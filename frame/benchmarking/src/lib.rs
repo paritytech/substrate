@@ -131,6 +131,13 @@ macro_rules! whitelist {
 ///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
 ///   }: baz(Origin::Signed(caller))
 ///
+///   // You may optionally specify the origin type if it can't be determined automatically like
+///   // this.
+///   baz3 {
+///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
+///     let l in 1 .. MAX_LENGTH => initialize_l(l);
+///   }: baz<T::Origin>(Origin::Signed(caller), vec![0u8; l])
+///
 ///   // this is benchmarking some code that is not a dispatchable.
 ///   populate_a_set {
 ///     let x in 0 .. 10_000;
@@ -305,7 +312,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* ) // This contains $( $( { $instance } )? $name:ident )*
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
+		$name:ident { $( $code:tt )* }: _ $(< $origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
@@ -315,7 +322,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
-			$name { $( $code )* }: $name ( $origin $( , $arg )* )
+			$name { $( $code )* }: $name $(< $origin_type >)? ( $origin $( , $arg )* )
 			verify $postcode
 			$( $rest )*
 		}
@@ -327,7 +334,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$name:ident { $( $code:tt )* }: $dispatch:ident $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
@@ -350,15 +357,14 @@ macro_rules! benchmarks_iter {
 						&__call
 					);
 				}: {
-					let call_decoded = <
+					let __call_decoded = <
 						Call<T $(, $instance )?>
 						as $crate::frame_support::codec::Decode
 					>::decode(&mut &__benchmarked_call_encoded[..])
 						.expect("call is encoded above, encoding must be correct");
-
-					<
-						Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
-					>::dispatch_bypass_filter(call_decoded, $origin.into())?;
+					let __origin = $crate::to_origin!($origin $(, $origin_type)?);
+					<Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
+						>::dispatch_bypass_filter(__call_decoded, __origin)?;
 				}
 				verify $postcode
 				$( $rest )*
@@ -485,6 +491,17 @@ macro_rules! benchmarks_iter {
 			verify { }
 			$( $rest )*
 		);
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! to_origin {
+	($origin:expr) => {
+		$origin.into()
+	};
+	($origin:expr, $origin_type:ty) => {
+		<T::Origin as From<$origin_type>>::from($origin)
 	};
 }
 

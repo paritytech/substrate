@@ -1411,15 +1411,17 @@ pub mod pallet_prelude {
 /// `<Pallet as Store>::Foo`.
 ///
 /// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::set_storage_max_encoded_len]`, e.g.:
+/// `#[pallet::generate_storage_info]`, e.g.:
 /// ```ignore
 /// #[pallet::pallet]
-/// #[pallet::set_storage_max_encoded_len]
+/// #[pallet::generate_storage_info]
 /// pub struct Pallet<T>(_);
 /// ```
 ///
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
 /// and value types must bound [`pallet_prelude::MaxEncodedLen`].
+/// Some individual storage can opt-out from this constraint by using `#[pallet::unbounded]`,
+/// see `#[pallet::storage]` documentation.
 ///
 /// As the macro implements [`traits::GetStorageVersion`], the current storage version needs to
 /// be communicated to the macro. This can be done by using the `storage_version` attribute:
@@ -1720,6 +1722,11 @@ pub mod pallet_prelude {
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
+///
+/// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
+/// When implementating the storage info (when #[pallet::generate_storage_info]` is specified
+/// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
+/// This can be useful for storage which can never go into PoV (Proof of Validity).
 ///
 /// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
 ///

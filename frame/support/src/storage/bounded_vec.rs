@@ -28,7 +28,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
+use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
 
 /// A bounded vector.
 ///
@@ -201,12 +201,12 @@ impl<T, S> Default for BoundedVec<T, S> {
 }
 
 #[cfg(feature = "std")]
-impl<T, S> fmt::Debug for BoundedVec<T, S>
+impl<T, S> std::fmt::Debug for BoundedVec<T, S>
 where
-	T: fmt::Debug,
+	T: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("BoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
