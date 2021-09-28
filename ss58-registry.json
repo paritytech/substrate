@@ -533,6 +533,15 @@
 			"website": "https://manta.network"
 		},
 		{
+			"prefix": 88,
+			"network": "polkadex",
+			"displayName": "Polkadex Mainnet",
+			"symbols": ["PDEX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://polkadex.trade"
+		},
+		{
 			"prefix": 98,
 			"network": "polkasmith",
 			"displayName": "PolkaSmith Canary Network",
@@ -567,7 +576,7 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://parallel.fi/"
-		},  
+		},
 		{
 			"prefix": 113,
 			"network": "integritee-incognito",
@@ -577,6 +586,15 @@
 			"standardAccount": "*25519",
 			"website": "https://integritee.network"
     },
+		{
+			"prefix": 128,
+			"network": "clover",
+			"displayName": "Clover Finance",
+			"symbols": ["CLV"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://clover.finance" 
+		},  
 		{
 			"prefix": 136,
 			"network": "altair",

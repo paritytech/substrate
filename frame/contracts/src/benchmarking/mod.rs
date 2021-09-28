@@ -2241,7 +2241,7 @@ benchmarks! {
 			);
 		}
 		#[cfg(not(feature = "std"))]
-		return Err("Run this bench with a native runtime in order to see the schedule.".into());
+		Err("Run this bench with a native runtime in order to see the schedule.")?;
 	}: {}
 
 	// Execute one erc20 transfer using the ink! erc20 example contract.

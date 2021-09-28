@@ -436,6 +436,10 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 		// exclusive). The runner project is created in `CARGO_TARGET_DIR` and executing it will
 		// create a sub target directory inside of `CARGO_TARGET_DIR`.
 		.env_remove("CARGO_TARGET_DIR")
+		// As we are being called inside a build-script, this env variable is set. However, we set
+		// our own `RUSTFLAGS` and thus, we need to remove this. Otherwise cargo favors this
+		// env variable.
+		.env_remove("CARGO_ENCODED_RUSTFLAGS")
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 

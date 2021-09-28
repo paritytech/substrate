@@ -268,6 +268,7 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
+	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChianFallback: bool = true;
@@ -303,11 +304,11 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
 		}
 	}
-	fn create_snapshot_internal() -> Weight {
+	fn create_snapshot_internal(v: u32, t: u32) -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal()
+			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal(v, t)
 		}
 	}
 	fn on_initialize_open_signed() -> Weight {
@@ -401,6 +402,7 @@ impl crate::Config for Runtime {
 	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
+	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -433,9 +435,9 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-		let voters = Voters::get();
-		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
-			return Err("Voters too big")
+		let mut voters = Voters::get();
+		if let Some(max_len) = maybe_max_len {
+			voters.truncate(max_len)
 		}
 
 		Ok(voters)
