@@ -302,13 +302,13 @@ cargo-deny:
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
-    - changes:
-      - "Cargo.lock"
-      - "**/Cargo.toml"
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+      changes:
+        - "Cargo.lock"
+        - "**/Cargo.toml"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
@@ -352,7 +352,7 @@ node-bench-regression-guard:
     # this is a DAG
     - job:                         cargo-check-benches
       artifacts:                   true
-    # this does not like a DAG, just polls the artifact
+    # this does not work like a DAG, just polls the artifact
     - project:                     $CI_PROJECT_PATH
       job:                         cargo-check-benches
       ref:                         master
@@ -362,7 +362,7 @@ node-bench-regression-guard:
   before_script: [""]
   script:
     - 'node-bench-regression-guard --reference artifacts/benches/master-*
-       --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
+        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
   stage:                           test
