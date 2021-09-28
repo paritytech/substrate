@@ -9152,7 +9152,7 @@ dependencies = [
  "rand 0.7.3",
  "scale-info",
  "serde",
- "sp-debug-derive 3.0.0",
+ "sp-debug-derive",
  "sp-std",
  "static_assertions",
 ]
@@ -9341,7 +9341,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.9.3",
- "sp-debug-derive 3.0.0",
+ "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
  "sp-serializer",
@@ -9368,17 +9368,6 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "3.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "sp-debug-derive"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e80275f23b4e7ba8f54dec5f90f016530e7307d2ee9445f617ab986cbe97f31e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9734,7 +9723,7 @@ dependencies = [
  "parity-scale-codec",
  "ref-cast",
  "serde",
- "sp-debug-derive 3.0.0",
+ "sp-debug-derive",
  "sp-std",
 ]
 
@@ -9882,14 +9871,14 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "ss58-registry"
 version = "0.0.1"
-source = "git+https://github.com/paritytech/ss58-registry.git?branch=vNext#a8b5944eaded74b496399d1bbbb3d87d90bd5dad"
+source = "git+https://github.com/paritytech/ss58-registry.git?branch=vNext#9817131f32b43e07c722e3b4ba10664a4cbc2b45"
 dependencies = [
  "Inflector",
  "proc-macro2",
  "quote",
  "serde",
  "serde_json",
- "sp-debug-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-xid",
 ]
 
 [[package]]
