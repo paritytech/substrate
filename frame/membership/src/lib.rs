@@ -790,9 +790,16 @@ mod tests {
 	fn migration_v4() {
 		new_test_ext().execute_with(|| {
 			use frame_support::traits::PalletInfo;
-			let old_pallet_name =
+			let old_pallet_name = "OldMembership";
+			let new_pallet_name =
 				<Test as frame_system::Config>::PalletInfo::name::<Membership>().unwrap();
-			let new_pallet_name = "NewMembership";
+
+			frame_support::storage::migration::move_pallet(
+				new_pallet_name.as_bytes(),
+				old_pallet_name.as_bytes(),
+			);
+
+			StorageVersion::new(0).put::<Membership>();
 
 			crate::migrations::v4::pre_migrate::<Membership, _>(old_pallet_name, new_pallet_name);
 			crate::migrations::v4::migrate::<Test, Membership, _>(old_pallet_name, new_pallet_name);
