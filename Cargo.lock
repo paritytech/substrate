@@ -2050,7 +2050,6 @@ dependencies = [
  "frame-metadata",
  "frame-support-procedural",
  "frame-system",
- "hashing-proc-macro",
  "impl-trait-for-tuples",
  "log 0.4.14",
  "once_cell",
@@ -2063,6 +2062,7 @@ dependencies = [
  "smallvec 1.6.1",
  "sp-arithmetic",
  "sp-core",
+ "sp-core-hashing-proc-macro",
  "sp-inherents",
  "sp-io",
  "sp-runtime",
@@ -2578,15 +2578,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 dependencies = [
  "ahash",
-]
-
-[[package]]
-name = "hashing-proc-macro"
-version = "4.0.0-dev"
-dependencies = [
- "blake2-rfc",
- "syn",
- "twox-hash",
 ]
 
 [[package]]
@@ -7947,7 +7938,6 @@ dependencies = [
 name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
- "hashing-proc-macro",
  "hex-literal",
  "lazy_static",
  "libsecp256k1 0.6.0",
@@ -7963,6 +7953,7 @@ dependencies = [
  "sc-tracing",
  "sp-api",
  "sp-core",
+ "sp-core-hashing-proc-macro",
  "sp-externalities",
  "sp-io",
  "sp-maybe-compressed-blob",
@@ -9332,7 +9323,6 @@ dependencies = [
  "futures 0.3.16",
  "hash-db",
  "hash256-std-hasher",
- "hashing-proc-macro",
  "hex",
  "hex-literal",
  "impl-serde",
@@ -9353,6 +9343,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.9.3",
+ "sp-core-hashing",
+ "sp-core-hashing-proc-macro",
  "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
@@ -9366,6 +9358,26 @@ dependencies = [
  "twox-hash",
  "wasmi",
  "zeroize",
+]
+
+[[package]]
+name = "sp-core-hashing"
+version = "4.0.0-dev"
+dependencies = [
+ "blake2-rfc",
+ "byteorder",
+ "sha2 0.9.3",
+ "sp-std",
+ "tiny-keccak",
+ "twox-hash",
+]
+
+[[package]]
+name = "sp-core-hashing-proc-macro"
+version = "4.0.0-dev"
+dependencies = [
+ "sp-core-hashing",
+ "syn",
 ]
 
 [[package]]

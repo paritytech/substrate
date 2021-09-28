@@ -28,12 +28,11 @@
 //!
 //! ```rust
 //! assert_eq!(
-//! 		hashing_proc_macro::blake2b_256!(b"test"),
-//! 		blake2_rfc::blake2b::blake2b(32, &[], b"test").as_bytes(),
-//! 	);
-//! 	// let _ = hashing_proc_macro::blake2b_32!([b"test"]);
-//! 	let _ = hashing_proc_macro::blake2b_256!([1u8]);
-//! 	let _ = hashing_proc_macro::blake2b_256!([1, 2, 3]);
+//! 	sp_core_hashing_proc_macro::blake2b_256!(b"test"),
+//! 	&sp_core_hashing::blake2_256(b"test"),
+//! );
+//! let _ = sp_core_hashing_proc_macro::blake2b_256!([1u8]);
+//! let _ = sp_core_hashing_proc_macro::blake2b_256!([1, 2, 3]);
 //! ```
 
 mod impls;
@@ -44,19 +43,19 @@ use proc_macro::TokenStream;
 /// Process a Blake2 64-bit hash of bytes parameter, outputs a `&'static [u8; 8]`..
 #[proc_macro]
 pub fn blake2b_64(input: TokenStream) -> TokenStream {
-	impls::blake2b(8, syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
+	impls::blake2b_64(syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
 }
 
 /// Apply a Blake2 256-bit hash of bytes parameter, outputs a `&'static [u8; 32]`.
 #[proc_macro]
 pub fn blake2b_256(input: TokenStream) -> TokenStream {
-	impls::blake2b(32, syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
+	impls::blake2b_256(syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
 }
 
 /// Apply a Blake2 512-bit hash of bytes parameter, outputs a `&'static [u8; 64]`.
 #[proc_macro]
 pub fn blake2b_512(input: TokenStream) -> TokenStream {
-	impls::blake2b(64, syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
+	impls::blake2b_512(syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
 }
 
 /// Apply a XX 64-bit hash on its bytes parameter, outputs a `&'static [u8; 8]`.

@@ -30,7 +30,7 @@ pub use codec;
 #[doc(hidden)]
 pub use frame_metadata as metadata;
 #[doc(hidden)]
-pub use hashing_proc_macro;
+pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use log;
 #[cfg(feature = "std")]
@@ -427,7 +427,7 @@ macro_rules! parameter_types {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> &'static [u8; 16] {
-				$crate::hashing_proc_macro::twox_128!(b":", $name, b":")
+				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
 			/// Set the value of this parameter type in the storage.

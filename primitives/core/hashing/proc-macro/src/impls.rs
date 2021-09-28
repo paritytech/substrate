@@ -19,11 +19,6 @@ use syn::parse::{Parse, ParseStream};
 
 use proc_macro::{Literal, TokenStream, TokenTree};
 
-pub(super) fn blake2b(size: usize, bytes: Vec<u8>) -> TokenStream {
-	let result = blake2_rfc::blake2b::blake2b(size, &[], bytes.as_slice()).as_bytes().to_vec();
-	TokenTree::Literal(Literal::byte_string(result.as_slice())).into()
-}
-
 pub(super) struct InputBytes(pub Vec<u8>);
 
 pub(super) struct MultipleInputBytes(pub Vec<Vec<u8>>);
@@ -90,25 +85,26 @@ impl Parse for MultipleInputBytes {
 }
 
 pub(super) fn twox_64(bytes: Vec<u8>) -> TokenStream {
-	use core::hash::Hasher;
-	let mut h0 = twox_hash::XxHash::with_seed(0);
-	h0.write(bytes.as_slice());
-	let r0 = h0.finish();
-
-	TokenTree::Literal(Literal::byte_string(&r0.to_le_bytes()[..])).into()
+	let result = sp_core_hashing::twox_64(bytes.as_slice());
+	TokenTree::Literal(Literal::byte_string(&result[..])).into()
 }
 
 pub(super) fn twox_128(bytes: Vec<u8>) -> TokenStream {
-	use core::hash::Hasher;
-	let mut h0 = twox_hash::XxHash::with_seed(0);
-	let mut h1 = twox_hash::XxHash::with_seed(1);
-	h0.write(bytes.as_slice());
-	h1.write(bytes.as_slice());
-	let r0 = h0.finish();
-	let r1 = h1.finish();
-	let mut result = [0u8; 16];
-	result[0..8].copy_from_slice(&r0.to_le_bytes()[..]);
-	result[8..16].copy_from_slice(&r1.to_le_bytes()[..]);
+	let result = sp_core_hashing::twox_128(bytes.as_slice());
+	TokenTree::Literal(Literal::byte_string(&result[..])).into()
+}
 
+pub(super) fn blake2b_512(bytes: Vec<u8>) -> TokenStream {
+	let result = sp_core_hashing::blake2_512(bytes.as_slice());
+	TokenTree::Literal(Literal::byte_string(&result[..])).into()
+}
+
+pub(super) fn blake2b_256(bytes: Vec<u8>) -> TokenStream {
+	let result = sp_core_hashing::blake2_256(bytes.as_slice());
+	TokenTree::Literal(Literal::byte_string(&result[..])).into()
+}
+
+pub(super) fn blake2b_64(bytes: Vec<u8>) -> TokenStream {
+	let result = sp_core_hashing::blake2_64(bytes.as_slice());
 	TokenTree::Literal(Literal::byte_string(&result[..])).into()
 }

@@ -152,6 +152,8 @@ members = [
 	"primitives/consensus/pow",
 	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/core/hashing",
+	"primitives/core/hashing/proc-macro",
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
@@ -207,7 +209,6 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
 	"utils/frame/generate-bags/node-runtime",
-	"utils/hashing-proc-macro",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
