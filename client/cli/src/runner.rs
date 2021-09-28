@@ -198,7 +198,7 @@ impl<C: SubstrateCli> Runner<C> {
 /// (and hint to people who haven't set up logging how to do it)
 pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {	
 	if log::max_level() == log::LevelFilter::Off {
-		println!("( for logging set env var RUST_LOG=info )");
+		println!("Logging disabled  (to enable typically set env var RUST_LOG=info )");
 	}
 	info!("{}", C::impl_name());
 	info!("✌️  version {}", C::impl_version());
