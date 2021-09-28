@@ -53,7 +53,10 @@ impl VanityCmd {
 	pub fn run(&self) -> error::Result<()> {
 		let formated_seed = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			generate_key(&self.pattern, unwrap_or_default_ss58_version(self.network_scheme.network)),
+			generate_key(
+				&self.pattern,
+				unwrap_or_default_ss58_version(self.network_scheme.network)
+			),
 		)?;
 
 		with_crypto_scheme!(
