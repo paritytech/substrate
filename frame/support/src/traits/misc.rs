@@ -471,12 +471,21 @@ mod test {
 		assert_eq!(decoded.0, 3u32);
 
 		assert_eq!(<WrapperOpaque<[u8; 63]>>::max_encoded_len(), 63 + 1);
-		assert_eq!(<WrapperOpaque<[u8; 63]>>::max_encoded_len(), WrapperOpaque([0u8; 63]).encode().len());
+		assert_eq!(
+			<WrapperOpaque<[u8; 63]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 63]).encode().len()
+		);
 
 		assert_eq!(<WrapperOpaque<[u8; 64]>>::max_encoded_len(), 64 + 2);
-		assert_eq!(<WrapperOpaque<[u8; 64]>>::max_encoded_len(), WrapperOpaque([0u8; 64]).encode().len());
+		assert_eq!(
+			<WrapperOpaque<[u8; 64]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 64]).encode().len()
+		);
 
-		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14) - 1]>>::max_encoded_len(), 2usize.pow(14) - 1 + 2);
+		assert_eq!(
+			<WrapperOpaque<[u8; 2usize.pow(14) - 1]>>::max_encoded_len(),
+			2usize.pow(14) - 1 + 2
+		);
 		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
 	}
 }
