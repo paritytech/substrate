@@ -215,6 +215,12 @@ benchmarks_instance_pallet! {
 		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
 	}
+
+	skip_benchmark {
+		Err(frame_benchmarking::BenchmarkError::Skip)?;
+	}: {
+		Err(frame_benchmarking::BenchmarkError::Skip)?
+	}
 }
 
 impl_benchmark_test_suite!(
