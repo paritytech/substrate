@@ -24,7 +24,7 @@ use crate::{
 use serde_json::json;
 use sp_core::{
 	crypto::{
-		unwrap_or_ss58_address_format, ExposeSecret, SecretString, Ss58AddressFormat, Ss58Codec,
+		unwrap_or_default_ss58_version, ExposeSecret, SecretString, Ss58AddressFormat, Ss58Codec,
 		Zeroize,
 	},
 	hexdisplay::HexDisplay,
@@ -75,7 +75,7 @@ pub fn print_from_uri<Pair>(
 	let password = password.as_ref().map(|s| s.expose_secret().as_str());
 	if let Ok((pair, seed)) = Pair::from_phrase(uri, password.clone()) {
 		let public_key = pair.public();
-		let network_override = unwrap_or_ss58_address_format(network_override);
+		let network_override = unwrap_or_default_ss58_version(network_override);
 
 		match output {
 			OutputType::Json => {
@@ -111,7 +111,7 @@ pub fn print_from_uri<Pair>(
 		}
 	} else if let Ok((pair, seed)) = Pair::from_string_with_seed(uri, password.clone()) {
 		let public_key = pair.public();
-		let network_override = unwrap_or_ss58_address_format(network_override);
+		let network_override = unwrap_or_default_ss58_version(network_override);
 
 		match output {
 			OutputType::Json => {
@@ -201,7 +201,7 @@ where
 	let public_key = Pair::Public::try_from(&public)
 		.map_err(|_| "Failed to construct public key from given hex")?;
 
-	let network_override = unwrap_or_ss58_address_format(network_override);
+	let network_override = unwrap_or_default_ss58_version(network_override);
 
 	match output {
 		OutputType::Json => {

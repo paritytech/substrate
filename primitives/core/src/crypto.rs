@@ -231,7 +231,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
-			v if v == ss58_address_format() => Ok(r),
+			v if v == default_ss58_version() => Ok(r),
 			_ => Err(PublicError::UnknownVersion),
 		})
 	}
@@ -287,7 +287,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		Self::from_string_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
-			v if v == ss58_address_format() => Ok(r),
+			v if v == default_ss58_version() => Ok(r),
 			_ => Err(PublicError::UnknownVersion),
 		})
 	}
@@ -318,7 +318,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check(&self) -> String {
-		self.to_ss58check_with_version(ss58_address_format())
+		self.to_ss58check_with_version(default_ss58_version())
 	}
 
 	/// Some if the string is a properly encoded SS58Check address, optionally with
@@ -362,13 +362,13 @@ static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = core::sync::atomic::Atom
 
 /// Returns default(). (can't impl Default due to orphan rules).
 #[cfg(feature = "std")]
-pub fn ss58_address_format() -> Ss58AddressFormat {
+pub fn default_ss58_version() -> Ss58AddressFormat {
 	DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into()
 }
 
 /// Returns either the input address format or the default.
 #[cfg(feature = "std")]
-pub fn unwrap_or_ss58_address_format(network: Option<Ss58AddressFormat>) -> Ss58AddressFormat {
+pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss58AddressFormat {
 	network.unwrap_or_else(|| DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into())
 }
 
