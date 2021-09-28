@@ -251,12 +251,16 @@ directory = \"{cache_dir}\"
 fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config, WasmError> {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
-	if std::env::var("WASMTIME_PROFILING_STRATEGY") == Ok("jitdump".to_owned()) {
-		config.profiler(wasmtime::ProfilingStrategy::JitDump).map_err(|e| {
-			WasmError::Instantiation(format!("fail to set jitdump profiler: {}", e))
-		})?;
-	}
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
+
+	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
+		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
+		Some(_) => return Err(WasmError::Instantiation("Unknown profiling strategy".to_owned())),
+		None => wasmtime::ProfilingStrategy::None,
+	};
+	config
+		.profiler(profiler)
+		.map_err(|e| WasmError::Instantiation(format!("fail to set jitdump profiler: {}", e)))?;
 
 	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
 		semantics.deterministic_stack_limit
