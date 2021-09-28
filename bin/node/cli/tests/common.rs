@@ -23,6 +23,8 @@ use nix::{
 	sys::signal::{kill, Signal::SIGINT},
 	unistd::Pid,
 };
+use node_primitives::Block;
+use remote_externalities::rpc_api;
 use std::{
 	convert::TryInto,
 	ops::{Deref, DerefMut},
@@ -38,8 +40,8 @@ static LOCALHOST_WS: &str = "ws://127.0.0.1:9944/";
 ///
 /// Returns the `Some(exit status)` or `None` if the process did not finish in the given time.
 pub fn wait_for(child: &mut Child, secs: u64) -> Result<ExitStatus, ()> {
-	let result =
-		wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(5.min(secs))).map_err(|_| ())?;
+	let result = wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(5.min(secs)))
+		.map_err(|_| ())?;
 	if let Some(exit_status) = result {
 		Ok(exit_status)
 	} else {
@@ -48,7 +50,7 @@ pub fn wait_for(child: &mut Child, secs: u64) -> Result<ExitStatus, ()> {
 			let result = wait_timeout::ChildExt::wait_timeout(child, Duration::from_secs(secs - 5))
 				.map_err(|_| ())?;
 			if let Some(exit_status) = result {
-				return Ok(exit_status);
+				return Ok(exit_status)
 			}
 		}
 		eprintln!("Took too long to exit (> {} seconds). Killing...", secs);
@@ -58,42 +60,26 @@ pub fn wait_for(child: &mut Child, secs: u64) -> Result<ExitStatus, ()> {
 	}
 }
 
-pub async fn wait_n_finalized_blocks(n: usize, timeout_secs: u64) -> Result<(), tokio::time::error::Elapsed> {
+/// Wait for at least n blocks to be finalized within a specified time.
+pub async fn wait_n_finalized_blocks(
+	n: usize,
+	timeout_secs: u64,
+) -> Result<(), tokio::time::error::Elapsed> {
 	timeout(Duration::from_secs(timeout_secs), wait_n_finalized_blocks_from(n, LOCALHOST_WS)).await
 }
 
-/// Wait for at least n blocks to be produced
-///
-/// Eg. to wait for 3 blocks or a timeout of 30 seconds:
-/// ```
-/// timeout(Duration::from_secs(30), wait_n_finalized_blocks("ws://127.0.0.1:9944/", 3)).await;
-/// ```
+/// Wait for at least n blocks to be finalized from a specified node
 pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
 	let mut built_blocks = std::collections::HashSet::new();
 	let mut interval = tokio::time::interval(Duration::from_secs(2));
 
 	loop {
-		// We could call remote-externalities like this:
-		// = remote_externalities::rpc_api::get_finalized_head::<String,
-		// String>("ws://127.0.0.1:9944/".to_string()).await;
-		// but then we'd need to gen the types to get the BlockT type.
-		// https://github.com/paritytech/substrate-subxt/blob/aj-metadata-vnext/proc-macro/src/generate_types.rs
-
-		if let Ok(ws_client) = jsonrpsee_ws_client::WsClientBuilder::default().build(url).await {
-			let block_result: Result<String, _> =
-				<jsonrpsee_ws_client::WsClient as jsonrpsee_ws_client::types::traits::Client>::request(
-					&ws_client,
-					"chain_getFinalizedHead",
-					jsonrpsee_ws_client::types::v2::params::JsonRpcParams::NoParams,
-				)
-				.await;
-			if let Ok(block) = block_result {
-				built_blocks.insert(block);
-				if built_blocks.len() > n {
-					break
-				}
+		if let Ok(block) = rpc_api::get_finalized_head::<Block, _>(url.to_string()).await {
+			built_blocks.insert(block);
+			if built_blocks.len() > n {
+				break
 			}
-		}
+		};
 		interval.tick().await;
 	}
 }

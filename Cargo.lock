@@ -4526,6 +4526,7 @@ dependencies = [
  "platforms",
  "rand 0.7.3",
  "regex",
+ "remote-externalities",
  "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-chain-spec",
