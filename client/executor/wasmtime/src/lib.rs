@@ -22,10 +22,10 @@
 //! environment variable `WASMTIME_PROFILING_STRATEGY`:
 //!
 //! | `WASMTIME_PROFILING_STRATEGY` | Effect |
-//! |-------------|-------------------|
-//! | undefined   | No profiling      |
-//! | `"jitdump"` | jitdump profiling |
-//! | other value | error             |
+//! |-------------|-------------------------|
+//! | undefined   | No profiling            |
+//! | `"jitdump"` | jitdump profiling       |
+//! | other value | No profiling (warning)  |
 
 mod host;
 mod imports;
