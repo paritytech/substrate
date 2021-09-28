@@ -1742,7 +1742,7 @@ impl<T: Config> Pallet<T> {
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. If the queue is not empty, it will take
 			// full block weight.
-			Self::launch_next(now).is_ok() {
+			if Self::launch_next(now).is_ok() {
 				weight = max_block_weight;
 			}
 		}
