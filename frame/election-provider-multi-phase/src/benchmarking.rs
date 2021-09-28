@@ -350,7 +350,6 @@ frame_benchmarking::benchmarks! {
 
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
-
 	}: _(RawOrigin::None, Box::new(raw_solution), witness)
 	verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
