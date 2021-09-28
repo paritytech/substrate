@@ -1,6 +1,6 @@
 [package]
 name = "beefy-gadget-rpc"
-version = "4.0.0-dev"
+version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -10,12 +10,9 @@ futures = "0.3.16"
 log = "0.4"
 serde = { version = "1.0.130", features = ["derive"] }
 
-jsonrpc-core = "18.0.0"
-jsonrpc-core-client = "18.0.0"
-jsonrpc-derive = "18.0.0"
-jsonrpc-pubsub = "18.0.0"
+jsonrpsee = { git = "http://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1", features = ["full"] }
 
-codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
+codec = { version = "2.0.0", package = "parity-scale-codec", features = ["derive"] }
 
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 
