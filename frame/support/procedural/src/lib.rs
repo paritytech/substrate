@@ -364,7 +364,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// * `= $n` optional: number to define at which index the pallet variants in `OriginCaller`, `Call`
 ///   and `Event` are encoded, and to define the ModuleToIndex value.
 ///
-///   if `= $n` is not given, then index is resolved same as fieldless enum in Rust
+///   if `= $n` is not given, then index is resolved in the same way as fieldless enum in Rust
 ///   (i.e. incrementedly from previous index):
 ///   ```nocompile
 ///   pallet1 .. = 2,
@@ -521,7 +521,7 @@ pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	dummy_part_checker::generate_dummy_part_checker(input)
 }
 
-/// Macro than expand after the first finding of some pattern.
+/// Macro that expands after the first match of some pattern.
 ///
 /// # Example:
 ///
