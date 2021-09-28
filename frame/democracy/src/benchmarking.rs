@@ -19,7 +19,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelist_account};
+use frame_benchmarking::{account, benchmarks, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
 	codec::Decode,
@@ -772,4 +772,9 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(Democracy, crate::tests::new_test_ext(), crate::tests::Test);
+// TODO: individual tests
+frame_benchmarking::impl_benchmark_test_suite!(
+	Democracy,
+	crate::tests::new_test_ext(),
+	crate::tests::Test
+);

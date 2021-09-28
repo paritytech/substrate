@@ -33,6 +33,6 @@ benchmarks_instance_pallet! {
 	} verify {
 		assert_eq!(crate::NumberOfLeaves::<T, I>::get(), leaves);
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::mock::Test);
+}
