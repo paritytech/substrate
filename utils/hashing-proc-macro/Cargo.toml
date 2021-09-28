@@ -17,6 +17,5 @@ proc-macro = true
 
 [dependencies]
 syn = { version = "1.0.77", features = ["full", "parsing"] }
-#syn = { version = "1.0.58", features = ["full", "visit", "fold", "extra-traits"] }
 blake2-rfc = { version = "0.2.18", default-features = false }
 twox-hash = { version = "1.5.0", default-features = false }

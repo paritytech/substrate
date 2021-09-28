@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,6 +70,11 @@ impl Parse for InputBytes {
 				}
 				return Ok(InputBytes(bytes))
 			},
+			Err(_e) => (),
+		}
+		// use rust names as a vec of their utf8 bytecode.
+		match <syn::Ident>::parse(input) {
+			Ok(ident) => return Ok(InputBytes(ident.to_string().as_bytes().to_vec())),
 			Err(_e) => (),
 		}
 		Ok(InputBytes(<syn::LitByteStr>::parse(input)?.value()))

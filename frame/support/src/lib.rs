@@ -30,6 +30,8 @@ pub use codec;
 #[doc(hidden)]
 pub use frame_metadata as metadata;
 #[doc(hidden)]
+pub use hashing_proc_macro;
+#[doc(hidden)]
 pub use log;
 #[cfg(feature = "std")]
 #[doc(hidden)]
@@ -48,8 +50,6 @@ pub use sp_runtime::RuntimeDebug;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
-#[doc(hidden)]
-pub use hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_std;
 
@@ -426,10 +426,8 @@ macro_rules! parameter_types {
 		impl $name {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
-			pub fn key() -> [u8; 16] {
-				$crate::hashing_proc_macro::twox_128!(
-					concat!(":", stringify!($name), ":").as_bytes()
-				)
+			pub fn key() -> &'static [u8; 16] {
+				$crate::hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
 			/// Set the value of this parameter type in the storage.
@@ -438,7 +436,7 @@ macro_rules! parameter_types {
 			/// environment.
 			#[allow(unused)]
 			pub fn set(value: &$type) {
-				$crate::storage::unhashed::put(&Self::key(), value);
+				$crate::storage::unhashed::put(Self::key(), value);
 			}
 
 			/// Returns the value of this parameter type.
@@ -447,7 +445,7 @@ macro_rules! parameter_types {
 			/// environment.
 			#[allow(unused)]
 			pub fn get() -> $type {
-				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
+				$crate::storage::unhashed::get(Self::key()).unwrap_or_else(|| $value)
 			}
 		}
 
@@ -1267,7 +1265,7 @@ pub mod tests {
 	#[test]
 	fn check_storage_parameter_type_works() {
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
+			assert_eq!(&sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
 
 			assert_eq!(10, StorageParameter::get());
 
