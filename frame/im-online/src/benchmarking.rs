@@ -93,10 +93,12 @@ benchmarks! {
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 		let call = Call::heartbeat { heartbeat: input_heartbeat, signature };
+		let call_enc = call.encode();
 	}: {
-		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
-			.map_err(<&str>::from)?;
-		call.dispatch_bypass_filter(RawOrigin::None.into())?;
+		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call).map_err(<&str>::from)?;
+		<Call<T> as Decode>::decode(&mut &*call_enc)
+			.expect("call is encoded above, encoding must be correct")
+			.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
 }
 
