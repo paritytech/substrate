@@ -255,7 +255,10 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
 		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
-		Some(_) => return Err(WasmError::Instantiation("Unknown profiling strategy".to_owned())),
+		Some(_) => {
+			log::warn!("WASMTIME_PROFILING_STRATEGY is set to unknown value, ignored.");
+			wasmtime::ProfilingStrategy::None
+		},
 		None => wasmtime::ProfilingStrategy::None,
 	};
 	config
