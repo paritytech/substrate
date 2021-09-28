@@ -22,7 +22,7 @@ use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;
 use sc_service::{Configuration, Error as ServiceError, TaskManager};
 use sc_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::{env, marker::PhantomData};
+use std::marker::PhantomData;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), E>
@@ -196,8 +196,8 @@ impl<C: SubstrateCli> Runner<C> {
 
 /// Log information about the node itself.
 /// (and hint to people who haven't set up logging how to do it)
-pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
-	if env::var("RUST_LOG").is_err() {
+pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {	
+	if log::max_level() == log::LevelFilter::Off {
 		println!("( for logging set env var RUST_LOG=info )");
 	}
 	info!("{}", C::impl_name());
