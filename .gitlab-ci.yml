@@ -299,7 +299,17 @@ test-prometheus-alerting-rules:
 cargo-deny:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *nightly-pipeline
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - changes:
+      - "Cargo.lock"
+      - "**/Cargo.toml"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -311,8 +321,6 @@ cargo-deny:
     when:                          always
     paths:
       - deny.log
-  # FIXME: Temorarily allow to fail.
-  allow_failure:                   true
 
 cargo-fmt:
   stage:                           test
