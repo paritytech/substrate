@@ -18,7 +18,6 @@ default = ["db"]
 # a path to a database, an error will be produced at runtime.
 db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
 wasmtime = ["sc-executor/wasmtime"]
-wasmtime-jitdump = ["sc-executor/wasmtime-jitdump"]
 # exposes the client type
 test-helpers = []
 

@@ -251,7 +251,6 @@ directory = \"{cache_dir}\"
 fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config, WasmError> {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
-	#[cfg(feature = "jitdump")]
 	if std::env::var("WASMTIME_PROFILING_STRATEGY") == Ok("jitdump".to_owned()) {
 		config.profiler(wasmtime::ProfilingStrategy::JitDump).map_err(|e| {
 			WasmError::Instantiation(format!("fail to set jitdump profiler: {}", e))
