@@ -269,16 +269,6 @@ check-signed-tag:
   script:
     - ./.maintain/gitlab/check_signed.sh
 
-check-line-width:
-  stage:                           check
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-    - ./.maintain/gitlab/check_line_width.sh
-  allow_failure:                   true
-
 test-dependency-rules:
   stage:                           check
   image:                           paritytech/tools:latest
@@ -773,12 +763,14 @@ publish-rustdoc:
     - cp README.md /tmp/doc/
     - git checkout gh-pages
     # Remove directories no longer necessary, as specified in $RUSTDOCS_DEPLOY_REFS.
-    # Also ensure $RUSTDOCS_DEPLOY_REFS is non-space
+    # Also ensure $RUSTDOCS_DEPLOY_REFS is not just empty spaces.
+    # Even though this block spans multiple lines, they are concatenated to run as a single line
+    #   command, so note for the semi-colons in the inner-most code block.
     - if [[ ! -z ${RUSTDOCS_DEPLOY_REFS// } ]]; then
         for FILE in *; do
           if [[ ! " $RUSTDOCS_DEPLOY_REFS " =~ " $FILE " ]]; then
-            echo "Removing ${FILE}..."
-            rm -rf $FILE
+            echo "Removing ${FILE}...";
+            rm -rf $FILE;
           fi
         done
       fi
