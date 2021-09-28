@@ -21,7 +21,7 @@ use crate::dispatch::Parameter;
 use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
-use sp_std::vec::Vec;
+use sp_std::prelude::*;
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
