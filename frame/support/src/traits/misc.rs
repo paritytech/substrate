@@ -468,7 +468,6 @@ mod test {
 		let decoded_from_vec_u8 = u32::decode(&mut &vec_u8[..]).unwrap();
 		assert_eq!(decoded_from_vec_u8, 3u32);
 		let decoded = <WrapperOpaque<u32>>::decode(&mut &encoded[..]).unwrap();
-
 		assert_eq!(decoded.0, 3u32);
 
 		assert_eq!(<WrapperOpaque<[u8; 63]>>::max_encoded_len(), 63 + 1);
