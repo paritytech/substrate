@@ -18,7 +18,7 @@
 //! Benchmarks for the MMR pallet.
 
 use crate::*;
-use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks_instance_pallet;
 use frame_support::traits::OnInitialize;
 
 benchmarks_instance_pallet! {
