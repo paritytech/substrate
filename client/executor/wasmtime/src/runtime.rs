@@ -263,7 +263,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	};
 	config
 		.profiler(profiler)
-		.map_err(|e| WasmError::Instantiation(format!("fail to set jitdump profiler: {}", e)))?;
+		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {}", e)))?;
 
 	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
 		semantics.deterministic_stack_limit
