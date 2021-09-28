@@ -1726,7 +1726,8 @@ impl<T: Config> Pallet<T> {
 	///
 	///
 	/// # <weight>
-	/// If a referendum is launched or maturing, this will take full block weight. Otherwise:
+	/// If a referendum is launched or maturing, this will take full block weight if queue is not
+	/// empty. Otherwise:
 	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
 	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
 	///   `ReferendumCount`, `LowestUnbaked`
@@ -1739,10 +1740,11 @@ impl<T: Config> Pallet<T> {
 
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
-			// Errors come from the queue being empty. we don't really care about that, and even if
-			// we did, there is nothing we can do here.
-			let _ = Self::launch_next(now);
-			weight = max_block_weight;
+			// Errors come from the queue being empty. If the queue is not empty, it will take
+			// full block weight.
+			Self::launch_next(now).is_ok() {
+				weight = max_block_weight;
+			}
 		}
 
 		let next = Self::lowest_unbaked();
