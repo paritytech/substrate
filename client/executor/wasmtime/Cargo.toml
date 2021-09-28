@@ -26,7 +26,7 @@ sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
 wasmtime = { version = "0.27.0", default-features = false, features = [
     "cache",
-	"jitdump",
+    "jitdump",
     "parallel-compilation",
 ] }
 
