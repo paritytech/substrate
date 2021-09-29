@@ -18,7 +18,8 @@
 use std::vec;
 
 use frame_support::{
-	construct_runtime, parameter_types, sp_io::TestExternalities, BasicExternalities,
+	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
+	BasicExternalities,
 };
 use sp_core::H256;
 use sp_runtime::{
