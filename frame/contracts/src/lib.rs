@@ -373,37 +373,35 @@ pub mod pallet {
 		Instantiated { deployer: T::AccountId, contract: T::AccountId },
 
 		/// Contract has been removed.
-		/// \[contract, beneficiary\]
-		///
-		/// # Params
-		///
-		/// - `contract`: The contract that was terminated.
-		/// - `beneficiary`: The account that received the contracts remaining balance.
 		///
 		/// # Note
 		///
 		/// The only way for a contract to be removed and emitting this event is by calling
 		/// `seal_terminate`.
-		Terminated { contract: T::AccountId, beneficiary: T::AccountId },
+		Terminated {
+			/// The contract that was terminated.
+			contract: T::AccountId,
+			/// The account that received the contracts remaining balance
+			beneficiary: T::AccountId
+		},
 
 		/// Code with the specified hash has been stored.
 		CodeStored { code_hash: T::Hash },
 
 		/// Triggered when the current schedule is updated.
-		///
-		/// # Params
-		///
-		/// - `version`: The version of the newly set schedule.
-		ScheduleUpdated { version: u32 },
+		ScheduleUpdated {
+			/// The version of the newly set schedule.
+			version: u32
+		},
 
 		/// A custom event emitted by the contract.
-		///
-		/// # Params
-		///
-		/// - `contract`: The contract that emitted the event.
-		/// - `data`: Data supplied by the contract. Metadata generated during contract compilation
-		///   is needed to decode it.
-		ContractEmitted { contract: T::AccountId, data: Vec<u8> },
+		ContractEmitted {
+			/// The contract that emitted the event.
+			contract: T::AccountId,
+			/// Data supplied by the contract. Metadata generated during contract compilation
+			/// is needed to decode it.
+			data: Vec<u8>
+		},
 
 		/// A code with the specified hash was removed.
 		///
