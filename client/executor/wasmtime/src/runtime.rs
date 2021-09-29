@@ -320,9 +320,6 @@ directory = \"{cache_dir}\"
 	Ok(())
 }
 
-// Remember if we have already logged a warning due to an unknown profiling strategy.
-static UNKNOWN_PROFILING_STRATEGY: AtomicBool = AtomicBool::new(false);
-
 fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config, WasmError> {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
@@ -330,14 +327,16 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
 		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
+		None => wasmtime::ProfilingStrategy::None,
 		Some(_) => {
+			// Remember if we have already logged a warning due to an unknown profiling strategy.
+			static UNKNOWN_PROFILING_STRATEGY: AtomicBool = AtomicBool::new(false);
 			// Make sure that the warning will not be relogged regularly.
 			if !UNKNOWN_PROFILING_STRATEGY.swap(true, Ordering::Relaxed) {
 				log::warn!("WASMTIME_PROFILING_STRATEGY is set to unknown value, ignored.");
 			}
 			wasmtime::ProfilingStrategy::None
 		},
-		None => wasmtime::ProfilingStrategy::None,
 	};
 	config
 		.profiler(profiler)
