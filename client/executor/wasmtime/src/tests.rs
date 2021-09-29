@@ -116,7 +116,7 @@ fn test_nan_canonicalization() {
 		builder.build()
 	};
 
-	let instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	/// A NaN with canonical payload bits.
 	const CANONICAL_NAN_BITS: u32 = 0x7fc00000;
@@ -159,7 +159,7 @@ fn test_stack_depth_reaching() {
 		builder.deterministic_stack(true);
 		builder.build()
 	};
-	let instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	let err = instance.call_export("test-many-locals", &[]).unwrap_err();
 
@@ -180,7 +180,7 @@ fn test_max_memory_pages() {
 			builder.max_memory_pages(max_memory_pages);
 			builder.build()
 		};
-		let instance = runtime.new_instance()?;
+		let mut instance = runtime.new_instance()?;
 		let _ = instance.call_export("main", &[])?;
 		Ok(())
 	}

@@ -21,7 +21,6 @@ mod host;
 mod imports;
 mod instance_wrapper;
 mod runtime;
-mod state_holder;
 mod util;
 
 #[cfg(test)]

@@ -702,6 +702,21 @@ pub use frame_support_procedural::DefaultNoBound;
 /// ```
 pub use frame_support_procedural::require_transactional;
 
+/// Convert the current crate version into a [`CrateVersion`](crate::traits::CrateVersion).
+///
+/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
+/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
+/// This means that the [`CrateVersion`](crate::traits::CrateVersion)
+/// object will correspond to the version of the crate the macro is called in!
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::{traits::CrateVersion, crate_to_crate_version};
+/// const Version: CrateVersion = crate_to_crate_version!();
+/// ```
+pub use frame_support_procedural::crate_to_crate_version;
+
 /// Return Err of the expression: `return Err($expression);`.
 ///
 /// Used as `fail!(expression)`.
@@ -819,6 +834,7 @@ pub mod tests {
 		StorageHasher,
 	};
 	use codec::{Codec, EncodeLike};
+	use frame_support::traits::CrateVersion;
 	use sp_io::TestExternalities;
 	use sp_std::result;
 
@@ -830,6 +846,12 @@ pub mod tests {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn module_name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn crate_version<P: 'static>() -> Option<CrateVersion> {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 	}
