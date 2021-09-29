@@ -17,10 +17,11 @@
 
 //! Smaller traits used in FRAME which don't need their own file.
 
-use crate::{dispatch::Parameter, TypeInfo};
+use crate::dispatch::Parameter;
 use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen};
+use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
-use sp_std::vec::Vec;
+use sp_std::prelude::*;
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -384,7 +385,7 @@ impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for 
 ///
 /// The encoding is the encoding of `T` prepended with the compact encoding of its size in bytes.
 /// Thus the encoded value can be decoded as a `Vec<u8>`.
-#[derive(Debug, Eq, PartialEq, Default, Clone, MaxEncodedLen, TypeInfo)]
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct WrapperOpaque<T>(pub T);
 
@@ -392,8 +393,7 @@ impl<T: Encode> EncodeLike for WrapperOpaque<T> {}
 
 impl<T: Encode> Encode for WrapperOpaque<T> {
 	fn size_hint(&self) -> usize {
-		// Compact<u32> usually takes at most 4 bytes
-		self.0.size_hint().saturating_add(4)
+		self.0.size_hint().saturating_add(<codec::Compact<u32>>::max_encoded_len())
 	}
 
 	fn encode_to<O: codec::Output + ?Sized>(&self, dest: &mut O) {
@@ -425,6 +425,37 @@ impl<T> From<T> for WrapperOpaque<T> {
 	}
 }
 
+impl<T: MaxEncodedLen> MaxEncodedLen for WrapperOpaque<T> {
+	fn max_encoded_len() -> usize {
+		let t_max_len = T::max_encoded_len();
+
+		// See scale encoding https://substrate.dev/docs/en/knowledgebase/advanced/codec
+		if t_max_len < 64 {
+			t_max_len + 1
+		} else if t_max_len < 2usize.pow(14) {
+			t_max_len + 2
+		} else if t_max_len < 2usize.pow(30) {
+			t_max_len + 4
+		} else {
+			<codec::Compact<u32>>::max_encoded_len().saturating_add(T::max_encoded_len())
+		}
+	}
+}
+
+impl<T: TypeInfo + 'static> TypeInfo for WrapperOpaque<T> {
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("WrapperOpaque", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<T>()))])
+			.composite(
+				Fields::unnamed()
+					.field(|f| f.compact::<u32>().type_name("EncodedLengthOfT"))
+					.field(|f| f.ty::<T>().type_name("T")),
+			)
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -438,5 +469,23 @@ mod test {
 		assert_eq!(decoded_from_vec_u8, 3u32);
 		let decoded = <WrapperOpaque<u32>>::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(decoded.0, 3u32);
+
+		assert_eq!(<WrapperOpaque<[u8; 63]>>::max_encoded_len(), 63 + 1);
+		assert_eq!(
+			<WrapperOpaque<[u8; 63]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 63]).encode().len()
+		);
+
+		assert_eq!(<WrapperOpaque<[u8; 64]>>::max_encoded_len(), 64 + 2);
+		assert_eq!(
+			<WrapperOpaque<[u8; 64]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 64]).encode().len()
+		);
+
+		assert_eq!(
+			<WrapperOpaque<[u8; 2usize.pow(14) - 1]>>::max_encoded_len(),
+			2usize.pow(14) - 1 + 2
+		);
+		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
 	}
 }
