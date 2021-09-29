@@ -70,7 +70,7 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	let referendum_index: ReferendumIndex = ReferendumCount::<T>::get() - 1;
 	T::Scheduler::schedule_named(
 		(DEMOCRACY_ID, referendum_index).encode(),
-		DispatchTime::At(1u32.into()),
+		DispatchTime::At(2u32.into()),
 		None,
 		63,
 		frame_system::RawOrigin::Root.into(),
@@ -770,11 +770,10 @@ benchmarks! {
 			Err(Error::<T>::PreimageInvalid.into())
 		);
 	}
-}
 
-// TODO: individual tests
-frame_benchmarking::impl_benchmark_test_suite!(
-	Democracy,
-	crate::tests::new_test_ext(),
-	crate::tests::Test
-);
+	impl_benchmark_test_suite!(
+		Democracy,
+		crate::tests::new_test_ext(),
+		crate::tests::Test
+	);
+}
