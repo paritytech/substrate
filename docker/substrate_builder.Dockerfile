@@ -22,7 +22,6 @@ RUN useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
 
 COPY --from=builder /substrate/target/release/substrate /usr/local/bin
 COPY --from=builder /substrate/target/release/subkey /usr/local/bin
-COPY --from=builder /substrate/target/release/node-rpc-client /usr/local/bin
 COPY --from=builder /substrate/target/release/node-template /usr/local/bin
 COPY --from=builder /substrate/target/release/chain-spec-builder /usr/local/bin
 
