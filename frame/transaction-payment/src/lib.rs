@@ -48,6 +48,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 
 use sp_runtime::{
 	traits::{
@@ -225,7 +226,7 @@ where
 }
 
 /// Storage releases of the pallet.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 enum Releases {
 	/// Original version of the pallet.
 	V1Ancient,
@@ -331,12 +332,7 @@ pub mod pallet {
 					.unwrap(),
 			);
 
-			// This is the minimum value of the multiplier. Make sure that if we collapse to this
-			// value, we can recover with a reasonable amount of traffic. For this test we assert
-			// that if we collapse to minimum, the trend will be positive with a weight value
-			// which is 1% more than the target.
-			let min_value = T::FeeMultiplierUpdate::min();
-			let mut target = T::FeeMultiplierUpdate::target() *
+			let target = T::FeeMultiplierUpdate::target() *
 				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
 					"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
@@ -347,10 +343,17 @@ pub mod pallet {
 				// this is most likely because in a test setup we set everything to ().
 				return
 			}
-			target += addition;
 
 			#[cfg(any(feature = "std", test))]
 			sp_io::TestExternalities::new_empty().execute_with(|| {
+				// This is the minimum value of the multiplier. Make sure that if we collapse to
+				// this value, we can recover with a reasonable amount of traffic. For this test we
+				// assert that if we collapse to minimum, the trend will be positive with a weight
+				// value which is 1% more than the target.
+				let min_value = T::FeeMultiplierUpdate::min();
+
+				let target = target + addition;
+
 				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(
@@ -522,7 +525,8 @@ where
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
 impl<T: Config> ChargeTransactionPayment<T>
@@ -714,7 +718,7 @@ mod tests {
 	);
 
 	const CALL: &<Runtime as frame_system::Config>::Call =
-		&Call::Balances(BalancesCall::transfer(2, 69));
+		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 	thread_local! {
 		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
@@ -1054,7 +1058,7 @@ mod tests {
 
 	#[test]
 	fn query_info_works() {
-		let call = Call::Balances(BalancesCall::transfer(2, 69));
+		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let origin = 111111;
 		let extra = ();
 		let xt = TestXt::new(call, Some((origin, extra)));

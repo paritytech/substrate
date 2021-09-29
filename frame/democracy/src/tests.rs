@@ -72,7 +72,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<Call> for BaseFilter {
 	fn contains(call: &Call) -> bool {
-		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
+		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
@@ -226,7 +226,8 @@ fn params_should_work() {
 }
 
 fn set_balance_proposal(value: u64) -> Vec<u8> {
-	Call::Balances(pallet_balances::Call::set_balance(42, value, 0)).encode()
+	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
+		.encode()
 }
 
 #[test]
