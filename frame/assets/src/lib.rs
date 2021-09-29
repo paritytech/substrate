@@ -340,7 +340,7 @@ pub mod pallet {
 				assert!(Asset::<T, I>::contains_key(id), "Asset does not exist");
 
 				let bounded_name: BoundedVec<u8, T::StringLimit> =
-					name.clone().try_into().expect("string is too long");
+					name.clone().try_into().expect("asset name is too long");
 				let bounded_symbol: BoundedVec<u8, T::StringLimit> =
 					symbol.clone().try_into().expect("string is too long");
 
