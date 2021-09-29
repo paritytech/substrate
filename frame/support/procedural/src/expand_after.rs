@@ -23,14 +23,10 @@ use syn::spanned::Spanned;
 
 pub fn expand_after(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let def = syn::parse_macro_input!(input as ExpandAfterDef);
-	let expand_in_span = def.expand_in.span();
 
 	match expand_in_stream(&def.expand_after, &mut Some(def.expand_with), def.expand_in) {
 		Ok(stream) => stream.into(),
-		Err(_) => {
-			let msg = format!("Cannot find pattern `{:?}` in given token stream", def.expand_after);
-			syn::Error::new(expand_in_span, msg).to_compile_error().into()
-		},
+		Err(err) => err.to_compile_error().into(),
 	}
 }
 
@@ -77,10 +73,11 @@ fn expand_in_stream(
 	after: &[TokenTree],
 	with: &mut Option<TokenStream>,
 	stream: TokenStream,
-) -> Result<TokenStream, ()> {
+) -> syn::Result<TokenStream> {
 	assert!(with.is_some(), "`with` must be some, Option is used because `with` is used only once");
 	assert!(!after.is_empty(), "`after` mustn't be empty, otherwise it cannot be found");
 
+	let stream_span = stream.span();
 	let mut stream = stream.into_iter();
 	let mut extended = TokenStream::new();
 	let mut match_cursor = 0;
@@ -121,7 +118,10 @@ fn expand_in_stream(
 					break
 				}
 			},
-			None => return Err(()),
+			None => {
+				let msg = format!("Cannot find pattern `{:?}` in given token stream", after);
+				return Err(syn::Error::new(stream_span, msg))
+			},
 		}
 	}
 
