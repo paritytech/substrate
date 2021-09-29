@@ -177,10 +177,10 @@ fn call_static<'a>(
 			.host_state()
 			.expect(
 				"host functions can be called only from wasm instance;
-			wasm instance is always called initializing context;
-			therefore host_ctx cannot be None;
-			qed
-			",
+				wasm instance is always called initializing context;
+				therefore host_ctx cannot be None;
+				qed
+				",
 			)
 			.clone();
 

@@ -43,7 +43,10 @@ use std::{
 use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
 
 pub(crate) struct StoreData {
+	/// The limits we aply to the store. We need to store it here to return a reference to this
+	/// object when we have the limits enabled.
 	limits: StoreLimits,
+	/// This will only be set when we call into the runtime.
 	host_state: Option<Rc<HostState>>,
 }
 
@@ -618,10 +621,10 @@ fn perform_call(
 
 	let ret = entrypoint
 		.call(&mut ctx, data_ptr, data_len)
-		.and_then(|r| Ok(unpack_ptr_and_len(r)));
+		.map(unpack_ptr_and_len);
 
-	// Take the host state
-	ctx.as_context_mut().data_mut().host_state.take();
+	// Reset the host state
+	ctx.as_context_mut().data_mut().host_state = None;
 
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(ctx, &instance_wrapper, output_ptr, output_len)?;
