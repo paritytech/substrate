@@ -450,7 +450,7 @@ impl<T: TypeInfo + 'static> TypeInfo for WrapperOpaque<T> {
 			.type_params(vec![TypeParameter::new("T", Some(meta_type::<T>()))])
 			.composite(
 				Fields::unnamed()
-					.field(|f| f.compact::<u32>().type_name("EncodedLengthOfT"))
+					.field(|f| f.compact::<u32>())
 					.field(|f| f.ty::<T>().type_name("T")),
 			)
 	}
