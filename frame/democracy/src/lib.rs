@@ -1738,19 +1738,23 @@ impl<T: Config> Pallet<T> {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = 0;
 
+		let next = Self::lowest_unbaked();
+		let last = Self::referendum_count();
+		let r = last.saturating_sub(next);
+
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. If the queue is not empty, it will take
 			// full block weight.
 			if Self::launch_next(now).is_ok() {
 				weight = max_block_weight;
+			} else {
+				weight = weight.saturating_add(T::WeightInfo::on_initialize_base_with_launch_period(r));
 			}
+		} else {
+			weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
 		}
 
-		let next = Self::lowest_unbaked();
-		let last = Self::referendum_count();
-		let r = last.saturating_sub(next);
-		weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
 		// tally up votes for any expiring referenda.
 		for (index, info) in Self::maturing_referenda_at_inner(now, next..last).into_iter() {
 			let approved = Self::bake_referendum(now, index, info)?;
