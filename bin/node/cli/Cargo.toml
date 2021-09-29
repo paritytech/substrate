@@ -124,6 +124,10 @@ regex = "1"
 platforms = "1.1"
 async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
+jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = ["tokio1"] }
+tokio = { version = "1.10", features = ["macros", "time"] }
+wait-timeout = "0.2"
+remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
@@ -135,7 +139,7 @@ try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../ut
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
 
 [features]
-default = [ "cli" ]
+default = ["cli"]
 cli = [
 	"node-executor/wasmi-errno",
 	"node-inspect",

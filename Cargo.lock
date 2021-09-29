@@ -4512,6 +4512,7 @@ dependencies = [
  "frame-system",
  "futures 0.3.16",
  "hex-literal",
+ "jsonrpsee-ws-client",
  "log 0.4.14",
  "nix",
  "node-executor",
@@ -4525,6 +4526,7 @@ dependencies = [
  "platforms",
  "rand 0.7.3",
  "regex",
+ "remote-externalities",
  "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-chain-spec",
@@ -4569,7 +4571,9 @@ dependencies = [
  "substrate-build-script-utils",
  "substrate-frame-cli",
  "tempfile",
+ "tokio",
  "try-runtime-cli",
+ "wait-timeout",
 ]
 
 [[package]]
@@ -10478,9 +10482,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.10.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01cf844b23c6131f624accf65ce0e4e9956a8bb329400ea5bcc26ae3a5c20b0b"
+checksum = "c2c2416fdedca8443ae44b4527de1ea633af61d8f7169ffa6e72c5b53d24efcc"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",

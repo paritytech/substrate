@@ -189,7 +189,7 @@ impl WasmExecutor {
 
 	/// Perform a call into the given runtime.
 	///
-	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be isntantiated with the
+	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be instantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
 	/// In case of problems with during creation of the runtime or instantation, a `Err` is
@@ -247,7 +247,7 @@ impl sp_core::traits::ReadRuntimeVersion for WasmExecutor {
 		}
 
 		// If the blob didn't have embedded runtime version section, we fallback to the legacy
-		// way of fetching the verison: i.e. instantiating the given instance and calling
+		// way of fetching the version: i.e. instantiating the given instance and calling
 		// `Core_version` on it.
 
 		self.uncached_call(
