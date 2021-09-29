@@ -619,9 +619,7 @@ fn perform_call(
 	// Set the host state before calling into wasm.
 	ctx.as_context_mut().data_mut().host_state = Some(Rc::new(host_state));
 
-	let ret = entrypoint
-		.call(&mut ctx, data_ptr, data_len)
-		.map(unpack_ptr_and_len);
+	let ret = entrypoint.call(&mut ctx, data_ptr, data_len).map(unpack_ptr_and_len);
 
 	// Reset the host state
 	ctx.as_context_mut().data_mut().host_state = None;
