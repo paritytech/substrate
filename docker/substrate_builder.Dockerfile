@@ -26,11 +26,12 @@ COPY --from=builder /substrate/target/release/node-rpc-client /usr/local/bin
 COPY --from=builder /substrate/target/release/node-template /usr/local/bin
 COPY --from=builder /substrate/target/release/chain-spec-builder /usr/local/bin
 
-# checks
+# Sanity checks
 RUN ldd /usr/local/bin/substrate && \
 	/usr/local/bin/substrate --version
 
-RUN	rm -rf /usr/bin /usr/sbin
+# Remove whatever not required
+RUN rm -rf /usr/bin /usr/sbin
 
 USER substrate
 EXPOSE 30333 9933 9944 9615
