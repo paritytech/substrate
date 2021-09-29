@@ -342,7 +342,7 @@ pub mod pallet {
 				let bounded_name: BoundedVec<u8, T::StringLimit> =
 					name.clone().try_into().expect("asset name is too long");
 				let bounded_symbol: BoundedVec<u8, T::StringLimit> =
-					symbol.clone().try_into().expect("string is too long");
+					symbol.clone().try_into().expect("asset symbol is too long");
 
 				let metadata = AssetMetadata {
 					deposit: Zero::zero(),
