@@ -13,38 +13,40 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
-	"derive",
-] }
+log = { version = "0.4.0", default-features = false }
+impl-trait-for-tuples = "0.2.1"
+
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../primitives/trie", optional = true }
+
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
-sp-trie = { version = "4.0.0-dev", optional = true, default-features = false, path = "../../primitives/trie" }
-log = { version = "0.4.0", default-features = false }
-impl-trait-for-tuples = "0.2.1"
 
 [features]
 default = ["std", "historical"]
 historical = ["sp-trie"]
 std = [
+	"log/std",
 	"codec/std",
 	"scale-info/std",
 	"sp-std/std",
-	"sp-io/std",
-	"frame-support/std",
 	"sp-core/std",
+	"sp-io/std",
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-staking/std",
-	"pallet-timestamp/std",
 	"sp-trie/std",
-	"log/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-timestamp/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
