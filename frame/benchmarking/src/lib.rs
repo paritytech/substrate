@@ -849,22 +849,12 @@ macro_rules! impl_bench_name_tests {
 						$module::<$test>::[< test_benchmark_ $name >] ()
 					}) {
 						Err(err) => {
-							println!(
-								"{}: {:?}",
-								stringify!($name),
-								err,
-							);
-							assert!(false);
+							panic!("{}: {:?}", stringify!($name), err);
 						},
 						Ok(Err(err)) => {
 							match err {
 								$crate::BenchmarkError::Stop(err) => {
-									println!(
-										"{}: {:?}",
-										stringify!($name),
-										err,
-									);
-									assert!(false);
+									panic!("{}: {:?}", stringify!($name), err);
 								},
 								$crate::BenchmarkError::Override(_) => {
 									// This is still considered a success condition.
