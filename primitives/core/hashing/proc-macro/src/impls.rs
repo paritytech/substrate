@@ -39,16 +39,13 @@ impl MultipleInputBytes {
 
 impl Parse for InputBytes {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
-		match <syn::ExprArray>::parse(input) {
+		match syn::ExprArray::parse(input) {
 			Ok(array) => {
 				let mut bytes = Vec::<u8>::new();
 				for expr in array.elems.iter() {
 					match expr {
 						syn::Expr::Lit(lit) => match &lit.lit {
-							syn::Lit::Int(b) => {
-								let v: u8 = b.base10_parse()?;
-								bytes.push(v)
-							},
+							syn::Lit::Int(b) => bytes.push(b.base10_parse()?),
 							syn::Lit::Byte(b) => bytes.push(b.value()),
 							_ =>
 								return Err(syn::Error::new(
@@ -68,11 +65,11 @@ impl Parse for InputBytes {
 			Err(_e) => (),
 		}
 		// use rust names as a vec of their utf8 bytecode.
-		match <syn::Ident>::parse(input) {
+		match syn::Ident::parse(input) {
 			Ok(ident) => return Ok(InputBytes(ident.to_string().as_bytes().to_vec())),
 			Err(_e) => (),
 		}
-		Ok(InputBytes(<syn::LitByteStr>::parse(input)?.value()))
+		Ok(InputBytes(syn::LitByteStr::parse(input)?.value()))
 	}
 }
 

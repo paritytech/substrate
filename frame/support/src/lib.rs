@@ -30,8 +30,6 @@ pub use codec;
 #[doc(hidden)]
 pub use frame_metadata as metadata;
 #[doc(hidden)]
-pub use sp_core_hashing_proc_macro;
-#[doc(hidden)]
 pub use log;
 #[cfg(feature = "std")]
 #[doc(hidden)]
@@ -43,6 +41,8 @@ pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
 pub use sp_core::Void;
+#[doc(hidden)]
+pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
 #[doc(hidden)]
