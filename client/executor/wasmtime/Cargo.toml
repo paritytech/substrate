@@ -16,7 +16,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 libc = "0.2.90"
 cfg-if = "1.0"
 log = "0.4.8"
-scoped-tls = "1.0"
 parity-wasm = "0.42.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
@@ -24,10 +23,7 @@ sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-in
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
-wasmtime = { version = "0.27.0", default-features = false, features = [
-    "cache",
-    "parallel-compilation",
-] }
+wasmtime = { version = "0.29.0", default-features = false, features = ["cache", "parallel-compilation"] }
 
 [dev-dependencies]
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
