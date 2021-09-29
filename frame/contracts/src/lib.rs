@@ -382,7 +382,7 @@ pub mod pallet {
 			/// The contract that was terminated.
 			contract: T::AccountId,
 			/// The account that received the contracts remaining balance
-			beneficiary: T::AccountId
+			beneficiary: T::AccountId,
 		},
 
 		/// Code with the specified hash has been stored.
@@ -391,7 +391,7 @@ pub mod pallet {
 		/// Triggered when the current schedule is updated.
 		ScheduleUpdated {
 			/// The version of the newly set schedule.
-			version: u32
+			version: u32,
 		},
 
 		/// A custom event emitted by the contract.
@@ -400,7 +400,7 @@ pub mod pallet {
 			contract: T::AccountId,
 			/// Data supplied by the contract. Metadata generated during contract compilation
 			/// is needed to decode it.
-			data: Vec<u8>
+			data: Vec<u8>,
 		},
 
 		/// A code with the specified hash was removed.

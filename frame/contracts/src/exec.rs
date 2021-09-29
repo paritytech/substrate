@@ -660,7 +660,10 @@ where
 				}
 
 				// Deposit an instantiation event.
-				deposit_event::<T>(vec![], Event::Instantiated { deployer: self.caller().clone(), contract: account_id });
+				deposit_event::<T>(
+					vec![],
+					Event::Instantiated { deployer: self.caller().clone(), contract: account_id },
+				);
 			}
 
 			Ok(output)
@@ -1662,7 +1665,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+			);
 		});
 	}
 
@@ -1751,7 +1757,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+			);
 		});
 	}
 
