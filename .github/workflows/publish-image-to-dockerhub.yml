@@ -12,10 +12,6 @@ jobs:
   tag-and-push:
     runs-on: ubuntu-18.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
