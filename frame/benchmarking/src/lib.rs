@@ -505,7 +505,7 @@ macro_rules! benchmarks_iter {
 			$(, $( $args )* )?
 		);
 	};
-	// iteration-exit arm which generates one #[test] function for all cases.
+	// iteration-exit arm which doesn't generate a #[test] function for all cases.
 	(
 		{ }
 		{ $( $instance:ident: $instance_bound:tt )? }
