@@ -27,8 +27,15 @@ Command:
 ```bash
 # Use the `--fast` flag to get the dependencies without needing to install the Substrate and Subkey binary
 curl https://getsubstrate.io -sSf | bash -s -- --fast
-# Install only `subkey`, at a specific version of the this subkey crate
+# Install only `subkey`, at a specific version of the subkey crate
 cargo install --force subkey --git https://github.com/paritytech/substrate --version <SET VERSION> --locked
+```
+
+### Run in a container
+
+```bash
+# Use `--pull=always` with the `latest` tag, or specify a version in a tag
+docker run -it --pull=always docker.io/parity/subkey:latest <command to subkey>
 ```
 
 ### Generate a random account
