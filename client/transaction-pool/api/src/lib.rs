@@ -264,16 +264,16 @@ pub trait TransactionPool: Send + Sync {
 /// returned next, by e.g.  skipping elements that are known to depend on the reported
 /// transaction, which yields them invalid as well.
 pub trait ReadyTransactions: Iterator {
-	/// Report last-returned transaction as invalid.
+	/// Report given transaction as invalid.
 	///
 	/// This might affect subsequent elements returned by the iterator, so dependent transactions
 	/// are skipped for performance reasons.
-	fn report_invalid(&mut self);
+	fn report_invalid(&mut self, _tx: &Self::Item);
 }
 
 /// A no-op implementation for an empty iterator.
 impl<T> ReadyTransactions for std::iter::Empty<T> {
-	fn report_invalid(&mut self) {}
+	fn report_invalid(&mut self, _tx: &T) {}
 }
 
 /// Events that the transaction pool listens for.

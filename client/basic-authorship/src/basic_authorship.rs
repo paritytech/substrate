@@ -378,7 +378,7 @@ where
 			let block_size =
 				block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
 			if block_size + pending_tx_data.encoded_size() > block_size_limit {
-				pending_iterator.report_invalid();
+				pending_iterator.report_invalid(&pending_tx);
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
 					debug!(
@@ -401,7 +401,7 @@ where
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
-					pending_iterator.report_invalid();
+					pending_iterator.report_invalid(&pending_tx);
 					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
 						debug!(
@@ -414,7 +414,7 @@ where
 					}
 				},
 				Err(e) if skipped > 0 => {
-					pending_iterator.report_invalid();
+					pending_iterator.report_invalid(&pending_tx);
 					trace!(
 						"[{:?}] Ignoring invalid transaction when skipping: {}",
 						pending_tx_hash,
@@ -422,7 +422,7 @@ where
 					);
 				},
 				Err(e) => {
-					pending_iterator.report_invalid();
+					pending_iterator.report_invalid(&pending_tx);
 					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
 					unqueue_invalid.push(pending_tx_hash);
 				},

@@ -165,7 +165,6 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			all: self.ready.clone(),
 			best: self.best.clone(),
 			awaiting: Default::default(),
-			last_returned: Default::default(),
 			invalid: Default::default(),
 		}
 	}
@@ -488,7 +487,6 @@ pub struct BestIterator<Hash, Ex> {
 	all: ReadOnlyTrackedMap<Hash, ReadyTx<Hash, Ex>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
-	last_returned: Option<ReadyTx<Hash, Ex>>,
 	invalid: HashSet<Hash>,
 }
 
@@ -509,25 +507,25 @@ impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 impl<Hash: hash::Hash + Member, Ex> sc_transaction_pool_api::ReadyTransactions
 	for BestIterator<Hash, Ex>
 {
-	fn report_invalid(&mut self) {
-		BestIterator::report_invalid(self)
+	fn report_invalid(&mut self, tx: &Self::Item) {
+		BestIterator::report_invalid(self, tx)
 	}
 }
 
 impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
-	/// Report last returned value as invalid.
+	/// Report given transaction as invalid.
 	///
 	/// As a consequence, all values that depend on the invalid one will be skipped.
-	/// When invoked on an iterator that didn't return any values it has no effect.
+	/// When given transaction is not in the pool it has no effect.
 	/// When invoked on a fully drained iterator it has no effect either.
-	pub fn report_invalid(&mut self) {
-		if let Some(ref last) = self.last_returned {
+	pub fn report_invalid(&mut self, tx: &Arc<Transaction<Hash, Ex>>) {
+		if let Some(to_report) = self.all.read().get(&tx.hash) {
 			debug!(
 				target: "txpool",
 				"[{:?}] Reported as invalid. Will skip sub-chains while iterating.",
-				last.transaction.transaction.hash
+				to_report.transaction.transaction.hash
 			);
-			for hash in &last.unlocks {
+			for hash in &to_report.unlocks {
 				self.invalid.insert(hash.clone());
 			}
 		}
@@ -578,7 +576,6 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 				}
 			}
 
-			self.last_returned = Some(ready);
 			return Some(best.transaction)
 		}
 	}
@@ -801,16 +798,17 @@ mod tests {
 
 		// when
 		let mut it = ready.get();
-		let data = |tx: Arc<Transaction<u64, Vec<u8>>>| tx.data[0];
+		let data = |tx: &Arc<Transaction<u64, Vec<u8>>>| tx.data[0];
 
 		// then
-		assert_eq!(it.next().map(data), Some(1));
-		assert_eq!(it.next().map(data), Some(2));
-		assert_eq!(it.next().map(data), Some(3));
-		assert_eq!(it.next().map(data), Some(4));
+		assert_eq!(it.next().as_ref().map(data), Some(1));
+		assert_eq!(it.next().as_ref().map(data), Some(2));
+		assert_eq!(it.next().as_ref().map(data), Some(3));
+		let tx4 = it.next();
+		assert_eq!(tx4.as_ref().map(data), Some(4));
 		// report 4 as invalid, which should skip 5 & 6.
-		it.report_invalid();
-		assert_eq!(it.next().map(data), Some(7));
-		assert_eq!(it.next().map(data), None);
+		it.report_invalid(&tx4.unwrap());
+		assert_eq!(it.next().as_ref().map(data), Some(7));
+		assert_eq!(it.next().as_ref().map(data), None);
 	}
 }

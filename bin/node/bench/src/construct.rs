@@ -227,7 +227,7 @@ impl Iterator for TransactionsIterator {
 }
 
 impl ReadyTransactions for TransactionsIterator {
-	fn report_invalid(&mut self) {}
+	fn report_invalid(&mut self, _tx: &Self::Item) {}
 }
 
 impl sc_transaction_pool_api::TransactionPool for Transactions {
