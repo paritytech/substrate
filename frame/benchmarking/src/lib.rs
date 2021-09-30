@@ -155,6 +155,12 @@ macro_rules! whitelist {
 /// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
 /// each component. The function will return `Ok(())` if the benchmarks return no errors.
 ///
+/// It is also possible to generate one #[test] function per benchmark by calling the
+/// `impl_benchmark_test_suite` macro inside the `benchmarks` block. The functions will be named
+/// `bench_<benchmark_name>` and can be run via `cargo test`.
+/// You will see one line of output per benchmark. This approach will give you more understandable
+/// error messages and allows for parallel benchmark execution.
+///
 /// You can optionally add a `verify` code block at the end of a benchmark to test any final state
 /// of your benchmark in a unit test. For example:
 ///
@@ -174,7 +180,8 @@ macro_rules! whitelist {
 ///
 /// These `verify` blocks will not affect your benchmark results!
 ///
-/// You can construct benchmark tests like so:
+/// You can construct benchmark by using the `impl_benchmark_test_suite` macro or
+/// by manually implementing them like so:
 ///
 /// ```ignore
 /// #[test]
