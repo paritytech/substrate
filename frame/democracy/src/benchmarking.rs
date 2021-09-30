@@ -422,7 +422,7 @@ benchmarks! {
 		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
 		assert_eq!(Democracy::<T>::lowest_unbaked(), 0, "invalid referenda init");
 
-	}: { Democracy::<T>::on_initialize(0u32.into()) }
+	}: { Democracy::<T>::on_initialize(1u32.into()) }
 	verify {
 		// All should be on going
 		for i in 0 .. r {
