@@ -1241,6 +1241,48 @@ macro_rules! impl_benchmark_test {
 /// }
 /// ```
 ///
+/// When called inside the `benchmarks` macro of the `pallet_example` as
+///
+/// ```rust,ignore
+/// benchmarks! {
+/// 	// Benchmarks omitted for brevity
+///
+/// 	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
+/// }
+/// ```
+///
+/// It expands to the equivalent of:
+///
+/// ```rust,ignore
+/// #[cfg(test)]
+/// mod benchmarking {
+/// 	use super::*;
+/// 	use crate::tests::{new_test_ext, Test};
+/// 	use frame_support::assert_ok;
+///
+/// 	#[test]
+/// 	fn bench_accumulate_dummy() {
+/// 		new_test_ext().execute_with(|| {
+/// 			assert_ok!(test_benchmark_accumulate_dummy::<Test>());
+/// 		}
+/// 	}
+///
+/// 	#[test]
+/// 	fn bench_set_dummy() {
+/// 		new_test_ext().execute_with(|| {
+/// 			assert_ok!(test_benchmark_set_dummy::<Test>());
+/// 		}
+/// 	}
+///
+/// 	#[test]
+/// 	fn bench_sort_vector() {
+/// 		new_test_ext().execute_with(|| {
+/// 			assert_ok!(test_benchmark_sort_vector::<Test>());
+/// 		}
+/// 	}
+/// }
+/// ```
+///
 /// ## Arguments
 ///
 /// The first argument, `module`, must be the path to this crate's module.
