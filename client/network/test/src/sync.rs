@@ -616,9 +616,10 @@ fn syncs_header_only_forks() {
 	let small_hash = net.peer(0).client().info().best_hash;
 	net.peer(1).push_blocks(4, false);
 
-	net.block_until_sync();
 	// Peer 1 will sync the small fork even though common block state is missing
-	assert!(net.peer(1).has_block(&small_hash));
+	while !net.peer(1).has_block(&small_hash) {
+		net.block_until_idle();
+	}
 }
 
 #[test]
@@ -855,12 +856,19 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	net.block_until_idle();
 
 	// Connect another node that should now sync to the tip
-	net.add_full_peer_with_config(Default::default());
-	net.block_until_connected();
+	net.add_full_peer_with_config(FullPeerConfig {
+		connect_to_peers: Some(vec![0]),
+		..Default::default()
+	});
 
-	while !net.peer(2).has_block(&block_hash) {
-		net.block_until_idle();
-	}
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(2).has_block(&block_hash) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}));
 
 	// However peer 1 should still not have the block.
 	assert!(!net.peer(1).has_block(&block_hash));

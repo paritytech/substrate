@@ -1726,7 +1726,8 @@ impl<T: Config> Pallet<T> {
 	///
 	///
 	/// # <weight>
-	/// If a referendum is launched or maturing, this will take full block weight. Otherwise:
+	/// If a referendum is launched or maturing, this will take full block weight if queue is not
+	/// empty. Otherwise:
 	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
 	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
 	///   `ReferendumCount`, `LowestUnbaked`
@@ -1737,18 +1738,24 @@ impl<T: Config> Pallet<T> {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = 0;
 
-		// pick out another public referendum if it's time.
-		if (now % T::LaunchPeriod::get()).is_zero() {
-			// Errors come from the queue being empty. we don't really care about that, and even if
-			// we did, there is nothing we can do here.
-			let _ = Self::launch_next(now);
-			weight = max_block_weight;
-		}
-
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		let r = last.saturating_sub(next);
-		weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
+
+		// pick out another public referendum if it's time.
+		if (now % T::LaunchPeriod::get()).is_zero() {
+			// Errors come from the queue being empty. If the queue is not empty, it will take
+			// full block weight.
+			if Self::launch_next(now).is_ok() {
+				weight = max_block_weight;
+			} else {
+				weight =
+					weight.saturating_add(T::WeightInfo::on_initialize_base_with_launch_period(r));
+			}
+		} else {
+			weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
+		}
+
 		// tally up votes for any expiring referenda.
 		for (index, info) in Self::maturing_referenda_at_inner(now, next..last).into_iter() {
 			let approved = Self::bake_referendum(now, index, info)?;
