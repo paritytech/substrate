@@ -422,7 +422,39 @@ benchmarks! {
 		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
 		assert_eq!(Democracy::<T>::lowest_unbaked(), 0, "invalid referenda init");
 
-	}: { Democracy::<T>::on_initialize(0u32.into()) }
+	}: { Democracy::<T>::on_initialize(1u32.into()) }
+	verify {
+		// All should be on going
+		for i in 0 .. r {
+			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+				match value {
+					ReferendumInfo::Finished { .. } => return Err("Referendum has been finished".into()),
+					ReferendumInfo::Ongoing(_) => (),
+				}
+			}
+		}
+	}
+
+	on_initialize_base_with_launch_period {
+		let r in 1 .. MAX_REFERENDUMS;
+
+		for i in 0..r {
+			add_referendum::<T>(i)?;
+		}
+
+		for (key, mut info) in ReferendumInfoOf::<T>::iter() {
+			if let ReferendumInfo::Ongoing(ref mut status) = info {
+				status.end += 100u32.into();
+			}
+			ReferendumInfoOf::<T>::insert(key, info);
+		}
+
+		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
+		assert_eq!(Democracy::<T>::lowest_unbaked(), 0, "invalid referenda init");
+
+		let block_number = T::LaunchPeriod::get();
+
+	}: { Democracy::<T>::on_initialize(block_number) }
 	verify {
 		// All should be on going
 		for i in 0 .. r {
