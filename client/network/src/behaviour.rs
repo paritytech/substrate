@@ -38,6 +38,7 @@ use libp2p::{
 use log::debug;
 use prost::Message;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
+use sc_peerset::PeersetHandle;
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -206,6 +207,7 @@ impl<B: BlockT> Behaviour<B> {
 		light_client_request_protocol_config: request_responses::ProtocolConfig,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
+		peerset: PeersetHandle,
 	) -> Result<Self, request_responses::RegisterError> {
 		// Extract protocol name and add to `request_response_protocols`.
 		let block_request_protocol_name = block_request_protocol_config.name.to_string();
@@ -222,13 +224,14 @@ impl<B: BlockT> Behaviour<B> {
 		request_response_protocols.push(state_request_protocol_config);
 		request_response_protocols.push(light_client_request_protocol_config);
 
-		Ok(Behaviour {
+		Ok(Self {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
 			bitswap: bitswap.into(),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
+				peerset,
 			)?,
 			light_client_request_sender,
 			events: VecDeque::new(),

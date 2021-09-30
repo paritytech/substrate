@@ -696,10 +696,10 @@ mod tests {
 		let mut network = NoOpNetwork::default();
 
 		let peer_id = PeerId::random();
-		consensus.new_peer(&mut network, peer_id.clone(), ObservedRole::Full);
+		consensus.new_peer(&mut network, peer_id, ObservedRole::Full);
 		assert!(consensus.peers.contains_key(&peer_id));
 
-		consensus.peer_disconnected(&mut network, peer_id.clone());
+		consensus.peer_disconnected(&mut network, peer_id);
 		assert!(!consensus.peers.contains_key(&peer_id));
 	}
 

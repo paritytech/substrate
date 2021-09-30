@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,9 +16,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#[substrate_test_utils::test]
-async fn missing_func_parameter() {
-	assert!(true);
-}
+use codec::Encode;
+use serde::{Deserialize, Serialize};
 
-fn main() {}
+use sp_runtime::traits::Block as BlockT;
+
+/// An encoded signed commitment proving that the given header has been finalized.
+/// The given bytes should be the SCALE-encoded representation of a
+/// `beefy_primitives::SignedCommitment`.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SignedCommitment(sp_core::Bytes);
+
+impl SignedCommitment {
+	pub fn new<Block>(
+		signed_commitment: beefy_gadget::notification::SignedCommitment<Block>,
+	) -> Self
+	where
+		Block: BlockT,
+	{
+		SignedCommitment(signed_commitment.encode().into())
+	}
+}

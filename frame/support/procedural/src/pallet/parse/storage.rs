@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use super::helper;
+use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
@@ -26,6 +27,7 @@ mod keyword {
 	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(getter);
 	syn::custom_keyword!(storage_prefix);
+	syn::custom_keyword!(unbounded);
 	syn::custom_keyword!(OptionQuery);
 	syn::custom_keyword!(ValueQuery);
 }
@@ -33,15 +35,17 @@ mod keyword {
 /// Parse for one of the following:
 /// * `#[pallet::getter(fn dummy)]`
 /// * `#[pallet::storage_prefix = "CustomName"]`
+/// * `#[pallet::unbounded]`
 pub enum PalletStorageAttr {
 	Getter(syn::Ident, proc_macro2::Span),
 	StorageName(syn::LitStr, proc_macro2::Span),
+	Unbounded(proc_macro2::Span),
 }
 
 impl PalletStorageAttr {
 	fn attr_span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Getter(_, span) | Self::StorageName(_, span) => *span,
+			Self::Getter(_, span) | Self::StorageName(_, span) | Self::Unbounded(span) => *span,
 		}
 	}
 }
@@ -75,9 +79,42 @@ impl syn::parse::Parse for PalletStorageAttr {
 			})?;
 
 			Ok(Self::StorageName(renamed_prefix, attr_span))
+		} else if lookahead.peek(keyword::unbounded) {
+			content.parse::<keyword::unbounded>()?;
+
+			Ok(Self::Unbounded(attr_span))
 		} else {
 			Err(lookahead.error())
 		}
+	}
+}
+
+struct PalletStorageAttrInfo {
+	getter: Option<syn::Ident>,
+	rename_as: Option<syn::LitStr>,
+	unbounded: bool,
+}
+
+impl PalletStorageAttrInfo {
+	fn from_attrs(attrs: Vec<PalletStorageAttr>) -> syn::Result<Self> {
+		let mut getter = None;
+		let mut rename_as = None;
+		let mut unbounded = false;
+		for attr in attrs {
+			match attr {
+				PalletStorageAttr::Getter(ident, ..) if getter.is_none() => getter = Some(ident),
+				PalletStorageAttr::StorageName(name, ..) if rename_as.is_none() =>
+					rename_as = Some(name),
+				PalletStorageAttr::Unbounded(..) if !unbounded => unbounded = true,
+				attr =>
+					return Err(syn::Error::new(
+						attr.attr_span(),
+						"Invalid attribute: Duplicate attribute",
+					)),
+			}
+		}
+
+		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded })
 	}
 }
 
@@ -85,6 +122,7 @@ impl syn::parse::Parse for PalletStorageAttr {
 pub enum Metadata {
 	Value { value: syn::Type },
 	Map { value: syn::Type, key: syn::Type },
+	CountedMap { value: syn::Type, key: syn::Type },
 	DoubleMap { value: syn::Type, key1: syn::Type, key2: syn::Type },
 	NMap { keys: Vec<syn::Type>, keygen: syn::Type, value: syn::Type },
 }
@@ -129,6 +167,8 @@ pub struct StorageDef {
 	/// generics of the storage.
 	/// If generics are not named, this is none.
 	pub named_generics: Option<StorageGenerics>,
+	/// If the value stored in this storage is unbounded.
+	pub unbounded: bool,
 }
 
 /// The parsed generic from the
@@ -145,6 +185,14 @@ pub enum StorageGenerics {
 		max_values: Option<syn::Type>,
 	},
 	Map {
+		hasher: syn::Type,
+		key: syn::Type,
+		value: syn::Type,
+		query_kind: Option<syn::Type>,
+		on_empty: Option<syn::Type>,
+		max_values: Option<syn::Type>,
+	},
+	CountedMap {
 		hasher: syn::Type,
 		key: syn::Type,
 		value: syn::Type,
@@ -172,6 +220,7 @@ impl StorageGenerics {
 		let res = match self.clone() {
 			Self::DoubleMap { value, key1, key2, .. } => Metadata::DoubleMap { value, key1, key2 },
 			Self::Map { value, key, .. } => Metadata::Map { value, key },
+			Self::CountedMap { value, key, .. } => Metadata::CountedMap { value, key },
 			Self::Value { value, .. } => Metadata::Value { value },
 			Self::NMap { keygen, value, .. } =>
 				Metadata::NMap { keys: collect_keys(&keygen)?, keygen, value },
@@ -185,6 +234,7 @@ impl StorageGenerics {
 		match &self {
 			Self::DoubleMap { query_kind, .. } |
 			Self::Map { query_kind, .. } |
+			Self::CountedMap { query_kind, .. } |
 			Self::Value { query_kind, .. } |
 			Self::NMap { query_kind, .. } => query_kind.clone(),
 		}
@@ -194,6 +244,7 @@ impl StorageGenerics {
 enum StorageKind {
 	Value,
 	Map,
+	CountedMap,
 	DoubleMap,
 	NMap,
 }
@@ -323,6 +374,33 @@ fn process_named_generics(
 				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
 		},
+		StorageKind::CountedMap => {
+			check_generics(
+				&parsed,
+				&["Hasher", "Key", "Value"],
+				&["QueryKind", "OnEmpty", "MaxValues"],
+				"CountedStorageMap",
+				args_span,
+			)?;
+
+			StorageGenerics::CountedMap {
+				hasher: parsed
+					.remove("Hasher")
+					.map(|binding| binding.ty)
+					.expect("checked above as mandatory generic"),
+				key: parsed
+					.remove("Key")
+					.map(|binding| binding.ty)
+					.expect("checked above as mandatory generic"),
+				value: parsed
+					.remove("Value")
+					.map(|binding| binding.ty)
+					.expect("checked above as mandatory generic"),
+				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
+				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
+			}
+		},
 		StorageKind::DoubleMap => {
 			check_generics(
 				&parsed,
@@ -424,6 +502,11 @@ fn process_unnamed_generics(
 			Metadata::Map { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
 		),
+		StorageKind::CountedMap => (
+			None,
+			Metadata::CountedMap { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
+			retrieve_arg(4).ok(),
+		),
 		StorageKind::DoubleMap => (
 			None,
 			Metadata::DoubleMap {
@@ -450,6 +533,7 @@ fn process_generics(
 	let storage_kind = match &*segment.ident.to_string() {
 		"StorageValue" => StorageKind::Value,
 		"StorageMap" => StorageKind::Map,
+		"CountedStorageMap" => StorageKind::CountedMap,
 		"StorageDoubleMap" => StorageKind::DoubleMap,
 		"StorageNMap" => StorageKind::NMap,
 		found => {
@@ -583,25 +667,8 @@ impl StorageDef {
 		};
 
 		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
-		let (mut getters, mut names) = attrs
-			.into_iter()
-			.partition::<Vec<_>, _>(|attr| matches!(attr, PalletStorageAttr::Getter(..)));
-		if getters.len() > 1 {
-			let msg = "Invalid pallet::storage, multiple argument pallet::getter found";
-			return Err(syn::Error::new(getters[1].attr_span(), msg))
-		}
-		if names.len() > 1 {
-			let msg = "Invalid pallet::storage, multiple argument pallet::storage_prefix found";
-			return Err(syn::Error::new(names[1].attr_span(), msg))
-		}
-		let getter = getters.pop().map(|attr| match attr {
-			PalletStorageAttr::Getter(ident, _) => ident,
-			_ => unreachable!(),
-		});
-		let rename_as = names.pop().map(|attr| match attr {
-			PalletStorageAttr::StorageName(lit, _) => lit,
-			_ => unreachable!(),
-		});
+		let PalletStorageAttrInfo { getter, rename_as, unbounded } =
+			PalletStorageAttrInfo::from_attrs(attrs)?;
 
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
@@ -609,7 +676,7 @@ impl StorageDef {
 		instances.push(helper::check_type_def_gen(&item.generics, item.ident.span())?);
 
 		let where_clause = item.generics.where_clause.clone();
-		let docs = helper::get_doc_literals(&item.attrs);
+		let docs = get_doc_literals(&item.attrs);
 
 		let typ = if let syn::Type::Path(typ) = &*item.ty {
 			typ
@@ -658,6 +725,7 @@ impl StorageDef {
 			where_clause,
 			cfg_attrs,
 			named_generics,
+			unbounded,
 		})
 	}
 }
