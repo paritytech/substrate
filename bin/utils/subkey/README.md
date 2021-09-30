@@ -18,6 +18,19 @@ If you save any output of `subkey` into a file, make sure to apply proper permis
 
 The following guide explains *some* of the `subkey` commands. For the full list and the most up to date documentation, make sure to check the integrated help with `subkey --help`.
 
+### Install with Cargo
+
+You will need to have the Substrate build dependencies to install Subkey. Use the following two commands to install the dependencies and Subkey, respectively:
+
+Command:
+
+```bash
+# Use the `--fast` flag to get the dependencies without needing to install the Substrate and Subkey binary
+curl https://getsubstrate.io -sSf | bash -s -- --fast
+# Install only `subkey`, at a specific version of the this subkey crate
+cargo install --force subkey --git https://github.com/paritytech/substrate --version <SET VERSION> --locked
+```
+
 ### Generate a random account
 
 Generating a new key is as simple as running:
