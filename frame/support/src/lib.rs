@@ -702,6 +702,21 @@ pub use frame_support_procedural::DefaultNoBound;
 /// ```
 pub use frame_support_procedural::require_transactional;
 
+/// Convert the current crate version into a [`CrateVersion`](crate::traits::CrateVersion).
+///
+/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
+/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
+/// This means that the [`CrateVersion`](crate::traits::CrateVersion)
+/// object will correspond to the version of the crate the macro is called in!
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::{traits::CrateVersion, crate_to_crate_version};
+/// const Version: CrateVersion = crate_to_crate_version!();
+/// ```
+pub use frame_support_procedural::crate_to_crate_version;
+
 /// Return Err of the expression: `return Err($expression);`.
 ///
 /// Used as `fail!(expression)`.
@@ -819,6 +834,7 @@ pub mod tests {
 		StorageHasher,
 	};
 	use codec::{Codec, EncodeLike};
+	use frame_support::traits::CrateVersion;
 	use sp_io::TestExternalities;
 	use sp_std::result;
 
@@ -830,6 +846,12 @@ pub mod tests {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn module_name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn crate_version<P: 'static>() -> Option<CrateVersion> {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 	}
@@ -1411,15 +1433,17 @@ pub mod pallet_prelude {
 /// `<Pallet as Store>::Foo`.
 ///
 /// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::set_storage_max_encoded_len]`, e.g.:
+/// `#[pallet::generate_storage_info]`, e.g.:
 /// ```ignore
 /// #[pallet::pallet]
-/// #[pallet::set_storage_max_encoded_len]
+/// #[pallet::generate_storage_info]
 /// pub struct Pallet<T>(_);
 /// ```
 ///
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
 /// and value types must bound [`pallet_prelude::MaxEncodedLen`].
+/// Some individual storage can opt-out from this constraint by using `#[pallet::unbounded]`,
+/// see `#[pallet::storage]` documentation.
 ///
 /// As the macro implements [`traits::GetStorageVersion`], the current storage version needs to
 /// be communicated to the macro. This can be done by using the `storage_version` attribute:
@@ -1720,6 +1744,11 @@ pub mod pallet_prelude {
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
+///
+/// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
+/// When implementating the storage info (when #[pallet::generate_storage_info]` is specified
+/// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
+/// This can be useful for storage which can never go into PoV (Proof of Validity).
 ///
 /// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
 ///

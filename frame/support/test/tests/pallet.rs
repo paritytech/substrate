@@ -329,6 +329,10 @@ pub mod pallet {
 	pub type SomeCountedStorageMap<T> =
 		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type Unbounded<T> = StorageValue<Value = Vec<u8>>;
+
 	#[pallet::genesis_config]
 	#[derive(Default)]
 	pub struct GenesisConfig {
@@ -568,7 +572,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		// Exclude part `Storage` in order not to check its metadata in tests.
-		System: frame_system exclude_parts { Storage },
+		System: frame_system exclude_parts { Pallet, Storage },
 		Example: pallet,
 		Example2: pallet2 exclude_parts { Call },
 		Example4: pallet4 use_parts { Call },
@@ -940,6 +944,10 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		let k = [twox_128(b"Example"), twox_128(b"CounterForRenamedCountedMap")].concat();
 		assert_eq!(unhashed::get::<u32>(&k), Some(1u32));
+
+		pallet::Unbounded::<Runtime>::put(vec![1, 2]);
+		let k = [twox_128(b"Example"), twox_128(b"Unbounded")].concat();
+		assert_eq!(unhashed::get::<Vec<u8>>(&k), Some(vec![1, 2]));
 	})
 }
 
@@ -1024,52 +1032,6 @@ fn metadata() {
 
 	let pallets = vec![
 		PalletMetadata {
-			index: 0,
-			name: "System",
-			storage: None, // The storage metadatas have been excluded.
-			calls: Some(meta_type::<frame_system::Call<Runtime>>().into()),
-			event: Some(meta_type::<frame_system::Event<Runtime>>().into()),
-			constants: vec![
-				PalletConstantMetadata {
-					name: "BlockWeights",
-					ty: meta_type::<frame_system::limits::BlockWeights>(),
-					value: vec![],
-					docs: vec![],
-				},
-				PalletConstantMetadata {
-					name: "BlockLength",
-					ty: meta_type::<frame_system::limits::BlockLength>(),
-					value: vec![],
-					docs: vec![],
-				},
-				PalletConstantMetadata {
-					name: "BlockHashCount",
-					ty: meta_type::<u32>(),
-					value: vec![],
-					docs: vec![],
-				},
-				PalletConstantMetadata {
-					name: "DbWeight",
-					ty: meta_type::<frame_support::weights::RuntimeDbWeight>(),
-					value: vec![],
-					docs: vec![],
-				},
-				PalletConstantMetadata {
-					name: "Version",
-					ty: meta_type::<sp_version::RuntimeVersion>(),
-					value: vec![],
-					docs: vec![],
-				},
-				PalletConstantMetadata {
-					name: "SS58Prefix",
-					ty: meta_type::<u16>(),
-					value: vec![],
-					docs: vec![],
-				},
-			],
-			error: Some(meta_type::<frame_system::Error<Runtime>>().into()),
-		},
-		PalletMetadata {
 			index: 1,
 			name: "Example",
 			storage: Some(PalletStorageMetadata {
@@ -1239,213 +1201,12 @@ fn metadata() {
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
-				],
-			}),
-			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
-			event: Some(meta_type::<pallet::Event<Runtime>>().into()),
-			constants: vec![
-				PalletConstantMetadata {
-					name: "MyGetParam",
-					ty: meta_type::<u32>(),
-					value: vec![10, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
-				},
-				PalletConstantMetadata {
-					name: "MyGetParam2",
-					ty: meta_type::<u32>(),
-					value: vec![11, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
-				},
-				PalletConstantMetadata {
-					name: "MyGetParam3",
-					ty: meta_type::<u64>(),
-					value: vec![12, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![],
-				},
-				PalletConstantMetadata {
-					name: "some_extra",
-					ty: meta_type::<u64>(),
-					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc", " Some doc"],
-				},
-				PalletConstantMetadata {
-					name: "some_extra_extra",
-					ty: meta_type::<u64>(),
-					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
-				},
-			],
-			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
-		},
-		PalletMetadata {
-			index: 1,
-			name: "Example",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Example",
-				entries: vec![
 					StorageEntryMetadata {
-						name: "ValueWhereClause",
+						name: "Unbounded",
 						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u64>()),
+						ty: StorageEntryType::Plain(meta_type::<Vec<u8>>()),
 						default: vec![0],
 						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "Value",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u32>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "Value2",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u64>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "Map",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
-							key: meta_type::<u8>(),
-							value: meta_type::<u16>(),
-							hashers: vec![StorageHasher::Blake2_128Concat],
-						},
-						default: vec![4, 0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "Map2",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							key: meta_type::<u16>(),
-							value: meta_type::<u32>(),
-							hashers: vec![StorageHasher::Twox64Concat],
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "DoubleMap",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							value: meta_type::<u32>(),
-							key: meta_type::<(u8, u16)>(),
-							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat,
-							],
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "DoubleMap2",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							value: meta_type::<u64>(),
-							key: meta_type::<(u16, u32)>(),
-							hashers: vec![
-								StorageHasher::Twox64Concat,
-								StorageHasher::Blake2_128Concat,
-							],
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "NMap",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							key: meta_type::<u8>(),
-							hashers: vec![StorageHasher::Blake2_128Concat],
-							value: meta_type::<u32>(),
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "NMap2",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							key: meta_type::<(u16, u32)>(),
-							hashers: vec![
-								StorageHasher::Twox64Concat,
-								StorageHasher::Blake2_128Concat,
-							],
-							value: meta_type::<u64>(),
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					#[cfg(feature = "conditional-storage")]
-					StorageEntryMetadata {
-						name: "ConditionalValue",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Plain(meta_type::<u32>()),
-						default: vec![0],
-						docs: vec![],
-					},
-					#[cfg(feature = "conditional-storage")]
-					StorageEntryMetadata {
-						name: "ConditionalMap",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							key: meta_type::<u16>(),
-							value: meta_type::<u32>(),
-							hashers: vec![StorageHasher::Twox64Concat],
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					#[cfg(feature = "conditional-storage")]
-					StorageEntryMetadata {
-						name: "ConditionalDoubleMap",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							value: meta_type::<u32>(),
-							key: meta_type::<(u8, u16)>(),
-							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat,
-							],
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					#[cfg(feature = "conditional-storage")]
-					StorageEntryMetadata {
-						name: "ConditionalNMap",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							key: meta_type::<(u8, u16)>(),
-							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat,
-							],
-							value: meta_type::<u32>(),
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "RenamedCountedMap",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							hashers: vec![StorageHasher::Twox64Concat],
-							key: meta_type::<u8>(),
-							value: meta_type::<u32>(),
-						},
-						default: vec![0],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
-						name: "CounterForRenamedCountedMap",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(meta_type::<u32>()),
-						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
 					},
 				],
 			}),
@@ -1490,15 +1251,35 @@ fn metadata() {
 			name: "Example2",
 			storage: Some(PalletStorageMetadata {
 				prefix: "Example2",
-				entries: vec![StorageEntryMetadata {
-					name: "SomeValue",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(meta_type::<Vec<u32>>()),
-					default: vec![0],
-					docs: vec![],
-				}],
+				entries: vec![
+					StorageEntryMetadata {
+						name: "SomeValue",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(meta_type::<Vec<u32>>()),
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "SomeCountedStorageMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Twox64Concat],
+							key: meta_type::<u8>(),
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForSomeCountedStorageMap",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec!["Counter for the related counted storage map"],
+					},
+				],
 			}),
-			calls: Some(meta_type::<pallet2::Call<Runtime>>().into()),
+			calls: None,
 			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
 			constants: vec![],
 			error: None,
@@ -1527,7 +1308,7 @@ fn metadata() {
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	pretty_assertions::assert_eq!(actual_metadata.pallets[1], expected_metadata.pallets[1]);
+	pretty_assertions::assert_eq!(actual_metadata.pallets, expected_metadata.pallets);
 }
 
 #[test]
@@ -1667,6 +1448,13 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"CounterForRenamedCountedMap").to_vec(),
 				max_values: Some(1),
 				max_size: Some(4),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Unbounded".to_vec(),
+				prefix: prefix(b"Example", b"Unbounded").to_vec(),
+				max_values: Some(1),
+				max_size: None,
 			},
 		],
 	);

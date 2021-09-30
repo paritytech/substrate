@@ -22,6 +22,7 @@ use super::*;
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
+	codec::Decode,
 	traits::{
 		schedule::DispatchTime, Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable,
 	},
@@ -194,9 +195,8 @@ benchmarks! {
 	emergency_cancel {
 		let origin = T::CancellationOrigin::successful_origin();
 		let referendum_index = add_referendum::<T>(0)?;
-		let call = Call::<T>::emergency_cancel { ref_index: referendum_index };
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, referendum_index)
 	verify {
 		// Referendum has been canceled
 		assert_noop!(
@@ -219,14 +219,11 @@ benchmarks! {
 		assert_ok!(
 			Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone())
 		);
-
+		let origin = T::BlacklistOrigin::successful_origin();
 		// Add a referendum of our proposal.
 		let referendum_index = add_referendum::<T>(0)?;
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
-
-		let call = Call::<T>::blacklist { proposal_hash: hash, maybe_ref_index: Some(referendum_index) };
-		let origin = T::BlacklistOrigin::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, hash, Some(referendum_index))
 	verify {
 		// Referendum has been canceled
 		assert_noop!(
@@ -246,9 +243,7 @@ benchmarks! {
 			proposal_hash,
 			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
 		);
-
-		let call = Call::<T>::external_propose { proposal_hash };
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, proposal_hash)
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -257,8 +252,7 @@ benchmarks! {
 	external_propose_majority {
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-		let call = Call::<T>::external_propose_majority { proposal_hash };
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, proposal_hash)
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -267,8 +261,7 @@ benchmarks! {
 	external_propose_default {
 		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-		let call = Call::<T>::external_propose_default { proposal_hash };
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, proposal_hash)
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -283,13 +276,7 @@ benchmarks! {
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0u32;
-		let call = Call::<T>::fast_track {
-			proposal_hash,
-			voting_period: voting_period.into(),
-			delay: delay.into()
-		};
-
-	}: { call.dispatch_bypass_filter(origin_fast_track)? }
+	}: _<T::Origin>(origin_fast_track, proposal_hash, voting_period.into(), delay.into())
 	verify {
 		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created")
 	}
@@ -310,10 +297,9 @@ benchmarks! {
 		vetoers.sort();
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
 
-		let call = Call::<T>::veto_external { proposal_hash };
 		let origin = T::VetoOrigin::successful_origin();
 		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, proposal_hash)
 	verify {
 		assert!(NextExternal::<T>::get().is_none());
 		let (_, new_vetoers) = <Blacklist<T>>::get(&proposal_hash).ok_or("no blacklist")?;
@@ -774,9 +760,13 @@ benchmarks! {
 			Some(PreimageStatus::Available { .. }) => (),
 			_ => return Err("preimage not available".into())
 		}
+		let origin = RawOrigin::Root.into();
+		let call = Call::<T>::enact_proposal { proposal_hash, index: 0 }.encode();
 	}: {
 		assert_eq!(
-			Democracy::<T>::enact_proposal(RawOrigin::Root.into(), proposal_hash, 0),
+			<Call<T> as Decode>::decode(&mut &*call)
+				.expect("call is encoded above, encoding must be correct")
+				.dispatch_bypass_filter(origin),
 			Err(Error::<T>::PreimageInvalid.into())
 		);
 	}

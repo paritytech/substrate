@@ -1348,11 +1348,11 @@ pub mod pallet {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let initial_unlocking = ledger.unlocking.len() as u32;
-			let ledger = ledger.rebond(value);
+			let (ledger, rebonded_value) = ledger.rebond(value);
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
-			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
+			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), rebonded_value));
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);

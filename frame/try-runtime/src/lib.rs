@@ -32,6 +32,12 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Returns the consumed weight of the migration in case of a successful one, combined with
 		/// the total allowed block weight of the runtime.
-		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString>;
+		fn on_runtime_upgrade() -> (Weight, Weight);
+
+		/// Execute the given block, but don't check that its state root matches that of yours.
+		///
+		/// This is only sensible where the incoming block is from a different network, yet it has
+		/// the same block format as the runtime implementing this API.
+		fn execute_block_no_check(block: Block) -> Weight;
 	}
 }
