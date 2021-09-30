@@ -718,7 +718,7 @@ mod tests {
 			);
 
 			// when
-			let deadline = time::Duration::from_secs(9);
+			let deadline = time::Duration::from_secs(900);
 			let block =
 				block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
 					.map(|r| r.block)
