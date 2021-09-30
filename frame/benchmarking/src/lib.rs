@@ -1228,7 +1228,6 @@ macro_rules! impl_benchmark_test {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_accumulate_dummy::<Test>());
 /// 			assert_ok!(test_benchmark_set_dummy::<Test>());
-/// 			assert_ok!(test_benchmark_another_set_dummy::<Test>());
 /// 			assert_ok!(test_benchmark_sort_vector::<Test>());
 /// 		});
 /// 	}
