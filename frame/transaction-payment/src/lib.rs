@@ -282,8 +282,8 @@ pub mod pallet {
 		/// ```
 		///
 		/// Note that since we use `final_fee` the multiplier applies also to the regular `tip`
-		/// sent with the transaction. So not only the transaction get's a priority bump based
-		/// on the `inclusion_fee` but also we amplify the impact of tips applied to `Operational`
+		/// sent with the transaction. So, not only does the transaction get a priority bump based
+		/// on the `inclusion_fee`, but we also amplify the impact of tips applied to `Operational`
 		/// transactions.
 		#[pallet::constant]
 		type OperationalFeeMultiplier: Get<u8>;
