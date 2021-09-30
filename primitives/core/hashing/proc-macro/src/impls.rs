@@ -105,3 +105,18 @@ pub(super) fn blake2b_64(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::blake2_64(bytes.as_slice());
 	TokenTree::Literal(Literal::byte_string(&result[..])).into()
 }
+
+pub(super) fn keccak_256(bytes: Vec<u8>) -> TokenStream {
+	let result = sp_core_hashing::keccak_256(bytes.as_slice());
+	TokenTree::Literal(Literal::byte_string(&result[..])).into()
+}
+
+pub(super) fn keccak_512(bytes: Vec<u8>) -> TokenStream {
+	let result = sp_core_hashing::keccak_512(bytes.as_slice());
+	TokenTree::Literal(Literal::byte_string(&result[..])).into()
+}
+
+pub(super) fn sha2_256(bytes: Vec<u8>) -> TokenStream {
+	let result = sp_core_hashing::sha2_256(bytes.as_slice());
+	TokenTree::Literal(Literal::byte_string(&result[..])).into()
+}

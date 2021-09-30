@@ -29,10 +29,21 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn blake2() {
+	fn blake2b() {
 		assert_eq!(sp_core_hashing_proc_macro::blake2b_64!(b""), &blake2_64(b"")[..],);
 		assert_eq!(sp_core_hashing_proc_macro::blake2b_256!(b"test"), &blake2_256(b"test")[..],);
 		assert_eq!(sp_core_hashing_proc_macro::blake2b_512!(b""), &blake2_512(b"")[..],);
+	}
+
+	#[test]
+	fn keccak() {
+		assert_eq!(sp_core_hashing_proc_macro::keccak_256!(b"test"), &keccak_256(b"test")[..],);
+		assert_eq!(sp_core_hashing_proc_macro::keccak_512!(b"test"), &keccak_512(b"test")[..],);
+	}
+
+	#[test]
+	fn sha2() {
+		assert_eq!(sp_core_hashing_proc_macro::sha2_256!(b"test"), &sha2_256(b"test")[..],);
 	}
 
 	#[test]
