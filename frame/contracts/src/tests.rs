@@ -478,20 +478,25 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored(code_hash.into())),
+					event: Event::Contracts(crate::Event::CodeStored {
+						code_hash: code_hash.into()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::ContractEmitted(
-						addr.clone(),
-						vec![1, 2, 3, 4]
-					)),
+					event: Event::Contracts(crate::Event::ContractEmitted {
+						contract: addr.clone(),
+						data: vec![1, 2, 3, 4]
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Instantiated(ALICE, addr.clone())),
+					event: Event::Contracts(crate::Event::Instantiated {
+						deployer: ALICE,
+						contract: addr.clone()
+					}),
 					topics: vec![],
 				},
 			]
@@ -764,12 +769,15 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeRemoved(code_hash)),
+					event: Event::Contracts(crate::Event::CodeRemoved { code_hash }),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Terminated(addr.clone(), DJANGO)),
+					event: Event::Contracts(crate::Event::Terminated {
+						contract: addr.clone(),
+						beneficiary: DJANGO
+					}),
 					topics: vec![],
 				},
 			],
