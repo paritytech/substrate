@@ -83,56 +83,40 @@ impl Parse for MultipleInputBytes {
 
 pub(super) fn twox_64(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::twox_64(bytes.as_slice());
-	vec_to_token(&result[..])
+	quote!(#result)
 }
 
 pub(super) fn twox_128(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::twox_128(bytes.as_slice());
-	vec_to_token(&result[..])
+	quote!(#result)
 }
 
 pub(super) fn blake2b_512(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::blake2_512(bytes.as_slice());
-	vec_to_token(&result[..])
+	quote!(#result)
 }
 
 pub(super) fn blake2b_256(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::blake2_256(bytes.as_slice());
-	vec_to_token(&result[..])
+	quote!(#result)
 }
 
 pub(super) fn blake2b_64(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::blake2_64(bytes.as_slice());
-	vec_to_token(&result[..])
+	quote!(#result)
 }
 
 pub(super) fn keccak_256(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::keccak_256(bytes.as_slice());
-	vec_to_token(&result[..])
+	quote!(#result)
 }
 
 pub(super) fn keccak_512(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::keccak_512(bytes.as_slice());
-	vec_to_token(&result[..])
+	quote!(#result)
 }
 
 pub(super) fn sha2_256(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::sha2_256(bytes.as_slice());
-	vec_to_token(&result[..])
-}
-
-fn vec_to_token(bytes: &[u8]) -> TokenStream {
-	// could also simply use quote.
-	let mut values = TokenStream::new();
-	let mut first = true;
-	values.extend(bytes.iter().flat_map(|b| [
-			if first {
-				first = false;
-				TokenTree::Literal(Literal::u8_suffixed(*b))
-			} else {
-				TokenTree::Literal(Literal::u8_unsuffixed(*b))
-			},
-		TokenTree::Punct(Punct::new(',', Spacing::Alone)),
-	]));
-	TokenTree::Group(Group::new(Delimiter::Bracket, values)).into()
+	quote!(#result)
 }
