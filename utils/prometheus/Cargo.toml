@@ -17,7 +17,7 @@ log = "0.4.8"
 prometheus = { version = "0.11.0", default-features = false }
 futures-util = { version = "0.3.17", default-features = false, features = ["io"] }
 derive_more = "0.99"
-async-std = { version = "1.6.5", features = ["unstable"] }
+async-std = { version = "1.10.0", features = ["unstable"] }
 tokio = "1.10"
 hyper = { version = "0.14.11", default-features = false, features = ["http1", "server", "tcp"] }
 

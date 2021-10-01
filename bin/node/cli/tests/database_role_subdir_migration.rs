@@ -25,9 +25,9 @@ use tempfile::tempdir;
 
 pub mod common;
 
-#[test]
+#[tokio::test]
 #[cfg(unix)]
-fn database_role_subdir_migration() {
+async fn database_role_subdir_migration() {
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	let base_path = tempdir().expect("could not create a temp dir");
@@ -62,7 +62,8 @@ fn database_role_subdir_migration() {
 			"44445",
 			"--no-prometheus",
 		],
-	);
+	)
+	.await;
 
 	// check if the database dir had been migrated
 	assert!(!path.join("db_version").exists());
