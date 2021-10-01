@@ -436,7 +436,7 @@ macro_rules! parameter_types {
 			/// environment.
 			#[allow(unused)]
 			pub fn set(value: &$type) {
-				$crate::storage::unhashed::put(Self::key(), value);
+				$crate::storage::unhashed::put(&Self::key(), value);
 			}
 
 			/// Returns the value of this parameter type.
@@ -445,7 +445,7 @@ macro_rules! parameter_types {
 			/// environment.
 			#[allow(unused)]
 			pub fn get() -> $type {
-				$crate::storage::unhashed::get(Self::key()).unwrap_or_else(|| $value)
+				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
 			}
 		}
 
@@ -1287,7 +1287,7 @@ pub mod tests {
 	#[test]
 	fn check_storage_parameter_type_works() {
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(&sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
+			assert_eq!(sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
 
 			assert_eq!(10, StorageParameter::get());
 
