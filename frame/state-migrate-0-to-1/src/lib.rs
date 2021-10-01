@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 //! Migration from state V0 to state V1.
 //!
 //! This pallet should be included to runtime AFTER the state did switch
@@ -28,16 +27,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use sp_runtime::{
-	RuntimeDebug,
-};
-use frame_support::{
-	pallet_prelude::*,
-};
-use frame_system::{
-	pallet_prelude::*, WeightInfo,
-};
+use frame_support::pallet_prelude::*;
+use frame_system::{pallet_prelude::*, WeightInfo};
 use scale_info::TypeInfo;
+use sp_runtime::RuntimeDebug;
 
 pub use pallet::*;
 
@@ -52,12 +45,11 @@ macro_rules! log {
 	};
 }
 
-
 /// Those key will be migrated in a single block.
 /// We avoid adding them to migration process as they can oversize
 /// the proof easilly (they need to be migrated first or they
 /// will be include in proof anyway).
-const RESERVED_BIG_KEYS: &'static[&'static [u8]] = &[sp_core::storage::well_known_keys::CODE];
+const RESERVED_BIG_KEYS: &'static [&'static [u8]] = &[sp_core::storage::well_known_keys::CODE];
 
 /// State of state migration from V0 to V1.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -87,11 +79,7 @@ pub enum MigrationState {
 
 impl Default for MigrationState {
 	fn default() -> Self {
-		MigrationState::Pending {
-			reserved_big: 0,
-			current_top: None,
-			current_child: None,
-		}
+		MigrationState::Pending { reserved_big: 0, current_top: None, current_child: None }
 	}
 }
 
@@ -119,20 +107,20 @@ pub mod pallet {
 	}
 
 	/// Migration progress.
-	///
 	#[pallet::storage]
 	#[pallet::getter(fn state_migration_v0_v1_progress)]
-	pub(crate) type MigrationProgress<T> = StorageValue<_, MigrationState, ValueQuery, MigrationProgressOnEmpty>;
+	pub(crate) type MigrationProgress<T> =
+		StorageValue<_, MigrationState, ValueQuery, MigrationProgressOnEmpty>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-
 		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
 			let migration_progress = MigrationProgress::<T>::get();
-	
+
 			let (current_top, current_child, current_reserved) = match migration_progress {
 				MigrationState::Finished => return T::DbWeight::get().reads(1),
-				MigrationState::Pending { current_top, current_child, reserved_big } => (current_top, current_child, reserved_big),
+				MigrationState::Pending { current_top, current_child, reserved_big } =>
+					(current_top, current_child, reserved_big),
 			};
 			let max_weight = T::MigrationWeight::get();
 			let max_size = T::MigrationMaxSize::get();
@@ -163,8 +151,7 @@ pub mod pallet {
 				+ pending.current_weight
 		}
 
-		fn on_finalize(_n: BlockNumberFor<T>) {
-		}
+		fn on_finalize(_n: BlockNumberFor<T>) {}
 	}
 }
 
@@ -186,16 +173,14 @@ impl<T: frame_system::Config> PendingMigration<T> {
 		// TODO should it take size in account?
 		self.current_weight += T::DbWeight::get().reads(1);
 		self.current_size += len;
-		self.current_size > self.max_size
-			|| self.current_weight > self.max_weight
+		self.current_size > self.max_size || self.current_weight > self.max_weight
 	}
 
 	fn new_write(&mut self, len: u32) -> bool {
 		self.touched = true;
 		self.current_size += len;
 		self.current_weight += T::SystemWeightInfo::set_storage(len);
-		self.current_size > self.max_size
-			|| self.current_weight > self.max_weight
+		self.current_size > self.max_size || self.current_weight > self.max_weight
 	}
 
 	fn new_next(&mut self) {
@@ -204,22 +189,30 @@ impl<T: frame_system::Config> PendingMigration<T> {
 
 	// return true if can continue and false if limit reached
 	fn process_child_key(&mut self) -> bool {
-		if let (Some(storage_key), Some(current_key)) = (self.current_top.as_ref(), self.current_child.as_ref()) {
-			if let Some(encode)	= sp_io::default_child_storage::get(child_io_key(storage_key), current_key) {
+		if let (Some(storage_key), Some(current_key)) =
+			(self.current_top.as_ref(), self.current_child.as_ref())
+		{
+			if let Some(encode) =
+				sp_io::default_child_storage::get(child_io_key(storage_key), current_key)
+			{
 				let len = encode.len() as u32;
 				if len >= self.threshold {
-					sp_io::default_child_storage::set(child_io_key(storage_key), current_key, encode.as_slice());
+					sp_io::default_child_storage::set(
+						child_io_key(storage_key),
+						current_key,
+						encode.as_slice(),
+					);
 					if self.new_write(len) {
-						return false;
+						return false
 					}
 				} else {
 					if self.new_read(len) {
-						return false;
+						return false
 					}
 				}
 			} else {
 				if self.new_read(0) {
-					return false;
+					return false
 				}
 			}
 		}
@@ -229,21 +222,21 @@ impl<T: frame_system::Config> PendingMigration<T> {
 	// return true if can continue and false if limit reached
 	fn process_top_key(&mut self) -> bool {
 		if let Some(current_key) = self.current_top.as_ref() {
-			if let Some(encode)	= sp_io::storage::get(current_key) {
+			if let Some(encode) = sp_io::storage::get(current_key) {
 				let len = encode.len() as u32;
 				if len >= self.threshold {
 					sp_io::storage::set(current_key, encode.as_slice());
 					if self.new_write(len) {
-						return false;
+						return false
 					}
 				} else {
 					if self.new_read(len) {
-						return false;
+						return false
 					}
 				}
 			} else {
 				if self.new_read(0) {
-					return false;
+					return false
 				}
 			}
 		}
@@ -267,14 +260,14 @@ impl<T: frame_system::Config> PendingMigration<T> {
 					self.new_next();
 					self.current_child = Some(next_key);
 					if !self.process_child_key() {
-						return false;
+						return false
 					}
 				} else {
 					self.new_next();
 					self.current_child = None;
 				}
 			} else {
-				return true;
+				return true
 			}
 		}
 	}
@@ -287,29 +280,31 @@ impl<T: frame_system::Config> PendingMigration<T> {
 		}
 		loop {
 			if let Some(current_top) = self.current_top.as_ref() {
-					if let Some(next_key) = sp_io::storage::next_key(current_top) {
-						self.new_next();
-						if RESERVED_BIG_KEYS.iter().find(|key| **key == next_key.as_slice()).is_some() {
-							self.current_top = Some(next_key);
-							// skip as big reserved key where already processed.
-							continue;
-						}
-						if next_key.starts_with(sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX) {
-							self.current_top = Some(next_key);
-							let _ = self.process_top_key();
-							// always process first child key at least
-							return true;
-						}
+				if let Some(next_key) = sp_io::storage::next_key(current_top) {
+					self.new_next();
+					if RESERVED_BIG_KEYS.iter().find(|key| **key == next_key.as_slice()).is_some() {
 						self.current_top = Some(next_key);
-						if !self.process_top_key() {
-							return false;
-						}
-					} else {
-						self.current_top = None;
+						// skip as big reserved key where already processed.
+						continue
 					}
+					if next_key
+						.starts_with(sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX)
+					{
+						self.current_top = Some(next_key);
+						let _ = self.process_top_key();
+						// always process first child key at least
+						return true
+					}
+					self.current_top = Some(next_key);
+					if !self.process_top_key() {
+						return false
+					}
+				} else {
+					self.current_top = None;
+				}
 			} else {
 				self.new_next();
-				return false;
+				return false
 			}
 		}
 	}
@@ -325,26 +320,26 @@ impl<T: frame_system::Config> PendingMigration<T> {
 				let _ = self.process_top_key();
 				self.current_top = current_top;
 				self.current_reserved += 1;
-				break;
+				break
 			}
 			if self.current_child.is_some() {
 				if !self.migrate_child() {
-					break;
+					break
 				}
 			} else {
 				let do_child = self.migrate_top();
 				if do_child {
 					if !self.migrate_child() {
-						break;
+						break
 					}
 					if self.current_top.is_none() {
-						return true;
+						return true
 					}
 				} else {
 					if self.current_top.is_none() {
-						return true;
+						return true
 					}
-					break;
+					break
 				}
 			}
 		}
@@ -360,20 +355,17 @@ fn child_io_key(storage_key: &Vec<u8>) -> &[u8] {
 	}
 }
 
-
 #[cfg(test)]
 mod mock {
-	use crate as pallet_state_migrate_0_to_1;
 	use super::*;
-	use frame_support::{
-		parameter_types,
-	};
+	use crate as pallet_state_migrate_0_to_1;
+	use frame_support::parameter_types;
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
+		StateVersion,
 	};
-	use sp_runtime::StateVersion;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -442,23 +434,37 @@ mod mock {
 			top: vec![
 				(b"key1".to_vec(), vec![1u8; 40]),
 				(sp_core::storage::well_known_keys::CODE.to_vec(), vec![1u8; 40]),
-			].into_iter().collect(),
+			]
+			.into_iter()
+			.collect(),
 			children_default: vec![
-				(child_key1, sp_core::storage::StorageChild {
-					data: vec![
-						(b"key1".to_vec(), vec![2u8; 40]),
-						(b"key2".to_vec(), vec![2u8; 4]),
-					].into_iter().collect(),
-					child_info: ChildInfo::new_default(b"chk1"),
-				}),
-				(child_key2, sp_core::storage::StorageChild {
-					data: vec![
-						(b"key1".to_vec(), vec![3u8; 4]),
-						(b"key2".to_vec(), vec![3u8; 40]),
-					].into_iter().collect(),
-					child_info: ChildInfo::new_default(b"chk2"),
-				}),
-			].into_iter().collect(),
+				(
+					child_key1,
+					sp_core::storage::StorageChild {
+						data: vec![
+							(b"key1".to_vec(), vec![2u8; 40]),
+							(b"key2".to_vec(), vec![2u8; 4]),
+						]
+						.into_iter()
+						.collect(),
+						child_info: ChildInfo::new_default(b"chk1"),
+					},
+				),
+				(
+					child_key2,
+					sp_core::storage::StorageChild {
+						data: vec![
+							(b"key1".to_vec(), vec![3u8; 4]),
+							(b"key2".to_vec(), vec![3u8; 40]),
+						]
+						.into_iter()
+						.collect(),
+						child_info: ChildInfo::new_default(b"chk2"),
+					},
+				),
+			]
+			.into_iter()
+			.collect(),
 		};
 		t.assimilate_storage::<Test>(&mut storage).unwrap();
 
@@ -505,12 +511,9 @@ mod test {
 			));
 			r
 		});
-		let final_no_switch = test_ext_no_switch.execute_with(|| {
-			run_to_block(2)
-		});
+		let final_no_switch = test_ext_no_switch.execute_with(|| run_to_block(2));
 		assert!(final_root == final_no_switch);
 	}
-
 
 	#[test]
 	fn run_test_stress() {
@@ -533,18 +536,16 @@ mod test {
 				block_nb += 1;
 				let (final_root, do_end) = ext.execute_with(|| {
 					let r = run_to_block(block_nb);
-					let end =  matches!(
+					let end = matches!(
 						StateMigrate0To1::state_migration_v0_v1_progress(),
 						MigrationState::Finished,
 					);
 					(r, end)
 				});
-				let final_no_switch = target_ext.execute_with(|| {
-					run_to_block(block_nb)
-				});
+				let final_no_switch = target_ext.execute_with(|| run_to_block(block_nb));
 				if do_end {
 					assert!(final_root == final_no_switch);
-					break;
+					break
 				}
 			}
 		}

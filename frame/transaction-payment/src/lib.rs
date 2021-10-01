@@ -332,12 +332,7 @@ pub mod pallet {
 					.unwrap(),
 			);
 
-			// This is the minimum value of the multiplier. Make sure that if we collapse to this
-			// value, we can recover with a reasonable amount of traffic. For this test we assert
-			// that if we collapse to minimum, the trend will be positive with a weight value
-			// which is 1% more than the target.
-			let min_value = T::FeeMultiplierUpdate::min();
-			let mut target = T::FeeMultiplierUpdate::target() *
+			let target = T::FeeMultiplierUpdate::target() *
 				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
 					"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
@@ -348,10 +343,17 @@ pub mod pallet {
 				// this is most likely because in a test setup we set everything to ().
 				return
 			}
-			target += addition;
 
 			#[cfg(any(feature = "std", test))]
 			sp_io::TestExternalities::new_empty().execute_with(|| {
+				// This is the minimum value of the multiplier. Make sure that if we collapse to
+				// this value, we can recover with a reasonable amount of traffic. For this test we
+				// assert that if we collapse to minimum, the trend will be positive with a weight
+				// value which is 1% more than the target.
+				let min_value = T::FeeMultiplierUpdate::min();
+
+				let target = target + addition;
+
 				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(

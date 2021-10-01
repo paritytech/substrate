@@ -55,11 +55,19 @@ pub use tracing::trace;
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! warn {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
-	($($arg:tt)+) => {
-		()
+	($message:expr, $( $arg:expr, )*) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -68,11 +76,12 @@ macro_rules! warn {
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! debug {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
-	};
-	($($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -983,14 +992,13 @@ mod execution {
 #[cfg(feature = "std")]
 use sp_core::storage::ChildInfo;
 #[cfg(feature = "std")]
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 
 /// Test helper to get some random storage.
 #[cfg(feature = "std")]
-pub fn build_random_storage(seed: u32) -> (
-	HashMap<Option<ChildInfo>, BTreeMap<Vec<u8>, Vec<u8>>>,
-	Vec<ChildInfo>,
-) {
+pub fn build_random_storage(
+	seed: u32,
+) -> (HashMap<Option<ChildInfo>, BTreeMap<Vec<u8>, Vec<u8>>>, Vec<ChildInfo>) {
 	use rand::{rngs::SmallRng, RngCore, SeedableRng};
 	let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
 		Default::default();
@@ -1650,7 +1658,8 @@ mod tests {
 			let (storage, child_infos) = build_random_storage(i + nb_iter);
 			(&mut seed[0..4]).copy_from_slice(&i.to_be_bytes()[..]);
 			let mut rand = SmallRng::from_seed(seed);
-			let trie: InMemoryBackend<BlakeTwo256> = (storage.clone(), StateVersion::default()).into();
+			let trie: InMemoryBackend<BlakeTwo256> =
+				(storage.clone(), StateVersion::default()).into();
 			let trie_root = trie.root().clone();
 			let backend = crate::ProvingBackend::new(&trie);
 			let nb_child_trie = child_infos.len();

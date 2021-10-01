@@ -21,9 +21,9 @@
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "std")]
-use std::collections::{HashMap, BTreeMap};
 use sp_debug_derive::RuntimeDebug;
+#[cfg(feature = "std")]
+use std::collections::{BTreeMap, HashMap};
 
 use codec::{Decode, Encode};
 use ref_cast::RefCast;
@@ -186,10 +186,9 @@ impl From<HashMap<Option<ChildInfo>, BTreeMap<Vec<u8>, Vec<u8>>>> for Storage {
 		let mut storage = Storage::default();
 		for (child_info, data) in data.into_iter() {
 			if let Some(child_info) = child_info {
-				storage.children_default.insert(child_info.storage_key().to_vec(), StorageChild {
-					data,
-					child_info,
-				});
+				storage
+					.children_default
+					.insert(child_info.storage_key().to_vec(), StorageChild { data, child_info });
 			} else {
 				storage.top = data;
 			}
