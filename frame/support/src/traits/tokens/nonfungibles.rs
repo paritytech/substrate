@@ -27,7 +27,7 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::dispatch::DispatchResult;
+use crate::dispatch::{DispatchError, DispatchResult};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -121,6 +121,31 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 pub trait Create<AccountId>: Inspect<AccountId> {
 	/// Create a `class` of nonfungible assets to be owned by `who` and managed by `admin`.
 	fn create_class(class: &Self::ClassId, who: &AccountId, admin: &AccountId) -> DispatchResult;
+}
+
+/// Trait for providing the ability to destroy classes of nonfungible assets.
+pub trait Destroy<AccountId>: Inspect<AccountId> {
+	/// The witness data needed to destroy an asset.
+	type DestroyWitness;
+
+	/// Provide the appropriate witness data needed to destroy an asset.
+	fn get_destroy_witness(class: &Self::ClassId) -> Option<Self::DestroyWitness>;
+
+	/// Destroy an existing fungible asset.
+	/// * `class`: The `ClassId` to be destroyed.
+	/// * `witness`: Any witness data that needs to be provided to complete the operation
+	///   successfully.
+	/// * `maybe_check_owner`: An optional account id that can be used to authorize the destroy
+	///   command. If not provided, we will not do any authorization checks before destroying the
+	///   asset.
+	///
+	/// If successful, this function will return the actual witness data from the destroyed asset.
+	/// This may be different than the witness data provided, and can be used to refund weight.
+	fn destroy(
+		class: Self::ClassId,
+		witness: Self::DestroyWitness,
+		maybe_check_owner: Option<AccountId>,
+	) -> Result<Self::DestroyWitness, DispatchError>;
 }
 
 /// Trait for providing an interface for multiple classes of NFT-like assets which may be minted,

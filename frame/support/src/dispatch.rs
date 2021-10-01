@@ -2151,6 +2151,18 @@ macro_rules! decl_module {
 					.expect("Pallet is part of the runtime because pallet `Config` trait is \
 						implemented by the runtime")
 			}
+
+			fn module_name() -> &'static str {
+				<
+					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
+				>::module_name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
+			}
+
+			fn crate_version() -> $crate::traits::CrateVersion {
+				$crate::crate_to_crate_version!()
+			}
 		}
 
 		// Implement GetCallName for the Call.
@@ -2529,8 +2541,8 @@ mod tests {
 	use crate::{
 		metadata::*,
 		traits::{
-			Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize, OnRuntimeUpgrade,
-			PalletInfo,
+			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
+			OnRuntimeUpgrade, PalletInfo,
 		},
 		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};
@@ -2629,6 +2641,22 @@ mod tests {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
 				return Some("Test")
+			}
+
+			None
+		}
+		fn module_name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some("tests")
+			}
+
+			None
+		}
+		fn crate_version<P: 'static>() -> Option<CrateVersion> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some(frame_support::crate_to_crate_version!())
 			}
 
 			None

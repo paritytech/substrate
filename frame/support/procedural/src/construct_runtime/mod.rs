@@ -132,7 +132,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let outer_origin = expand::expand_outer_origin(&name, &pallets, pallets_token, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
-	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
+	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
 	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
@@ -236,13 +236,24 @@ fn decl_all_pallets<'a>(
 }
 
 fn decl_pallet_runtime_setup(
+	runtime: &Ident,
 	pallet_declarations: &[Pallet],
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
-	let names = pallet_declarations.iter().map(|d| &d.name);
-	let names2 = pallet_declarations.iter().map(|d| &d.name);
+	let names = pallet_declarations.iter().map(|d| &d.name).collect::<Vec<_>>();
 	let name_strings = pallet_declarations.iter().map(|d| d.name.to_string());
+	let module_names = pallet_declarations.iter().map(|d| d.path.module_name());
 	let indices = pallet_declarations.iter().map(|pallet| pallet.index as usize);
+	let pallet_structs = pallet_declarations
+		.iter()
+		.map(|pallet| {
+			let path = &pallet.path;
+			match pallet.instance.as_ref() {
+				Some(inst) => quote!(#path::Pallet<#runtime, #path::#inst>),
+				None => quote!(#path::Pallet<#runtime>),
+			}
+		})
+		.collect::<Vec<_>>();
 
 	quote!(
 		/// Provides an implementation of `PalletInfo` to provide information
@@ -264,8 +275,32 @@ fn decl_pallet_runtime_setup(
 			fn name<P: 'static>() -> Option<&'static str> {
 				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
 				#(
-					if type_id == #scrate::sp_std::any::TypeId::of::<#names2>() {
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
 						return Some(#name_strings)
+					}
+				)*
+
+				None
+			}
+
+			fn module_name<P: 'static>() -> Option<&'static str> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
+				#(
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
+						return Some(#module_names)
+					}
+				)*
+
+				None
+			}
+
+			fn crate_version<P: 'static>() -> Option<#scrate::traits::CrateVersion> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
+				#(
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
+						return Some(
+							<#pallet_structs as #scrate::traits::PalletInfoAccess>::crate_version()
+						)
 					}
 				)*
 

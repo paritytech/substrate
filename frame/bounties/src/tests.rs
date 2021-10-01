@@ -32,8 +32,10 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill,
+	Perbill, Storage,
 };
+
+use super::Event as BountiesEvent;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -160,7 +162,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-fn last_event() -> RawEvent<u64, u128> {
+fn last_event() -> BountiesEvent<Test> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -396,7 +398,7 @@ fn propose_bounty_works() {
 
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 10, b"1234567890".to_vec()));
 
-		assert_eq!(last_event(), RawEvent::BountyProposed(0));
+		assert_eq!(last_event(), BountiesEvent::BountyProposed(0));
 
 		let deposit: u64 = 85 + 5;
 		assert_eq!(Balances::reserved_balance(0), deposit);
@@ -458,7 +460,7 @@ fn close_bounty_works() {
 
 		let deposit: u64 = 80 + 5;
 
-		assert_eq!(last_event(), RawEvent::BountyRejected(0, deposit));
+		assert_eq!(last_event(), BountiesEvent::BountyRejected(0, deposit));
 
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
@@ -690,7 +692,7 @@ fn award_and_claim_bounty_works() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 56, 3));
+		assert_eq!(last_event(), BountiesEvent::BountyClaimed(0, 56, 3));
 
 		assert_eq!(Balances::free_balance(4), 14); // initial 10 + fee 4
 
@@ -729,7 +731,7 @@ fn claim_handles_high_fee() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 0, 3));
+		assert_eq!(last_event(), BountiesEvent::BountyClaimed(0, 0, 3));
 
 		assert_eq!(Balances::free_balance(4), 70); // 30 + 50 - 10
 		assert_eq!(Balances::free_balance(3), 0);
@@ -806,7 +808,7 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
 		assert_ok!(Bounties::close_bounty(Origin::root(), 0));
 
-		assert_eq!(last_event(), RawEvent::BountyCanceled(0));
+		assert_eq!(last_event(), BountiesEvent::BountyCanceled(0));
 
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 
@@ -931,6 +933,48 @@ fn extend_expiry() {
 
 		assert_eq!(Balances::free_balance(4), 10); // not slashed
 		assert_eq!(Balances::reserved_balance(4), 0);
+	});
+}
+
+#[test]
+fn test_migration_v4() {
+	let mut s = Storage::default();
+
+	let index: u32 = 10;
+
+	let bounty = Bounty::<u128, u64, u64> {
+		proposer: 0,
+		value: 20,
+		fee: 20,
+		curator_deposit: 20,
+		bond: 50,
+		status: BountyStatus::<u128, u64>::Proposed,
+	};
+
+	let data = vec![
+		(pallet_bounties::BountyCount::<Test>::hashed_key().to_vec(), 10.encode().to_vec()),
+		(pallet_bounties::Bounties::<Test>::hashed_key_for(index), bounty.encode().to_vec()),
+		(pallet_bounties::BountyDescriptions::<Test>::hashed_key_for(index), vec![0, 0]),
+		(
+			pallet_bounties::BountyApprovals::<Test>::hashed_key().to_vec(),
+			vec![10 as u32].encode().to_vec(),
+		),
+	];
+
+	s.top = data.into_iter().collect();
+
+	sp_io::TestExternalities::new(s).execute_with(|| {
+		use frame_support::traits::PalletInfo;
+		let old_pallet_name = <Test as frame_system::Config>::PalletInfo::name::<Bounties>()
+			.expect("Bounties is part of runtime, so it has a name; qed");
+		let new_pallet_name = "NewBounties";
+
+		crate::migrations::v4::pre_migration::<Test, Bounties, _>(old_pallet_name, new_pallet_name);
+		crate::migrations::v4::migrate::<Test, Bounties, _>(old_pallet_name, new_pallet_name);
+		crate::migrations::v4::post_migration::<Test, Bounties, _>(
+			old_pallet_name,
+			new_pallet_name,
+		);
 	});
 }
 
