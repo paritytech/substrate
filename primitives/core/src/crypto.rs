@@ -617,8 +617,12 @@ ss58_address_format!(
 		(1284, "moonbeam", "Moonbeam, session key (*25519).")
 	Moonriver =>
 		(1285, "moonriver", "Moonriver, session key (*25519).")
+	Automata =>
+		(2349, "automata", "Automata mainnet standard account (*25519).")
 	BasiliskAccount =>
 		(10041, "basilisk", "Basilisk standard account (*25519).")
+	ContextFree =>
+		(11820, "contextfree", "Automata ContextFree standard account (*25519).")
 
 	// Note: 16384 and above are reserved.
 );
