@@ -38,7 +38,10 @@ use sp_wasm_interface::{Function, Pointer, Value, WordSize};
 use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
-	sync::Arc,
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc,
+	},
 };
 use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
 
@@ -321,6 +324,23 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
+
+	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
+		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
+		None => wasmtime::ProfilingStrategy::None,
+		Some(_) => {
+			// Remember if we have already logged a warning due to an unknown profiling strategy.
+			static UNKNOWN_PROFILING_STRATEGY: AtomicBool = AtomicBool::new(false);
+			// Make sure that the warning will not be relogged regularly.
+			if !UNKNOWN_PROFILING_STRATEGY.swap(true, Ordering::Relaxed) {
+				log::warn!("WASMTIME_PROFILING_STRATEGY is set to unknown value, ignored.");
+			}
+			wasmtime::ProfilingStrategy::None
+		},
+	};
+	config
+		.profiler(profiler)
+		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {}", e)))?;
 
 	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
 		semantics.deterministic_stack_limit
