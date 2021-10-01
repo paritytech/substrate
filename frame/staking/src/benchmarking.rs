@@ -23,6 +23,7 @@ use testing_utils::*;
 
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{
+	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
@@ -764,9 +765,15 @@ benchmarks! {
 		<ErasValidatorReward<T>>::insert(current_era, total_payout);
 
 		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller);
+		let calls: Vec<_> = payout_calls_arg.iter().map(|arg|
+			Call::<T>::payout_stakers { validator_stash: arg.0.clone(), era: arg.1 }.encode()
+		).collect();
 	}: {
-		for arg in payout_calls_arg {
-			<Staking<T>>::payout_stakers(RawOrigin::Signed(caller.clone()).into(), arg.0, arg.1)?;
+		for call in calls {
+			<Call<T> as Decode>::decode(&mut &*call)
+				.expect("call is encoded above, encoding must be correct")
+				.dispatch_bypass_filter(origin.clone().into())?;
 		}
 	}
 
@@ -880,6 +887,13 @@ benchmarks! {
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
 	}
+
+	impl_benchmark_test_suite!(
+		Staking,
+		crate::mock::ExtBuilder::default().has_stakers(true),
+		crate::mock::Test,
+		exec_name = build_and_execute
+	);
 }
 
 #[cfg(test)]
@@ -994,10 +1008,3 @@ mod tests {
 		});
 	}
 }
-
-impl_benchmark_test_suite!(
-	Staking,
-	crate::mock::ExtBuilder::default().has_stakers(true),
-	crate::mock::Test,
-	exec_name = build_and_execute
-);
