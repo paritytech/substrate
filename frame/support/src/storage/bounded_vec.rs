@@ -200,13 +200,12 @@ impl<T, S> Default for BoundedVec<T, S> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T, S> std::fmt::Debug for BoundedVec<T, S>
+impl<T, S> sp_std::fmt::Debug for BoundedVec<T, S>
 where
-	T: std::fmt::Debug,
+	T: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
