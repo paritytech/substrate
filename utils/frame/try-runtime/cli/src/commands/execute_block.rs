@@ -157,7 +157,7 @@ where
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
 
-	let (expected_spec_name, expected_spec_version) =
+	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
 	ensure_matching_spec::<Block>(
 		block_ws_uri.clone(),

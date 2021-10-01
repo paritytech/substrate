@@ -699,7 +699,7 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	ext: &TestExternalities,
 	executor: &NativeElseWasmExecutor<D>,
-) -> (String, u32) {
+) -> (String, u32, sp_core::StateVersion) {
 	let (_, encoded) = state_machine_call::<Block, D>(
 		&ext,
 		&executor,
@@ -711,6 +711,9 @@ pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	.expect("all runtimes should have version; qed");
 	<sp_version::RuntimeVersion as Decode>::decode(&mut &*encoded)
 		.map_err(|e| format!("failed to decode output: {:?}", e))
-		.map(|v| (v.spec_name.into(), v.spec_version))
+		.map(|v| {
+			let state_version = v.state_version();
+			(v.spec_name.into(), v.spec_version, state_version)
+		})
 		.expect("all runtimes should have version; qed")
 }
