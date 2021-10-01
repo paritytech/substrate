@@ -411,11 +411,6 @@ where
 		CallExecutor::runtime_version(&self.executor, id)
 	}
 
-	/// Get the StateVersion at a given block.
-	pub fn state_hash_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<StateVersion> {
-		Ok(self.runtime_version_at(id)?.state_version())
-	}
-
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
 	pub fn header_proof_with_cht_size(
 		&self,
@@ -1881,10 +1876,6 @@ where
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
-	}
-
-	fn state_hash_at(&self, at: &BlockId<Block>) -> Result<StateVersion, sp_api::ApiError> {
-		Ok(self.runtime_version_at(at)?.state_version())
 	}
 }
 

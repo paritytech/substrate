@@ -28,7 +28,7 @@ use sp_core::{
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 	StateVersion,
 };
-use sp_externalities::{Extension, ExtensionStore, Extensions, Externalities};
+use sp_externalities::{Extension, ExtensionStore, Externalities};
 use sp_trie::{empty_child_trie_root, trie_types::Layout};
 
 #[cfg(feature = "std")]

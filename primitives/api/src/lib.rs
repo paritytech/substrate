@@ -566,9 +566,6 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, ApiError>;
-
-	/// Returns the state version at the given block.
-	fn state_hash_at(&self, at: &BlockId<Block>) -> Result<StateVersion, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
