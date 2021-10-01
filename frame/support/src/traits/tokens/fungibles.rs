@@ -23,6 +23,7 @@ use super::{
 };
 use crate::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::traits::Saturating;
+use sp_std::vec::Vec;
 
 mod balanced;
 pub use balanced::{Balanced, Unbalanced};
@@ -63,6 +64,18 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
+}
+
+/// Trait for reading metadata from a fungible asset.
+pub trait InspectMetadata<AccountId>: Inspect<AccountId> {
+	/// Return the name of an asset.
+	fn name(asset: &Self::AssetId) -> Vec<u8>;
+
+	/// Return the symbol of an asset.
+	fn symbol(asset: &Self::AssetId) -> Vec<u8>;
+
+	/// Return the decimals of an asset.
+	fn decimals(asset: &Self::AssetId) -> u8;
 }
 
 /// Trait for providing a set of named fungible assets which can be created and destroyed.

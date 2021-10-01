@@ -1280,7 +1280,7 @@ construct_runtime!(
 		Multisig: pallet_multisig::{Pallet, Call, Storage, Event<T>},
 		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
 		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
+		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Mmr: pallet_mmr::{Pallet, Storage},
 		Lottery: pallet_lottery::{Pallet, Call, Storage, Event<T>},
 		Gilt: pallet_gilt::{Pallet, Call, Storage, Event<T>, Config},

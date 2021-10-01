@@ -660,7 +660,10 @@ where
 				}
 
 				// Deposit an instantiation event.
-				deposit_event::<T>(vec![], Event::Instantiated(self.caller().clone(), account_id));
+				deposit_event::<T>(
+					vec![],
+					Event::Instantiated { deployer: self.caller().clone(), contract: account_id },
+				);
 			}
 
 			Ok(output)
@@ -942,10 +945,10 @@ where
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash, &mut frame.nested_meter)?;
-		Contracts::<T>::deposit_event(Event::Terminated(
-			frame.account_id.clone(),
-			beneficiary.clone(),
-		));
+		Contracts::<T>::deposit_event(Event::Terminated {
+			contract: frame.account_id.clone(),
+			beneficiary: beneficiary.clone(),
+		});
 		Ok(())
 	}
 
@@ -997,7 +1000,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			Event::ContractEmitted(self.top_frame().account_id.clone(), data),
+			Event::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
 		);
 	}
 
@@ -1662,7 +1665,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated(ALICE, instantiated_contract_address)]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+			);
 		});
 	}
 
@@ -1751,7 +1757,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated(BOB, instantiated_contract_address)]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+			);
 		});
 	}
 

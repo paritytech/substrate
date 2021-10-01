@@ -76,7 +76,7 @@ impl VersionedRuntime {
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,
-			&dyn WasmInstance,
+			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
 		) -> Result<R, Error>,
@@ -90,12 +90,12 @@ impl VersionedRuntime {
 
 		match instance {
 			Some((index, mut locked)) => {
-				let (instance, new_inst) = locked
+				let (mut instance, new_inst) = locked
 					.take()
 					.map(|r| Ok((r, false)))
 					.unwrap_or_else(|| self.module.new_instance().map(|i| (i, true)))?;
 
-				let result = f(&self.module, &*instance, self.version.as_ref(), ext);
+				let result = f(&self.module, &mut *instance, self.version.as_ref(), ext);
 				if let Err(e) = &result {
 					if new_inst {
 						log::warn!(
@@ -129,9 +129,9 @@ impl VersionedRuntime {
 				log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
 
 				// Allocate a new instance
-				let instance = self.module.new_instance()?;
+				let mut instance = self.module.new_instance()?;
 
-				f(&self.module, &*instance, self.version.as_ref(), ext)
+				f(&self.module, &mut *instance, self.version.as_ref(), ext)
 			},
 		}
 	}
@@ -213,7 +213,7 @@ impl RuntimeCache {
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,
-			&dyn WasmInstance,
+			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
 		) -> Result<R, Error>,
