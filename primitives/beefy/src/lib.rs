@@ -93,6 +93,11 @@ impl<AuthorityId> ValidatorSet<AuthorityId> {
 	}
 }
 
+impl<AuthorityId> Default for ValidatorSet<AuthorityId> {
+	fn default() -> Self {
+		Self::empty()
+	}
+}
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
