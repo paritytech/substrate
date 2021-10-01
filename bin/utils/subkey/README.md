@@ -27,19 +27,28 @@ Command:
 ```bash
 # Use the `--fast` flag to get the dependencies without needing to install the Substrate and Subkey binary
 curl https://getsubstrate.io -sSf | bash -s -- --fast
-# Install only `subkey`, at a specific version of the this subkey crate
+# Install only `subkey`, at a specific version of the subkey crate
 cargo install --force subkey --git https://github.com/paritytech/substrate --version <SET VERSION> --locked
+```
+
+### Run in a container
+
+```bash
+# Use `--pull=always` with the `latest` tag, or specify a version in a tag
+docker run -it --pull=always docker.io/parity/subkey:latest <command to subkey>
 ```
 
 ### Generate a random account
 
 Generating a new key is as simple as running:
 
-    subkey generate
+```bash
+subkey generate
+```
 
 The output looks similar to:
 
-```
+```text
 Secret phrase `hotel forest jar hover kite book view eight stuff angle legend defense` is account:
   Secret seed:      0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
   Public key (hex): 0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
@@ -63,6 +72,7 @@ The **SS58 address** (or **Public Address**) of a new account is a reprensentati
 You can read more about the SS58 format in the [substrate wiki](https://github.com/paritytech/substrate/wiki/External-Address-Format-(SS58)) and see the list of reserved prefixes in the [Polkadot wiki](https://wiki.polkadot.network/docs/build-ss58-registry).
 
 For instance, considering the previous seed `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` the SS58 addresses are:
+
 - Polkadot: `16m4J167Mptt8UXL8aGSAi7U2FnPpPxZHPrCgMG9KJzVoFqM`
 - Kusama: `JLNozAv8QeLSbLFwe2UvWeKKE4yvmDbfGxTuiYkF2BUMx4M`
 
@@ -71,12 +81,14 @@ For instance, considering the previous seed `0xa05c75731970cc7868a2fb7cb577353cd
 `subkey` can calso generate the output as *json*. This is useful for automation.
 
 command:
-```
+
+```bash
 subkey generate --output-type json
 ```
 
 output:
-```
+
+```json
 {
   "accountId": "0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515",
   "publicKey": "0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515",
@@ -89,12 +101,14 @@ output:
 So if you only want to get the `secretSeed` for instance, you can use:
 
 command:
-```
+
+```bash
 subkey generate --output-type json | jq -r .secretSeed
 ```
 
 output:
-```
+
+```text
 0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
 ```
 
@@ -102,10 +116,13 @@ output:
 
 `subkey` supports an additional user-defined secret that will be appended to the seed. Let's see the following example:
 
-    subkey generate --password extra_secret
+```bash
+subkey generate --password extra_secret
+```
 
 output:
-```
+
+```text
 Secret phrase `soup lyrics media market way crouch elevator put moon useful question wide` is account:
   Secret seed:      0xe7cfd179d6537a676cb94bac3b5c5c9cb1550e846ac4541040d077dfbac2e7fd
   Public key (hex): 0xf6a233c3e1de1a2ae0486100b460b3ce3d7231ddfe9dadabbd35ab968c70905d
@@ -115,11 +132,15 @@ Secret phrase `soup lyrics media market way crouch elevator put moon useful ques
 
 Using the `inspect` command (see more details below), we see that knowning only the **secret seed** is no longer sufficient to recover the account:
 
-    subkey inspect "soup lyrics media market way crouch elevator put moon useful question wide"
+```bash
+subkey inspect "soup lyrics media market way crouch elevator put moon useful question wide"
+```
 
 which recovers the account `5Fe4sqj2K4fRuzEGvToi4KATqZfiDU7TqynjXG6PZE2dxwyh` and not `5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC` as we expected. The additional user-defined **password** (`extra_secret` in our example) is now required to fully recover the account. Let's inspect the the previous mnemonic, this time passing also the required `password` as shown below:
 
-    subkey inspect --password extra_secret "soup lyrics media market way crouch elevator put moon useful question wide"
+```bash
+subkey inspect --password extra_secret "soup lyrics media market way crouch elevator put moon useful question wide"
+```
 
 This time, we properly recovered `5He5pZpc7AJ8evPuab37vJF6KkFDqq9uDq2WXh877Qw6iaVC`.
 
@@ -129,23 +150,29 @@ If you have *some data* about a key, `subkey inpsect` will help you discover mor
 
 If you have **secrets** that you would like to verify for instance, you can use:
 
-    subkey inspect < mnemonic | seed >
+```bash
+subkey inspect < mnemonic | seed >
+```
 
 If you have only **public data**, you can see a subset of the information:
 
-    subkey inspect --public < pubkey | address >
+```bash
+subkey inspect --public < pubkey | address >
+```
 
 **NOTE**: While you will be able to recover the secret seed from the mnemonic, the opposite is not possible.
 
 **NOTE**: For obvious reasons, the **secrets** cannot be recovered from passing **public data** such as `pubkey` or `address` as input.
 
 command:
-```
+
+```bash
 subkey inspect 0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
 ```
 
 output:
-```
+
+```text
 Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d` is account:
   Secret seed:      0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
   Public key (hex): 0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
@@ -157,17 +184,23 @@ Secret Key URI `0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c9
 
 `subkey` allows using a **secret key** to sign a random message. The signature can then be verified by anyone using your **public key**:
 
-    echo -n <msg> | subkey sign --suri <seed|mnemonic>
+```bash
+echo -n <msg> | subkey sign --suri <seed|mnemonic>
+```
 
 example:
 
-    MESSAGE=hello
-    SURI=0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
-    echo -n $MESSAGE | subkey sign --suri $SURI
+```text
+MESSAGE=hello
+SURI=0xa05c75731970cc7868a2fb7cb577353cd5b31f62dccced92c441acd8fee0c92d
+echo -n $MESSAGE | subkey sign --suri $SURI
+```
 
 output:
 
-    9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
+```text
+9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
+```
 
 **NOTE**: Each run of the `sign` command will yield a different output. While each signature is different, they are all valid.
 
@@ -175,34 +208,44 @@ output:
 
 Given a message, a signature and an address, `subkey` can verify whether the **message** has been digitally signed by the holder (or one of the holders) of the **private key** for the given **address**:
 
-    echo -n <msg> | subkey verify <sig> <address>
+```bash
+echo -n <msg> | subkey verify <sig> <address>
+```
 
 example:
 
-    MESSAGE=hello
-    URI=0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
-    SIGNATURE=9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
-    echo -n $MESSAGE | subkey verify $SIGNATURE $URI
+```bash
+MESSAGE=hello
+URI=0xfec70cfbf1977c6965b5af10a4534a6a35d548eb14580594d0bc543286892515
+SIGNATURE=9201af3788ad4f986b800853c79da47155f2e08fde2070d866be4c27ab060466fea0623dc2b51f4392f4c61f25381a62848dd66c5d8217fae3858e469ebd668c
+echo -n $MESSAGE | subkey verify $SIGNATURE $URI
+```
 
 output:
 
-    Signature verifies correctly.
+```text
+Signature verifies correctly.
+```
 
 A failure looks like:
 
-    Error: SignatureInvalid
+```text
+Error: SignatureInvalid
+```
 
 ### Using the vanity generator
 
 You can use the included vanity generator to find a seed that provides an address which includes the desired pattern. Be warned, depending on your hardware this may take a while.
 
 command:
-```
+
+```bash
 subkey vanity --network polkadot --pattern bob
 ```
 
 output:
-```
+
+```text
 Generating key containing pattern 'bob'
 best: 190 == top: 189
 Secret Key URI `0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d6691` is account:
