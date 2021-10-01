@@ -34,7 +34,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "7cd7f36a2f05842f58af817638ac8fd34f6ac2a8", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979", features = ["server"] }
 serde = { version = "1.0.126", features = ["derive"] }
 futures = "0.3.16"
 hex-literal = "0.3.1"
