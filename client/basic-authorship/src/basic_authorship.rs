@@ -390,7 +390,7 @@ where
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
 					continue
-				} else if (self.now)() < soft_deadline {
+				} else if now < soft_deadline {
 					debug!(
 						"Transaction would overflow the block size limit, \
 						 but we still have time before the soft deadline, so \
@@ -756,8 +756,8 @@ mod tests {
 
 			// then
 			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
 			assert_eq!(txpool.ready().count(), expected_pool_transactions);
+			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
 
 			block
 		};
@@ -770,6 +770,7 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
+		assert_eq!(txpool.ready().count(), 7);
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
@@ -783,6 +784,7 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
+		assert_eq!(txpool.ready().count(), 5);
 
 		// now let's make sure that we can still make some progress
 		let block = propose_block(&client, 1, 2, 5);
@@ -929,7 +931,8 @@ mod tests {
 		);
 
 		// when
-		let deadline = time::Duration::from_secs(300);
+		// give it enough time so that deadline is never triggered.
+		let deadline = time::Duration::from_secs(900);
 		let block =
 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
 				.map(|r| r.block)
