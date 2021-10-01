@@ -17,4 +17,6 @@ proc-macro = true
 
 [dependencies]
 syn = { version = "1.0.77", features = ["full", "parsing"] }
+quote = "1.0.6"
+proc-macro2 = "1.0.29"
 sp-core-hashing = { version = "4.0.0-dev", path = "../", default-features = false }

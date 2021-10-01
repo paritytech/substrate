@@ -16,8 +16,10 @@
 // limitations under the License.
 
 use syn::parse::{Parse, ParseStream};
+use quote::{quote, ToTokens};
 
-use proc_macro::{Literal, TokenStream, TokenTree, Delimiter, Group, Punct, Spacing};
+use proc_macro::TokenStream;
+use proc_macro2::{TokenStream as TokenStream2, Literal, TokenTree, Delimiter, Group, Punct, Spacing};
 
 pub(super) struct InputBytes(pub Vec<u8>);
 
@@ -83,40 +85,67 @@ impl Parse for MultipleInputBytes {
 
 pub(super) fn twox_64(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::twox_64(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
 }
 
 pub(super) fn twox_128(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::twox_128(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
 }
 
 pub(super) fn blake2b_512(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::blake2_512(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
 }
 
 pub(super) fn blake2b_256(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::blake2_256(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
 }
 
 pub(super) fn blake2b_64(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::blake2_64(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
 }
 
 pub(super) fn keccak_256(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::keccak_256(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
 }
 
 pub(super) fn keccak_512(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::keccak_512(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
 }
 
 pub(super) fn sha2_256(bytes: Vec<u8>) -> TokenStream {
 	let result = sp_core_hashing::sha2_256(bytes.as_slice());
-	quote!(#result)
+	let result = ToArray(&result[..]);
+	quote!(#result).into()
+}
+
+struct ToArray<'a>(&'a [u8]);
+
+impl<'a> ToTokens for ToArray<'a> {
+	fn to_tokens(&self, tokens: &mut TokenStream2) {
+		let mut values = TokenStream2::new();
+		let mut first = true;
+		values.extend(self.0.iter().flat_map(|b| [
+				if first {
+					first = false;
+					TokenTree::Literal(Literal::u8_suffixed(*b))
+				} else {
+					TokenTree::Literal(Literal::u8_unsuffixed(*b))
+				},
+			TokenTree::Punct(Punct::new(',', Spacing::Alone)),
+		]));
+		tokens.extend([TokenTree::Group(Group::new(Delimiter::Bracket, values))])
+	}
 }

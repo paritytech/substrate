@@ -9381,6 +9381,8 @@ dependencies = [
 name = "sp-core-hashing-proc-macro"
 version = "4.0.0-dev"
 dependencies = [
+ "proc-macro2",
+ "quote",
  "sp-core-hashing",
  "syn",
 ]
