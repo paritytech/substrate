@@ -272,6 +272,7 @@
 //!   validators is stored in the Session pallet's `Validators` at the end of each era.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit = "256"]
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
