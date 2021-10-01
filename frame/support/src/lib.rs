@@ -426,7 +426,7 @@ macro_rules! parameter_types {
 		impl $name {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
-			pub fn key() -> &'static [u8; 16] {
+			pub fn key() -> [u8; 16] {
 				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
