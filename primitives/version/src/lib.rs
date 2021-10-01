@@ -28,7 +28,6 @@ use std::fmt;
 
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-pub use sp_runtime::create_runtime_str;
 use sp_runtime::RuntimeString;
 pub use sp_runtime::{create_runtime_str, StateVersion, DEFAULT_STATE_HASHING};
 #[doc(hidden)]
