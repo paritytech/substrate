@@ -138,10 +138,7 @@ impl MembershipState {
 
 	/// Returns `true` for [`MembershipState::NotConnected`].
 	fn is_not_connected(self) -> bool {
-		match self {
-			Self::NotConnected { .. } => true,
-			Self::In | Self::Out | Self::NotMember => false,
-		}
+		matches!(self, Self::NotConnected { .. })
 	}
 }
 
