@@ -223,13 +223,14 @@ pub trait TransactionPool: Send + Sync {
 		at: NumberFor<Self::Block>,
 	) -> Pin<
 		Box<
-			dyn Future<Output = Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>>
-				+ Send,
+			dyn Future<
+					Output = Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send>,
+				> + Send,
 		>,
 	>;
 
 	/// Get an iterator for ready transactions ordered by priority.
-	fn ready(&self) -> Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>;
+	fn ready(&self) -> Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send>;
 
 	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
@@ -252,6 +253,27 @@ pub trait TransactionPool: Send + Sync {
 
 	/// Return specific ready transaction by hash, if there is one.
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>>;
+}
+
+/// An iterator of ready transactions.
+///
+/// The trait extends regular [`std::iter::Iterator`] trait and allows reporting
+/// last-returned element as invalid.
+///
+/// The implementation is then allowed, for performance reasons, to change the elements
+/// returned next, by e.g.  skipping elements that are known to depend on the reported
+/// transaction, which yields them invalid as well.
+pub trait ReadyTransactions: Iterator {
+	/// Report given transaction as invalid.
+	///
+	/// This might affect subsequent elements returned by the iterator, so dependent transactions
+	/// are skipped for performance reasons.
+	fn report_invalid(&mut self, _tx: &Self::Item);
+}
+
+/// A no-op implementation for an empty iterator.
+impl<T> ReadyTransactions for std::iter::Empty<T> {
+	fn report_invalid(&mut self, _tx: &T) {}
 }
 
 /// Events that the transaction pool listens for.

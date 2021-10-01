@@ -37,7 +37,7 @@ use sp_runtime::traits::{BlakeTwo256, Hash, One, Saturating, Zero};
 use sp_std::{prelude::*, result};
 use sp_transaction_storage_proof::{
 	encode_index, random_chunk, InherentError, TransactionStorageProof, CHUNK_SIZE,
-	DEFAULT_STORAGE_PERIOD, INHERENT_IDENTIFIER,
+	INHERENT_IDENTIFIER,
 };
 
 /// A type alias for the balance type from this pallet's point of view.
@@ -380,7 +380,7 @@ pub mod pallet {
 			Self {
 				byte_fee: 10u32.into(),
 				entry_fee: 1000u32.into(),
-				storage_period: DEFAULT_STORAGE_PERIOD.into(),
+				storage_period: sp_transaction_storage_proof::DEFAULT_STORAGE_PERIOD.into(),
 				max_block_transactions: DEFAULT_MAX_BLOCK_TRANSACTIONS,
 				max_transaction_size: DEFAULT_MAX_TRANSACTION_SIZE,
 			}

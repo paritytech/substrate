@@ -26,6 +26,6 @@ sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 tracing = "0.1.25"
 
 [dev-dependencies]
-async-std = "1.6.5"
+async-std = "1.10.0"
 quickcheck = "1.0.3"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

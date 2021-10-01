@@ -537,7 +537,10 @@ mod bags {
 
 	// Panics in case of duplicate tail insert (which would result in an infinite loop).
 	#[test]
-	#[should_panic = "system logic error: inserting a node who has the id of tail"]
+	#[cfg_attr(
+		debug_assertions,
+		should_panic = "system logic error: inserting a node who has the id of tail"
+	)]
 	fn insert_node_duplicate_tail_panics_with_debug_assert() {
 		ExtBuilder::default().build_and_execute(|| {
 			let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
@@ -548,7 +551,9 @@ mod bags {
 
 			// when inserting a duplicate id that is already the tail
 			assert_eq!(bag_1000.tail, Some(4));
-			bag_1000.insert_node_unchecked(node(4, None, None, bag_1000.bag_upper)); // panics
+			assert_eq!(bag_1000.iter().count(), 3);
+			bag_1000.insert_node_unchecked(node(4, None, None, bag_1000.bag_upper)); // panics in debug
+			assert_eq!(bag_1000.iter().count(), 3); // in release we expect it to silently ignore the request.
 		});
 	}
 
