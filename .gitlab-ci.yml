@@ -327,7 +327,6 @@ cargo-clippy:
   <<:                              *test-refs
   script:
     - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy
-  allow_failure:                   false
 
 cargo-check-benches:
   stage:                           test
