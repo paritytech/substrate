@@ -1428,6 +1428,7 @@ mod qc {
 	#[derive(Debug, Clone)]
 	struct Node {
 		hash: H256,
+		#[allow(unused)]
 		parent: H256,
 		state: KeyMap,
 		changes: KeySet,

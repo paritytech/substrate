@@ -27,6 +27,8 @@ use std::collections::HashSet;
 use std::fmt;
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
+pub use sp_runtime::create_runtime_str;
 use sp_runtime::RuntimeString;
 pub use sp_runtime::{create_runtime_str, StateVersion, DEFAULT_STATE_HASHING};
 #[doc(hidden)]
@@ -123,7 +125,7 @@ macro_rules! create_apis_vec {
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly
 /// `authoring_version`, absolutely not `impl_version` since they change the semantics of the
 /// runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
