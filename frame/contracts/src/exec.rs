@@ -660,7 +660,10 @@ where
 				}
 
 				// Deposit an instantiation event.
-				deposit_event::<T>(vec![], Event::Instantiated(self.caller().clone(), account_id));
+				deposit_event::<T>(
+					vec![],
+					Event::Instantiated { deployer: self.caller().clone(), contract: account_id },
+				);
 			}
 
 			Ok(output)
@@ -942,10 +945,10 @@ where
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash, &mut frame.nested_meter)?;
-		Contracts::<T>::deposit_event(Event::Terminated(
-			frame.account_id.clone(),
-			beneficiary.clone(),
-		));
+		Contracts::<T>::deposit_event(Event::Terminated {
+			contract: frame.account_id.clone(),
+			beneficiary: beneficiary.clone(),
+		});
 		Ok(())
 	}
 
@@ -997,7 +1000,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			Event::ContractEmitted(self.top_frame().account_id.clone(), data),
+			Event::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
 		);
 	}
 
@@ -1662,7 +1665,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated(ALICE, instantiated_contract_address)]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+			);
 		});
 	}
 
@@ -1751,7 +1757,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated(BOB, instantiated_contract_address)]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+			);
 		});
 	}
 
@@ -2060,7 +2069,9 @@ mod tests {
 	#[test]
 	fn call_runtime_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			let call = Call::System(frame_system::Call::remark_with_event(b"Hello World".to_vec()));
+			let call = Call::System(frame_system::Call::remark_with_event {
+				remark: b"Hello World".to_vec(),
+			});
 			ctx.ext.call_runtime(call).unwrap();
 			exec_success()
 		});
@@ -2094,20 +2105,19 @@ mod tests {
 			use pallet_utility::Call as UtilCall;
 
 			// remark should still be allowed
-			let allowed_call = Call::System(SysCall::remark_with_event(b"Hello".to_vec()));
+			let allowed_call =
+				Call::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
 
 			// transfers are disallowed by the `TestFiler` (see below)
-			let forbidden_call = Call::Balances(BalanceCall::transfer(CHARLIE, 22));
+			let forbidden_call = Call::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
 
 			// simple cases: direct call
 			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
-			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch(vec![
-				allowed_call.clone(),
-				forbidden_call,
-				allowed_call
-			]))),);
+			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch {
+				calls: vec![allowed_call.clone(), forbidden_call, allowed_call]
+			})),);
 
 			// the transfer wasn't performed
 			assert_eq!(get_balance(&CHARLIE), 0);
@@ -2116,7 +2126,7 @@ mod tests {
 		});
 
 		TestFilter::set_filter(|call| match call {
-			Call::Balances(pallet_balances::Call::transfer(_, _)) => false,
+			Call::Balances(pallet_balances::Call::transfer { .. }) => false,
 			_ => true,
 		});
 

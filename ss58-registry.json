@@ -533,6 +533,15 @@
 			"website": "https://manta.network"
 		},
 		{
+			"prefix": 88,
+			"network": "polkadex",
+			"displayName": "Polkadex Mainnet",
+			"symbols": ["PDEX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://polkadex.trade"
+		},
+		{
 			"prefix": 98,
 			"network": "polkasmith",
 			"displayName": "PolkaSmith Canary Network",

@@ -18,6 +18,56 @@
 
 use super::*;
 
+pub mod v8 {
+	use frame_election_provider_support::SortedListProvider;
+	use frame_support::traits::Get;
+
+	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
+
+	#[cfg(feature = "try-runtime")]
+	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+		frame_support::ensure!(
+			StorageVersion::<T>::get() == crate::Releases::V7_0_0,
+			"must upgrade linearly"
+		);
+
+		crate::log!(info, "👜 staking bags-list migration passes PRE migrate checks ✅",);
+		Ok(())
+	}
+
+	/// Migration to sorted [`SortedListProvider`].
+	pub fn migrate<T: Config>() -> Weight {
+		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
+			crate::log!(info, "migrating staking to Releases::V8_0_0");
+
+			let migrated = T::SortedListProvider::regenerate(
+				Nominators::<T>::iter().map(|(id, _)| id),
+				Pallet::<T>::weight_of_fn(),
+			);
+			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+
+			StorageVersion::<T>::put(crate::Releases::V8_0_0);
+			crate::log!(
+				info,
+				"👜 completed staking migration to Releases::V8_0_0 with {} voters migrated",
+				migrated,
+			);
+
+			T::BlockWeights::get().max_block
+		} else {
+			T::DbWeight::get().reads(1)
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	pub fn post_migrate<T: Config>() -> Result<(), &'static str> {
+		T::SortedListProvider::sanity_check()
+			.map_err(|_| "SortedListProvider is not in a sane state.")?;
+		crate::log!(info, "👜 staking bags-list migration passes POST migrate checks ✅",);
+		Ok(())
+	}
+}
+
 pub mod v7 {
 	use super::*;
 

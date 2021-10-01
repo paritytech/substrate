@@ -50,7 +50,8 @@ pub use tests::MockExt;
 /// `instruction_weights_version` and `code` when a contract with an outdated instrumention is
 /// called. Therefore one must be careful when holding any in-memory representation of this
 /// type while calling into a contract as those fields can get out of date.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct PrefabWasmModule<T: Config> {
 	/// Version of the instruction weights with which the code was instrumented.
 	#[codec(compact)]
@@ -1967,7 +1968,7 @@ mod tests {
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
 		use std::convert::TryInto;
-		let call = Call::System(frame_system::Call::remark(b"Hello World".to_vec()));
+		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
 		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);

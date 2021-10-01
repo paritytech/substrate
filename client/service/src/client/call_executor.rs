@@ -41,7 +41,7 @@ use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	backend: Arc<B>,
 	executor: E,
-	wasm_override: Option<WasmOverride<E>>,
+	wasm_override: Option<WasmOverride>,
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig<Block>,
@@ -62,7 +62,7 @@ where
 		let wasm_override = client_config
 			.wasm_runtime_overrides
 			.as_ref()
-			.map(|p| WasmOverride::new(p.clone(), executor.clone()))
+			.map(|p| WasmOverride::new(p.clone(), &executor))
 			.transpose()?;
 
 		let wasm_substitutes = WasmSubstitutes::new(
@@ -371,7 +371,7 @@ mod tests {
 			1,
 		);
 
-		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
+		let overrides = crate::client::wasm_override::dummy_overrides();
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());
 		let onchain_code = RuntimeCode {
 			code_fetcher: &onchain_code,
