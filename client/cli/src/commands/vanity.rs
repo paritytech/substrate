@@ -163,7 +163,7 @@ fn assert_non_empty_string(pattern: &str) -> Result<String, &'static str> {
 mod tests {
 	use super::*;
 	use sp_core::{
-		crypto::{default_ss58_version, KnownSs58AddressFormat, Ss58Codec},
+		crypto::{default_ss58_version, Ss58AddressFormatRegistry, Ss58Codec},
 		sr25519, Pair,
 	};
 	use structopt::StructOpt;
@@ -189,12 +189,12 @@ mod tests {
 	#[test]
 	fn generate_key_respects_network_override() {
 		let seed =
-			generate_key::<sr25519::Pair>("ab", KnownSs58AddressFormat::PolkadotAccount.into())
+			generate_key::<sr25519::Pair>("ab", Ss58AddressFormatRegistry::PolkadotAccount.into())
 				.unwrap();
 		assert!(sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
 			.unwrap()
 			.public()
-			.to_ss58check_with_version(KnownSs58AddressFormat::PolkadotAccount.into())
+			.to_ss58check_with_version(Ss58AddressFormatRegistry::PolkadotAccount.into())
 			.contains("ab"));
 	}
 

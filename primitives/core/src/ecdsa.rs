@@ -640,7 +640,7 @@ impl CryptoType for Pair {
 mod test {
 	use super::*;
 	use crate::{
-		crypto::{set_default_ss58_version, PublicError, DEV_PHRASE},
+		crypto::{set_default_ss58_version, PublicError, DEV_PHRASE, Ss58AddressFormat, Ss58AddressFormatRegistry},
 		keccak_256,
 	};
 	use hex_literal::hex;
@@ -772,20 +772,18 @@ mod test {
 
 	#[test]
 	fn ss58check_format_check_works() {
-		use crate::crypto::KnownSs58AddressFormat;
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let format = KnownSs58AddressFormat::Reserved46Account.into();
+		let format = Ss58AddressFormatRegistry::Reserved46Account.into();
 		let s = public.to_ss58check_with_version(format);
 		assert_eq!(Public::from_ss58check_with_version(&s), Err(PublicError::FormatNotAllowed));
 	}
 
 	#[test]
 	fn ss58check_full_roundtrip_works() {
-		use crate::crypto::{KnownSs58AddressFormat, Ss58AddressFormat};
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let format = KnownSs58AddressFormat::PolkadotAccount.into();
+		let format = Ss58AddressFormatRegistry::PolkadotAccount.into();
 		let s = public.to_ss58check_with_version(format);
 		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
 		assert_eq!(k, public);

@@ -42,6 +42,9 @@ use sp_std::{convert::TryFrom, hash::Hash, str, vec::Vec};
 /// Trait to zeroize a memory buffer.
 pub use zeroize::Zeroize;
 
+#[cfg(feature = "full_crypto")]
+pub use ss58_registry::{from_known_address_format, Ss58AddressFormatRegistry, Ss58AddressFormat};
+
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str =
 	"bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -351,13 +354,10 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 	context.finalize()
 }
 
-#[cfg(feature = "full_crypto")]
-pub use ss58_registry::{from_known_address_format, KnownSs58AddressFormat, Ss58AddressFormat};
-
 /// Default prefix number
 #[cfg(feature = "std")]
 static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = core::sync::atomic::AtomicU16::new(
-	from_known_address_format(KnownSs58AddressFormat::SubstrateAccount),
+	from_known_address_format(Ss58AddressFormatRegistry::SubstrateAccount),
 );
 
 /// Returns default(). (can't impl Default due to orphan rules).
