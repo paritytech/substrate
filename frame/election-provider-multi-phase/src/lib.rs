@@ -1204,7 +1204,7 @@ impl<T: Config> Pallet<T> {
 				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
 					// This is executed at the beginning of each round. Any cache is now invalid.
 					// Clear it.
-					kill_ocw_solution::<T>();
+					unsigned::kill_ocw_solution::<T>();
 					Self::mine_check_save_submit()
 				});
 				log!(debug, "initial offchain thread output: {:?}", initial_output);
