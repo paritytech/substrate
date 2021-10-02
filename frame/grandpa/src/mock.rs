@@ -217,6 +217,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type WeightInfo = ();
 }
 
@@ -229,6 +230,7 @@ impl pallet_offences::Config for Test {
 parameter_types! {
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+	pub const MaxAuthorities: u32 = 100;
 }
 
 impl Config for Test {
@@ -249,6 +251,7 @@ impl Config for Test {
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
+	type MaxAuthorities = MaxAuthorities;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {

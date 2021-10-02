@@ -250,6 +250,20 @@ If you are trying to set up Substrate on Windows, you should do the following:
 
 7. Finally, you need to install `cmake`: https://cmake.org/download/
 
+==== Docker
+
+You can use https://github.com/paritytech/scripts/tree/master/dockerfiles/ci-linux[Parity CI docker image] with all necessary dependencies to build Substrate:
+
+[source, shell]
+----
+#run it in the folder with the Substrate source code
+docker run --rm -it -w /shellhere/substrate \
+                    -v $(pwd):/shellhere/substrate \
+                    paritytech/ci-linux:production <cargo commands>
+----
+
+You can find necessary cargo commands in <<shared-steps,shared steps>>
+
 ==== Shared Steps
 
 Then, grab the Substrate source code:

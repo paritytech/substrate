@@ -702,6 +702,21 @@ pub use frame_support_procedural::DefaultNoBound;
 /// ```
 pub use frame_support_procedural::require_transactional;
 
+/// Convert the current crate version into a [`CrateVersion`](crate::traits::CrateVersion).
+///
+/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
+/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
+/// This means that the [`CrateVersion`](crate::traits::CrateVersion)
+/// object will correspond to the version of the crate the macro is called in!
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::{traits::CrateVersion, crate_to_crate_version};
+/// const Version: CrateVersion = crate_to_crate_version!();
+/// ```
+pub use frame_support_procedural::crate_to_crate_version;
+
 /// Return Err of the expression: `return Err($expression);`.
 ///
 /// Used as `fail!(expression)`.
@@ -819,6 +834,7 @@ pub mod tests {
 		StorageHasher,
 	};
 	use codec::{Codec, EncodeLike};
+	use frame_support::traits::CrateVersion;
 	use sp_io::TestExternalities;
 	use sp_std::result;
 
@@ -830,6 +846,12 @@ pub mod tests {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn module_name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn crate_version<P: 'static>() -> Option<CrateVersion> {
 			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 		}
 	}
@@ -1293,8 +1315,8 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				Key as NMapKey, OptionQuery, StorageDoubleMap, StorageMap, StorageNMap,
-				StorageValue, ValueQuery,
+				CountedStorageMap, Key as NMapKey, OptionQuery, StorageDoubleMap, StorageMap,
+				StorageNMap, StorageValue, ValueQuery,
 			},
 		},
 		traits::{
@@ -1411,15 +1433,17 @@ pub mod pallet_prelude {
 /// `<Pallet as Store>::Foo`.
 ///
 /// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::set_storage_max_encoded_len]`, e.g.:
+/// `#[pallet::generate_storage_info]`, e.g.:
 /// ```ignore
 /// #[pallet::pallet]
-/// #[pallet::set_storage_max_encoded_len]
+/// #[pallet::generate_storage_info]
 /// pub struct Pallet<T>(_);
 /// ```
 ///
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
 /// and value types must bound [`pallet_prelude::MaxEncodedLen`].
+/// Some individual storage can opt-out from this constraint by using `#[pallet::unbounded]`,
+/// see `#[pallet::storage]` documentation.
 ///
 /// As the macro implements [`traits::GetStorageVersion`], the current storage version needs to
 /// be communicated to the macro. This can be done by using the `storage_version` attribute:
@@ -1673,6 +1697,8 @@ pub mod pallet_prelude {
 /// * [`pallet_prelude::StorageValue`] expect `Value` and optionally `QueryKind` and `OnEmpty`,
 /// * [`pallet_prelude::StorageMap`] expect `Hasher`, `Key`, `Value` and optionally `QueryKind`
 ///   and `OnEmpty`,
+/// * [`pallet_prelude::CountedStorageMap`] expect `Hasher`, `Key`, `Value` and optionally
+///   `QueryKind` and `OnEmpty`,
 /// * [`pallet_prelude::StorageDoubleMap`] expect `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value`
 ///   and optionally `QueryKind` and `OnEmpty`.
 ///
@@ -1684,13 +1710,16 @@ pub mod pallet_prelude {
 /// E.g. if runtime names the pallet "MyExample" then the storage `type Foo<T> = ...` use the
 /// prefix: `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
-/// The optional attribute `#[pallet::storage_prefix = "$custom_name"]` allows to define a
-/// specific name to use for the prefix.
+/// For the `CountedStorageMap` variant, the Prefix also implements
+/// `CountedStorageMapInstance`. It associate a `CounterPrefix`, which is implemented same as
+/// above, but the storage prefix is prepend with `"CounterFor"`.
+/// E.g. if runtime names the pallet "MyExample" then the storage
+/// `type Foo<T> = CountedStorageaMap<...>` will store its counter at the prefix:
+/// `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
 ///
 /// E.g:
 /// ```ignore
 /// #[pallet::storage]
-/// #[pallet::storage_prefix = "OtherName"]
 /// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 /// ```
 /// In this case the final prefix used by the map is
@@ -1699,9 +1728,13 @@ pub mod pallet_prelude {
 /// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows to define a
 /// getter function on `Pallet`.
 ///
+/// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allow to define the storage
+/// prefix to use, see how `Prefix` generic is implemented above.
+///
 /// E.g:
 /// ```ignore
 /// #[pallet::storage]
+/// #[pallet::storage_prefix = "foo"]
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 /// ```
@@ -1711,6 +1744,11 @@ pub mod pallet_prelude {
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
+///
+/// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
+/// When implementating the storage info (when #[pallet::generate_storage_info]` is specified
+/// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
+/// This can be useful for storage which can never go into PoV (Proof of Validity).
 ///
 /// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
 ///
@@ -1738,6 +1776,8 @@ pub mod pallet_prelude {
 /// `_GeneratedPrefixForStorage$NameOfStorage`, and implements
 /// [`StorageInstance`](traits::StorageInstance) on it using the pallet and storage name. It
 /// then uses it as the first generic of the aliased type.
+/// For `CountedStorageMap`, `CountedStorageMapInstance` is implemented, and another similar
+/// struct is generated.
 ///
 /// For named generic, the macro will reorder the generics, and remove the names.
 ///

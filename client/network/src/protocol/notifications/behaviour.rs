@@ -417,7 +417,7 @@ impl Notifications {
 
 	/// Returns true if we have an open substream to the given peer.
 	pub fn is_open(&self, peer_id: &PeerId, set_id: sc_peerset::SetId) -> bool {
-		self.peers.get(&(peer_id.clone(), set_id)).map(|p| p.is_open()).unwrap_or(false)
+		self.peers.get(&(*peer_id, set_id)).map(|p| p.is_open()).unwrap_or(false)
 	}
 
 	/// Disconnects the given peer if we are connected to it.
@@ -1777,7 +1777,7 @@ impl NetworkBehaviour for Notifications {
 					"Handler({}, {:?}) => CloseResult({:?})",
 					source, connection, set_id);
 
-				match self.peers.get_mut(&(source.clone(), set_id)) {
+				match self.peers.get_mut(&(source, set_id)) {
 					// Move the connection from `Closing` to `Closed`.
 					Some(PeerState::Incoming { connections, .. }) |
 					Some(PeerState::DisabledPendingEnable { connections, .. }) |
