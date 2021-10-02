@@ -1,18 +1,17 @@
 error: associated type `Balance` does not have a default type specified, or does not exist
-  --> $DIR/undefined_default_type.rs:5:1
-   |
-5  | #[frame_support::pallet]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^
-...
-23 | #[frame_support::use_default_config_for(Balance)]
-   | ------------------------------------------------- in this procedural macro expansion
-   |
-   = note: this error originates in the macro `pallet::__substrate_config_defaults::use_default_config_for` (in Nightly builds, run with -Z macro-backtrace for more info)
+ --> $DIR/undefined_default_type.rs:5:1
+  |
+5 | #[frame_support::pallet]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `pallet::__substrate_config_defaults::use_default_config_for` (in Nightly builds, run with -Z macro-backtrace for more info)
+
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_default_type.rs:32:11
    |
 32 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
    |                 ^^^^^^ use of undeclared crate or module `system`
+
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_default_type.rs:26:1
    |
@@ -30,6 +29,7 @@ help: consider importing this enum
    |
 1  | use frame_system::RawOrigin;
    |
+
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_default_type.rs:26:1
    |
@@ -53,6 +53,7 @@ help: consider importing one of these items
    |
 1  | use test_pallet::Pallet;
    |
+
 error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
   --> $DIR/undefined_default_type.rs:24:6
    |
