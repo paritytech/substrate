@@ -5,7 +5,3 @@ error[E0277]: the trait bound `<T as Config>::C: Clone` is not satisfied
     |     ^ the trait `Clone` is not implemented for `<T as Config>::C`
     |
 note: required by `clone`
-   --> $DIR/clone.rs:121:5
-    |
-121 |     fn clone(&self) -> Self;
-    |     ^^^^^^^^^^^^^^^^^^^^^^^^
