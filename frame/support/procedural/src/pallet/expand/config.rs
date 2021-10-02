@@ -41,17 +41,19 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 		));
 	}
 
-	let (config_type_names, config_type_defaults) = config
-		.defaults_metadata
-		.iter()
-		.fold((Vec::new(), Vec::new()), |mut acc, metadata| {
-			acc.0.push(metadata.ident.clone());
-			acc.1.push(metadata.default.clone());
-			acc
-		});
+	let (config_type_names, config_type_defaults) =
+		config
+			.defaults_metadata
+			.iter()
+			.fold((Vec::new(), Vec::new()), |mut acc, metadata| {
+				acc.0.push(metadata.ident.clone());
+				acc.1.push(metadata.default.clone());
+				acc
+			});
 
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
-	let macro_ident = syn::Ident::new(&format!("__use_default_config_for_{}", count), config.attr_span);
+	let macro_ident =
+		syn::Ident::new(&format!("__use_default_config_for_{}", count), config.attr_span);
 
 	quote::quote! {
 		#[doc(hidden)]

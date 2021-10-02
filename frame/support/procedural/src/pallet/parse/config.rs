@@ -155,7 +155,7 @@ impl syn::parse::Parse for TypeAttr {
 		syn::bracketed!(content in input);
 		content.parse::<syn::Ident>()?;
 		content.parse::<syn::Token![::]>()?;
-		
+
 		let lookahead = content.lookahead1();
 
 		if lookahead.peek(keyword::constant) {
@@ -372,7 +372,8 @@ impl ConfigDef {
 				type_attrs.into_iter().partition(|attr| matches!(attr, TypeAttr::Constant(_)));
 
 			if type_attrs_const.len() > 1 {
-				let msg = "Invalid attribute in pallet::config, only one pallet::constant is expected";
+				let msg =
+					"Invalid attribute in pallet::config, only one pallet::constant is expected";
 				return Err(syn::Error::new(type_attrs_const[1].span(), msg))
 			}
 

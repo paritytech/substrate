@@ -17,7 +17,10 @@
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Ident, ItemImpl, Path, PathArguments, PathSegment, Result, Token, parse::Parser, punctuated::Punctuated, spanned::Spanned};
+use syn::{
+	parse::Parser, punctuated::Punctuated, spanned::Spanned, Ident, ItemImpl, Path, PathArguments,
+	PathSegment, Result, Token,
+};
 
 pub fn use_default_config_for(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let config_impl: ItemImpl = syn::parse(input)?;
@@ -28,11 +31,13 @@ pub fn use_default_config_for(attr: TokenStream, input: TokenStream) -> Result<T
 	})?;
 	let ItemImpl { attrs, generics, self_ty, items, .. } = config_impl;
 	let config_opts = Punctuated::<Ident, Token![,]>::parse_terminated.parse(attr)?;
-	let default_items = config_opts.iter().map(|config_item_ident| {
-		let path = construct_path_to_macro(&config_trait);
-		quote!(#path::use_default_config_for!(#config_item_ident);)
-	})
-	.collect::<Vec<_>>();
+	let default_items = config_opts
+		.iter()
+		.map(|config_item_ident| {
+			let path = construct_path_to_macro(&config_trait);
+			quote!(#path::use_default_config_for!(#config_item_ident);)
+		})
+		.collect::<Vec<_>>();
 
 	Ok(quote! {
 		#(#attrs)*
@@ -40,7 +45,8 @@ pub fn use_default_config_for(attr: TokenStream, input: TokenStream) -> Result<T
 			#(#items)*
 			#(#default_items)*
 		}
-	}.into())
+	}
+	.into())
 }
 
 fn construct_path_to_macro(config_trait: &Path) -> Path {
