@@ -1,10 +1,13 @@
 error: associated type `Balance` does not have a default type specified, or does not exist
- --> $DIR/undefined_default_type.rs:5:1
-  |
-5 | #[frame_support::pallet]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `pallet::__substrate_config_defaults::use_default_config_for` (in Nightly builds, run with -Z macro-backtrace for more info)
+  --> $DIR/undefined_default_type.rs:5:1
+   |
+5  | #[frame_support::pallet]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+23 | #[frame_support::use_default_config_for(Balance)]
+   | ------------------------------------------------- in this procedural macro expansion
+   |
+   = note: this error originates in the macro `pallet::__substrate_config_defaults::use_default_config_for` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_default_type.rs:32:11
@@ -57,8 +60,11 @@ help: consider importing one of these items
 error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
   --> $DIR/undefined_default_type.rs:24:6
    |
-9  |     pub trait Config: frame_system::Config {
-   |                       -------------------- required by this bound in `pallet::Config`
-...
 24 | impl pallet::Config for Runtime {}
    |      ^^^^^^^^^^^^^^ the trait `frame_system::Config` is not implemented for `Runtime`
+   |
+note: required by a bound in `pallet::Config`
+  --> $DIR/undefined_default_type.rs:9:20
+   |
+9  |     pub trait Config: frame_system::Config {
+   |                       ^^^^^^^^^^^^^^^^^^^^ required by this bound in `pallet::Config`
