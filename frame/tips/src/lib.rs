@@ -83,7 +83,7 @@ pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
 /// and the members who have voted.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub struct OpenTip<
 	AccountId: Parameter,
 	Balance: Parameter,
@@ -177,7 +177,6 @@ pub mod pallet {
 	pub type Reasons<T: Config> = StorageMap<_, Identity, T::Hash, Vec<u8>, OptionQuery>;
 
 	#[pallet::event]
-	#[pallet::metadata(T::Hash = "Hash", T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new tip suggestion has been opened. \[tip_hash\]

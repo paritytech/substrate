@@ -21,10 +21,11 @@
 
 use super::*;
 
-use frame_benchmarking::{
-	account, benchmarks, impl_benchmark_test_suite, whitelist, BenchmarkError, BenchmarkResult,
+use frame_benchmarking::{account, benchmarks, whitelist, BenchmarkError, BenchmarkResult};
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+	traits::OnInitialize,
 };
-use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 use frame_system::RawOrigin;
 
 use crate::Pallet as Elections;
@@ -401,15 +402,23 @@ benchmarks! {
 
 		let _ = fill_seats_up_to::<T>(m)?;
 		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
+		let who = T::Lookup::lookup(removing.clone()).expect("member was added above");
+		let call = Call::<T>::remove_member { who: removing, has_replacement: false }.encode();
 	}: {
 		assert_eq!(
-			<Elections<T>>::remove_member(RawOrigin::Root.into(), removing, false).unwrap_err().error,
+			<Call<T> as Decode>::decode(&mut &*call)
+				.expect("call is encoded above, encoding must be correct")
+				.dispatch_bypass_filter(RawOrigin::Root.into())
+				.unwrap_err()
+				.error,
 			Error::<T>::InvalidReplacement.into(),
 		);
 	}
 	verify {
 		// must still have enough members.
 		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
+		// on fail, `who` must still be a member
+		assert!(<Elections<T>>::members_ids().contains(&who));
 		#[cfg(test)]
 		{
 			// reset members in between benchmark tests.
@@ -538,11 +547,11 @@ benchmarks! {
 			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
 		}
 	}
-}
 
-impl_benchmark_test_suite!(
-	Elections,
-	crate::tests::ExtBuilder::default().desired_members(13).desired_runners_up(7),
-	crate::tests::Test,
-	exec_name = build_and_execute,
-);
+	impl_benchmark_test_suite!(
+		Elections,
+		crate::tests::ExtBuilder::default().desired_members(13).desired_runners_up(7),
+		crate::tests::Test,
+		exec_name = build_and_execute,
+	);
+}

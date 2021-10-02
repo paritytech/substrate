@@ -21,8 +21,7 @@
 
 use super::*;
 use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelist_account,
-	whitelisted_caller,
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -330,13 +329,13 @@ benchmarks_instance_pallet! {
 		create_default_asset::<T, I>(true);
 
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_set_metadata(
-			Default::default(),
-			name.clone(),
-			symbol.clone(),
+		let call = Call::<T, I>::force_set_metadata {
+			id: Default::default(),
+			name: name.clone(),
+			symbol: symbol.clone(),
 			decimals,
-			false,
-		);
+			is_frozen: false,
+		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		let id = Default::default();
@@ -351,7 +350,7 @@ benchmarks_instance_pallet! {
 		Assets::<T, I>::set_metadata(origin, Default::default(), dummy.clone(), dummy, 12)?;
 
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_clear_metadata(Default::default());
+		let call = Call::<T, I>::force_clear_metadata { id: Default::default() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::MetadataCleared(Default::default()).into());
@@ -361,16 +360,16 @@ benchmarks_instance_pallet! {
 		let (caller, caller_lookup) = create_default_asset::<T, I>(true);
 
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_asset_status(
-			Default::default(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			100u32.into(),
-			true,
-			false,
-		);
+		let call = Call::<T, I>::force_asset_status {
+			id: Default::default(),
+			owner: caller_lookup.clone(),
+			issuer: caller_lookup.clone(),
+			admin: caller_lookup.clone(),
+			freezer: caller_lookup.clone(),
+			min_balance: 100u32.into(),
+			is_sufficient: true,
+			is_frozen: false,
+		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::AssetStatusChanged(Default::default()).into());
@@ -438,6 +437,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled(id, caller, delegate).into());
 	}
-}
 
-impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)
+}
