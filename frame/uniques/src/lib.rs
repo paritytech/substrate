@@ -142,6 +142,19 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	/// The assets held by any given account; set out this way so that assets owned by a single
+	/// account can be enumerated.
+	pub(super) type ClassAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		T::ClassId,
+		(),
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
 	/// The assets in existence and their ownership details.
 	pub(super) type Asset<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -536,10 +549,10 @@ pub mod pallet {
 					if T::Currency::reserve(&class_details.owner, deposit - old).is_err() {
 						// NOTE: No alterations made to class_details in this iteration so far, so
 						// this is OK to do.
-						continue
+						continue;
 					}
 				} else {
-					continue
+					continue;
 				}
 				class_details.total_deposit.saturating_accrue(deposit);
 				class_details.total_deposit.saturating_reduce(old);
@@ -691,7 +704,7 @@ pub mod pallet {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
-					return Ok(())
+					return Ok(());
 				}
 
 				// Move the deposit to the new owner.
@@ -701,6 +714,8 @@ pub mod pallet {
 					details.total_deposit,
 					Reserved,
 				)?;
+				ClassAccount::<T, I>::remove(&details.owner, &class);
+				ClassAccount::<T, I>::insert(&owner, &class, ());
 				details.owner = owner.clone();
 
 				Self::deposit_event(Event::OwnerChanged(class, owner));
@@ -866,14 +881,17 @@ pub mod pallet {
 
 			Class::<T, I>::try_mutate(class, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				asset.owner = T::Lookup::lookup(owner)?;
+				let old_owner = asset.owner;
+				let new_owner = T::Lookup::lookup(owner)?;
+				asset.owner = new_owner.clone();
 				asset.issuer = T::Lookup::lookup(issuer)?;
 				asset.admin = T::Lookup::lookup(admin)?;
 				asset.freezer = T::Lookup::lookup(freezer)?;
 				asset.free_holding = free_holding;
 				asset.is_frozen = is_frozen;
 				*maybe_asset = Some(asset);
-
+				ClassAccount::<T, I>::remove(&old_owner, &class);
+				ClassAccount::<T, I>::insert(&new_owner, &class, ());
 				Self::deposit_event(Event::AssetStatusChanged(class));
 				Ok(())
 			})
@@ -914,8 +932,9 @@ pub mod pallet {
 			}
 			let maybe_is_frozen = match maybe_instance {
 				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
-				Some(instance) =>
-					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
+				Some(instance) => {
+					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen)
+				}
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
@@ -978,8 +997,9 @@ pub mod pallet {
 			}
 			let maybe_is_frozen = match maybe_instance {
 				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
-				Some(instance) =>
-					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
+				Some(instance) => {
+					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen)
+				}
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
