@@ -19,7 +19,7 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-rand_chacha = { version = "0.2", default-features = false }
+rand_chacha = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }

@@ -26,7 +26,7 @@ sp-externalities = { version = "0.10.0-dev", path = "../externalities", default-
 
 [dev-dependencies]
 rand = "0.7.2"
-rand_chacha = "0.2.2"
+rand_chacha = "0.3.0"
 
 
 [features]

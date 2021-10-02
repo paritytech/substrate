@@ -60,5 +60,5 @@ sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
-rand_chacha = "0.2.2"
+rand_chacha = "0.3.0"
 tempfile = "3.1.0"

@@ -34,7 +34,7 @@ log = { version = "0.4.14", default-features = false }
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-rand_chacha = { version = "0.2", default-features = false, optional = true }
+rand_chacha = { version = "0.3", default-features = false, optional = true }
 
 [dev-dependencies]
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
@@ -47,7 +47,7 @@ pallet-bags-list = { version = "4.0.0-dev", features = ["runtime-benchmarks"], p
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
-rand_chacha = { version = "0.2" }
+rand_chacha = { version = "0.3" }
 
 [features]
 default = ["std"]
