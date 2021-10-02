@@ -23,7 +23,7 @@ mod mock;
 
 use sp_std::{convert::TryFrom, prelude::*, vec};
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks};
 use frame_support::{
 	traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification},
 	WeakBoundedVec,

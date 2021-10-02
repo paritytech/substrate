@@ -305,8 +305,8 @@ use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get},
 	weights::Weight,
-	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
-	WeakBoundedVec,
+	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, OrdNoBound, PartialEqNoBound,
+	RuntimeDebugNoBound, WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -319,7 +319,6 @@ use sp_staking::{
 	SessionIndex,
 };
 use sp_std::{
-	cmp::Ordering,
 	convert::{From, TryFrom},
 	fmt,
 	prelude::*,
@@ -647,6 +646,7 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
+	OrdNoBound,
 	Encode,
 	Decode,
 	CloneNoBound,
@@ -659,8 +659,8 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 #[codec(mel_bound(Limit: Get<u32>, Balance: HasCompact))]
 pub struct Exposure<AccountId, Balance, Limit>
 where
-	AccountId: MaxEncodedLen + Eq + Default + Clone + fmt::Debug,
-	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + fmt::Debug,
+	AccountId: MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
 	Limit: Get<u32>,
 {
 	/// The total balance backing this validator.
@@ -671,35 +671,6 @@ where
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>,
-}
-
-impl<AccountId, Balance, Limit> PartialOrd for Exposure<AccountId, Balance, Limit>
-where
-	AccountId: MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
-	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
-	Limit: Get<u32>,
-{
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-impl<AccountId, Balance, Limit> Ord for Exposure<AccountId, Balance, Limit>
-where
-	AccountId: MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
-	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
-	Limit: Get<u32>,
-{
-	fn cmp(&self, other: &Self) -> Ordering {
-		let mut result = Ord::cmp(&self.total, &other.total);
-		if result == Ordering::Equal {
-			result = Ord::cmp(&self.own, &other.own);
-			if result == Ordering::Equal {
-				return Ord::cmp(&self.others, &other.others)
-			}
-		}
-		return result
-	}
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
