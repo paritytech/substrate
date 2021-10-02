@@ -25,5 +25,5 @@ fn ui() {
 	env::set_var("SKIP_WASM_BUILD", "1");
 
 	let t = trybuild::TestCases::new();
-	t.compile_fail("tests/construct_runtime_ui/undefined_default_type.rs");
+	t.compile_fail("tests/construct_runtime_ui/*.rs");
 }
