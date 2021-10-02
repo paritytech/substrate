@@ -233,7 +233,7 @@ pub mod wasmer {
 				let range = checked_range(dest_addr.into(), source.len(), destination.len())
 					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
 
-				&mut destination[range].copy_from_slice(source);
+				destination[range].copy_from_slice(source);
 				Ok(())
 			}
 		}

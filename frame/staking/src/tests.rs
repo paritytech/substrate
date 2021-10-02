@@ -23,7 +23,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
-	traits::{Currency, Get, OnInitialize, ReservableCurrency},
+	traits::{Currency, Get, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use mock::*;
