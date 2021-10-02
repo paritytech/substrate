@@ -111,10 +111,7 @@ where
 		// Constrain to the base number, if that's the minimal
 		// vote that can be placed.
 		if *base.number() + self.0 > *best_target.number() {
-			return Box::pin(std::future::ready(Some((
-				base.hash(),
-				*base.number(),
-			))));
+			return Box::pin(std::future::ready(Some((base.hash(), *base.number()))))
 		}
 
 		// find the target number restricted by this rule
@@ -431,7 +428,8 @@ mod tests {
 				&base,
 				&best,
 				&best,
-			)).unwrap();
+			))
+			.unwrap();
 
 			let expected = std::cmp::max(best_number - 2, *base.number());
 			assert_eq!(number, expected, "best = {}, lag = 2, base = {}", best_number, i);
