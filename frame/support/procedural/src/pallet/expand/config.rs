@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::{pallet::Def, COUNTER};
 use frame_support_procedural_tools::get_doc_literals;
 
 ///
@@ -41,5 +41,40 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 		));
 	}
 
-	Default::default()
+	let (config_type_names, config_type_defaults) = config
+		.defaults_metadata
+		.iter()
+		.fold((Vec::new(), Vec::new()), |mut acc, metadata| {
+			acc.0.push(metadata.ident.clone());
+			acc.1.push(metadata.default.clone());
+			acc
+		});
+
+	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
+	let macro_ident = syn::Ident::new(&format!("__use_default_config_for_{}", count), config.attr_span);
+
+	quote::quote! {
+		#[doc(hidden)]
+		pub mod __substrate_config_defaults {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #macro_ident {
+				#(
+					(#config_type_names) => {
+						type #config_type_names = #config_type_defaults;
+					};
+				)*
+				($no_default_config_name:ident) => {
+					compile_error!(concat!(
+						"associated type `",
+						stringify!($no_default_config_name),
+						"` does not have a default type specified, or does not exist"
+					));
+				};
+			}
+
+			#[doc(hidden)]
+			pub use #macro_ident as use_default_config_for;
+		}
+	}
 }

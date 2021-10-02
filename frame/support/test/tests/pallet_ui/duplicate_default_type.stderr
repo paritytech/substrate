@@ -1,0 +1,5 @@
+error: Invalid attribute in pallet::config, only one pallet::default_type is expected
+ --> $DIR/duplicate_default_type.rs:8:19
+  |
+8 |         #[pallet::default_type(u128)]
+  |                   ^^^^^^^^^^^^

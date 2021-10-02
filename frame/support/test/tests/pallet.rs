@@ -126,6 +126,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MyGetParam3: Get<<Self::AccountId as SomeAssociation1>::_1>;
 
+		#[pallet::default_type(u64)]
 		type Balance: Parameter + Default + TypeInfo;
 
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -438,6 +439,7 @@ pub mod pallet2 {
 	where
 		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
+		#[pallet::default_type(Event)]
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
@@ -535,17 +537,17 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
+
+#[frame_support::use_default_config_for(Balance)]
 impl pallet::Config for Runtime {
 	type Event = Event;
 	type MyGetParam = MyGetParam;
 	type MyGetParam2 = MyGetParam2;
 	type MyGetParam3 = MyGetParam3;
-	type Balance = u64;
 }
 
-impl pallet2::Config for Runtime {
-	type Event = Event;
-}
+#[frame_support::use_default_config_for(Event)]
+impl pallet2::Config for Runtime {}
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

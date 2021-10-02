@@ -23,6 +23,7 @@ mod clone_no_bound;
 mod construct_runtime;
 mod crate_version;
 mod debug_no_bound;
+mod default_config;
 mod default_no_bound;
 mod dummy_part_checker;
 mod key_prefix;
@@ -497,4 +498,11 @@ pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	dummy_part_checker::generate_dummy_part_checker(input)
+}
+
+/// Macro used for declaring that defaults should be used for the specified config items.
+#[proc_macro_attribute]
+pub fn use_default_config_for(attr: TokenStream, input: TokenStream) -> TokenStream {
+	default_config::use_default_config_for(attr, input)
+		.unwrap_or_else(|e| e.to_compile_error().into())
 }

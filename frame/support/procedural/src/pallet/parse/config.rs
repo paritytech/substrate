@@ -28,6 +28,7 @@ mod keyword {
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(I);
 	syn::custom_keyword!(config);
+	syn::custom_keyword!(default_type);
 	syn::custom_keyword!(IsType);
 	syn::custom_keyword!(Event);
 	syn::custom_keyword!(constant);
@@ -43,6 +44,8 @@ pub struct ConfigDef {
 	pub has_instance: bool,
 	/// Const associated type.
 	pub consts_metadata: Vec<ConstMetadataDef>,
+	/// The default types for the associated types.
+	pub defaults_metadata: Vec<DefaultMetadataDef>,
 	/// Whether the trait has the associated type `Event`, note that those bounds are checked:
 	/// * `IsType<Self as frame_system::Config>::Event`
 	/// * `From<Event>` or `From<Event<T>>` or `From<Event<T, I>>`
@@ -106,6 +109,14 @@ impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
 	}
 }
 
+/// Input definition for a default type in pallet config.
+pub struct DefaultMetadataDef {
+	/// Name of the associated type
+	pub ident: syn::Ident,
+	/// Default type that can be assigned to the associated type
+	pub default: syn::Type,
+}
+
 /// Parse for `#[pallet::disable_frame_system_supertrait_check]`
 pub struct DisableFrameSystemSupertraitCheck;
 
@@ -122,24 +133,41 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 	}
 }
 
-/// Parse for `#[pallet::constant]`
-pub struct TypeAttrConst(proc_macro2::Span);
+/// Parse for `#[pallet::constant]` and `#[pallet::default_type]`
+pub enum TypeAttr {
+	Constant(proc_macro2::Span),
+	Default(proc_macro2::Span, syn::Type),
+}
 
-impl Spanned for TypeAttrConst {
+impl Spanned for TypeAttr {
 	fn span(&self) -> proc_macro2::Span {
-		self.0
+		match self {
+			TypeAttr::Constant(s) => *s,
+			TypeAttr::Default(s, _) => *s,
+		}
 	}
 }
 
-impl syn::parse::Parse for TypeAttrConst {
+impl syn::parse::Parse for TypeAttr {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		input.parse::<syn::Token![#]>()?;
 		let content;
 		syn::bracketed!(content in input);
 		content.parse::<syn::Ident>()?;
 		content.parse::<syn::Token![::]>()?;
+		
+		let lookahead = content.lookahead1();
 
-		Ok(TypeAttrConst(content.parse::<keyword::constant>()?.span()))
+		if lookahead.peek(keyword::constant) {
+			Ok(TypeAttr::Constant(content.parse::<keyword::constant>()?.span()))
+		} else if lookahead.peek(keyword::default_type) {
+			let ty;
+			let span = content.parse::<keyword::default_type>()?.span();
+			syn::parenthesized!(ty in content);
+			Ok(TypeAttr::Default(span, ty.parse()?))
+		} else {
+			Err(lookahead.error())
+		}
 	}
 }
 
@@ -331,16 +359,20 @@ impl ConfigDef {
 
 		let mut has_event_type = false;
 		let mut consts_metadata = vec![];
+		let mut defaults_metadata = vec![];
 		for trait_item in &mut item.items {
 			// Parse for event
 			has_event_type =
 				has_event_type || check_event_type(frame_system, trait_item, has_instance)?;
 
+			let type_attrs: Vec<TypeAttr> = helper::take_item_pallet_attrs(trait_item)?;
+
 			// Parse for constant
-			let type_attrs_const: Vec<TypeAttrConst> = helper::take_item_pallet_attrs(trait_item)?;
+			let (type_attrs_const, type_attrs_default): (Vec<_>, Vec<_>) =
+				type_attrs.into_iter().partition(|attr| matches!(attr, TypeAttr::Constant(_)));
 
 			if type_attrs_const.len() > 1 {
-				let msg = "Invalid attribute in pallet::config, only one attribute is expected";
+				let msg = "Invalid attribute in pallet::config, only one pallet::constant is expected";
 				return Err(syn::Error::new(type_attrs_const[1].span(), msg))
 			}
 
@@ -356,6 +388,30 @@ impl ConfigDef {
 							item";
 						return Err(syn::Error::new(trait_item.span(), msg))
 					},
+				}
+			}
+
+			if type_attrs_default.len() > 1 {
+				let msg = "Invalid attribute in pallet::config, only one pallet::default_type is expected";
+				return Err(syn::Error::new(type_attrs_default[1].span(), msg))
+			}
+
+			if type_attrs_default.len() == 1 {
+				if let TypeAttr::Default(_, default_ty) = &type_attrs_default[0] {
+					match trait_item {
+						syn::TraitItem::Type(syn::TraitItemType { ident, .. }) => {
+							defaults_metadata.push(DefaultMetadataDef {
+								ident: ident.clone(),
+								default: default_ty.clone(),
+							});
+						},
+						_ => {
+							let msg =
+								"Invalid pallet::default_type in pallet::config, expected type \
+								trait item";
+							return Err(syn::Error::new(trait_item.span(), msg))
+						},
+					}
 				}
 			}
 		}
@@ -393,6 +449,14 @@ impl ConfigDef {
 			return Err(syn::Error::new(item.span(), msg))
 		}
 
-		Ok(Self { index, has_instance, consts_metadata, has_event_type, where_clause, attr_span })
+		Ok(Self {
+			index,
+			has_instance,
+			consts_metadata,
+			defaults_metadata,
+			has_event_type,
+			where_clause,
+			attr_span,
+		})
 	}
 }

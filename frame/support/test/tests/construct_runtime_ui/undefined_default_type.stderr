@@ -1,0 +1,64 @@
+error: associated type `Balance` does not have a default type specified, or does not exist
+ --> $DIR/undefined_default_type.rs:5:1
+  |
+5 | #[frame_support::pallet]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `pallet::__substrate_config_defaults::use_default_config_for` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/undefined_default_type.rs:32:11
+   |
+32 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
+   |                 ^^^^^^ use of undeclared crate or module `system`
+
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/undefined_default_type.rs:26:1
+   |
+26 | / construct_runtime! {
+27 | |     pub enum Runtime where
+28 | |         Block = Block,
+29 | |         NodeBlock = Block,
+...  |
+34 | |     }
+35 | | }
+   | |_^ not found in `system`
+   |
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this enum
+   |
+1  | use frame_system::RawOrigin;
+   |
+
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/undefined_default_type.rs:26:1
+   |
+26 | / construct_runtime! {
+27 | |     pub enum Runtime where
+28 | |         Block = Block,
+29 | |         NodeBlock = Block,
+...  |
+34 | |     }
+35 | | }
+   | |_^ not found in `system`
+   |
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these items
+   |
+1  | use crate::pallet::Pallet;
+   |
+1  | use frame_support_test::Pallet;
+   |
+1  | use frame_system::Pallet;
+   |
+1  | use test_pallet::Pallet;
+   |
+
+error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
+  --> $DIR/undefined_default_type.rs:24:6
+   |
+9  |     pub trait Config: frame_system::Config {
+   |                       -------------------- required by this bound in `pallet::Config`
+...
+24 | impl pallet::Config for Runtime {}
+   |      ^^^^^^^^^^^^^^ the trait `frame_system::Config` is not implemented for `Runtime`
