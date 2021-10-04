@@ -26,11 +26,11 @@ mod shared_params;
 mod transaction_pool_params;
 
 use crate::arg_enums::{CryptoScheme, OutputType};
-use sp_core::crypto::Ss58AddressFormat;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
 };
+use ss58_registry::Ss58AddressFormat;
 use std::{convert::TryFrom, fmt::Debug, str::FromStr};
 use structopt::StructOpt;
 

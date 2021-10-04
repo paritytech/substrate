@@ -17,6 +17,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 structopt = "0.3.8"
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
+ss58-registry = { git="https://github.com/paritytech/ss58-registry.git" }
 
 [dev-dependencies]
 

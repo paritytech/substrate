@@ -640,14 +640,12 @@ impl CryptoType for Pair {
 mod test {
 	use super::*;
 	use crate::{
-		crypto::{
-			set_default_ss58_version, PublicError, Ss58AddressFormat, Ss58AddressFormatRegistry,
-			DEV_PHRASE,
-		},
+		crypto::{set_default_ss58_version, PublicError, DEV_PHRASE},
 		keccak_256,
 	};
 	use hex_literal::hex;
 	use serde_json;
+	use ss58_registry::{Ss58AddressFormat, Ss58AddressFormatRegistry};
 
 	#[test]
 	fn default_phrase_should_be_used() {
@@ -804,7 +802,7 @@ mod test {
 		// We need to run this test in its own process to not interfere with other tests running in
 		// parallel and also relying on the ss58 version.
 		if std::env::var("RUN_CUSTOM_FORMAT_TEST") == Ok("1".into()) {
-			use crate::crypto::Ss58AddressFormat;
+			use ss58_registry::Ss58AddressFormat;
 			// temp save default format version
 			let default_format = crate::crypto::default_ss58_version();
 			// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`

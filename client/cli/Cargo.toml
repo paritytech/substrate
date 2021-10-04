@@ -44,6 +44,7 @@ chrono = "0.4.10"
 serde = "1.0.126"
 thiserror = "1.0.21"
 rpassword = "5.0.0"
+ss58-registry = { git="https://github.com/paritytech/ss58-registry.git" }
 
 [dev-dependencies]
 tempfile = "3.1.0"

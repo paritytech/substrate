@@ -22,8 +22,9 @@ use sc_cli::{
 	utils::print_from_uri, with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams,
 	OutputTypeFlag,
 };
-use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
+use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58Codec};
 use sp_runtime::traits::AccountIdConversion;
+use ss58_registry::Ss58AddressFormat;
 use std::convert::{TryFrom, TryInto};
 use structopt::StructOpt;
 

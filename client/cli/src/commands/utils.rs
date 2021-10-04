@@ -23,14 +23,12 @@ use crate::{
 };
 use serde_json::json;
 use sp_core::{
-	crypto::{
-		unwrap_or_default_ss58_version, ExposeSecret, SecretString, Ss58AddressFormat, Ss58Codec,
-		Zeroize,
-	},
+	crypto::{unwrap_or_default_ss58_version, ExposeSecret, SecretString, Ss58Codec, Zeroize},
 	hexdisplay::HexDisplay,
 	Pair,
 };
 use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+use ss58_registry::Ss58AddressFormat;
 use std::{convert::TryFrom, io::Read, path::PathBuf};
 
 /// Public key type for Runtime
