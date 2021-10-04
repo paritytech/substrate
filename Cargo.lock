@@ -8449,6 +8449,7 @@ version = "2.0.0"
 dependencies = [
  "fdlimit",
  "futures 0.3.16",
+ "hex",
  "hex-literal",
  "log 0.4.14",
  "parity-scale-codec",
