@@ -33,7 +33,7 @@ use sp_core::{
 };
 use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_trie::{Layout, TrieConfiguration};
+use sp_trie::{LayoutV1 as Layout, TrieConfiguration};
 use sp_wasm_interface::HostFunctions as _;
 use std::sync::Arc;
 use tracing_subscriber::layer::SubscriberExt;
@@ -372,10 +372,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 	let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 	assert_eq!(
 		call_in_wasm("test_ordered_trie_root", &[0], wasm_method, &mut ext.ext(),).unwrap(),
-		Layout::<BlakeTwo256>::default()
-			.ordered_trie_root(trie_input.iter())
-			.as_bytes()
-			.encode(),
+		Layout::<BlakeTwo256>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
 	);
 }
 

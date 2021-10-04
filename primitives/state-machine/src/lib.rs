@@ -169,7 +169,10 @@ mod std_reexport {
 		read_only::{InspectState, ReadOnlyExternalities},
 		testing::TestExternalities,
 	};
-	pub use sp_trie::{trie_types::TrieDBMut, DBValue, Layout, MemoryDB, StorageProof, TrieMut};
+	pub use sp_trie::{
+		trie_types::{TrieDBMutV0, TrieDBMutV1},
+		DBValue, LayoutV0, LayoutV1, MemoryDB, StorageProof, TrieMut,
+	};
 }
 
 #[cfg(feature = "std")]
@@ -1743,12 +1746,10 @@ mod tests {
 
 	#[test]
 	fn inner_state_versioning_switch_proofs() {
-		let mut layout = Layout::default();
 		let mut state_version = StateVersion::V0;
 		let (mut mdb, mut root) = trie_backend::tests::test_db(state_version);
 		{
-			let mut trie =
-				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
+			let mut trie = TrieDBMutV0::from_existing(&mut mdb, &mut root).unwrap();
 			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
 				.expect("insert failed");
 			trie.insert(b"foo2", vec![3u8; 16].as_slice()) // no inner hash
@@ -1780,11 +1781,9 @@ mod tests {
 		let root1 = root.clone();
 
 		// do switch
-		layout = Layout::with_max_inline_value(sp_core::storage::DEFAULT_MAX_INLINE_VALUE);
 		state_version = StateVersion::V1;
 		{
-			let mut trie =
-				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
+			let mut trie = TrieDBMutV1::from_existing(&mut mdb, &mut root).unwrap();
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
 			// update with same value do change

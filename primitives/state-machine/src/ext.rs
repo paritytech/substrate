@@ -29,7 +29,7 @@ use sp_core::{
 	StateVersion,
 };
 use sp_externalities::{Extension, ExtensionStore, Externalities};
-use sp_trie::{empty_child_trie_root, trie_types::Layout};
+use sp_trie::{empty_child_trie_root, LayoutV1};
 
 #[cfg(feature = "std")]
 use crate::changes_trie::State as ChangesTrieState;
@@ -560,7 +560,8 @@ where
 			let root = self
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
-				.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
+				// V1 is equivalent to V0 on empty root.
+				.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
 			trace!(
 				target: "state",
 				method = "ChildStorageRoot",
@@ -606,7 +607,8 @@ where
 				let root = self
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
-					.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
+					// V1 is equivalent to V0 on empty root.
+					.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
 
 				trace!(
 					target: "state",

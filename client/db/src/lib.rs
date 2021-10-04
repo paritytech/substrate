@@ -1047,7 +1047,8 @@ impl<Block: BlockT> EmptyStorage<Block> {
 	pub fn new() -> Self {
 		let mut root = Block::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<Block>>::default();
-		sp_state_machine::TrieDBMut::<HashFor<Block>>::new(&mut mdb, &mut root);
+		// both triedbmut are the same on empty storage.
+		sp_state_machine::TrieDBMutV1::<HashFor<Block>>::new(&mut mdb, &mut root);
 		EmptyStorage(root)
 	}
 }
@@ -2438,7 +2439,7 @@ pub(crate) mod tests {
 		traits::{BlakeTwo256, Hash},
 		ConsensusEngineId,
 	};
-	use sp_state_machine::{TrieDBMut, TrieMut};
+	use sp_state_machine::{TrieDBMutV1 as TrieDBMut, TrieMut};
 
 	const CONS0_ENGINE_ID: ConsensusEngineId = *b"CON0";
 	const CONS1_ENGINE_ID: ConsensusEngineId = *b"CON1";

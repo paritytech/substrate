@@ -112,8 +112,6 @@ where
 	I: IntoIterator<Item = &'a [u8]>,
 {
 	let mut nodes_iter = encoded.into_iter();
-	// Layout does not change trie reading.
-	let layout = L::default();
 	let (top_root, _nb_used) = trie_db::decode_compact_from_iter::<L, _, _>(db, &mut nodes_iter)?;
 
 	// Only check root if expected root is passed as argument.
@@ -126,7 +124,7 @@ where
 	let mut child_tries = Vec::new();
 	{
 		// fetch child trie roots
-		let trie = crate::TrieDB::<L>::new_with_layout(db, &top_root, layout.clone())?;
+		let trie = crate::TrieDB::<L>::new(db, &top_root)?;
 
 		let mut iter = trie.iter()?;
 
@@ -204,7 +202,6 @@ where
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {
-		// Layout does not change trie reading, so can use default here.
 		let trie = crate::TrieDB::<L>::new(&partial_db, &root)?;
 
 		let mut iter = trie.iter()?;

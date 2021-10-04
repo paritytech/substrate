@@ -94,8 +94,7 @@ where
 	I: IntoIterator<Item = ClientResult<Option<Header::Hash>>>,
 {
 	use sp_trie::TrieConfiguration;
-	Ok(sp_trie::Layout::<Hasher>::default()
-		.trie_root(build_pairs::<Header, I>(cht_size, cht_num, hashes)?))
+	Ok(sp_trie::LayoutV0::<Hasher>::trie_root(build_pairs::<Header, I>(cht_size, cht_num, hashes)?))
 }
 
 /// Build CHT-based header proof.

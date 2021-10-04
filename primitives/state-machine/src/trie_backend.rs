@@ -32,7 +32,7 @@ use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
 	trie_types::{TrieDB, TrieError},
-	Layout, Trie,
+	LayoutV0, LayoutV1, Trie,
 };
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
@@ -199,13 +199,11 @@ where
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
-			let res = || {
-				let layout = if let Some(threshold) = state_version.state_value_threshold() {
-					sp_trie::Layout::with_max_inline_value(threshold)
-				} else {
-					sp_trie::Layout::default()
-				};
-				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta, layout)
+			let res = || match state_version {
+				StateVersion::V0 =>
+					delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(&mut eph, root, delta),
+				StateVersion::V1 =>
+					delta_trie_root::<LayoutV1<H>, _, _, _, _, _>(&mut eph, root, delta),
 			};
 
 			match res() {
@@ -227,14 +225,8 @@ where
 		H::Out: Ord,
 	{
 		let default_root = match child_info.child_type() {
-			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
+			ChildType::ParentKeyId => empty_child_trie_root::<LayoutV1<H>>(),
 		};
-		let layout = if let Some(threshold) = state_version.state_value_threshold() {
-			sp_trie::Layout::with_max_inline_value(threshold)
-		} else {
-			sp_trie::Layout::default()
-		};
-
 		let mut write_overlay = S::Overlay::default();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
 		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
@@ -249,14 +241,20 @@ where
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
-
-			match child_delta_trie_root::<Layout<H>, _, _, _, _, _, _>(
-				child_info.keyspace(),
-				&mut eph,
-				root,
-				delta,
-				layout,
-			) {
+			match match state_version {
+				StateVersion::V0 => child_delta_trie_root::<LayoutV0<H>, _, _, _, _, _, _>(
+					child_info.keyspace(),
+					&mut eph,
+					root,
+					delta,
+				),
+				StateVersion::V1 => child_delta_trie_root::<LayoutV1<H>, _, _, _, _, _, _>(
+					child_info.keyspace(),
+					&mut eph,
+					root,
+					delta,
+				),
+			} {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -288,41 +286,64 @@ pub mod tests {
 	use codec::Encode;
 	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::{trie_types::TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut};
+	use sp_trie::{
+		trie_types::{TrieDBMutV0, TrieDBMutV1},
+		KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+	};
 	use std::{collections::HashSet, iter};
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
-	pub(crate) fn test_db(hashed_value: StateVersion) -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
+	pub(crate) fn test_db(state_version: StateVersion) -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
 		let child_info = ChildInfo::new_default(CHILD_KEY_1);
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
 		{
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(b"value3", &[142]).expect("insert failed");
-			trie.insert(b"value4", &[124]).expect("insert failed");
+			match state_version {
+				StateVersion::V0 => {
+					let mut trie = TrieDBMutV0::new(&mut mdb, &mut root);
+					trie.insert(b"value3", &[142]).expect("insert failed");
+					trie.insert(b"value4", &[124]).expect("insert failed");
+				},
+				StateVersion::V1 => {
+					let mut trie = TrieDBMutV1::new(&mut mdb, &mut root);
+					trie.insert(b"value3", &[142]).expect("insert failed");
+					trie.insert(b"value4", &[124]).expect("insert failed");
+				},
+			};
 		};
 
 		{
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
-			let mut trie = if let Some(hash) = hashed_value.state_value_threshold() {
-				let layout = Layout::with_max_inline_value(hash);
-				TrieDBMut::new_with_layout(&mut mdb, &mut root, layout)
-			} else {
-				TrieDBMut::new(&mut mdb, &mut root)
-			};
 
-			trie.insert(child_info.prefixed_storage_key().as_slice(), &sub_root[..])
-				.expect("insert failed");
-			trie.insert(b"key", b"value").expect("insert failed");
-			trie.insert(b"value1", &[42]).expect("insert failed");
-			trie.insert(b"value2", &[24]).expect("insert failed");
-			trie.insert(b":code", b"return 42").expect("insert failed");
-			for i in 128u8..255u8 {
-				trie.insert(&[i], &[i]).unwrap();
+			fn build<L: sp_trie::TrieLayout>(
+				mut trie: sp_trie::TrieDBMut<L>,
+				child_info: &ChildInfo,
+				sub_root: &[u8],
+			) {
+				trie.insert(child_info.prefixed_storage_key().as_slice(), sub_root)
+					.expect("insert failed");
+				trie.insert(b"key", b"value").expect("insert failed");
+				trie.insert(b"value1", &[42]).expect("insert failed");
+				trie.insert(b"value2", &[24]).expect("insert failed");
+				trie.insert(b":code", b"return 42").expect("insert failed");
+				for i in 128u8..255u8 {
+					trie.insert(&[i], &[i]).unwrap();
+				}
 			}
+
+			match state_version {
+				StateVersion::V0 => {
+					let trie = TrieDBMutV0::new(&mut mdb, &mut root);
+					build(trie, &child_info, &sub_root[..])
+				},
+				StateVersion::V1 => {
+					let trie = TrieDBMutV1::new(&mut mdb, &mut root);
+					build(trie, &child_info, &sub_root[..])
+				},
+			};
 		}
 		(mdb, root)
 	}

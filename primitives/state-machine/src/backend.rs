@@ -313,11 +313,11 @@ where
 	H: Hasher,
 	I: IntoIterator<Item = (StorageKey, StorageValue)>,
 {
-	use sp_trie::{trie_types::TrieDBMut, TrieMut};
+	use sp_trie::{trie_types::TrieDBMutV1, TrieMut};
 
 	let mut root = <H as Hasher>::Out::default();
 	{
-		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
+		let mut trie = TrieDBMutV1::<H>::new(mdb, &mut root);
 		for (key, value) in input {
 			if let Err(e) = trie.insert(&key, &value) {
 				log::warn!(target: "trie", "Failed to write to trie: {}", e);

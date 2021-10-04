@@ -15,11 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Layout;
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
+// Note that `LayoutV1` usage here (proof compaction) is compatible
+// with `LayoutV0`.
+use crate::LayoutV1 as Layout;
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
