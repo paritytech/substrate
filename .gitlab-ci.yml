@@ -852,6 +852,7 @@ deploy-prometheus-alerting-rules:
 # checking values from metrics exposed by the app.
 # A "long" test is the load testing where we send 50K transactions into the 
 # network and check if all completed successfully
+
 simnet-tests:
   stage:                           deploy
   image:                           docker.io/paritytech/simnet:${SIMNET_REF}
@@ -880,3 +881,4 @@ simnet-tests:
   retry: 2
   tags:
     - parity-simnet
+
