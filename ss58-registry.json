@@ -461,6 +461,15 @@
 			"website": "https://composable.finance"
 		},
 		{
+			"prefix": 55,
+			"network": "xxnetwork",
+			"displayName": "xx network",
+			"symbols": ["XX"],
+			"decimals": [9],
+			"standardAccount": "*25519",
+			"website": "https://xx.network"
+		},
+		{
 			"prefix": 63,
 			"network": "hydradx",
 			"displayName": "HydraDX",

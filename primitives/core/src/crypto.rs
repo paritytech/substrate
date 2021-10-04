@@ -581,6 +581,8 @@ ss58_address_format!(
 		(49, "picasso", "Composable Canary Network, standard account (*25519).")
 	ComposableAccount =>
 		(50, "composable", "Composable mainnet, standard account (*25519).")
+	XXNetworkAccount =>
+		(55, "xxnetwork", "xx network mainnet, standard account (*25519).")
 	HydraDXAccount =>
 		(63, "hydradx", "HydraDX standard account (*25519).")
 	AventusAccount =>
