@@ -90,7 +90,7 @@ pub fn run() -> Result<()> {
 				)).map_err(sc_cli::Error::Service)
 			}).and_then(|runner| {
 				if *clean_shutdown.borrow() {
-					log::debug!("shut down cleanly because of block production change");
+					log::info!("👻 shut down cleanly because of block production change");
 					runner.async_run(|config| {
 						let mut config = config;
 						config.block_production = Some("Aura".to_owned());
@@ -101,6 +101,7 @@ pub fn run() -> Result<()> {
 							.map_err(sc_cli::Error::Service)
 					})
 				} else {
+					log::warn!("👻 shut down without clean_shutdown flag");
 					Ok(())
 				}
 			})

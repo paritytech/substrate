@@ -86,7 +86,7 @@ where
 		let version = self.client.runtime_version_at(&block_id).map_err(|e| e.to_string())?;
 		if version.spec_version > 267
 		{
-			log::debug!("shutting down!");
+			log::debug!("👻 shutting down!");
 			self.signal_shutdown.take().map(|s| s.fire());
 			Ok((block_import, None))
 		} else {
@@ -160,10 +160,13 @@ where
 			}
 		).is_some();
 
+		log::debug!(target: "bailing_import", "👻 executing inner import; was_upgraded: {}", was_upgraded);
+
 		let res = self.inner.import_block(block, new_cache).await.map_err(Into::into);
 
 		if was_upgraded {
 			let res = self.signal_shutdown.try_lock().map(|mut o| {
+				log::debug!(target: "bailing_import", "👻 sending shutdown signal");
 				o.take().map(|s| s.fire());
 				o
 			});
@@ -520,18 +523,15 @@ pub fn new_full_base(
 		client,
 		backend,
 		mut task_manager,
-		// import_queue,
 		keystore_container,
-		// select_chain,
 		transaction_pool,
-		// block_import,
 		grandpa_link,
 		shared_voter_state,
 		mut telemetry,
 		network,
 		network_starter,
 	) = if config.block_production == Some("Aura".to_owned()) {
-		log::debug!("inside new_full_base Aura");
+		log::debug!("👻 inside new_full_base Aura");
 		let sc_service::PartialComponents {
 			client,
 			backend,
@@ -637,17 +637,16 @@ pub fn new_full_base(
 			// the AURA authoring task is considered essential, i.e. if it
 			// fails we take down the service with it.
 			task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
+			log::debug!("👻 started Aura task");
 		}
+
 
 		(
 			client,
 			backend,
 			task_manager,
-			// import_queue,
 			keystore_container,
-			// select_chain,
 			transaction_pool,
-			// block_import,
 			grandpa_link,
 			shared_voter_state,
 			telemetry,
@@ -655,7 +654,7 @@ pub fn new_full_base(
 			network_starter,
 		)
 	} else if config.block_production == Some("Babe".to_owned()) {
-		log::debug!("inside new_full_base Babe");
+		log::debug!("👻 inside new_full_base Babe");
 		let sc_service::PartialComponents {
 			client,
 			backend,
@@ -775,16 +774,14 @@ pub fn new_full_base(
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", babe);
+			log::debug!("👻 started Babe task");
 		}
 		(
 			client,
 			backend,
 			task_manager,
-			// import_queue,
 			keystore_container,
-			// select_chain,
 			transaction_pool,
-			// block_import,
 			grandpa_link,
 			shared_voter_state,
 			telemetry,
@@ -865,12 +862,13 @@ pub fn new_full_base(
 	}
 
 	network_starter.start_network();
+	log::debug!("👻 started network");
 	Ok(NewFullBase { task_manager, client, network, transaction_pool })
 }
 
 /// Builds a new service for a full client.
 pub fn new_full(config: &mut Configuration) -> Result<(TaskManager, exit_future::Exit), ServiceError> {
-	log::debug!("inside new_full");
+	log::debug!("👻 inside new_full");
 	let (signal, exit) = exit_future::signal();
 	new_full_base(config, |_, _| (), signal)
 		.map(|NewFullBase { task_manager, .. }| (task_manager, exit))
