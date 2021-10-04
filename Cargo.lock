@@ -9871,7 +9871,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "ss58-registry"
 version = "0.0.1"
-source = "git+https://github.com/paritytech/ss58-registry.git?branch=vNext#9817131f32b43e07c722e3b4ba10664a4cbc2b45"
+source = "git+https://github.com/paritytech/ss58-registry.git?branch=main#3327f12c9bbd659636ba7e1e63eeb40e647d550e"
 dependencies = [
  "Inflector",
  "proc-macro2",
