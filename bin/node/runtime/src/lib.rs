@@ -1409,6 +1409,7 @@ impl pallet_collective::Config<AllianceCollective> for Runtime {
 
 parameter_types! {
 	pub const MaxBlacklistCount: u32 = 100;
+	pub const MaxWebsiteUrlLength: u32 = 255;
 }
 
 impl pallet_alliance::Config for Runtime {
@@ -1426,6 +1427,7 @@ impl pallet_alliance::Config for Runtime {
 	type IdentityVerifier = AllianceIdentityVerifier;
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxBlacklistCount = MaxBlacklistCount;
+	type MaxWebsiteUrlLength = MaxWebsiteUrlLength;
 	type CandidateDeposit = CandidateDeposit;
 >>>>>>> 4a8ad01901 (Add pallet-alliance into node runtime)
 }

@@ -230,12 +230,13 @@ pub mod pallet {
 		/// The provider of the proposal operation.
 		type ProposalProvider: ProposalProvider<Self::AccountId, Self::Hash, Self::Proposal>;
 
-		/// The maximum number of blacklist supported by the pallet. Used for weight estimation.
-		///
-		/// NOTE:
-		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
-		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		/// The maximum number of blacklist supported by the pallet.
+		#[pallet::constant]
 		type MaxBlacklistCount: Get<u32>;
+
+		/// The maximum length of website url.
+		#[pallet::constant]
+		type MaxWebsiteUrlLength: Get<u32>;
 
 		/// The amount of a deposit required for submitting candidacy.
 		#[pallet::constant]
@@ -270,6 +271,8 @@ pub mod pallet {
 		NotInBlacklist,
 		/// Number of blacklist exceed MaxBlacklist.
 		TooManyBlacklist,
+		/// Length of website url exceed MaxWebsiteUrlLength.
+		TooLongWebsiteUrl,
 		/// The member is kicking.
 		KickingMember,
 		/// Balance is insufficient to be a candidate.
@@ -723,7 +726,13 @@ pub mod pallet {
 				ensure!(!Self::is_blacklist(info), Error::<T, I>::AlreadyInBlacklist);
 				match info {
 					BlacklistItem::AccountId(who) => accounts.push(who.clone()),
-					BlacklistItem::Website(url) => webs.push(url.clone()),
+					BlacklistItem::Website(url) => {
+						ensure!(
+							url.len() as u32 <= T::MaxWebsiteUrlLength::get(),
+							Error::<T, I>::TooLongWebsiteUrl
+						);
+						webs.push(url.clone());
+					},
 				}
 			}
 
