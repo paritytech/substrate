@@ -268,6 +268,8 @@ pub mod pallet {
 		AlreadyInBlacklist,
 		/// Not be a blacklist item.
 		NotInBlacklist,
+		/// Number of blacklist exceed MaxBlacklist.
+		TooManyBlacklist,
 		/// The member is kicking.
 		KickingMember,
 		/// Balance is insufficient to be a candidate.
@@ -446,7 +448,7 @@ pub mod pallet {
 		pub fn vote(
 			origin: OriginFor<T>,
 			proposal: T::Hash,
-			index: ProposalIndex,
+			#[pallet::compact] index: ProposalIndex,
 			approve: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -483,9 +485,9 @@ pub mod pallet {
 		pub fn close(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
-			index: ProposalIndex,
-			proposal_weight_bound: Weight,
-			length_bound: u32,
+			#[pallet::compact] index: ProposalIndex,
+			#[pallet::compact] proposal_weight_bound: Weight,
+			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_votable_member(&who), Error::<T, I>::NotVotableMember);
@@ -714,6 +716,7 @@ pub mod pallet {
 			infos: Vec<BlacklistItem<T::AccountId>>,
 		) -> DispatchResultWithPostInfo {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
+
 			let mut accounts = vec![];
 			let mut webs = vec![];
 			for info in infos.iter() {
@@ -723,6 +726,18 @@ pub mod pallet {
 					BlacklistItem::Website(url) => webs.push(url.clone()),
 				}
 			}
+
+			let account_blacklist_len = AccountBlacklist::<T, I>::decode_len().unwrap_or_default();
+			ensure!(
+				(account_blacklist_len + accounts.len()) as u32 <= T::MaxBlacklistCount::get(),
+				Error::<T, I>::TooManyBlacklist
+			);
+			let web_blacklist_len = WebsiteBlacklist::<T, I>::decode_len().unwrap_or_default();
+			ensure!(
+				(web_blacklist_len + webs.len()) as u32 <= T::MaxBlacklistCount::get(),
+				Error::<T, I>::TooManyBlacklist
+			);
+
 			Self::do_add_blacklist(&mut accounts, &mut webs)?;
 			Self::deposit_event(Event::BlacklistAdded(infos));
 			Ok(().into())
@@ -877,14 +892,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let mut accounts = <AccountBlacklist<T, I>>::get();
 			accounts.append(new_accounts);
 			accounts.sort();
-			Self::maybe_warn_max_blacklist(&accounts);
 			AccountBlacklist::<T, I>::put(accounts);
 		}
 		if !new_webs.is_empty() {
 			let mut webs = <WebsiteBlacklist<T, I>>::get();
 			webs.append(new_webs);
 			webs.sort();
-			Self::maybe_warn_max_blacklist(&webs);
 			WebsiteBlacklist::<T, I>::put(webs);
 		}
 		Ok(())
@@ -901,7 +914,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let pos = accounts.binary_search(who).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
 				accounts.remove(pos);
 			}
-			Self::maybe_warn_max_blacklist(&accounts);
 			AccountBlacklist::<T, I>::put(accounts);
 		}
 		if !out_webs.is_empty() {
@@ -910,21 +922,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let pos = webs.binary_search(web).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
 				webs.remove(pos);
 			}
-			Self::maybe_warn_max_blacklist(&webs);
 			WebsiteBlacklist::<T, I>::put(webs);
 		}
 		Ok(())
-	}
-
-	fn maybe_warn_max_blacklist<B>(blacklist: &[B]) {
-		if blacklist.len() as u32 > T::MaxBlacklistCount::get() {
-			log::error!(
-				target: "runtime::alliance",
-				"maximum number of blacklist used for weight is exceeded, weights can be underestimated [{} > {}].",
-				blacklist.len(),
-				T::MaxBlacklistCount::get(),
-			)
-		}
 	}
 
 	fn has_identity(who: &T::AccountId) -> DispatchResult {
