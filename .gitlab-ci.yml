@@ -558,6 +558,7 @@ build-linux-substrate:             &build-binary
   <<:                              *collect-artifacts
   <<:                              *docker-env
   <<:                              *build-refs
+  <<:                              *test-refs-no-trigger-prs-only
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
@@ -881,4 +882,3 @@ simnet-tests:
   retry: 2
   tags:
     - parity-simnet
-
