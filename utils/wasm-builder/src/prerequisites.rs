@@ -140,10 +140,10 @@ fn check_wasm_toolchain_installed(
 
 	// Make sure the host's flags aren't used here, e.g. if an alternative linker is specified
 	// in the RUSTFLAGS then the check we do here will break unless we clear these.
-	build_cmd.env("CARGO_ENCODED_RUSTFLAGS", "");
-	run_cmd.env("CARGO_ENCODED_RUSTFLAGS", "");
-	build_cmd.env("RUSTFLAGS", "");
-	run_cmd.env("RUSTFLAGS", "");
+	build_cmd.env_remove("CARGO_ENCODED_RUSTFLAGS");
+	run_cmd.env_remove("CARGO_ENCODED_RUSTFLAGS");
+	build_cmd.env_remove("RUSTFLAGS");
+	run_cmd.env_remove("RUSTFLAGS");
 
 	build_cmd.output().map_err(|_| err_msg.clone()).and_then(|s| {
 		if s.status.success() {
