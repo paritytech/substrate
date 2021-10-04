@@ -28,12 +28,33 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-      - name: Run tests with latest version of smart contract
+      - name: Run tests with the triggered version of smart contract
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           DDC_SMART_CONTRACT_VERSION: ${{ github.event.client_payload.DDC_SMART_CONTRACT_VERSION }}
         run: |
           echo "DDC_SMART_CONTRACT_VERSION::$DDC_SMART_CONTRACT_VERSION"
           docker build --build-arg ECR_REGISTRY=$ECR_REGISTRY --build-arg DDC_SMART_CONTRACT_VERSION=$DDC_SMART_CONTRACT_VERSION -f Dockerfile.tests -t pos-network-node:test .
+      - name: Slack Notification Success
+        if: ${{ success() }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: e2e-test-results
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_MESSAGE: 'Run integration tests with params: DDC_SMART_CONTRACT_VERSION="${{ github.event.client_payload.DDC_SMART_CONTRACT_VERSION }}"'
+          SLACK_TITLE: 'Test Results for "${{github.repository}}"'
+          SLACK_USERNAME: pos-network-node-tests-bot
+      - name: Slack Notification Failure
+        if: ${{ failure() }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: e2e-test-results
+          SLACK_LINK_NAMES: true
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_MESSAGE: 'Run integration tests with params: DDC_SMART_CONTRACT_VERSION="${{ github.event.client_payload.DDC_SMART_CONTRACT_VERSION }}". Responsible persons: <@U011DQ8QZD4>, <@UM0FVG0CD>'
+          SLACK_TITLE: 'Test Results for "${{github.repository}}"'
+          SLACK_USERNAME: pos-network-node-tests-bot
       - name: Free space
         run: df -h
