@@ -142,6 +142,8 @@ fn check_wasm_toolchain_installed(
 	// in the RUSTFLAGS then the check we do here will break unless we clear these.
 	build_cmd.env("CARGO_ENCODED_RUSTFLAGS", "");
 	run_cmd.env("CARGO_ENCODED_RUSTFLAGS", "");
+	build_cmd.env("RUSTFLAGS", "");
+	run_cmd.env("RUSTFLAGS", "");
 
 	build_cmd.output().map_err(|_| err_msg.clone()).and_then(|s| {
 		if s.status.success() {
