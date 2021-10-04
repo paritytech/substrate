@@ -640,7 +640,10 @@ impl CryptoType for Pair {
 mod test {
 	use super::*;
 	use crate::{
-		crypto::{set_default_ss58_version, PublicError, DEV_PHRASE, Ss58AddressFormat, Ss58AddressFormatRegistry},
+		crypto::{
+			set_default_ss58_version, PublicError, Ss58AddressFormat, Ss58AddressFormatRegistry,
+			DEV_PHRASE,
+		},
 		keccak_256,
 	};
 	use hex_literal::hex;

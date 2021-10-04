@@ -43,7 +43,7 @@ use sp_std::{convert::TryFrom, hash::Hash, str, vec::Vec};
 pub use zeroize::Zeroize;
 
 #[cfg(feature = "full_crypto")]
-pub use ss58_registry::{from_known_address_format, Ss58AddressFormatRegistry, Ss58AddressFormat};
+pub use ss58_registry::{from_known_address_format, Ss58AddressFormat, Ss58AddressFormatRegistry};
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str =
