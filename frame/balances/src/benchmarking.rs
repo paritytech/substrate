@@ -214,12 +214,6 @@ benchmarks_instance_pallet! {
 		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
 	}
 
-	skip_benchmark {
-		Err(frame_benchmarking::BenchmarkError::Skip)?;
-	}: {
-		Err(frame_benchmarking::BenchmarkError::Skip)?
-	}
-
 	impl_benchmark_test_suite!(
 		Balances,
 		crate::tests_composite::ExtBuilder::default().build(),
