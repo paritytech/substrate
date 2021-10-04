@@ -412,7 +412,7 @@ pub mod pallet {
 	pub(crate) type Keys<T: Config> =
 		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
-	/// For each session index, we keep a mapping of 'SessionIndex` and `AuthIndex` to
+	/// For each session index, we keep a mapping of `SessionIndex` and `AuthIndex` to
 	/// `WrapperOpaque<BoundedOpaqueNetworkState>`.
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
