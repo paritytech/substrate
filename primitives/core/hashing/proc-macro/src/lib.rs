@@ -33,9 +33,18 @@
 //! 	sp_core_hashing_proc_macro::blake2b_256!(b"test"),
 //! 	sp_core_hashing::blake2_256(b"test"),
 //! );
-//! sp_core_hashing_proc_macro::blake2b_256!([1u8]);
-//! sp_core_hashing_proc_macro::blake2b_256!([1, 2, 3]);
-//! sp_core_hashing_proc_macro::blake2b_256!(identifier);
+//! assert_eq!(
+//!		sp_core_hashing_proc_macro::blake2b_256!([1u8]),
+//!		sp_core_hashing::blake2_256(&[1u8]),
+//!	);
+//! assert_eq!(
+//!		sp_core_hashing_proc_macro::blake2b_256!([1, 2, 3]),
+//!		sp_core_hashing::blake2_256(&[1, 2, 3]),
+//!	);
+//! assert_eq!(
+//!		sp_core_hashing_proc_macro::blake2b_256!(identifier),
+//!		sp_core_hashing::blake2_256(b"identifier"),
+//!	);
 //! assert_eq!(
 //! 	sp_core_hashing_proc_macro::blake2b_256!(identifier, b"/string"),
 //! 	sp_core_hashing::blake2_256(b"identifier/string"),

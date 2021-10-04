@@ -15,13 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
 
 use proc_macro::TokenStream;
-use proc_macro2::{
-	Delimiter, Group, Literal, Punct, Spacing, TokenStream as TokenStream2, TokenTree,
-};
 
 pub(super) struct InputBytes(pub Vec<u8>);
 
