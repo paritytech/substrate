@@ -21,9 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -221,10 +219,10 @@ benchmarks_instance_pallet! {
 	}: {
 		Err(frame_benchmarking::BenchmarkError::Skip)?
 	}
-}
 
-impl_benchmark_test_suite!(
-	Balances,
-	crate::tests_composite::ExtBuilder::default().build(),
-	crate::tests_composite::Test,
-);
+	impl_benchmark_test_suite!(
+		Balances,
+		crate::tests_composite::ExtBuilder::default().build(),
+		crate::tests_composite::Test,
+	)
+}

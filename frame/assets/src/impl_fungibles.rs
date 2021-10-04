@@ -60,6 +60,25 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	}
 }
 
+impl<T: Config<I>, I: 'static> fungibles::InspectMetadata<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	/// Return the name of an asset.
+	fn name(asset: &Self::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).name.to_vec()
+	}
+
+	/// Return the symbol of an asset.
+	fn symbol(asset: &Self::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).symbol.to_vec()
+	}
+
+	/// Return the decimals of an asset.
+	fn decimals(asset: &Self::AssetId) -> u8 {
+		Metadata::<T, I>::get(asset).decimals
+	}
+}
+
 impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	fn mint_into(
 		asset: Self::AssetId,
