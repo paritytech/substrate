@@ -84,6 +84,10 @@ fn ally1<T: Config<I>, I: 'static>() -> T::AccountId {
 	funded_account::<T, I>("ally", 1)
 }
 
+fn set_announcement<T: Config<I>, I: 'static>(cid: Cid) {
+	Announcements::<T, I>::put(vec![cid]);
+}
+
 fn set_candidates<T: Config<I>, I: 'static>() {
 	let candidates = vec![funded_account::<T, I>("candidate", 1)];
 	candidates.iter().for_each(|who| {
@@ -141,6 +145,19 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(Alliance::<T, I>::announcements().contains(&announcement));
 		assert_last_event::<T, I>(Event::NewAnnouncement(announcement).into());
+	}
+
+	remove_announcement {
+		set_members::<T, I>();
+		let announcement = test_cid();
+		set_announcement::<T, I>(announcement);
+
+		let call = Call::<T, I>::remove_announcement { announcement };
+		let origin = T::SuperMajorityOrigin::successful_origin();
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert!(Alliance::<T, I>::announcements().is_empty());
+		assert_last_event::<T, I>(Event::AnnouncementRemoved(announcement).into());
 	}
 
 	submit_candidacy {

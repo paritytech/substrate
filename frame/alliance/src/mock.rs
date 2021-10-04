@@ -153,6 +153,7 @@ ord_parameter_types! {
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub const MaxBlacklistCount: u32 = 100;
+	pub const MaxWebsiteUrlLength: u32 = 255;
 }
 impl Config for Test {
 	type Event = Event;
@@ -165,6 +166,7 @@ impl Config for Test {
 	type IdentityVerifier = AllianceIdentityVerifier;
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxBlacklistCount = MaxBlacklistCount;
+	type MaxWebsiteUrlLength = MaxWebsiteUrlLength;
 	type CandidateDeposit = CandidateDeposit;
 }
 

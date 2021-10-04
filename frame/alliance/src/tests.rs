@@ -221,6 +221,22 @@ fn announce_works() {
 }
 
 #[test]
+fn remove_announcement_works() {
+	new_test_ext().execute_with(|| {
+		let cid = test_cid();
+		assert_ok!(Alliance::announce(Origin::signed(1), cid));
+		assert_eq!(Alliance::announcements(), vec![cid]);
+		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement(cid)));
+
+		System::set_block_number(2);
+
+		assert_ok!(Alliance::remove_announcement(Origin::signed(1), cid));
+		assert_eq!(Alliance::announcements(), vec![]);
+		System::assert_last_event(mock::Event::Alliance(crate::Event::AnnouncementRemoved(cid)));
+	});
+}
+
+#[test]
 fn submit_candidacy_works() {
 	new_test_ext().execute_with(|| {
 		// check already member

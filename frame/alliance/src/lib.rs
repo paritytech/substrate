@@ -285,6 +285,8 @@ pub mod pallet {
 		MissingProposalHash,
 		/// The proposal is not vetoable.
 		NotVetoableProposal,
+		/// The Announcement is not found.
+		MissingAnnouncement,
 	}
 
 	#[pallet::event]
@@ -294,6 +296,8 @@ pub mod pallet {
 		NewRule(Cid),
 		/// A new announcement has been proposed. \[announcement\]
 		NewAnnouncement(Cid),
+		/// A on-chain announcement has been removed. \[announcement\]
+		AnnouncementRemoved(Cid),
 		/// Some accounts have been initialized to founders. \[founders\]
 		FoundersInitialized(Vec<T::AccountId>),
 		/// An account has been added as a candidate and lock its deposit. \[candidate, nominator,
@@ -568,6 +572,20 @@ pub mod pallet {
 			<Announcements<T, I>>::put(announcements);
 
 			Self::deposit_event(Event::NewAnnouncement(announcement));
+			Ok(().into())
+		}
+
+		/// Remove the announcement.
+		#[pallet::weight(0)]
+		pub fn remove_announcement(origin: OriginFor<T>, announcement: Cid) -> DispatchResultWithPostInfo {
+			T::SuperMajorityOrigin::ensure_origin(origin)?;
+
+			let mut announcements = <Announcements<T, I>>::get();
+			let pos = announcements.binary_search(&announcement).ok().ok_or(Error::<T, I>::MissingAnnouncement)?;
+			announcements.remove(pos);
+			<Announcements<T, I>>::put(announcements);
+
+			Self::deposit_event(Event::AnnouncementRemoved(announcement));
 			Ok(().into())
 		}
 
