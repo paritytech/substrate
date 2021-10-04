@@ -73,10 +73,7 @@ impl InsertKeyCmd {
 
 		let (keystore, public) = match self.keystore_params.keystore_config(&config_dir)? {
 			(_, KeystoreConfig::Path { path, password }) => {
-				let public = with_crypto_scheme!(
-					self.scheme,
-					to_vec(&suri, password.clone())
-				)?;
+				let public = with_crypto_scheme!(self.scheme, to_vec(&suri, password.clone()))?;
 				let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(path, password)?);
 				(keystore, public)
 			},
@@ -166,7 +163,7 @@ mod tests {
 			"test",
 			"--suri",
 			&uri,
-			"--scheme=sr25519"
+			"--scheme=sr25519",
 		]);
 		assert!(inspect.run(&Cli).is_ok());
 
