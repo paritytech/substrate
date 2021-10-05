@@ -233,6 +233,9 @@ pub mod pallet {
 		/// The amount of a deposit required for submitting candidacy.
 		#[pallet::constant]
 		type CandidateDeposit: Get<BalanceOf<Self>>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -550,7 +553,7 @@ pub mod pallet {
 		}
 
 		/// Set a new IPFS cid to the alliance rule.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::set_rule())]
 		pub fn set_rule(origin: OriginFor<T>, rule: Cid) -> DispatchResultWithPostInfo {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
@@ -561,7 +564,7 @@ pub mod pallet {
 		}
 
 		/// Make a new announcement by a new IPFS cid about the alliance issues.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::announce())]
 		pub fn announce(origin: OriginFor<T>, announcement: Cid) -> DispatchResultWithPostInfo {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
@@ -574,7 +577,7 @@ pub mod pallet {
 		}
 
 		/// Remove the announcement.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_announcement())]
 		pub fn remove_announcement(
 			origin: OriginFor<T>,
 			announcement: Cid,
@@ -595,7 +598,7 @@ pub mod pallet {
 
 		/// Submit oneself for candidacy.
 		/// Account must have enough transferable funds in it to pay the candidate deposit.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::submit_candidacy())]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(!Self::is_account_blacklist(&who), Error::<T, I>::AlreadyInBlacklist);
@@ -619,7 +622,7 @@ pub mod pallet {
 
 		/// Founder or fellow can nominate someone to join the alliance and become a candidate.
 		/// There is no deposit required to the nominator or nominee.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::nominate_candidacy())]
 		pub fn nominate_candidacy(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -642,7 +645,7 @@ pub mod pallet {
 		}
 
 		/// Approve a `Candidate` to become an `Ally`.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::approve_candidate())]
 		pub fn approve_candidate(
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
@@ -660,7 +663,7 @@ pub mod pallet {
 		}
 
 		/// Reject a `Candidate` back to an ordinary account.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::reject_candidate())]
 		pub fn reject_candidate(
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
@@ -680,7 +683,7 @@ pub mod pallet {
 		}
 
 		/// Elevate an ally to fellow.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::reject_candidate())]
 		pub fn elevate_ally(
 			origin: OriginFor<T>,
 			ally: <T::Lookup as StaticLookup>::Source,
@@ -698,7 +701,7 @@ pub mod pallet {
 		}
 
 		/// As a member, retire and back to an ordinary account and unlock its deposit.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(!Self::is_kicking(&who), Error::<T, I>::KickingMember);
@@ -715,7 +718,7 @@ pub mod pallet {
 		}
 
 		/// Kick a member to ordinary account with its deposit slashed.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::kick_member())]
 		pub fn kick_member(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -735,7 +738,7 @@ pub mod pallet {
 		}
 
 		/// Add accounts or websites into blacklist.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::add_blacklist(infos.len() as u32))]
 		pub fn add_blacklist(
 			origin: OriginFor<T>,
 			infos: Vec<BlacklistItem<T::AccountId>>,
@@ -775,7 +778,7 @@ pub mod pallet {
 		}
 
 		/// Remove accounts or websites from blacklist.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_blacklist(infos.len() as u32))]
 		pub fn remove_blacklist(
 			origin: OriginFor<T>,
 			infos: Vec<BlacklistItem<T::AccountId>>,

@@ -1427,6 +1427,7 @@ impl pallet_alliance::Config for Runtime {
 	type MaxBlacklistCount = MaxBlacklistCount;
 	type MaxWebsiteUrlLength = MaxWebsiteUrlLength;
 	type CandidateDeposit = CandidateDeposit;
+	type WeightInfo = pallet_alliance::weights::SubstrateWeight<Runtime>;
 }
 
 construct_runtime!(
