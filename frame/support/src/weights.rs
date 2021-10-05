@@ -202,6 +202,7 @@ pub trait PaysFee<T> {
 
 /// Explicit enum to denote if a transaction pays fee or not.
 #[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Pays {
 	/// Transactor will pay related fees.
 	Yes,
@@ -312,6 +313,7 @@ pub mod priority {
 
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
 	pub weight: Weight,

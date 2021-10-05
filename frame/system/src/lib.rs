@@ -65,7 +65,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use sp_runtime::{
 	generic,
 	traits::{
@@ -518,6 +518,7 @@ pub mod pallet {
 	/// Event for the System pallet.
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId", T::Hash = "Hash")]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
@@ -539,6 +540,7 @@ pub mod pallet {
 
 	/// Error for the System pallet
 	#[pallet::error]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Error<T> {
 		/// The name of specification does not match between the current runtime
 		/// and the new runtime.
@@ -759,7 +761,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// A phase of a block's execution.
 #[derive(Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
 	ApplyExtrinsic(u32),
@@ -777,7 +779,7 @@ impl Default for Phase {
 
 /// Record of an event happening.
 #[derive(Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
 	pub phase: Phase,
@@ -789,6 +791,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 
 /// Origin for the System pallet.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -829,6 +832,7 @@ pub type RefCount = u32;
 
 /// Information of an account.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
@@ -849,7 +853,7 @@ pub struct AccountInfo<Index, AccountData> {
 /// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
 /// happened.
 #[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(PartialEq))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, PartialEq))]
 pub struct LastRuntimeUpgradeInfo {
 	pub spec_version: codec::Compact<u32>,
 	pub spec_name: sp_runtime::RuntimeString,
@@ -1021,6 +1025,7 @@ where
 }
 
 /// A type of block initialization to perform.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum InitKind {
 	/// Leave inspectable storage entries in state.
 	///
@@ -1043,6 +1048,7 @@ impl Default for InitKind {
 
 /// Reference status; can be either referenced or unreferenced.
 #[derive(RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum RefStatus {
 	Referenced,
 	Unreferenced,
@@ -1050,6 +1056,7 @@ pub enum RefStatus {
 
 /// Some resultant status relevant to incrementing a provider/self-sufficient reference.
 #[derive(Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum IncRefStatus {
 	/// Account was created.
 	Created,
@@ -1059,6 +1066,7 @@ pub enum IncRefStatus {
 
 /// Some resultant status relevant to decrementing a provider/self-sufficient reference.
 #[derive(Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DecRefStatus {
 	/// Account was destroyed.
 	Reaped,
