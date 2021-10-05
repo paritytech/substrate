@@ -46,6 +46,7 @@ variables:                         &default-vars
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
   SIMNET_FEATURES_PATH:            "simnet_tests/tests"
+  PIPELINE_SCRIPTS_TAG:            "v0.1"
 
 default:
   cache:                           {}
@@ -538,29 +539,37 @@ cargo-check-macos:
 
 #### stage:                        build
 
-check-polkadot-companion-status:
-  stage:                           build
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
-  <<:                              *vault-secrets
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-    - ./.maintain/gitlab/check_polkadot_companion_status.sh
-
-check-polkadot-companion-build:
+.check-dependent-project:          &check-dependent-project
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
   <<:                              *vault-secrets
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
   script:
-    - ./.maintain/gitlab/check_polkadot_companion_build.sh
-  after_script:
-    - cd polkadot && git rev-parse --abbrev-ref HEAD
-  allow_failure:                   true
+    - git clone
+        --depth=1
+        "--branch=$PIPELINE_SCRIPTS_TAG"
+        https://github.com/paritytech/pipeline-scripts
+    - ./pipeline-scripts/check_dependent_project.sh
+        paritytech
+        substrate
+        --substrate
+        "$DEPENDENT_REPO"
+        "$GITHUB_PR_TOKEN"
+    - cd "$DEPENDENT_REPO" && git rev-parse --abbrev-ref HEAD
+
+# Individual jobs are set up for each dependent project so that they can be ran in parallel.
+# Arguably we could generate a job for each companion in the PR's description using Gitlab's
+# parent-child pipelines but that's more complicated.
+
+check-dependent-polkadot:
+  <<: *check-dependent-project
+  variables:
+    DEPENDENT_REPO: polkadot
+
+check-dependent-cumulus:
+  <<: *check-dependent-project
+  variables:
+    DEPENDENT_REPO: cumulus
 
 build-linux-substrate:             &build-binary
   stage:                           build
@@ -884,7 +893,7 @@ deploy-prometheus-alerting-rules:
 # Runs "quick" and "long" tests on nightly schedule and on commit / merge to master
 # A "quick" test is a smoke test where basic check-expect tests run by
 # checking values from metrics exposed by the app.
-# A "long" test is the load testing where we send 50K transactions into the 
+# A "long" test is the load testing where we send 50K transactions into the
 # network and check if all completed successfully
 simnet-tests:
   stage:                           deploy
