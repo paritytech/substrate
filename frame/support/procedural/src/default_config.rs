@@ -16,19 +16,17 @@
 // limitations under the License.
 
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::{
-	parse::Parser, punctuated::Punctuated, spanned::Spanned, Ident, ItemImpl, Path, PathArguments,
+	parse::Parser, punctuated::Punctuated, spanned::Spanned, token::{Bang, For}, Ident, ItemImpl, Path, PathArguments,
 	PathSegment, Result, Token,
 };
 
 pub fn use_default_config_for(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let config_impl: ItemImpl = syn::parse(input)?;
 	let config_impl_span = config_impl.span();
-	let (_, config_trait, _) = config_impl.trait_.ok_or_else(|| {
-		let msg = "impl block does not implement a pallet Config trait";
-		syn::Error::new(config_impl_span, msg)
-	})?;
+	let config_trait = extract_config_trait(config_impl.trait_, config_impl_span)?;
 	let ItemImpl { attrs, generics, self_ty, items, .. } = config_impl;
 	let config_opts = Punctuated::<Ident, Token![,]>::parse_terminated.parse(attr)?;
 	let default_items = config_opts
@@ -47,6 +45,20 @@ pub fn use_default_config_for(attr: TokenStream, input: TokenStream) -> Result<T
 		}
 	}
 	.into())
+}
+
+fn extract_config_trait(trait_: Option<(Option<Bang>, Path, For)>, span: Span) -> Result<Path> {
+	let make_err = || -> syn::Error {
+		let msg = "impl block does not implement a pallet Config trait";
+		syn::Error::new(span, msg)
+	};
+	let (_, config_trait, _) = trait_.ok_or_else(make_err)?;
+
+	match config_trait.segments.last() {
+		Some(seg) if seg.ident == "Config" => {}
+		_ => return Err(make_err()),
+	}
+	Ok(config_trait)
 }
 
 fn construct_path_to_macro(config_trait: &Path) -> Path {

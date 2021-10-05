@@ -1,0 +1,26 @@
+error: impl block does not implement a pallet Config trait
+  --> $DIR/default_config_non_config_impl.rs:16:1
+   |
+16 | impl Foo for Runtime {}
+   | ^^^^
+
+error: `System` pallet declaration is missing. Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`
+  --> $DIR/default_config_non_config_impl.rs:23:2
+   |
+23 |     {}
+   |     ^^
+
+error[E0412]: cannot find type `Call` in this scope
+ --> $DIR/default_config_non_config_impl.rs:9:64
+  |
+9 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+  |                                                                ^^^^ not found in this scope
+  |
+help: consider importing one of these items
+  |
+1 | use frame_support_test::Call;
+  |
+1 | use frame_system::Call;
+  |
+1 | use test_pallet::Call;
+  |
