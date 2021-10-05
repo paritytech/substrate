@@ -231,15 +231,14 @@ pub fn verify_trie_proof<'a, L, I, K, V>(
 	root: &TrieHash<L>,
 	proof: &[Vec<u8>],
 	items: I,
-) -> Result<(), VerifyError<TrieHash<L>, error::Error>>
+) -> Result<(), VerifyError<TrieHash<L>, CError<L>>>
 where
 	L: TrieConfiguration,
 	I: IntoIterator<Item = &'a (K, Option<V>)>,
 	K: 'a + AsRef<[u8]>,
 	V: 'a + AsRef<[u8]>,
 {
-	// for read proof layout v0 and v1 are the same.
-	verify_proof::<LayoutV1<L::Hash>, _, _, _>(root, proof, items)
+	verify_proof::<L, _, _, _>(root, proof, items)
 }
 
 /// Determine a trie root given a hash DB and delta values.
