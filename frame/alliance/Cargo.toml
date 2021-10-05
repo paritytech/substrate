@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-cid = { git = "https://github.com/patractlabs/rust-cid", branch = "alliance", default-features = false, features = ["scale-codec","scale-info"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
 log = { version = "0.4.14", default-features = false }
 
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
@@ -24,20 +24,22 @@ sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primi
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 
+pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false }
+
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
 
 [dev-dependencies]
-cid = { git = "https://github.com/patractlabs/rust-cid", branch = "alliance" }
 hex-literal = "0.3.1"
+sha2 = "0.9"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 
 [features]
 default = ["std"]
 std = [
-	"cid/std",
 	"log/std",
 	"codec/std",
 	"scale-info/std",
@@ -47,14 +49,16 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-identity/std",
 ]
 runtime-benchmarks = [
+	"hex",
 	"frame-benchmarking",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"pallet-balances/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
+	"pallet-identity/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-support/try-runtime",

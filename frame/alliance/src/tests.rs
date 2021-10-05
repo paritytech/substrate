@@ -202,8 +202,8 @@ fn close_works() {
 fn set_rule_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
-		assert_ok!(Alliance::set_rule(Origin::signed(1), cid));
-		assert_eq!(Alliance::rule(), Some(cid));
+		assert_ok!(Alliance::set_rule(Origin::signed(1), cid.clone()));
+		assert_eq!(Alliance::rule(), Some(cid.clone()));
 
 		System::assert_last_event(mock::Event::Alliance(crate::Event::NewRule(cid)));
 	});
@@ -213,8 +213,8 @@ fn set_rule_works() {
 fn announce_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
-		assert_ok!(Alliance::announce(Origin::signed(1), cid));
-		assert_eq!(Alliance::announcements(), vec![cid]);
+		assert_ok!(Alliance::announce(Origin::signed(1), cid.clone()));
+		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
 		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement(cid)));
 	});
@@ -224,13 +224,15 @@ fn announce_works() {
 fn remove_announcement_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
-		assert_ok!(Alliance::announce(Origin::signed(1), cid));
-		assert_eq!(Alliance::announcements(), vec![cid]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement(cid)));
+		assert_ok!(Alliance::announce(Origin::signed(1), cid.clone()));
+		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
+		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement(
+			cid.clone(),
+		)));
 
 		System::set_block_number(2);
 
-		assert_ok!(Alliance::remove_announcement(Origin::signed(1), cid));
+		assert_ok!(Alliance::remove_announcement(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![]);
 		System::assert_last_event(mock::Event::Alliance(crate::Event::AnnouncementRemoved(cid)));
 	});
@@ -272,6 +274,17 @@ fn submit_candidacy_works() {
 			Alliance::submit_candidacy(Origin::signed(4)),
 			Error::<Test, ()>::AlreadyCandidate
 		);
+
+		// check missing identity judgement
+		assert_noop!(
+			Alliance::submit_candidacy(Origin::signed(6)),
+			Error::<Test, ()>::WithoutGoodIdentityJudgement
+		);
+		// check missing identity info
+		assert_noop!(
+			Alliance::submit_candidacy(Origin::signed(7)),
+			Error::<Test, ()>::WithoutIdentityDisplayAndWebsite
+		);
 	});
 }
 
@@ -310,6 +323,17 @@ fn nominate_candidacy_works() {
 		assert_noop!(
 			Alliance::nominate_candidacy(Origin::signed(1), 4),
 			Error::<Test, ()>::AlreadyCandidate
+		);
+
+		// check missing identity judgement
+		assert_noop!(
+			Alliance::submit_candidacy(Origin::signed(6)),
+			Error::<Test, ()>::WithoutGoodIdentityJudgement
+		);
+		// check missing identity info
+		assert_noop!(
+			Alliance::submit_candidacy(Origin::signed(7)),
+			Error::<Test, ()>::WithoutIdentityDisplayAndWebsite
 		);
 	});
 }
@@ -431,89 +455,4 @@ fn remove_blacklist_works() {
 		));
 		assert_eq!(Alliance::account_blacklist(), Vec::<u64>::new());
 	});
-}
-
-mod cid_tests {
-	use cid::{
-		multibase::Base,
-		multihash::{Code, MultihashDigest},
-		Cid, Version,
-	};
-	use codec::{Decode, Encode};
-	use hex_literal::hex;
-
-	const RAW: u64 = 0x55;
-
-	#[test]
-	fn normal_test_for_example() {
-		let cid = "QmRZdc3mAMXpv6Akz9Ekp1y4vDSjazTx2dCQRkxVy1yUj6".parse::<Cid>().unwrap();
-		let bytes = cid.encode();
-		let expect = hex!("0070000000000000001200000000000000202fe65ccc17fe180c3bf4e9b8490fcc6dc74c30bf6595795dcd1136d8d9cb3f95");
-		assert_eq!(bytes, expect);
-		let new_cid: Cid = Decode::decode(&mut &bytes[..]).unwrap();
-		assert_eq!(new_cid, cid);
-	}
-
-	macro_rules! assert_cid {
-		($cid:expr, $length:expr) => {
-			let mut digest = [0_u8; $length];
-			digest.copy_from_slice($cid.hash().digest());
-			let raw =
-				($cid.version(), $cid.codec(), ($cid.hash().code(), $cid.hash().size(), digest));
-			let raw_encode = Encode::encode(&raw);
-			let bytes = $cid.encode();
-			assert_eq!(bytes, raw_encode);
-			let new_cid: Cid = Decode::decode(&mut &bytes[..]).unwrap();
-			assert_eq!(new_cid, $cid);
-		};
-	}
-
-	// those test case is from crate cid
-	#[test]
-	fn v0_handling() {
-		let old = "QmdfTbBqBPQ7VNxZEYEj14VmRuZBkqFbiwReogJgS1zR1n";
-		let cid = old.parse::<Cid>().unwrap();
-
-		assert_eq!(cid.version(), Version::V0);
-		assert_eq!(cid.to_string(), old);
-
-		// for Cid v0 hash is 32 length
-		assert_cid!(cid, 32);
-	}
-
-	#[test]
-	fn v1_handling() {
-		let expected_cid = "bafkreibme22gw2h7y2h7tg2fhqotaqjucnbc24deqo72b6mkl2egezxhvy";
-		let cid: Cid = Cid::new_v1(RAW, Code::Sha2_256.digest(b"foo"));
-		assert_eq!(cid.to_string_of_base(Base::Base32Lower).unwrap(), expected_cid);
-
-		// for sha256 hash is 32 length
-		assert_cid!(cid, 32);
-	}
-
-	// test case from https://github.com/ipfs/go-cid/blob/master/cid_test.go#L662
-	#[test]
-	fn v1_handling2() {
-		let cid1 = "k2cwueckqkibutvhkr4p2ln2pjcaxaakpd9db0e7j7ax1lxhhxy3ekpv"
-			.parse::<Cid>()
-			.unwrap();
-		let cid2 = "zb2rhZi1JR4eNc2jBGaRYJKYM8JEB4ovenym8L1CmFsRAytkz".parse::<Cid>().unwrap();
-		assert_cid!(cid1, 32);
-		assert_cid!(cid2, 32);
-	}
-
-	#[test]
-	fn v1_handling3() {
-		let cid = Cid::new_v1(RAW, Code::Sha2_512.digest(b"foo"));
-		assert_cid!(cid, 64);
-
-		let cid = Cid::new_v1(RAW, Code::Keccak384.digest(b"foo"));
-		assert_cid!(cid, 48);
-
-		let cid = Cid::new_v1(RAW, Code::Sha3_224.digest(b"foo"));
-		assert_cid!(cid, 28);
-
-		let cid = Cid::new_v1(RAW, Code::Blake2s128.digest(b"foo"));
-		assert_cid!(cid, 16);
-	}
 }

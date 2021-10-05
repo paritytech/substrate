@@ -17,17 +17,19 @@
 
 //! Test utilities
 
-pub use cid::Cid;
-
 pub use sp_core::H256;
 pub use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+use sp_std::convert::TryInto;
 
-pub use frame_support::{ord_parameter_types, parameter_types, traits::SortedMembers};
-pub use frame_system::EnsureSignedBy;
+pub use frame_support::{
+	assert_ok, ord_parameter_types, parameter_types, traits::SortedMembers, BoundedVec,
+};
+pub use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+use pallet_identity::{Data, IdentityInfo, Judgement};
 
 pub use crate as pallet_alliance;
 
@@ -95,18 +97,60 @@ impl pallet_collective::Config<AllianceCollective> for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const BasicDeposit: u64 = 10;
+	pub const FieldDeposit: u64 = 10;
+	pub const SubAccountDeposit: u64 = 10;
+	pub const MaxSubAccounts: u32 = 2;
+	pub const MaxAdditionalFields: u32 = 2;
+	pub const MaxRegistrars: u32 = 20;
+}
+ord_parameter_types! {
+	pub const One: u64 = 1;
+	pub const Two: u64 = 2;
+	pub const Three: u64 = 3;
+	pub const Four: u64 = 4;
+	pub const Five: u64 = 5;
+}
+type EnsureOneOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+type EnsureTwoOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
+
+impl pallet_identity::Config for Test {
+	type Event = Event;
+	type Currency = Balances;
+	type BasicDeposit = BasicDeposit;
+	type FieldDeposit = FieldDeposit;
+	type SubAccountDeposit = SubAccountDeposit;
+	type MaxSubAccounts = MaxSubAccounts;
+	type MaxAdditionalFields = MaxAdditionalFields;
+	type MaxRegistrars = MaxRegistrars;
+	type Slashed = ();
+	type RegistrarOrigin = EnsureOneOrRoot;
+	type ForceOrigin = EnsureTwoOrRoot;
+	type WeightInfo = ();
+}
+
 pub struct AllianceIdentityVerifier;
 impl IdentityVerifier<u64> for AllianceIdentityVerifier {
-	fn has_identity(_who: &u64, _fields: u64) -> bool {
-		true
+	fn has_identity(who: &u64, fields: u64) -> bool {
+		Identity::has_identity(who, fields)
 	}
 
-	fn has_good_judgement(_who: &u64) -> bool {
-		true
+	fn has_good_judgement(who: &u64) -> bool {
+		if let Some(judgements) =
+			Identity::identity(who).map(|registration| registration.judgements)
+		{
+			judgements
+				.iter()
+				.filter(|(_, j)| Judgement::KnownGood == *j || Judgement::Reasonable == *j)
+				.count() > 0
+		} else {
+			false
+		}
 	}
 
-	fn super_account_id(_who: &u64) -> Option<u64> {
-		None
+	fn super_account_id(who: &u64) -> Option<u64> {
+		Identity::super_of(who).map(|parent| parent.0)
 	}
 }
 
@@ -143,13 +187,6 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 	}
 }
 
-ord_parameter_types! {
-	pub const One: u64 = 1;
-	pub const Two: u64 = 2;
-	pub const Three: u64 = 3;
-	pub const Four: u64 = 4;
-	pub const Five: u64 = 5;
-}
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub const MaxBlacklistCount: u32 = 100;
@@ -159,8 +196,6 @@ impl Config for Test {
 	type Event = Event;
 	type Proposal = Call;
 	type SuperMajorityOrigin = EnsureSignedBy<One, u64>;
-	type Currency = Balances;
-	type Slashed = ();
 	type InitializeMembers = AllianceMotion;
 	type MembershipChanged = AllianceMotion;
 	type IdentityVerifier = AllianceIdentityVerifier;
@@ -181,6 +216,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Identity: pallet_identity::{Pallet, Call, Storage, Event<T>},
 		AllianceMotion: pallet_collective::<Instance1>::{Pallet, Storage, Origin<T>, Event<T>},
 		Alliance: pallet_alliance::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
@@ -189,7 +225,7 @@ frame_support::construct_runtime!(
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = GenesisConfig {
 		balances: pallet_balances::GenesisConfig {
-			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 20)],
+			balances: vec![(1, 50), (2, 50), (3, 50), (4, 50), (5, 30), (6, 50), (7, 50)],
 		},
 		alliance: pallet_alliance::GenesisConfig {
 			founders: vec![1, 2],
@@ -202,7 +238,34 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
+	ext.execute_with(|| {
+		assert_ok!(Identity::add_registrar(Origin::signed(1), 1));
+
+		let info = IdentityInfo {
+			additional: BoundedVec::default(),
+			display: Data::Raw(b"name".to_vec().try_into().unwrap()),
+			legal: Data::default(),
+			web: Data::Raw(b"website".to_vec().try_into().unwrap()),
+			riot: Data::default(),
+			email: Data::default(),
+			pgp_fingerprint: None,
+			image: Data::default(),
+			twitter: Data::default(),
+		};
+		assert_ok!(Identity::set_identity(Origin::signed(1), Box::new(info.clone())));
+		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 1, Judgement::KnownGood));
+		assert_ok!(Identity::set_identity(Origin::signed(2), Box::new(info.clone())));
+		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 2, Judgement::KnownGood));
+		assert_ok!(Identity::set_identity(Origin::signed(3), Box::new(info.clone())));
+		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 3, Judgement::KnownGood));
+		assert_ok!(Identity::set_identity(Origin::signed(4), Box::new(info.clone())));
+		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 4, Judgement::KnownGood));
+		assert_ok!(Identity::set_identity(Origin::signed(5), Box::new(info.clone())));
+		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
+		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
+
+		System::set_block_number(1);
+	});
 	ext
 }
 
@@ -212,7 +275,11 @@ pub fn new_bench_ext() -> sp_io::TestExternalities {
 }
 
 pub fn test_cid() -> Cid {
-	"QmdfTbBqBPQ7VNxZEYEj14VmRuZBkqFbiwReogJgS1zR1n".parse().unwrap()
+	use sha2::{Digest, Sha256};
+	let mut hasher = Sha256::new();
+	hasher.update(b"hello world");
+	let result = hasher.finalize();
+	Cid::new_v0(&*result)
 }
 
 pub fn make_proposal(value: u64) -> Call {

@@ -97,6 +97,7 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod types;
 pub mod weights;
 
 use sp_runtime::{
@@ -114,14 +115,14 @@ use frame_support::{
 	ensure,
 	scale_info::TypeInfo,
 	traits::{
-		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, LockableCurrency, OnUnbalanced,
+		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
 	},
 	weights::{Pays, Weight},
 };
 
-pub use cid::Cid;
 pub use pallet::*;
+pub use types::*;
 pub use weights::*;
 
 /// Simple index type for proposal counting.
@@ -129,11 +130,9 @@ pub type ProposalIndex = u32;
 
 type Url = Vec<u8>;
 
-type BalanceOf<T, I = ()> =
-	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
+type BalanceOf<T> = <<T as pallet_identity::Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
+>>::Balance;
 
 pub trait IdentityVerifier<AccountId: Clone + Ord> {
 	fn has_identity(who: &AccountId, fields: u64) -> bool;
@@ -195,7 +194,7 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config + pallet_identity::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -210,13 +209,6 @@ pub mod pallet {
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a majority-carries referendum.
 		type SuperMajorityOrigin: EnsureOrigin<Self::Origin>;
-
-		/// The currency used for deposits.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
-			+ ReservableCurrency<Self::AccountId>;
-
-		/// What to do with slashed funds.
-		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
 		/// What to do with genesis members
 		type InitializeMembers: InitializeMembers<Self::AccountId>;
@@ -240,7 +232,7 @@ pub mod pallet {
 
 		/// The amount of a deposit required for submitting candidacy.
 		#[pallet::constant]
-		type CandidateDeposit: Get<BalanceOf<Self, I>>;
+		type CandidateDeposit: Get<BalanceOf<Self>>;
 	}
 
 	#[pallet::error]
@@ -302,7 +294,7 @@ pub mod pallet {
 		FoundersInitialized(Vec<T::AccountId>),
 		/// An account has been added as a candidate and lock its deposit. \[candidate, nominator,
 		/// reserved\]
-		CandidateAdded(T::AccountId, Option<T::AccountId>, Option<BalanceOf<T, I>>),
+		CandidateAdded(T::AccountId, Option<T::AccountId>, Option<BalanceOf<T>>),
 		/// A proposal has been proposed to approve the candidate. \[candidate\]
 		CandidateApproved(T::AccountId),
 		/// A proposal has been proposed to reject the candidate. \[candidate\]
@@ -311,10 +303,10 @@ pub mod pallet {
 		AllyElevated(T::AccountId),
 		/// A member has retired to an ordinary account with its deposit unreserved. \[member,
 		/// unreserved\]
-		MemberRetired(T::AccountId, Option<BalanceOf<T, I>>),
+		MemberRetired(T::AccountId, Option<BalanceOf<T>>),
 		/// A member has been kicked out to an ordinary account with its deposit slashed. \[member,
 		/// slashed\]
-		MemberKicked(T::AccountId, Option<BalanceOf<T, I>>),
+		MemberKicked(T::AccountId, Option<BalanceOf<T>>),
 		/// Accounts or websites have been added into blacklist. \[items\]
 		BlacklistAdded(Vec<BlacklistItem<T::AccountId>>),
 		/// Accounts or websites have been removed from blacklist. \[items\]
@@ -344,8 +336,14 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			for m in self.founders.iter().chain(self.fellows.iter()).chain(self.allies.iter()) {
-				assert!(Pallet::<T, I>::has_identity(m).is_ok(), "Member does not set identity!");
+			#[cfg(not(test))]
+			{
+				for m in self.founders.iter().chain(self.fellows.iter()).chain(self.allies.iter()) {
+					assert!(
+						Pallet::<T, I>::has_identity(m).is_ok(),
+						"Member does not set identity!"
+					);
+				}
 			}
 
 			if !self.founders.is_empty() {
@@ -390,7 +388,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn deposit_of)]
 	pub type DepositOf<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T, I>, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T>, OptionQuery>;
 
 	/// The current set of candidates.
 	/// If the candidacy is approved by a motion, then it will become an ally member.
@@ -568,7 +566,7 @@ pub mod pallet {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
 			let mut announcements = <Announcements<T, I>>::get();
-			announcements.push(announcement);
+			announcements.push(announcement.clone());
 			<Announcements<T, I>>::put(announcements);
 
 			Self::deposit_event(Event::NewAnnouncement(announcement));
@@ -577,11 +575,17 @@ pub mod pallet {
 
 		/// Remove the announcement.
 		#[pallet::weight(0)]
-		pub fn remove_announcement(origin: OriginFor<T>, announcement: Cid) -> DispatchResultWithPostInfo {
+		pub fn remove_announcement(
+			origin: OriginFor<T>,
+			announcement: Cid,
+		) -> DispatchResultWithPostInfo {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
 			let mut announcements = <Announcements<T, I>>::get();
-			let pos = announcements.binary_search(&announcement).ok().ok_or(Error::<T, I>::MissingAnnouncement)?;
+			let pos = announcements
+				.binary_search(&announcement)
+				.ok()
+				.ok_or(Error::<T, I>::MissingAnnouncement)?;
 			announcements.remove(pos);
 			<Announcements<T, I>>::put(announcements);
 

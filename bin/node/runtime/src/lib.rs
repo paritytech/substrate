@@ -1358,7 +1358,6 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
-<<<<<<< HEAD
 impl pallet_whitelist::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -1388,7 +1387,8 @@ impl pallet_state_trie_migration::Config for Runtime {
 	// migrations.
 	type SignedFilter = EnsureSigned<Self::AccountId>;
 	type WeightInfo = ();
-=======
+}
+
 parameter_types! {
 	pub const AllianceMotionDuration: BlockNumber = 5 * DAYS;
 	pub const AllianceMaxProposals: u32 = 100;
@@ -1420,16 +1420,13 @@ impl pallet_alliance::Config for Runtime {
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionMoreThan<_2, _3, AccountId, AllianceCollective>,
 	>;
-	type Currency = Balances;
 	type InitializeMembers = AllianceMotion;
 	type MembershipChanged = AllianceMotion;
-	type Slashed = Treasury;
 	type IdentityVerifier = AllianceIdentityVerifier;
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxBlacklistCount = MaxBlacklistCount;
 	type MaxWebsiteUrlLength = MaxWebsiteUrlLength;
 	type CandidateDeposit = CandidateDeposit;
->>>>>>> 4a8ad01901 (Add pallet-alliance into node runtime)
 }
 
 construct_runtime!(
@@ -1465,7 +1462,6 @@ construct_runtime!(
 		AuthorityDiscovery: pallet_authority_discovery,
 		Offences: pallet_offences,
 		Historical: pallet_session_historical::{Pallet},
-<<<<<<< HEAD
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
 		Identity: pallet_identity,
 		Society: pallet_society,
@@ -1489,26 +1485,8 @@ construct_runtime!(
 		Referenda: pallet_referenda,
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
-=======
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
-		Identity: pallet_identity::{Pallet, Call, Storage, Event<T>},
-		Society: pallet_society::{Pallet, Call, Storage, Event<T>, Config<T>},
-		Recovery: pallet_recovery::{Pallet, Call, Storage, Event<T>},
-		Vesting: pallet_vesting::{Pallet, Call, Storage, Event<T>, Config<T>},
-		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
-		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
-		Multisig: pallet_multisig::{Pallet, Call, Storage, Event<T>},
-		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
-		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
-		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
-		Mmr: pallet_mmr::{Pallet, Storage},
-		Lottery: pallet_lottery::{Pallet, Call, Storage, Event<T>},
-		Gilt: pallet_gilt::{Pallet, Call, Storage, Event<T>, Config},
-		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
-		TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Config<T>, Event<T>},
-		AllianceMotion: pallet_collective::<Instance3>::{Pallet, Storage, Origin<T>, Event<T>},
-		Alliance: pallet_alliance::{Pallet, Call, Storage, Event<T>},
->>>>>>> 4a8ad01901 (Add pallet-alliance into node runtime)
+		AllianceMotion: pallet_collective::<Instance3>,
+		Alliance: pallet_alliance,
 	}
 );
 
@@ -1949,7 +1927,11 @@ impl_runtime_apis! {
 			add_benchmarks!(params, batches);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+			add_benchmark!(params, batches, pallet_alliance, Alliance);
+>>>>>>> 4482b77565 (Derive pallet_identity::Config and Fix test/benchmarking)
 			add_benchmark!(params, batches, pallet_assets, Assets);
 			add_benchmark!(params, batches, pallet_babe, Babe);
 			add_benchmark!(params, batches, pallet_balances, Balances);
@@ -1981,7 +1963,6 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_uniques, Uniques);
 			add_benchmark!(params, batches, pallet_utility, Utility);
 			add_benchmark!(params, batches, pallet_vesting, Vesting);
-			add_benchmark!(params, batches, pallet_alliance, Alliance);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 >>>>>>> 4a8ad01901 (Add pallet-alliance into node runtime)

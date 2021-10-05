@@ -17,11 +17,17 @@
 
 //! Alliance pallet benchmarking.
 
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{Bounded, StaticLookup};
+use sp_std::{convert::TryInto, prelude::*};
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, impl_benchmark_test_suite};
-use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
+use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_support::{
+	assert_ok,
+	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
+	BoundedVec,
+};
 use frame_system::RawOrigin;
+use pallet_identity::{Data, IdentityInfo, Judgement, Pallet as Identity};
 
 use super::{Pallet as Alliance, *};
 
@@ -32,16 +38,53 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn test_cid() -> Cid {
-	"QmdfTbBqBPQ7VNxZEYEj14VmRuZBkqFbiwReogJgS1zR1n".parse().unwrap()
+	Cid::new_v0(
+		hex::decode("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9").unwrap(),
+	)
+}
+
+fn registrar_account<T: Config<I>, I: 'static>() -> T::AccountId {
+	account("registrar", 0, SEED)
+}
+
+fn create_registrar_account<T: Config<I>, I: 'static>() -> T::AccountId {
+	let registrar: T::AccountId = registrar_account::<T, I>();
+	let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
+	assert_ok!(Identity::<T>::add_registrar(RawOrigin::Root.into(), registrar.clone()));
+	registrar
 }
 
 fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, SEED);
-	T::Currency::make_free_balance_be(&account, T::CandidateDeposit::get() * 2u32.into());
+	T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
+
+	let info = IdentityInfo {
+		additional: BoundedVec::default(),
+		display: Data::Raw(b"name".to_vec().try_into().unwrap()),
+		legal: Data::default(),
+		web: Data::Raw(b"website".to_vec().try_into().unwrap()),
+		riot: Data::default(),
+		email: Data::default(),
+		pgp_fingerprint: None,
+		image: Data::default(),
+		twitter: Data::default(),
+	};
+	assert_ok!(Identity::<T>::set_identity(
+		RawOrigin::Signed(account.clone()).into(),
+		Box::new(info.clone())
+	));
+	assert_ok!(Identity::<T>::provide_judgement(
+		RawOrigin::Signed(registrar_account::<T, I>()).into(),
+		0,
+		T::Lookup::unlookup(account.clone()),
+		Judgement::KnownGood
+	));
 	account
 }
 
 fn set_members<T: Config<I>, I: 'static>() {
+	create_registrar_account::<T, I>();
+
 	let founders = vec![
 		funded_account::<T, I>("founder", 1),
 		funded_account::<T, I>("founder", 2),
@@ -127,11 +170,11 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let rule = test_cid();
-		let call = Call::<T, I>::set_rule { rule };
+		let call = Call::<T, I>::set_rule { rule: rule.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Alliance::<T, I>::rule(), Some(rule));
+		assert_eq!(Alliance::<T, I>::rule(), Some(rule.clone()));
 		assert_last_event::<T, I>(Event::NewRule(rule).into());
 	}
 
@@ -139,7 +182,7 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let announcement = test_cid();
-		let call = Call::<T, I>::announce { announcement };
+		let call = Call::<T, I>::announce { announcement: announcement.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -150,9 +193,9 @@ benchmarks_instance_pallet! {
 	remove_announcement {
 		set_members::<T, I>();
 		let announcement = test_cid();
-		set_announcement::<T, I>(announcement);
+		set_announcement::<T, I>(announcement.clone());
 
-		let call = Call::<T, I>::remove_announcement { announcement };
+		let call = Call::<T, I>::remove_announcement { announcement: announcement.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -166,12 +209,12 @@ benchmarks_instance_pallet! {
 		let outsider = create_outsider::<T, I>();
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(!Alliance::<T, I>::is_candidate(&outsider));
-		assert_eq!(T::Currency::reserved_balance(&outsider), BalanceOf::<T, I>::zero());
+		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 	}: _(RawOrigin::Signed(outsider.clone()))
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(Alliance::<T, I>::is_candidate(&outsider));
-		assert_eq!(T::Currency::reserved_balance(&outsider), T::CandidateDeposit::get());
+		assert_eq!(DepositOf::<T, I>::get(&outsider), Some(T::CandidateDeposit::get()));
 		assert_last_event::<T, I>(Event::CandidateAdded(outsider, None, Some(T::CandidateDeposit::get())).into());
 	}
 
@@ -184,13 +227,14 @@ benchmarks_instance_pallet! {
 		let outsider = create_outsider::<T, I>();
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(!Alliance::<T, I>::is_candidate(&outsider));
-		assert_eq!(T::Currency::reserved_balance(&outsider), BalanceOf::<T, I>::zero());
+		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
+
 		let outsider_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(outsider.clone());
 	}: _(RawOrigin::Signed(founder1.clone()), outsider_lookup)
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(Alliance::<T, I>::is_candidate(&outsider));
-		assert_eq!(T::Currency::reserved_balance(&outsider), BalanceOf::<T, I>::zero());
+		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 		assert_last_event::<T, I>(Event::CandidateAdded(outsider, Some(founder1), None).into());
 	}
 
@@ -201,8 +245,6 @@ benchmarks_instance_pallet! {
 		let candidate1 = candidate1::<T, I>();
 		assert!(Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(!Alliance::<T, I>::is_member(&candidate1));
-
-		assert_eq!(T::Currency::reserved_balance(&candidate1), T::CandidateDeposit::get());
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
 
 		let candidate1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(candidate1.clone());
@@ -212,7 +254,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(Alliance::<T, I>::is_ally(&candidate1));
-		assert_eq!(T::Currency::reserved_balance(&candidate1), T::CandidateDeposit::get());
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
 		assert_last_event::<T, I>(Event::CandidateApproved(candidate1).into());
 	}
@@ -224,8 +265,6 @@ benchmarks_instance_pallet! {
 		let candidate1 = candidate1::<T, I>();
 		assert!(Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(!Alliance::<T, I>::is_member(&candidate1));
-
-		assert_eq!(T::Currency::reserved_balance(&candidate1), T::CandidateDeposit::get());
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
 
 		let candidate1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(candidate1.clone());
@@ -235,7 +274,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(!Alliance::<T, I>::is_member(&candidate1));
-		assert_eq!(T::Currency::reserved_balance(&candidate1), BalanceOf::<T, I>::zero());
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), None);
 		assert_last_event::<T, I>(Event::CandidateRejected(candidate1).into());
 	}
@@ -263,12 +301,10 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_fellow(&fellow2));
 		assert!(!Alliance::<T, I>::is_kicking(&fellow2));
 
-		assert_eq!(T::Currency::reserved_balance(&fellow2), T::CandidateDeposit::get());
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::CandidateDeposit::get()));
 	}: _(RawOrigin::Signed(fellow2.clone()))
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
-		assert_eq!(T::Currency::reserved_balance(&fellow2), BalanceOf::<T, I>::zero());
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
 		assert_last_event::<T, I>(Event::MemberRetired(fellow2, Some(T::CandidateDeposit::get())).into());
 	}
@@ -280,7 +316,6 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Fellow));
 		assert!(Alliance::<T, I>::is_kicking(&fellow2));
 
-		assert_eq!(T::Currency::reserved_balance(&fellow2), T::CandidateDeposit::get());
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::CandidateDeposit::get()));
 
 		let fellow2_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(fellow2.clone());
@@ -289,7 +324,6 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
-		assert_eq!(T::Currency::reserved_balance(&fellow2), BalanceOf::<T, I>::zero());
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
 		assert_last_event::<T, I>(Event::MemberKicked(fellow2, Some(T::CandidateDeposit::get())).into());
 	}
@@ -297,10 +331,9 @@ benchmarks_instance_pallet! {
 	add_blacklist {
 		let n in 0 .. T::MaxBlacklistCount::get();
 
+		set_members::<T, I>();
 		let mut blacklist = (0..n).map(|i| BlacklistItem::AccountId(blacklist_account::<T, I>(i))).collect::<Vec<_>>();
 		blacklist.extend((0..n).map(|i| BlacklistItem::Website(vec![i as u8])));
-
-		set_members::<T, I>();
 
 		let call = Call::<T, I>::add_blacklist { infos: blacklist.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
@@ -312,10 +345,10 @@ benchmarks_instance_pallet! {
 	remove_blacklist {
 		let n in 0 .. T::MaxBlacklistCount::get();
 
+		set_members::<T, I>();
 		let mut blacklist = (0..n).map(|i| BlacklistItem::AccountId(blacklist_account::<T, I>(i))).collect::<Vec<_>>();
 		blacklist.extend((0..n).map(|i| BlacklistItem::Website(vec![i as u8])));
 
-		set_members::<T, I>();
 		set_blacklist::<T, I>();
 
 		let call = Call::<T, I>::remove_blacklist { infos: blacklist.clone() };
@@ -324,6 +357,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_last_event::<T, I>(Event::BlacklistRemoved(blacklist).into());
 	}
-}
 
-impl_benchmark_test_suite!(Alliance, crate::mock::new_bench_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Alliance, crate::mock::new_bench_ext(), crate::mock::Test);
+}
