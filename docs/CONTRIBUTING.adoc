@@ -79,7 +79,7 @@ To create a Polkadot companion PR:
 . Override substrate deps to point to your local path or branch using https://github.com/bkchr/diener. (E.g. from the polkadot clone dir run `diener patch --crates-to-patch ../substrate --substrate` assuming substrate clone is in a sibling dir. If you do use diener, ensure that you _do not_ commit the changes diener makes to the Cargo.tomls.)
 . Make the changes required and build polkadot locally.
 . Submit all this as a PR against the Polkadot Repo.
-. Link to your Polkadot PR in the _description_ of your _Substrate_ PR as "polkadot companion: [URL]"
+. In the _description_ of your _Substrate_ PR add "polkadot companion: [Polkadot_PR_URL]"
 . Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
 . Someone will need to approve the Polkadot PR before the Substrate CI will go green. (The Polkadot CI failing can be ignored as long as the polkadot job in the _substrate_ PR is green).
 . Wait for reviews on both the Substrate and the Polkadot PRs.
