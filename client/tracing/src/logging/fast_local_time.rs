@@ -81,7 +81,7 @@ impl FormatTime for FastLocalTime {
 
 		let elapsed = SystemTime::now()
 			.duration_since(SystemTime::UNIX_EPOCH)
-			.expect("system time is never be before UNIX epoch; qed");
+			.expect("system time is never before UNIX epoch; qed");
 		let unix_time = elapsed.as_secs();
 
 		TIMESTAMP.with(|cache| {
