@@ -83,16 +83,16 @@ fn construct_block<E: Externalities>(
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
 ) -> (Vec<u8>, Hash) {
-	use sp_trie::{trie_types::Layout, TrieConfiguration};
+	use sp_trie::{LayoutV0, TrieConfiguration};
 
 	// sign extrinsics.
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 	// calculate the header fields that we can.
-	let extrinsics_root = Layout::<BlakeTwo256>::default()
-		.ordered_trie_root(extrinsics.iter().map(Encode::encode))
-		.to_fixed_bytes()
-		.into();
+	let extrinsics_root =
+		LayoutV0::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
+			.to_fixed_bytes()
+			.into();
 
 	let header = Header {
 		parent_hash,
