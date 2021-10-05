@@ -485,6 +485,9 @@ pub fn new_partial_aura(
 		}
 	};
 
+	// Nope, I'm not doing this here :P
+	std::mem::forget(signal_shutdown);
+
 	Ok(sc_service::PartialComponents {
 		client,
 		backend,
@@ -544,7 +547,7 @@ pub fn new_full_base(
 		} = new_partial_aura(&config, Some(signal_shutdown))?;
 		let (block_import, grandpa_link) = import_setup;
 
-		config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
+		// config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 		let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 			backend.clone(),
 			grandpa_link.shared_authority_set().clone(),
