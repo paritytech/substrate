@@ -52,7 +52,7 @@
 //! This is an example of a pallet that exposes a privileged function:
 //!
 //! ```
-//! 
+//!
 //! #[frame_support::pallet]
 //! pub mod logger {
 //! 	use frame_support::pallet_prelude::*;
@@ -196,9 +196,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
-			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			if ensure_root(origin.clone()).is_err() {
+				let sender = ensure_signed(origin)?;
+				ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			}
+
 			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(Event::KeyChanged(Self::key()));
@@ -233,9 +235,10 @@ pub mod pallet {
 			who: <T::Lookup as StaticLookup>::Source,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			if ensure_root(origin.clone()).is_err() {
+				let sender = ensure_signed(origin)?;
+				ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			}
 
 			let who = T::Lookup::lookup(who)?;
 
