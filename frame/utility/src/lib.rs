@@ -114,7 +114,7 @@ pub mod pallet {
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
 		/// A call was dispatched. \[result\]
-		DsipatchAsDone(DispatchResult),
+		DispatchedAs(DispatchResult),
 	}
 
 	#[pallet::extra_constants]
@@ -358,8 +358,7 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter(as_origin.into());
 
-			Self::deposit_event(Event::DsipatchAsDone(res.map(|_| ()).map_err(|e| e.error)));
-			// Sudo user does not pay a fee.
+			Self::deposit_event(Event::DispatchedAs(res.map(|_| ()).map_err(|e| e.error)));
 			Ok(())
 		}
 	}
