@@ -96,6 +96,9 @@ pub mod pallet {
 			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::Call>;
 
+		/// The caller origin, overarching type of all pallets origins.
+		type PalletsOrigin: Parameter + Into<<Self as frame_system::Config>::Origin>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -110,6 +113,8 @@ pub mod pallet {
 		BatchCompleted,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
+		/// A call was dispatched. \[result\]
+		DsipatchAsDone(DispatchResult),
 	}
 
 	#[pallet::extra_constants]
@@ -322,6 +327,40 @@ pub mod pallet {
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch_all(calls_len as u32);
 			Ok(Some(base_weight + weight).into())
+		}
+
+		/// Dispatches a function call with a provided origin.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB write (event).
+		/// - Weight of derivative `call` execution + 10,000.
+		/// # </weight>
+		#[pallet::weight({
+			let dispatch_info = call.get_dispatch_info();
+			(
+				dispatch_info.weight
+					.saturating_add(10_000)
+					// AccountData for inner call origin accountdata.
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				dispatch_info.class,
+			)
+		})]
+		pub fn dispatch_as(
+			origin: OriginFor<T>,
+			as_origin: T::PalletsOrigin,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let res = call.dispatch_bypass_filter(as_origin.into());
+
+			Self::deposit_event(Event::DsipatchAsDone(res.map(|_| ()).map_err(|e| e.error)));
+			// Sudo user does not pay a fee.
+			Ok(())
 		}
 	}
 }

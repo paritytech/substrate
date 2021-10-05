@@ -244,6 +244,7 @@ impl pallet_timestamp::Config for Test {
 impl pallet_utility::Config for Test {
 	type Event = Event;
 	type Call = Call;
+	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
 parameter_types! {
