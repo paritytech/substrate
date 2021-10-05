@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -33,16 +33,25 @@ pub struct FastLocalTime {
 	pub with_fractional: bool,
 }
 
+// This is deliberately slightly larger than we actually need, just in case.
+const TIMESTAMP_MAXIMUM_LENGTH: usize = 32;
+
 #[derive(Default)]
 struct InlineString {
-	buffer: [u8; 32],
+	buffer: [u8; TIMESTAMP_MAXIMUM_LENGTH],
 	length: usize,
 }
 
 impl Write for InlineString {
 	fn write_str(&mut self, s: &str) -> std::fmt::Result {
-		self.buffer[self.length..self.length + s.len()].copy_from_slice(s.as_bytes());
-		self.length += s.len();
+		let new_length = self.length + s.len();
+		assert!(
+			new_length <= TIMESTAMP_MAXIMUM_LENGTH,
+			"buffer overflow when formatting the current timestamp"
+		);
+
+		self.buffer[self.length..new_length].copy_from_slice(s.as_bytes());
+		self.length = new_length;
 		Ok(())
 	}
 }
@@ -72,7 +81,7 @@ impl FormatTime for FastLocalTime {
 
 		let elapsed = SystemTime::now()
 			.duration_since(SystemTime::UNIX_EPOCH)
-			.expect("system time should never be before UNIX epoch");
+			.expect("system time is never be before UNIX epoch; qed");
 		let unix_time = elapsed.as_secs();
 
 		TIMESTAMP.with(|cache| {
@@ -103,8 +112,7 @@ impl FormatTime for FastLocalTime {
 				// Regenerate the fractional part at most once each millisecond.
 				if cache.last_fractional != fractional {
 					cache.last_fractional = fractional;
-					cache.buffer.length =
-						std::cmp::min(cache.buffer.length, TIMESTAMP_PARTIAL_LENGTH + 1);
+					cache.buffer.length = TIMESTAMP_PARTIAL_LENGTH + 1;
 					write!(&mut cache.buffer, "{:03}", fractional)?;
 				}
 			}
