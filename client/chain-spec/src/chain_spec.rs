@@ -59,7 +59,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 		match self {
 			Self::File(path) => {
 				let file = File::open(path).map_err(|e| {
-					format!("Error opening spec file at `{}`: {}", &path.to_string_lossy(), e)
+					format!("Error opening spec file at `{}`: {}", path.display(), e)
 				})?;
 				let genesis: GenesisContainer<G> = json::from_reader(file)
 					.map_err(|e| format!("Error parsing spec file: {}", e))?;
