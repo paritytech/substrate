@@ -22,7 +22,7 @@ libp2p = "0.39.1"
 parity-scale-codec = "2.0.0"
 hex = "0.4.2"
 rand = "0.7.3"
-tiny-bip39 = "0.8.0"
+tiny-bip39 = "0.8.2"
 serde_json = "1.0.68"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-panic-handler = { version = "3.0.0", path = "../../primitives/panic-handler" }
