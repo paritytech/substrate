@@ -82,12 +82,12 @@ fn basic_setup_works() {
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_eq!(classes(),vec![(1,0)]);
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 
 		assert_ok!(Uniques::force_create(Origin::root(), 1, 2, true));
-		assert_eq!(classes(),vec![(1,0), (2,1)]);
+		assert_eq!(classes(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Uniques::mint(Origin::signed(2), 1, 69, 1));
 		assert_eq!(assets(), vec![(1, 0, 42), (1, 1, 69)]);
 	});
@@ -99,7 +99,7 @@ fn lifecycle_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
-		assert_eq!(classes(), vec![(1,0)]);
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0, 0], false));
 		assert_eq!(Balances::reserved_balance(&1), 5);
 		assert!(ClassMetadataOf::<Test>::contains_key(0));
