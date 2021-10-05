@@ -21,13 +21,14 @@
 use crate::{
 	storage::{StorageDecodeLength, StorageTryAppend},
 	traits::Get,
+	WeakBoundedVec,
 };
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
+use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
 
 /// A bounded vector.
 ///
@@ -36,7 +37,8 @@ use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
 /// A bounded slice.
@@ -45,8 +47,13 @@ pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 #[derive(Encode)]
 pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
-// `BoundedSlice`s encode to something which will always decode into a `BoundedVec` or a `Vec`.
+// `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
+// `WeakBoundedVec`, or a `Vec`.
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>>
+	for BoundedSlice<'a, T, S>
+{
+}
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
 
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
@@ -193,13 +200,12 @@ impl<T, S> Default for BoundedVec<T, S> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T, S> fmt::Debug for BoundedVec<T, S>
+impl<T, S> sp_std::fmt::Debug for BoundedVec<T, S>
 where
-	T: fmt::Debug,
+	T: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }

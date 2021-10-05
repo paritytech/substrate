@@ -142,7 +142,7 @@ impl OutChannels {
 		let metrics =
 			if let Some(registry) = registry { Some(Metrics::register(registry)?) } else { None };
 
-		Ok(OutChannels { event_streams: Vec::new(), metrics: Arc::new(metrics) })
+		Ok(Self { event_streams: Vec::new(), metrics: Arc::new(metrics) })
 	}
 
 	/// Adds a new [`Sender`] to the collection.

@@ -60,6 +60,25 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	}
 }
 
+impl<T: Config<I>, I: 'static> fungibles::InspectMetadata<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	/// Return the name of an asset.
+	fn name(asset: &Self::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).name.to_vec()
+	}
+
+	/// Return the symbol of an asset.
+	fn symbol(asset: &Self::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).symbol.to_vec()
+	}
+
+	/// Return the decimals of an asset.
+	fn decimals(asset: &Self::AssetId) -> u8 {
+		Metadata::<T, I>::get(asset).decimals
+	}
+}
+
 impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	fn mint_into(
 		asset: Self::AssetId,
@@ -145,5 +164,32 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 			Ok(()) => amount,
 			Err(_) => Zero::zero(),
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> {
+	fn create(
+		id: T::AssetId,
+		admin: T::AccountId,
+		is_sufficient: bool,
+		min_balance: Self::Balance,
+	) -> DispatchResult {
+		Self::do_force_create(id, admin, is_sufficient, min_balance)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I> {
+	type DestroyWitness = DestroyWitness;
+
+	fn get_destroy_witness(asset: &T::AssetId) -> Option<Self::DestroyWitness> {
+		Asset::<T, I>::get(asset).map(|asset_details| asset_details.destroy_witness())
+	}
+
+	fn destroy(
+		id: T::AssetId,
+		witness: Self::DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> Result<Self::DestroyWitness, DispatchError> {
+		Self::do_destroy(id, witness, maybe_check_owner)
 	}
 }
