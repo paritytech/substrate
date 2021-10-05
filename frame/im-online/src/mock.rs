@@ -212,6 +212,9 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 
 parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
+	pub const MaxKeys: u32 = 10_000;
+	pub const MaxPeerInHeartbeats: u32 = 10_000;
+	pub const MaxPeerDataEncodingSize: u32 = 1_000;
 }
 
 impl Config for Runtime {
@@ -222,6 +225,9 @@ impl Config for Runtime {
 	type ReportUnresponsiveness = OffenceHandler;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
+	type MaxKeys = MaxKeys;
+	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
+	type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

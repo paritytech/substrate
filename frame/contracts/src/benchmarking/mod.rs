@@ -36,7 +36,7 @@ use crate::{
 	Pallet as Contracts, *,
 };
 use codec::Encode;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
 use pwasm_utils::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
@@ -50,7 +50,7 @@ use sp_std::{convert::TryInto, default::Default, vec, vec::Vec};
 const API_BENCHMARK_BATCHES: u32 = 20;
 
 /// How many batches we do per Instruction benchmark.
-const INSTR_BENCHMARK_BATCHES: u32 = 1;
+const INSTR_BENCHMARK_BATCHES: u32 = 50;
 
 /// An instantiated and deployed contract.
 struct Contract<T: Config> {
@@ -444,11 +444,8 @@ benchmarks! {
 
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	// We cannot call seal_input multiple times. Therefore our weight determination is not
-	// as precise as with other APIs. Because this function can only be called once per
-	// contract it cannot be used for Dos.
 	seal_input {
-		let r in 0 .. 1;
+		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -463,7 +460,7 @@ benchmarks! {
 					value: 0u32.to_le_bytes().to_vec(),
 				},
 			],
-			call_body: Some(body::repeated(r, &[
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(4), // ptr where to store output
 				Instruction::I32Const(0), // ptr to length
 				Instruction::Call(0),
@@ -492,11 +489,10 @@ benchmarks! {
 					value: buffer_size.to_le_bytes().to_vec(),
 				},
 			],
-			call_body: Some(body::plain(vec![
+			call_body: Some(body::repeated(API_BENCHMARK_BATCH_SIZE, &[
 				Instruction::I32Const(4), // ptr where to store output
 				Instruction::I32Const(0), // ptr to length
 				Instruction::Call(0),
-				Instruction::End,
 			])),
 			.. Default::default()
 		});
@@ -505,7 +501,9 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), data)
 
-	// The same argument as for `seal_input` is true here.
+	// We cannot call `seal_return` multiple times. Therefore our weight determination is not
+	// as precise as with other APIs. Because this function can only be called once per
+	// contract it cannot be used as an attack vector.
 	seal_return {
 		let r in 0 .. 1;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -551,7 +549,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	// The same argument as for `seal_input` is true here.
+	// The same argument as for `seal_return` is true here.
 	seal_terminate {
 		let r in 0 .. 1;
 		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
@@ -1215,7 +1213,7 @@ benchmarks! {
 
 		for addr in &addresses {
 			if let Some(_) = ContractInfoOf::<T>::get(&addr) {
-				return Err("Expected that contract does not exist at this point.");
+				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
 	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
@@ -1417,6 +1415,60 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
+	// Only calling the function itself with valid arguments.
+	// It generates different private keys and signatures for the message "Hello world".
+	seal_ecdsa_recover {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		use rand::SeedableRng;
+		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
+
+		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
+		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| {
+				use secp256k1::{SecretKey, Message, sign};
+
+				let private_key = SecretKey::random(&mut rng);
+				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
+				let mut full_signature = [0; 65];
+				full_signature[..64].copy_from_slice(&signature.serialize());
+				full_signature[64] = recovery_id.serialize();
+				full_signature
+			})
+			.collect::<Vec<_>>();
+		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();
+		let signatures_bytes_len = signatures.len() as i32;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_ecdsa_recover",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: message_hash[..].to_vec(),
+				},
+				DataSegment {
+					offset: 32,
+					value: signatures,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(32, 65), // signature_ptr
+				Regular(Instruction::I32Const(0)), // message_hash_ptr
+				Regular(Instruction::I32Const(signatures_bytes_len + 32)), // output_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+
 	// We make the assumption that pushing a constant and dropping a value takes roughly
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
 	// of this benchmark / 2. We need to make this assumption because there is no way
@@ -1509,6 +1561,7 @@ benchmarks! {
 	}
 
 	// w_br = w_bench - 2 * w_param
+	// Block instructions are not counted.
 	instr_br {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -1533,9 +1586,8 @@ benchmarks! {
 		sbox.invoke();
 	}
 
-	// w_br_if = w_bench - 5 * w_param
-	// The two additional pushes + drop are only executed 50% of the time.
-	// Making it: 3 * w_param + (50% * 4 * w_param)
+	// w_br_if = w_bench - 3 * w_param
+	// Block instructions are not counted.
 	instr_br_if {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -1543,7 +1595,7 @@ benchmarks! {
 				Regular(Instruction::Block(BlockType::NoResult)),
 				Regular(Instruction::Block(BlockType::NoResult)),
 				Regular(Instruction::Block(BlockType::NoResult)),
-				RandomI32(0, 2),
+				Regular(Instruction::I32Const(1)),
 				Regular(Instruction::BrIf(1)),
 				RandomI64Repeated(1),
 				Regular(Instruction::Drop),
@@ -1562,11 +1614,11 @@ benchmarks! {
 	}
 
 	// w_br_table = w_bench - 3 * w_param
-	// 1 * w_param + 0.5 * 2 * w_param + 0.25 * 4 * w_param
+	// Block instructions are not counted.
 	instr_br_table {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let table = Box::new(BrTableData {
-			table: Box::new([0, 1, 2]),
+			table: Box::new([1, 1, 1]),
 			default: 1,
 		});
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
@@ -2189,7 +2241,7 @@ benchmarks! {
 			);
 		}
 		#[cfg(not(feature = "std"))]
-		return Err("Run this bench with a native runtime in order to see the schedule.");
+		Err("Run this bench with a native runtime in order to see the schedule.")?;
 	}: {}
 
 	// Execute one erc20 transfer using the ink! erc20 example contract.
@@ -2273,10 +2325,10 @@ benchmarks! {
 		)
 		.result?;
 	}
-}
 
-impl_benchmark_test_suite!(
-	Contracts,
-	crate::tests::ExtBuilder::default().build(),
-	crate::tests::Test,
-);
+	impl_benchmark_test_suite!(
+		Contracts,
+		crate::tests::ExtBuilder::default().build(),
+		crate::tests::Test,
+	)
+}

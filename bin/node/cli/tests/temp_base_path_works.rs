@@ -29,37 +29,34 @@ use std::{
 	io::Read,
 	path::PathBuf,
 	process::{Command, Stdio},
-	thread,
-	time::Duration,
 };
 
 pub mod common;
 
-#[test]
-fn temp_base_path_works() {
+#[tokio::test]
+async fn temp_base_path_works() {
 	let mut cmd = Command::new(cargo_bin("substrate"));
-
-	let mut cmd = cmd
-		.args(&["--dev", "--tmp"])
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.spawn()
-		.unwrap();
+	let mut child = common::KillChildOnDrop(
+		cmd.args(&["--dev", "--tmp"])
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.unwrap(),
+	);
 
 	// Let it produce some blocks.
-	thread::sleep(Duration::from_secs(30));
-	assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
+	common::wait_n_finalized_blocks(3, 30).await.unwrap();
+	assert!(child.try_wait().unwrap().is_none(), "the process should still be running");
 
 	// Stop the process
-	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(common::wait_for(&mut cmd, 40).map(|x| x.success()).unwrap_or_default());
+	kill(Pid::from_raw(child.id().try_into().unwrap()), SIGINT).unwrap();
+	assert!(common::wait_for(&mut child, 40).map(|x| x.success()).unwrap_or_default());
 
 	// Ensure the database has been deleted
 	let mut stderr = String::new();
-	cmd.stderr.unwrap().read_to_string(&mut stderr).unwrap();
+	child.stderr.as_mut().unwrap().read_to_string(&mut stderr).unwrap();
 	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
-	let db_path =
-		PathBuf::from(re.captures(stderr.as_str()).unwrap().get(1).unwrap().as_str().to_string());
+	let db_path = PathBuf::from(re.captures(stderr.as_str()).unwrap().get(1).unwrap().as_str());
 
 	assert!(!db_path.exists());
 }

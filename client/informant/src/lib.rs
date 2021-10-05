@@ -52,31 +52,16 @@ impl Default for OutputFormat {
 	}
 }
 
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
-/// "unknown")`.
-#[cfg(target_os = "unknown")]
-pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool {}
-
-/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os =
-/// "unknown")`.
-#[cfg(not(target_os = "unknown"))]
-pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool + MallocSizeOf {}
-
-#[cfg(target_os = "unknown")]
-impl<T: TransactionPool> TransactionPoolAndMaybeMallogSizeOf for T {}
-
-#[cfg(not(target_os = "unknown"))]
-impl<T: TransactionPool + MallocSizeOf> TransactionPoolAndMaybeMallogSizeOf for T {}
-
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C>(
+pub async fn build<B: BlockT, C, P>(
 	client: Arc<C>,
 	network: Arc<NetworkService<B, <B as BlockT>::Hash>>,
-	pool: Arc<impl TransactionPoolAndMaybeMallogSizeOf>,
+	pool: Arc<P>,
 	format: OutputFormat,
 ) where
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
+	P: TransactionPool + MallocSizeOf,
 {
 	let mut display = display::InformantDisplay::new(format.clone());
 
@@ -97,7 +82,6 @@ pub async fn build<B: BlockT, C>(
 					"Usage statistics not displayed as backend does not provide it",
 				)
 			}
-			#[cfg(not(target_os = "unknown"))]
 			trace!(
 				target: "usage",
 				"Subsystems memory [txpool: {} kB]",

@@ -27,7 +27,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
+use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///
@@ -36,7 +36,8 @@ use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 ///
 /// The length of the vec is not strictly bounded. Decoding a vec with more element that the bound
 /// is accepted, and some method allow to bypass the restriction with warnings.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct WeakBoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
 impl<T: Decode, S: Get<u32>> Decode for WeakBoundedVec<T, S> {
@@ -170,12 +171,12 @@ impl<T, S> Default for WeakBoundedVec<T, S> {
 }
 
 #[cfg(feature = "std")]
-impl<T, S> fmt::Debug for WeakBoundedVec<T, S>
+impl<T, S> std::fmt::Debug for WeakBoundedVec<T, S>
 where
-	T: fmt::Debug,
+	T: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("WeakBoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }

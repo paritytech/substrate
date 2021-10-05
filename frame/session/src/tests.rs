@@ -18,16 +18,18 @@
 // Tests for the Session Pallet
 
 use super::*;
-use codec::Decode;
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
-use mock::{
+use crate::mock::{
 	authorities, before_session_end_called, force_new_session, new_test_ext,
 	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
 	Origin, PreUpgradeMockSessionKeys, Session, System, Test, SESSION_CHANGED,
 	TEST_SESSION_CHANGED,
 };
+
+use codec::Decode;
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
+
+use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 fn initialize_block(block: u64) {
 	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
