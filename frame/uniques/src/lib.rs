@@ -142,7 +142,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// The assets held by any given account; set out this way so that assets owned by a single
+	/// The classes owned by any given account; set out this way so that classes owned by a single
 	/// account can be enumerated.
 	pub(super) type ClassAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
