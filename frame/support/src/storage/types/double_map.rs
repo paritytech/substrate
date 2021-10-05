@@ -19,14 +19,14 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
-		types::{OnEmptyGetter, OptionQuery, QueryKindTrait},
+		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
@@ -342,7 +342,7 @@ where
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value> {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::iter_values()
 	}
@@ -511,37 +511,35 @@ where
 	}
 }
 
-/// Part of storage metadata for a storage double map.
-///
-/// NOTE: Generic hashers is supported.
-pub trait StorageDoubleMapMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-	const HASHER1: frame_metadata::StorageHasher;
-	const HASHER2: frame_metadata::StorageHasher;
-}
-
 impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
-	StorageDoubleMapMetadata
+	StorageEntryMetadataBuilder
 	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher,
 	Hasher2: crate::hash::StorageHasher,
-	Key1: FullCodec,
-	Key2: FullCodec,
-	Value: FullCodec,
+	Key1: FullCodec + scale_info::StaticTypeInfo,
+	Key2: FullCodec + scale_info::StaticTypeInfo,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const HASHER1: frame_metadata::StorageHasher = Hasher1::METADATA;
-	const HASHER2: frame_metadata::StorageHasher = Hasher2::METADATA;
-	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter =
-		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let entry = StorageEntryMetadata {
+			name: Prefix::STORAGE_PREFIX,
+			modifier: QueryKind::METADATA,
+			ty: StorageEntryType::Map {
+				hashers: vec![Hasher1::METADATA, Hasher2::METADATA],
+				key: scale_info::meta_type::<(Key1, Key2)>(),
+				value: scale_info::meta_type::<Value>(),
+			},
+			default: OnEmpty::get().encode(),
+			docs,
+		};
+
+		entries.push(entry);
+	}
 }
 
 impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
@@ -603,8 +601,11 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{hash::*, storage::types::ValueQuery};
-	use frame_metadata::StorageEntryModifier;
+	use crate::{
+		hash::*,
+		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		storage::types::ValueQuery,
+	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -766,21 +767,42 @@ mod test {
 			A::translate::<u8, _>(|k1, k2, v| Some((k1 * k2 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40, 1600), (3, 30, 900)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::HASHER1, frame_metadata::StorageHasher::Blake2_128Concat);
-			assert_eq!(A::HASHER2, frame_metadata::StorageHasher::Twox64Concat);
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
 			assert_eq!(
-				AValueQueryWithAnOnEmpty::HASHER1,
-				frame_metadata::StorageHasher::Blake2_128Concat
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 97u32.encode(),
+						docs: vec![],
+					}
+				]
 			);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::HASHER2,
-				frame_metadata::StorageHasher::Twox64Concat
-			);
-			assert_eq!(A::NAME, "foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len(3, 30), None);

@@ -24,13 +24,13 @@ mod mock;
 
 use sp_std::{prelude::*, vec};
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
-use pallet_session::{historical::Module as Historical, Module as Session, *};
+use pallet_session::{historical::Module as Historical, Pallet as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
 	RewardDestination,
@@ -39,7 +39,7 @@ use sp_runtime::traits::{One, StaticLookup};
 
 const MAX_VALIDATORS: u32 = 1000;
 
-pub struct Pallet<T: Config>(pallet_session::Module<T>);
+pub struct Pallet<T: Config>(pallet_session::Pallet<T>);
 pub trait Config:
 	pallet_session::Config + pallet_session::historical::Config + pallet_staking::Config
 {
@@ -47,7 +47,7 @@ pub trait Config:
 
 impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
 	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
-		pallet_session::Module::<T>::on_initialize(n)
+		pallet_session::Pallet::<T>::on_initialize(n)
 	}
 }
 
@@ -115,6 +115,8 @@ benchmarks! {
 	verify {
 		assert!(Historical::<T>::check_proof(key, key_owner_proof2).is_some());
 	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false);
 }
 
 /// Sets up the benchmark for checking a membership proof. It creates the given
@@ -161,5 +163,3 @@ fn check_membership_proof_setup<T: Config>(
 
 	(key, Historical::<T>::prove(key).unwrap())
 }
-
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false);

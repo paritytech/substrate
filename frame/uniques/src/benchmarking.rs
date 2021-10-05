@@ -21,8 +21,7 @@
 
 use super::*;
 use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelist_account,
-	whitelisted_caller,
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -286,15 +285,15 @@ benchmarks_instance_pallet! {
 	force_asset_status {
 		let (class, caller, caller_lookup) = create_class::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_asset_status(
+		let call = Call::<T, I>::force_asset_status {
 			class,
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			true,
-			false,
-		);
+			owner: caller_lookup.clone(),
+			issuer: caller_lookup.clone(),
+			admin: caller_lookup.clone(),
+			freezer: caller_lookup.clone(),
+			free_holding: true,
+			is_frozen: false,
+		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::AssetStatusChanged(class).into());
@@ -379,6 +378,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled(class, instance, caller, delegate).into());
 	}
-}
 
-impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
+}

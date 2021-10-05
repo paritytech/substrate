@@ -36,7 +36,7 @@ use crate::{
 	Pallet as Contracts, *,
 };
 use codec::Encode;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
 use pwasm_utils::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
@@ -1213,7 +1213,7 @@ benchmarks! {
 
 		for addr in &addresses {
 			if let Some(_) = ContractInfoOf::<T>::get(&addr) {
-				return Err("Expected that contract does not exist at this point.");
+				return Err("Expected that contract does not exist at this point.".into());
 			}
 		}
 	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
@@ -1412,6 +1412,60 @@ benchmarks! {
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_128", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+
+	// Only calling the function itself with valid arguments.
+	// It generates different private keys and signatures for the message "Hello world".
+	seal_ecdsa_recover {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		use rand::SeedableRng;
+		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
+
+		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
+		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| {
+				use secp256k1::{SecretKey, Message, sign};
+
+				let private_key = SecretKey::random(&mut rng);
+				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
+				let mut full_signature = [0; 65];
+				full_signature[..64].copy_from_slice(&signature.serialize());
+				full_signature[64] = recovery_id.serialize();
+				full_signature
+			})
+			.collect::<Vec<_>>();
+		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();
+		let signatures_bytes_len = signatures.len() as i32;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_ecdsa_recover",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: message_hash[..].to_vec(),
+				},
+				DataSegment {
+					offset: 32,
+					value: signatures,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(32, 65), // signature_ptr
+				Regular(Instruction::I32Const(0)), // message_hash_ptr
+				Regular(Instruction::I32Const(signatures_bytes_len + 32)), // output_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
@@ -2187,7 +2241,7 @@ benchmarks! {
 			);
 		}
 		#[cfg(not(feature = "std"))]
-		return Err("Run this bench with a native runtime in order to see the schedule.");
+		Err("Run this bench with a native runtime in order to see the schedule.")?;
 	}: {}
 
 	// Execute one erc20 transfer using the ink! erc20 example contract.
@@ -2271,10 +2325,10 @@ benchmarks! {
 		)
 		.result?;
 	}
-}
 
-impl_benchmark_test_suite!(
-	Contracts,
-	crate::tests::ExtBuilder::default().build(),
-	crate::tests::Test,
-);
+	impl_benchmark_test_suite!(
+		Contracts,
+		crate::tests::ExtBuilder::default().build(),
+		crate::tests::Test,
+	)
+}

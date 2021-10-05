@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
-use frame_benchmarking::{account, impl_benchmark_test_suite};
+use frame_benchmarking::account;
 use frame_support::{assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
@@ -143,7 +143,7 @@ fn solution_with_size<T: Config>(
 
 	let solution =
 		<SolutionOf<T>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
-	let score = solution.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
+	let score = solution.clone().score(stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
 	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
@@ -243,10 +243,10 @@ frame_benchmarking::benchmarks! {
 	}
 
 	create_snapshot_internal {
-		// number of votes in snapshot. Fixed to maximum.
-		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
-		// number of targets in snapshot. Fixed to maximum.
-		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
@@ -278,7 +278,8 @@ frame_benchmarking::benchmarks! {
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d)?;
 		let ready_solution =
-			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed)?;
+			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed)
+				.map_err(<&str>::from)?;
 		<CurrentPhase<T>>::put(Phase::Signed);
 		// assume a queued solution is stored, regardless of where it comes from.
 		<QueuedSolution<T>>::put(ready_solution);
@@ -307,7 +308,7 @@ frame_benchmarking::benchmarks! {
 			..Default::default()
 		};
 
-		<MultiPhase<T>>::create_snapshot()?;
+		<MultiPhase<T>>::create_snapshot().map_err(<&str>::from)?;
 		MultiPhase::<T>::on_initialize_open_signed();
 		<Round<T>>::put(1);
 
@@ -349,22 +350,8 @@ frame_benchmarking::benchmarks! {
 
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
-
-		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("missing snapshot")?.encode();
-		let encoded_call = <Call<T>>::submit_unsigned(Box::new(raw_solution.clone()), witness).encode();
-	}: {
-		assert_ok!(
-			<MultiPhase<T>>::submit_unsigned(
-				RawOrigin::None.into(),
-				Box::new(raw_solution),
-				witness,
-			)
-		);
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.expect("decoding should not fail; qed.");
-		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).expect("decoding should not fail; qed.");
-	} verify {
+	}: _(RawOrigin::None, Box::new(raw_solution), witness)
+	verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
 
@@ -385,13 +372,8 @@ frame_benchmarking::benchmarks! {
 
 		assert_eq!(raw_solution.solution.voter_count() as u32, a);
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
-
-		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot missing")?.encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.expect("decoding should not fail; qed.");
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
@@ -515,10 +497,10 @@ frame_benchmarking::benchmarks! {
 		log!(trace, "actual encoded size = {}", encoding.len());
 		assert!(encoding.len() <= desired_size);
 	}
-}
 
-impl_benchmark_test_suite!(
-	MultiPhase,
-	crate::mock::ExtBuilder::default().build_offchainify(10).0,
-	crate::mock::Runtime,
-);
+	impl_benchmark_test_suite!(
+		MultiPhase,
+		crate::mock::ExtBuilder::default().build_offchainify(10).0,
+		crate::mock::Runtime,
+	);
+}

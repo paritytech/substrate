@@ -58,8 +58,8 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods,
-	TaskExecutor, TaskType, TransactionStorageMode,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -395,7 +395,6 @@ fn start_rpc_servers<
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
 				address,
-				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
@@ -406,6 +405,7 @@ fn start_rpc_servers<
 					),
 				)?,
 				config.rpc_max_payload,
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?
@@ -425,6 +425,7 @@ fn start_rpc_servers<
 				)?,
 				config.rpc_max_payload,
 				server_metrics.clone(),
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?

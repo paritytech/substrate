@@ -143,6 +143,7 @@ use codec::HasCompact;
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
+	pallet_prelude::DispatchResultWithPostInfo,
 	traits::{
 		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
 		BalanceStatus::Reserved,
@@ -157,6 +158,9 @@ use sp_runtime::{
 	ArithmeticError, TokenError,
 };
 use sp_std::{borrow::Borrow, convert::TryInto, prelude::*};
+
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -179,10 +183,22 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaxEncodedLen;
+		type Balance: Member
+			+ Parameter
+			+ AtLeast32BitUnsigned
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
+		type AssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ HasCompact
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -275,9 +291,91 @@ pub mod pallet {
 		ConstU32<300_000>,
 	>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		/// Genesis assets: id, owner, is_sufficient, min_balance
+		pub assets: Vec<(T::AssetId, T::AccountId, bool, T::Balance)>,
+		/// Genesis metadata: id, name, symbol, decimals
+		pub metadata: Vec<(T::AssetId, Vec<u8>, Vec<u8>, u8)>,
+		/// Genesis accounts: id, account_id, balance
+		pub accounts: Vec<(T::AssetId, T::AccountId, T::Balance)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self {
+				assets: Default::default(),
+				metadata: Default::default(),
+				accounts: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			for (id, owner, is_sufficient, min_balance) in &self.assets {
+				assert!(!Asset::<T, I>::contains_key(id), "Asset id already in use");
+				assert!(!min_balance.is_zero(), "Min balance should not be zero");
+				Asset::<T, I>::insert(
+					id,
+					AssetDetails {
+						owner: owner.clone(),
+						issuer: owner.clone(),
+						admin: owner.clone(),
+						freezer: owner.clone(),
+						supply: Zero::zero(),
+						deposit: Zero::zero(),
+						min_balance: *min_balance,
+						is_sufficient: *is_sufficient,
+						accounts: 0,
+						sufficients: 0,
+						approvals: 0,
+						is_frozen: false,
+					},
+				);
+			}
+
+			for (id, name, symbol, decimals) in &self.metadata {
+				assert!(Asset::<T, I>::contains_key(id), "Asset does not exist");
+
+				let bounded_name: BoundedVec<u8, T::StringLimit> =
+					name.clone().try_into().expect("asset name is too long");
+				let bounded_symbol: BoundedVec<u8, T::StringLimit> =
+					symbol.clone().try_into().expect("asset symbol is too long");
+
+				let metadata = AssetMetadata {
+					deposit: Zero::zero(),
+					name: bounded_name,
+					symbol: bounded_symbol,
+					decimals: *decimals,
+					is_frozen: false,
+				};
+				Metadata::<T, I>::insert(id, metadata);
+			}
+
+			for (id, account_id, amount) in &self.accounts {
+				let result = <Pallet<T, I>>::increase_balance(
+					*id,
+					account_id,
+					*amount,
+					|details| -> DispatchResult {
+						debug_assert!(
+							T::Balance::max_value() - details.supply >= *amount,
+							"checked in prep; qed"
+						);
+						details.supply = details.supply.saturating_add(*amount);
+						Ok(())
+					},
+				);
+				assert!(result.is_ok());
+			}
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", T::Balance = "Balance", T::AssetId = "AssetId")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Some asset class was created. \[asset_id, creator, owner\]
 		Created(T::AssetId, T::AccountId, T::AccountId),
@@ -438,29 +536,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
-
-			ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
-			ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
-
-			Asset::<T, I>::insert(
-				id,
-				AssetDetails {
-					owner: owner.clone(),
-					issuer: owner.clone(),
-					admin: owner.clone(),
-					freezer: owner.clone(),
-					supply: Zero::zero(),
-					deposit: Zero::zero(),
-					min_balance,
-					is_sufficient,
-					accounts: 0,
-					sufficients: 0,
-					approvals: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::ForceCreated(id, owner));
-			Ok(())
+			Self::do_force_create(id, owner, is_sufficient, min_balance)
 		}
 
 		/// Destroy a class of fungible assets.
@@ -495,39 +571,13 @@ pub mod pallet {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
-			Asset::<T, I>::try_mutate_exists(id, |maybe_details| {
-				let mut details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-				if let Some(check_owner) = maybe_check_owner {
-					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-				}
-				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
-				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
-				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
-
-				for (who, v) in Account::<T, I>::drain_prefix(id) {
-					Self::dead_account(id, &who, &mut details, v.sufficient);
-				}
-				debug_assert_eq!(details.accounts, 0);
-				debug_assert_eq!(details.sufficients, 0);
-
-				let metadata = Metadata::<T, I>::take(&id);
-				T::Currency::unreserve(
-					&details.owner,
-					details.deposit.saturating_add(metadata.deposit),
-				);
-
-				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
-					T::Currency::unreserve(&owner, approval.deposit);
-				}
-				Self::deposit_event(Event::Destroyed(id));
-
-				Ok(Some(T::WeightInfo::destroy(
-					details.accounts.saturating_sub(details.sufficients),
-					details.sufficients,
-					details.approvals,
-				))
-				.into())
-			})
+			let details = Self::do_destroy(id, witness, maybe_check_owner)?;
+			Ok(Some(T::WeightInfo::destroy(
+				details.accounts.saturating_sub(details.sufficients),
+				details.sufficients,
+				details.approvals,
+			))
+			.into())
 		}
 
 		/// Mint assets of a particular class.

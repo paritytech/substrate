@@ -160,9 +160,9 @@ impl<T: Config> Pallet<T> {
 		let call = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
-				if let Call::submit_unsigned(solution, _) = &call {
+				if let Call::submit_unsigned { raw_solution, .. } = &call {
 					// prevent errors arising from state changes in a forkful chain
-					Self::basic_checks(solution, "restored")?;
+					Self::basic_checks(raw_solution, "restored")?;
 					Ok(call)
 				} else {
 					Err(MinerError::SolutionCallInvalid)
@@ -213,7 +213,8 @@ impl<T: Config> Pallet<T> {
 		let (raw_solution, witness) = Self::mine_and_check()?;
 
 		let score = raw_solution.score.clone();
-		let call: Call<T> = Call::submit_unsigned(Box::new(raw_solution), witness).into();
+		let call: Call<T> =
+			Call::submit_unsigned { raw_solution: Box::new(raw_solution), witness }.into();
 
 		log!(
 			debug,
@@ -315,7 +316,7 @@ impl<T: Config> Pallet<T> {
 			SolutionOf::<T>::try_from(assignments).map(|s| s.encoded_size())
 		};
 
-		let ElectionResult { assignments, winners } = election_result;
+		let ElectionResult { assignments, winners: _ } = election_result;
 
 		// Reduce (requires round-trip to staked form)
 		let sorted_assignments = {
@@ -374,8 +375,7 @@ impl<T: Config> Pallet<T> {
 		let solution = SolutionOf::<T>::try_from(&index_assignments)?;
 
 		// re-calc score.
-		let winners = sp_npos_elections::to_without_backing(winners);
-		let score = solution.clone().score(&winners, stake_of, voter_at, target_at)?;
+		let score = solution.clone().score(stake_of, voter_at, target_at)?;
 
 		let round = Self::round();
 		Ok((RawSolution { solution, score, round }, size))
@@ -651,7 +651,7 @@ mod max_weight {
 		fn elect_queued(a: u32, d: u32) -> Weight {
 			unreachable!()
 		}
-		fn create_snapshot_internal() -> Weight {
+		fn create_snapshot_internal(v: u32, t: u32) -> Weight {
 			unreachable!()
 		}
 		fn on_initialize_nothing() -> Weight {
@@ -764,7 +764,10 @@ mod tests {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -834,7 +837,10 @@ mod tests {
 
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -871,7 +877,8 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let raw = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(raw.clone()), witness());
+			let call =
+				Call::submit_unsigned { raw_solution: Box::new(raw.clone()), witness: witness() };
 			assert_eq!(raw.solution.unique_targets().len(), 0);
 
 			// won't work anymore.
@@ -897,7 +904,10 @@ mod tests {
 
 				let solution =
 					RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-				let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+				let call = Call::submit_unsigned {
+					raw_solution: Box::new(solution.clone()),
+					witness: witness(),
+				};
 
 				assert_eq!(
 					<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -924,7 +934,10 @@ mod tests {
 			// This is in itself an invalid BS solution.
 			let solution =
 				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: witness(),
+			};
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -945,7 +958,10 @@ mod tests {
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned(Box::new(solution.clone()), correct_witness);
+			let call = Call::submit_unsigned {
+				raw_solution: Box::new(solution.clone()),
+				witness: correct_witness,
+			};
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -1225,35 +1241,62 @@ mod tests {
 	}
 
 	#[test]
-	fn ocw_clears_cache_after_election() {
-		let (mut ext, _pool) = ExtBuilder::default().build_offchainify(0);
+	fn ocw_clears_cache_on_unsigned_phase_open() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
-			roll_to(25);
-			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			const BLOCK: u64 = 25;
+			let block_plus = |delta: u64| BLOCK + delta;
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
 
-			// we must clear the offchain storage to ensure the offchain execution check doesn't get
-			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
-			storage.clear();
+			roll_to(BLOCK);
+			// we are on the first block of the unsigned phase
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, BLOCK)));
 
 			assert!(
 				!ocw_solution_exists::<Runtime>(),
 				"no solution should be present before we mine one",
 			);
 
-			// creates and cache a solution
-			MultiPhase::offchain_worker(25);
+			// create and cache a solution on the first block of the unsigned phase
+			MultiPhase::offchain_worker(BLOCK);
 			assert!(
 				ocw_solution_exists::<Runtime>(),
 				"a solution must be cached after running the worker",
 			);
 
-			// after an election, the solution must be cleared
+			// record the submitted tx,
+			let tx_cache_1 = pool.read().transactions[0].clone();
+			// and assume it has been processed.
+			pool.try_write().unwrap().transactions.clear();
+
+			// after an election, the solution is not cleared
 			// we don't actually care about the result of the election
-			roll_to(26);
 			let _ = MultiPhase::do_elect();
-			MultiPhase::offchain_worker(26);
-			assert!(!ocw_solution_exists::<Runtime>(), "elections must clear the ocw cache");
+			MultiPhase::offchain_worker(block_plus(1));
+			assert!(ocw_solution_exists::<Runtime>(), "elections does not clear the ocw cache");
+
+			// submit a solution with the offchain worker after the repeat interval
+			MultiPhase::offchain_worker(block_plus(offchain_repeat + 1));
+
+			// record the submitted tx,
+			let tx_cache_2 = pool.read().transactions[0].clone();
+			// and assume it has been processed.
+			pool.try_write().unwrap().transactions.clear();
+
+			// the OCW submitted the same solution twice since the cache was not cleared.
+			assert_eq!(tx_cache_1, tx_cache_2);
+
+			let current_block = block_plus(offchain_repeat * 2 + 2);
+			// force the unsigned phase to start on the current block.
+			CurrentPhase::<Runtime>::set(Phase::Unsigned((true, current_block)));
+
+			// clear the cache and create a solution since we are on the first block of the unsigned
+			// phase.
+			MultiPhase::offchain_worker(current_block);
+			let tx_cache_3 = pool.read().transactions[0].clone();
+
+			// the submitted solution changes because the cache was cleared.
+			assert_eq!(tx_cache_1, tx_cache_3);
 		})
 	}
 
@@ -1351,7 +1394,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = codec::Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(..))));
+			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned { .. })));
 		})
 	}
 
@@ -1368,7 +1411,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
 			let call = match extrinsic.call {
-				OuterCall::MultiPhase(call @ Call::submit_unsigned(..)) => call,
+				OuterCall::MultiPhase(call @ Call::submit_unsigned { .. }) => call,
 				_ => panic!("bad call: unexpected submission"),
 			};
 
