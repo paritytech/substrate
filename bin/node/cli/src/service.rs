@@ -547,7 +547,6 @@ pub fn new_full_base(
 		} = new_partial_aura(&config, Some(signal_shutdown))?;
 		let (block_import, grandpa_link) = import_setup;
 
-		// config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 		let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 			backend.clone(),
 			grandpa_link.shared_authority_set().clone(),
@@ -672,7 +671,6 @@ pub fn new_full_base(
 
 		let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
 
-		config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 		let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 			backend.clone(),
 			grandpa_link.shared_authority_set().clone(),
@@ -794,6 +792,8 @@ pub fn new_full_base(
 	} else {
 		return Err(ServiceError::Other("no block production specified".to_owned()))
 	};
+
+	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
 	// Spawn authority discovery module.
 	if role.is_authority() {
