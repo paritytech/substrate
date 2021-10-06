@@ -32,6 +32,9 @@ pub struct SharedParams {
 	pub chain: Option<String>,
 
 	/// Specify the development chain.
+	///
+	/// This also implies `--force-authoring`, `--tmp`, `--rpc-cors`,
+	/// and adds the `alice` key to the keystore 
 	#[structopt(long, conflicts_with_all = &["chain"])]
 	pub dev: bool,
 
