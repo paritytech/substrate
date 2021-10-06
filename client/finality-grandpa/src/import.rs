@@ -553,7 +553,7 @@ where
 
 		if number <= self.inner.info().finalized_number {
 			// Importing an old block. Just save justifications and authority set changes
-			if let Some(_) = self.check_new_change(&block.header, hash) {
+			if self.check_new_change(&block.header, hash).is_some() {
 				assert!(block.justifications.is_some());
 				let mut authority_set = self.authority_set.inner_locked();
 				authority_set.authority_set_changes.insert(number);

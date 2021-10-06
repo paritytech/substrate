@@ -263,7 +263,7 @@ impl<E: Epoch> PersistedEpoch<E> {
 
 /// Persisted epoch header stored in ForkTree.
 #[derive(Encode, Decode, PartialEq, Eq, Debug)]
-pub enum PersistedEpochHeader<E: Epoch + std::fmt::Debug> {
+pub enum PersistedEpochHeader<E: Epoch> {
 	/// Genesis persisted epoch header. epoch_0, epoch_1.
 	Genesis(EpochHeader<E>, EpochHeader<E>),
 	/// Regular persisted epoch header. epoch_n.

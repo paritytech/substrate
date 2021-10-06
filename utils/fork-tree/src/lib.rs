@@ -84,8 +84,8 @@ pub struct ForkTree<H, N, V> {
 
 impl<H, N, V> ForkTree<H, N, V>
 where
-	H: PartialEq + Clone + std::fmt::Debug,
-	N: Ord + Clone + std::fmt::Debug,
+	H: PartialEq + Clone,
+	N: Ord + Clone,
 	V: Clone,
 {
 	/// Prune the tree, removing all non-canonical nodes. We find the node in the
