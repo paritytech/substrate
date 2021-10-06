@@ -242,7 +242,7 @@ pub struct RunCmd {
 	/// Note: the directory is random per process execution. This directory is used as base path
 	/// which includes: database, node key and keystore.
 	///
-	/// When `--dev` is given and no explicit `--base-path`, this is option is implied.
+	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
 }
