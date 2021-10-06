@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
-use std::{cell::RefCell, collections::HashSet};
+use std::cell::RefCell;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -44,10 +44,6 @@ pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
-
-thread_local! {
-	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
-}
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
@@ -61,23 +57,14 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
 	{
 	}
 
-	fn on_new_session<'a, I: 'a>(_: bool, validators: I, _: I)
+	fn on_new_session<'a, I: 'a>(_: bool, _: I, _: I)
 	where
 		I: Iterator<Item = (&'a AccountId, Self::Key)>,
 		AccountId: 'a,
 	{
-		SESSION.with(|x| {
-			*x.borrow_mut() = (validators.map(|x| x.0.clone()).collect(), HashSet::new())
-		});
 	}
 
-	fn on_disabled(validator_index: usize) {
-		SESSION.with(|d| {
-			let mut d = d.borrow_mut();
-			let value = d.0[validator_index];
-			d.1.insert(value);
-		})
-	}
+	fn on_disabled(_validator_index: u32) {}
 }
 
 impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
@@ -86,7 +73,12 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 
 pub fn is_disabled(controller: AccountId) -> bool {
 	let stash = Staking::ledger(&controller).unwrap().stash;
-	SESSION.with(|d| d.borrow().1.contains(&stash))
+	let validator_index = match Session::validators().iter().position(|v| *v == stash) {
+		Some(index) => index as u32,
+		None => return false,
+	};
+
+	Session::disabled_validators().contains(&validator_index)
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -171,7 +163,6 @@ impl pallet_balances::Config for Test {
 }
 parameter_types! {
 	pub const UncleGenerations: u64 = 0;
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -186,7 +177,6 @@ impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
@@ -224,6 +214,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 
 thread_local! {
@@ -277,6 +268,7 @@ impl crate::pallet::pallet::Config for Test {
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
@@ -510,10 +502,6 @@ impl ExtBuilder {
 		.assimilate_storage(&mut storage);
 
 		let mut ext = sp_io::TestExternalities::from(storage);
-		ext.execute_with(|| {
-			let validators = Session::validators();
-			SESSION.with(|x| *x.borrow_mut() = (validators.clone(), HashSet::new()));
-		});
 
 		if self.initialize_first_session {
 			// We consider all test to start after timestamp is initialized This must be ensured by
