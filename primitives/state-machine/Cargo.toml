@@ -34,7 +34,7 @@ tracing = { version = "0.1.22", optional = true }
 [dev-dependencies]
 hex-literal = "0.3.1"
 sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
-pretty_assertions = "0.6.1"
+pretty_assertions = "1.0.0"
 rand = "0.7.2"
 
 [features]
