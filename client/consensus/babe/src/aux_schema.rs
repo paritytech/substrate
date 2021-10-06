@@ -68,9 +68,11 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 		Some(1) =>
 			load_decode::<_, EpochChangesV1For<Block, EpochV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
 				.map(|v1| v1.migrate().map(|_, _, epoch| epoch.migrate(config))),
-		Some(2) =>
+		Some(2) => {
+			// v2 still uses `EpochChanges` v1 format but with a different `Epoch` type.
 			load_decode::<_, EpochChangesV1For<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?
-				.map(|v2| v2.migrate()),
+				.map(|v2| v2.migrate())
+		},
 		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) =>
 			load_decode::<_, EpochChangesFor<Block, Epoch>>(backend, BABE_EPOCH_CHANGES_KEY)?,
 		Some(other) =>
