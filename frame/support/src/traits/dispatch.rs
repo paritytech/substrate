@@ -70,7 +70,8 @@ pub trait OriginTrait: Sized {
 	/// Replace the caller with caller from the other origin
 	fn set_caller_from(&mut self, other: impl Into<Self>);
 
-	/// Filter the call if caller is not root, if false is returned then the call must be filtered out.
+	/// Filter the call if caller is not root, if false is returned then the call must be filtered
+	/// out.
 	///
 	/// For root origin caller, the filters are bypassed and true is returned.
 	fn filter_call(&self, call: &Self::Call) -> bool;
