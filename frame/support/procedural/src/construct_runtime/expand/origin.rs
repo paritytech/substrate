@@ -141,9 +141,11 @@ pub fn expand_outer_origin(
 			}
 
 			fn filter_call(&self, call: &Self::Call) -> bool {
-				// Root bypasses all filters
-				matches!(self.caller, OriginCaller::system(#system_path::Origin::<#runtime>::Root))
-					|| (self.filter)(call)
+				match self.caller {
+					// Root bypasses all filters
+					OriginCaller::system(#system_path::Origin::<#runtime>::Root) => true,
+					_ => (self.filter)(call),
+				}
 			}
 
 			fn caller(&self) -> &Self::PalletsOrigin {
