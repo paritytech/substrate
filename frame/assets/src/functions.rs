@@ -275,7 +275,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			details.supply = details.supply.saturating_add(amount);
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Issued(id, beneficiary.clone(), amount));
+		Self::deposit_event(Event::Issued{asset_id: id, owner: beneficiary.clone(), total_supply: amount});
 		Ok(())
 	}
 
@@ -342,7 +342,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Burned(id, target.clone(), actual));
+		Self::deposit_event(Event::Burned{asset_id: id, owner: target.clone(), balance: actual});
 		Ok(actual)
 	}
 
@@ -415,7 +415,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<T::Balance, DispatchError> {
 		// Early exist if no-op.
 		if amount.is_zero() {
-			Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), amount));
+			Self::deposit_event(Event::Transferred{asset_id: id, from: source.clone(), to: dest.clone(), amount});
 			return Ok(amount)
 		}
 
@@ -476,7 +476,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), credit));
+		Self::deposit_event(Event::Transferred{asset_id: id, from: source.clone(), to: dest.clone(), amount: credit});
 		Ok(credit)
 	}
 
@@ -514,7 +514,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				is_frozen: false,
 			},
 		);
-		Self::deposit_event(Event::ForceCreated(id, owner));
+		Self::deposit_event(Event::ForceCreated{asset_id: id, owner});
 		Ok(())
 	}
 
@@ -554,7 +554,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
 				T::Currency::unreserve(&owner, approval.deposit);
 			}
-			Self::deposit_event(Event::Destroyed(id));
+			Self::deposit_event(Event::Destroyed{asset_id: id});
 
 			Ok(DestroyWitness {
 				accounts: details.accounts,
