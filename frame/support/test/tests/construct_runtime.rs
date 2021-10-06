@@ -334,12 +334,23 @@ mod origin_test {
 
 		origin.set_caller_from(Origin::root());
 		assert!(matches!(origin.caller, OriginCaller::system(super::system::RawOrigin::Root)));
+
+		// Root origin bypass all filter.
+		assert_eq!(origin.filter_call(&accepted_call), true);
+		assert_eq!(origin.filter_call(&rejected_call), true);
+
+		origin.set_caller_from(Origin::from(Some(0)));
+
+		// Back to another signed origin, the filtered are now effective again
 		assert_eq!(origin.filter_call(&accepted_call), false);
 		assert_eq!(origin.filter_call(&rejected_call), false);
 
+		origin.set_caller_from(Origin::root());
 		origin.reset_filter();
+
+		// Root origin bypass all filter, even when they are reset.
 		assert_eq!(origin.filter_call(&accepted_call), true);
-		assert_eq!(origin.filter_call(&rejected_call), false);
+		assert_eq!(origin.filter_call(&rejected_call), true);
 	}
 }
 

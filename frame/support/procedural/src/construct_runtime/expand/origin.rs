@@ -140,7 +140,9 @@ pub fn expand_outer_origin(
 			}
 
 			fn filter_call(&self, call: &Self::Call) -> bool {
-				(self.filter)(call)
+				// Root bypass all filters
+				matches!(self.caller, OriginCaller::system(#system_path::Origin::<#runtime>::Root))
+					|| (self.filter)(call)
 			}
 
 			fn caller(&self) -> &Self::PalletsOrigin {
@@ -237,10 +239,7 @@ pub fn expand_outer_origin(
 					filter: #scrate::sp_std::rc::Rc::new(Box::new(|_| true)),
 				};
 
-				// Root has no filter
-				if !matches!(o.caller, OriginCaller::system(#system_path::Origin::<#runtime>::Root)) {
-					#scrate::traits::OriginTrait::reset_filter(&mut o);
-				}
+				#scrate::traits::OriginTrait::reset_filter(&mut o);
 
 				o
 			}
