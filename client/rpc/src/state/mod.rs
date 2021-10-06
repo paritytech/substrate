@@ -178,6 +178,7 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }
 
@@ -413,12 +414,13 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return async move { Err(err.into()) }.boxed()
 		}
 
-		self.backend.trace_block(block, targets, storage_keys)
+		self.backend.trace_block(block, targets, storage_keys, methods)
 	}
 }
 
@@ -462,6 +464,14 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
+
+	/// Returns child storage entries at a specific block's state.
+	fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
 	fn storage_hash(
@@ -512,6 +522,15 @@ where
 		block: Option<Block::Hash>,
 	) -> FutureResult<Option<StorageData>> {
 		self.backend.storage(block, storage_key, key)
+	}
+
+	fn storage_entries(
+		&self,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		self.backend.storage_entries(block, storage_key, keys)
 	}
 
 	fn storage_keys(

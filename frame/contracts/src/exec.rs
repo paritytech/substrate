@@ -16,11 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	gas::GasMeter,
-	rent::{Rent, RentStatus},
-	storage::Storage,
-	AccountCounter, AliveContractInfo, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf,
-	Error, Event, Pallet as Contracts, Schedule,
+	gas::GasMeter, storage::Storage, AccountCounter, BalanceOf, CodeHash, Config, ContractInfo,
+	ContractInfoOf, Error, Event, Pallet as Contracts, Schedule,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
@@ -28,17 +25,19 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
 	weights::Weight,
-	DefaultNoBound,
 };
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::crypto::UncheckedFrom;
-use sp_runtime::{
-	traits::{Convert, Saturating},
-	Perbill,
-};
+use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
+use sp_runtime::traits::{Convert, Saturating};
 use sp_std::{marker::PhantomData, mem, prelude::*};
+
+/// When fields are added to the [`ContractInfo`] that can change during execution this
+/// variable needs to be set to true. This will also force changes to the
+/// `in_memory_changes_not_discarded` test.
+const CONTRACT_INFO_CAN_CHANGE: bool = false;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
@@ -78,67 +77,6 @@ pub struct ExecError {
 impl<T: Into<DispatchError>> From<T> for ExecError {
 	fn from(error: T) -> Self {
 		Self { error: error.into(), origin: ErrorOrigin::Caller }
-	}
-}
-
-/// Information needed for rent calculations that can be requested by a contract.
-#[derive(codec::Encode, DefaultNoBound)]
-#[cfg_attr(test, derive(Debug, PartialEq))]
-pub struct RentParams<T: Config> {
-	/// The total balance of the contract. Includes the balance transferred from the caller.
-	total_balance: BalanceOf<T>,
-	/// The free balance of the contract. Includes the balance transferred from the caller.
-	free_balance: BalanceOf<T>,
-	/// See crate [`Contracts::subsistence_threshold()`].
-	subsistence_threshold: BalanceOf<T>,
-	/// See crate [`Config::DepositPerContract`].
-	deposit_per_contract: BalanceOf<T>,
-	/// See crate [`Config::DepositPerStorageByte`].
-	deposit_per_storage_byte: BalanceOf<T>,
-	/// See crate [`Config::DepositPerStorageItem`].
-	deposit_per_storage_item: BalanceOf<T>,
-	/// See crate [`Ext::rent_allowance()`].
-	rent_allowance: BalanceOf<T>,
-	/// See crate [`Config::RentFraction`].
-	rent_fraction: Perbill,
-	/// See crate [`AliveContractInfo::storage_size`].
-	storage_size: u32,
-	/// See crate [`Executable::aggregate_code_len()`].
-	code_size: u32,
-	/// See crate [`Executable::refcount()`].
-	code_refcount: u32,
-	/// Reserved for backwards compatible changes to this data structure.
-	_reserved: Option<()>,
-}
-
-impl<T> RentParams<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	/// Derive new `RentParams` from the passed in data.
-	///
-	/// `value` is added to the current free and total balance of the contracts' account.
-	fn new<E: Executable<T>>(
-		account_id: &T::AccountId,
-		value: &BalanceOf<T>,
-		contract: &AliveContractInfo<T>,
-		executable: &E,
-	) -> Self {
-		Self {
-			total_balance: T::Currency::total_balance(account_id).saturating_add(*value),
-			free_balance: T::Currency::free_balance(account_id).saturating_add(*value),
-			subsistence_threshold: <Contracts<T>>::subsistence_threshold(),
-			deposit_per_contract: T::DepositPerContract::get(),
-			deposit_per_storage_byte: T::DepositPerStorageByte::get(),
-			deposit_per_storage_item: T::DepositPerStorageItem::get(),
-			rent_allowance: contract.rent_allowance,
-			rent_fraction: T::RentFraction::get(),
-			storage_size: contract.storage_size,
-			code_size: executable.aggregate_code_len(),
-			code_refcount: executable.refcount(),
-			_reserved: None,
-		}
 	}
 }
 
@@ -197,25 +135,6 @@ pub trait Ext: sealing::Sealed {
 	/// call stack.
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError>;
 
-	/// Restores the given destination contract sacrificing the current one.
-	///
-	/// Since this function removes the self contract eagerly, if succeeded, no further actions
-	/// should be performed on this `Ext` instance.
-	///
-	/// This function will fail if the same contract is present
-	/// on the contract call stack.
-	///
-	/// # Return Value
-	///
-	/// Result<(CallerCodeSize, DestCodeSize), (DispatchError, CallerCodeSize, DestCodesize)>
-	fn restore_to(
-		&mut self,
-		dest: AccountIdOf<Self::T>,
-		code_hash: CodeHash<Self::T>,
-		rent_allowance: BalanceOf<Self::T>,
-		delta: Vec<StorageKey>,
-	) -> Result<(), DispatchError>;
-
 	/// Transfer some amount of funds into the specified account.
 	fn transfer(&mut self, to: &AccountIdOf<Self::T>, value: BalanceOf<Self::T>) -> DispatchResult;
 
@@ -249,8 +168,8 @@ pub trait Ext: sealing::Sealed {
 	/// Returns the minimum balance that is required for creating an account.
 	fn minimum_balance(&self) -> BalanceOf<Self::T>;
 
-	/// Returns the deposit required to create a tombstone upon contract eviction.
-	fn tombstone_deposit(&self) -> BalanceOf<Self::T>;
+	/// Returns the deposit required to instantiate a contract.
+	fn contract_deposit(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>);
@@ -259,12 +178,6 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// There should not be any duplicates in `topics`.
 	fn deposit_event(&mut self, topics: Vec<TopicOf<Self::T>>, data: Vec<u8>);
-
-	/// Set rent allowance of the contract
-	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<Self::T>);
-
-	/// Rent allowance of the contract
-	fn rent_allowance(&mut self) -> BalanceOf<Self::T>;
 
 	/// Returns the current block number.
 	fn block_number(&self) -> BlockNumberOf<Self::T>;
@@ -277,12 +190,6 @@ pub trait Ext: sealing::Sealed {
 
 	/// Get a reference to the schedule used by the current call.
 	fn schedule(&self) -> &Schedule<Self::T>;
-
-	/// Information needed for rent calculations.
-	fn rent_params(&self) -> &RentParams<Self::T>;
-
-	/// Information about the required deposit and resulting rent.
-	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T>;
 
 	/// Get a mutable reference to the nested gas meter.
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T>;
@@ -299,6 +206,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Call some dispatchable and return the result.
 	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo;
+
+	/// Recovers ECDSA compressed public key based on signature and message hash.
+	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -335,9 +245,6 @@ pub trait Executable<T: Config>: Sized {
 	///
 	/// Does not charge from the gas meter. Do not call in contexts where this is important.
 	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError>;
-
-	/// Decrements the refcount by one and deletes the code if it drops to zero.
-	fn drop_from_storage(self);
 
 	/// Increment the refcount by one. Fails if the code does not exist on-chain.
 	///
@@ -387,23 +294,6 @@ pub trait Executable<T: Config>: Sized {
 
 	// The number of contracts using this executable.
 	fn refcount(&self) -> u32;
-
-	/// The storage that is occupied by the instrumented executable and its pristine source.
-	///
-	/// The returned size is already divided by the number of users who share the code.
-	/// This is essentially `aggregate_code_len() / refcount()`.
-	///
-	/// # Note
-	///
-	/// This works with the current in-memory value of refcount. When calling any contract
-	/// without refetching this from storage the result can be inaccurate as it might be
-	/// working with a stale value. Usually this inaccuracy is tolerable.
-	fn occupied_storage(&self) -> u32 {
-		// We disregard the size of the struct itself as the size is completely
-		// dominated by the code size.
-		let len = self.aggregate_code_len();
-		len.checked_div(self.refcount()).unwrap_or(len)
-	}
 }
 
 /// The complete call stack of a contract execution.
@@ -461,8 +351,6 @@ pub struct Frame<T: Config> {
 	contract_info: CachedContract<T>,
 	/// The amount of balance transferred by the caller as part of the call.
 	value_transferred: BalanceOf<T>,
-	/// Snapshotted rent information that can be copied to the contract if requested.
-	rent_params: RentParams<T>,
 	/// Determines whether this is a call or instantiate frame.
 	entry_point: ExportedFunction,
 	/// The gas meter capped to the supplied gas limit.
@@ -479,7 +367,7 @@ enum FrameArgs<'a, T: Config, E> {
 		/// The account id of the contract that is to be called.
 		dest: T::AccountId,
 		/// If `None` the contract info needs to be reloaded from storage.
-		cached_info: Option<AliveContractInfo<T>>,
+		cached_info: Option<ContractInfo<T>>,
 	},
 	Instantiate {
 		/// The contract or signed origin which instantiates the new contract.
@@ -496,12 +384,12 @@ enum FrameArgs<'a, T: Config, E> {
 /// Describes the different states of a contract as contained in a `Frame`.
 enum CachedContract<T: Config> {
 	/// The cached contract is up to date with the in-storage value.
-	Cached(AliveContractInfo<T>),
+	Cached(ContractInfo<T>),
 	/// A recursive call into the same contract did write to the contract info.
 	///
 	/// In this case the cached contract is stale and needs to be reloaded from storage.
 	Invalidated,
-	/// The current contract executed `terminate` or `restore_to` and removed the contract.
+	/// The current contract executed `terminate` and removed the contract.
 	///
 	/// In this case a reload is neither allowed nor possible. Please note that recursive
 	/// calls cannot remove a contract as this is checked and denied.
@@ -510,13 +398,8 @@ enum CachedContract<T: Config> {
 
 impl<T: Config> Frame<T> {
 	/// Return the `contract_info` of the current contract.
-	fn contract_info(&mut self) -> &mut AliveContractInfo<T> {
-		self.contract_info.as_alive(&self.account_id)
-	}
-
-	/// Invalidate and return the `contract_info` of the current contract.
-	fn invalidate(&mut self) -> AliveContractInfo<T> {
-		self.contract_info.invalidate(&self.account_id)
+	fn contract_info(&mut self) -> &mut ContractInfo<T> {
+		self.contract_info.get(&self.account_id)
 	}
 
 	/// Terminate and return the `contract_info` of the current contract.
@@ -525,7 +408,7 @@ impl<T: Config> Frame<T> {
 	///
 	/// Under no circumstances the contract is allowed to access the `contract_info` after
 	/// a call to this function. This would constitute a programming error in the exec module.
-	fn terminate(&mut self) -> AliveContractInfo<T> {
+	fn terminate(&mut self) -> ContractInfo<T> {
 		self.contract_info.terminate(&self.account_id)
 	}
 }
@@ -540,7 +423,7 @@ macro_rules! get_cached_or_panic_after_load {
 		} else {
 			panic!(
 				"It is impossible to remove a contract that is on the call stack;\
-				See implementations of terminate and restore_to;\
+				See implementations of terminate;\
 				Therefore fetching a contract will never fail while using an account id
 				that is currently active on the call stack;\
 				qed"
@@ -553,28 +436,21 @@ impl<T: Config> CachedContract<T> {
 	/// Load the `contract_info` from storage if necessary.
 	fn load(&mut self, account_id: &T::AccountId) {
 		if let CachedContract::Invalidated = self {
-			let contract =
-				<ContractInfoOf<T>>::get(&account_id).and_then(|contract| contract.get_alive());
+			let contract = <ContractInfoOf<T>>::get(&account_id);
 			if let Some(contract) = contract {
 				*self = CachedContract::Cached(contract);
 			}
 		}
 	}
 
-	/// Return the cached contract_info as alive contract info.
-	fn as_alive(&mut self, account_id: &T::AccountId) -> &mut AliveContractInfo<T> {
+	/// Return the cached contract_info.
+	fn get(&mut self, account_id: &T::AccountId) -> &mut ContractInfo<T> {
 		self.load(account_id);
 		get_cached_or_panic_after_load!(self)
 	}
 
-	/// Invalidate and return the contract info.
-	fn invalidate(&mut self, account_id: &T::AccountId) -> AliveContractInfo<T> {
-		self.load(account_id);
-		get_cached_or_panic_after_load!(mem::replace(self, Self::Invalidated))
-	}
-
 	/// Terminate and return the contract info.
-	fn terminate(&mut self, account_id: &T::AccountId) -> AliveContractInfo<T> {
+	fn terminate(&mut self, account_id: &T::AccountId) -> ContractInfo<T> {
 		self.load(account_id);
 		get_cached_or_panic_after_load!(mem::replace(self, Self::Terminated))
 	}
@@ -695,23 +571,11 @@ where
 				let contract = if let Some(contract) = cached_info {
 					contract
 				} else {
-					<ContractInfoOf<T>>::get(&dest)
-						.ok_or(<Error<T>>::ContractNotFound.into())
-						.and_then(|contract| {
-							contract.get_alive().ok_or(<Error<T>>::ContractIsTombstone)
-						})?
+					<ContractInfoOf<T>>::get(&dest).ok_or(<Error<T>>::ContractNotFound)?
 				};
 
 				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)?;
 
-				// This charges the rent and denies access to a contract that is in need of
-				// eviction by returning `None`. We cannot evict eagerly here because those
-				// changes would be rolled back in case this contract is called by another
-				// contract.
-				// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
-				let contract =
-					Rent::<T, E>::charge(&dest, contract, executable.occupied_storage())?
-						.ok_or(Error::<T>::RentNotPaid)?;
 				(dest, contract, executable, ExportedFunction::Call)
 			},
 			FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
@@ -728,12 +592,6 @@ where
 		};
 
 		let frame = Frame {
-			rent_params: RentParams::new(
-				&account_id,
-				&value_transferred,
-				&contract_info,
-				&executable,
-			),
 			value_transferred,
 			contract_info: CachedContract::Cached(contract_info),
 			account_id,
@@ -756,18 +614,17 @@ where
 			return Err(Error::<T>::MaxCallDepthReached.into())
 		}
 
-		// We need to make sure that changes made to the contract info are not discarded.
-		// See the `in_memory_changes_not_discarded` test for more information.
-		// We do not store on instantiate because we do not allow to call into a contract
-		// from its own constructor.
-		let frame = self.top_frame();
-		if let (CachedContract::Cached(contract), ExportedFunction::Call) =
-			(&frame.contract_info, frame.entry_point)
-		{
-			<ContractInfoOf<T>>::insert(
-				frame.account_id.clone(),
-				ContractInfo::Alive(contract.clone()),
-			);
+		if CONTRACT_INFO_CAN_CHANGE {
+			// We need to make sure that changes made to the contract info are not discarded.
+			// See the `in_memory_changes_not_discarded` test for more information.
+			// We do not store on instantiate because we do not allow to call into a contract
+			// from its own constructor.
+			let frame = self.top_frame();
+			if let (CachedContract::Cached(contract), ExportedFunction::Call) =
+				(&frame.contract_info, frame.entry_point)
+			{
+				<ContractInfoOf<T>>::insert(frame.account_id.clone(), contract.clone());
+			}
 		}
 
 		let nested_meter =
@@ -784,12 +641,6 @@ where
 	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError> {
 		let entry_point = self.top_frame().entry_point;
 		let do_transaction = || {
-			// Cache the value before calling into the constructor because that
-			// consumes the value. If the constructor creates additional contracts using
-			// the same code hash we still charge the "1 block rent" as if they weren't
-			// spawned. This is OK as overcharging is always safe.
-			let occupied_storage = executable.occupied_storage();
-
 			// Every call or instantiate also optionally transferres balance.
 			self.initial_transfer()?;
 
@@ -808,18 +659,11 @@ where
 					return Err(Error::<T>::TerminatedInConstructor.into())
 				}
 
-				// Collect the rent for the first block to prevent the creation of very large
-				// contracts that never intended to pay for even one block.
-				// This also makes sure that it is above the subsistence threshold
-				// in order to keep up the guarantuee that we always leave a tombstone behind
-				// with the exception of a contract that called `seal_terminate`.
-				let contract =
-					Rent::<T, E>::charge(&account_id, frame.invalidate(), occupied_storage)?
-						.ok_or(Error::<T>::NewContractNotFunded)?;
-				frame.contract_info = CachedContract::Cached(contract);
-
 				// Deposit an instantiation event.
-				deposit_event::<T>(vec![], Event::Instantiated(self.caller().clone(), account_id));
+				deposit_event::<T>(
+					vec![],
+					Event::Instantiated { deployer: self.caller().clone(), contract: account_id },
+				);
 			}
 
 			Ok(output)
@@ -877,7 +721,7 @@ where
 				// because that case is already handled by the optimization above. Only the first
 				// cache needs to be invalidated because that one will invalidate the next cache
 				// when it is popped from the stack.
-				<ContractInfoOf<T>>::insert(account_id, ContractInfo::Alive(contract));
+				<ContractInfoOf<T>>::insert(account_id, contract);
 				if let Some(c) = self.frames_mut().skip(1).find(|f| f.account_id == *account_id) {
 					c.contract_info = CachedContract::Invalidated;
 				}
@@ -897,10 +741,7 @@ where
 				return
 			}
 			if let CachedContract::Cached(contract) = &self.first_frame.contract_info {
-				<ContractInfoOf<T>>::insert(
-					&self.first_frame.account_id,
-					ContractInfo::Alive(contract.clone()),
-				);
+				<ContractInfoOf<T>>::insert(&self.first_frame.account_id, contract.clone());
 			}
 			if let Some(counter) = self.account_counter {
 				<AccountCounter<T>>::set(counter);
@@ -1104,43 +945,11 @@ where
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash, &mut frame.nested_meter)?;
-		Contracts::<T>::deposit_event(Event::Terminated(
-			frame.account_id.clone(),
-			beneficiary.clone(),
-		));
+		Contracts::<T>::deposit_event(Event::Terminated {
+			contract: frame.account_id.clone(),
+			beneficiary: beneficiary.clone(),
+		});
 		Ok(())
-	}
-
-	fn restore_to(
-		&mut self,
-		dest: AccountIdOf<Self::T>,
-		code_hash: CodeHash<Self::T>,
-		rent_allowance: BalanceOf<Self::T>,
-		delta: Vec<StorageKey>,
-	) -> Result<(), DispatchError> {
-		if self.is_recursive() {
-			return Err(Error::<T>::TerminatedWhileReentrant.into())
-		}
-		let frame = self.top_frame_mut();
-		let origin_contract = frame.contract_info().clone();
-		let account_id = frame.account_id.clone();
-		let result = Rent::<T, E>::restore_to(
-			&account_id,
-			origin_contract,
-			dest.clone(),
-			code_hash.clone(),
-			rent_allowance,
-			delta,
-			&mut frame.nested_meter,
-		);
-		if let Ok(_) = result {
-			deposit_event::<Self::T>(
-				vec![],
-				Event::Restored(account_id, dest, code_hash, rent_allowance),
-			);
-			frame.terminate();
-		}
-		result
 	}
 
 	fn transfer(&mut self, to: &T::AccountId, value: BalanceOf<T>) -> DispatchResult {
@@ -1152,9 +961,8 @@ where
 	}
 
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
-		let block_number = self.block_number;
 		let frame = self.top_frame_mut();
-		Storage::<T>::write(block_number, frame.contract_info(), &key, value)
+		Storage::<T>::write(frame.contract_info(), &key, value)
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -1185,23 +993,15 @@ where
 		T::Currency::minimum_balance()
 	}
 
-	fn tombstone_deposit(&self) -> BalanceOf<T> {
-		T::TombstoneDeposit::get()
+	fn contract_deposit(&self) -> BalanceOf<T> {
+		T::ContractDeposit::get()
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			Event::ContractEmitted(self.top_frame().account_id.clone(), data),
+			Event::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
 		);
-	}
-
-	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
-		self.top_frame_mut().contract_info().rent_allowance = rent_allowance;
-	}
-
-	fn rent_allowance(&mut self) -> BalanceOf<T> {
-		self.top_frame_mut().contract_info().rent_allowance
 	}
 
 	fn block_number(&self) -> T::BlockNumber {
@@ -1218,24 +1018,6 @@ where
 
 	fn schedule(&self) -> &Schedule<Self::T> {
 		&self.schedule
-	}
-
-	fn rent_params(&self) -> &RentParams<Self::T> {
-		&self.top_frame().rent_params
-	}
-
-	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T> {
-		let frame = self.top_frame_mut();
-		let balance = T::Currency::free_balance(&frame.account_id);
-		let code_size = frame.rent_params.code_size;
-		let refcount = frame.rent_params.code_refcount;
-		<Rent<T, E>>::rent_status(
-			&balance,
-			&frame.contract_info(),
-			code_size,
-			refcount,
-			at_refcount,
-		)
 	}
 
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
@@ -1257,6 +1039,10 @@ where
 		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
 		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
+	}
+
+	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
+		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
 	}
 }
 
@@ -1304,7 +1090,7 @@ mod tests {
 	use frame_support::{assert_err, assert_ok};
 	use frame_system::{EventRecord, Phase};
 	use pallet_contracts_primitives::ReturnFlags;
-	use pretty_assertions::{assert_eq, assert_ne};
+	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
 	use sp_runtime::{
 		traits::{BadOrigin, Hash},
@@ -1400,12 +1186,6 @@ mod tests {
 				}
 			});
 		}
-
-		fn refcount(code_hash: &CodeHash<Test>) -> u32 {
-			LOADER.with(|loader| {
-				loader.borrow().map.get(code_hash).expect("code_hash does not exist").refcount()
-			})
-		}
 	}
 
 	impl Executable<Test> for MockExecutable {
@@ -1426,10 +1206,6 @@ mod tests {
 					.cloned()
 					.ok_or(Error::<Test>::CodeNotFound.into())
 			})
-		}
-
-		fn drop_from_storage(self) {
-			MockLoader::decrement_refcount(self.code_hash);
 		}
 
 		fn add_user(
@@ -1546,7 +1322,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			place_contract(&BOB, return_ch);
+			place_contract(&dest, return_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
 
@@ -1563,9 +1339,7 @@ mod tests {
 
 			assert!(!output.is_success());
 			assert_eq!(get_balance(&origin), 100);
-
-			// the rent is still charged
-			assert!(get_balance(&dest) < balance);
+			assert_eq!(get_balance(&dest), balance);
 		});
 	}
 
@@ -1891,7 +1665,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated(ALICE, instantiated_contract_address)]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+			);
 		});
 	}
 
@@ -1980,7 +1757,10 @@ mod tests {
 				Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(),
 				dummy_ch
 			);
-			assert_eq!(&events(), &[Event::Instantiated(BOB, instantiated_contract_address)]);
+			assert_eq!(
+				&events(),
+				&[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+			);
 		});
 	}
 
@@ -2067,146 +1847,11 @@ mod tests {
 	}
 
 	#[test]
-	fn rent_allowance() {
-		let rent_allowance_ch = MockLoader::insert(Constructor, |ctx, _| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let allowance = subsistence * 3;
-			assert_eq!(ctx.ext.rent_allowance(), <BalanceOf<Test>>::max_value());
-			ctx.ext.set_rent_allowance(allowance);
-			assert_eq!(ctx.ext.rent_allowance(), allowance);
-			exec_success()
-		});
-
-		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let schedule = <Test as Config>::Schedule::get();
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(rent_allowance_ch, &schedule, &mut gas_meter).unwrap();
-			set_balance(&ALICE, subsistence * 10);
-
-			let result = MockStack::run_instantiate(
-				ALICE,
-				executable,
-				&mut gas_meter,
-				&schedule,
-				subsistence * 5,
-				vec![],
-				&[],
-				None,
-			);
-			assert_matches!(result, Ok(_));
-		});
-	}
-
-	#[test]
-	fn rent_params_works() {
-		let code_hash = MockLoader::insert(Call, |ctx, executable| {
-			let address = ctx.ext.address();
-			let contract =
-				<ContractInfoOf<Test>>::get(address).and_then(|c| c.get_alive()).unwrap();
-			assert_eq!(ctx.ext.rent_params(), &RentParams::new(address, &0, &contract, executable));
-			exec_success()
-		});
-
-		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let schedule = <Test as Config>::Schedule::get();
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			set_balance(&ALICE, subsistence * 10);
-			place_contract(&BOB, code_hash);
-			MockStack::run_call(ALICE, BOB, &mut gas_meter, &schedule, 0, vec![], None).unwrap();
-		});
-	}
-
-	#[test]
-	fn rent_params_snapshotted() {
-		let code_hash = MockLoader::insert(Call, |ctx, executable| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let address = ctx.ext.address();
-			let contract =
-				<ContractInfoOf<Test>>::get(address).and_then(|c| c.get_alive()).unwrap();
-			let rent_params = RentParams::new(address, &0, &contract, executable);
-
-			// Changing the allowance during the call: rent params stay unchanged.
-			let allowance = 42;
-			assert_ne!(allowance, rent_params.rent_allowance);
-			ctx.ext.set_rent_allowance(allowance);
-			assert_eq!(ctx.ext.rent_params(), &rent_params);
-
-			// Creating another instance from the same code_hash increases the refcount.
-			// This is also not reflected in the rent params.
-			assert_eq!(MockLoader::refcount(&executable.code_hash), 1);
-			ctx.ext
-				.instantiate(0, executable.code_hash, subsistence * 25, vec![], &[])
-				.unwrap();
-			assert_eq!(MockLoader::refcount(&executable.code_hash), 2);
-			assert_eq!(ctx.ext.rent_params(), &rent_params);
-
-			exec_success()
-		});
-
-		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let schedule = <Test as Config>::Schedule::get();
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			set_balance(&ALICE, subsistence * 100);
-			place_contract(&BOB, code_hash);
-			MockStack::run_call(
-				ALICE,
-				BOB,
-				&mut gas_meter,
-				&schedule,
-				subsistence * 50,
-				vec![],
-				None,
-			)
-			.unwrap();
-		});
-	}
-
-	#[test]
-	fn rent_status_works() {
-		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			assert_eq!(
-				ctx.ext.rent_status(0),
-				RentStatus {
-					max_deposit: 80000,
-					current_deposit: 80000,
-					custom_refcount_deposit: None,
-					max_rent: 32,
-					current_rent: 32,
-					custom_refcount_rent: None,
-					_reserved: None,
-				}
-			);
-			assert_eq!(
-				ctx.ext.rent_status(1),
-				RentStatus {
-					max_deposit: 80000,
-					current_deposit: 80000,
-					custom_refcount_deposit: Some(80000),
-					max_rent: 32,
-					current_rent: 32,
-					custom_refcount_rent: Some(32),
-					_reserved: None,
-				}
-			);
-			exec_success()
-		});
-
-		ExtBuilder::default().build().execute_with(|| {
-			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let schedule = <Test as Config>::Schedule::get();
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			set_balance(&ALICE, subsistence * 10);
-			place_contract(&BOB, code_hash);
-			MockStack::run_call(ALICE, BOB, &mut gas_meter, &schedule, 0, vec![], None).unwrap();
-		});
-	}
-
-	#[test]
 	fn in_memory_changes_not_discarded() {
+		// Remove this assert and fill out the "DO" stubs once fields are added to the
+		// contract info that can be modified during exection.
+		assert!(!CONTRACT_INFO_CAN_CHANGE);
+
 		// Call stack: BOB -> CHARLIE (trap) -> BOB' (success)
 		// This tests verfies some edge case of the contract info cache:
 		// We change some value in our contract info before calling into a contract
@@ -2217,13 +1862,9 @@ mod tests {
 		// are made before calling into CHARLIE are not discarded.
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
-				let original_allowance = ctx.ext.rent_allowance();
-				let changed_allowance = <BalanceOf<Test>>::max_value() / 2;
-				assert_ne!(original_allowance, changed_allowance);
-				ctx.ext.set_rent_allowance(changed_allowance);
+				// DO: modify medata (ContractInfo) of own contract through ctx.ext functions
 				assert_eq!(ctx.ext.call(0, CHARLIE, 0, vec![], true), exec_trapped());
-				assert_eq!(ctx.ext.rent_allowance(), changed_allowance);
-				assert_ne!(ctx.ext.rent_allowance(), original_allowance);
+				// DO: check that the value is not discarded (query via ctx.ext)
 			}
 			exec_success()
 		});
@@ -2428,7 +2069,9 @@ mod tests {
 	#[test]
 	fn call_runtime_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			let call = Call::System(frame_system::Call::remark_with_event(b"Hello World".to_vec()));
+			let call = Call::System(frame_system::Call::remark_with_event {
+				remark: b"Hello World".to_vec(),
+			});
 			ctx.ext.call_runtime(call).unwrap();
 			exec_success()
 		});
@@ -2462,20 +2105,19 @@ mod tests {
 			use pallet_utility::Call as UtilCall;
 
 			// remark should still be allowed
-			let allowed_call = Call::System(SysCall::remark_with_event(b"Hello".to_vec()));
+			let allowed_call =
+				Call::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
 
 			// transfers are disallowed by the `TestFiler` (see below)
-			let forbidden_call = Call::Balances(BalanceCall::transfer(CHARLIE, 22));
+			let forbidden_call = Call::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
 
 			// simple cases: direct call
 			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
-			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch(vec![
-				allowed_call.clone(),
-				forbidden_call,
-				allowed_call
-			]))),);
+			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch {
+				calls: vec![allowed_call.clone(), forbidden_call, allowed_call]
+			})),);
 
 			// the transfer wasn't performed
 			assert_eq!(get_balance(&CHARLIE), 0);
@@ -2484,7 +2126,7 @@ mod tests {
 		});
 
 		TestFilter::set_filter(|call| match call {
-			Call::Balances(pallet_balances::Call::transfer(_, _)) => false,
+			Call::Balances(pallet_balances::Call::transfer { .. }) => false,
 			_ => true,
 		});
 

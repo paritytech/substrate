@@ -44,8 +44,8 @@ enum BlockRangeState<B: BlockT> {
 impl<B: BlockT> BlockRangeState<B> {
 	pub fn len(&self) -> NumberFor<B> {
 		match *self {
-			BlockRangeState::Downloading { len, .. } => len,
-			BlockRangeState::Complete(ref blocks) => (blocks.len() as u32).into(),
+			Self::Downloading { len, .. } => len,
+			Self::Complete(ref blocks) => (blocks.len() as u32).into(),
 		}
 	}
 }
@@ -61,7 +61,7 @@ pub struct BlockCollection<B: BlockT> {
 impl<B: BlockT> BlockCollection<B> {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		BlockCollection { blocks: BTreeMap::new(), peer_requests: HashMap::new() }
+		Self { blocks: BTreeMap::new(), peer_requests: HashMap::new() }
 	}
 
 	/// Clear everything.
@@ -90,10 +90,7 @@ impl<B: BlockT> BlockCollection<B> {
 		self.blocks.insert(
 			start,
 			BlockRangeState::Complete(
-				blocks
-					.into_iter()
-					.map(|b| BlockData { origin: Some(who.clone()), block: b })
-					.collect(),
+				blocks.into_iter().map(|b| BlockData { origin: Some(who), block: b }).collect(),
 			),
 		);
 	}
@@ -194,7 +191,7 @@ impl<B: BlockT> BlockCollection<B> {
 		for r in ranges {
 			self.blocks.remove(&r);
 		}
-		trace!(target: "sync", "Drained {} blocks", drained.len());
+		trace!(target: "sync", "Drained {} blocks from {:?}", drained.len(), from);
 		drained
 	}
 

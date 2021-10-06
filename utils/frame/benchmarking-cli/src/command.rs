@@ -19,7 +19,7 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{
 	Analysis, BenchmarkBatch, BenchmarkBatchSplitResults, BenchmarkList, BenchmarkParameter,
-	BenchmarkResults, BenchmarkSelector,
+	BenchmarkResult, BenchmarkSelector,
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
@@ -48,7 +48,7 @@ fn combine_batches(
 	}
 
 	let mut all_benchmarks =
-		LinkedHashMap::<_, (Vec<BenchmarkResults>, Vec<BenchmarkResults>)>::new();
+		LinkedHashMap::<_, (Vec<BenchmarkResult>, Vec<BenchmarkResult>)>::new();
 
 	db_batches
 		.into_iter()
@@ -407,6 +407,20 @@ impl BenchmarkCmd {
 				println!();
 			}
 
+			if !self.no_storage_info {
+				let mut comments: Vec<String> = Default::default();
+				crate::writer::add_storage_comments(
+					&mut comments,
+					&batch.db_results,
+					&storage_info,
+				);
+				println!("Raw Storage Info\n========");
+				for comment in comments {
+					println!("{}", comment);
+				}
+				println!("");
+			}
+
 			// Conduct analysis.
 			if !self.no_median_slopes {
 				println!("Median Slopes Analysis\n========");
@@ -425,6 +439,7 @@ impl BenchmarkCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
+				println!("");
 			}
 			if !self.no_min_squares {
 				println!("Min Squares Analysis\n========");
@@ -443,6 +458,7 @@ impl BenchmarkCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
+				println!("");
 			}
 		}
 

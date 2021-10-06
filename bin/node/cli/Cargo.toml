@@ -109,19 +109,25 @@ sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../../pr
 
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
+sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
-futures = "0.3.9"
+sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
+futures = "0.3.16"
 tempfile = "3.1.0"
 assert_cmd = "1.0"
 nix = "0.19"
 serde_json = "1.0"
 regex = "1"
 platforms = "1.1"
-async-std = { version = "1.6.5", features = ["attributes"] }
+async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
+jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = ["tokio1"] }
+tokio = { version = "1.10", features = ["macros", "time"] }
+wait-timeout = "0.2"
+remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
@@ -130,15 +136,10 @@ frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../..
 substrate-build-script-utils = { version = "3.0.0", optional = true, path = "../../../utils/build-script-utils" }
 substrate-frame-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
-
-[build-dependencies.sc-cli]
-version = "0.10.0-dev"
-package = "sc-cli"
-path = "../../../client/cli"
-optional = true
+sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
 
 [features]
-default = [ "cli" ]
+default = ["cli"]
 cli = [
 	"node-executor/wasmi-errno",
 	"node-inspect",

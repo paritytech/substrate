@@ -112,8 +112,8 @@ pub struct OnlineConfig<B: BlockT> {
 	pub at: Option<B::Hash>,
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
-	/// The modules to scrape. If empty, entire chain state will be scraped.
-	pub modules: Vec<String>,
+	/// The pallets to scrape. If empty, entire chain state will be scraped.
+	pub pallets: Vec<String>,
 	/// Transport config.
 	pub transport: Transport,
 }
@@ -134,7 +134,7 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 			transport: Transport { uri: DEFAULT_TARGET.to_owned(), client: None },
 			at: None,
 			state_snapshot: None,
-			modules: vec![],
+			pallets: vec![],
 		}
 	}
 }
@@ -360,9 +360,9 @@ impl<B: BlockT> Builder<B> {
 			.clone();
 		info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
 
-		let mut keys_and_values = if config.modules.len() > 0 {
+		let mut keys_and_values = if config.pallets.len() > 0 {
 			let mut filtered_kv = vec![];
-			for f in config.modules.iter() {
+			for f in config.pallets.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
 				let module_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
 				info!(
@@ -376,7 +376,7 @@ impl<B: BlockT> Builder<B> {
 			}
 			filtered_kv
 		} else {
-			info!(target: LOG_TARGET, "downloading data for all modules.");
+			info!(target: LOG_TARGET, "downloading data for all pallets.");
 			self.rpc_get_pairs_paged(StorageKey(vec![]), at).await?
 		};
 
@@ -482,12 +482,23 @@ impl<B: BlockT> Builder<B> {
 		self
 	}
 
+	/// overwrite the `at` value, if `mode` is set to [`Mode::Online`].
+	///
+	/// noop if `mode` is [`Mode::Offline`]
+	pub fn overwrite_online_at(mut self, at: B::Hash) -> Self {
+		if let Mode::Online(mut online) = self.mode.clone() {
+			online.at = Some(at);
+			self.mode = Mode::Online(online);
+		}
+		self
+	}
+
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
 		let kv = self.pre_build().await?;
 		let mut ext = TestExternalities::new_empty();
 
-		debug!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
+		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
 			let (k, v) = (k.0, v.0);
 			// Insert the key,value pair into the test trie backend
@@ -541,7 +552,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["System".to_owned()],
+				pallets: vec!["System".to_owned()],
 				..Default::default()
 			}))
 			.build()
@@ -555,7 +566,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec![
+				pallets: vec![
 					"Proxy".to_owned(),
 					"Multisig".to_owned(),
 					"PhragmenElection".to_owned(),
@@ -583,7 +594,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["PhragmenElection".to_owned()],
+				pallets: vec!["PhragmenElection".to_owned()],
 				..Default::default()
 			}))
 			.build()
@@ -609,7 +620,7 @@ mod remote_tests {
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
 				state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
-				modules: vec!["Balances".to_owned()],
+				pallets: vec!["Balances".to_owned()],
 				..Default::default()
 			}))
 			.build()

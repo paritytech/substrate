@@ -192,8 +192,6 @@ parameter_types! {
 }
 
 impl onchain::Config for Test {
-	type AccountId = <Self as frame_system::Config>::AccountId;
-	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -218,6 +216,7 @@ impl pallet_staking::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 }
 
 impl pallet_offences::Config for Test {
@@ -231,6 +230,7 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 1;
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
+	pub const MaxAuthorities: u32 = 10;
 }
 
 impl Config for Test {
@@ -253,6 +253,7 @@ impl Config for Test {
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
+	type MaxAuthorities = MaxAuthorities;
 }
 
 pub fn go_to_block(n: u64, s: u64) {

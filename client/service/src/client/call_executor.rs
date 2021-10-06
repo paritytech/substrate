@@ -41,7 +41,7 @@ use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	backend: Arc<B>,
 	executor: E,
-	wasm_override: Option<WasmOverride<E>>,
+	wasm_override: Option<WasmOverride>,
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig<Block>,
@@ -62,7 +62,7 @@ where
 		let wasm_override = client_config
 			.wasm_runtime_overrides
 			.as_ref()
-			.map(|p| WasmOverride::new(p.clone(), executor.clone()))
+			.map(|p| WasmOverride::new(p.clone(), &executor))
 			.transpose()?;
 
 		let wasm_substitutes = WasmSubstitutes::new(
@@ -212,7 +212,7 @@ where
 			backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let mut state = self.backend.state_at(*at)?;
+		let state = self.backend.state_at(*at)?;
 
 		let changes = &mut *changes.borrow_mut();
 
@@ -220,20 +220,21 @@ where
 			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
 		})?;
 
+		// It is important to extract the runtime code here before we create the proof
+		// recorder to not record it. We also need to fetch the runtime code from `state` to
+		// make sure we use the caching layers.
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+
+		let runtime_code =
+			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
+		let runtime_code = self.check_override(runtime_code, at)?;
+
 		match recorder {
 			Some(recorder) => {
 				let trie_state = state.as_trie_backend().ok_or_else(|| {
 					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
 						as Box<dyn sp_state_machine::Error>
 				})?;
-
-				let state_runtime_code =
-					sp_state_machine::backend::BackendRuntimeCode::new(trie_state);
-				// It is important to extract the runtime code here before we create the proof
-				// recorder.
-				let runtime_code =
-					state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-				let runtime_code = self.check_override(runtime_code, at)?;
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -259,11 +260,6 @@ where
 				)
 			},
 			None => {
-				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				let runtime_code =
-					state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-				let runtime_code = self.check_override(runtime_code, at)?;
-
 				let mut state_machine = StateMachine::new(
 					&state,
 					changes_trie_state,
@@ -309,7 +305,7 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let mut state = self.backend.state_at(*at)?;
+		let state = self.backend.state_at(*at)?;
 
 		let trie_backend = state.as_trie_backend().ok_or_else(|| {
 			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
@@ -375,7 +371,7 @@ mod tests {
 			1,
 		);
 
-		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
+		let overrides = crate::client::wasm_override::dummy_overrides();
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());
 		let onchain_code = RuntimeCode {
 			code_fetcher: &onchain_code,

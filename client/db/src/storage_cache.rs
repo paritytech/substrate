@@ -703,7 +703,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.state.as_trie_backend()
 	}
 
@@ -901,9 +901,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		self.caching_state().child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.caching_state
-			.as_mut()
+			.as_ref()
 			.expect("`caching_state` is valid for the lifetime of the object; qed")
 			.as_trie_backend()
 	}
@@ -1418,6 +1418,7 @@ mod qc {
 	#[derive(Debug, Clone)]
 	struct Node {
 		hash: H256,
+		#[allow(unused)]
 		parent: H256,
 		state: KeyMap,
 		changes: KeySet,

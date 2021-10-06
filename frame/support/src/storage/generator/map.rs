@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	hash::{ReversibleStorageHasher, StorageHasher, Twox128},
-	storage::{self, unhashed, KeyPrefixIterator, PrefixIterator, StorageAppend},
+	hash::{ReversibleStorageHasher, StorageHasher},
+	storage::{self, storage_prefix, unhashed, KeyPrefixIterator, PrefixIterator, StorageAppend},
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
@@ -52,16 +52,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
 	/// `storage_prefix`.
 	fn prefix_hash() -> Vec<u8> {
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
-
-		let mut result =
-			Vec::with_capacity(module_prefix_hashed.len() + storage_prefix_hashed.len());
-
-		result.extend_from_slice(&module_prefix_hashed[..]);
-		result.extend_from_slice(&storage_prefix_hashed[..]);
-
-		result
+		let result = storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		result.to_vec()
 	}
 
 	/// Convert an optional value retrieved from storage to the type queried.
@@ -75,16 +67,12 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	where
 		KeyArg: EncodeLike<K>,
 	{
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 		let key_hashed = key.borrow().using_encoded(Self::Hasher::hash);
 
-		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len(),
-		);
+		let mut final_key = Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
-		final_key.extend_from_slice(&module_prefix_hashed[..]);
-		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(&storage_prefix);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -150,6 +138,7 @@ where
 				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
 				Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
 			},
+			phantom: Default::default(),
 		}
 	}
 
@@ -330,18 +319,13 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 	fn migrate_key<OldHasher: StorageHasher, KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V> {
 		let old_key = {
-			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+			let storage_prefix = storage_prefix(Self::module_prefix(), Self::storage_prefix());
 			let key_hashed = key.borrow().using_encoded(OldHasher::hash);
 
-			let mut final_key = Vec::with_capacity(
-				module_prefix_hashed.len() +
-					storage_prefix_hashed.len() +
-					key_hashed.as_ref().len(),
-			);
+			let mut final_key =
+				Vec::with_capacity(storage_prefix.len() + key_hashed.as_ref().len());
 
-			final_key.extend_from_slice(&module_prefix_hashed[..]);
-			final_key.extend_from_slice(&storage_prefix_hashed[..]);
+			final_key.extend_from_slice(&storage_prefix);
 			final_key.extend_from_slice(key_hashed.as_ref());
 
 			final_key

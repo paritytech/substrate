@@ -55,11 +55,19 @@ pub use tracing::trace;
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! warn {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
-	($($arg:tt)+) => {
-		()
+	($message:expr, $( $arg:expr, )*) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -68,11 +76,12 @@ macro_rules! warn {
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! debug {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
-	};
-	($($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -719,7 +728,7 @@ mod execution {
 	}
 
 	/// Generate storage read proof.
-	pub fn prove_read<B, H, I>(mut backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
+	pub fn prove_read<B, H, I>(backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
 	where
 		B: Backend<H>,
 		H: Hasher,
@@ -735,7 +744,7 @@ mod execution {
 
 	/// Generate range storage read proof.
 	pub fn prove_range_read_with_size<B, H>(
-		mut backend: B,
+		backend: B,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		size_limit: usize,
@@ -794,7 +803,7 @@ mod execution {
 
 	/// Generate child storage read proof.
 	pub fn prove_child_read<B, H, I>(
-		mut backend: B,
+		backend: B,
 		child_info: &ChildInfo,
 		keys: I,
 	) -> Result<StorageProof, Box<dyn Error>>
@@ -1197,7 +1206,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1350,7 +1359,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1372,7 +1381,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1427,7 +1436,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 
@@ -1515,7 +1524,9 @@ mod tests {
 	#[test]
 	fn prove_read_and_proof_check_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
+		let missing_child_info = ChildInfo::new_default(b"sub1sub2"); // key will include other child root to proof.
 		let child_info = &child_info;
+		let missing_child_info = &missing_child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
@@ -1553,11 +1564,112 @@ mod tests {
 			&[b"value2"],
 		)
 		.unwrap();
+		let local_result3 = read_child_proof_check::<BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone(),
+			missing_child_info,
+			&[b"dummy"],
+		)
+		.unwrap();
+
 		assert_eq!(
 			local_result1.into_iter().collect::<Vec<_>>(),
 			vec![(b"value3".to_vec(), Some(vec![142]))],
 		);
 		assert_eq!(local_result2.into_iter().collect::<Vec<_>>(), vec![(b"value2".to_vec(), None)]);
+		assert_eq!(local_result3.into_iter().collect::<Vec<_>>(), vec![(b"dummy".to_vec(), None)]);
+	}
+
+	#[test]
+	fn child_read_compact_stress_test() {
+		use rand::{rngs::SmallRng, RngCore, SeedableRng};
+		let mut storage: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> =
+			Default::default();
+		let mut seed = [0; 16];
+		for i in 0..50u32 {
+			let mut child_infos = Vec::new();
+			let seed_partial = &mut seed[0..4];
+			seed_partial.copy_from_slice(&i.to_be_bytes()[..]);
+			let mut rand = SmallRng::from_seed(seed);
+
+			let nb_child_trie = rand.next_u32() as usize % 25;
+			for _ in 0..nb_child_trie {
+				let key_len = 1 + (rand.next_u32() % 10);
+				let mut key = vec![0; key_len as usize];
+				rand.fill_bytes(&mut key[..]);
+				let child_info = ChildInfo::new_default(key.as_slice());
+				let nb_item = 1 + rand.next_u32() % 25;
+				let mut items = BTreeMap::new();
+				for item in 0..nb_item {
+					let key_len = 1 + (rand.next_u32() % 10);
+					let mut key = vec![0; key_len as usize];
+					rand.fill_bytes(&mut key[..]);
+					let value = vec![item as u8; item as usize + 28];
+					items.insert(key, value);
+				}
+				child_infos.push(child_info.clone());
+				storage.insert(Some(child_info), items);
+			}
+
+			let trie: InMemoryBackend<BlakeTwo256> = storage.clone().into();
+			let trie_root = trie.root().clone();
+			let backend = crate::ProvingBackend::new(&trie);
+			let mut queries = Vec::new();
+			for c in 0..(5 + nb_child_trie / 2) {
+				// random existing query
+				let child_info = if c < 5 {
+					// 4 missing child trie
+					let key_len = 1 + (rand.next_u32() % 10);
+					let mut key = vec![0; key_len as usize];
+					rand.fill_bytes(&mut key[..]);
+					ChildInfo::new_default(key.as_slice())
+				} else {
+					child_infos[rand.next_u32() as usize % nb_child_trie].clone()
+				};
+
+				if let Some(values) = storage.get(&Some(child_info.clone())) {
+					for _ in 0..(1 + values.len() / 2) {
+						let ix = rand.next_u32() as usize % values.len();
+						for (i, (key, value)) in values.iter().enumerate() {
+							if i == ix {
+								assert_eq!(
+									&backend
+										.child_storage(&child_info, key.as_slice())
+										.unwrap()
+										.unwrap(),
+									value
+								);
+								queries.push((
+									child_info.clone(),
+									key.clone(),
+									Some(value.clone()),
+								));
+								break
+							}
+						}
+					}
+				}
+				for _ in 0..4 {
+					let key_len = 1 + (rand.next_u32() % 10);
+					let mut key = vec![0; key_len as usize];
+					rand.fill_bytes(&mut key[..]);
+					let result = backend.child_storage(&child_info, key.as_slice()).unwrap();
+					queries.push((child_info.clone(), key, result));
+				}
+			}
+
+			let storage_proof = backend.extract_proof();
+			let remote_proof = test_compact(storage_proof, &trie_root);
+			let proof_check =
+				create_proof_check_backend::<BlakeTwo256>(trie_root, remote_proof).unwrap();
+
+			for (child_info, key, expected) in queries {
+				assert_eq!(
+					proof_check.child_storage(&child_info, key.as_slice()).unwrap(),
+					expected,
+				);
+			}
+		}
 	}
 
 	#[test]
@@ -1619,7 +1731,7 @@ mod tests {
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
 			vec![
@@ -1641,8 +1753,9 @@ mod tests {
 			]
 			.into_iter(),
 		);
-		remote_backend.backend_storage_mut().consolidate(transaction);
-		remote_backend.essence.set_root(remote_root.clone());
+		let mut remote_storage = remote_backend.into_storage();
+		remote_storage.consolidate(transaction);
+		let remote_backend = TrieBackend::new(remote_storage, remote_root);
 		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
@@ -1696,7 +1809,7 @@ mod tests {
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"bbb".to_vec() => b"".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
