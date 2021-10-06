@@ -22,9 +22,8 @@ use crate::{
 	error, utils, with_crypto_scheme, CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
 };
 use rand::{rngs::OsRng, RngCore};
-use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58Codec};
+use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
-use ss58_registry::Ss58AddressFormat;
 use structopt::StructOpt;
 use utils::print_from_uri;
 
@@ -164,10 +163,9 @@ fn assert_non_empty_string(pattern: &str) -> Result<String, &'static str> {
 mod tests {
 	use super::*;
 	use sp_core::{
-		crypto::{default_ss58_version, Ss58Codec},
+		crypto::{default_ss58_version, Ss58AddressFormatRegistry, Ss58Codec},
 		sr25519, Pair,
 	};
-	use ss58_registry::Ss58AddressFormatRegistry;
 	use structopt::StructOpt;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
