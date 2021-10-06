@@ -18,7 +18,7 @@
 //! Client parts
 use crate::{default_config, ChainInfo};
 use futures::channel::mpsc;
-use jsonrpsee::types::RpcModule;
+use jsonrpsee::RpcModule;
 use manual_seal::{
 	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
 	import_queue,
