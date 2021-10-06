@@ -141,7 +141,7 @@ pub fn expand_outer_origin(
 			}
 
 			fn filter_call(&self, call: &Self::Call) -> bool {
-				// Root bypass all filters
+				// Root bypasses all filters
 				matches!(self.caller, OriginCaller::system(#system_path::Origin::<#runtime>::Root))
 					|| (self.filter)(call)
 			}
