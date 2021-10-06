@@ -19,8 +19,11 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::{
-	parse::Parser, punctuated::Punctuated, spanned::Spanned, token::{Bang, For}, Ident, ItemImpl, Path, PathArguments,
-	PathSegment, Result, Token,
+	parse::Parser,
+	punctuated::Punctuated,
+	spanned::Spanned,
+	token::{Bang, For},
+	Ident, ItemImpl, Path, PathArguments, PathSegment, Result, Token,
 };
 
 pub fn use_default_config_for(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
@@ -55,7 +58,7 @@ fn extract_config_trait(trait_: Option<(Option<Bang>, Path, For)>, span: Span) -
 	let (_, config_trait, _) = trait_.ok_or_else(make_err)?;
 
 	match config_trait.segments.last() {
-		Some(seg) if seg.ident == "Config" => {}
+		Some(seg) if seg.ident == "Config" => (),
 		_ => return Err(make_err()),
 	}
 	Ok(config_trait)
