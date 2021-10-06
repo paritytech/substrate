@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use futures::{future, StreamExt};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
@@ -24,19 +24,16 @@ use node_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
-		DatabaseSource, KeepBlocks, KeystoreConfig, MultiaddrWithPeerId, NetworkConfiguration,
-		OffchainWorkerConfig, PruningMode, TransactionPoolOptions, TransactionStorageMode,
-		WasmExecutionMethod,
+		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
+		PruningMode, TransactionPoolOptions, TransactionStorageMode, WasmExecutionMethod,
 	},
-	BasePath, ChainSpec, Configuration, Error as ServiceError, PartialComponents, Role,
-	RpcHandlers, TFullBackend, TaskManager,
+	BasePath, Configuration, Role,
 };
 use sc_transaction_pool::PoolLimit;
 use sc_transaction_pool_api::{TransactionPool as _, TransactionSource, TransactionStatus};
 use sp_core::{crypto::Pair, sr25519};
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{generic::BlockId, OpaqueExtrinsic};
-use std::sync::Arc;
 use tokio::runtime::Handle;
 
 fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
@@ -201,7 +198,7 @@ async fn submit_tx_and_wait_for_inclusion(
 		match watch.select_next_some().await {
 			TransactionStatus::Finalized(_) => break,
 			TransactionStatus::InBlock(_) if !wait_for_finalized => break,
-			_ => {}
+			_ => {},
 		}
 	}
 }
@@ -209,7 +206,7 @@ async fn submit_tx_and_wait_for_inclusion(
 fn transaction_pool_benchmarks(c: &mut Criterion) {
 	sp_tracing::try_init_simple();
 
-	let mut runtime = tokio::runtime::Runtime::new().expect("Creates tokio runtime");
+	let runtime = tokio::runtime::Runtime::new().expect("Creates tokio runtime");
 	let tokio_handle = runtime.handle().clone();
 
 	let node = new_node(tokio_handle.clone());
@@ -223,29 +220,42 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 	group.sample_size(10);
 	group.throughput(Throughput::Elements(account_num as u64 * extrinsics_per_account as u64));
 
-	let mut counter = 0;
-	group.bench_function("txpool", move |b| {
-		b.iter_batched(
-			|| {
-				let prepare_extrinsics = create_account_extrinsics(&*node.client, &accounts);
+	let mut counter = 1;
+	group.bench_function(
+		format!("{} transfers from {} accounts", account_num * extrinsics_per_account, account_num),
+		move |b| {
+			b.iter_batched(
+				|| {
+					let prepare_extrinsics = create_account_extrinsics(&*node.client, &accounts);
 
-				runtime.block_on(future::join_all(prepare_extrinsics.into_iter().map(|tx| {
-					submit_tx_and_wait_for_inclusion(&node.transaction_pool, tx, &*node.client, true)
-				})));
+					runtime.block_on(future::join_all(prepare_extrinsics.into_iter().map(|tx| {
+						submit_tx_and_wait_for_inclusion(
+							&node.transaction_pool,
+							tx,
+							&*node.client,
+							true,
+						)
+					})));
 
-				create_benchmark_extrinsics(&*node.client, &accounts, extrinsics_per_account)
-			},
-			|extrinsics| {
-				runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
-					submit_tx_and_wait_for_inclusion(&node.transaction_pool, tx, &*node.client, false)
-				})));
+					create_benchmark_extrinsics(&*node.client, &accounts, extrinsics_per_account)
+				},
+				|extrinsics| {
+					runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
+						submit_tx_and_wait_for_inclusion(
+							&node.transaction_pool,
+							tx,
+							&*node.client,
+							false,
+						)
+					})));
 
-				println!("Finished {}", counter);
-				counter += 1;
-			},
-			BatchSize::SmallInput,
-		)
-	});
+					println!("Finished {}", counter);
+					counter += 1;
+				},
+				BatchSize::SmallInput,
+			)
+		},
+	);
 }
 
 criterion_group!(benches, transaction_pool_benchmarks);
