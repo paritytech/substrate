@@ -519,7 +519,7 @@ impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 	/// When given transaction is not in the pool it has no effect.
 	/// When invoked on a fully drained iterator it has no effect either.
 	pub fn report_invalid(&mut self, tx: &Arc<Transaction<Hash, Ex>>) {
-		if let Some(to_report) = self.all.read().get(&tx.hash) {
+		if let Some(to_report) = self.all.get(&tx.hash) {
 			debug!(
 				target: "txpool",
 				"[{:?}] Reported as invalid. Will skip sub-chains while iterating.",
@@ -551,7 +551,7 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 				continue
 			}
 
-			let ready = match self.all.remove(&hash) {
+			let ready = match self.all.get(&hash).cloned() {
 				Some(ready) => ready,
 				// The transaction is not in all, maybe it was removed in the meantime?
 				None => continue,

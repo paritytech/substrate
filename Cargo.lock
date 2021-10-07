@@ -1200,7 +1200,7 @@ dependencies = [
  "cranelift-codegen 0.76.0",
  "cranelift-entity 0.76.0",
  "cranelift-frontend 0.76.0",
- "itertools 0.10.0",
+ "itertools",
  "log 0.4.14",
  "serde",
  "smallvec 1.7.0",
