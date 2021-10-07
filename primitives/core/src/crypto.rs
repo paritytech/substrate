@@ -360,7 +360,7 @@ static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = core::sync::atomic::Atom
 	from_known_address_format(Ss58AddressFormatRegistry::SubstrateAccount),
 );
 
-/// Returns default(). (can't impl Default due to orphan rules).
+/// Returns default ss58 format used by the current active process.
 #[cfg(feature = "std")]
 pub fn default_ss58_version() -> Ss58AddressFormat {
 	DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into()
