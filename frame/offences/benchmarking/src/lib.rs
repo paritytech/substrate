@@ -300,17 +300,16 @@ benchmarks! {
 		let balance_deposit = |id, amount: u32| core::iter::once(
 			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit(id, amount.into()))
 		);
-		let mut balance_slashes = vec![];
 		let reporter = reporters.first().unwrap();
 		let mut slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
 				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
-					balance_slashes.push(balance_slash(nom.clone()));
-					slash(nom).map(Into::into).chain(balance_slash(nom.clone()).map(Into::into))
+					slash(nom.clone()).map(Into::into)
+					.chain(balance_slash(nom.clone()).map(Into::into))
 				}).collect::<Vec<_>>();
 
-				chill(offender.stash.clone().map(Into::into))
-				.chain(slash(offender.stash).map(Into::into))
+				chill(offender.stash.clone()).map(Into::into)
+				.chain(slash(offender.stash.clone()).map(Into::into))
 				.chain(balance_slash(offender.stash.clone()).map(Into::into))
 				.chain(nom_slashes.into_iter())
 				.chain(balance_deposit(reporter.clone(), reward_amount / r).map(Into::into))
@@ -322,7 +321,7 @@ benchmarks! {
 				<T as BalancesConfig>::Event::from(
 					pallet_balances::Event::<T>::Endowed(reporter.clone(), (reward_amount / r).into())
 				).into(),
-				balance_deposit(reporter, reward_amount / r).into(),
+				<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit(reporter, (reward_amount / r).into())).into(),
 			]);
 
 		// Rewards are applied after first offender and it's nominators.
@@ -333,7 +332,6 @@ benchmarks! {
 		#[cfg(test)]
 		check_events::<T, _>(
 			std::iter::empty()
-				.chain(balance_slashes.into_iter().map(Into::into))
 				.chain(slash_events.into_iter().map(Into::into))
 				.chain(reward_events)
 				.chain(slash_rest.into_iter().map(Into::into))
