@@ -45,7 +45,7 @@ variables:                         &default-vars
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
-  SIMNET_FEATURES:                 "simnet_tests/tests"
+  SIMNET_FEATURES_PATH:            "simnet_tests/tests"
 
 default:
   cache:                           {}
@@ -434,7 +434,7 @@ test-simnet-quick:
   <<:                              *vault-secrets
   <<:                              *test-refs
   variables:
-    SIMNET_FEATURES:               "${SIMNET_FEATURES}/quick"
+    SIMNET_FEATURES:               "${SIMNET_FEATURES_PATH}/quick"
   before_script:
     - echo "Simnet Tests Config
       docker.io/paritytech/simnet:${SIMNET_REF}
