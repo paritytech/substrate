@@ -54,6 +54,8 @@ pub struct ProposerFactory<A, B, C> {
 	transaction_pool: Arc<A>,
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
+	/// keystore for encrypted transactions
+	keystore: KeyStorePtr,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
 }
@@ -63,11 +65,13 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
+		keystore: KeyStorePtr,
 	) -> Self {
 		ProposerFactory {
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
+			keystore,
 			_phantom: PhantomData,
 		}
 	}
@@ -102,6 +106,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 			transaction_pool: self.transaction_pool.clone(),
 			now,
 			metrics: self.metrics.clone(),
+			keystore: self.keystore.clone(),
 			_phantom: PhantomData,
 		};
 
@@ -142,6 +147,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
+	keystore: KeyStorePtr,
 	_phantom: PhantomData<B>,
 }
 
@@ -232,7 +238,6 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		let parent_number = self.parent_number;
 		let transaction_pool = self.transaction_pool.clone();
 		let now = self.now;
-
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
 		block_builder.consume_valid_transactions(
