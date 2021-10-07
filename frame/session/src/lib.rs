@@ -853,7 +853,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
+	pub fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
 		<NextKeys<T>>::get(v)
 	}
 
