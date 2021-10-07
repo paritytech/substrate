@@ -389,7 +389,7 @@ fn full_native_block_import_works() {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Withdraw(
 					alice().into(),
-					1480323268000,
+					fees,
 				)),
 				topics: vec![],
 			},
@@ -459,7 +459,7 @@ fn full_native_block_import_works() {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Withdraw(
 					bob().into(),
-					1480323267504,
+					fees,
 				)),
 				topics: vec![],
 			},
@@ -497,7 +497,7 @@ fn full_native_block_import_works() {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::Balances(pallet_balances::Event::Withdraw(
 					alice().into(),
-					1480323267504,
+					fees,
 				)),
 				topics: vec![],
 			},
