@@ -61,6 +61,8 @@ sc-light = { version = "2.0.0", path = "../light" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sc-client-db = { version = "0.8.0", default-features = false, path = "../db" }
+sc-consensus-babe = { version = "0.8.0", default-features = false, path = "../../client/consensus/babe" }
+sp-encrypted-tx = { version = "2.0.0", default-features = false, path = "../../primitives/encrypted-tx" }
 codec = { package = "parity-scale-codec", version = "1.3.4" }
 sc-executor = { version = "0.8.0", path = "../executor" }
 sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }

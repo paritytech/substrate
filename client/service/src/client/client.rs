@@ -34,6 +34,7 @@ use sp_core::{
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
+	AccountId32,
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
@@ -92,6 +93,7 @@ use super::{
 };
 use sc_light::{call_executor::prove_execution, fetcher::ChangesProof};
 use rand::Rng;
+use sp_encrypted_tx::{EncryptedTxApi, ExtrinsicType};
 
 #[cfg(feature="test-helpers")]
 use {
@@ -275,6 +277,20 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for &Client<B, E, Block, RA>
 	{
 		(**self).lock_import_and_run(f)
 	}
+}
+
+fn get_block_author<'a,Block, Api>(api: &ApiRef<'a, Api::Api>, block_id: &BlockId<Block>, header: &Block::Header) -> sp_blockchain::Result<AccountId32> 
+where
+	Block: BlockT,
+	Api: ProvideRuntimeApi<Block> + 'a,
+	Api::Api: EncryptedTxApi<Block>,
+{
+	let authority_id = sc_consensus_babe::find_pre_digest::<Block>(&header)
+		.map(|pre_digest| pre_digest.authority_index())
+		.map_err(|e| ConsensusError::ClientImport(e.into()))?;
+
+	api.get_account_id(block_id, authority_id)
+        .map_err(|e| sp_blockchain::Error::Backend(String::from("block author unknown")))
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -838,6 +854,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
 			+ ApiExt<Block, StateBackend = B::State>
 			+ ExtrinsicInfoRuntimeApi<Block>
+			+ EncryptedTxApi<Block>
 			+ BlockBuilderRuntimeApi<Block>,
 	{
 		let parent_hash = import_block.header.parent_hash();
@@ -849,6 +866,29 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			BlockStatus::InChainPruned => return Ok(Some(ImportResult::MissingState)),
 			BlockStatus::KnownBad => return Ok(Some(ImportResult::KnownBad)),
 		};
+		let api = self.runtime_api();
+
+		let block_builder_id = get_block_author::<Block, Self>(&self.runtime_api(), &at, &import_block.header)?;
+
+		let pre_doubly_encrypted_tx_ids = api.get_double_encrypted_transactions(&at, &block_builder_id)
+            .map_err(|_| sp_blockchain::Error::Backend(String::from("block author unknown")))?
+            .into_iter()
+            .map(|tx| tx.tx_id)
+            .collect::<HashSet<_>>();
+
+		let pre_singly_encrypted_tx_ids = api.get_singly_encrypted_transactions(&at, &block_builder_id)
+            .map_err(|_| sp_blockchain::Error::Backend(String::from("block author unknown")))?
+            .into_iter()
+            .map(|tx| tx.tx_id)
+            .collect::<HashSet<_>>();
+
+		for tx in pre_doubly_encrypted_tx_ids.iter(){
+            log::debug!(target: "encrypted", "{:?} - doubly encrypted TX assigned to {:?}", tx, block_builder_id);
+		}
+
+		for tx in pre_singly_encrypted_tx_ids.iter(){
+			log::debug!(target: "encrypted", "{:?} - singly encrypted TX  assigned to {:?}", tx, block_builder_id);
+		}
 
 		match (enact_state, &mut import_block.storage_changes, &mut import_block.body) {
 			// We have storage changes and should enact the state, so we don't need to do anything
@@ -871,13 +911,75 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
 						let mut header = import_block.header.clone();
 						header.set_extrinsics_root(*prev_header.extrinsics_root());
-						let block = Block::new(header.clone(), previous_block_extrinsics);
+						let block = Block::new(header.clone(), previous_block_extrinsics.clone());
 
 						runtime_api.execute_block_with_context(
 							&at,
 							execution_context,
 							block,
 						)?;
+
+						let singly_encrypted_transactions_from_prev_block: HashSet<_> = previous_block_extrinsics.iter()
+							.filter_map(|tx| {
+								match  api.get_type(&at, tx.to_owned()).unwrap(){
+									ExtrinsicType::SinglyEncryptedTx{identifier, ..} => Some(identifier.clone()),
+									_ => None
+								}
+							}).collect();
+
+						let singly_encrypted_transactions_from_this_block: HashSet<_> = import_block
+							.body.clone().unwrap().iter()
+							.filter_map(|tx| {
+								match  api.get_type(&at, tx.to_owned()).unwrap(){
+									ExtrinsicType::SinglyEncryptedTx{identifier, ..} => Some(identifier.clone()),
+									_ => None
+								}
+							}).collect();
+
+						let decrypted_transactions_from_this_block: HashSet<_> = import_block
+							.body.clone().unwrap().iter()
+							.filter_map(|tx| {
+								match  api.get_type(&at, tx.to_owned()).unwrap(){
+									ExtrinsicType::DecryptedTx{identifier, ..} => Some(identifier.clone()),
+									_ => None
+								}
+							}).collect();
+
+						let decrypted_transactions_from_prev_block: HashSet<_> = previous_block_extrinsics.iter()
+							.filter_map(|tx| {
+								match  api.get_type(&at, tx.to_owned()).unwrap(){
+									ExtrinsicType::DecryptedTx{identifier, ..} => Some(identifier.clone()),
+									_ => None
+								}
+							}).collect();
+
+						for tx in singly_encrypted_transactions_from_prev_block.iter(){
+							log::debug!(target: "encrypted", "{:?} - singly encrypted TX found in executed block", tx);
+						}
+
+						for tx in decrypted_transactions_from_prev_block.iter(){
+							log::debug!(target: "encrypted", "{:?} - singly encrypted TX found in executed block", tx);
+						}
+
+
+						for tx in singly_encrypted_transactions_from_this_block.iter(){
+							log::debug!(target: "encrypted", "{:?} - singly encrypted TX found in block", tx);
+						}
+
+						for tx in decrypted_transactions_from_this_block.iter(){
+							log::debug!(target: "encrypted", "{:?} - decrypted TX found in block", tx);
+						}
+
+
+
+						if !decrypted_transactions_from_this_block.union(&decrypted_transactions_from_prev_block).cloned().collect::<HashSet<_>>().is_superset(&pre_singly_encrypted_tx_ids){
+							return Err(ConsensusError::ClientImport("block builder is malicious".to_owned()))?;
+						}
+
+						if !singly_encrypted_transactions_from_this_block.union(&singly_encrypted_transactions_from_prev_block).cloned().collect::<HashSet<_>>().is_superset(&pre_doubly_encrypted_tx_ids){
+							return Err(ConsensusError::ClientImport("block builder is malicious".to_owned()))?;
+						}
+
 					}
 					None => {
 						info!("previous block is empty");
@@ -1284,6 +1386,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block, Error = Error>
 			+ ExtrinsicInfoRuntimeApi<Block>
+			+ EncryptedTxApi<Block>
 			+ BlockBuilderRuntimeApi<Block>,
 
 {
@@ -1693,6 +1796,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
 		+ ApiExt<Block, StateBackend = B::State>
 		+ ExtrinsicInfoRuntimeApi<Block>
+        + EncryptedTxApi<Block>
 		+ BlockBuilderRuntimeApi<Block>,
 {
 	type Error = ConsensusError;
@@ -1795,6 +1899,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
 		+ ApiExt<Block, StateBackend = B::State>
 		+ ExtrinsicInfoRuntimeApi<Block>
+        + EncryptedTxApi<Block>
 		+ BlockBuilderRuntimeApi<Block>,
 {
 	type Error = ConsensusError;
