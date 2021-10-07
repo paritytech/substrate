@@ -46,9 +46,12 @@ type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient =
 	sc_service::TLightClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>;
+/// The transaction pool type defintion.
 pub type TransactionPool = sc_transaction_pool::FullPool<Block, FullClient>;
 
 /// Fetch the nonce of the given `account` from the chain state.
+///
+/// Note: Should only be used for tests.
 pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 {
 	let best_hash = client.chain_info().best_hash;
 	client
@@ -61,6 +64,8 @@ pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 
 ///
 /// The transaction will be signed by `sender`. If `nonce` is `None` it will be fetched from the
 /// state of the best block.
+///
+/// Note: Should only be used for tests.
 pub fn create_extrinsic(
 	client: &FullClient,
 	sender: sp_core::sr25519::Pair,
@@ -114,6 +119,7 @@ pub fn create_extrinsic(
 	)
 }
 
+/// Creates a new partial node.
 pub fn new_partial(
 	config: &Configuration,
 ) -> Result<
@@ -283,10 +289,15 @@ pub fn new_partial(
 	})
 }
 
+/// Result of [`new_full_base`].
 pub struct NewFullBase {
+	/// The task manager of the node.
 	pub task_manager: TaskManager,
+	/// The client instance of the node.
 	pub client: Arc<FullClient>,
+	/// The networking service of the node.
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	/// The transaction pool of the node.
 	pub transaction_pool: Arc<TransactionPool>,
 }
 
@@ -504,6 +515,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| task_manager)
 }
 
+/// Creates a light service from the configuration.
 pub fn new_light_base(
 	mut config: Configuration,
 ) -> Result<
