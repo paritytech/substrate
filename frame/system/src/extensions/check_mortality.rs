@@ -17,6 +17,7 @@
 
 use crate::{BlockHash, Config, Pallet};
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,
 	traits::{DispatchInfoOf, SaturatedConversion, SignedExtension},
@@ -26,7 +27,8 @@ use sp_runtime::{
 };
 
 /// Check for transaction mortality.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckMortality<T> {

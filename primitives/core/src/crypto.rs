@@ -31,6 +31,7 @@ use parking_lot::Mutex;
 use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
+use scale_info::TypeInfo;
 /// Trait for accessing reference to `SecretString`.
 pub use secrecy::ExposeSecret;
 /// A store for sensitive data.
@@ -596,6 +597,8 @@ ss58_address_format!(
 		(77, "manta", "Manta Network, standard account (*25519).")
 	CalamariAccount =>
 		(78, "calamari", "Manta Canary Network, standard account (*25519).")
+	Polkadex =>
+		(88, "polkadex", "Polkadex Mainnet, standard account (*25519).")
 	PolkaSmith =>
 		(98, "polkasmith", "PolkaSmith Canary Network, standard account (*25519).")
 	PolkaFoundry =>
@@ -614,8 +617,12 @@ ss58_address_format!(
 		(1284, "moonbeam", "Moonbeam, session key (*25519).")
 	Moonriver =>
 		(1285, "moonriver", "Moonriver, session key (*25519).")
+	Automata =>
+		(2349, "automata", "Automata mainnet standard account (*25519).")
 	BasiliskAccount =>
 		(10041, "basilisk", "Basilisk standard account (*25519).")
+	ContextFree =>
+		(11820, "contextfree", "Automata ContextFree standard account (*25519).")
 
 	// Note: 16384 and above are reserved.
 );
@@ -715,7 +722,9 @@ pub trait Public:
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
@@ -1175,6 +1184,7 @@ pub trait CryptoType {
 	Decode,
 	PassByInner,
 	crate::RuntimeDebug,
+	TypeInfo,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);

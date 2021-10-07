@@ -784,3 +784,13 @@ fn balance_conversion_should_work() {
 		);
 	});
 }
+
+#[test]
+fn assets_from_genesis_should_exist() {
+	new_test_ext().execute_with(|| {
+		assert!(Asset::<Test>::contains_key(999));
+		assert!(Metadata::<Test>::contains_key(999));
+		assert_eq!(Assets::balance(999, 1), 100);
+		assert_eq!(Assets::total_supply(999), 100);
+	});
+}

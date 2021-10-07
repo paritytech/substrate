@@ -42,7 +42,7 @@ A Pull Request (PR) needs to be reviewed and approved by project maintainers unl
 . PRs must be tagged with their release importance via the `C1-C9` labels.
 . PRs must be tagged with their audit requirements via the `D1-D9` labels.
 . PRs that must be backported to a stable branch must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E0-patchthis`].
-. PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E1-runtimemigration`].
+. PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E1-runtimemigration`]. See the https://github.com/paritytech/substrate/blob/master/utils/frame/try-runtime/cli/src/lib.rs#L18[Migration Best Practices here] for more info about how to test runtime migrations.
 . PRs that introduce irreversible database migrations must be tagged with https://github.com/paritytech/substrate/labels/E2-databasemigration[`E2-databasemigration`].
 . PRs that add host functions must be tagged with with https://github.com/paritytech/substrate/labels/E4-newhostfunctions[`E4-newhostfunctions`].
 . PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/E5-breaksapi[`E5-breaksapi`].
@@ -88,8 +88,7 @@ To create a Polkadot companion PR:
     - The bot will push a commit to the Polkadot PR updating its Substrate reference.
     - If the polkadot PR origins from a fork then a project member may need to press `approve run` on the polkadot PR.
     - The bot will merge the Polkadot PR once all its CI `{"build_allow_failure":false}` checks are green.
-    
-    Note: The merge-bot currently doesn't work with forks on org accounts, only individual accounts. 
+    Note: The merge-bot currently doesn't work with forks on org accounts, only individual accounts.
 
 If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/A7-needspolkadotpr[`A7-needspolkadotpr`] to prevent it from getting automatically merged.
 

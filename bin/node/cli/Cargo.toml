@@ -124,10 +124,13 @@ nix = "0.19"
 serde_json = "1.0"
 regex = "1"
 platforms = "1.1"
-async-std = { version = "1.6.5", features = ["attributes"] }
+async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = [ "async_tokio" ] }
-tokio = "1.10"
+tokio = { version = "1.10", features = ["macros", "time"] }
+jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = ["tokio1"] }
+wait-timeout = "0.2"
+remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
@@ -140,7 +143,7 @@ sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true
 pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 
 [features]
-default = [ "cli" ]
+default = ["cli"]
 cli = [
 	"node-executor/wasmi-errno",
 	"node-inspect",
