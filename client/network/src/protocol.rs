@@ -710,8 +710,7 @@ impl<B: BlockT> Protocol<B> {
 		match self.sync.on_state_data(&peer_id, response) {
 			Ok(sync::OnStateData::Import(origin, block)) =>
 				CustomMessageOutcome::BlockImport(origin, vec![block]),
-			Ok(sync::OnStateData::Request(peer, req)) =>
-				prepare_state_request::<B>(&mut self.peers, peer, req),
+			Ok(sync::OnStateData::Continue) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -728,10 +727,7 @@ impl<B: BlockT> Protocol<B> {
 		response: crate::warp_request_handler::EncodedProof,
 	) -> CustomMessageOutcome<B> {
 		match self.sync.on_warp_sync_data(&peer_id, response) {
-			Ok(sync::OnWarpSyncData::WarpProofRequest(peer, req)) =>
-				prepare_warp_sync_request::<B>(&mut self.peers, peer, req),
-			Ok(sync::OnWarpSyncData::StateRequest(peer, req)) =>
-				prepare_state_request::<B>(&mut self.peers, peer, req),
+			Ok(()) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);

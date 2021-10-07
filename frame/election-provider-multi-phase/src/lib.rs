@@ -1201,8 +1201,12 @@ impl<T: Config> Pallet<T> {
 		match current_phase {
 			Phase::Unsigned((true, opened)) if opened == now => {
 				// Mine a new solution, cache it, and attempt to submit it
-				let initial_output = Self::ensure_offchain_repeat_frequency(now)
-					.and_then(|_| Self::mine_check_save_submit());
+				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
+					// This is executed at the beginning of each round. Any cache is now invalid.
+					// Clear it.
+					unsigned::kill_ocw_solution::<T>();
+					Self::mine_check_save_submit()
+				});
 				log!(debug, "initial offchain thread output: {:?}", initial_output);
 			},
 			Phase::Unsigned((true, opened)) if opened < now => {
@@ -1213,20 +1217,6 @@ impl<T: Config> Pallet<T> {
 				log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
 			},
 			_ => {},
-		}
-
-		// After election finalization, clear OCW solution storage.
-		//
-		// We can read the events here because offchain worker doesn't affect PoV.
-		if <frame_system::Pallet<T>>::read_events_no_consensus()
-			.into_iter()
-			.filter_map(|event_record| {
-				let local_event = <T as Config>::Event::from(event_record.event);
-				local_event.try_into().ok()
-			})
-			.any(|event| matches!(event, Event::ElectionFinalized(_)))
-		{
-			unsigned::kill_ocw_solution::<T>();
 		}
 	}
 

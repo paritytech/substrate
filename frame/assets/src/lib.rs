@@ -159,6 +159,9 @@ use sp_runtime::{
 };
 use sp_std::{borrow::Borrow, convert::TryInto, prelude::*};
 
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
+
 pub use pallet::*;
 pub use weights::WeightInfo;
 
@@ -180,10 +183,22 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaxEncodedLen;
+		type Balance: Member
+			+ Parameter
+			+ AtLeast32BitUnsigned
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
+		type AssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ HasCompact
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -275,6 +290,89 @@ pub mod pallet {
 		GetDefault,
 		ConstU32<300_000>,
 	>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		/// Genesis assets: id, owner, is_sufficient, min_balance
+		pub assets: Vec<(T::AssetId, T::AccountId, bool, T::Balance)>,
+		/// Genesis metadata: id, name, symbol, decimals
+		pub metadata: Vec<(T::AssetId, Vec<u8>, Vec<u8>, u8)>,
+		/// Genesis accounts: id, account_id, balance
+		pub accounts: Vec<(T::AssetId, T::AccountId, T::Balance)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self {
+				assets: Default::default(),
+				metadata: Default::default(),
+				accounts: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			for (id, owner, is_sufficient, min_balance) in &self.assets {
+				assert!(!Asset::<T, I>::contains_key(id), "Asset id already in use");
+				assert!(!min_balance.is_zero(), "Min balance should not be zero");
+				Asset::<T, I>::insert(
+					id,
+					AssetDetails {
+						owner: owner.clone(),
+						issuer: owner.clone(),
+						admin: owner.clone(),
+						freezer: owner.clone(),
+						supply: Zero::zero(),
+						deposit: Zero::zero(),
+						min_balance: *min_balance,
+						is_sufficient: *is_sufficient,
+						accounts: 0,
+						sufficients: 0,
+						approvals: 0,
+						is_frozen: false,
+					},
+				);
+			}
+
+			for (id, name, symbol, decimals) in &self.metadata {
+				assert!(Asset::<T, I>::contains_key(id), "Asset does not exist");
+
+				let bounded_name: BoundedVec<u8, T::StringLimit> =
+					name.clone().try_into().expect("asset name is too long");
+				let bounded_symbol: BoundedVec<u8, T::StringLimit> =
+					symbol.clone().try_into().expect("asset symbol is too long");
+
+				let metadata = AssetMetadata {
+					deposit: Zero::zero(),
+					name: bounded_name,
+					symbol: bounded_symbol,
+					decimals: *decimals,
+					is_frozen: false,
+				};
+				Metadata::<T, I>::insert(id, metadata);
+			}
+
+			for (id, account_id, amount) in &self.accounts {
+				let result = <Pallet<T, I>>::increase_balance(
+					*id,
+					account_id,
+					*amount,
+					|details| -> DispatchResult {
+						debug_assert!(
+							T::Balance::max_value() - details.supply >= *amount,
+							"checked in prep; qed"
+						);
+						details.supply = details.supply.saturating_add(*amount);
+						Ok(())
+					},
+				);
+				assert!(result.is_ok());
+			}
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
