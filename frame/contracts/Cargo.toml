@@ -28,7 +28,7 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
-libsecp256k1 = { version = "0.3.5", optional = true, default-features = false, features = ["hmac"] }
+libsecp256k1 = { version = "0.6.0", optional = true, default-features = false, features = ["hmac", "static-context"] }
 rand = { version = "0.7.3", optional = true, default-features = false }
 rand_pcg = { version = "0.2", optional = true }
 
