@@ -23,6 +23,7 @@
 
 use codec::Decode;
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
+use sp_encrypted_tx::EncryptedTxApi;
 use futures::{executor, future, future::Either};
 use log::{debug, error, info, trace, warn};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
@@ -40,6 +41,9 @@ use sp_runtime::{
 use sp_transaction_pool::{InPoolTransaction, TransactionPool};
 use std::marker::PhantomData;
 use std::{sync::Arc, time};
+use sc_keystore::KeyStorePtr;
+use ecies::{utils::{aes_decrypt, decapsulate}, SecretKey, PublicKey};
+use sp_core::crypto::KeyTypeId;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
@@ -124,7 +128,7 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 				+ Send + Sync + 'static,
 			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>
-				+ ExtrinsicInfoRuntimeApi<Block>,
+				+ ExtrinsicInfoRuntimeApi<Block> + EncryptedTxApi<Block> ,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
 	type Proposer = Proposer<B, Block, C, A>;
@@ -161,7 +165,7 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 				+ Send + Sync + 'static,
 			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>
-				+ ExtrinsicInfoRuntimeApi<Block>,
+				+ ExtrinsicInfoRuntimeApi<Block>+ EncryptedTxApi<Block> ,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
 	type Proposal = tokio_executor::blocking::Blocking<
@@ -193,7 +197,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			+ Send + Sync + 'static,
 		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>
-			+ ExtrinsicInfoRuntimeApi<Block>,
+			+ ExtrinsicInfoRuntimeApi<Block>+ EncryptedTxApi<Block> ,
 {
 	fn propose_with(
 		self,
@@ -207,14 +211,57 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
+		let api = self.client.runtime_api();
+		let block_builder_id = sc_consensus_babe::extract_pre_digest::<Block>(&inherent_digests)
+			.map(|pre_digest| pre_digest.authority_index())
+			.map_err(|e| sp_blockchain::Error::Msg(e.to_string()))?;
+		let account_id = api.get_account_id(&self.parent_id, block_builder_id).unwrap();
+		debug!(target:"basic_authorship", "account id:  {:?}", account_id); 
+
 		let mut block_builder = self.client.new_block_at(
 			&self.parent_id,
 			inherent_digests,
 			record_proof,
 		)?;
 
+		let keystore = self.keystore.clone();
+
+		let public_key = api.get_authority_public_key(&self.parent_id, &account_id).unwrap();
+		debug!(target:"basic_authorship","public_key id:  {:?}", public_key); 
+		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx")).unwrap();
+
+		let seed: [u8; 32] = key_pair.seed();
+		let priv_key: SecretKey = SecretKey::parse_slice(&seed).unwrap();
+
+		let dummy_secret_key: SecretKey = SecretKey::default();
+		let pub_key: PublicKey = PublicKey::from_secret_key(&dummy_secret_key);
+
+		let aes_key = decapsulate(&pub_key, &priv_key).unwrap();
+
+		let doubly_encrypted_txs = api.get_double_encrypted_transactions(&self.parent_id, &account_id).unwrap();
+		let singly_encrypted_txs = api.get_singly_encrypted_transactions(&self.parent_id, &account_id).unwrap();
+
+		debug!(target:"basic_authorship", "aes_key {:?}", aes_key); 
+		debug!(target:"basic_authorship", "found {} double encrypted transactions", doubly_encrypted_txs.len()); 
+		debug!(target:"basic_authorship", "found {} singly encrypted transactions", singly_encrypted_txs.len()); 
+
+		let decrypted_inherents: Vec<_> = singly_encrypted_txs.into_iter().map(|tx| {
+			log::trace!(target:"basic_authorship", "decrypting singly encrypted call INPUT : {:?}", tx.data);
+			let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
+			log::trace!(target:"basic_authorship", "decrypting singly encrypted call OUTPUT: {:?}", decrypted_msg);
+			api.create_submit_decrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg, 500000000).unwrap()
+		}).collect();
+
+		let singly_encrypted_inherents: Vec<_> = doubly_encrypted_txs.into_iter().map(|tx| {
+			log::trace!(target:"basic_authorship", "decrypting doubly encrypted call INPUT : {:?}", tx.data);
+			let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
+			log::trace!(target:"basic_authorship", "decrypting doubly encrypted call OUTPUT: {:?}", decrypted_msg);
+			api.create_submit_singly_encrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg).unwrap()
+		}).collect();
+
+
 		let (seed, inherents) = block_builder.create_inherents(inherent_data.clone())?;
-		for inherent in inherents {
+		for inherent in inherents.into_iter().chain(singly_encrypted_inherents.into_iter()).chain(decrypted_inherents.into_iter()) {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
