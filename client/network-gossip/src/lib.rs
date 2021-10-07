@@ -123,11 +123,7 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 	}
 
 	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
-		NetworkService::remove_peers_from_reserved_set(
-			self,
-			protocol,
-			iter::once(who).collect(),
-		);
+		NetworkService::remove_peers_from_reserved_set(self, protocol, iter::once(who).collect());
 	}
 
 	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {

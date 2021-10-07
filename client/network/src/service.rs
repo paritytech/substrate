@@ -1164,11 +1164,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Remove peers from a peer set.
-	pub fn remove_peers_from_reserved_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: Vec<PeerId>,
-	) {
+	pub fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
@@ -1224,11 +1220,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Remove peers from a peer set.
 	///
 	/// If we currently have an open substream with this peer, it will soon be closed.
-	pub fn remove_from_peers_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: Vec<PeerId>,
-	) {
+	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
