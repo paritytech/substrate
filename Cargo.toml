@@ -133,6 +133,7 @@ members = [
 	"primitives/chain-spec",
 	"primitives/database",
 	"primitives/debug-derive",
+	"primitives/encrypted-tx",
 	"primitives/extrinsic-info-runtime-api",
 	"primitives/storage",
 	"primitives/externalities",
