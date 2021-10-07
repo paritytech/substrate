@@ -1092,6 +1092,44 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
 	}
 
+	/// Sets the reserved set of a protocol to the given set of peers.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	pub fn set_reserved_peers(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		let peers_addrs = self.split_multiaddr_and_peer_id(peers)?;
+
+		let mut peers: HashSet<PeerId> = HashSet::with_capacity(peers_addrs.len());
+
+		for (peer_id, addr) in peers_addrs.into_iter() {
+			// Make sure the local peer ID is never added to the PSM.
+			if peer_id == self.local_peer_id {
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+			}
+
+			peers.insert(peer_id);
+
+			if !addr.is_empty() {
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+			}
+		}
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetPeersetReserved(protocol, peers));
+
+		Ok(())
+	}
+
 	/// Add peers to a peer set.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
@@ -1400,6 +1438,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddReserved(PeerId),
 	RemoveReserved(PeerId),
 	SetReserved(HashSet<PeerId>),
+	SetPeersetReserved(Cow<'static, str>, HashSet<PeerId>),
 	AddSetReserved(Cow<'static, str>, PeerId),
 	RemoveSetReserved(Cow<'static, str>, PeerId),
 	AddToPeersSet(Cow<'static, str>, PeerId),
@@ -1541,6 +1580,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					.behaviour_mut()
 					.user_protocol_mut()
 					.set_reserved_peers(peers),
+				ServiceToWorkerMsg::SetPeersetReserved(protocol, peers) => this
+					.network_service
+					.behaviour_mut()
+					.user_protocol_mut()
+					.set_reserved_peerset_peers(protocol, peers),
 				ServiceToWorkerMsg::AddReserved(peer_id) => this
 					.network_service
 					.behaviour_mut()
