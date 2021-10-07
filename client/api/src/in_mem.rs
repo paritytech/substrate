@@ -369,6 +369,7 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 				None
 			},
 			number_leaves: storage.leaves.count(),
+			block_gap: None,
 		}
 	}
 
