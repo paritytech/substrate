@@ -23,7 +23,7 @@ use futures::{
 	task::{FutureObj, Spawn, SpawnError},
 };
 use jsonrpsee::types::{
-	v2::{Response as RpcResponse, RpcError, SubscriptionResponse},
+	v2::{Response as RpcResponse, RpcError},
 	DeserializeOwned,
 };
 use sp_core::traits::SpawnNamed;
@@ -69,11 +69,6 @@ pub(crate) fn timeout_secs<I, F: Future<Output = I>>(s: u64, f: F) -> tokio::tim
 pub(crate) fn deser_call<T: DeserializeOwned>(raw: String) -> T {
 	let out: RpcResponse<T> = serde_json::from_str(&raw).unwrap();
 	out.result
-}
-
-pub(crate) fn deser_sub<T: DeserializeOwned>(raw: String) -> T {
-	let out: SubscriptionResponse<T> = serde_json::from_str(&raw).unwrap();
-	out.params.result
 }
 
 pub(crate) fn deser_error<'a>(raw: &'a str) -> RpcError<'a> {

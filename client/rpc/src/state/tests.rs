@@ -20,11 +20,10 @@ use self::error::Error;
 use super::{state_full::split_range, *};
 use crate::testing::{timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
-use futures::{executor, StreamExt};
-use jsonrpsee::types::{error::SubscriptionClosedError, v2::SubscriptionResponse};
+use futures::executor;
+use jsonrpsee::types::error::SubscriptionClosedError;
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
-use serde_json::value::to_raw_value;
 use sp_consensus::BlockOrigin;
 use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
 use sp_io::hashing::blake2_256;
@@ -237,7 +236,7 @@ async fn should_call_contract() {
 
 #[tokio::test]
 async fn should_notify_about_storage_changes() {
-	let mut sub_rx = {
+	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(
 			client.clone(),
@@ -247,7 +246,7 @@ async fn should_notify_about_storage_changes() {
 		);
 
 		let api_rpc = api.into_rpc();
-		let (_sub_id, sub_rx) = api_rpc.test_subscription("state_subscribeStorage", None).await;
+		let sub = api_rpc.test_subscription("state_subscribeStorage", Vec::<()>::new()).await;
 
 		// Cause a change:
 		let mut builder = client.new_block(Default::default()).unwrap();
@@ -262,26 +261,19 @@ async fn should_notify_about_storage_changes() {
 		let block = builder.build().unwrap().block;
 		client.import(BlockOrigin::Own, block).await.unwrap();
 
-		sub_rx
+		sub
 	};
 
 	// We should get a message back on our subscription about the storage change:
 	// NOTE: previous versions of the subscription code used to return an empty value for the
 	// "initial" storage change here
-	let msg = timeout_secs(1, sub_rx.next()).await;
-	assert_matches!(&msg, Ok(Some(json)) => {
-		serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).expect("The right kind of response")
-	});
-
-	let err = timeout_secs(1, sub_rx.next()).await;
-	assert_matches!(&err, Ok(Some(json)) => {
-		serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&json).expect("The right kind of response")
-	});
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosedError>()).await, Ok(_));
 }
 
 #[tokio::test]
 async fn should_send_initial_storage_changes_and_notifications() {
-	let mut sub_rx = {
+	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(
 			client.clone(),
@@ -294,11 +286,8 @@ async fn should_send_initial_storage_changes_and_notifications() {
 			blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		let api_rpc = api.into_rpc();
-		let (_sub_id, sub_rx) = api_rpc
-			.test_subscription(
-				"state_subscribeStorage",
-				Some(to_raw_value(&[vec![StorageKey(alice_balance_key.to_vec())]]).unwrap()),
-			)
+		let sub = api_rpc
+			.test_subscription("state_subscribeStorage", [[StorageKey(alice_balance_key.to_vec())]])
 			.await;
 
 		let mut builder = client.new_block(Default::default()).unwrap();
@@ -313,22 +302,14 @@ async fn should_send_initial_storage_changes_and_notifications() {
 		let block = builder.build().unwrap().block;
 		client.import(BlockOrigin::Own, block).await.unwrap();
 
-		sub_rx
+		sub
 	};
 
-	// Check for the correct number of notifications
-	let msgs = timeout_secs(5, (&mut sub_rx).take(2).collect::<Vec<_>>()).await;
-	assert_matches!(&msgs, Ok(json_vals) => {
-		for json in json_vals {
-			assert!(serde_json::from_str::<SubscriptionResponse<StorageChangeSet<H256>>>(&json).is_ok());
-		}
-	});
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
 
 	// No more messages to follow
-	let err = timeout_secs(1, sub_rx.next()).await;
-	assert_matches!(&err, Ok(Some(json)) => {
-		serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&json).expect("The right kind of response")
-	});
+	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosedError>()).await, Ok(_));
 }
 
 #[tokio::test]
@@ -577,24 +558,25 @@ async fn should_return_runtime_version() {
 
 #[tokio::test]
 async fn should_notify_on_runtime_version_initially() {
-	let mut sub_rx = {
+	let mut sub = {
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) =
 			new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
 		let api_rpc = api.into_rpc();
-		let (_sub_id, sub_rx) =
-			api_rpc.test_subscription("state_subscribeRuntimeVersion", None).await;
+		let sub = api_rpc
+			.test_subscription("state_subscribeRuntimeVersion", Vec::<()>::new())
+			.await;
 
-		sub_rx
+		sub
 	};
 
 	// assert initial version sent.
-	assert_matches!(timeout_secs(1, sub_rx.next()).await, Ok(Some(_)));
+	assert_matches!(timeout_secs(1, sub.next::<RuntimeVersion>()).await, Ok(_));
 
-	// TODO(niklasad1): the subscription never closes here, might be that we use take_while
-	// and if no other new version is seen the subscription runs forever..?!.
-	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+	sub.close();
+	// TODO(niklasad1): panics if polled after close; needs a jsonrpsee fix
+	//assert_matches!(timeout_secs(1, sub.next::<RuntimeVersion>()).await, Ok(None));
 }
 
 #[test]

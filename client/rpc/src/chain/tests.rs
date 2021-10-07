@@ -17,9 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use crate::testing::{deser_call, deser_sub, timeout_secs, TaskExecutor};
+use crate::testing::{deser_call, timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
-use futures::StreamExt;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
 use sp_rpc::list::ListOrValue;
@@ -227,79 +226,63 @@ async fn should_return_finalized_hash() {
 
 #[tokio::test]
 async fn should_notify_about_latest_block() {
-	let mut sub_rx = {
+	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
 
-		let (_sub_id, sub_rx) = api.test_subscription("chain_subscribeAllHeads", None).await;
+		let sub = api.test_subscription("chain_subscribeAllHeads", Vec::<()>::new()).await;
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).await.unwrap();
-		sub_rx
+		sub
 	};
 
-	// Check for the correct number of notifications
-	let subs = (&mut sub_rx)
-		.take(2_usize)
-		.map(|json| deser_sub::<Header>(json))
-		.collect::<Vec<_>>()
-		.await;
-
-	assert!(subs.len() == 2);
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
 
 	// TODO(niklasad1): assert that the subscription was closed.
-	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Err(_));
 }
 
 #[tokio::test]
 async fn should_notify_about_best_block() {
-	let mut sub_rx = {
+	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
 
-		let (_sub_id, sub_rx) = api.test_subscription("chain_subscribeNewHeads", None).await;
+		let sub = api.test_subscription("chain_subscribeNewHeads", Vec::<()>::new()).await;
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).await.unwrap();
-		sub_rx
+		sub
 	};
 
 	// Check for the correct number of notifications
-	let subs = (&mut sub_rx)
-		.take(2_usize)
-		.map(|json| deser_sub::<Header>(json))
-		.collect::<Vec<_>>()
-		.await;
-
-	assert!(subs.len() == 2);
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
 
 	// TODO(niklasad1): assert that the subscription was closed.
-	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Err(_));
 }
 
 #[tokio::test]
 async fn should_notify_about_finalized_block() {
-	let mut sub_rx = {
+	let mut sub = {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
 
-		let (_sub_id, sub_rx) = api.test_subscription("chain_subscribeFinalizedHeads", None).await;
+		let sub = api.test_subscription("chain_subscribeFinalizedHeads", Vec::<()>::new()).await;
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).await.unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
-		sub_rx
+		sub
 	};
 
 	// Check for the correct number of notifications
-	let subs = (&mut sub_rx)
-		.take(2_usize)
-		.map(|json| deser_sub::<Header>(json))
-		.collect::<Vec<_>>()
-		.await;
-
-	assert!(subs.len() == 2);
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
 
 	// TODO(niklasad1): assert that the subscription was closed.
-	assert_matches!(timeout_secs(1, sub_rx.next()).await, Err(_));
+	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Err(_));
 }

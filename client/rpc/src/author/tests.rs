@@ -19,20 +19,19 @@
 use super::*;
 
 use crate::testing::{deser_call, deser_error};
+use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
-	types::v2::{Response, RpcError, SubscriptionResponse},
+	types::v2::{Response, RpcError, SubscriptionId},
 	RpcModule,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
-use serde_json::value::to_raw_value;
+use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
 	blake2_256,
 	bytes::to_hex,
 	crypto::{CryptoTypePublicPair, Pair, Public},
-	ed25519,
-	hexdisplay::HexDisplay,
-	sr25519,
+	ed25519, sr25519,
 	testing::{ED25519, SR25519},
 	H256,
 };
@@ -109,22 +108,13 @@ async fn author_submit_transaction_should_not_cause_error() {
 #[tokio::test]
 async fn author_should_watch_extrinsic() {
 	let api = TestSetup::into_rpc();
+	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
-	let xt = {
-		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
-		to_raw_value(&[to_hex(&xt_bytes, true)]).unwrap()
-	};
+	let mut sub = api.test_subscription("author_submitAndWatchExtrinsic", [xt]).await;
+	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await;
 
-	let (subscription_id, mut rx) =
-		api.test_subscription("author_submitAndWatchExtrinsic", Some(xt)).await;
-	let subscription_data = rx.next().await;
-
-	let expected = Some(format!(
-		// TODO: (dp) The `jsonrpc` version of this wraps the subscription ID in `"` – is this a problem? I think not.
-		r#"{{"jsonrpc":"2.0","method":"author_submitAndWatchExtrinsic","params":{{"subscription":{},"result":"ready"}}}}"#,
-		subscription_id,
-	));
-	assert_eq!(subscription_data, expected);
+	assert_matches!(sub_data, TransactionStatus::Ready);
+	assert_matches!(sub_id, SubscriptionId::Num(id) if id == sub.subscription_id());
 
 	// Replace the extrinsic and observe the subscription is notified.
 	let (xt_replacement, xt_hash) = {
@@ -137,20 +127,14 @@ async fn author_should_watch_extrinsic() {
 		let tx = tx.into_signed_tx().encode();
 		let hash = blake2_256(&tx);
 
-		(to_raw_value(&[to_hex(&tx, true)]).unwrap(), hash)
+		(to_hex(&tx, true), hash)
 	};
 
-	let _ = api.call("author_submitExtrinsic", Some(xt_replacement)).await.unwrap();
+	let _ = api.call_with("author_submitExtrinsic", [xt_replacement]).await.unwrap();
 
-	let expected = Some(format!(
-		// TODO: (dp) The `jsonrpc` version of this wraps the subscription ID in `"` – is this a
-		// problem? I think not.
-		r#"{{"jsonrpc":"2.0","method":"author_submitAndWatchExtrinsic","params":{{"subscription":{},"result":{{"usurped":"0x{}"}}}}}}"#,
-		subscription_id,
-		HexDisplay::from(&xt_hash),
-	));
-	let subscription_data = rx.next().await;
-	assert_eq!(subscription_data, expected);
+	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await;
+	assert_eq!(sub_data, TransactionStatus::Usurped(xt_hash.into()));
+	assert_matches!(sub_id, SubscriptionId::Num(id) if id == sub.subscription_id());
 }
 
 #[tokio::test]
@@ -158,17 +142,12 @@ async fn author_should_return_watch_validation_error() {
 	const METH: &'static str = "author_submitAndWatchExtrinsic";
 
 	let api = TestSetup::into_rpc();
-	// Nonsensical nonce
-	let invalid_xt = {
-		let xt_bytes = uxt(AccountKeyring::Alice, 179).encode();
-		to_raw_value(&[to_hex(&xt_bytes, true)]).unwrap()
-	};
-	let (_, mut data_stream) = api.test_subscription(METH, Some(invalid_xt)).await;
+	let mut sub = api
+		.test_subscription(METH, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
+		.await;
 
-	let subscription_data = data_stream.next().await.unwrap();
-	let response: SubscriptionResponse<String> =
-		serde_json::from_str(&subscription_data).expect("subscriptions respond");
-	assert!(response.params.result.contains("subscription useless"));
+	let (data, _) = sub.next::<String>().await;
+	assert!(data.contains("subscription useless"));
 }
 
 #[tokio::test]
@@ -177,12 +156,10 @@ async fn author_should_return_pending_extrinsics() {
 
 	let api = TestSetup::into_rpc();
 
-	let (xt, xt_bytes) = {
-		let xt_bytes = uxt(AccountKeyring::Alice, 0).encode();
-		let xt_hex = to_hex(&xt_bytes, true);
-		(to_raw_value(&[xt_hex]).unwrap(), xt_bytes.into())
-	};
-	api.call("author_submitExtrinsic", Some(xt)).await.unwrap();
+	let xt_bytes: Bytes = uxt(AccountKeyring::Alice, 0).encode().into();
+	api.call_with("author_submitExtrinsic", [to_hex(&xt_bytes, true)])
+		.await
+		.unwrap();
 
 	let pending = api.call(METH, None).await.unwrap();
 	log::debug!(target: "test", "pending: {:?}", pending);
@@ -190,7 +167,7 @@ async fn author_should_return_pending_extrinsics() {
 		let r: Response<Vec<Bytes>> = serde_json::from_str(&pending).unwrap();
 		r.result
 	};
-	assert_eq!(pending, &[xt_bytes]);
+	assert_eq!(pending, vec![xt_bytes]);
 }
 
 #[tokio::test]
