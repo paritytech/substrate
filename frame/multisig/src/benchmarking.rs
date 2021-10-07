@@ -21,7 +21,7 @@
 
 use super::*;
 use core::convert::TryInto;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -40,7 +40,8 @@ fn setup_multi<T: Config>(s: u32, z: u32) -> Result<(Vec<T::AccountId>, Vec<u8>)
 	}
 	signatories.sort();
 	// Must first convert to outer call type.
-	let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![0; z as usize]).into();
+	let call: <T as Config>::Call =
+		frame_system::Call::<T>::remark { remark: vec![0; z as usize] }.into();
 	let call_data = call.encode();
 	return Ok((signatories, call_data))
 }
@@ -51,7 +52,9 @@ benchmarks! {
 		let z in 0 .. 10_000;
 		let max_signatories = T::MaxSignatories::get().into();
 		let (mut signatories, _) = setup_multi::<T>(max_signatories, z)?;
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![0; z as usize]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark {
+			remark: vec![0; z as usize]
+		}.into();
 		let call_hash = call.using_encoded(blake2_256);
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, 1);
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
@@ -294,6 +297,6 @@ benchmarks! {
 		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
 		assert!(!Calls::<T>::contains_key(call_hash));
 	}
-}
 
-impl_benchmark_test_suite!(Multisig, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Multisig, crate::tests::new_test_ext(), crate::tests::Test);
+}

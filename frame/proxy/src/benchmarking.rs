@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::Pallet as Proxy;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -83,7 +83,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(Event::ProxyExecuted(Ok(())).into())
@@ -98,7 +98,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(delegate.clone()).into(),
 			real.clone(),
@@ -118,7 +118,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -139,7 +139,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -161,7 +161,7 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
 	verify {
@@ -245,6 +245,6 @@ benchmarks! {
 	verify {
 		assert!(!Proxies::<T>::contains_key(&anon));
 	}
-}
 
-impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);
+}

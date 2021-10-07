@@ -78,10 +78,12 @@ impl frame_system::Config for Test {
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
+	pub const OperationalFeeMultiplier: u8 = 5;
 }
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
+	type OperationalFeeMultiplier = OperationalFeeMultiplier;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
