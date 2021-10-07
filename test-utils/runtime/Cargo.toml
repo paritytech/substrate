@@ -45,7 +45,6 @@ sc-service = { version = "0.8.0", default-features = false, optional = true, fea
 sp-state-machine = { version = "0.8.0", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.8.0", default-features = false, path = "../../primitives/externalities" }
 extrinsic-info-runtime-api = { path = '../../primitives/extrinsic-info-runtime-api', default-features = false, version = '2.0.0' }
-pallet-random-seed = {path = '../../frame/random-seed', default-features = false, version = '2.0.0' }
 
 # 3rd party
 cfg-if = "0.1.10"
