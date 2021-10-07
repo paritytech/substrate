@@ -28,8 +28,10 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
+	time::Duration,
 };
 
+use async_std::future::timeout;
 use futures::{future::BoxFuture, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
@@ -1017,10 +1019,13 @@ where
 	/// Blocks the current thread until we are sync'ed.
 	///
 	/// Calls `poll_until_sync` repeatedly.
+	/// (If we've not synced within 10 mins then panic rather than hang.)
 	fn block_until_sync(&mut self) {
-		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| {
-			self.poll_until_sync(cx)
-		}));
+		futures::executor::block_on(timeout(
+			Duration::from_secs(10 * 60),
+			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
+		))
+		.expect("sync didn't happen within 10 mins");
 	}
 
 	/// Blocks the current thread until there are no pending packets.
