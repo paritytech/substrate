@@ -1270,7 +1270,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	fn split_multiaddr_and_peer_id(
+	pub fn split_multiaddr_and_peer_id(
 		&self,
 		peers: HashSet<Multiaddr>,
 	) -> Result<Vec<(PeerId, Multiaddr)>, String> {
