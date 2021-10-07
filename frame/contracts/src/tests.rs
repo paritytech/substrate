@@ -498,11 +498,6 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Withdraw(addr.clone(), 1980)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone()
@@ -763,11 +758,6 @@ fn self_destruct_works() {
 		pretty_assertions::assert_eq!(
 			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Withdraw(addr.clone(), 3462)),
-					topics: vec![],
-				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::KilledAccount(addr.clone())),

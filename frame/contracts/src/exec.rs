@@ -2091,11 +2091,6 @@ mod tests {
 				vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Balances(pallet_balances::Event::Withdraw(BOB, 32)),
-						topics: vec![],
-					},
-					EventRecord {
-						phase: Phase::Initialization,
 						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
 						topics: vec![],
 					},
@@ -2150,11 +2145,6 @@ mod tests {
 			assert_eq!(
 				System::events(),
 				vec![
-					EventRecord {
-						phase: Phase::Initialization,
-						event: MetaEvent::Balances(pallet_balances::Event::Withdraw(BOB, 32)),
-						topics: vec![],
-					},
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
