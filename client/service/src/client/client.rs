@@ -290,7 +290,7 @@ where
 		.map_err(|e| ConsensusError::ClientImport(e.into()))?;
 
 	api.get_account_id(block_id, authority_id)
-        .map_err(|e| sp_blockchain::Error::Backend(String::from("block author unknown")))
+        .map_err(|_| sp_blockchain::Error::Backend(String::from("block author unknown")))
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where

@@ -36,7 +36,7 @@ tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 sc-transaction-pool = {  version = "2.0.0", path = "../transaction-pool" }
 sp-encrypted-tx = {  version = "2.0.0", path = "../../primitives/encrypted-tx" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
-ecies = { path="/home/dev/ecies", version = "0.2", default-features = false, features = ["openssl"]}
+ecies = { version = "0.2", default-features = false, features = ["openssl"]}
 secp256k1 = { package = "libsecp256k1", version = "0.6" }
 
 [dev-dependencies]
