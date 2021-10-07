@@ -50,13 +50,15 @@ pub struct SharedParams {
 	#[structopt(long)]
 	pub disable_log_color: bool,
 
-	/// Disable feature to dynamically update and reload the log filter.
+	/// Enable feature to dynamically update and reload the log filter.
 	///
-	/// By default this feature is enabled, however it leads to a small performance decrease.
+	/// Be aware that enabling this feature can lead to a performance decrease up to factor six or
+	/// more. Depending on the global logging level the performance decrease changes.
+	///
 	/// The `system_addLogFilter` and `system_resetLogFilter` RPCs will have no effect with this
-	/// option set.
-	#[structopt(long = "disable-log-reloading")]
-	pub disable_log_reloading: bool,
+	/// option not being set.
+	#[structopt(long)]
+	pub enable_log_reloading: bool,
 
 	/// Sets a custom profiling filter. Syntax is the same as for logging: <target>=<level>
 	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
@@ -107,9 +109,9 @@ impl SharedParams {
 		self.disable_log_color
 	}
 
-	/// Is log reloading disabled
-	pub fn is_log_filter_reloading_disabled(&self) -> bool {
-		self.disable_log_reloading
+	/// Is log reloading enabled
+	pub fn enable_log_reloading(&self) -> bool {
+		self.enable_log_reloading
 	}
 
 	/// Receiver to process tracing messages.
