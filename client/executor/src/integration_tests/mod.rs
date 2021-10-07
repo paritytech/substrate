@@ -467,7 +467,7 @@ test_wasm_execution!(returns_mutable_static);
 fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	let runtime = mk_test_runtime(wasm_method, 1024);
 
-	let instance = runtime.new_instance().unwrap();
+	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
 
@@ -482,7 +482,7 @@ test_wasm_execution!(returns_mutable_static_bss);
 fn returns_mutable_static_bss(wasm_method: WasmExecutionMethod) {
 	let runtime = mk_test_runtime(wasm_method, 1024);
 
-	let instance = runtime.new_instance().unwrap();
+	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static_bss", &[0]).unwrap();
 	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
 
@@ -508,7 +508,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	const REQUIRED_MEMORY_PAGES: u64 = 32;
 
 	let runtime = mk_test_runtime(wasm_method, REQUIRED_MEMORY_PAGES);
-	let instance = runtime.new_instance().unwrap();
+	let mut instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
 	let res = instance.call_export("allocates_huge_stack_array", &true.encode());
@@ -522,7 +522,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 	let runtime = mk_test_runtime(wasm_method, 1024);
-	let instance = runtime.new_instance().unwrap();
+	let mut instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance
 		.get_global_const("__heap_base")

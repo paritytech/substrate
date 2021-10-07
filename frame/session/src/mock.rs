@@ -21,16 +21,18 @@ use super::*;
 use crate as pallet_session;
 #[cfg(feature = "historical")]
 use crate::historical as pallet_session_historical;
-use frame_support::{parameter_types, BasicExternalities};
+
+use std::cell::RefCell;
+
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Perbill,
 };
 use sp_staking::SessionIndex;
-use std::cell::RefCell;
+
+use frame_support::{parameter_types, traits::GenesisBuild, BasicExternalities};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -141,7 +143,7 @@ impl SessionHandler<u64> for TestSessionHandler {
 				.collect()
 		});
 	}
-	fn on_disabled(_validator_index: usize) {
+	fn on_disabled(_validator_index: u32) {
 		DISABLED.with(|l| *l.borrow_mut() = true)
 	}
 	fn on_before_session_ending() {
@@ -266,10 +268,6 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
-}
-
 impl Config for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
@@ -281,7 +279,6 @@ impl Config for Test {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = Event;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
