@@ -26,7 +26,7 @@ use crate::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
 };
-use codec::{Decode, Encode, EncodeLike, Error, Input};
+use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
@@ -203,7 +203,7 @@ where
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of vector length (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
+		let _length_do_not_remove_me_see_above: Compact<u32> = Decode::decode(input)?;
 
 		let version = input.read_byte()?;
 
@@ -228,19 +228,29 @@ where
 	Extra: SignedExtension,
 {
 	fn encode(&self) -> Vec<u8> {
-		super::encode_with_vec_prefix::<Self, _>(|v| {
-			// 1 byte version id.
-			match self.signature.as_ref() {
-				Some(s) => {
-					v.push(EXTRINSIC_VERSION | 0b1000_0000);
-					s.encode_to(v);
-				},
-				None => {
-					v.push(EXTRINSIC_VERSION & 0b0111_1111);
-				},
-			}
-			self.function.encode_to(v);
-		})
+		let mut tmp = Vec::with_capacity(sp_std::mem::size_of::<Self>());
+
+		// 1 byte version id.
+		match self.signature.as_ref() {
+			Some(s) => {
+				tmp.push(EXTRINSIC_VERSION | 0b1000_0000);
+				s.encode_to(&mut tmp);
+			},
+			None => {
+				tmp.push(EXTRINSIC_VERSION & 0b0111_1111);
+			},
+		}
+		self.function.encode_to(&mut tmp);
+
+		let compact_len = codec::Compact::<u32>(tmp.len() as u32);
+
+		// Allocate the output buffer with the correct length
+		let mut output = Vec::with_capacity(compact_len.size_hint() + tmp.len());
+
+		compact_len.encode_to(&mut output);
+		output.extend(tmp);
+
+		output
 	}
 }
 
@@ -435,5 +445,14 @@ mod tests {
 		let opaque: OpaqueExtrinsic = ux.into();
 		let opaque_encoded = opaque.encode();
 		assert_eq!(opaque_encoded, encoded);
+	}
+
+	#[test]
+	fn large_bad_prefix_should_work() {
+		let encoded = Compact::<u32>::from(u32::MAX).encode();
+		assert_eq!(
+			Ex::decode(&mut &encoded[..]),
+			Err(Error::from("Not enough data to fill buffer"))
+		);
 	}
 }

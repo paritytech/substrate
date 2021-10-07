@@ -46,7 +46,8 @@ pub struct KeystoreParams {
 	)]
 	pub password_interactive: bool,
 
-	/// Password used by the keystore.
+	/// Password used by the keystore. This allows appending an extra user-defined secret to the
+	/// seed.
 	#[structopt(
 		long = "password",
 		parse(try_from_str = secret_string_from_str),

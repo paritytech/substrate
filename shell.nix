@@ -1,9 +1,8 @@
 let
   mozillaOverlay =
     import (builtins.fetchGit {
-      # TODO: revert to upstream after https://github.com/mozilla/nixpkgs-mozilla/pull/250
-      url = "https://github.com/andresilva/nixpkgs-mozilla.git";
-      rev = "7626aca57c20f3f6ee28cce8657147d9b358ea18";
+      url = "https://github.com/mozilla/nixpkgs-mozilla.git";
+      rev = "4a07484cf0e49047f82d83fd119acffbad3b235f";
     });
   nixpkgs = import <nixpkgs> { overlays = [ mozillaOverlay ]; };
   rust-nightly = with nixpkgs; ((rustChannelOf { date = "2021-07-06"; channel = "nightly"; }).rust.override {
@@ -20,7 +19,7 @@ with nixpkgs; pkgs.mkShell {
     darwin.apple_sdk.frameworks.Security
   ];
 
-  RUST_SRC_PATH="${rust-nightly}/lib/rustlib/src/rust/src";
+  RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   ROCKSDB_LIB_DIR = "${rocksdb}/lib";

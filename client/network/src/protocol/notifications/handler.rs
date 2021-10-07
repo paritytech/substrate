@@ -88,9 +88,8 @@ use std::{
 	str,
 	sync::Arc,
 	task::{Context, Poll},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use wasm_timer::Instant;
 
 /// Number of pending notifications in asynchronous contexts.
 /// See [`NotificationsSink::reserve_notification`] for context.

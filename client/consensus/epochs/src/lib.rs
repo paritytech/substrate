@@ -28,7 +28,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
 use std::{
 	borrow::{Borrow, BorrowMut},
 	collections::BTreeMap,
-	ops::Add,
+	ops::{Add, Sub},
 };
 
 /// A builder for `is_descendent_of` functions.
@@ -228,7 +228,7 @@ impl<Hash, Number, E: Epoch> ViableEpochDescriptor<Hash, Number, E> {
 }
 
 /// Persisted epoch stored in EpochChanges.
-#[derive(Clone, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode)]
 pub enum PersistedEpoch<E: Epoch> {
 	/// Genesis persisted epoch data. epoch_0, epoch_1.
 	Genesis(E, E),
@@ -322,7 +322,7 @@ where
 impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E>
 where
 	Hash: PartialEq + Ord + AsRef<[u8]> + AsMut<[u8]> + Copy,
-	Number: Ord + One + Zero + Add<Output = Number> + Copy,
+	Number: Ord + One + Zero + Add<Output = Number> + Sub<Output = Number> + Copy,
 {
 	/// Create a new epoch change.
 	pub fn new() -> Self {
@@ -561,12 +561,13 @@ where
 							// Ok, we found our node.
 							// and here we figure out which of the internal epochs
 							// of a genesis node to use based on their start slot.
-							PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) =>
+							PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) => {
 								if epoch_1.start_slot <= slot {
 									(EpochIdentifierPosition::Genesis1, epoch_1.clone())
 								} else {
 									(EpochIdentifierPosition::Genesis0, epoch_0.clone())
-								},
+								}
+							},
 							PersistedEpochHeader::Regular(ref epoch_n) =>
 								(EpochIdentifierPosition::Regular, epoch_n.clone()),
 						},
@@ -613,6 +614,26 @@ where
 	/// Return the inner fork tree.
 	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
 		&self.inner
+	}
+
+	/// Reset to a specified pair of epochs, as if they were announced at blocks `parent_hash` and
+	/// `hash`.
+	pub fn reset(&mut self, parent_hash: Hash, hash: Hash, number: Number, current: E, next: E) {
+		self.inner = ForkTree::new();
+		self.epochs.clear();
+		let persisted = PersistedEpoch::Regular(current);
+		let header = PersistedEpochHeader::from(&persisted);
+		let _res = self.inner.import(parent_hash, number - One::one(), header, &|_, _| {
+			Ok(false) as Result<bool, fork_tree::Error<ClientError>>
+		});
+		self.epochs.insert((parent_hash, number - One::one()), persisted);
+
+		let persisted = PersistedEpoch::Regular(next);
+		let header = PersistedEpochHeader::from(&persisted);
+		let _res = self.inner.import(hash, number, header, &|_, _| {
+			Ok(true) as Result<bool, fork_tree::Error<ClientError>>
+		});
+		self.epochs.insert((hash, number), persisted);
 	}
 }
 
@@ -694,6 +715,7 @@ mod tests {
 
 	#[test]
 	fn genesis_epoch_is_created_but_not_imported() {
+		//
 		// A - B
 		//  \
 		//   — C
@@ -735,6 +757,7 @@ mod tests {
 
 	#[test]
 	fn epoch_changes_between_blocks() {
+		//
 		// A - B
 		//  \
 		//   — C

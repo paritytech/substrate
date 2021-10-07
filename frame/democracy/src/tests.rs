@@ -22,7 +22,7 @@ use crate as pallet_democracy;
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Filter, GenesisBuild, OnInitialize, SortedMembers},
+	traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
 	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -70,8 +70,8 @@ frame_support::construct_runtime!(
 
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
-impl Filter<Call> for BaseFilter {
-	fn filter(call: &Call) -> bool {
+impl Contains<Call> for BaseFilter {
+	fn contains(call: &Call) -> bool {
 		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
 	}
 }
@@ -140,6 +140,7 @@ parameter_types! {
 	pub const FastTrackVotingPeriod: u64 = 2;
 	pub const MinimumDeposit: u64 = 1;
 	pub const EnactmentPeriod: u64 = 2;
+	pub const VoteLockingPeriod: u64 = 3;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
 	pub const MaxProposals: u32 = MAX_PROPOSALS;
@@ -170,6 +171,7 @@ impl Config for Test {
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
+	type VoteLockingPeriod = VoteLockingPeriod;
 	type FastTrackVotingPeriod = FastTrackVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
@@ -231,7 +233,7 @@ fn set_balance_proposal(value: u64) -> Vec<u8> {
 fn set_balance_proposal_is_correctly_filtered_out() {
 	for i in 0..10 {
 		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
-		assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 	}
 }
 

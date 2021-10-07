@@ -269,7 +269,8 @@ pub trait SessionHandler<ValidatorId> {
 	/// All the key type ids this session handler can process.
 	///
 	/// The order must be the same as it expects them in
-	/// [`on_new_session`](Self::on_new_session<Ks>) and [`on_genesis_session`](Self::on_genesis_session<Ks>).
+	/// [`on_new_session`](Self::on_new_session<Ks>) and
+	/// [`on_genesis_session`](Self::on_genesis_session<Ks>).
 	const KEY_TYPE_IDS: &'static [KeyTypeId];
 
 	/// The given validator set will be used for the genesis session.
@@ -490,8 +491,8 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event {
-		/// New session has happened. Note that the argument is the \[session_index\], not the block
-		/// number as the type might suggest.
+		/// New session has happened. Note that the argument is the \[session_index\], not the
+		/// block number as the type might suggest.
 		NewSession(SessionIndex),
 	}
 );
@@ -890,5 +891,11 @@ impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+}
+
+impl<T: Config> frame_support::traits::DisabledValidators for Module<T> {
+	fn is_disabled(index: u32) -> bool {
+		<Module<T>>::disabled_validators().binary_search(&index).is_ok()
 	}
 }

@@ -17,6 +17,7 @@
 
 use crate::pallet::{parse::helper::get_doc_literals, Def};
 
+///
 /// * impl various trait on Error
 /// * impl ModuleErrorMetadata for Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
