@@ -913,7 +913,7 @@ simnet-tests:
         --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
   retry: 2
   tags:
-    - parity-simnet
+    - substrate-simnet
 
 #run quick simnet-tests for each PR
 simnet-tests-quick:
@@ -939,5 +939,5 @@ simnet-tests-quick:
         --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
         --features="${SIMNET_FEATURES}"
   tags:
-    - parity-simnet
+    - substrate-simnet
 
