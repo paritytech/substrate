@@ -33,8 +33,8 @@ pub struct SharedParams {
 
 	/// Specify the development chain.
 	///
-	/// This also implies `--force-authoring`, `--tmp`, `--rpc-cors=all`,
-	/// and the `--alice` flags.
+	/// This also sets `--chain=dev`, `--force-authoring`, `--rpc-cors=all`,
+	/// `--alice`, and `--tmp` flags, unless explicitly overridden.
 	#[structopt(long, conflicts_with_all = &["chain"])]
 	pub dev: bool,
 
