@@ -917,7 +917,7 @@ simnet-tests:
 
 #run quick simnet-tests for each PR
 simnet-tests-quick:
-  stage:                           delpoy
+  stage:                           deploy
   image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
   <<:                              *vault-secrets
