@@ -34,18 +34,20 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979", features = ["server"] }
-serde = { version = "1.0.126", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = "0.3.16"
 hex-literal = "0.3.1"
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979", features = ["server"] }
 log = "0.4.8"
 rand = "0.7.2"
+serde = { version = "1.0.126", features = ["derive"] }
 structopt = { version = "0.3.8", optional = true }
 
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
@@ -85,6 +87,7 @@ sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/autho
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
@@ -124,15 +127,16 @@ sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
 futures = "0.3.16"
 tempfile = "3.1.0"
-assert_cmd = "1.0"
+assert_cmd = "2.0.2"
 nix = "0.19"
 serde_json = "1.0"
 regex = "1"
 platforms = "1.1"
 async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
-jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = ["tokio1"] }
+criterion = { version = "0.3.5", features = [ "async_tokio" ] }
 tokio = { version = "1.10", features = ["macros", "time"] }
+jsonrpsee-ws-client = { version = "0.3.1", default-features = false, features = ["tokio1"] }
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 
@@ -144,6 +148,7 @@ substrate-build-script-utils = { version = "3.0.0", optional = true, path = "../
 substrate-frame-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
+pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 
 [features]
 default = ["cli"]
@@ -165,3 +170,7 @@ runtime-benchmarks = [
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
 try-runtime = ["node-runtime/try-runtime", "try-runtime-cli"]
+
+[[bench]]
+name = "transaction_pool"
+harness = false

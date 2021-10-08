@@ -619,12 +619,9 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 ///
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `pallet_session::Config`
 pub trait SessionInterface<AccountId>: frame_system::Config {
-	/// Disable a given validator by stash ID.
-	///
-	/// Returns `true` if new era should be forced at the end of this session.
-	/// This allows preventing a situation where there is too many validators
-	/// disabled and block production stalls.
-	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
+	/// Disable the validator at the given index, returns `false` if the validator was already
+	/// disabled or the index is out of bounds.
+	fn disable_validator(validator_index: u32) -> bool;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -645,8 +642,8 @@ where
 		Option<<T as frame_system::Config>::AccountId>,
 	>,
 {
-	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> Result<bool, ()> {
-		<pallet_session::Pallet<T>>::disable(validator)
+	fn disable_validator(validator_index: u32) -> bool {
+		<pallet_session::Pallet<T>>::disable_index(validator_index)
 	}
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {

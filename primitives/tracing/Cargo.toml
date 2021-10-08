@@ -22,7 +22,7 @@ sp-std = { version = "4.0.0-dev", path = "../std", default-features = false }
 codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false, features = [
 	"derive",
 ] }
-tracing = { version = "0.1.25", default-features = false }
+tracing = { version = "0.1.29", default-features = false }
 tracing-core = { version = "0.1.17", default-features = false }
 log = { version = "0.4.8", optional = true }
 tracing-subscriber = { version = "0.2.19", optional = true, features = [
