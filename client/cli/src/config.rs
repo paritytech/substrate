@@ -522,7 +522,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
 			tracing_receiver: self.tracing_receiver()?,
-			disable_log_reloading: self.is_log_filter_reloading_disabled()?,
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
@@ -542,9 +541,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
-	/// Is log reloading disabled (enabled by default)
-	fn is_log_filter_reloading_disabled(&self) -> Result<bool> {
-		Ok(self.shared_params().is_log_filter_reloading_disabled())
+	/// Is log reloading enabled?
+	fn enable_log_reloading(&self) -> Result<bool> {
+		Ok(self.shared_params().enable_log_reloading())
 	}
 
 	/// Should the log color output be disabled?
@@ -563,7 +562,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		let mut logger = LoggerBuilder::new(self.log_filters()?);
-		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
+		logger.with_log_reloading(self.enable_log_reloading()?);
 
 		if let Some(tracing_targets) = self.tracing_targets()? {
 			let tracing_receiver = self.tracing_receiver()?;
