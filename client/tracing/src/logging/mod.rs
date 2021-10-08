@@ -26,6 +26,9 @@ mod directives;
 mod event_format;
 mod fast_local_time;
 mod layers;
+mod stderr_writer;
+
+pub(crate) type DefaultLogger = stderr_writer::MakeStderrWriter;
 
 pub use directives::*;
 pub use sc_tracing_proc_macro::*;
@@ -46,6 +49,8 @@ use tracing_subscriber::{
 pub use event_format::*;
 pub use fast_local_time::FastLocalTime;
 pub use layers::*;
+
+use stderr_writer::MakeStderrWriter;
 
 /// Logging Result typedef.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -91,7 +96,7 @@ fn prepare_subscriber<N, E, F, W>(
 	profiling_targets: Option<&str>,
 	force_colors: Option<bool>,
 	builder_hook: impl Fn(
-		SubscriberBuilder<format::DefaultFields, EventFormat, EnvFilter, fn() -> std::io::Stderr>,
+		SubscriberBuilder<format::DefaultFields, EventFormat, EnvFilter, DefaultLogger>,
 	) -> SubscriberBuilder<N, E, F, W>,
 ) -> Result<impl Subscriber + for<'a> LookupSpan<'a>>
 where
@@ -172,7 +177,7 @@ where
 
 	let builder = builder.with_span_events(format::FmtSpan::NONE);
 
-	let builder = builder.with_writer(std::io::stderr as _);
+	let builder = builder.with_writer(MakeStderrWriter);
 
 	let builder = builder.event_format(event_format);
 
