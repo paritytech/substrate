@@ -128,7 +128,7 @@ async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = [ "async_tokio" ] }
 tokio = { version = "1.10", features = ["macros", "time"] }
-jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = ["tokio1"] }
+jsonrpsee-ws-client = { version = "0.3.1", default-features = false, features = ["tokio1"] }
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 
