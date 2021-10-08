@@ -471,11 +471,13 @@ pub mod pallet {
 		/// Final argument indicates the destination balance type.
 		/// \[from, to, balance, destination_status\]
 		ReserveRepatriated(T::AccountId, T::AccountId, T::Balance, Status),
-		/// Some amount was deposited into the account (e.g. for transaction fees). \[who, deposit\]
+		/// Some amount was deposited into the account (e.g. for transaction fees). \[who,
+		/// deposit\]
 		Deposit(T::AccountId, T::Balance),
 		/// Some amount was withdrawn from the account (e.g. for transaction fees). \[who, value\]
 		Withdraw(T::AccountId, T::Balance),
-		/// Some amount was removed from the account (e.g. for misbehavior). \[who, amount_slashed\]
+		/// Some amount was removed from the account (e.g. for misbehavior). \[who,
+		/// amount_slashed\]
 		Slashed(T::AccountId, T::Balance),
 	}
 
