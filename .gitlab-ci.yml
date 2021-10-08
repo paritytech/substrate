@@ -589,32 +589,11 @@ build-linux-substrate:             &build-binary
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
-#Build binary for simnet quick tests. Artifacts can expire.
+#Build binary for simnet quick tests.
 build-linux-substrate-simnet:
-  # <<:                              *build-binary
+  <<:                              *build-binary
   <<:                              *collect-artifacts-short
   <<:                              *test-refs-no-trigger-prs-only
-  # FIXME: remove this and uncomment *build-binary after fixing test-linux-stable
-  stage:                           build
-  <<:                              *docker-env
-  before_script:
-    - mkdir -p ./artifacts/substrate/
-  script:
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mv ./target/release/substrate ./artifacts/substrate/.
-    - echo -n "Substrate version = "
-    - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-      else
-        ./artifacts/substrate/substrate --version |
-          sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-            tee ./artifacts/substrate/VERSION;
-      fi
-    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-    - printf '\n# building node-template\n\n'
-    - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
-    - sccache -s
 
 build-linux-subkey:                &build-subkey
   stage:                           build
@@ -952,13 +931,8 @@ simnet-tests-quick:
       docker.io/paritytech/simnet:${SIMNET_REF}
       ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
   script:
-    - echo --------------Debug-----------------------
-    - echo "/home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
-        --github-remote-dir='https://github.com/paritytech/substrate/tree/master/simnet_tests'
-        --config='simnet_tests/configs/default_local_testnet.toml'
-        --image=${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}
-        --features=${SIMNET_FEATURES}"
-    - echo ------------------------------------------
+    - echo "Image: ${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+    - echo "Features: ${SIMNET_FEATURES}"
     - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
         --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
         --config="simnet_tests/configs/default_local_testnet.toml"
@@ -966,6 +940,4 @@ simnet-tests-quick:
         --features="${SIMNET_FEATURES}"
   tags:
     - parity-simnet
-  #FIXME: remove after debug
-  allow_failure:                   true
 
