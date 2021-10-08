@@ -308,7 +308,10 @@ fn test_add_reset_log_filter() {
 
 	// Enter log generation / filter reload
 	if std::env::var("TEST_LOG_FILTER").is_ok() {
-		sc_tracing::logging::LoggerBuilder::new("test_before_add=debug").init().unwrap();
+		let mut builder = sc_tracing::logging::LoggerBuilder::new("test_before_add=debug");
+		builder.with_log_reloading(true);
+		builder.init().unwrap();
+
 		for line in std::io::stdin().lock().lines() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {

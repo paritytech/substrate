@@ -197,7 +197,7 @@ impl LoggerBuilder {
 		Self {
 			directives: directives.into(),
 			profiling: None,
-			log_reloading: true,
+			log_reloading: false,
 			force_colors: None,
 		}
 	}
