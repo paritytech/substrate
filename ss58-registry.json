@@ -666,6 +666,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://ata.network"
+		},
+		{
+			"prefix": 12191,
+			"network": "nftmart",
+			"displayName": "NFTMart",
+			"symbols": ["NMT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://nftmart.io"
 		}
 	]
 }
