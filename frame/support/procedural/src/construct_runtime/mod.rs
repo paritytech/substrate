@@ -61,8 +61,8 @@
 //! 	);
 //! );
 //! ```
-//! `construct_runtime_parts` must be define add the pallet parts inside some tokens and then
-//! expand to those tokens with the parts added.
+//! `construct_runtime_parts` must be defined. It adds the pallet parts inside some tokens, and
+//! then expands to those tokens with the parts added.
 //! Thus `pallet_balances::construct_runtime_parts` must expand to:
 //! ```ignore
 //! frame_system::construct_runtime_parts!(
@@ -94,6 +94,22 @@
 //! impl Call ...
 //! pub enum Origin { ... }
 //! ...
+//! ```
+//!
+//! Visualizing the entire clow of `construct_runtime!`, it would look like the following:
+//!
+//! ```
+//! +--------------------+     +--------------------------+     +---------------+
+//! |                    |     |   (defined in pallet)    |     |               |
+//! | construct_runtime! | --> | construct_runtime_parts! | --> | expand_after! |
+//! | w/ no pallet parts |     |                          |     |               |
+//! +--------------------+     +--------------------------+     +---------------+
+//!
+//!     +--------------------+
+//!     |                    |
+//! --> | construct_runtime! |
+//!     |  w/ pallet parts   |
+//!     +--------------------+
 //! ```
 
 mod expand;
