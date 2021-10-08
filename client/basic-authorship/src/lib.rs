@@ -24,6 +24,7 @@
 //! # use sc_basic_authorship::ProposerFactory;
 //! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
+//! # use sc_keystore::Store;
 //! # use std::{sync::Arc, time::Duration};
 //! # use substrate_test_runtime_client::{
 //! #     runtime::{Extrinsic, Transfer}, AccountKeyring,
@@ -39,7 +40,7 @@
 //! #     client.clone(),
 //! # );
 //! // The first step is to create a `ProposerFactory`.
-//! let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+//! let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, Store::new_in_memory());
 //!
 //! // From this factory, we create a `Proposer`.
 //! let proposer = proposer_factory.init(

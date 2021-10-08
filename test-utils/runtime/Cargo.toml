@@ -31,6 +31,7 @@ frame-support = { version = "2.0.0", default-features = false, path = "../../fra
 sp-version = { version = "2.0.0", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "2.0.0", default-features = false, path = "../../primitives/api" }
+sp-encrypted-tx = { version = "2.0.0", default-features = false, path = "../../primitives/encrypted-tx" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "2.0.0", default-features = false, path = "../../frame/babe" }
 frame-system = { version = "2.0.0", default-features = false, path = "../../frame/system" }
@@ -96,5 +97,6 @@ std = [
 	"sp-finality-grandpa/std",
 	"sp-trie/std",
 	"sp-transaction-pool/std",
+	"sp-encrypted-tx/std",
 	"trie-db/std",
 ]

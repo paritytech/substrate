@@ -27,3 +27,4 @@ sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
 sc-service = { version = "0.8.0", default-features = false, path = "../../../client/service" }
 futures = "0.3.4"
 extrinsic-info-runtime-api = { path='../../../primitives/extrinsic-info-runtime-api', version='2.0.0' }
+sp-encrypted-tx = { version = "2.0.0", default-features = false, path = "../../../primitives/encrypted-tx" }

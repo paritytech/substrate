@@ -449,6 +449,7 @@ fn should_split_ranges() {
 
 
 #[test]
+#[ignore]
 fn should_return_runtime_version() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));

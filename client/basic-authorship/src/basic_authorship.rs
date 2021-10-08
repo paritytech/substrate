@@ -35,6 +35,7 @@ use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_core::ExecutionContext;
 use sp_inherents::InherentData;
 use sp_runtime::{
+    AccountId32,
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
 };
@@ -199,6 +200,25 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>
 			+ ExtrinsicInfoRuntimeApi<Block>+ EncryptedTxApi<Block> ,
 {
+    fn get_decryption_key(&self, account_id: &AccountId32) -> sp_blockchain::Result<[u8;32]>{
+
+		let keystore = self.keystore.clone();
+
+        let api = self.client.runtime_api();
+		let public_key = api.get_authority_public_key(&self.parent_id, account_id).unwrap();
+		debug!(target:"basic_authorship","public_key id:  {:?}", public_key);
+		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx")).unwrap();
+
+		let seed: [u8; 32] = key_pair.seed();
+		let priv_key: SecretKey = SecretKey::parse_slice(&seed).unwrap();
+
+		let dummy_secret_key: SecretKey = SecretKey::default();
+		let pub_key: PublicKey = PublicKey::from_secret_key(&dummy_secret_key);
+
+		decapsulate(&pub_key, &priv_key)
+            .map_err(|_| sp_blockchain::Error::Backend(String::from("cannot decapsulate aes key for decryption")))
+    }
+
 	fn propose_with(
 		self,
 		inherent_data: InherentData,
@@ -211,10 +231,14 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
-		let api = self.client.runtime_api();
+        let api = self.client.runtime_api();
+
+		// TODO: solve problem of missing pre_digest in testing framework
+		// https://trello.com/c/YPt5RKOj/325-newsolve-problem-of-missing-blockbuilderid-information-in-substrate-tests
 		let block_builder_id = sc_consensus_babe::extract_pre_digest::<Block>(&inherent_digests)
 			.map(|pre_digest| pre_digest.authority_index())
-			.map_err(|e| sp_blockchain::Error::Msg(e.to_string()))?;
+			.map_err(|e| sp_blockchain::Error::Backend(e.to_string())).unwrap_or_default();
+
 		let account_id = api.get_account_id(&self.parent_id, block_builder_id).unwrap();
 		debug!(target:"basic_authorship", "account id:  {:?}", account_id); 
 
@@ -224,44 +248,36 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			record_proof,
 		)?;
 
-		let keystore = self.keystore.clone();
-
-		let public_key = api.get_authority_public_key(&self.parent_id, &account_id).unwrap();
-		debug!(target:"basic_authorship","public_key id:  {:?}", public_key); 
-		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx")).unwrap();
-
-		let seed: [u8; 32] = key_pair.seed();
-		let priv_key: SecretKey = SecretKey::parse_slice(&seed).unwrap();
-
-		let dummy_secret_key: SecretKey = SecretKey::default();
-		let pub_key: PublicKey = PublicKey::from_secret_key(&dummy_secret_key);
-
-		let aes_key = decapsulate(&pub_key, &priv_key).unwrap();
-
 		let doubly_encrypted_txs = api.get_double_encrypted_transactions(&self.parent_id, &account_id).unwrap();
 		let singly_encrypted_txs = api.get_singly_encrypted_transactions(&self.parent_id, &account_id).unwrap();
 
-		debug!(target:"basic_authorship", "aes_key {:?}", aes_key); 
 		debug!(target:"basic_authorship", "found {} double encrypted transactions", doubly_encrypted_txs.len()); 
 		debug!(target:"basic_authorship", "found {} singly encrypted transactions", singly_encrypted_txs.len()); 
 
-		let decrypted_inherents: Vec<_> = singly_encrypted_txs.into_iter().map(|tx| {
-			log::trace!(target:"basic_authorship", "decrypting singly encrypted call INPUT : {:?}", tx.data);
-			let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
-			log::trace!(target:"basic_authorship", "decrypting singly encrypted call OUTPUT: {:?}", decrypted_msg);
-			api.create_submit_decrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg, 500000000).unwrap()
-		}).collect();
+		let decrypted_inherents = if !singly_encrypted_txs.is_empty() || !doubly_encrypted_txs.is_empty() {
+			let aes_key = self.get_decryption_key(&account_id)?;
+			debug!(target:"basic_authorship", "aes_key {:?}", aes_key); 
+			let decrypted_inherents = singly_encrypted_txs.into_iter().map(|tx| {
+				log::trace!(target:"basic_authorship", "decrypting singly encrypted call INPUT : {:?}", tx.data);
+				let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
+				log::trace!(target:"basic_authorship", "decrypting singly encrypted call OUTPUT: {:?}", decrypted_msg);
+				api.create_submit_decrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg, 500000000).unwrap()
+			});
 
-		let singly_encrypted_inherents: Vec<_> = doubly_encrypted_txs.into_iter().map(|tx| {
-			log::trace!(target:"basic_authorship", "decrypting doubly encrypted call INPUT : {:?}", tx.data);
-			let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
-			log::trace!(target:"basic_authorship", "decrypting doubly encrypted call OUTPUT: {:?}", decrypted_msg);
-			api.create_submit_singly_encrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg).unwrap()
-		}).collect();
+			let singly_encrypted_inherents = doubly_encrypted_txs.into_iter().map(|tx| {
+				log::trace!(target:"basic_authorship", "decrypting doubly encrypted call INPUT : {:?}", tx.data);
+				let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
+				log::trace!(target:"basic_authorship", "decrypting doubly encrypted call OUTPUT: {:?}", decrypted_msg);
+				api.create_submit_singly_encrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg).unwrap()
+			});
+			decrypted_inherents.chain(singly_encrypted_inherents).collect()
+		}else{
+			vec![]
+		};
 
 
 		let (seed, inherents) = block_builder.create_inherents(inherent_data.clone())?;
-		for inherent in inherents.into_iter().chain(singly_encrypted_inherents.into_iter()).chain(decrypted_inherents.into_iter()) {
+		for inherent in inherents.into_iter().chain(decrypted_inherents.into_iter()){
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
@@ -409,6 +425,8 @@ mod tests {
 	use sp_runtime::traits::NumberFor;
 	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sc_client_api::BlockImportOperation;
+	use sc_keystore::Store;
+	use parking_lot::RwLock;
 
 	use substrate_test_runtime_client::{
 		prelude::*,
@@ -450,6 +468,11 @@ mod tests {
 		}
 	}
 
+	fn create_key_store() -> KeyStorePtr{
+		Store::new_in_memory()
+	}
+
+
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
@@ -474,7 +497,7 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -515,7 +538,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(Default::default(), None, spawner, client.clone());
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -568,7 +591,7 @@ mod tests {
 			)),
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
 
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
@@ -642,7 +665,7 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
 		let mut propose_block = |
 			client: &TestClient,
 			number,

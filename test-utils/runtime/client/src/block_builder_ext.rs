@@ -23,6 +23,7 @@ use sc_client_api::backend;
 use sp_runtime::traits::HashFor;
 
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
+use sp_encrypted_tx::EncryptedTxApi;
 use sc_block_builder::BlockBuilderApi;
 
 /// Extension trait for test block builder.
@@ -48,7 +49,8 @@ impl<'a, A, B> BlockBuilderExt for sc_block_builder::BlockBuilder<'a, substrate_
 		ApiExt<
 			substrate_test_runtime::Block,
 			StateBackend = backend::StateBackendFor<B, substrate_test_runtime::Block>
-		> + ExtrinsicInfoRuntimeApi<substrate_test_runtime::Block>,
+		> + ExtrinsicInfoRuntimeApi<substrate_test_runtime::Block>
+		  + EncryptedTxApi<substrate_test_runtime::Block>,
 	B: backend::Backend<substrate_test_runtime::Block>,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	backend::StateBackendFor<B, substrate_test_runtime::Block>:

@@ -31,9 +31,11 @@ use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::{PrefixedMemoryDB, StorageProof};
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
+use sp_encrypted_tx::{EncryptedTx, ExtrinsicType};
 
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 use sp_runtime::{
+    AccountId32,
 	create_runtime_str, impl_opaque_keys,
 	ApplyExtrinsicResult, Perbill,
 	transaction_validity::{
@@ -566,6 +568,37 @@ cfg_if! {
 				}
 			}
 
+			impl sp_encrypted_tx::EncryptedTxApi<Block> for Runtime
+			{
+				fn create_submit_singly_encrypted_transaction(_identifier: <Block as BlockT>::Hash, _singly_encrypted_call: Vec<u8>) -> <Block as BlockT>::Extrinsic{
+					unimplemented!()
+				}
+
+				fn create_submit_decrypted_transaction(_identifier: <Block as BlockT>::Hash, _decrypted_call: Vec<u8>, _weight: Weight) -> <Block as BlockT>::Extrinsic{
+					unimplemented!()
+				}
+
+				fn get_type(_extrinsic: <Block as BlockT>::Extrinsic) -> ExtrinsicType<<Block as BlockT>::Hash>{
+					unimplemented!()
+				}
+
+				fn get_double_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
+					Default::default()
+				}
+
+				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
+					Default::default()
+				}
+
+				fn get_account_id(_block_builder_id: u32) -> AccountId32{
+					Default::default()
+				}
+
+				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
+					unimplemented!()
+				}
+			}
+
 			impl extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi<Block> for Runtime {
 				fn get_info(
 					_tx: <Block as BlockT>::Extrinsic,
@@ -813,6 +846,37 @@ cfg_if! {
 
 				fn initialize_block(header: &<Block as BlockT>::Header) {
 					system::initialize_block(header)
+				}
+			}
+
+			impl sp_encrypted_tx::EncryptedTxApi<Block> for Runtime
+			{
+				fn create_submit_singly_encrypted_transaction(_identifier: <Block as BlockT>::Hash, _singly_encrypted_call: Vec<u8>) -> <Block as BlockT>::Extrinsic{
+					unimplemented!()
+				}
+
+				fn create_submit_decrypted_transaction(_identifier: <Block as BlockT>::Hash, _decrypted_call: Vec<u8>, _weight: Weight) -> <Block as BlockT>::Extrinsic{
+					unimplemented!()
+				}
+
+				fn get_type(_extrinsic: <Block as BlockT>::Extrinsic) -> ExtrinsicType<<Block as BlockT>::Hash>{
+					unimplemented!()
+				}
+
+				fn get_double_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
+					Default::default()
+				}
+
+				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
+					Default::default()
+				}
+
+				fn get_account_id(_block_builder_id: u32) -> AccountId32{
+				    Default::default()
+				}
+
+				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
+					unimplemented!()
 				}
 			}
 
