@@ -96,7 +96,7 @@
 //! ...
 //! ```
 //!
-//! Visualizing the entire clow of `construct_runtime!`, it would look like the following:
+//! Visualizing the entire flow of `construct_runtime!`, it would look like the following:
 //!
 //! ```
 //! +--------------------+     +--------------------------+     +---------------+
