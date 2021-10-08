@@ -1102,7 +1102,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Returns the list of reserved peers.
@@ -1112,12 +1112,12 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Sets the list of reserved peers for syncing purposes.
 	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers.clone());
+		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers);
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
