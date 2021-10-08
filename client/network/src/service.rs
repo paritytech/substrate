@@ -1164,25 +1164,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Remove peers from a peer set.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
-	// convenience.
-	pub fn remove_peers_from_reserved_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-		for (peer_id, _) in peers.into_iter() {
+	pub fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
 				.unbounded_send(ServiceToWorkerMsg::RemoveSetReserved(protocol.clone(), peer_id));
 		}
-		Ok(())
 	}
 
 	/// Configure an explicit fork sync request.
@@ -1233,25 +1220,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Remove peers from a peer set.
 	///
 	/// If we currently have an open substream with this peer, it will soon be closed.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
-	// convenience.
-	pub fn remove_from_peers_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-		for (peer_id, _) in peers.into_iter() {
+	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
 				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
 		}
-		Ok(())
 	}
 
 	/// Returns the number of peers we're connected to.
