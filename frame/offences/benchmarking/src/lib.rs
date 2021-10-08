@@ -233,10 +233,10 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 	}
 	fn print_events<D: std::fmt::Debug>(idx: usize, events: &[D], expected: &[D]) {
 		let window = 10;
-		let start = idx.saturating_sub(window/2);
-		let end_got = (idx+window/2).min(events.len());
+		let start = idx.saturating_sub(window / 2);
+		let end_got = (idx + window / 2).min(events.len());
 		pretty("Got(window):", &events[start..end_got], start);
-		let end_expected = (idx+window/2).min(expected.len());
+		let end_expected = (idx + window / 2).min(expected.len());
 		pretty("Expected(window):", &expected[start..end_expected], start);
 		println!("---------------");
 		let start_got = events.len().saturating_sub(window);
@@ -254,13 +254,17 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 			println!("     Got: {:?}", b);
 			println!("Expected: {:?}", a);
 			if events_copy.len() != expected_copy.len() {
-				println!("Mismatching lengths. Got: {}, Expected: {}", events_copy.len() , expected_copy.len())
+				println!(
+					"Mismatching lengths. Got: {}, Expected: {}",
+					events_copy.len(),
+					expected_copy.len()
+				)
 			}
 			panic!("Mismatching events.");
 		}
 	}
 
-	if  events_copy.len() != expected_copy.len() {
+	if events_copy.len() != expected_copy.len() {
 		print_events(0, &events_copy, &expected_copy);
 		panic!("Mismatching lengths. Got: {}, Expected: {}", events_copy.len(), expected_copy.len())
 	}
@@ -356,21 +360,24 @@ benchmarks! {
 			})
 			.collect::<Vec<_>>();
 
-		// In case of error it's useful to see the inputs
-		println!("Inputs: r: {}, o: {}, n: {}", r, o, n);
 
-		// make sure that all slashes have been applied
+
 		#[cfg(test)]
-		check_events::<T, _>(
-			std::iter::empty()
-				.chain(slash_events.into_iter().map(Into::into))
-				.chain(std::iter::once(<T as OffencesConfig>::Event::from(
-					pallet_offences::Event::Offence(
-						UnresponsivenessOffence::<T>::ID,
-						0_u32.to_le_bytes().to_vec(),
-					)
-				).into()))
-		);
+		{
+			// In case of error it's useful to see the inputs
+			println!("Inputs: r: {}, o: {}, n: {}", r, o, n);
+			// make sure that all slashes have been applied
+			check_events::<T, _>(
+				std::iter::empty()
+					.chain(slash_events.into_iter().map(Into::into))
+					.chain(std::iter::once(<T as OffencesConfig>::Event::from(
+						pallet_offences::Event::Offence(
+							UnresponsivenessOffence::<T>::ID,
+							0_u32.to_le_bytes().to_vec(),
+						)
+					).into()))
+			);
+		}
 	}
 
 	report_offence_grandpa {
