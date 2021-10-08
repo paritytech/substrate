@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 ] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 static_assertions = "1.1.0"
-hex-literal = { version = "0.3.1", optional = true }
+hex-literal = { version = "0.3.3", optional = true }
 log = { version = "0.4.14", default-features = false }
 
 # primitives

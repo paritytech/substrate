@@ -37,7 +37,7 @@ crate-type = ["cdylib", "rlib"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde = { version = "1.0.126", features = ["derive"] }
 futures = "0.3.16"
-hex-literal = "0.3.1"
+hex-literal = "0.3.3"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
