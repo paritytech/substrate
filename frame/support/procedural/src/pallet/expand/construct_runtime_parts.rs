@@ -49,7 +49,7 @@ pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream
 		def.validate_unsigned.as_ref().map(|_| quote::quote!(ValidateUnsigned,));
 
 	quote::quote!(
-		// Export the construct runtime parts macro with a unique name to avoid conflict.
+		// Export the construct runtime parts macro with a unique name to avoid naming conflicts.
 		//
 		// macro args are:
 		// ```
@@ -68,7 +68,7 @@ pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream
 				{ $( $pattern:tt )* }
 				$( $t:tt )*
 			) => {
-				$frame_support::expand_after!(
+				$frame_support::match_and_insert!(
 					{ $( $pattern )* }
 					{
 						::{

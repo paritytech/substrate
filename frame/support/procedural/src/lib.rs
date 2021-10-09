@@ -25,8 +25,8 @@ mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
 mod dummy_part_checker;
-mod expand_after;
 mod key_prefix;
+mod match_and_insert;
 mod pallet;
 mod partial_eq_no_bound;
 mod storage;
@@ -539,12 +539,12 @@ pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	dummy_part_checker::generate_dummy_part_checker(input)
 }
 
-/// Macro that expands after the first match of some pattern.
+/// Macro that inserts some tokens after the first match of some pattern.
 ///
 /// # Example:
 ///
 /// ```nocompile
-/// expand_after!(
+/// match_and_insert!(
 ///     { match pattern } // the match pattern cannot contains any group: `[]`, `()`, `{}`.
 ///     { expansion tokens } // content inside braces can be anything including groups.
 ///     Some content with { at some point match pattern } other match pattern are ignored
@@ -554,10 +554,10 @@ pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 /// will generate:
 ///
 /// ```nocompile
-///     Some content with { at some point match pattern expansion tokens } other match pattern are
+///     Some content with { at some point match pattern expansion tokens } other match patterns are
 ///     ignored
 /// ```
 #[proc_macro]
-pub fn expand_after(input: TokenStream) -> TokenStream {
-	expand_after::expand_after(input)
+pub fn match_and_insert(input: TokenStream) -> TokenStream {
+	match_and_insert::match_and_insert(input)
 }

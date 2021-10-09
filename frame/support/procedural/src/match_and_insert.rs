@@ -15,67 +15,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of macro `expand_after`.
+//! Implementation of the `match_and_insert` macro.
 
 use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use std::iter::once;
 use syn::spanned::Spanned;
 
-pub fn expand_after(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	let def = syn::parse_macro_input!(input as ExpandAfterDef);
+pub fn match_and_insert(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let MatchAndInsertDef { pattern, tokens, target } =
+		syn::parse_macro_input!(input as MatchAndInsertDef);
 
-	match expand_in_stream(&def.expand_after, &mut Some(def.expand_with), def.expand_in) {
+	match expand_in_stream(&pattern, &mut Some(tokens), target) {
 		Ok(stream) => stream.into(),
 		Err(err) => err.to_compile_error().into(),
 	}
 }
 
-struct ExpandAfterDef {
-	// Pattern to expand after, this is ensured to have no TokenTree::Group nor TokenTree::Literal
+struct MatchAndInsertDef {
+	// Pattern to match against, this is ensured to have no TokenTree::Group nor TokenTree::Literal
 	// (i.e. contains only Punct or Ident), and not being empty.
-	expand_after: Vec<TokenTree>,
-	// Token stream to write after match.
-	expand_with: TokenStream,
+	pattern: Vec<TokenTree>,
+	// Token stream to insert after the match pattern.
+	tokens: TokenStream,
 	// Token stream to search and write inside.
-	expand_in: TokenStream,
+	target: TokenStream,
 }
 
-impl syn::parse::Parse for ExpandAfterDef {
+impl syn::parse::Parse for MatchAndInsertDef {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let expand_after;
-		let _replace_with_bracket: syn::token::Brace = syn::braced!(expand_after in input);
-		let expand_after =
-			expand_after.parse::<TokenStream>()?.into_iter().collect::<Vec<TokenTree>>();
+		let pattern;
+		let _replace_with_bracket: syn::token::Brace = syn::braced!(pattern in input);
+		let pattern = pattern.parse::<TokenStream>()?.into_iter().collect::<Vec<TokenTree>>();
 
-		if let Some(t) = expand_after.iter().find(|t| matches!(t, TokenTree::Group(_))) {
+		if let Some(t) = pattern.iter().find(|t| matches!(t, TokenTree::Group(_))) {
 			return Err(syn::Error::new(t.span(), "Unexpected group token tree"))
 		}
-		if let Some(t) = expand_after.iter().find(|t| matches!(t, TokenTree::Literal(_))) {
+		if let Some(t) = pattern.iter().find(|t| matches!(t, TokenTree::Literal(_))) {
 			return Err(syn::Error::new(t.span(), "Unexpected literal token tree"))
 		}
 
-		if expand_after.is_empty() {
+		if pattern.is_empty() {
 			return Err(syn::Error::new(Span::call_site(), "empty match pattern is invalid"))
 		}
 
-		let expand_with;
-		let _replace_with_bracket: syn::token::Brace = syn::braced!(expand_with in input);
-		let expand_with: TokenStream = expand_with.parse()?;
+		let tokens;
+		let _replace_with_bracket: syn::token::Brace = syn::braced!(tokens in input);
+		let tokens: TokenStream = tokens.parse()?;
 
-		Ok(Self { expand_with, expand_after, expand_in: input.parse()? })
+		Ok(Self { tokens, pattern, target: input.parse()? })
 	}
 }
 
-// Replace the first found `after` pattern by content of `with`.
-// `with` must be some (Option is used for internal simplification).
-// `after` musn't be empty and only contains Ident or Punct
+// Insert `tokens` after the first matching `pattern`.
+// `tokens` must be some (Option is used for internal simplification).
+// `pattern` must not be empty and should only contain Ident or Punct.
 fn expand_in_stream(
-	after: &[TokenTree],
-	with: &mut Option<TokenStream>,
+	pattern: &[TokenTree],
+	tokens: &mut Option<TokenStream>,
 	stream: TokenStream,
 ) -> syn::Result<TokenStream> {
-	assert!(with.is_some(), "`with` must be some, Option is used because `with` is used only once");
-	assert!(!after.is_empty(), "`after` mustn't be empty, otherwise it cannot be found");
+	assert!(tokens.is_some(), "`tokens` must be some, Option is used because `tokens` is used only once");
+	assert!(!pattern.is_empty(), "`pattern` must not be empty, otherwise there is nothing to match against");
 
 	let stream_span = stream.span();
 	let mut stream = stream.into_iter();
@@ -87,7 +87,7 @@ fn expand_in_stream(
 			TokenTree::Group(group) => {
 				match_cursor = 0;
 				let group_stream = group.stream();
-				match expand_in_stream(after, with, group_stream) {
+				match expand_in_stream(pattern, tokens, group_stream) {
 					Ok(s) => {
 						extended
 							.extend(once(TokenTree::Group(Group::new(group.delimiter(), s))));
@@ -100,12 +100,12 @@ fn expand_in_stream(
 				}
 			},
 			other => {
-				advance_match_cursor(&other, after, &mut match_cursor);
+				advance_match_cursor(&other, pattern, &mut match_cursor);
 
 				extended.extend(once(other));
 
-				if match_cursor == after.len() {
-					extended.extend(once(with.take().expect("with is used to replace only once")));
+				if match_cursor == pattern.len() {
+					extended.extend(once(tokens.take().expect("tokens is used to replace only once")));
 					extended.extend(stream);
 					return Ok(extended)
 				}
@@ -113,14 +113,14 @@ fn expand_in_stream(
 		}
 	}
 	// if we reach this point, it means the stream is empty and we haven't found a matching pattern
-	let msg = format!("Cannot find pattern `{:?}` in given token stream", after);
+	let msg = format!("Cannot find pattern `{:?}` in given token stream", pattern);
 	Err(syn::Error::new(stream_span, msg))
 }
 
-fn advance_match_cursor(other: &TokenTree, after: &[TokenTree], match_cursor: &mut usize) {
+fn advance_match_cursor(other: &TokenTree, pattern: &[TokenTree], match_cursor: &mut usize) {
 	use TokenTree::{Ident, Punct};
 
-	let other_match_pattern = match (other, &after[*match_cursor]) {
+	let other_match_pattern = match (other, &pattern[*match_cursor]) {
 		(Ident(i1), Ident(i2)) => i1 == i2,
 		(Punct(p1), Punct(p2)) => p1.as_char() == p2.as_char(),
 		_ => false,
