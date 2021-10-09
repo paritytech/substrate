@@ -10,7 +10,7 @@ futures = "0.3.16"
 log = "0.4"
 serde = { version = "1.0.130", features = ["derive"] }
 
-jsonrpsee = { git = "http://github.com/paritytech/jsonrpsee", rev = "0b7614884ea24fd1e00ffb406a79d48e0be8dee1", features = ["full"] }
+jsonrpsee = { git = "http://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979", features = ["full"] }
 
 codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
 
