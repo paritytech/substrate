@@ -5453,10 +5453,14 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> 2369417073 (Add pallet-alliance)
 =======
  "sha2 0.9.3",
 >>>>>>> 4482b77565 (Derive pallet_identity::Config and Fix test/benchmarking)
+=======
+ "sha2 0.9.5",
+>>>>>>> b0f38f7b9f (Remove pallet_identity Config trait)
  "sp-core",
  "sp-io",
  "sp-runtime",

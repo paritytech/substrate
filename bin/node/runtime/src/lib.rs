@@ -1412,7 +1412,7 @@ parameter_types! {
 	pub const MaxWebsiteUrlLength: u32 = 255;
 }
 
-impl pallet_alliance::Config for Runtime {
+impl pallet_alliance::Config<AllianceCollective> for Runtime {
 	type Event = Event;
 	type Proposal = Call;
 	type SuperMajorityOrigin = EnsureOneOf<
@@ -1420,6 +1420,8 @@ impl pallet_alliance::Config for Runtime {
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionMoreThan<_2, _3, AccountId, AllianceCollective>,
 	>;
+	type Currency = Balances;
+	type Slashed = Treasury;
 	type InitializeMembers = AllianceMotion;
 	type MembershipChanged = AllianceMotion;
 	type IdentityVerifier = AllianceIdentityVerifier;

@@ -130,9 +130,11 @@ pub type ProposalIndex = u32;
 
 type Url = Vec<u8>;
 
-type BalanceOf<T> = <<T as pallet_identity::Config>::Currency as Currency<
+type BalanceOf<T, I = ()> =
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
->>::Balance;
+>>::NegativeImbalance;
 
 pub trait IdentityVerifier<AccountId: Clone + Ord> {
 	fn has_identity(who: &AccountId, fields: u64) -> bool;
@@ -194,7 +196,7 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config + pallet_identity::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -209,6 +211,12 @@ pub mod pallet {
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a majority-carries referendum.
 		type SuperMajorityOrigin: EnsureOrigin<Self::Origin>;
+
+		/// The currency used for deposits.
+		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// What to do with slashed funds.
+		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
 		/// What to do with genesis members
 		type InitializeMembers: InitializeMembers<Self::AccountId>;
@@ -232,7 +240,7 @@ pub mod pallet {
 
 		/// The amount of a deposit required for submitting candidacy.
 		#[pallet::constant]
-		type CandidateDeposit: Get<BalanceOf<Self>>;
+		type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -297,7 +305,7 @@ pub mod pallet {
 		FoundersInitialized(Vec<T::AccountId>),
 		/// An account has been added as a candidate and lock its deposit. \[candidate, nominator,
 		/// reserved\]
-		CandidateAdded(T::AccountId, Option<T::AccountId>, Option<BalanceOf<T>>),
+		CandidateAdded(T::AccountId, Option<T::AccountId>, Option<BalanceOf<T, I>>),
 		/// A proposal has been proposed to approve the candidate. \[candidate\]
 		CandidateApproved(T::AccountId),
 		/// A proposal has been proposed to reject the candidate. \[candidate\]
@@ -306,10 +314,10 @@ pub mod pallet {
 		AllyElevated(T::AccountId),
 		/// A member has retired to an ordinary account with its deposit unreserved. \[member,
 		/// unreserved\]
-		MemberRetired(T::AccountId, Option<BalanceOf<T>>),
+		MemberRetired(T::AccountId, Option<BalanceOf<T, I>>),
 		/// A member has been kicked out to an ordinary account with its deposit slashed. \[member,
 		/// slashed\]
-		MemberKicked(T::AccountId, Option<BalanceOf<T>>),
+		MemberKicked(T::AccountId, Option<BalanceOf<T, I>>),
 		/// Accounts or websites have been added into blacklist. \[items\]
 		BlacklistAdded(Vec<BlacklistItem<T::AccountId>>),
 		/// Accounts or websites have been removed from blacklist. \[items\]
@@ -391,7 +399,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn deposit_of)]
 	pub type DepositOf<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T>, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T, I>, OptionQuery>;
 
 	/// The current set of candidates.
 	/// If the candidacy is approved by a motion, then it will become an ally member.

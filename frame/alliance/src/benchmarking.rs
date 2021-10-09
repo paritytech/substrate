@@ -18,16 +18,11 @@
 //! Alliance pallet benchmarking.
 
 use sp_runtime::traits::{Bounded, StaticLookup};
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
-use frame_support::{
-	assert_ok,
-	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
-	BoundedVec,
-};
+use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
 use frame_system::RawOrigin;
-use pallet_identity::{Data, IdentityInfo, Judgement, Pallet as Identity};
 
 use super::{Pallet as Alliance, *};
 
@@ -43,48 +38,13 @@ fn test_cid() -> Cid {
 	)
 }
 
-fn registrar_account<T: Config<I>, I: 'static>() -> T::AccountId {
-	account("registrar", 0, SEED)
-}
-
-fn create_registrar_account<T: Config<I>, I: 'static>() -> T::AccountId {
-	let registrar: T::AccountId = registrar_account::<T, I>();
-	let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
-	assert_ok!(Identity::<T>::add_registrar(RawOrigin::Root.into(), registrar.clone()));
-	registrar
-}
-
 fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, SEED);
-	T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
-
-	let info = IdentityInfo {
-		additional: BoundedVec::default(),
-		display: Data::Raw(b"name".to_vec().try_into().unwrap()),
-		legal: Data::default(),
-		web: Data::Raw(b"website".to_vec().try_into().unwrap()),
-		riot: Data::default(),
-		email: Data::default(),
-		pgp_fingerprint: None,
-		image: Data::default(),
-		twitter: Data::default(),
-	};
-	assert_ok!(Identity::<T>::set_identity(
-		RawOrigin::Signed(account.clone()).into(),
-		Box::new(info.clone())
-	));
-	assert_ok!(Identity::<T>::provide_judgement(
-		RawOrigin::Signed(registrar_account::<T, I>()).into(),
-		0,
-		T::Lookup::unlookup(account.clone()),
-		Judgement::KnownGood
-	));
+	T::Currency::make_free_balance_be(&account, BalanceOf::<T, I>::max_value());
 	account
 }
 
 fn set_members<T: Config<I>, I: 'static>() {
-	create_registrar_account::<T, I>();
-
 	let founders = vec![
 		funded_account::<T, I>("founder", 1),
 		funded_account::<T, I>("founder", 2),

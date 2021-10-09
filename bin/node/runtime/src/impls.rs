@@ -17,7 +17,7 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use crate::{AllianceMotion, Authorship, Balances, Call, Identity, NegativeImbalance};
+use crate::{AllianceMotion, Authorship, Balances, Call, NegativeImbalance};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResultWithPostInfo},
 	traits::{Currency, OnUnbalanced},
@@ -51,17 +51,21 @@ impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 
 pub struct AllianceIdentityVerifier;
 impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
-	fn super_account_id(who: &AccountId) -> Option<AccountId> {
-		Identity::super_of(who).map(|parent| parent.0)
-	}
-
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn has_identity(who: &AccountId, fields: u64) -> bool {
-		Identity::has_identity(who, fields)
+		crate::Identity::has_identity(who, fields)
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn has_identity(_who: &AccountId, _fields: u64) -> bool {
+		true
+	}
+
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn has_good_judgement(who: &AccountId) -> bool {
+		use pallet_identity::Judgement;
 		if let Some(judgements) =
-			Identity::identity(who).map(|registration| registration.judgements)
+			crate::Identity::identity(who).map(|registration| registration.judgements)
 		{
 			judgements
 				.iter()
@@ -70,6 +74,21 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 		} else {
 			false
 		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn has_good_judgement(_who: &AccountId) -> bool {
+		true
+	}
+
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	fn super_account_id(who: &AccountId) -> Option<AccountId> {
+		crate::Identity::super_of(who).map(|parent| parent.0)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn super_account_id(_who: &AccountId) -> Option<AccountId> {
+		None
 	}
 }
 

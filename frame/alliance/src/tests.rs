@@ -276,11 +276,13 @@ fn submit_candidacy_works() {
 		);
 
 		// check missing identity judgement
+		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
 			Alliance::submit_candidacy(Origin::signed(6)),
 			Error::<Test, ()>::WithoutGoodIdentityJudgement
 		);
 		// check missing identity info
+		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
 			Alliance::submit_candidacy(Origin::signed(7)),
 			Error::<Test, ()>::WithoutIdentityDisplayAndWebsite
@@ -326,11 +328,13 @@ fn nominate_candidacy_works() {
 		);
 
 		// check missing identity judgement
+		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
 			Alliance::submit_candidacy(Origin::signed(6)),
 			Error::<Test, ()>::WithoutGoodIdentityJudgement
 		);
 		// check missing identity info
+		#[cfg(not(feature = "runtime-benchmarks"))]
 		assert_noop!(
 			Alliance::submit_candidacy(Origin::signed(7)),
 			Error::<Test, ()>::WithoutIdentityDisplayAndWebsite

@@ -132,10 +132,17 @@ impl pallet_identity::Config for Test {
 
 pub struct AllianceIdentityVerifier;
 impl IdentityVerifier<u64> for AllianceIdentityVerifier {
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn has_identity(who: &u64, fields: u64) -> bool {
 		Identity::has_identity(who, fields)
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn has_identity(_who: &u64, _fields: u64) -> bool {
+		true
+	}
+
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn has_good_judgement(who: &u64) -> bool {
 		if let Some(judgements) =
 			Identity::identity(who).map(|registration| registration.judgements)
@@ -149,8 +156,19 @@ impl IdentityVerifier<u64> for AllianceIdentityVerifier {
 		}
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn has_good_judgement(_who: &u64) -> bool {
+		true
+	}
+
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn super_account_id(who: &u64) -> Option<u64> {
 		Identity::super_of(who).map(|parent| parent.0)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn super_account_id(_who: &u64) -> Option<u64> {
+		None
 	}
 }
 
@@ -196,6 +214,8 @@ impl Config for Test {
 	type Event = Event;
 	type Proposal = Call;
 	type SuperMajorityOrigin = EnsureSignedBy<One, u64>;
+	type Currency = Balances;
+	type Slashed = ();
 	type InitializeMembers = AllianceMotion;
 	type MembershipChanged = AllianceMotion;
 	type IdentityVerifier = AllianceIdentityVerifier;
