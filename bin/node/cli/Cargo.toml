@@ -36,8 +36,8 @@ crate-type = ["cdylib", "rlib"]
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde = { version = "1.0.126", features = ["derive"] }
-futures = "0.3.16"
-hex-literal = "0.3.1"
+futures = "0.3.17"
+hex-literal = "0.3.3"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
@@ -117,7 +117,7 @@ sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
-futures = "0.3.16"
+futures = "0.3.17"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
 nix = "0.19"

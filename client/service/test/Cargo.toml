@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 hex = "0.4"
-hex-literal = "0.3.1"
+hex-literal = "0.3.3"
 tempfile = "3.1.0"
 tokio = { version = "1.10.0", features = ["time"] }
 log = "0.4.8"
@@ -27,7 +27,7 @@ sp-externalities = { version = "0.10.0-dev", path = "../../../primitives/externa
 sp-trie = { version = "4.0.0-dev", path = "../../../primitives/trie" }
 sp-storage = { version = "4.0.0-dev", path = "../../../primitives/storage" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../db" }
-futures = "0.3.16"
+futures = "0.3.17"
 sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }

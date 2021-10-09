@@ -9,7 +9,7 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Transaction pool client facing API."
 
 [dependencies]
-futures = { version = "0.3.1"  }
+futures = { version = "0.3.17"  }
 log = { version = "0.4.8" }
 serde = { version = "1.0.126", features = ["derive"] }
 thiserror = { version = "1.0.21" }

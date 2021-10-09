@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "0.3.16"
+futures = "0.3.17"
 jsonrpc-core-client = { version = "18.0.0", default-features = false, features = [
     "http",
 ] }
