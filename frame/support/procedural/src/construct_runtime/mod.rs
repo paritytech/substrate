@@ -98,7 +98,7 @@
 //!
 //! Visualizing the entire flow of `construct_runtime!`, it would look like the following:
 //!
-//! ```
+//! ```ignore
 //! +--------------------+     +--------------------------+     +---------------+
 //! |                    |     |   (defined in pallet)    |     |               |
 //! | construct_runtime! | --> | construct_runtime_parts! | --> | expand_after! |
