@@ -311,7 +311,7 @@ cargo-deny:
     when:                          always
     paths:
       - deny.log
-  # FIXME: Temorarily allow to fail.
+  # FIXME: Temporarily allow to fail.
   allow_failure:                   true
 
 cargo-fmt:
@@ -320,6 +320,13 @@ cargo-fmt:
   <<:                              *test-refs
   script:
     - cargo +nightly fmt --all -- --check
+
+cargo-clippy:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy
 
 cargo-check-benches:
   stage:                           test

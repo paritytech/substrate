@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{EnsureOrigin, OnInitialize};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Zero};
@@ -163,6 +163,6 @@ benchmarks! {
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
 		assert!(!T::Currency::free_balance(&winner).is_zero())
 	}
-}
 
-impl_benchmark_test_suite!(Lottery, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Lottery, crate::mock::new_test_ext(), crate::mock::Test);
+}

@@ -1,12 +1,13 @@
 [package]
 name = "node-template-runtime"
 version = "3.0.0"
+description = 'A fresh FRAME-based Substrate runtime, ready for hacking.'
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+homepage = "https://substrate.dev"
 edition = "2018"
 license = "Unlicense"
-homepage = "https://substrate.dev"
-repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 publish = false
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
