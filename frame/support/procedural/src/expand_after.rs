@@ -82,50 +82,51 @@ fn expand_in_stream(
 	let mut extended = TokenStream::new();
 	let mut match_cursor = 0;
 
-	loop {
-		match stream.next() {
-			Some(TokenTree::Group(group)) => {
+	while let Some(token) = stream.next() {
+		match token {
+			TokenTree::Group(group) => {
 				match_cursor = 0;
-				let stream = group.stream();
-				match expand_in_stream(after, with, stream) {
-					Ok(stream) => {
+				let group_stream = group.stream();
+				match expand_in_stream(after, with, group_stream) {
+					Ok(s) => {
 						extended
-							.extend(once(TokenTree::Group(Group::new(group.delimiter(), stream))));
-						break
+							.extend(once(TokenTree::Group(Group::new(group.delimiter(), s))));
+						extended.extend(stream);
+						return Ok(extended)
 					},
 					Err(_) => {
 						extended.extend(once(TokenTree::Group(group)));
 					},
 				}
 			},
-			Some(other) => {
-				use TokenTree::{Ident, Punct};
-
-				let other_match_pattern = match (&other, &after[match_cursor]) {
-					(Ident(i1), Ident(i2)) => i1 == i2,
-					(Punct(p1), Punct(p2)) => p1.as_char() == p2.as_char(),
-					_ => false,
-				};
-
-				if other_match_pattern {
-					match_cursor += 1
-				}
+			other => {
+				advance_match_cursor(&other, after, &mut match_cursor);
 
 				extended.extend(once(other));
 
 				if match_cursor == after.len() {
 					extended.extend(once(with.take().expect("with is used to replace only once")));
-					break
+					extended.extend(stream);
+					return Ok(extended)
 				}
-			},
-			None => {
-				let msg = format!("Cannot find pattern `{:?}` in given token stream", after);
-				return Err(syn::Error::new(stream_span, msg))
 			},
 		}
 	}
+	// if we reach this point, it means the stream is empty and we haven't found a matching pattern
+	let msg = format!("Cannot find pattern `{:?}` in given token stream", after);
+	Err(syn::Error::new(stream_span, msg))
+}
 
-	extended.extend(stream);
+fn advance_match_cursor(other: &TokenTree, after: &[TokenTree], match_cursor: &mut usize) {
+	use TokenTree::{Ident, Punct};
 
-	Ok(extended)
+	let other_match_pattern = match (other, &after[*match_cursor]) {
+		(Ident(i1), Ident(i2)) => i1 == i2,
+		(Punct(p1), Punct(p2)) => p1.as_char() == p2.as_char(),
+		_ => false,
+	};
+
+	if other_match_pattern {
+		*match_cursor += 1;
+	}
 }
