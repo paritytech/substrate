@@ -74,8 +74,14 @@ fn expand_in_stream(
 	tokens: &mut Option<TokenStream>,
 	stream: TokenStream,
 ) -> syn::Result<TokenStream> {
-	assert!(tokens.is_some(), "`tokens` must be some, Option is used because `tokens` is used only once");
-	assert!(!pattern.is_empty(), "`pattern` must not be empty, otherwise there is nothing to match against");
+	assert!(
+		tokens.is_some(),
+		"`tokens` must be some, Option is used because `tokens` is used only once"
+	);
+	assert!(
+		!pattern.is_empty(),
+		"`pattern` must not be empty, otherwise there is nothing to match against"
+	);
 
 	let stream_span = stream.span();
 	let mut stream = stream.into_iter();
@@ -89,8 +95,7 @@ fn expand_in_stream(
 				let group_stream = group.stream();
 				match expand_in_stream(pattern, tokens, group_stream) {
 					Ok(s) => {
-						extended
-							.extend(once(TokenTree::Group(Group::new(group.delimiter(), s))));
+						extended.extend(once(TokenTree::Group(Group::new(group.delimiter(), s))));
 						extended.extend(stream);
 						return Ok(extended)
 					},
@@ -105,7 +110,8 @@ fn expand_in_stream(
 				extended.extend(once(other));
 
 				if match_cursor == pattern.len() {
-					extended.extend(once(tokens.take().expect("tokens is used to replace only once")));
+					extended
+						.extend(once(tokens.take().expect("tokens is used to replace only once")));
 					extended.extend(stream);
 					return Ok(extended)
 				}
