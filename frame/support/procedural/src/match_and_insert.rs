@@ -21,6 +21,12 @@ use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use std::iter::once;
 use syn::spanned::Spanned;
 
+mod keyword {
+	syn::custom_keyword!(target);
+	syn::custom_keyword!(pattern);
+	syn::custom_keyword!(tokens);
+}
+
 pub fn match_and_insert(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let MatchAndInsertDef { pattern, tokens, target } =
 		syn::parse_macro_input!(input as MatchAndInsertDef);
@@ -37,14 +43,24 @@ struct MatchAndInsertDef {
 	pattern: Vec<TokenTree>,
 	// Token stream to insert after the match pattern.
 	tokens: TokenStream,
-	// Token stream to search and write inside.
+	// Token stream to search and insert tokens into.
 	target: TokenStream,
 }
 
 impl syn::parse::Parse for MatchAndInsertDef {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let pattern;
-		let _replace_with_bracket: syn::token::Brace = syn::braced!(pattern in input);
+		let mut target;
+		let _ = input.parse::<keyword::target>()?;
+		let _ = input.parse::<syn::Token![=]>()?;
+		let _replace_with_bracket: syn::token::Bracket = syn::bracketed!(target in input);
+		let _replace_with_brace: syn::token::Brace = syn::braced!(target in target);
+		let target = target.parse()?;
+
+		let mut pattern;
+		let _ = input.parse::<keyword::pattern>()?;
+		let _ = input.parse::<syn::Token![=]>()?;
+		let _replace_with_bracket: syn::token::Bracket = syn::bracketed!(pattern in input);
+		let _replace_with_brace: syn::token::Brace = syn::braced!(pattern in pattern);
 		let pattern = pattern.parse::<TokenStream>()?.into_iter().collect::<Vec<TokenTree>>();
 
 		if let Some(t) = pattern.iter().find(|t| matches!(t, TokenTree::Group(_))) {
@@ -58,11 +74,14 @@ impl syn::parse::Parse for MatchAndInsertDef {
 			return Err(syn::Error::new(Span::call_site(), "empty match pattern is invalid"))
 		}
 
-		let tokens;
-		let _replace_with_bracket: syn::token::Brace = syn::braced!(tokens in input);
-		let tokens: TokenStream = tokens.parse()?;
+		let mut tokens;
+		let _ = input.parse::<keyword::tokens>()?;
+		let _ = input.parse::<syn::Token![=]>()?;
+		let _replace_with_bracket: syn::token::Bracket = syn::bracketed!(tokens in input);
+		let _replace_with_brace: syn::token::Brace = syn::braced!(tokens in tokens);
+		let tokens = tokens.parse()?;
 
-		Ok(Self { tokens, pattern, target: input.parse()? })
+		Ok(Self { tokens, pattern, target })
 	}
 }
 

@@ -23,15 +23,17 @@
 //! Pallets define their parts (`Call`, `Storage`, ..) either explicitly with the syntax
 //! `::{Call, ...}` or implicitly.
 //!
-//! In case a pallet define their part implicitly, then the pallet must provide the macro
-//! `construct_runtime_parts`. `construct_rutime` will generate some code which calls the macro
-//! `construct_runtime_parts` of the pallet. The `construct_runtime_parts` will generate some code
-//! which calls `construct_runtime` again with this time all explicit definition of parts.
+//! In case a pallet defines its parts implicitly, then the pallet must provide the
+//! `tt_default_parts` macro. `construct_rutime` will generate some code which utilizes `tt_call`
+//! to call the `tt_default_parts` macro of the pallet. `tt_default_parts` will then return the
+//! default pallet parts as input tokens to the `match_and_replace` macro, which ultimately
+//! generates a call to `construct_runtime` again, this time with all the pallet parts explicitly
+//! defined.
 //!
 //! E.g.
 //! ```ignore
 //! construct_runtime!(
-//! 	...
+//! 	//...
 //! 	{
 //! 		System: frame_system = 0, // Implicit definition of parts
 //! 		Balances: pallet_balances = 1, // Implicit definition of parts
@@ -40,52 +42,78 @@
 //! ```
 //! This call has some implicit pallet parts, thus it will expand to:
 //! ```ignore
-//! pallet_balances::construct_runtime_parts!(
-//! 	// First *argument* is the path to frame_support crate.
-//! 	{ frame_support }
-//! 	// Second *argument* is the token identifying the pallet on which `construct_runtime_parts`
-//! 	// must add the parts.
-//! 	{ Balances: pallet_balances }
-//! 	// The other tokens are the tokens in which the parts must be added and once the parts are
-//! 	// added it is the tokens the expand into.
-//! 	frame_system::construct_runtime_parts!(
-//! 		{ frame_support }
-//! 		{ System: frame_system }
+//! frame_support::tt_call! {
+//! 	macro = [{ pallet_balances::tt_default_parts }]
+//! 	~~> frame_support::match_and_insert! {
+//! 		target = [{
+//! 			frame_support::tt_call! {
+//! 				macro = [{ frame_system::tt_default_parts }]
+//! 				~~> frame_support::match_and_insert! {
+//! 					target = [{
+//! 						construct_runtime!(
+//! 							//...
+//! 							{
+//! 								System: frame_system = 0,
+//! 								Balances: pallet_balances = 1,
+//! 							}
+//! 						);
+//! 					}]
+//! 					pattern = [{ System: frame_system }]
+//! 				}
+//! 			}
+//! 		}]
+//! 		pattern = [{ Balances: pallet_balances }]
+//! 	}
+//! }
+//! ```
+//! `tt_default_parts` must be defined. It returns the pallet parts inside some tokens, and
+//! then `tt_call` will pipe the returned pallet parts into the input of `match_and_insert`.
+//! Thus `match_and_insert` will initially receive the following inputs:
+//! ```ignore
+//! frame_support::match_and_insert! {
+//! 	target = [{
+//! 		frame_support::match_and_insert! {
+//! 			target = [{
+//! 				construct_runtime!(
+//! 					//...
+//! 					{
+//! 						System: frame_system = 0,
+//! 						Balances: pallet_balances = 1,
+//! 					}
+//! 				)
+//! 			}]
+//! 			pattern = [{ System: frame_system }]
+//! 			tokens = [{ ::{Pallet, Call} }]
+//! 	}]
+//! 	pattern = [{ Balances: pallet_balances }]
+//! 	tokens = [{ ::{Pallet, Call} }]
+//! }
+//! ```
+//! After dealing with `pallet_balances`, the inner `match_and_insert` will expand to:
+//! ```ignore
+//! frame_support::match_and_insert! {
+//! 	target = [{
 //! 		construct_runtime!(
-//! 			...
+//! 			//...
 //! 			{
 //! 				System: frame_system = 0, // Implicit definition of parts
-//! 				Balances: pallet_balances = 1, // Implicit definition of parts
+//! 				Balances: pallet_balances::{Pallet, Call} = 1, // Explicit definition of parts
 //! 			}
-//! 		);
-//! 	);
-//! );
+//! 		)
+//! 	}]
+//! 	pattern = [{ System: frame_system }]
+//! 	tokens = [{ ::{Pallet, Call} }]
+//! }
 //! ```
-//! `construct_runtime_parts` must be defined. It adds the pallet parts inside some tokens, and
-//! then expands to those tokens with the parts added.
-//! Thus `pallet_balances::construct_runtime_parts` must expand to:
-//! ```ignore
-//! frame_system::construct_runtime_parts!(
-//! 	{ frame_support }
-//! 	{ System: frame_system }
-//! 	construct_runtime!(
-//! 		...
-//! 		{
-//! 			System: frame_system = 0, // Implicit definition of parts
-//! 			Balances: pallet_balances::{Pallet, Call} = 1, // Explicit definition of parts
-//! 		}
-//! 	);
-//! );
-//! ```
-//! Then `frame_system::construct_runtime_parts` must expand to:
+//! Which will then finally expand to the following:
 //! ```ignore
 //! construct_runtime!(
-//! 	...
+//! 	//...
 //! 	{
-//! 		System: frame_system::{Pallet, Call} = 0, // Explicit definition of parts
-//! 		Balances: pallet_balances::{Pallet, Call} = 1, // Explicit definition of parts
+//! 		System: frame_system::{Pallet, Call},
+//! 		Balances: pallet_balances::{Pallet, Call},
 //! 	}
-//! );
+//! )
 //! ```
 //! This call has no implicit pallet parts, thus it will expand to the runtime construction:
 //! ```ignore
@@ -99,11 +127,11 @@
 //! Visualizing the entire flow of `construct_runtime!`, it would look like the following:
 //!
 //! ```ignore
-//! +--------------------+     +--------------------------+     +-------------------+
-//! |                    |     |   (defined in pallet)    |     |                   |
-//! | construct_runtime! | --> | construct_runtime_parts! | --> | match_and_insert! |
-//! | w/ no pallet parts |     |                          |     |                   |
-//! +--------------------+     +--------------------------+     +-------------------+
+//! +--------------------+     +---------------------+     +-------------------+
+//! |                    |     | (defined in pallet) |     |                   |
+//! | construct_runtime! | --> |  tt_default_parts!  | --> | match_and_insert! |
+//! | w/ no pallet parts |     |                     |     |                   |
+//! +--------------------+     +---------------------+     +-------------------+
 //!
 //!     +--------------------+
 //!     |                    |
@@ -161,9 +189,12 @@ fn construct_runtime_intermediary_expansion(
 		let pallet_name = &pallet.name;
 		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
 		expansion = quote::quote!(
-			#pallet_path::construct_runtime_parts! {
-				{ #pallet_name: #pallet_path #pallet_instance }
-				#expansion
+			#frame_support::tt_call! {
+				macro = [{ #pallet_path::tt_default_parts }]
+				~~> #frame_support::match_and_insert! {
+					target = [{ #expansion }]
+					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]
+				}
 			}
 		);
 	}

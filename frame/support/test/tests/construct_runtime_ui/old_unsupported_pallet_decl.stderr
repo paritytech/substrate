@@ -1,4 +1,4 @@
-error[E0433]: failed to resolve: could not find `construct_runtime_parts` in `pallet_old`
+error[E0433]: failed to resolve: could not find `tt_default_parts` in `pallet_old`
   --> $DIR/old_unsupported_pallet_decl.rs:15:1
    |
 15 | / construct_runtime! {
@@ -8,7 +8,7 @@ error[E0433]: failed to resolve: could not find `construct_runtime_parts` in `pa
 ...  |
 23 | |     }
 24 | | }
-   | |_^ could not find `construct_runtime_parts` in `pallet_old`
+   | |_^ could not find `tt_default_parts` in `pallet_old`
    |
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 

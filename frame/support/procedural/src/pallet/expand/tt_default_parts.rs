@@ -18,12 +18,12 @@
 use crate::{pallet::Def, COUNTER};
 use syn::spanned::Spanned;
 
-/// Generate the `construct_runtime_parts` macro.
-pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream {
+/// Generate the `tt_default_parts` macro.
+pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
-	let construct_runtime_parts_unique_id =
-		syn::Ident::new(&format!("__construct_runtime_parts_{}", count), def.item.span());
+	let default_parts_unique_id =
+		syn::Ident::new(&format!("__tt_default_parts_{}", count), def.item.span());
 
 	let call_part = def.call.as_ref().map(|_| quote::quote!(Call,));
 
@@ -50,40 +50,28 @@ pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream
 		def.validate_unsigned.as_ref().map(|_| quote::quote!(ValidateUnsigned,));
 
 	quote::quote!(
-		// Export the construct runtime parts macro with a unique name to avoid naming conflicts.
-		//
-		// macro args are:
-		// ```
-		// { $pattern_tokens }
-		// $input
-		// ```
-		//
-		// it will search in $input for the $pattern_tokens and then expand after it
-		// `::{Part1, Part2, ..}`.
+		// This macro follows the conventions as laid out by the `tt-call` crate. It does not
+		// accept any arguments and simply returns the pallet parts, separated by commas, then
+		// wrapped inside of braces and finally prepended with double colons, to the caller inside
+		// of a key named `tokens`.
 		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #construct_runtime_parts_unique_id {
-			(
-				{ $( $pattern:tt )* }
-				$( $t:tt )*
-			) => {
-				#frame_support::match_and_insert!(
-					{ $( $pattern )* }
-					{
+		macro_rules! #default_parts_unique_id {
+			{
+				$caller:tt
+			} => {
+				#frame_support::tt_return! {
+					$caller
+					tokens = [{
 						::{
 							Pallet, #call_part #storage_part #event_part #origin_part #config_part
 							#inherent_part #validate_unsigned_part
 						}
-					}
-					$( $t )*
-				);
-			}
+					}]
+				}
+			};
 		}
 
-		/// Macro to build the pallet parts inside `construct_runtime`.
-		///
-		/// This macro is expected to be called by `construct_runtime` when the pallet parts are
-		/// not explicitly provided.
-		pub use #construct_runtime_parts_unique_id as construct_runtime_parts;
+		pub use #default_parts_unique_id as tt_default_parts;
 	)
 }

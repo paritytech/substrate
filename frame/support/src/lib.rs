@@ -50,6 +50,8 @@ pub use sp_runtime::RuntimeDebug;
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use sp_std;
+#[doc(hidden)]
+pub use tt_call::*;
 
 #[macro_use]
 pub mod dispatch;
