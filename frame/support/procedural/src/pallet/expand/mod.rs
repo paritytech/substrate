@@ -18,7 +18,6 @@
 mod call;
 mod config;
 mod constants;
-mod tt_default_parts;
 mod error;
 mod event;
 mod genesis_build;
@@ -30,6 +29,7 @@ mod origin;
 mod pallet_struct;
 mod storage;
 mod store_trait;
+mod tt_default_parts;
 mod type_value;
 mod validate_unsigned;
 
