@@ -1,19 +1,20 @@
 // This file is part of Substrate.
 
 // Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// 	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Transaction pool client facing API.
 #![warn(missing_docs)]
@@ -222,13 +223,14 @@ pub trait TransactionPool: Send + Sync {
 		at: NumberFor<Self::Block>,
 	) -> Pin<
 		Box<
-			dyn Future<Output = Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>>
-				+ Send,
+			dyn Future<
+					Output = Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send>,
+				> + Send,
 		>,
 	>;
 
 	/// Get an iterator for ready transactions ordered by priority.
-	fn ready(&self) -> Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>;
+	fn ready(&self) -> Box<dyn ReadyTransactions<Item = Arc<Self::InPoolTransaction>> + Send>;
 
 	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
@@ -251,6 +253,27 @@ pub trait TransactionPool: Send + Sync {
 
 	/// Return specific ready transaction by hash, if there is one.
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>>;
+}
+
+/// An iterator of ready transactions.
+///
+/// The trait extends regular [`std::iter::Iterator`] trait and allows reporting
+/// last-returned element as invalid.
+///
+/// The implementation is then allowed, for performance reasons, to change the elements
+/// returned next, by e.g.  skipping elements that are known to depend on the reported
+/// transaction, which yields them invalid as well.
+pub trait ReadyTransactions: Iterator {
+	/// Report given transaction as invalid.
+	///
+	/// This might affect subsequent elements returned by the iterator, so dependent transactions
+	/// are skipped for performance reasons.
+	fn report_invalid(&mut self, _tx: &Self::Item);
+}
+
+/// A no-op implementation for an empty iterator.
+impl<T> ReadyTransactions for std::iter::Empty<T> {
+	fn report_invalid(&mut self, _tx: &T) {}
 }
 
 /// Events that the transaction pool listens for.

@@ -37,7 +37,7 @@ use sc_client_api::light::{
 use sp_core::{
 	sr25519,
 	storage::{ChildInfo, Storage, StorageChild},
-	ChangesTrieConfiguration,
+	ChangesTrieConfiguration, Pair,
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor};
 use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
@@ -118,11 +118,15 @@ impl GenesisParameters {
 				sr25519::Public::from(Sr25519Keyring::Bob).into(),
 				sr25519::Public::from(Sr25519Keyring::Charlie).into(),
 			],
-			vec![
-				AccountKeyring::Alice.into(),
-				AccountKeyring::Bob.into(),
-				AccountKeyring::Charlie.into(),
-			],
+			(0..16_usize)
+				.into_iter()
+				.map(|i| AccountKeyring::numeric(i).public())
+				.chain(vec![
+					AccountKeyring::Alice.into(),
+					AccountKeyring::Bob.into(),
+					AccountKeyring::Charlie.into(),
+				])
+				.collect(),
 			1000,
 			self.heap_pages_override,
 			self.extra_storage.clone(),

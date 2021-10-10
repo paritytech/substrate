@@ -24,6 +24,7 @@
 
 mod directives;
 mod event_format;
+mod fast_local_time;
 mod layers;
 
 pub use directives::*;
@@ -34,8 +35,8 @@ use tracing::Subscriber;
 use tracing_subscriber::{
 	filter::LevelFilter,
 	fmt::{
-		format, time::ChronoLocal, FormatEvent, FormatFields, Formatter, Layer as FmtLayer,
-		MakeWriter, SubscriberBuilder,
+		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
+		SubscriberBuilder,
 	},
 	layer::{self, SubscriberExt},
 	registry::LookupSpan,
@@ -43,6 +44,7 @@ use tracing_subscriber::{
 };
 
 pub use event_format::*;
+pub use fast_local_time::FastLocalTime;
 pub use layers::*;
 
 /// Logging Result typedef.
@@ -89,12 +91,7 @@ fn prepare_subscriber<N, E, F, W>(
 	profiling_targets: Option<&str>,
 	force_colors: Option<bool>,
 	builder_hook: impl Fn(
-		SubscriberBuilder<
-			format::DefaultFields,
-			EventFormat<ChronoLocal>,
-			EnvFilter,
-			fn() -> std::io::Stderr,
-		>,
+		SubscriberBuilder<format::DefaultFields, EventFormat, EnvFilter, fn() -> std::io::Stderr>,
 	) -> SubscriberBuilder<N, E, F, W>,
 ) -> Result<impl Subscriber + for<'a> LookupSpan<'a>>
 where
@@ -161,11 +158,7 @@ where
 	};
 
 	let enable_color = force_colors.unwrap_or_else(|| atty::is(atty::Stream::Stderr));
-	let timer = ChronoLocal::with_format(if simple {
-		"%Y-%m-%d %H:%M:%S".to_string()
-	} else {
-		"%Y-%m-%d %H:%M:%S%.3f".to_string()
-	});
+	let timer = fast_local_time::FastLocalTime { with_fractional: !simple };
 
 	let event_format = EventFormat {
 		timer,
@@ -177,25 +170,15 @@ where
 	};
 	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
 
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.with_span_events(format::FmtSpan::NONE);
 
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.with_writer(std::io::stderr as _);
 
-	#[cfg(target_os = "unknown")]
-	let builder = builder.with_writer(std::io::sink);
-
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.event_format(event_format);
 
-	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
 	let subscriber = builder.finish().with(PrefixLayer);
-
-	#[cfg(target_os = "unknown")]
-	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
 	Ok(subscriber)
 }
@@ -214,7 +197,7 @@ impl LoggerBuilder {
 		Self {
 			directives: directives.into(),
 			profiling: None,
-			log_reloading: true,
+			log_reloading: false,
 			force_colors: None,
 		}
 	}

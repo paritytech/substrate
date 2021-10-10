@@ -27,6 +27,7 @@ use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
 };
 use sc_telemetry::TelemetryHandle;
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::{Core, RuntimeApiInfo, TransactionFor};
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
@@ -37,7 +38,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
-use sp_utils::mpsc::TracingUnboundedSender;
 
 use crate::{
 	authorities::{AuthoritySet, DelayKind, PendingChange, SharedAuthoritySet},
@@ -118,10 +118,10 @@ where
 						)
 						.await
 				} else {
-					Ok(Some(pending_change.canon_hash))
+					Ok(pending_change.canon_hash)
 				};
 
-				if let Ok(Some(hash)) = effective_block_hash {
+				if let Ok(hash) = effective_block_hash {
 					if let Ok(Some(header)) = self.inner.header(BlockId::Hash(hash)) {
 						if *header.number() == pending_change.effective_number() {
 							out.push((header.hash(), *header.number()));
@@ -549,6 +549,32 @@ where
 
 		if block.with_state() {
 			return self.import_state(block, new_cache).await
+		}
+
+		if number <= self.inner.info().finalized_number {
+			// Importing an old block. Just save justifications and authority set changes
+			if self.check_new_change(&block.header, hash).is_some() {
+				if block.justifications.is_none() {
+					return Err(ConsensusError::ClientImport(
+						"Justification required when importing \
+							an old block with authority set change."
+							.into(),
+					))
+				}
+				assert!(block.justifications.is_some());
+				let mut authority_set = self.authority_set.inner_locked();
+				authority_set.authority_set_changes.insert(number);
+				crate::aux_schema::update_authority_set::<Block, _, _>(
+					&authority_set,
+					None,
+					|insert| {
+						block
+							.auxiliary
+							.extend(insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
+					},
+				);
+			}
+			return (&*self.inner).import_block(block, new_cache).await
 		}
 
 		// on initial sync we will restrict logging under info to avoid spam.

@@ -265,7 +265,7 @@ pub fn testnet_genesis(
 		.map(|x| &x.0)
 		.chain(initial_nominators.iter())
 		.for_each(|x| {
-			if !endowed_accounts.contains(&x) {
+			if !endowed_accounts.contains(x) {
 				endowed_accounts.push(x.clone())
 			}
 		});
@@ -361,6 +361,7 @@ pub fn testnet_genesis(
 			max_members: 999,
 		},
 		vesting: Default::default(),
+		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
 	}
@@ -463,6 +464,8 @@ pub(crate) mod tests {
 	#[test]
 	#[ignore]
 	fn test_connectivity() {
+		sp_tracing::try_init_simple();
+
 		sc_service_test::connectivity(
 			integration_test_config_with_two_authorities(),
 			|config| {

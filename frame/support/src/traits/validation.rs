@@ -18,7 +18,7 @@
 //! Traits for dealing with validation and validators.
 
 use crate::{dispatch::Parameter, weights::Weight};
-use codec::{Codec, Decode};
+use codec::{Codec, Decode, MaxEncodedLen};
 use sp_runtime::{
 	traits::{Convert, Zero},
 	BoundToRuntimeAppPublic, ConsensusEngineId, Permill, RuntimeAppPublic,
@@ -31,7 +31,7 @@ use sp_std::prelude::*;
 /// Something that can give information about the current validator set.
 pub trait ValidatorSet<AccountId> {
 	/// Type for representing validator id in a session.
-	type ValidatorId: Parameter;
+	type ValidatorId: Parameter + MaxEncodedLen;
 	/// A type for converting `AccountId` to `ValidatorId`.
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
 
@@ -109,7 +109,7 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(_validator_index: usize);
+	fn on_disabled(_validator_index: u32);
 }
 
 /// Something that can estimate at which block the next session rotation will happen (i.e. a new

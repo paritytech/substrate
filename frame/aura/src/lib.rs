@@ -38,10 +38,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
-	ConsensusEngineId, Parameter,
+	BoundedSlice, ConsensusEngineId, Parameter, WeakBoundedVec,
 };
 use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
 use sp_runtime::{
@@ -49,7 +49,7 @@ use sp_runtime::{
 	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
 	RuntimeAppPublic,
 };
-use sp_std::prelude::*;
+use sp_std::{convert::TryFrom, vec::Vec};
 
 pub mod migrations;
 mod mock;
@@ -70,7 +70,10 @@ pub mod pallet {
 			+ Parameter
 			+ RuntimeAppPublic
 			+ Default
-			+ MaybeSerializeDeserialize;
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
+		/// The maximum number of authorities that the pallet can hold.
+		type MaxAuthorities: Get<u32>;
 
 		/// A way to check whether a given validator is disabled and should not be authoring blocks.
 		/// Blocks authored by a disabled validator will lead to a panic as part of this module's
@@ -79,6 +82,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
 	#[pallet::hooks]
@@ -113,7 +117,8 @@ pub mod pallet {
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(super) type Authorities<T: Config> =
+		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -143,18 +148,22 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: Vec<T::AuthorityId>) {
+	fn change_authorities(new: WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
-		let log: DigestItem<T::Hash> =
-			DigestItem::Consensus(AURA_ENGINE_ID, ConsensusLog::AuthoritiesChange(new).encode());
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			AURA_ENGINE_ID,
+			ConsensusLog::AuthoritiesChange(new.into_inner()).encode(),
+		);
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put(authorities);
+			let bounded = <BoundedSlice<'_, _, T::MaxAuthorities>>::try_from(authorities)
+				.expect("Initial authority set must be less than T::MaxAuthorities");
+			<Authorities<T>>::put(bounded);
 		}
 	}
 
@@ -202,13 +211,17 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = Self::authorities();
-			if next_authorities != last_authorities {
-				Self::change_authorities(next_authorities);
+			if last_authorities != next_authorities {
+				let bounded = <WeakBoundedVec<_, T::MaxAuthorities>>::force_from(
+					next_authorities,
+					Some("AuRa new session"),
+				);
+				Self::change_authorities(bounded);
 			}
 		}
 	}
 
-	fn on_disabled(i: usize) {
+	fn on_disabled(i: u32) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),

@@ -17,6 +17,7 @@
 
 //! Staking FRAME Pallet.
 
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
@@ -38,10 +39,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
+	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakerStatus, StakingLedger, UnappliedSlash,
-	UnlockChunk, ValidatorPrefs,
+	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	ValidatorPrefs,
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -139,6 +140,15 @@ pub mod pallet {
 		/// claim their reward. This used to limit the i/o cost for the nominator payout.
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
+
+		/// The fraction of the validator set that is safe to be offending.
+		/// After the threshold is reached a new era will be forced.
+		type OffendingValidatorsThreshold: Get<Perbill>;
+
+		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
+		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
+		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
+		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -431,6 +441,19 @@ pub mod pallet {
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
+	/// Indices of validators that have offended in the active era and whether they are currently
+	/// disabled.
+	///
+	/// This value should be a superset of disabled validators since not all offences lead to the
+	/// validator being disabled (if there was no slash). This is needed to track the percentage of
+	/// validators that have offended in the current era, ensuring a new era is forced if
+	/// `OffendingValidatorsThreshold` is reached. The vec is always kept sorted so that we can find
+	/// whether a given validator has previously offended using binary search. It gets cleared when
+	/// the era ends.
+	#[pallet::storage]
+	#[pallet::getter(fn offending_validators)]
+	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
+
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
 	///
@@ -453,7 +476,8 @@ pub mod pallet {
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
-		pub stakers: Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>,
+		pub stakers:
+			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, crate::StakerStatus<T::AccountId>)>,
 		pub min_nominator_bond: BalanceOf<T>,
 		pub min_validator_bond: BalanceOf<T>,
 	}
@@ -491,6 +515,13 @@ pub mod pallet {
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
+				log!(
+					trace,
+					"inserting genesis staker: {:?} => {:?} => {:?}",
+					stash,
+					balance,
+					status
+				);
 				assert!(
 					T::Currency::free_balance(&stash) >= balance,
 					"Stash does not have enough balance to bond."
@@ -502,23 +533,29 @@ pub mod pallet {
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
-					StakerStatus::Validator => <Pallet<T>>::validate(
+					crate::StakerStatus::Validator => <Pallet<T>>::validate(
 						T::Origin::from(Some(controller.clone()).into()),
 						Default::default(),
 					),
-					StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
+					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
 						T::Origin::from(Some(controller.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
 				});
 			}
+
+			// all voters are reported to the `SortedListProvider`.
+			assert_eq!(
+				T::SortedListProvider::count(),
+				CounterForNominators::<T>::get(),
+				"not all genesis stakers were inserted into sorted list provider, something is wrong."
+			);
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
@@ -763,8 +800,15 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				Self::deposit_event(Event::<T>::Bonded(stash, extra));
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
+				// update this staker in the sorted list, if they exist in it.
+				if T::SortedListProvider::contains(&stash) {
+					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
+					debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+				}
+
+				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 			}
 			Ok(())
 		}
@@ -823,7 +867,14 @@ pub mod pallet {
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
+				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
+
+				// update this staker in the sorted list, if they exist in it.
+				if T::SortedListProvider::contains(&ledger.stash) {
+					T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				}
+
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -1314,12 +1365,17 @@ pub mod pallet {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let initial_unlocking = ledger.unlocking.len() as u32;
-			let ledger = ledger.rebond(value);
+			let (ledger, rebonded_value) = ledger.rebond(value);
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
-			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
+			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), rebonded_value));
+
+			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
+			if T::SortedListProvider::contains(&ledger.stash) {
+				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)
@@ -1492,8 +1548,6 @@ pub mod pallet {
 		///
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
-		// TODO: Maybe we can deprecate `chill` in the future.
-		// https://github.com/paritytech/substrate/issues/9111
 		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.

@@ -16,12 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-/// ! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
+//! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
+//!
+//! You can choose a profiling strategy at runtime with
+//! environment variable `WASMTIME_PROFILING_STRATEGY`:
+//!
+//! | `WASMTIME_PROFILING_STRATEGY` | Effect |
+//! |-------------|-------------------------|
+//! | undefined   | No profiling            |
+//! | `"jitdump"` | jitdump profiling       |
+//! | other value | No profiling (warning)  |
+
 mod host;
 mod imports;
 mod instance_wrapper;
 mod runtime;
-mod state_holder;
 mod util;
 
 #[cfg(test)]
