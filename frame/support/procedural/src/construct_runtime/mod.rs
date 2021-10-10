@@ -162,7 +162,6 @@ fn construct_runtime_intermediary_expansion(
 		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
 		expansion = quote::quote!(
 			#pallet_path::construct_runtime_parts! {
-				{ #frame_support }
 				{ #pallet_name: #pallet_path #pallet_instance }
 				#expansion
 			}

@@ -20,6 +20,7 @@ use syn::spanned::Spanned;
 
 /// Generate the `construct_runtime_parts` macro.
 pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream {
+	let frame_support = &def.frame_support;
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 	let construct_runtime_parts_unique_id =
 		syn::Ident::new(&format!("__construct_runtime_parts_{}", count), def.item.span());
@@ -53,7 +54,6 @@ pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream
 		//
 		// macro args are:
 		// ```
-		// { $path_to_frame_support }
 		// { $pattern_tokens }
 		// $input
 		// ```
@@ -64,11 +64,10 @@ pub fn expand_construct_runtime_parts(def: &mut Def) -> proc_macro2::TokenStream
 		#[doc(hidden)]
 		macro_rules! #construct_runtime_parts_unique_id {
 			(
-				{ $frame_support:tt }
 				{ $( $pattern:tt )* }
 				$( $t:tt )*
 			) => {
-				$frame_support::match_and_insert!(
+				#frame_support::match_and_insert!(
 					{ $( $pattern )* }
 					{
 						::{
