@@ -1,5 +1,0 @@
-error: Instantiable pallet with no generic `Event` cannot be constructed: pallet `Balance` must have generic `Event`
-  --> $DIR/missing_event_generic_on_module_with_instance.rs:10:3
-   |
-10 |         Balance: balances::<Instance1>::{Event},
-   |         ^^^^^^^
