@@ -204,8 +204,9 @@ pub mod pallet {
 		/// The outer call dispatch type.
 		type Proposal: Parameter
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
-			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>
+			+ From<Call<Self, I>>
+			+ GetDispatchInfo
 			+ IsSubType<Call<Self, I>>
 			+ IsType<<Self as frame_system::Config>::Call>;
 

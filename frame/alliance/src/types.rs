@@ -61,7 +61,7 @@ pub struct Cid {
 }
 
 impl Cid {
-	/// Create a new CIDv0.
+	/// Creates a new CIDv0.
 	pub fn new_v0(sha2_256_digest: impl Into<Vec<u8>>) -> Self {
 		/// DAG-PB multicodec code
 		const DAG_PB: u64 = 0x70;

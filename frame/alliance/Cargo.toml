@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 hex = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
+sha2 = { version = "0.9", default-features = false, optional = true }
 log = { version = "0.4.14", default-features = false }
 
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
@@ -52,6 +53,7 @@ std = [
 ]
 runtime-benchmarks = [
 	"hex",
+	"sha2",
 	"frame-benchmarking",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
