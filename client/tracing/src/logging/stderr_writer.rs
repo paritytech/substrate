@@ -200,8 +200,7 @@ impl Write for StderrWriter {
 	}
 
 	fn write_all(&mut self, input: &[u8]) -> Result<(), std::io::Error> {
-		self.write(input)?;
-		Ok(())
+		self.write(input).map(|_| ())
 	}
 
 	fn flush(&mut self) -> Result<(), std::io::Error> {
