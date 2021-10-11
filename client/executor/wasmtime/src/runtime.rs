@@ -383,7 +383,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// usage in bytes.
 ///
 /// The actual number of bytes consumed by a function is not trivial to compute  without going
-/// through full compilation. Therefore, it's expected that `native_stack_max` is grealy
+/// through full compilation. Therefore, it's expected that `native_stack_max` is greatly
 /// overestimated and thus never reached in practice. The stack overflow check introduced by the
 /// instrumentation and that relies on the logical item count should be reached first.
 ///
@@ -401,7 +401,7 @@ pub struct DeterministicStackLimit {
 	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm
 	/// function after translation into machine code. It is also not quite trivial.
 	///
-	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
+	/// Therefore, this number should be chosen conservatively. It must be so large so that it can
 	/// fit the [`logical_max`](Self::logical_max) logical values on the stack, according to the
 	/// current instrumentation algorithm.
 	///
@@ -411,7 +411,7 @@ pub struct DeterministicStackLimit {
 
 pub struct Semantics {
 	/// Enabling this will lead to some optimization shenanigans that make calling [`WasmInstance`]
-	/// extermely fast.
+	/// extremely fast.
 	///
 	/// Primarily this is achieved by not recreating the instance for each call and performing a
 	/// bare minimum clean up: reapplying the data segments and restoring the values for global
