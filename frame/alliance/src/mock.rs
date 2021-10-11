@@ -211,6 +211,9 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 }
 
 parameter_types! {
+	// pub const MaxFounders: u32 = 10;
+	// pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
+	// pub const MaxAllies: u32 = 100;
 	pub const CandidateDeposit: u64 = 25;
 	pub const MaxBlacklistCount: u32 = 100;
 	pub const MaxWebsiteUrlLength: u32 = 255;
@@ -225,6 +228,10 @@ impl Config for Test {
 	type MembershipChanged = AllianceMotion;
 	type IdentityVerifier = AllianceIdentityVerifier;
 	type ProposalProvider = AllianceProposalProvider;
+	// type MaxProposals = MaxProposals;
+	// type MaxFounders = MaxMembers;
+	// type MaxFellows = MaxFellows;
+	// type MaxAllies = MaxAllies;
 	type MaxBlacklistCount = MaxBlacklistCount;
 	type MaxWebsiteUrlLength = MaxWebsiteUrlLength;
 	type CandidateDeposit = CandidateDeposit;
@@ -254,8 +261,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			balances: vec![(1, 50), (2, 50), (3, 50), (4, 50), (5, 30), (6, 50), (7, 50)],
 		},
 		alliance: pallet_alliance::GenesisConfig {
-			founders: vec![1, 2],
-			fellows: vec![3],
+			founders: vec![],
+			fellows: vec![],
 			allies: vec![],
 			phantom: Default::default(),
 		},
@@ -289,6 +296,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		assert_ok!(Identity::set_identity(Origin::signed(5), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
+
+		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
 
 		System::set_block_number(1);
 	});

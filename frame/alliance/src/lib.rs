@@ -219,10 +219,10 @@ pub mod pallet {
 		/// What to do with slashed funds.
 		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
-		/// What to do with genesis members
+		/// What to do with genesis voteable members
 		type InitializeMembers: InitializeMembers<Self::AccountId>;
 
-		/// The receiver of the signal for when the members have changed.
+		/// The receiver of the signal for when the voteable members have changed.
 		type MembershipChanged: ChangeMembers<Self::AccountId>;
 
 		/// The identity verifier of alliance member.
@@ -230,6 +230,32 @@ pub mod pallet {
 
 		/// The provider of the proposal operation.
 		type ProposalProvider: ProposalProvider<Self::AccountId, Self::Hash, Self::Proposal>;
+
+		/*
+		/// Maximum number of proposals allowed to be active in parallel.
+		type MaxProposals: Get<ProposalIndex>;
+
+		/// The maximum number of founders supported by the pallet. Used for weight estimation.
+		///
+		/// NOTE:
+		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
+		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		type MaxFounders: Get<u32>;
+
+		/// The maximum number of fellows supported by the pallet. Used for weight estimation.
+		///
+		/// NOTE:
+		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
+		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		type MaxFellows: Get<u32>;
+
+		/// The maximum number of allies supported by the pallet. Used for weight estimation.
+		///
+		/// NOTE:
+		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
+		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		type MaxAllies: Get<u32>;
+		*/
 
 		/// The maximum number of blacklist supported by the pallet.
 		#[pallet::constant]
@@ -249,8 +275,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The founders have already been initialized.
-		FoundersAlreadyInitialized,
+		/// The founders/fellows/allies have already been initialized.
+		MembersAlreadyInitialized,
 		/// Already be a candidate.
 		AlreadyCandidate,
 		/// Not be a candidate.
@@ -302,8 +328,9 @@ pub mod pallet {
 		NewAnnouncement(Cid),
 		/// A on-chain announcement has been removed. \[announcement\]
 		AnnouncementRemoved(Cid),
-		/// Some accounts have been initialized to founders. \[founders\]
-		FoundersInitialized(Vec<T::AccountId>),
+		/// Some accounts have been initialized to members (founders/fellows/allies). \[founders,
+		/// fellows, allies\]
+		MembersInitialized(Vec<T::AccountId>, Vec<T::AccountId>, Vec<T::AccountId>),
 		/// An account has been added as a candidate and lock its deposit. \[candidate, nominator,
 		/// reserved\]
 		CandidateAdded(T::AccountId, Option<T::AccountId>, Option<BalanceOf<T, I>>),
@@ -530,40 +557,54 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// IInitialize the founders to the given members.
+		/// Initialize the founders/fellows/allies.
 		///
 		/// This should be called by the referendum and can only be called once.
 		#[pallet::weight(0)]
-		pub fn init_founders(
+		pub fn init_members(
 			origin: OriginFor<T>,
-			founders: Vec<T::AccountId>,
+			mut founders: Vec<T::AccountId>,
+			mut fellows: Vec<T::AccountId>,
+			mut allies: Vec<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
+
 			ensure!(
-				!Self::has_member(MemberRole::Founder),
-				Error::<T, I>::FoundersAlreadyInitialized
+				!Self::has_member(MemberRole::Founder) &&
+					!Self::has_member(MemberRole::Fellow) &&
+					!Self::has_member(MemberRole::Ally),
+				Error::<T, I>::MembersAlreadyInitialized
 			);
-			for founder in &founders {
-				Self::has_identity(founder)?;
+			for member in founders.iter().chain(fellows.iter()).chain(allies.iter()) {
+				Self::has_identity(member)?;
 			}
 
-			let mut founders = founders;
 			founders.sort();
-			T::InitializeMembers::initialize_members(&founders);
 			Members::<T, I>::insert(&MemberRole::Founder, founders.clone());
+			fellows.sort();
+			Members::<T, I>::insert(&MemberRole::Fellow, fellows.clone());
+			allies.sort();
+			Members::<T, I>::insert(&MemberRole::Ally, allies.clone());
+
+			let mut voteable_members = Vec::with_capacity(founders.len() + fellows.len());
+			voteable_members.extend(founders.clone());
+			voteable_members.extend(fellows.clone());
+			voteable_members.sort();
+
+			T::InitializeMembers::initialize_members(&voteable_members);
 
 			log::debug!(
 				target: "runtime::alliance",
-				"Initialize alliance founders: {:?}",
-				founders,
+				"Initialize alliance founders: {:?}, fellows: {:?}, allies: {:?}",
+				founders, fellows, allies
 			);
 
-			Self::deposit_event(Event::FoundersInitialized(founders));
+			Self::deposit_event(Event::MembersInitialized(founders, fellows, allies));
 			Ok(().into())
 		}
 
 		/// Set a new IPFS cid to the alliance rule.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::set_rule())]
+		#[pallet::weight(T::WeightInfo::set_rule())]
 		pub fn set_rule(origin: OriginFor<T>, rule: Cid) -> DispatchResultWithPostInfo {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
@@ -574,7 +615,7 @@ pub mod pallet {
 		}
 
 		/// Make a new announcement by a new IPFS cid about the alliance issues.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::announce())]
+		#[pallet::weight(T::WeightInfo::announce())]
 		pub fn announce(origin: OriginFor<T>, announcement: Cid) -> DispatchResultWithPostInfo {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
@@ -587,7 +628,7 @@ pub mod pallet {
 		}
 
 		/// Remove the announcement.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_announcement())]
+		#[pallet::weight(T::WeightInfo::remove_announcement())]
 		pub fn remove_announcement(
 			origin: OriginFor<T>,
 			announcement: Cid,
@@ -608,7 +649,7 @@ pub mod pallet {
 
 		/// Submit oneself for candidacy.
 		/// Account must have enough transferable funds in it to pay the candidate deposit.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::submit_candidacy())]
+		#[pallet::weight(T::WeightInfo::submit_candidacy())]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(!Self::is_account_blacklist(&who), Error::<T, I>::AlreadyInBlacklist);
@@ -632,7 +673,7 @@ pub mod pallet {
 
 		/// Founder or fellow can nominate someone to join the alliance and become a candidate.
 		/// There is no deposit required to the nominator or nominee.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::nominate_candidacy())]
+		#[pallet::weight(T::WeightInfo::nominate_candidacy())]
 		pub fn nominate_candidacy(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -655,7 +696,7 @@ pub mod pallet {
 		}
 
 		/// Approve a `Candidate` to become an `Ally`.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::approve_candidate())]
+		#[pallet::weight(T::WeightInfo::approve_candidate())]
 		pub fn approve_candidate(
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
@@ -673,7 +714,7 @@ pub mod pallet {
 		}
 
 		/// Reject a `Candidate` back to an ordinary account.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::reject_candidate())]
+		#[pallet::weight(T::WeightInfo::reject_candidate())]
 		pub fn reject_candidate(
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
@@ -693,7 +734,7 @@ pub mod pallet {
 		}
 
 		/// Elevate an ally to fellow.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::reject_candidate())]
+		#[pallet::weight(T::WeightInfo::reject_candidate())]
 		pub fn elevate_ally(
 			origin: OriginFor<T>,
 			ally: <T::Lookup as StaticLookup>::Source,
@@ -711,7 +752,7 @@ pub mod pallet {
 		}
 
 		/// As a member, retire and back to an ordinary account and unlock its deposit.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::retire())]
+		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(!Self::is_kicking(&who), Error::<T, I>::KickingMember);
@@ -728,7 +769,7 @@ pub mod pallet {
 		}
 
 		/// Kick a member to ordinary account with its deposit slashed.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::kick_member())]
+		#[pallet::weight(T::WeightInfo::kick_member())]
 		pub fn kick_member(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -748,7 +789,7 @@ pub mod pallet {
 		}
 
 		/// Add accounts or websites into blacklist.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::add_blacklist(infos.len() as u32))]
+		#[pallet::weight(T::WeightInfo::add_blacklist(infos.len() as u32, T::MaxWebsiteUrlLength::get()))]
 		pub fn add_blacklist(
 			origin: OriginFor<T>,
 			infos: Vec<BlacklistItem<T::AccountId>>,
@@ -788,7 +829,7 @@ pub mod pallet {
 		}
 
 		/// Remove accounts or websites from blacklist.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_blacklist(infos.len() as u32))]
+		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_blacklist(infos.len() as u32, T::MaxWebsiteUrlLength::get()))]
 		pub fn remove_blacklist(
 			origin: OriginFor<T>,
 			infos: Vec<BlacklistItem<T::AccountId>>,

@@ -44,22 +44,42 @@ fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T
 	account
 }
 
+fn founder<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+	funded_account::<T, I>("founder", index)
+}
+
+fn fellow<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+	funded_account::<T, I>("fellow", index)
+}
+
+fn ally<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+	funded_account::<T, I>("ally", index)
+}
+
+fn candidate<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+	funded_account::<T, I>("candidate", index)
+}
+
+fn outsider<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+	funded_account::<T, I>("outsider", index)
+}
+
+fn blacklist<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
+	funded_account::<T, I>("blacklist", index)
+}
+
 fn set_members<T: Config<I>, I: 'static>() {
-	let founders = vec![
-		funded_account::<T, I>("founder", 1),
-		funded_account::<T, I>("founder", 2),
-		funded_account::<T, I>("founder", 3),
-	];
+	let founders = vec![founder::<T, I>(1), founder::<T, I>(2)];
 	Members::<T, I>::insert(MemberRole::Founder, founders.clone());
 
-	let fellows = vec![funded_account::<T, I>("fellow", 1), funded_account::<T, I>("fellow", 2)];
+	let fellows = vec![fellow::<T, I>(1), fellow::<T, I>(2)];
 	fellows.iter().for_each(|who| {
 		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
 	});
 	Members::<T, I>::insert(MemberRole::Fellow, fellows.clone());
 
-	let allies = vec![funded_account::<T, I>("ally", 1)];
+	let allies = vec![ally::<T, I>(1)];
 	allies.iter().for_each(|who| {
 		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
@@ -67,24 +87,6 @@ fn set_members<T: Config<I>, I: 'static>() {
 	Members::<T, I>::insert(MemberRole::Ally, allies);
 
 	T::InitializeMembers::initialize_members(&[founders.as_slice(), fellows.as_slice()].concat());
-}
-
-fn founder1<T: Config<I>, I: 'static>() -> T::AccountId {
-	funded_account::<T, I>("founder", 1)
-}
-
-fn fellow2<T: Config<I>, I: 'static>() -> T::AccountId {
-	funded_account::<T, I>("fellow", 2)
-}
-
-fn kicking_fellow2<T: Config<I>, I: 'static>() -> T::AccountId {
-	let fellow2 = funded_account::<T, I>("fellow", 2);
-	KickingMembers::<T, I>::insert(&fellow2, true);
-	fellow2
-}
-
-fn ally1<T: Config<I>, I: 'static>() -> T::AccountId {
-	funded_account::<T, I>("ally", 1)
 }
 
 fn set_announcement<T: Config<I>, I: 'static>(cid: Cid) {
@@ -98,31 +100,6 @@ fn set_candidates<T: Config<I>, I: 'static>() {
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
 	});
 	Candidates::<T, I>::put(candidates);
-}
-
-fn candidate1<T: Config<I>, I: 'static>() -> T::AccountId {
-	funded_account::<T, I>("candidate", 1)
-}
-
-fn create_outsider<T: Config<I>, I: 'static>() -> T::AccountId {
-	funded_account::<T, I>("outsider", 1)
-}
-
-fn blacklist_account<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
-	funded_account::<T, I>("blacklist", index)
-}
-
-fn set_blacklist<T: Config<I>, I: 'static>() {
-	let mut account_blacklist = (0..T::MaxBlacklistCount::get())
-		.map(|i| blacklist_account::<T, I>(i))
-		.collect::<Vec<_>>();
-	account_blacklist.sort();
-	AccountBlacklist::<T, I>::put(account_blacklist);
-
-	let mut website_blacklist =
-		(0..T::MaxBlacklistCount::get()).map(|i| vec![i as u8]).collect::<Vec<_>>();
-	website_blacklist.sort();
-	WebsiteBlacklist::<T, I>::put(website_blacklist);
 }
 
 benchmarks_instance_pallet! {
@@ -166,7 +143,7 @@ benchmarks_instance_pallet! {
 	submit_candidacy {
 		set_members::<T, I>();
 
-		let outsider = create_outsider::<T, I>();
+		let outsider = outsider::<T, I>(1);
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(!Alliance::<T, I>::is_candidate(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
@@ -181,10 +158,10 @@ benchmarks_instance_pallet! {
 	nominate_candidacy {
 		set_members::<T, I>();
 
-		let founder1 = founder1::<T, I>();
+		let founder1 = founder::<T, I>(1);
 		assert!(Alliance::<T, I>::is_member_of(&founder1, MemberRole::Founder));
 
-		let outsider = create_outsider::<T, I>();
+		let outsider = outsider::<T, I>(1);
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(!Alliance::<T, I>::is_candidate(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
@@ -202,7 +179,7 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 		set_candidates::<T, I>();
 
-		let candidate1 = candidate1::<T, I>();
+		let candidate1 = candidate::<T, I>(1);
 		assert!(Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(!Alliance::<T, I>::is_member(&candidate1));
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
@@ -222,7 +199,7 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 		set_candidates::<T, I>();
 
-		let candidate1 = candidate1::<T, I>();
+		let candidate1 = candidate::<T, I>(1);
 		assert!(Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(!Alliance::<T, I>::is_member(&candidate1));
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
@@ -241,7 +218,7 @@ benchmarks_instance_pallet! {
 	elevate_ally {
 		set_members::<T, I>();
 
-		let ally1 = ally1::<T, I>();
+		let ally1 = ally::<T, I>(1);
 		assert!(Alliance::<T, I>::is_ally(&ally1));
 
 		let ally1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(ally1.clone());
@@ -257,7 +234,7 @@ benchmarks_instance_pallet! {
 	retire {
 		set_members::<T, I>();
 
-		let fellow2 = fellow2::<T, I>();
+		let fellow2 = fellow::<T, I>(2);
 		assert!(Alliance::<T, I>::is_fellow(&fellow2));
 		assert!(!Alliance::<T, I>::is_kicking(&fellow2));
 
@@ -272,7 +249,9 @@ benchmarks_instance_pallet! {
 	kick_member {
 		set_members::<T, I>();
 
-		let fellow2 = kicking_fellow2::<T, I>();
+		let fellow2 = fellow::<T, I>(2);
+		KickingMembers::<T, I>::insert(&fellow2, true);
+
 		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Fellow));
 		assert!(Alliance::<T, I>::is_kicking(&fellow2));
 
@@ -290,10 +269,16 @@ benchmarks_instance_pallet! {
 
 	add_blacklist {
 		let n in 0 .. T::MaxBlacklistCount::get();
+		let l in 0 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
-		let mut blacklist = (0..n).map(|i| BlacklistItem::AccountId(blacklist_account::<T, I>(i))).collect::<Vec<_>>();
-		blacklist.extend((0..n).map(|i| BlacklistItem::Website(vec![i as u8])));
+
+		let accounts = (0 .. n).map(|i| blacklist::<T, I>(i)).collect::<Vec<_>>();
+		let websites = (0 .. n).map(|i| vec![i as u8; l as usize]).collect::<Vec<_>>();
+
+		let mut blacklist = Vec::with_capacity(accounts.len() + websites.len());
+		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
+		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
 
 		let call = Call::<T, I>::add_blacklist { infos: blacklist.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
@@ -304,12 +289,21 @@ benchmarks_instance_pallet! {
 
 	remove_blacklist {
 		let n in 0 .. T::MaxBlacklistCount::get();
+		let l in 0 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
-		let mut blacklist = (0..n).map(|i| BlacklistItem::AccountId(blacklist_account::<T, I>(i))).collect::<Vec<_>>();
-		blacklist.extend((0..n).map(|i| BlacklistItem::Website(vec![i as u8])));
 
-		set_blacklist::<T, I>();
+		let mut accounts = (0 .. n).map(|i| blacklist::<T, I>(i)).collect::<Vec<_>>();
+		accounts.sort();
+		AccountBlacklist::<T, I>::put(accounts.clone());
+
+		let mut websites = (0 .. n).map(|i| vec![i as u8; l as usize]).collect::<Vec<_>>();
+		websites.sort();
+		WebsiteBlacklist::<T, I>::put(websites.clone());
+
+		let mut blacklist = Vec::with_capacity(accounts.len() + websites.len());
+		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
+		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
 
 		let call = Call::<T, I>::remove_blacklist { infos: blacklist.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
