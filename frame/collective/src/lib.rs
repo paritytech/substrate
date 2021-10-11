@@ -527,7 +527,8 @@ pub mod pallet {
 					})
 					.into())
 			} else {
-				let (proposal_len, active_proposals) = Self::do_propose_proposed(who, threshold, proposal, length_bound)?;
+				let (proposal_len, active_proposals) =
+					Self::do_propose_proposed(who, threshold, proposal, length_bound)?;
 
 				Ok(Some(T::WeightInfo::propose_proposed(
 					proposal_len as u32,  // B
@@ -685,10 +686,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 		let proposal_hash = T::Hashing::hash_of(&proposal);
-		ensure!(
-			!<ProposalOf<T, I>>::contains_key(proposal_hash),
-			Error::<T, I>::DuplicateProposal
-		);
+		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
 		let seats = Self::members().len() as MemberCount;
 		let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
