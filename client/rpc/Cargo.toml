@@ -38,7 +38,7 @@ sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = "0.11.1"
 lazy_static = { version = "1.4.0", optional = true }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "f949d9b2567796068eb3c74de3318f8c34e6e2b6", features = ["server"] }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 
 [dev-dependencies]

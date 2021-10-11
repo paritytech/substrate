@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 
 use jsonrpsee::{
-	http_server::{AccessControlBuilder, Host, HttpServerBuilder, HttpStopHandle},
+	http_server::{AccessControlBuilder, HttpServerBuilder, HttpStopHandle},
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
 };
@@ -105,20 +105,19 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		let host = Host::parse(&format!("localhost:{}", addr.port()));
-		acl = acl.allow_host(host);
-		let host = Host::parse(&format!("127.0.0.1:{}", addr.port()));
-		acl = acl.allow_host(host);
+		acl = acl.set_allowed_hosts([
+			format!("localhost:{}", addr.port()),
+			format!("127.0.0.1:{}", addr.port()),
+		])?;
 
-		// Set allowed origins.
-		for origin in cors {
-			acl = acl.cors_allow_origin(origin.into());
-		}
+		let origins: Vec<String> = cors.iter().map(Into::into).collect();
+		acl = acl.set_allowed_origins(origins)?;
 	};
 
 	let server = HttpServerBuilder::default()
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
+		.custom_tokio_runtime(rt)
 		.build(addr)?;
 
 	let handle = server.stop_handle();
@@ -147,7 +146,8 @@ pub fn start_ws<M: Send + Sync + 'static>(
 
 	let mut builder = WsServerBuilder::default()
 		.max_request_body_size(max_request_body_size as u32)
-		.max_connections(max_connections as u64);
+		.max_connections(max_connections as u64)
+		.custom_tokio_runtime(rt);
 
 	log::info!("Starting JSONRPC WS server: addr={}, allowed origins={:?}", addr, cors);
 
@@ -164,9 +164,8 @@ pub fn start_ws<M: Send + Sync + 'static>(
 
 	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addr)))?;
 
-	let handle = server.stop_handle();
 	let rpc_api = build_rpc_api(module);
-	rt.spawn(async move { server.start(rpc_api).await });
+	let handle = server.start(rpc_api)?;
 
 	Ok(handle)
 }
