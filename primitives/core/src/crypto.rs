@@ -377,8 +377,7 @@ pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss5
 /// encoding and decoding SS58 addresses.
 #[cfg(feature = "std")]
 pub fn set_default_ss58_version(new_default: Ss58AddressFormat) {
-	let prefix: u16 = new_default.into();
-	DEFAULT_VERSION.store(prefix, core::sync::atomic::Ordering::Relaxed);
+	DEFAULT_VERSION.store(new_default.into(), std::sync::atomic::Ordering::Relaxed);
 }
 
 #[cfg(feature = "std")]
