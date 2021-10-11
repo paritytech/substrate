@@ -25,7 +25,7 @@ use std::{
 use futures::channel::mpsc::{channel, Sender};
 use parking_lot::{Mutex, RwLock};
 use retain_mut::RetainMut;
-use sc_transaction_pool_api::{error, PoolStatus};
+use sc_transaction_pool_api::{error, PoolStatus, ReadyTransactions};
 use serde::Serialize;
 use sp_runtime::{
 	generic::BlockId,
@@ -111,7 +111,6 @@ pub struct ValidatedPool<B: ChainApi> {
 	rotator: PoolRotator<ExtrinsicHash<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
@@ -631,7 +630,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> impl Iterator<Item = TransactionFor<B>> + Send {
+	pub fn ready(&self) -> impl ReadyTransactions<Item = TransactionFor<B>> + Send {
 		self.pool.read().ready()
 	}
 

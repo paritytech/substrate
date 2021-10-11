@@ -73,6 +73,7 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 			genesis_hash: Default::default(),
 			number_leaves: Default::default(),
 			finalized_state: None,
+			block_gap: None,
 		}
 	}
 
@@ -167,7 +168,7 @@ impl NetworkProvider for TestNetwork {
 
 impl NetworkStateInfo for TestNetwork {
 	fn local_peer_id(&self) -> PeerId {
-		self.peer_id.clone()
+		self.peer_id
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {

@@ -4,4 +4,4 @@ error: Invalid usage of Event, `Config` contains no associated type `Event`, but
 1 | #[frame_support::pallet]
   | ^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the attribute macro `frame_support::pallet` (in Nightly builds, run with -Z macro-backtrace for more info)

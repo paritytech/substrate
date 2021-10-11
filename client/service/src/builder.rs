@@ -22,8 +22,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, MallocSizeOfWasm, RpcHandlers, SpawnTaskHandle, TaskManager,
-	TransactionPoolAdapter,
+	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpc_pubsub::manager::SubscriptionManager;
@@ -49,6 +48,7 @@ use sc_network::{
 };
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::block_validation::{
@@ -61,7 +61,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, Zero},
 	BuildStorage,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -249,7 +248,7 @@ where
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.tokio_handle.clone(), registry)?
 	};
 
 	let chain_spec = &config.chain_spec;
@@ -467,7 +466,7 @@ where
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
-		+ MallocSizeOfWasm
+		+ parity_util_mem::MallocSizeOf
 		+ 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {

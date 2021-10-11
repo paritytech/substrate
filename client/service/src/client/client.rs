@@ -61,6 +61,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	convert_hash,
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
@@ -82,7 +83,6 @@ use sp_state_machine::{
 	ChangesTrieConfigurationRange, ChangesTrieRootsStorage, ChangesTrieStorage, DBValue,
 };
 use sp_trie::StorageProof;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	marker::PhantomData,
@@ -684,8 +684,6 @@ where
 			..
 		} = import_block;
 
-		assert!(justifications.is_some() && finalized || justifications.is_none());
-
 		if !intermediates.is_empty() {
 			return Err(Error::IncompletePipeline)
 		}
@@ -779,11 +777,17 @@ where
 		}
 
 		let info = self.backend.blockchain().info();
+		let gap_block = info
+			.block_gap
+			.map_or(false, |(start, _)| *import_headers.post().number() == start);
+
+		assert!(justifications.is_some() && finalized || justifications.is_none() || gap_block);
 
 		// the block is lower than our last finalized block so it must revert
 		// finality, refusing import.
 		if status == blockchain::BlockStatus::Unknown &&
-			*import_headers.post().number() <= info.finalized_number
+			*import_headers.post().number() <= info.finalized_number &&
+			!gap_block
 		{
 			return Err(sp_blockchain::Error::NotInFinalizedChain)
 		}
@@ -854,12 +858,13 @@ where
 			None => None,
 		};
 
-		let is_new_best = finalized ||
-			match fork_choice {
-				ForkChoiceStrategy::LongestChain =>
-					import_headers.post().number() > &info.best_number,
-				ForkChoiceStrategy::Custom(v) => v,
-			};
+		let is_new_best = !gap_block &&
+			(finalized ||
+				match fork_choice {
+					ForkChoiceStrategy::LongestChain =>
+						import_headers.post().number() > &info.best_number,
+					ForkChoiceStrategy::Custom(v) => v,
+				});
 
 		let leaf_state = if finalized {
 			NewBlockState::Final

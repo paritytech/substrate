@@ -62,7 +62,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 		name: generate_protocol_name(protocol_id).into(),
 		max_request_size: 1024 * 1024,
 		max_response_size: 16 * 1024 * 1024,
-		request_timeout: Duration::from_secs(40),
+		request_timeout: Duration::from_secs(20),
 		inbound_queue: None,
 	}
 }
@@ -85,13 +85,14 @@ struct SeenRequestsKey<B: BlockT> {
 	support_multiple_justifications: bool,
 }
 
+#[allow(clippy::derive_hash_xor_eq)]
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.peer.hash(state);
 		self.max_blocks.hash(state);
 		self.direction.hash(state);
 		self.attributes.hash(state);
-
+		self.support_multiple_justifications.hash(state);
 		match self.from {
 			BlockId::Hash(h) => h.hash(state),
 			BlockId::Number(n) => n.hash(state),
@@ -355,7 +356,8 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				indexed_body,
 			};
 
-			total_size += block_data.body.len();
+			total_size += block_data.body.iter().map(|ex| ex.len()).sum::<usize>();
+			total_size += block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
 			blocks.push(block_data);
 
 			if blocks.len() >= max_blocks as usize || total_size > MAX_BODY_BYTES {

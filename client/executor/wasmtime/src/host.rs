@@ -19,46 +19,34 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::instance_wrapper::InstanceWrapper;
+use crate::{instance_wrapper::InstanceWrapper, runtime::StoreData};
 use codec::{Decode, Encode};
 use log::trace;
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::Result,
-	sandbox::{self, SandboxCapabilities, SandboxCapabilitiesHolder, SupervisorFuncIndex},
+	sandbox::{self, SupervisorFuncIndex},
 	util::MemoryTransfer,
 };
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use std::{cell::RefCell, rc::Rc};
-use wasmtime::{Func, Val};
-
-/// Wrapper type for pointer to a Wasm table entry.
-///
-/// The wrapper type is used to ensure that the function reference is valid as it must be unsafely
-/// dereferenced from within the safe method `<HostContext as SandboxCapabilities>::invoke`.
-#[derive(Clone)]
-pub struct SupervisorFuncRef(Func);
+use wasmtime::{Caller, Func, Val};
 
 /// The state required to construct a HostContext context. The context only lasts for one host
 /// call, whereas the state is maintained for the duration of a Wasm runtime call, which may make
 /// many different host calls that must share state.
-#[derive(Clone)]
 pub struct HostState {
-	inner: Rc<Inner>,
-}
-
-struct Inner {
-	// We need some interior mutability here since the host state is shared between all host
-	// function handlers and the wasmtime backend's `impl WasmRuntime`.
-	//
-	// Furthermore, because of recursive calls (e.g. runtime can create and call an sandboxed
-	// instance which in turn can call the runtime back) we have to be very careful with borrowing
-	// those.
-	//
-	// Basically, most of the interactions should do temporary borrow immediately releasing the
-	// borrow after performing necessary queries/changes.
-	sandbox_store: RefCell<sandbox::Store<SupervisorFuncRef>>,
+	/// We need some interior mutability here since the host state is shared between all host
+	/// function handlers and the wasmtime backend's `impl WasmRuntime`.
+	///
+	/// Furthermore, because of recursive calls (e.g. runtime can create and call an sandboxed
+	/// instance which in turn can call the runtime back) we have to be very careful with borrowing
+	/// those.
+	///
+	/// Basically, most of the interactions should do temporary borrow immediately releasing the
+	/// borrow after performing necessary queries/changes.
+	sandbox_store: Rc<RefCell<sandbox::Store<Func>>>,
 	allocator: RefCell<FreeingBumpHeapAllocator>,
 	instance: Rc<InstanceWrapper>,
 }
@@ -67,81 +55,76 @@ impl HostState {
 	/// Constructs a new `HostState`.
 	pub fn new(allocator: FreeingBumpHeapAllocator, instance: Rc<InstanceWrapper>) -> Self {
 		HostState {
-			inner: Rc::new(Inner {
-				sandbox_store: RefCell::new(sandbox::Store::new(
-					sandbox::SandboxBackend::TryWasmer,
-				)),
-				allocator: RefCell::new(allocator),
-				instance,
-			}),
+			sandbox_store: Rc::new(RefCell::new(sandbox::Store::new(
+				sandbox::SandboxBackend::TryWasmer,
+			))),
+			allocator: RefCell::new(allocator),
+			instance,
 		}
+	}
+
+	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.
+	pub(crate) fn materialize<'a, 'b, 'c>(
+		&'a self,
+		caller: &'b mut Caller<'c, StoreData>,
+	) -> HostContext<'a, 'b, 'c> {
+		HostContext { host_state: self, caller }
 	}
 }
 
-impl SandboxCapabilities for HostState {
-	type SupervisorFuncRef = SupervisorFuncRef;
+/// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
+/// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
+/// a longer-living `HostState`.
+pub(crate) struct HostContext<'a, 'b, 'c> {
+	host_state: &'a HostState,
+	caller: &'b mut Caller<'c, StoreData>,
+}
 
-	fn invoke(
-		&mut self,
-		dispatch_thunk: &Self::SupervisorFuncRef,
-		invoke_args_ptr: Pointer<u8>,
-		invoke_args_len: WordSize,
-		state: u32,
-		func_idx: SupervisorFuncIndex,
-	) -> Result<i64> {
-		let result = dispatch_thunk.0.call(&[
-			Val::I32(u32::from(invoke_args_ptr) as i32),
-			Val::I32(invoke_args_len as i32),
-			Val::I32(state as i32),
-			Val::I32(usize::from(func_idx) as i32),
-		]);
-		match result {
-			Ok(ret_vals) => {
-				let ret_val = if ret_vals.len() != 1 {
-					return Err(format!(
-						"Supervisor function returned {} results, expected 1",
-						ret_vals.len()
-					)
-					.into())
-				} else {
-					&ret_vals[0]
-				};
-
-				if let Some(ret_val) = ret_val.i64() {
-					Ok(ret_val)
-				} else {
-					return Err("Supervisor function returned unexpected result!".into())
-				}
-			},
-			Err(err) => Err(err.to_string().into()),
-		}
+impl<'a, 'b, 'c> std::ops::Deref for HostContext<'a, 'b, 'c> {
+	type Target = HostState;
+	fn deref(&self) -> &HostState {
+		self.host_state
 	}
 }
 
-impl sp_wasm_interface::FunctionContext for HostState {
+impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> {
 	fn read_memory_into(
 		&self,
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		self.inner.instance.read_memory_into(address, dest).map_err(|e| e.to_string())
+		let ctx = &self.caller;
+		self.host_state
+			.instance
+			.read_memory_into(ctx, address, dest)
+			.map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		self.inner.instance.write_memory_from(address, data).map_err(|e| e.to_string())
+		let ctx = &mut self.caller;
+		self.host_state
+			.instance
+			.write_memory_from(ctx, address, data)
+			.map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
-		self.inner
+		let ctx = &mut self.caller;
+		let allocator = &self.host_state.allocator;
+
+		self.host_state
 			.instance
-			.allocate(&mut *self.inner.allocator.borrow_mut(), size)
+			.allocate(ctx, &mut *allocator.borrow_mut(), size)
 			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
-		self.inner
+		let ctx = &mut self.caller;
+		let allocator = &self.host_state.allocator;
+
+		self.host_state
 			.instance
-			.deallocate(&mut *self.inner.allocator.borrow_mut(), ptr)
+			.deallocate(ctx, &mut *allocator.borrow_mut(), ptr)
 			.map_err(|e| e.to_string())
 	}
 
@@ -150,7 +133,7 @@ impl sp_wasm_interface::FunctionContext for HostState {
 	}
 }
 
-impl Sandbox for HostState {
+impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -159,7 +142,7 @@ impl Sandbox for HostState {
 		buf_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
 		let sandboxed_memory =
-			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
+			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = buf_len as usize;
 
@@ -168,7 +151,8 @@ impl Sandbox for HostState {
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = self.inner.instance.write_memory_from(buf_ptr, &buffer) {
+		let instance = self.instance.clone();
+		if let Err(_) = instance.write_memory_from(&mut self.caller, buf_ptr, &buffer) {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
 
@@ -183,11 +167,11 @@ impl Sandbox for HostState {
 		val_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
 		let sandboxed_memory =
-			self.inner.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
+			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = val_len as usize;
 
-		let buffer = match self.inner.instance.read_memory(val_ptr, len) {
+		let buffer = match self.instance.read_memory(&self.caller, val_ptr, len) {
 			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
@@ -200,16 +184,14 @@ impl Sandbox for HostState {
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> sp_wasm_interface::Result<()> {
-		self.inner
-			.sandbox_store
+		self.sandbox_store
 			.borrow_mut()
 			.memory_teardown(memory_id)
 			.map_err(|e| e.to_string())
 	}
 
 	fn memory_new(&mut self, initial: u32, maximum: u32) -> sp_wasm_interface::Result<u32> {
-		self.inner
-			.sandbox_store
+		self.sandbox_store
 			.borrow_mut()
 			.new_memory(initial, maximum)
 			.map_err(|e| e.to_string())
@@ -233,14 +215,21 @@ impl Sandbox for HostState {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance = self
-			.inner
+		let instance =
+			self.sandbox_store.borrow().instance(instance_id).map_err(|e| e.to_string())?;
+
+		let dispatch_thunk = self
 			.sandbox_store
 			.borrow()
-			.instance(instance_id)
+			.dispatch_thunk(instance_id)
 			.map_err(|e| e.to_string())?;
 
-		let result = instance.invoke::<_, CapsHolder, ThunkHolder>(export_name, &args, state);
+		let result = instance.invoke(
+			export_name,
+			&args,
+			state,
+			&mut SandboxContext { host_context: self, dispatch_thunk },
+		);
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -250,7 +239,7 @@ impl Sandbox for HostState {
 					if val.len() > return_val_len as usize {
 						Err("Return value buffer is too small")?;
 					}
-					<HostState as FunctionContext>::write_memory(self, return_val, val)
+					<HostContext as FunctionContext>::write_memory(self, return_val, val)
 						.map_err(|_| "can't write return value")?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
@@ -260,8 +249,7 @@ impl Sandbox for HostState {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> sp_wasm_interface::Result<()> {
-		self.inner
-			.sandbox_store
+		self.sandbox_store
 			.borrow_mut()
 			.instance_teardown(instance_id)
 			.map_err(|e| e.to_string())
@@ -276,37 +264,39 @@ impl Sandbox for HostState {
 	) -> sp_wasm_interface::Result<u32> {
 		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
+			let ctx = &mut self.caller;
 			let table_item = self
-				.inner
+				.host_state
 				.instance
 				.table()
 				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?
-				.get(dispatch_thunk_id);
+				.get(ctx, dispatch_thunk_id);
 
-			let func_ref = table_item
+			table_item
 				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?
 				.funcref()
 				.ok_or_else(|| "dispatch_thunk_idx should be a funcref")?
 				.ok_or_else(|| "dispatch_thunk_idx should point to actual func")?
-				.clone();
-			SupervisorFuncRef(func_ref)
+				.clone()
 		};
 
-		let guest_env = match sandbox::GuestEnvironment::decode(
-			&*self.inner.sandbox_store.borrow(),
-			raw_env_def,
-		) {
-			Ok(guest_env) => guest_env,
-			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
-		};
+		let guest_env =
+			match sandbox::GuestEnvironment::decode(&*self.sandbox_store.borrow(), raw_env_def) {
+				Ok(guest_env) => guest_env,
+				Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+			};
 
-		let store = &mut *self.inner.sandbox_store.borrow_mut();
-		let result = DISPATCH_THUNK.set(&dispatch_thunk, || {
-			store
-				.instantiate::<_, CapsHolder, ThunkHolder>(wasm, guest_env, state)
-				.map(|i| i.register(store))
-		});
+		let store = self.sandbox_store.clone();
+		let store = &mut store.borrow_mut();
+		let result = store
+			.instantiate(
+				wasm,
+				guest_env,
+				state,
+				&mut SandboxContext { host_context: self, dispatch_thunk: dispatch_thunk.clone() },
+			)
+			.map(|i| i.register(store, dispatch_thunk));
 
 		let instance_idx_or_err_code = match result {
 			Ok(instance_idx) => instance_idx,
@@ -322,8 +312,7 @@ impl Sandbox for HostState {
 		instance_idx: u32,
 		name: &str,
 	) -> sp_wasm_interface::Result<Option<sp_wasm_interface::Value>> {
-		self.inner
-			.sandbox_store
+		self.sandbox_store
 			.borrow()
 			.instance(instance_idx)
 			.map(|i| i.get_global_val(name))
@@ -331,41 +320,52 @@ impl Sandbox for HostState {
 	}
 }
 
-/// Wasmtime specific implementation of `SandboxCapabilitiesHolder` that provides
-/// sandbox with a scoped thread local access to a function executor.
-/// This is a way to calm down the borrow checker since host function closures
-/// require exclusive access to it.
-struct CapsHolder;
-
-impl SandboxCapabilitiesHolder for CapsHolder {
-	type SupervisorFuncRef = SupervisorFuncRef;
-	type SC = HostState;
-
-	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
-		crate::state_holder::with_context(|ctx| f(&mut ctx.expect("wasmtime executor is not set")))
-	}
+struct SandboxContext<'a, 'b, 'c, 'd> {
+	host_context: &'a mut HostContext<'b, 'c, 'd>,
+	dispatch_thunk: Func,
 }
 
-/// Wasmtime specific implementation of `DispatchThunkHolder` that provides
-/// sandbox with a scoped thread local access to a dispatch thunk.
-/// This is a way to calm down the borrow checker since host function closures
-/// require exclusive access to it.
-struct ThunkHolder;
+impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> {
+	fn invoke(
+		&mut self,
+		invoke_args_ptr: Pointer<u8>,
+		invoke_args_len: WordSize,
+		state: u32,
+		func_idx: SupervisorFuncIndex,
+	) -> Result<i64> {
+		let result = self.dispatch_thunk.call(
+			&mut self.host_context.caller,
+			&[
+				Val::I32(u32::from(invoke_args_ptr) as i32),
+				Val::I32(invoke_args_len as i32),
+				Val::I32(state as i32),
+				Val::I32(usize::from(func_idx) as i32),
+			],
+		);
 
-scoped_tls::scoped_thread_local!(static DISPATCH_THUNK: SupervisorFuncRef);
+		match result {
+			Ok(ret_vals) => {
+				let ret_val = if ret_vals.len() != 1 {
+					return Err(format!(
+						"Supervisor function returned {} results, expected 1",
+						ret_vals.len()
+					)
+					.into())
+				} else {
+					&ret_vals[0]
+				};
 
-impl sandbox::DispatchThunkHolder for ThunkHolder {
-	type DispatchThunk = SupervisorFuncRef;
-
-	fn with_dispatch_thunk<R, F: FnOnce(&mut Self::DispatchThunk) -> R>(f: F) -> R {
-		assert!(DISPATCH_THUNK.is_set(), "dispatch thunk is not set");
-		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
+				if let Some(ret_val) = ret_val.i64() {
+					Ok(ret_val)
+				} else {
+					return Err("Supervisor function returned unexpected result!".into())
+				}
+			},
+			Err(err) => Err(err.to_string().into()),
+		}
 	}
 
-	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R
-	where
-		F: FnOnce() -> R,
-	{
-		DISPATCH_THUNK.set(s, f)
+	fn supervisor_context(&mut self) -> &mut dyn FunctionContext {
+		self.host_context
 	}
 }
