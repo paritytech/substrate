@@ -231,7 +231,6 @@ pub mod pallet {
 		/// The provider of the proposal operation.
 		type ProposalProvider: ProposalProvider<Self::AccountId, Self::Hash, Self::Proposal>;
 
-		/*
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;
 
@@ -255,7 +254,6 @@ pub mod pallet {
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependents keep to the limit without enforcing it.
 		type MaxAllies: Get<u32>;
-		*/
 
 		/// The maximum number of blacklist supported by the pallet.
 		#[pallet::constant]
@@ -647,8 +645,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Submit oneself for candidacy.
-		/// Account must have enough transferable funds in it to pay the candidate deposit.
+		/// Submit oneself for candidacy. A fixed amount of deposit is recorded.
 		#[pallet::weight(T::WeightInfo::submit_candidacy())]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;

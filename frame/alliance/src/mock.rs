@@ -211,9 +211,9 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 }
 
 parameter_types! {
-	// pub const MaxFounders: u32 = 10;
-	// pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
-	// pub const MaxAllies: u32 = 100;
+	pub const MaxFounders: u32 = 10;
+	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
+	pub const MaxAllies: u32 = 100;
 	pub const CandidateDeposit: u64 = 25;
 	pub const MaxBlacklistCount: u32 = 100;
 	pub const MaxWebsiteUrlLength: u32 = 255;
@@ -228,10 +228,10 @@ impl Config for Test {
 	type MembershipChanged = AllianceMotion;
 	type IdentityVerifier = AllianceIdentityVerifier;
 	type ProposalProvider = AllianceProposalProvider;
-	// type MaxProposals = MaxProposals;
-	// type MaxFounders = MaxMembers;
-	// type MaxFellows = MaxFellows;
-	// type MaxAllies = MaxAllies;
+	type MaxProposals = MaxProposals;
+	type MaxFounders = MaxMembers;
+	type MaxFellows = MaxFellows;
+	type MaxAllies = MaxAllies;
 	type MaxBlacklistCount = MaxBlacklistCount;
 	type MaxWebsiteUrlLength = MaxWebsiteUrlLength;
 	type CandidateDeposit = CandidateDeposit;

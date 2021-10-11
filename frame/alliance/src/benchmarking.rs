@@ -89,12 +89,8 @@ fn set_members<T: Config<I>, I: 'static>() {
 	T::InitializeMembers::initialize_members(&[founders.as_slice(), fellows.as_slice()].concat());
 }
 
-fn set_announcement<T: Config<I>, I: 'static>(cid: Cid) {
-	Announcements::<T, I>::put(vec![cid]);
-}
-
-fn set_candidates<T: Config<I>, I: 'static>() {
-	let candidates = vec![funded_account::<T, I>("candidate", 1)];
+fn set_candidates<T: Config<I>, I: 'static>(indexes: Vec<u32>) {
+	let candidates = indexes.into_iter().map(|i| candidate::<T, I>(i)).collect::<Vec<_>>();
 	candidates.iter().for_each(|who| {
 		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
@@ -119,6 +115,7 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let announcement = test_cid();
+
 		let call = Call::<T, I>::announce { announcement: announcement.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -129,8 +126,9 @@ benchmarks_instance_pallet! {
 
 	remove_announcement {
 		set_members::<T, I>();
+
 		let announcement = test_cid();
-		set_announcement::<T, I>(announcement.clone());
+		Announcements::<T, I>::put(vec![announcement.clone()]);
 
 		let call = Call::<T, I>::remove_announcement { announcement: announcement.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
@@ -177,7 +175,7 @@ benchmarks_instance_pallet! {
 
 	approve_candidate {
 		set_members::<T, I>();
-		set_candidates::<T, I>();
+		set_candidates::<T, I>(vec![1]);
 
 		let candidate1 = candidate::<T, I>(1);
 		assert!(Alliance::<T, I>::is_candidate(&candidate1));
@@ -197,7 +195,7 @@ benchmarks_instance_pallet! {
 
 	reject_candidate {
 		set_members::<T, I>();
-		set_candidates::<T, I>();
+		set_candidates::<T, I>(vec![1]);
 
 		let candidate1 = candidate::<T, I>(1);
 		assert!(Alliance::<T, I>::is_candidate(&candidate1));
