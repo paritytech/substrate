@@ -363,7 +363,7 @@ static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = std::sync::atomic::Atomi
 /// Returns default ss58 format used by the current active process.
 #[cfg(feature = "std")]
 pub fn default_ss58_version() -> Ss58AddressFormat {
-	DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into()
+	DEFAULT_VERSION.load(std::sync::atomic::Ordering::Relaxed).into()
 }
 
 /// Returns either the input address format or the default.
