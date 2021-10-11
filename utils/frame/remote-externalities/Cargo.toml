@@ -15,11 +15,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 jsonrpsee-ws-client = { version = "0.3.1", default-features = false, features = ["tokio1"] }
 jsonrpsee-proc-macros = "0.3.1"
-# jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979" }
-# # jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979", default-features = false, features = [
+# jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "03e72bfbcf75993e7456bfa56e51ebcc8bab7175" }
+# # jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "03e72bfbcf75993e7456bfa56e51ebcc8bab7175", default-features = false, features = [
 # #     "tokio02",
 # # ] }
-# jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a74d2d54ef3b8cce6539cb82bc1c39c79c9f979" }
+# jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", rev = "03e72bfbcf75993e7456bfa56e51ebcc8bab7175" }
 
 env_logger = "0.9"
 log = "0.4.11"

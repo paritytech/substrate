@@ -38,7 +38,7 @@ mod notification;
 pub trait BeefyApi<Notification, Hash> {
 	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
 	#[subscription(
-		name = "subscribeJustifications"
+		name = "subscribeJustifications",
 		aliases = "beefy_justifications",
 		item = Notification,
 	)]
