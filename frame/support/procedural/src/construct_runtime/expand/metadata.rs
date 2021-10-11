@@ -134,10 +134,10 @@ fn expand_pallet_metadata_events(
 		let path = &decl.path;
 		let pallet_event = if decl.name == SYSTEM_PALLET_NAME {
 			// Note: for some reason, the compiler recognizes
-			// `<frame_system::Pallet<Runtime> as frame_system::SubstratePalletEvent>::Event` as essentially
-			// the same as the outer/runtime Event type, which then causes an error about conflicting
-			// implementations of the From<Event> trait for the Event type, and thereby necessitating a special
-			// case for the system pallet.
+			// `<frame_system::Pallet<Runtime> as frame_system::SubstratePalletEvent>::Event` as
+			// essentially the same as the outer/runtime Event type, which then causes an error
+			// about conflicting implementations of the From<Event> trait for the Event type, and
+			// thereby necessitating a special case for the system pallet.
 			quote!(#path::Event<#runtime>)
 		} else {
 			let instance = decl.instance.as_ref().into_iter();

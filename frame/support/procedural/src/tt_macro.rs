@@ -54,7 +54,7 @@ pub fn create_tt_return_macro(input: proc_macro::TokenStream) -> proc_macro::Tok
 		Err(e) => return e.into_compile_error().into(),
 	};
 	let (keys, values): (Vec<_>, Vec<_>) = args.into_iter().unzip();
-	
+
 	let decl_macro = quote::quote! {
 		macro_rules! #name {
 			{
