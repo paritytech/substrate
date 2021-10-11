@@ -95,6 +95,7 @@ impl RuntimeBuilder {
 						false => None,
 					},
 					canonicalize_nans: self.canonicalize_nans,
+					parallel_compilation: true,
 				},
 			},
 			{

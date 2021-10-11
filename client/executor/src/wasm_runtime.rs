@@ -326,6 +326,7 @@ pub fn create_wasm_runtime_with_code(
 					fast_instance_reuse: true,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
+					parallel_compilation: true,
 				},
 			},
 			host_functions,

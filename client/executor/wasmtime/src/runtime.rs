@@ -350,6 +350,8 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {}", e)))?;
 	}
 
+	config.parallel_compilation(semantics.parallel_compilation);
+
 	// Be clear and specific about the extensions we support. If an update brings new features
 	// they should be introduced here as well.
 	config.wasm_reference_types(false);
@@ -449,6 +451,9 @@ pub struct Semantics {
 	/// developers. For PVFs, we want to ensure that execution is deterministic though. Therefore,
 	/// for PVF execution this flag is meant to be turned on.
 	pub canonicalize_nans: bool,
+
+	/// Configures wasmtime to use multiple threads for compiling.
+	pub parallel_compilation: bool,
 }
 
 pub struct Config {
