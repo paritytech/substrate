@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-use crate::construct_runtime::Pallet;
+use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Ident, TypePath};
@@ -132,17 +132,16 @@ fn expand_pallet_metadata_events(
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
 		let path = &decl.path;
-		let part_is_generic = !decl
-			.find_part("Event")
-			.expect("Event part exists; qed")
-			.generics
-			.params
-			.is_empty();
-		let pallet_event = match (decl.instance.as_ref(), part_is_generic) {
-			(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
-			(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
-			(None, true) => quote!(#path::Event::<#runtime>),
-			(None, false) => quote!(#path::Event),
+		let pallet_event = if decl.name == SYSTEM_PALLET_NAME {
+			// Note: for some reason, the compiler recognizes
+			// `<frame_system::Pallet<Runtime> as frame_system::SubstratePalletEvent>::Event` as essentially
+			// the same as the outer/runtime Event type, which then causes an error about conflicting
+			// implementations of the From<Event> trait for the Event type, and thereby necessitating a special
+			// case for the system pallet.
+			quote!(#path::Event<#runtime>)
+		} else {
+			let instance = decl.instance.as_ref().into_iter();
+			quote!(<#path::Pallet<#runtime #(, #path::#instance)*> as #path::SubstratePalletEvent>::Event)
 		};
 
 		quote! {

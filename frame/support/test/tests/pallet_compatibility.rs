@@ -268,10 +268,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event},
 		// NOTE: name Example here is needed in order to have same module prefix
-		Example: pallet::{Pallet, Call, Event<T>, Config<T>, Storage},
-		PalletOld: pallet_old::{Pallet, Call, Event<T>, Config<T>, Storage},
+		Example: pallet::{Pallet, Call, Event, Config<T>, Storage},
+		PalletOld: pallet_old::{Pallet, Call, Event, Config<T>, Storage},
 	}
 );
 

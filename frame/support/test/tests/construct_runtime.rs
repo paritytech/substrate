@@ -247,19 +247,19 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Pallet, Call, Event<T>, Origin<T>} = 30,
-		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
+		System: system::{Pallet, Call, Event, Origin<T>} = 30,
+		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event, Origin<T>},
 		Module2: module2::{Pallet, Call, Storage, Event, Origin},
-		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
+		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event, Origin<T>},
 		NestedModule3: nested::module3::{Pallet, Call, Config, Storage, Event, Origin},
 		Module3: self::module3::{Pallet, Call, Config, Storage, Event, Origin<T>},
 		Module1_3: module1::<Instance3>::{Pallet, Storage} = 6,
 		Module1_4: module1::<Instance4>::{Pallet, Call} = 3,
-		Module1_5: module1::<Instance5>::{Pallet, Event<T>},
-		Module1_6: module1::<Instance6>::{Pallet, Call, Storage, Event<T>, Origin<T>} = 1,
-		Module1_7: module1::<Instance7>::{Pallet, Call, Storage, Event<T>, Origin<T>},
-		Module1_8: module1::<Instance8>::{Pallet, Call, Storage, Event<T>, Origin<T>} = 12,
-		Module1_9: module1::<Instance9>::{Pallet, Call, Storage, Event<T>, Origin<T>},
+		Module1_5: module1::<Instance5>::{Pallet, Event},
+		Module1_6: module1::<Instance6>::{Pallet, Call, Storage, Event, Origin<T>} = 1,
+		Module1_7: module1::<Instance7>::{Pallet, Call, Storage, Event, Origin<T>},
+		Module1_8: module1::<Instance8>::{Pallet, Call, Storage, Event, Origin<T>} = 12,
+		Module1_9: module1::<Instance9>::{Pallet, Call, Storage, Event, Origin<T>},
 	}
 );
 
@@ -302,7 +302,7 @@ mod origin_test {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Pallet, Event<T>, Origin<T>},
+			System: system::{Pallet, Event, Origin<T>},
 			NestedModule3: nested::module3::{Pallet, Origin, Call},
 			Module3: module3::{Pallet, Origin<T>, Call},
 		}

@@ -30,6 +30,7 @@ mod pallet;
 mod partial_eq_no_bound;
 mod storage;
 mod transactional;
+mod tt_macro;
 
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
@@ -497,4 +498,10 @@ pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	dummy_part_checker::generate_dummy_part_checker(input)
+}
+
+/// Internal macro used by frame_support to create tt-call-compliant macros
+#[proc_macro]
+pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
+	tt_macro::create_tt_return_macro(input)
 }

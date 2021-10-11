@@ -142,6 +142,12 @@ macro_rules! decl_event {
 		impl From<Event> for () {
 			fn from(_: Event) -> () { () }
 		}
+		$crate::tt_call! {
+			macro = [{ tt_get_pallet_type }]
+			~~> $crate::impl_substrate_pallet_event! {
+				event = [{ Event }]
+			}
+		}
 	}
 }
 
@@ -285,8 +291,32 @@ macro_rules! __decl_generic_event {
 		impl<$( $generic_param ),* $(, $instance)? > From<RawEvent<$( $generic_param ),* $(, $instance)?>> for () {
 			fn from(_: RawEvent<$( $generic_param ),* $(, $instance)?>) -> () { () }
 		}
+		$crate::tt_call! {
+			macro = [{ tt_get_pallet_type }]
+			~~> $crate::impl_substrate_pallet_event! {
+				event = [{ Event<$event_generic_param $(, $instance)?> }]
+			}
+		}
 	};
 	(@cannot_parse $ty:ty) => {
 		compile_error!(concat!("The type `", stringify!($ty), "` can't be parsed as an unnamed one, please name it `Name = ", stringify!($ty), "`"));
 	}
+}
+
+#[macro_export]
+macro_rules! impl_substrate_pallet_event {
+	{
+		event = [{ Event $( <$event_generic_param:ident $(, $event_instance:ident)?> )? }]
+		pallet = [{ $pallet_type:ident <$config_instance:ident : $config_name:ident $(<I>, $instance:ident : $instantiable:path)?> }]
+	} => {
+		pub trait SubstratePalletEvent {
+			type Event;
+		}
+
+		impl<$config_instance: $config_name $(<I>, $instance: $instantiable)?>
+			SubstratePalletEvent for $pallet_type<$config_instance $(, $instance)?>
+		{
+			type Event = Event $( <$event_generic_param $(, $event_instance)?> )?;
+		}
+	};
 }

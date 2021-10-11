@@ -25,6 +25,7 @@ sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primi
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+tt-call = "1.0.8"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }

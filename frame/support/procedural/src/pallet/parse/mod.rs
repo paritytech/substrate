@@ -336,7 +336,7 @@ impl GenericKind {
 
 	/// Return the generic to be used when using the type.
 	///
-	/// Depending on its definition it can be: ``, `T` or `T, I`
+	/// Depending on its definition it can be: ` `, `T` or `T, I`
 	pub fn type_use_gen(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		match self {
 			GenericKind::None => quote::quote!(),
