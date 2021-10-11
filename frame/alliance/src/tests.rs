@@ -31,15 +31,16 @@ type AllianceMotionEvent = pallet_collective::Event<Test, pallet_collective::Ins
 fn propose_works() {
 	new_test_ext().execute_with(|| {
 		let proposal = make_proposal(42);
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
 
 		// only votable member can propose proposal, 4 is ally not have vote rights
 		assert_noop!(
-			Alliance::propose(Origin::signed(4), Box::new(proposal.clone())),
+			Alliance::propose(Origin::signed(4), 3, Box::new(proposal.clone()), proposal_len),
 			Error::<Test, ()>::NotVotableMember
 		);
 
-		assert_ok!(Alliance::propose(Origin::signed(1), Box::new(proposal.clone())));
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 		assert_eq!(*AllianceMotion::proposals(), vec![hash]);
 		assert_eq!(AllianceMotion::proposal_of(&hash), Some(proposal));
 		assert_eq!(
@@ -57,8 +58,9 @@ fn propose_works() {
 fn vote_works() {
 	new_test_ext().execute_with(|| {
 		let proposal = make_proposal(42);
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
-		assert_ok!(Alliance::propose(Origin::signed(1), Box::new(proposal.clone())));
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 		assert_ok!(Alliance::vote(Origin::signed(2), hash.clone(), 0, true));
 
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
@@ -87,8 +89,9 @@ fn vote_works() {
 fn veto_works() {
 	new_test_ext().execute_with(|| {
 		let proposal = make_proposal(42);
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
-		assert_ok!(Alliance::propose(Origin::signed(1), Box::new(proposal.clone())));
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 		// only set_rule/elevate_ally can be veto
 		assert_noop!(
 			Alliance::veto(Origin::signed(1), hash.clone()),
@@ -97,8 +100,9 @@ fn veto_works() {
 
 		let cid = test_cid();
 		let vetoable_proposal = make_set_rule_proposal(cid);
+		let vetoable_proposal_len: u32 = vetoable_proposal.using_encoded(|p| p.len() as u32);
 		let vetoable_hash: H256 = vetoable_proposal.blake2_256().into();
-		assert_ok!(Alliance::propose(Origin::signed(1), Box::new(vetoable_proposal.clone())));
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(vetoable_proposal.clone()), vetoable_proposal_len));
 
 		// only founder have veto rights, 3 is fellow
 		assert_noop!(
@@ -140,7 +144,7 @@ fn close_works() {
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		let hash = BlakeTwo256::hash_of(&proposal);
-		assert_ok!(Alliance::propose(Origin::signed(1), Box::new(proposal.clone())));
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 		assert_ok!(Alliance::vote(Origin::signed(1), hash.clone(), 0, true));
 		assert_ok!(Alliance::vote(Origin::signed(2), hash.clone(), 0, true));
 		assert_ok!(Alliance::vote(Origin::signed(3), hash.clone(), 0, true));
@@ -397,7 +401,8 @@ fn elevate_ally_works() {
 fn retire_works() {
 	new_test_ext().execute_with(|| {
 		let proposal = make_kick_member_proposal(2);
-		assert_ok!(Alliance::propose(Origin::signed(1), Box::new(proposal.clone())));
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 		assert_noop!(Alliance::retire(Origin::signed(2)), Error::<Test, ()>::KickingMember);
 
 		assert_noop!(Alliance::retire(Origin::signed(4)), Error::<Test, ()>::NotMember);
@@ -417,7 +422,8 @@ fn kick_member_works() {
 		);
 
 		let proposal = make_kick_member_proposal(2);
-		assert_ok!(Alliance::propose(Origin::signed(1), Box::new(proposal.clone())));
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 		assert_eq!(Alliance::kicking_member(2), true);
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1, 2]);
 

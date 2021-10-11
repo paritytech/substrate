@@ -514,10 +514,10 @@ pub mod pallet {
 			let members = Self::members();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
-			let proposal_len = proposal.using_encoded(|x| x.len());
-			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
-
 			if threshold < 2 {
+				let proposal_len = proposal.using_encoded(|x| x.len());
+				ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+
 				let proposal_hash = T::Hashing::hash_of(&proposal);
 				ensure!(
 					!<ProposalOf<T, I>>::contains_key(proposal_hash),
@@ -541,7 +541,7 @@ pub mod pallet {
 					})
 					.into())
 			} else {
-				let active_proposals = Self::do_propose(who, threshold, *proposal)?;
+				let (proposal_len, active_proposals) = Self::do_propose(who, threshold, *proposal, length_bound)?;
 
 				Ok(Some(T::WeightInfo::propose_proposed(
 					proposal_len as u32,  // B
@@ -695,7 +695,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		who: T::AccountId,
 		threshold: MemberCount,
 		proposal: <T as Config<I>>::Proposal,
-	) -> Result<u32, DispatchError> {
+		length_bound: MemberCount,
+	) -> Result<(u32, u32), DispatchError> {
+		let proposal_len = proposal.using_encoded(|x| x.len());
+		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
@@ -715,7 +719,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<Voting<T, I>>::insert(proposal_hash, votes);
 
 		Self::deposit_event(Event::Proposed(who, index, proposal_hash, threshold));
-		Ok(active_proposals as u32)
+		Ok((proposal_len as u32, active_proposals as u32))
 	}
 
 	/// Add an aye or nay vote for the member to the given proposal, returns true if it's the first

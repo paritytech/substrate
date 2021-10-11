@@ -149,7 +149,8 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		who: AccountId,
 		threshold: u32,
 		proposal: Proposal,
-	) -> Result<u32, DispatchError>;
+		length_bound: u32,
+	) -> Result<(u32, u32), DispatchError>;
 
 	fn vote_proposal(
 		who: AccountId,
@@ -442,7 +443,9 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn propose(
 			origin: OriginFor<T>,
+			#[pallet::compact] threshold: u32,
 			proposal: Box<<T as Config<I>>::Proposal>,
+			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let proposor = ensure_signed(origin)?;
 			ensure!(Self::is_votable_member(&proposor), Error::<T, I>::NotVotableMember);
@@ -452,8 +455,7 @@ pub mod pallet {
 				<KickingMembers<T, I>>::insert(strike, true);
 			}
 
-			let threshold = 2 * Self::votable_member_count() / 3 + 1;
-			T::ProposalProvider::propose_proposal(proposor, threshold, *proposal)?;
+			T::ProposalProvider::propose_proposal(proposor, threshold, *proposal, length_bound)?;
 			Ok(().into())
 		}
 
@@ -866,11 +868,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::is_founder(who) || Self::is_fellow(who)
 	}
 
+	/*
 	fn votable_member_count() -> u32 {
 		let founder_count = Members::<T, I>::decode_len(MemberRole::Founder).unwrap_or_default();
 		let fellow_count = Members::<T, I>::decode_len(MemberRole::Fellow).unwrap_or_default();
 		(founder_count + fellow_count) as u32
 	}
+	*/
 
 	fn votable_member_sorted() -> Vec<T::AccountId> {
 		let mut founders = Members::<T, I>::get(MemberRole::Founder);

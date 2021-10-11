@@ -98,8 +98,9 @@ impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
 		who: AccountId,
 		threshold: u32,
 		proposal: Call,
-	) -> Result<u32, DispatchError> {
-		AllianceMotion::do_propose(who, threshold, proposal)
+		length_bound: u32,
+	) -> Result<(u32, u32), DispatchError> {
+		AllianceMotion::do_propose(who, threshold, proposal, length_bound)
 	}
 
 	fn vote_proposal(
