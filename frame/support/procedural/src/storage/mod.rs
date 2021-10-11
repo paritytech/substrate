@@ -258,20 +258,24 @@ impl StorageLineDefExt {
 		hidden_crate: &proc_macro2::TokenStream,
 	) -> Self {
 		let is_generic = match &storage_def.storage_type {
-			StorageLineTypeDef::Simple(value) =>
-				ext::type_contains_ident(&value, &def.module_runtime_generic),
-			StorageLineTypeDef::Map(map) =>
-				ext::type_contains_ident(&map.key, &def.module_runtime_generic) ||
-					ext::type_contains_ident(&map.value, &def.module_runtime_generic),
-			StorageLineTypeDef::DoubleMap(map) =>
-				ext::type_contains_ident(&map.key1, &def.module_runtime_generic) ||
-					ext::type_contains_ident(&map.key2, &def.module_runtime_generic) ||
-					ext::type_contains_ident(&map.value, &def.module_runtime_generic),
-			StorageLineTypeDef::NMap(map) =>
+			StorageLineTypeDef::Simple(value) => {
+				ext::type_contains_ident(&value, &def.module_runtime_generic)
+			}
+			StorageLineTypeDef::Map(map) => {
+				ext::type_contains_ident(&map.key, &def.module_runtime_generic)
+					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
+			}
+			StorageLineTypeDef::DoubleMap(map) => {
+				ext::type_contains_ident(&map.key1, &def.module_runtime_generic)
+					|| ext::type_contains_ident(&map.key2, &def.module_runtime_generic)
+					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
+			}
+			StorageLineTypeDef::NMap(map) => {
 				map.keys
 					.iter()
-					.any(|key| ext::type_contains_ident(key, &def.module_runtime_generic)) ||
-					ext::type_contains_ident(&map.value, &def.module_runtime_generic),
+					.any(|key| ext::type_contains_ident(key, &def.module_runtime_generic))
+					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
+			}
 		};
 
 		let query_type = match &storage_def.storage_type {
@@ -309,20 +313,20 @@ impl StorageLineDefExt {
 		let storage_trait_truncated = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(_) => {
 				quote!( StorageValue<#value_type> )
-			},
+			}
 			StorageLineTypeDef::Map(map) => {
 				let key = &map.key;
 				quote!( StorageMap<#key, #value_type> )
-			},
+			}
 			StorageLineTypeDef::DoubleMap(map) => {
 				let key1 = &map.key1;
 				let key2 = &map.key2;
 				quote!( StorageDoubleMap<#key1, #key2, #value_type> )
-			},
+			}
 			StorageLineTypeDef::NMap(map) => {
 				let keygen = map.to_keygen_struct(hidden_crate);
 				quote!( StorageNMap<#keygen, #value_type> )
-			},
+			}
 		};
 
 		let storage_trait = quote!( storage::#storage_trait_truncated );
@@ -394,7 +398,7 @@ impl NMapDef {
 		if self.keys.len() == 1 {
 			let hasher = &self.hashers[0].to_storage_hasher_struct();
 			let key = &self.keys[0];
-			return quote!( #scrate::storage::types::Key<#scrate::#hasher, #key> )
+			return quote!( #scrate::storage::types::Key<#scrate::#hasher, #key> );
 		}
 
 		let key_hasher = self
@@ -412,7 +416,7 @@ impl NMapDef {
 	fn to_key_tuple(&self) -> proc_macro2::TokenStream {
 		if self.keys.len() == 1 {
 			let key = &self.keys[0];
-			return quote!(#key)
+			return quote!(#key);
 		}
 
 		let tuple = self.keys.iter().map(|key| quote!(#key)).collect::<Vec<_>>();

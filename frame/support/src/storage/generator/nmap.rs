@@ -408,16 +408,16 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				Some(value) => value,
 				None => {
 					log::error!("Invalid translate: fail to decode old value");
-					continue
-				},
+					continue;
+				}
 			};
 
 			let final_key = match K::decode_final_key(&previous_key[prefix.len()..]) {
 				Ok((final_key, _)) => final_key,
 				Err(_) => {
 					log::error!("Invalid translate: fail to decode key");
-					continue
-				},
+					continue;
+				}
 			};
 
 			match f(final_key, value) {

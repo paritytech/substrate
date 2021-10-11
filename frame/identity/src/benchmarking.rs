@@ -44,14 +44,16 @@ fn add_registrars<T: Config>(r: u32) -> Result<(), &'static str> {
 			i.into(),
 			10u32.into(),
 		)?;
-		let fields =
-			IdentityFields(
-				IdentityField::Display |
-					IdentityField::Legal | IdentityField::Web |
-					IdentityField::Riot | IdentityField::Email |
-					IdentityField::PgpFingerprint |
-					IdentityField::Image | IdentityField::Twitter,
-			);
+		let fields = IdentityFields(
+			IdentityField::Display
+				| IdentityField::Legal
+				| IdentityField::Web
+				| IdentityField::Riot
+				| IdentityField::Email
+				| IdentityField::PgpFingerprint
+				| IdentityField::Image
+				| IdentityField::Twitter,
+		);
 		Identity::<T>::set_fields(RawOrigin::Signed(registrar.clone()).into(), i.into(), fields)?;
 	}
 
@@ -113,7 +115,7 @@ fn create_identity_info<T: Config>(num_fields: u32) -> IdentityInfo<T::MaxAdditi
 		twitter: data.clone(),
 	};
 
-	return info
+	return info;
 }
 
 benchmarks! {

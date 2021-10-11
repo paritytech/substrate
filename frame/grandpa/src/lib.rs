@@ -154,7 +154,7 @@ pub mod pallet {
 				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Self::set_grandpa_authorities(&pending_change.next_authorities);
-					Self::deposit_event(Event::NewAuthorities{
+					Self::deposit_event(Event::NewAuthorities {
 						authority_set: pending_change.next_authorities.to_vec(),
 					});
 					<PendingChange<T>>::kill();
@@ -174,7 +174,7 @@ pub mod pallet {
 						<State<T>>::put(StoredState::Paused);
 						Self::deposit_event(Event::Paused);
 					}
-				},
+				}
 				StoredState::PendingResume { scheduled_at, delay } => {
 					// signal change to resume
 					if block_number == scheduled_at {
@@ -186,8 +186,8 @@ pub mod pallet {
 						<State<T>>::put(StoredState::Live);
 						Self::deposit_event(Event::Resumed);
 					}
-				},
-				_ => {},
+				}
+				_ => {}
 			}
 		}
 	}
@@ -256,7 +256,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
 		/// New authority set has been applied.
-		NewAuthorities{authority_set: AuthorityList},
+		NewAuthorities { authority_set: AuthorityList },
 		/// Current authority set has been paused.
 		Paused,
 		/// Current authority set has been resumed.
@@ -550,7 +550,7 @@ impl<T: Config> Pallet<T> {
 		// validate equivocation proof (check votes are different and
 		// signatures are valid).
 		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		// fetch the current and previous sets last session index. on the
@@ -569,12 +569,12 @@ impl<T: Config> Pallet<T> {
 
 		// check that the session id for the membership proof is within the
 		// bounds of the set id reported in the equivocation.
-		if session_index > set_id_session_index ||
-			previous_set_id_session_index
+		if session_index > set_id_session_index
+			|| previous_set_id_session_index
 				.map(|previous_index| session_index <= previous_index)
 				.unwrap_or(false)
 		{
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		// report to the offences module rewarding the sender.

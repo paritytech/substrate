@@ -130,7 +130,7 @@ impl<T: Config> List<T> {
 	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
 		let new_thresholds = T::BagThresholds::get();
 		if new_thresholds == old_thresholds {
-			return 0
+			return 0;
 		}
 
 		// we can't check all preconditions, but we can check one
@@ -163,7 +163,7 @@ impl<T: Config> List<T> {
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(affected_bag) {
@@ -175,7 +175,7 @@ impl<T: Config> List<T> {
 		// a removed bag means that all members of that bag must be rebagged
 		for removed_bag in removed_bags.clone() {
 			if !affected_old_bags.insert(removed_bag) {
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(removed_bag) {
@@ -263,7 +263,7 @@ impl<T: Config> List<T> {
 	/// Returns an error if the list already contains `id`.
 	pub(crate) fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
 		if Self::contains(&id) {
-			return Err(Error::Duplicate)
+			return Err(Error::Duplicate);
 		}
 
 		let bag_weight = notional_bag_for::<T>(weight);
@@ -568,7 +568,7 @@ impl<T: Config> Bag<T> {
 				// infinite loop.
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return
+				return;
 			};
 		}
 
@@ -775,9 +775,9 @@ impl<T: Config> Node<T> {
 		);
 
 		frame_support::ensure!(
-			!self.is_terminal() ||
-				expected_bag.head.as_ref() == Some(id) ||
-				expected_bag.tail.as_ref() == Some(id),
+			!self.is_terminal()
+				|| expected_bag.head.as_ref() == Some(id)
+				|| expected_bag.tail.as_ref() == Some(id),
 			"a terminal node is neither its bag head or tail"
 		);
 

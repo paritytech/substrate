@@ -198,7 +198,7 @@ pub mod pallet {
 			let mut index = 0;
 			<BlockTransactions<T>>::mutate(|transactions| {
 				if transactions.len() + 1 > MaxBlockTransactions::<T>::get() as usize {
-					return Err(Error::<T>::TooManyTransactions)
+					return Err(Error::<T>::TooManyTransactions);
 				}
 				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunk_count;
 				index = transactions.len() as u32;
@@ -238,7 +238,7 @@ pub mod pallet {
 			let mut index = 0;
 			<BlockTransactions<T>>::mutate(|transactions| {
 				if transactions.len() + 1 > MaxBlockTransactions::<T>::get() as usize {
-					return Err(Error::<T>::TooManyTransactions)
+					return Err(Error::<T>::TooManyTransactions);
 				}
 				let chunks = num_chunks(info.size);
 				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunks;
@@ -291,7 +291,7 @@ pub mod pallet {
 					let chunks = num_chunks(info.size);
 					let prev_chunks = info.block_chunks - chunks;
 					(info, selected_chunk_index - prev_chunks)
-				},
+				}
 				None => Err(Error::<T>::MissingStateData)?,
 			};
 			ensure!(

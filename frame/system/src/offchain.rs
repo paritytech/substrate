@@ -175,7 +175,7 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X> Signer<T, C, X> 
 						})
 						.filter(move |account| keystore_lookup.contains(&account.public)),
 				)
-			},
+			}
 		}
 	}
 
@@ -211,7 +211,7 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> Signer<T, C, ForAny
 		for account in accounts.into_iter() {
 			let res = f(&account);
 			if let Some(res) = res {
-				return Some((account, res))
+				return Some((account, res));
 			}
 		}
 		None

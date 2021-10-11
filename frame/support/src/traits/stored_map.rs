@@ -46,7 +46,7 @@ pub trait StoredMap<K, T: Default> {
 				let r = f(&mut account);
 				*x = Some(account);
 				r
-			},
+			}
 		})
 	}
 

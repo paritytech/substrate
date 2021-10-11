@@ -64,7 +64,7 @@ impl Decode for Data {
 					.expect("bound checked in match arm condition; qed");
 				input.read(&mut r[..])?;
 				Data::Raw(r)
-			},
+			}
 			34 => Data::BlakeTwo256(<[u8; 32]>::decode(input)?),
 			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
 			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
@@ -83,7 +83,7 @@ impl Encode for Data {
 				let mut r = vec![l as u8 + 1; l + 1];
 				r[1..].copy_from_slice(&x[..l as usize]);
 				r
-			},
+			}
 			Data::BlakeTwo256(ref h) => once(34u8).chain(h.iter().cloned()).collect(),
 			Data::Sha256(ref h) => once(35u8).chain(h.iter().cloned()).collect(),
 			Data::Keccak256(ref h) => once(36u8).chain(h.iter().cloned()).collect(),
@@ -368,8 +368,9 @@ impl<
 	> Registration<Balance, MaxJudgements, MaxAdditionalFields>
 {
 	pub(crate) fn total_deposit(&self) -> Balance {
-		self.deposit +
-			self.judgements
+		self.deposit
+			+ self
+				.judgements
 				.iter()
 				.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
 				.fold(Zero::zero(), |a, i| a + i)

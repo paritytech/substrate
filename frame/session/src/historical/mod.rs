@@ -94,7 +94,7 @@ impl<T: Config> Module<T> {
 			let up_to = sp_std::cmp::min(up_to, end);
 
 			if up_to < start {
-				return // out of bounds. harmless.
+				return; // out of bounds. harmless.
 			}
 
 			(start..up_to).for_each(<Self as Store>::HistoricalSessions::remove);
@@ -170,7 +170,7 @@ impl<T: Config, I: SessionManager<T::ValidatorId, T::FullIdentification>> NoteHi
 				Err(reason) => {
 					print("Failed to generate historical ancestry-inclusion proof.");
 					print(reason);
-				},
+				}
 			};
 		} else {
 			let previous_index = new_index.saturating_sub(1);
@@ -341,7 +341,7 @@ impl<T: Config, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyT
 					let count = <SessionModule<T>>::validators().len() as ValidatorCount;
 
 					if count != proof.validator_count {
-						return None
+						return None;
 					}
 
 					Some((owner, id))
@@ -351,7 +351,7 @@ impl<T: Config, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyT
 			let (root, count) = <HistoricalSessions<T>>::get(&proof.session)?;
 
 			if count != proof.validator_count {
-				return None
+				return None;
 			}
 
 			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);

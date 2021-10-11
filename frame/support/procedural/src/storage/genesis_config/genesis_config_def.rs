@@ -95,17 +95,17 @@ impl GenesisConfigDef {
 				StorageLineTypeDef::Map(map) => {
 					let key = &map.key;
 					parse_quote!( Vec<(#key, #value_type)> )
-				},
+				}
 				StorageLineTypeDef::DoubleMap(map) => {
 					let key1 = &map.key1;
 					let key2 = &map.key2;
 
 					parse_quote!( Vec<(#key1, #key2, #value_type)> )
-				},
+				}
 				StorageLineTypeDef::NMap(map) => {
 					let key_tuple = map.to_key_tuple();
 					parse_quote!( Vec<(#key_tuple, #value_type)> )
-				},
+				}
 			};
 
 			let default =
@@ -138,7 +138,7 @@ impl GenesisConfigDef {
 						return Err(syn::Error::new(
 							meta.span(),
 							"extra genesis config items do not support `cfg` attribute",
-						))
+						));
 					}
 					Ok(meta)
 				})

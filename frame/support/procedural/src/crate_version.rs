@@ -30,7 +30,7 @@ fn create_error(message: &str) -> Error {
 /// Implementation of the `crate_to_crate_version!` macro.
 pub fn crate_to_crate_version(input: proc_macro::TokenStream) -> Result<TokenStream> {
 	if !input.is_empty() {
-		return Err(create_error("No arguments expected!"))
+		return Err(create_error("No arguments expected!"));
 	}
 
 	let major_version = get_cargo_env_var::<u16>("CARGO_PKG_VERSION_MAJOR")

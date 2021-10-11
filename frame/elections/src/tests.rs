@@ -966,7 +966,7 @@ fn election_seats_should_be_released() {
 			assert_ok!(Elections::end_block(System::block_number()));
 			if Elections::members().len() == 0 {
 				free_block = current;
-				break
+				break;
 			}
 		}
 		// 11 + 2 which is the next voting period.

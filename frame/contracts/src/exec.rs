@@ -577,7 +577,7 @@ where
 				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)?;
 
 				(dest, contract, executable, ExportedFunction::Call)
-			},
+			}
 			FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
 				let account_id =
 					<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
@@ -588,7 +588,7 @@ where
 					executable.code_hash().clone(),
 				)?;
 				(account_id, contract, executable, ExportedFunction::Constructor)
-			},
+			}
 		};
 
 		let frame = Frame {
@@ -611,7 +611,7 @@ where
 		gas_limit: Weight,
 	) -> Result<E, ExecError> {
 		if self.frames.len() == T::CallStack::size() {
-			return Err(Error::<T>::MaxCallDepthReached.into())
+			return Err(Error::<T>::MaxCallDepthReached.into());
 		}
 
 		if CONTRACT_INFO_CAN_CHANGE {
@@ -656,7 +656,7 @@ where
 
 				// It is not allowed to terminate a contract inside its constructor.
 				if let CachedContract::Terminated = frame.contract_info {
-					return Err(Error::<T>::TerminatedInConstructor.into())
+					return Err(Error::<T>::TerminatedInConstructor.into());
 				}
 
 				// Deposit an instantiation event.
@@ -704,7 +704,7 @@ where
 			prev.nested_meter.absorb_nested(frame.nested_meter);
 			// Only gas counter changes are persisted in case of a failure.
 			if !persist {
-				return
+				return;
 			}
 			if let CachedContract::Cached(contract) = frame.contract_info {
 				// optimization: Predecessor is the same contract.
@@ -713,7 +713,7 @@ where
 				// trigger a rollback.
 				if prev.account_id == *account_id {
 					prev.contract_info = CachedContract::Cached(contract);
-					return
+					return;
 				}
 
 				// Predecessor is a different contract: We persist the info and invalidate the first
@@ -738,7 +738,7 @@ where
 			self.gas_meter.absorb_nested(mem::take(&mut self.first_frame.nested_meter));
 			// Only gas counter changes are persisted in case of a failure.
 			if !persist {
-				return
+				return;
 			}
 			if let CachedContract::Cached(contract) = &self.first_frame.contract_info {
 				<ContractInfoOf<T>>::insert(&self.first_frame.account_id, contract.clone());
@@ -763,19 +763,19 @@ where
 		value: BalanceOf<T>,
 	) -> DispatchResult {
 		if value == 0u32.into() {
-			return Ok(())
+			return Ok(());
 		}
 
 		let existence_requirement = match (allow_death, sender_is_contract) {
 			(true, _) => ExistenceRequirement::AllowDeath,
 			(false, true) => {
 				ensure!(
-					T::Currency::total_balance(from).saturating_sub(value) >=
-						Contracts::<T>::subsistence_threshold(),
+					T::Currency::total_balance(from).saturating_sub(value)
+						>= Contracts::<T>::subsistence_threshold(),
 					Error::<T>::BelowSubsistenceThreshold,
 				);
 				ExistenceRequirement::KeepAlive
-			},
+			}
 			(false, false) => ExistenceRequirement::KeepAlive,
 		};
 
@@ -795,7 +795,7 @@ where
 		// we can error out early. This avoids executing the constructor in cases where
 		// we already know that the contract has too little balance.
 		if frame.entry_point == ExportedFunction::Constructor && value < subsistence_threshold {
-			return Err(<Error<T>>::NewContractNotFunded.into())
+			return Err(<Error<T>>::NewContractNotFunded.into());
 		}
 
 		Self::transfer(self.caller_is_origin(), false, self.caller(), &frame.account_id, value)
@@ -879,7 +879,7 @@ where
 
 		let try_call = || {
 			if !self.allows_reentry(&to) {
-				return Err(<Error<T>>::ReentranceDenied.into())
+				return Err(<Error<T>>::ReentranceDenied.into());
 			}
 			// We ignore instantiate frames in our search for a cached contract.
 			// Otherwise it would be possible to recursively call a contract from its own
@@ -931,7 +931,7 @@ where
 
 	fn terminate(&mut self, beneficiary: &AccountIdOf<Self::T>) -> Result<(), DispatchError> {
 		if self.is_recursive() {
-			return Err(Error::<T>::TerminatedWhileReentrant.into())
+			return Err(Error::<T>::TerminatedWhileReentrant.into());
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();

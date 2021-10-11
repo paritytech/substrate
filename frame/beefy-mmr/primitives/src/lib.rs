@@ -113,7 +113,7 @@ where
 				// swap collections to avoid allocations
 				upper = next;
 				next = t;
-			},
+			}
 		};
 	}
 }
@@ -282,7 +282,7 @@ where
 	L: Into<Leaf<'a>>,
 {
 	if leaf_index >= number_of_leaves {
-		return false
+		return false;
 	}
 
 	let leaf_hash = match leaf.into() {
@@ -354,11 +354,11 @@ where
 				combined[32..64].copy_from_slice(&b);
 
 				next.push(H::hash(&combined));
-			},
+			}
 			// Odd number of items. Promote the item to the upper layer.
 			(Some(a), None) if !next.is_empty() => {
 				next.push(a);
-			},
+			}
 			// Last item = root.
 			(Some(a), None) => return Ok(a),
 			// Finish up, no more items.
@@ -368,8 +368,8 @@ where
 					"[merkelize_row] Next: {:?}",
 					next.iter().map(hex::encode).collect::<Vec<_>>()
 				);
-				return Err(next)
-			},
+				return Err(next);
+			}
 		}
 	}
 }

@@ -55,12 +55,12 @@ use sp_arithmetic::{
 pub fn compute_inflation<P: PerThing>(stake: P, ideal_stake: P, falloff: P) -> P {
 	if stake < ideal_stake {
 		// ideal_stake is more than 0 because it is strictly more than stake
-		return stake / ideal_stake
+		return stake / ideal_stake;
 	}
 
 	if falloff < P::from_percent(1.into()) {
 		log::error!("Invalid inflation computation: falloff less than 1% is not supported");
-		return PerThing::zero()
+		return PerThing::zero();
 	}
 
 	let accuracy = {
@@ -97,7 +97,7 @@ pub fn compute_inflation<P: PerThing>(stake: P, ideal_stake: P, falloff: P) -> P
 		_ => {
 			log::error!("Invalid inflation computation: unexpected result {:?}", res);
 			P::zero()
-		},
+		}
 	}
 }
 
@@ -131,7 +131,7 @@ fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
 		last_taylor_term = compute_taylor_term(k, &last_taylor_term, p);
 
 		if last_taylor_term.is_zero() {
-			break
+			break;
 		}
 
 		let last_taylor_term_positive = k % 2 == 0;
@@ -156,7 +156,7 @@ fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
 	}
 
 	if !taylor_sum_positive {
-		return BigUint::zero()
+		return BigUint::zero();
 	}
 
 	taylor_sum.lstrip();
@@ -198,15 +198,15 @@ fn div_by_stripped(mut a: BigUint, b: &BigUint) -> BigUint {
 
 	if b.len() == 0 {
 		log::error!("Computation error: Invalid division");
-		return BigUint::zero()
+		return BigUint::zero();
 	}
 
 	if b.len() == 1 {
-		return a.div_unit(b.checked_get(0).unwrap_or(1))
+		return a.div_unit(b.checked_get(0).unwrap_or(1));
 	}
 
 	if b.len() > a.len() {
-		return BigUint::zero()
+		return BigUint::zero();
 	}
 
 	if b.len() == a.len() {
@@ -220,7 +220,7 @@ fn div_by_stripped(mut a: BigUint, b: &BigUint) -> BigUint {
 			.map(|res| res.0)
 			.unwrap_or_else(|| BigUint::zero())
 			.div_unit(100_000)
-			.div_unit(100_000)
+			.div_unit(100_000);
 	}
 
 	a.div(b, false).map(|res| res.0).unwrap_or_else(|| BigUint::zero())

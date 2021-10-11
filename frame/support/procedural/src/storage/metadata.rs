@@ -31,7 +31,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					#scrate::scale_info::meta_type::<#value_type>()
 				)
 			}
-		},
+		}
 		StorageLineTypeDef::Map(map) => {
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
@@ -42,7 +42,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}
-		},
+		}
 		StorageLineTypeDef::DoubleMap(map) => {
 			let hasher1 = map.hasher1.into_metadata();
 			let hasher2 = map.hasher2.into_metadata();
@@ -58,7 +58,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}
-		},
+		}
 		StorageLineTypeDef::NMap(map) => {
 			let key_tuple = &map.to_key_tuple();
 			let hashers = map
@@ -75,7 +75,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}
-		},
+		}
 	}
 }
 

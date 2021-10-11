@@ -162,7 +162,7 @@ impl ChainExtension<Test> for TestExtension {
 				env.write(&input, false, None)?;
 				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
 				Ok(RetVal::Converging(func_id))
-			},
+			}
 			1 => {
 				let env = env.only_in();
 				TEST_EXTENSION.with(|e| {
@@ -170,17 +170,17 @@ impl ChainExtension<Test> for TestExtension {
 						(env.val0(), env.val1(), env.val2(), env.val3())
 				});
 				Ok(RetVal::Converging(func_id))
-			},
+			}
 			2 => {
 				let mut env = env.buf_in_buf_out();
 				let weight = env.read(2)?[1].into();
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(func_id))
-			},
+			}
 			3 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
 			_ => {
 				panic!("Passed unknown func_id to test chain extension: {}", func_id);
-			},
+			}
 		}
 	}
 

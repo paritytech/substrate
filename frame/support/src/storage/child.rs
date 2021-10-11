@@ -42,7 +42,7 @@ pub fn get<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> {
 					None
 				})
 			})
-		},
+		}
 	}
 }
 
@@ -111,9 +111,10 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(child_info: &ChildInfo, key: &[u8]) -> bool {
 	match child_info.child_type() {
-		ChildType::ParentKeyId =>
+		ChildType::ParentKeyId => {
 			sp_io::default_child_storage::read(child_info.storage_key(), key, &mut [0; 0][..], 0)
-				.is_some(),
+				.is_some()
+		}
 	}
 }
 
@@ -138,8 +139,9 @@ pub fn exists(child_info: &ChildInfo, key: &[u8]) -> bool {
 /// blocks.
 pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageResult {
 	match child_info.child_type() {
-		ChildType::ParentKeyId =>
-			sp_io::default_child_storage::storage_kill(child_info.storage_key(), limit),
+		ChildType::ParentKeyId => {
+			sp_io::default_child_storage::storage_kill(child_info.storage_key(), limit)
+		}
 	}
 }
 
@@ -148,7 +150,7 @@ pub fn kill(child_info: &ChildInfo, key: &[u8]) {
 	match child_info.child_type() {
 		ChildType::ParentKeyId => {
 			sp_io::default_child_storage::clear(child_info.storage_key(), key);
-		},
+		}
 	}
 }
 
@@ -162,8 +164,9 @@ pub fn get_raw(child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
 /// Put a raw byte slice into storage.
 pub fn put_raw(child_info: &ChildInfo, key: &[u8], value: &[u8]) {
 	match child_info.child_type() {
-		ChildType::ParentKeyId =>
-			sp_io::default_child_storage::set(child_info.storage_key(), key, value),
+		ChildType::ParentKeyId => {
+			sp_io::default_child_storage::set(child_info.storage_key(), key, value)
+		}
 	}
 }
 
@@ -180,6 +183,6 @@ pub fn len(child_info: &ChildInfo, key: &[u8]) -> Option<u32> {
 		ChildType::ParentKeyId => {
 			let mut buffer = [0; 0];
 			sp_io::default_child_storage::read(child_info.storage_key(), key, &mut buffer, 0)
-		},
+		}
 	}
 }

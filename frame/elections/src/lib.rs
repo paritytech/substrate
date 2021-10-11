@@ -466,13 +466,13 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Reaped
-		VoterReaped{voter: T::AccountId, reaper: T::AccountId},
+		VoterReaped { voter: T::AccountId, reaper: T::AccountId },
 		/// Slashed
-		BadReaperSlashed{reaper: T::AccountId},
+		BadReaperSlashed { reaper: T::AccountId },
 		/// A tally (for approval votes of seats) has started.
-		TallyStarted{seats: u32},
+		TallyStarted { seats: u32 },
 		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
-		TallyFinalized{incoming: Vec<T::AccountId>, outgoing: Vec<T::AccountId>},
+		TallyFinalized { incoming: Vec<T::AccountId>, outgoing: Vec<T::AccountId> },
 	}
 
 	#[pallet::call]
@@ -589,11 +589,11 @@ pub mod pallet {
 					T::VotingBond::get(),
 					BalanceStatus::Free,
 				)?;
-				Self::deposit_event(Event::<T>::VoterReaped{voter: who, reaper: reporter});
+				Self::deposit_event(Event::<T>::VoterReaped { voter: who, reaper: reporter });
 			} else {
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
 				T::BadReaper::on_unbalanced(imbalance);
-				Self::deposit_event(Event::<T>::BadReaperSlashed{reaper: reporter});
+				Self::deposit_event(Event::<T>::BadReaperSlashed { reaper: reporter });
 			}
 			Ok(())
 		}
@@ -657,8 +657,8 @@ pub mod pallet {
 			let count = Self::candidate_count() as usize;
 			let candidates = Self::candidates();
 			ensure!(
-				(slot == count && count == candidates.len()) ||
-					(slot < candidates.len() && candidates[slot] == T::AccountId::default()),
+				(slot == count && count == candidates.len())
+					|| (slot < candidates.len() && candidates[slot] == T::AccountId::default()),
 				Error::<T>::InvalidCandidateSlot,
 			);
 			// NOTE: This must be last as it has side-effects.
@@ -732,7 +732,7 @@ pub mod pallet {
 						} else {
 							None
 						}
-					},
+					}
 					_ => None,
 				})
 				.fold(Zero::zero(), |acc, n| acc + n);
@@ -850,14 +850,13 @@ impl<T: Config> Pallet<T> {
 			None
 		} else {
 			let c = Self::members();
-			let (next_possible, count, coming) = if let Some((tally_end, comers, leavers)) =
-				Self::next_finalize()
-			{
-				// if there's a tally in progress, then next tally can begin immediately afterwards
-				(tally_end, c.len() - leavers.len() + comers as usize, comers)
-			} else {
-				(<frame_system::Pallet<T>>::block_number(), c.len(), 0)
-			};
+			let (next_possible, count, coming) =
+				if let Some((tally_end, comers, leavers)) = Self::next_finalize() {
+					// if there's a tally in progress, then next tally can begin immediately afterwards
+					(tally_end, c.len() - leavers.len() + comers as usize, comers)
+				} else {
+					(<frame_system::Pallet<T>>::block_number(), c.len(), 0)
+				};
 			if count < desired_seats as usize {
 				Some(next_possible)
 			} else {
@@ -952,7 +951,7 @@ impl<T: Config> Pallet<T> {
 				CellStatus::Hole => {
 					// requested cell was a valid hole.
 					<Voters<T>>::mutate(set_index, |set| set[vec_index] = Some(who.clone()));
-				},
+				}
 				CellStatus::Head | CellStatus::Occupied => {
 					// Either occupied or out-of-range.
 					let next = Self::next_nonfull_voter_set();
@@ -974,7 +973,7 @@ impl<T: Config> Pallet<T> {
 						NextVoterSet::<T>::put(next + 1);
 					}
 					<Voters<T>>::append(next, Some(who.clone()));
-				},
+				}
 			}
 
 			T::Currency::reserve(&who, T::VotingBond::get())?;
@@ -1023,7 +1022,7 @@ impl<T: Config> Pallet<T> {
 				leaderboard_size
 			]);
 
-			Self::deposit_event(Event::<T>::TallyStarted{seats: empty_seats as u32});
+			Self::deposit_event(Event::<T>::TallyStarted { seats: empty_seats as u32 });
 		}
 	}
 
@@ -1117,7 +1116,7 @@ impl<T: Config> Pallet<T> {
 			new_candidates.truncate(last_index + 1);
 		}
 
-		Self::deposit_event(Event::<T>::TallyFinalized{incoming, outgoing});
+		Self::deposit_event(Event::<T>::TallyFinalized { incoming, outgoing });
 
 		<Candidates<T>>::put(new_candidates);
 		CandidateCount::<T>::put(count);
@@ -1144,7 +1143,7 @@ impl<T: Config> Pallet<T> {
 		loop {
 			let next_set = <Voters<T>>::get(index);
 			if next_set.is_empty() {
-				break
+				break;
 			} else {
 				index += 1;
 				all.extend(next_set);
@@ -1226,7 +1225,7 @@ impl<T: Config> Pallet<T> {
 	pub fn bool_to_flag(x: Vec<bool>) -> Vec<ApprovalFlag> {
 		let mut result: Vec<ApprovalFlag> = Vec::with_capacity(x.len() / APPROVAL_FLAG_LEN);
 		if x.is_empty() {
-			return result
+			return result;
 		}
 		result.push(0);
 		let mut index = 0;
@@ -1236,7 +1235,7 @@ impl<T: Config> Pallet<T> {
 			result[index] += (if x[counter] { 1 } else { 0 }) << shl_index;
 			counter += 1;
 			if counter > x.len() - 1 {
-				break
+				break;
 			}
 			if counter % APPROVAL_FLAG_LEN == 0 {
 				result.push(0);
@@ -1250,7 +1249,7 @@ impl<T: Config> Pallet<T> {
 	pub fn flag_to_bool(chunk: Vec<ApprovalFlag>) -> Vec<bool> {
 		let mut result = Vec::with_capacity(chunk.len());
 		if chunk.is_empty() {
-			return vec![]
+			return vec![];
 		}
 		chunk
 			.into_iter()
@@ -1275,7 +1274,7 @@ impl<T: Config> Pallet<T> {
 		loop {
 			let chunk = Self::approvals_of((who.clone(), index));
 			if chunk.is_empty() {
-				break
+				break;
 			}
 			all.extend(Self::flag_to_bool(chunk));
 			index += 1;
@@ -1292,7 +1291,7 @@ impl<T: Config> Pallet<T> {
 				<ApprovalsOf<T>>::remove((who.clone(), index));
 				index += 1;
 			} else {
-				break
+				break;
 			}
 		}
 	}
@@ -1310,7 +1309,7 @@ impl<T: Config> Pallet<T> {
 	fn get_offset(stake: BalanceOf<T>, t: VoteIndex) -> BalanceOf<T> {
 		let decay_ratio: BalanceOf<T> = T::DecayRatio::get().into();
 		if t > 150 {
-			return stake * decay_ratio
+			return stake * decay_ratio;
 		}
 		let mut offset = stake;
 		let mut r = Zero::zero();

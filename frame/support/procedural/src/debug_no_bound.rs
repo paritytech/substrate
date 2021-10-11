@@ -40,7 +40,7 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 						#( #fields )*
 						.finish()
 				)
-			},
+			}
 			syn::Fields::Unnamed(unnamed) => {
 				let fields = unnamed
 					.unnamed
@@ -54,7 +54,7 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 						#( #fields )*
 						.finish()
 				)
-			},
+			}
 			syn::Fields::Unit => quote::quote!(fmt.write_str(stringify!(#input_ident))),
 		},
 		syn::Data::Enum(enum_) => {
@@ -76,7 +76,7 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 									.finish()
 							}
 						)
-					},
+					}
 					syn::Fields::Unnamed(unnamed) => {
 						let captured = unnamed
 							.unnamed
@@ -93,7 +93,7 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 									.finish()
 							}
 						)
-					},
+					}
 					syn::Fields::Unit => quote::quote!(
 						Self::#ident => fmt.write_str(#full_variant_str)
 					),
@@ -103,11 +103,11 @@ pub fn derive_debug_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 			quote::quote!(match *self {
 				#( #variants, )*
 			})
-		},
+		}
 		syn::Data::Union(_) => {
 			let msg = "Union type not supported by `derive(DebugNoBound)`";
-			return syn::Error::new(input.span(), msg).to_compile_error().into()
-		},
+			return syn::Error::new(input.span(), msg).to_compile_error().into();
+		}
 	};
 
 	quote::quote!(

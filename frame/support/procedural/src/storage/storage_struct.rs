@@ -120,7 +120,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						}
 					}
 				)
-			},
+			}
 			StorageLineTypeDef::Map(map) => {
 				let hasher = map.hasher.to_storage_hasher_struct();
 				quote!(
@@ -159,7 +159,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						}
 					}
 				)
-			},
+			}
 			StorageLineTypeDef::DoubleMap(map) => {
 				let hasher1 = map.hasher1.to_storage_hasher_struct();
 				let hasher2 = map.hasher2.to_storage_hasher_struct();
@@ -202,7 +202,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						}
 					}
 				)
-			},
+			}
 			StorageLineTypeDef::NMap(_) => {
 				quote!(
 					impl<#impl_trait> #scrate::storage::StoragePrefixedMap<#value_type>
@@ -239,7 +239,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						}
 					}
 				)
-			},
+			}
 		};
 
 		let max_values = if let Some(max_values) = &line.max_values {
@@ -286,7 +286,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 				StorageLineTypeDef::Map(map) => {
 					let key = &map.key;
 					quote!(
@@ -330,7 +330,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 				StorageLineTypeDef::DoubleMap(map) => {
 					let key1 = &map.key1;
 					let key2 = &map.key2;
@@ -380,7 +380,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 				StorageLineTypeDef::NMap(map) => {
 					let key = &map.to_keygen_struct(scrate);
 					quote!(
@@ -423,7 +423,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 			}
 		} else {
 			// Implement `__partial_storage_info` which doesn't require MaxEncodedLen on keys and
@@ -456,7 +456,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 				StorageLineTypeDef::Map(_) => {
 					quote!(
 						impl<#impl_trait> #scrate::traits::PartialStorageInfoTrait
@@ -487,7 +487,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 				StorageLineTypeDef::DoubleMap(_) => {
 					quote!(
 						impl<#impl_trait> #scrate::traits::PartialStorageInfoTrait
@@ -518,7 +518,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 				StorageLineTypeDef::NMap(_) => {
 					quote!(
 						impl<#impl_trait> #scrate::traits::PartialStorageInfoTrait
@@ -549,7 +549,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
-				},
+				}
 			}
 		};
 

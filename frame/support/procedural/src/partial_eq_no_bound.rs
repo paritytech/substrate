@@ -37,7 +37,7 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 					.map(|i| quote::quote_spanned!(i.span() => self.#i == other.#i ));
 
 				quote::quote!( true #( && #fields )* )
-			},
+			}
 			syn::Fields::Unnamed(unnamed) => {
 				let fields = unnamed
 					.unnamed
@@ -47,10 +47,10 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 					.map(|i| quote::quote_spanned!(i.span() => self.#i == other.#i ));
 
 				quote::quote!( true #( && #fields )* )
-			},
+			}
 			syn::Fields::Unit => {
 				quote::quote!(true)
-			},
+			}
 		},
 		syn::Data::Enum(enum_) => {
 			let variants =
@@ -77,7 +77,7 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 									Self::#ident { #( #other_capture, )* },
 								) => true #( && #eq )*
 							)
-						},
+						}
 						syn::Fields::Unnamed(unnamed) => {
 							let names = unnamed
 								.unnamed
@@ -97,7 +97,7 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 									Self::#ident ( #( #other_names, )* ),
 								) => true #( && #eq )*
 							)
-						},
+						}
 						syn::Fields::Unit => quote::quote!( (Self::#ident, Self::#ident) => true ),
 					}
 				});
@@ -119,11 +119,11 @@ pub fn derive_partial_eq_no_bound(input: proc_macro::TokenStream) -> proc_macro:
 				#( #variants, )*
 				#( #different_variants, )*
 			})
-		},
+		}
 		syn::Data::Union(_) => {
 			let msg = "Union type not supported by `derive(PartialEqNoBound)`";
-			return syn::Error::new(input.span(), msg).to_compile_error().into()
-		},
+			return syn::Error::new(input.span(), msg).to_compile_error().into();
+		}
 	};
 
 	quote::quote!(

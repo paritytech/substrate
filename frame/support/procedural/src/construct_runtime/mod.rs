@@ -84,7 +84,7 @@ fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Resul
 			);
 			let mut err = syn::Error::new(used_pallet.span(), &msg);
 			err.combine(syn::Error::new(pallet.name.span(), msg));
-			return Err(err)
+			return Err(err);
 		}
 
 		if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span()) {
@@ -92,7 +92,7 @@ fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Resul
 
 			let mut err = syn::Error::new(used_pallet, &msg);
 			err.combine(syn::Error::new(pallet.name.span(), &msg));
-			return Err(err)
+			return Err(err);
 		}
 
 		Ok(Pallet {

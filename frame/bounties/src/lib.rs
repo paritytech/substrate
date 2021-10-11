@@ -229,19 +229,19 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// New bounty proposal.
-		BountyProposed{index: BountyIndex},
+		BountyProposed { index: BountyIndex },
 		/// A bounty proposal was rejected; funds were slashed.
-		BountyRejected{index: BountyIndex, bond: BalanceOf<T>},
+		BountyRejected { index: BountyIndex, bond: BalanceOf<T> },
 		/// A bounty proposal is funded and became active.
-		BountyBecameActive{index: BountyIndex},
+		BountyBecameActive { index: BountyIndex },
 		/// A bounty is awarded to a beneficiary.
-		BountyAwarded{index: BountyIndex, beneficiary: T::AccountId},
+		BountyAwarded { index: BountyIndex, beneficiary: T::AccountId },
 		/// A bounty is claimed by beneficiary.
-		BountyClaimed{index: BountyIndex, payout: BalanceOf<T>, beneficiary: T::AccountId},
+		BountyClaimed { index: BountyIndex, payout: BalanceOf<T>, beneficiary: T::AccountId },
 		/// A bounty is cancelled.
-		BountyCanceled{index: BountyIndex},
+		BountyCanceled { index: BountyIndex },
 		/// A bounty expiry is extended.
-		BountyExtended{index: BountyIndex},
+		BountyExtended { index: BountyIndex },
 	}
 
 	/// Number of bounty proposals that have been made.
@@ -342,7 +342,7 @@ pub mod pallet {
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				match bounty.status {
-					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {},
+					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {}
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				};
 
@@ -395,13 +395,13 @@ pub mod pallet {
 				match bounty.status {
 					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {
 						// No curator to unassign at this point.
-						return Err(Error::<T>::UnexpectedStatus.into())
-					},
+						return Err(Error::<T>::UnexpectedStatus.into());
+					}
 					BountyStatus::CuratorProposed { ref curator } => {
 						// A curator has been proposed, but not accepted yet.
 						// Either `RejectOrigin` or the proposed curator can unassign the curator.
 						ensure!(maybe_sender.map_or(true, |sender| sender == *curator), BadOrigin);
-					},
+					}
 					BountyStatus::Active { ref curator, ref update_due } => {
 						// The bounty is active.
 						match maybe_sender {
@@ -409,7 +409,7 @@ pub mod pallet {
 							None => {
 								slash_curator(curator, &mut bounty.curator_deposit);
 								// Continue to change bounty status below...
-							},
+							}
 							Some(sender) => {
 								// If the sender is not the curator, and the curator is inactive,
 								// slash the curator.
@@ -420,7 +420,7 @@ pub mod pallet {
 									// Continue to change bounty status below...
 									} else {
 										// Curator has more time to give an update.
-										return Err(Error::<T>::Premature.into())
+										return Err(Error::<T>::Premature.into());
 									}
 								} else {
 									// Else this is the curator, willingly giving up their role.
@@ -430,9 +430,9 @@ pub mod pallet {
 									debug_assert!(err_amount.is_zero());
 									// Continue to change bounty status below...
 								}
-							},
+							}
 						}
-					},
+					}
 					BountyStatus::PendingPayout { ref curator, .. } => {
 						// The bounty is pending payout, so only council can unassign a curator.
 						// By doing so, they are claiming the curator is acting maliciously, so
@@ -440,7 +440,7 @@ pub mod pallet {
 						ensure!(maybe_sender.is_none(), BadOrigin);
 						slash_curator(curator, &mut bounty.curator_deposit);
 						// Continue to change bounty status below...
-					},
+					}
 				};
 
 				bounty.status = BountyStatus::Funded;
@@ -475,13 +475,13 @@ pub mod pallet {
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
-						let update_due = frame_system::Pallet::<T>::block_number() +
-							T::BountyUpdatePeriod::get();
+						let update_due = frame_system::Pallet::<T>::block_number()
+							+ T::BountyUpdatePeriod::get();
 						bounty.status =
 							BountyStatus::Active { curator: curator.clone(), update_due };
 
 						Ok(())
-					},
+					}
 					_ => Err(Error::<T>::UnexpectedStatus.into()),
 				}
 			})?;
@@ -513,20 +513,20 @@ pub mod pallet {
 				match &bounty.status {
 					BountyStatus::Active { curator, .. } => {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
-					},
+					}
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
 				bounty.status = BountyStatus::PendingPayout {
 					curator: signer,
 					beneficiary: beneficiary.clone(),
-					unlock_at: frame_system::Pallet::<T>::block_number() +
-						T::BountyDepositPayoutDelay::get(),
+					unlock_at: frame_system::Pallet::<T>::block_number()
+						+ T::BountyDepositPayoutDelay::get(),
 				};
 
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T>::BountyAwarded{index: bounty_id, beneficiary});
+			Self::deposit_event(Event::<T>::BountyAwarded { index: bounty_id, beneficiary });
 			Ok(())
 		}
 
@@ -571,7 +571,11 @@ pub mod pallet {
 
 					BountyDescriptions::<T>::remove(bounty_id);
 
-					Self::deposit_event(Event::<T>::BountyClaimed{index: bounty_id, payout, beneficiary});
+					Self::deposit_event(Event::<T>::BountyClaimed {
+						index: bounty_id,
+						payout,
+						beneficiary,
+					});
 					Ok(())
 				} else {
 					Err(Error::<T>::UnexpectedStatus.into())
@@ -612,34 +616,37 @@ pub mod pallet {
 							T::OnSlash::on_unbalanced(imbalance);
 							*maybe_bounty = None;
 
-							Self::deposit_event(Event::<T>::BountyRejected{index: bounty_id, bond: value});
+							Self::deposit_event(Event::<T>::BountyRejected {
+								index: bounty_id,
+								bond: value,
+							});
 							// Return early, nothing else to do.
 							return Ok(
 								Some(<T as Config>::WeightInfo::close_bounty_proposed()).into()
-							)
-						},
+							);
+						}
 						BountyStatus::Approved => {
 							// For weight reasons, we don't allow a council to cancel in this phase.
 							// We ask for them to wait until it is funded before they can cancel.
-							return Err(Error::<T>::UnexpectedStatus.into())
-						},
+							return Err(Error::<T>::UnexpectedStatus.into());
+						}
 						BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {
 							// Nothing extra to do besides the removal of the bounty below.
-						},
+						}
 						BountyStatus::Active { curator, .. } => {
 							// Cancelled by council, refund deposit of the working curator.
 							let err_amount =
 								T::Currency::unreserve(&curator, bounty.curator_deposit);
 							debug_assert!(err_amount.is_zero());
 							// Then execute removal of the bounty below.
-						},
+						}
 						BountyStatus::PendingPayout { .. } => {
 							// Bounty is already pending payout. If council wants to cancel
 							// this bounty, it should mean the curator was acting maliciously.
 							// So the council should first unassign the curator, slashing their
 							// deposit.
-							return Err(Error::<T>::PendingPayout.into())
-						},
+							return Err(Error::<T>::PendingPayout.into());
+						}
 					}
 
 					let bounty_account = Self::bounty_account_id(bounty_id);
@@ -656,7 +663,7 @@ pub mod pallet {
 					debug_assert!(res.is_ok());
 					*maybe_bounty = None;
 
-					Self::deposit_event(Event::<T>::BountyCanceled{index: bounty_id});
+					Self::deposit_event(Event::<T>::BountyCanceled { index: bounty_id });
 					Ok(Some(<T as Config>::WeightInfo::close_bounty_active()).into())
 				},
 			)
@@ -686,17 +693,17 @@ pub mod pallet {
 				match bounty.status {
 					BountyStatus::Active { ref curator, ref mut update_due } => {
 						ensure!(*curator == signer, Error::<T>::RequireCurator);
-						*update_due = (frame_system::Pallet::<T>::block_number() +
-							T::BountyUpdatePeriod::get())
+						*update_due = (frame_system::Pallet::<T>::block_number()
+							+ T::BountyUpdatePeriod::get())
 						.max(*update_due);
-					},
+					}
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
 
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T>::BountyExtended{index: bounty_id});
+			Self::deposit_event(Event::<T>::BountyExtended { index: bounty_id });
 			Ok(())
 		}
 	}
@@ -734,8 +741,8 @@ impl<T: Config> Pallet<T> {
 		let index = Self::bounty_count();
 
 		// reserve deposit for new bounty
-		let bond = T::BountyDepositBase::get() +
-			T::DataDepositPerByte::get() * (description.len() as u32).into();
+		let bond = T::BountyDepositBase::get()
+			+ T::DataDepositPerByte::get() * (description.len() as u32).into();
 		T::Currency::reserve(&proposer, bond)
 			.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
@@ -753,7 +760,7 @@ impl<T: Config> Pallet<T> {
 		Bounties::<T>::insert(index, &bounty);
 		BountyDescriptions::<T>::insert(index, description);
 
-		Self::deposit_event(Event::<T>::BountyProposed{index});
+		Self::deposit_event(Event::<T>::BountyProposed { index });
 
 		Ok(())
 	}
@@ -787,7 +794,7 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Pallet<T> {
 								bounty.value,
 							));
 
-							Self::deposit_event(Event::<T>::BountyBecameActive{index});
+							Self::deposit_event(Event::<T>::BountyBecameActive { index });
 							false
 						} else {
 							*missed_any = true;

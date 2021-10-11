@@ -118,8 +118,8 @@ pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
 		let l = SESSION_LENGTH.with(|l| *l.borrow());
-		now % l == 0 ||
-			FORCE_SESSION_END.with(|l| {
+		now % l == 0
+			|| FORCE_SESSION_END.with(|l| {
 				let r = *l.borrow();
 				*l.borrow_mut() = false;
 				r

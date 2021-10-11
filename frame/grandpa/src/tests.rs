@@ -57,7 +57,10 @@ fn authorities_change_logged() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities{authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])}.into(),
+				event: Event::NewAuthorities {
+					authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+				}
+				.into(),
 				topics: vec![],
 			},]
 		);
@@ -93,7 +96,10 @@ fn authorities_change_logged_after_delay() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities{authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])}.into(),
+				event: Event::NewAuthorities {
+					authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+				}
+				.into(),
 				topics: vec![],
 			},]
 		);
@@ -373,7 +379,7 @@ fn report_equivocation_current_set_works() {
 		// check that the balances of all other validators are left intact.
 		for validator in &validators {
 			if *validator == equivocation_validator_id {
-				continue
+				continue;
 			}
 
 			assert_eq!(Balances::total_balance(validator), 10_000_000);
@@ -452,7 +458,7 @@ fn report_equivocation_old_set_works() {
 		// check that the balances of all other validators are left intact.
 		for validator in &validators {
 			if *validator == equivocation_validator_id {
-				continue
+				continue;
 			}
 
 			assert_eq!(Balances::total_balance(validator), 10_000_000);

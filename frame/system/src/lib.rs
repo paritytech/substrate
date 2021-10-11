@@ -1149,18 +1149,18 @@ impl<T: Config> Pallet<T> {
 
 						Pallet::<T>::on_killed_account(who.clone());
 						Ok(DecRefStatus::Reaped)
-					},
+					}
 					(1, c, _) if c > 0 => {
 						// Cannot remove last provider if there are consumers.
 						Err(DispatchError::ConsumerRemaining)
-					},
+					}
 					(x, _, _) => {
 						// Account will continue to exist as there is either > 1 provider or
 						// > 0 sufficients.
 						account.providers = x - 1;
 						*maybe_account = Some(account);
 						Ok(DecRefStatus::Exists)
-					},
+					}
 				}
 			} else {
 				log::error!(
@@ -1204,12 +1204,12 @@ impl<T: Config> Pallet<T> {
 					(0, 0) | (1, 0) => {
 						Pallet::<T>::on_killed_account(who.clone());
 						DecRefStatus::Reaped
-					},
+					}
 					(x, _) => {
 						account.sufficients = x - 1;
 						*maybe_account = Some(account);
 						DecRefStatus::Exists
-					},
+					}
 				}
 			} else {
 				log::error!(
@@ -1301,7 +1301,7 @@ impl<T: Config> Pallet<T> {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
-			return
+			return;
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
@@ -1573,7 +1573,7 @@ impl<T: Config> Pallet<T> {
 					err,
 				);
 				Event::ExtrinsicFailed(err.error, info)
-			},
+			}
 		});
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
@@ -1707,10 +1707,10 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 				DecRefStatus::Reaped => return Ok(result),
 				DecRefStatus::Exists => {
 					// Update value as normal...
-				},
+				}
 			}
 		} else if !was_providing && !is_providing {
-			return Ok(result)
+			return Ok(result);
 		}
 		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)
@@ -1726,7 +1726,7 @@ pub fn split_inner<T, R, S>(
 		Some(inner) => {
 			let (r, s) = splitter(inner);
 			(Some(r), Some(s))
-		},
+		}
 		None => (None, None),
 	}
 }

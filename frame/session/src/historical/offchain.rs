@@ -121,9 +121,9 @@ pub fn prune_older_than<T: Config>(first_to_keep: SessionIndex) {
 					let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
 				}
 			}
-		},
-		Err(MutateStorageError::ConcurrentModification(_)) => {},
-		Err(MutateStorageError::ValueFunctionFailed(_)) => {},
+		}
+		Err(MutateStorageError::ConcurrentModification(_)) => {}
+		Err(MutateStorageError::ValueFunctionFailed(_)) => {}
 	}
 }
 

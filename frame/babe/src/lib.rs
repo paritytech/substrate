@@ -441,11 +441,11 @@ impl<T: Config> FindAuthor<u32> for Pallet<T> {
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
 				let pre_digest: PreDigest = PreDigest::decode(&mut data).ok()?;
-				return Some(pre_digest.authority_index())
+				return Some(pre_digest.authority_index());
 			}
 		}
 
-		return None
+		return None;
 	}
 }
 
@@ -661,7 +661,7 @@ impl<T: Config> Pallet<T> {
 		// => let's ensure that we only modify the storage once per block
 		let initialized = Self::initialized().is_some();
 		if initialized {
-			return
+			return;
 		}
 
 		let maybe_pre_digest: Option<PreDigest> =
@@ -790,7 +790,7 @@ impl<T: Config> Pallet<T> {
 
 		// validate the equivocation proof
 		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
+			return Err(Error::<T>::InvalidEquivocationProof.into());
 		}
 
 		let validator_set_count = key_owner_proof.validator_count();
@@ -802,7 +802,7 @@ impl<T: Config> Pallet<T> {
 		// check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
 		if epoch_index != session_index {
-			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
+			return Err(Error::<T>::InvalidKeyOwnershipProof.into());
 		}
 
 		// check the membership proof and extract the offender's id

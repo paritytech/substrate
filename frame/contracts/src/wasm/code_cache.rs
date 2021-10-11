@@ -60,7 +60,7 @@ where
 		None => {
 			*existing = Some(prefab_module);
 			Contracts::<T>::deposit_event(Event::CodeStored { code_hash })
-		},
+		}
 	});
 }
 
@@ -230,8 +230,9 @@ where
 		// the contract.
 		match *self {
 			Instrument(len) => T::WeightInfo::instrument(len / 1024),
-			Load(len) =>
-				T::WeightInfo::code_load(len / 1024).saturating_sub(T::WeightInfo::code_load(0)),
+			Load(len) => {
+				T::WeightInfo::code_load(len / 1024).saturating_sub(T::WeightInfo::code_load(0))
+			}
 			UpdateRefcount(len) => T::WeightInfo::code_refcount(len / 1024)
 				.saturating_sub(T::WeightInfo::code_refcount(0)),
 		}

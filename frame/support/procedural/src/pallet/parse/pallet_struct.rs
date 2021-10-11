@@ -113,7 +113,7 @@ impl PalletStructDef {
 			item
 		} else {
 			let msg = "Invalid pallet::pallet, expected struct definition";
-			return Err(syn::Error::new(item.span(), msg))
+			return Err(syn::Error::new(item.span(), msg));
 		};
 
 		let mut store = None;
@@ -125,7 +125,7 @@ impl PalletStructDef {
 			match attr {
 				PalletStructAttr::GenerateStore { vis, keyword, .. } if store.is_none() => {
 					store = Some((vis, keyword));
-				},
+				}
 				PalletStructAttr::GenerateStorageInfoTrait(span)
 					if generate_storage_info.is_none() =>
 				{
@@ -138,8 +138,8 @@ impl PalletStructDef {
 				}
 				attr => {
 					let msg = "Unexpected duplicated attribute";
-					return Err(syn::Error::new(attr.span(), msg))
-				},
+					return Err(syn::Error::new(attr.span(), msg));
+				}
 			}
 		}
 
@@ -147,12 +147,12 @@ impl PalletStructDef {
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::pallet, Pallet must be public";
-			return Err(syn::Error::new(item.span(), msg))
+			return Err(syn::Error::new(item.span(), msg));
 		}
 
 		if item.generics.where_clause.is_some() {
 			let msg = "Invalid pallet::pallet, where clause not supported on Pallet declaration";
-			return Err(syn::Error::new(item.generics.where_clause.span(), msg))
+			return Err(syn::Error::new(item.generics.where_clause.span(), msg));
 		}
 
 		let mut instances = vec![];

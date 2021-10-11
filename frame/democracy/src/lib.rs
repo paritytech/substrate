@@ -508,39 +508,44 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A motion has been proposed by a public account.
-		Proposed{proposal_index: PropIndex, deposit: BalanceOf<T>},
+		Proposed { proposal_index: PropIndex, deposit: BalanceOf<T> },
 		/// A public proposal has been tabled for referendum vote.
-		Tabled{proposal_index: PropIndex, deposit: BalanceOf<T>, depositors: Vec<T::AccountId>},
+		Tabled { proposal_index: PropIndex, deposit: BalanceOf<T>, depositors: Vec<T::AccountId> },
 		/// An external proposal has been tabled.
 		ExternalTabled,
 		/// A referendum has begun.
-		Started{ref_index: ReferendumIndex, threshold: VoteThreshold},
+		Started { ref_index: ReferendumIndex, threshold: VoteThreshold },
 		/// A proposal has been approved by referendum.
-		Passed{ref_index: ReferendumIndex},
+		Passed { ref_index: ReferendumIndex },
 		/// A proposal has been rejected by referendum.
-		NotPassed{ref_index: ReferendumIndex},
+		NotPassed { ref_index: ReferendumIndex },
 		/// A referendum has been cancelled.
-		Cancelled{ref_index: ReferendumIndex},
+		Cancelled { ref_index: ReferendumIndex },
 		/// A proposal has been enacted.
-		Executed{ref_index: ReferendumIndex, result: DispatchResult},
+		Executed { ref_index: ReferendumIndex, result: DispatchResult },
 		/// An account has delegated their vote to another account.
-		Delegated{who: T::AccountId, target: T::AccountId},
+		Delegated { who: T::AccountId, target: T::AccountId },
 		/// An account has cancelled a previous delegation operation.
-		Undelegated{account: T::AccountId},
+		Undelegated { account: T::AccountId },
 		/// An external proposal has been vetoed.
-		Vetoed{who: T::AccountId, proposal_hash: T::Hash, until: T::BlockNumber},
+		Vetoed { who: T::AccountId, proposal_hash: T::Hash, until: T::BlockNumber },
 		/// A proposal's preimage was noted, and the deposit taken.
-		PreimageNoted{proposal_hash: T::Hash, who: T::AccountId, deposit: BalanceOf<T>},
+		PreimageNoted { proposal_hash: T::Hash, who: T::AccountId, deposit: BalanceOf<T> },
 		/// A proposal preimage was removed and used (the deposit was returned).
-		PreimageUsed{proposal_hash: T::Hash, provider: T::AccountId, deposit: BalanceOf<T>},
+		PreimageUsed { proposal_hash: T::Hash, provider: T::AccountId, deposit: BalanceOf<T> },
 		/// A proposal could not be executed because its preimage was invalid.
-		PreimageInvalid{proposal_hash: T::Hash, ref_index: ReferendumIndex},
+		PreimageInvalid { proposal_hash: T::Hash, ref_index: ReferendumIndex },
 		/// A proposal could not be executed because its preimage was missing.
-		PreimageMissing{proposal_hash: T::Hash, ref_index: ReferendumIndex},
+		PreimageMissing { proposal_hash: T::Hash, ref_index: ReferendumIndex },
 		/// A registered preimage was removed and the deposit collected by the reaper.
-		PreimageReaped{proposal_hash: T::Hash, provider: T::AccountId, deposit: BalanceOf<T>, reaper: T::AccountId},
+		PreimageReaped {
+			proposal_hash: T::Hash,
+			provider: T::AccountId,
+			deposit: BalanceOf<T>,
+			reaper: T::AccountId,
+		},
 		/// A proposal_hash has been blacklisted permanently.
-		Blacklisted{proposal_hash: T::Hash},
+		Blacklisted { proposal_hash: T::Hash },
 	}
 
 	#[pallet::error]
@@ -652,7 +657,7 @@ pub mod pallet {
 
 			<PublicProps<T>>::append((index, proposal_hash, who));
 
-			Self::deposit_event(Event::<T>::Proposed{proposal_index: index, deposit: value});
+			Self::deposit_event(Event::<T>::Proposed { proposal_index: index, deposit: value });
 			Ok(())
 		}
 
@@ -877,7 +882,7 @@ pub mod pallet {
 			let until = <frame_system::Pallet<T>>::block_number() + T::CooloffPeriod::get();
 			<Blacklist<T>>::insert(&proposal_hash, (until, existing_vetoers));
 
-			Self::deposit_event(Event::<T>::Vetoed{who, proposal_hash, until});
+			Self::deposit_event(Event::<T>::Vetoed { who, proposal_hash, until });
 			<NextExternal<T>>::kill();
 			Ok(())
 		}
@@ -1083,8 +1088,9 @@ pub mod pallet {
 
 			let (provider, deposit, since, expiry) = <Preimages<T>>::get(&proposal_hash)
 				.and_then(|m| match m {
-					PreimageStatus::Available { provider, deposit, since, expiry, .. } =>
-						Some((provider, deposit, since, expiry)),
+					PreimageStatus::Available { provider, deposit, since, expiry, .. } => {
+						Some((provider, deposit, since, expiry))
+					}
 					_ => None,
 				})
 				.ok_or(Error::<T>::PreimageMissing)?;
@@ -1099,7 +1105,12 @@ pub mod pallet {
 				T::Currency::repatriate_reserved(&provider, &who, deposit, BalanceStatus::Free);
 			debug_assert!(res.is_ok());
 			<Preimages<T>>::remove(&proposal_hash);
-			Self::deposit_event(Event::<T>::PreimageReaped{proposal_hash, provider, deposit, reaper: who});
+			Self::deposit_event(Event::<T>::PreimageReaped {
+				proposal_hash,
+				provider,
+				deposit,
+				reaper: who,
+			});
 			Ok(())
 		}
 
@@ -1244,7 +1255,7 @@ pub mod pallet {
 				}
 			}
 
-			Self::deposit_event(Event::<T>::Blacklisted{proposal_hash});
+			Self::deposit_event(Event::<T>::Blacklisted { proposal_hash });
 			Ok(())
 		}
 
@@ -1325,7 +1336,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Remove a referendum.
 	pub fn internal_cancel_referendum(ref_index: ReferendumIndex) {
-		Self::deposit_event(Event::<T>::Cancelled{ref_index});
+		Self::deposit_event(Event::<T>::Cancelled { ref_index });
 		ReferendumInfoOf::<T>::remove(ref_index);
 	}
 
@@ -1366,14 +1377,14 @@ impl<T: Config> Pallet<T> {
 							status.tally.reduce(approve, *delegations);
 						}
 						votes[i].1 = vote;
-					},
+					}
 					Err(i) => {
 						ensure!(
 							votes.len() as u32 <= T::MaxVotes::get(),
 							Error::<T>::MaxVotesReached
 						);
 						votes.insert(i, (ref_index, vote));
-					},
+					}
 				}
 				// Shouldn't be possible to fail, but we handle it gracefully.
 				status.tally.add(vote).ok_or(ArithmeticError::Overflow)?;
@@ -1418,7 +1429,7 @@ impl<T: Config> Pallet<T> {
 							status.tally.reduce(approve, *delegations);
 						}
 						ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
-					},
+					}
 					Some(ReferendumInfo::Finished { end, approved }) => {
 						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
 							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
@@ -1431,8 +1442,8 @@ impl<T: Config> Pallet<T> {
 								prior.accumulate(unlock_at, balance)
 							}
 						}
-					},
-					None => {}, // Referendum was cancelled.
+					}
+					None => {} // Referendum was cancelled.
 				}
 				votes.remove(i);
 			}
@@ -1448,7 +1459,7 @@ impl<T: Config> Pallet<T> {
 				// We don't support second level delegating, so we don't need to do anything more.
 				*delegations = delegations.saturating_add(amount);
 				1
-			},
+			}
 			Voting::Direct { votes, delegations, .. } => {
 				*delegations = delegations.saturating_add(amount);
 				for &(ref_index, account_vote) in votes.iter() {
@@ -1461,7 +1472,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 				votes.len() as u32
-			},
+			}
 		})
 	}
 
@@ -1472,7 +1483,7 @@ impl<T: Config> Pallet<T> {
 				// We don't support second level delegating, so we don't need to do anything more.
 				*delegations = delegations.saturating_sub(amount);
 				1
-			},
+			}
 			Voting::Direct { votes, delegations, .. } => {
 				*delegations = delegations.saturating_sub(amount);
 				for &(ref_index, account_vote) in votes.iter() {
@@ -1485,7 +1496,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 				votes.len() as u32
-			},
+			}
 		})
 	}
 
@@ -1514,12 +1525,12 @@ impl<T: Config> Pallet<T> {
 					// remove any delegation votes to our current target.
 					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					voting.set_common(delegations, prior);
-				},
+				}
 				Voting::Direct { votes, delegations, prior } => {
 					// here we just ensure that we're currently idling with no votes recorded.
 					ensure!(votes.is_empty(), Error::<T>::VotesExist);
 					voting.set_common(delegations, prior);
-				},
+				}
 			}
 			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
@@ -1527,7 +1538,7 @@ impl<T: Config> Pallet<T> {
 			T::Currency::extend_lock(DEMOCRACY_ID, &who, balance, WithdrawReasons::TRANSFER);
 			Ok(votes)
 		})?;
-		Self::deposit_event(Event::<T>::Delegated{who, target});
+		Self::deposit_event(Event::<T>::Delegated { who, target });
 		Ok(votes)
 	}
 
@@ -1549,11 +1560,11 @@ impl<T: Config> Pallet<T> {
 					voting.set_common(delegations, prior);
 
 					Ok(votes)
-				},
+				}
 				Voting::Direct { .. } => Err(Error::<T>::NotDelegating.into()),
 			}
 		})?;
-		Self::deposit_event(Event::<T>::Undelegated{account: who});
+		Self::deposit_event(Event::<T>::Undelegated { account: who });
 		Ok(votes)
 	}
 
@@ -1584,7 +1595,7 @@ impl<T: Config> Pallet<T> {
 			ReferendumStatus { end, proposal_hash, threshold, delay, tally: Default::default() };
 		let item = ReferendumInfo::Ongoing(status);
 		<ReferendumInfoOf<T>>::insert(ref_index, item);
-		Self::deposit_event(Event::<T>::Started{ref_index, threshold});
+		Self::deposit_event(Event::<T>::Started { ref_index, threshold });
 		ref_index
 	}
 
@@ -1630,7 +1641,11 @@ impl<T: Config> Pallet<T> {
 				for d in &depositors {
 					T::Currency::unreserve(d, deposit);
 				}
-				Self::deposit_event(Event::<T>::Tabled{proposal_index: prop_index, deposit, depositors});
+				Self::deposit_event(Event::<T>::Tabled {
+					proposal_index: prop_index,
+					deposit,
+					depositors,
+				});
 				Self::inject_referendum(
 					now + T::VotingPeriod::get(),
 					proposal,
@@ -1650,22 +1665,25 @@ impl<T: Config> Pallet<T> {
 			if let Ok(proposal) = T::Proposal::decode(&mut &data[..]) {
 				let err_amount = T::Currency::unreserve(&provider, deposit);
 				debug_assert!(err_amount.is_zero());
-				Self::deposit_event(Event::<T>::PreimageUsed{proposal_hash, provider, deposit});
+				Self::deposit_event(Event::<T>::PreimageUsed { proposal_hash, provider, deposit });
 
 				let res = proposal
 					.dispatch(frame_system::RawOrigin::Root.into())
 					.map(|_| ())
 					.map_err(|e| e.error);
-				Self::deposit_event(Event::<T>::Executed{ref_index: index, result: res});
+				Self::deposit_event(Event::<T>::Executed { ref_index: index, result: res });
 
 				Ok(())
 			} else {
 				T::Slash::on_unbalanced(T::Currency::slash_reserved(&provider, deposit).0);
-				Self::deposit_event(Event::<T>::PreimageInvalid{proposal_hash, ref_index: index});
+				Self::deposit_event(Event::<T>::PreimageInvalid {
+					proposal_hash,
+					ref_index: index,
+				});
 				Err(Error::<T>::PreimageInvalid.into())
 			}
 		} else {
-			Self::deposit_event(Event::<T>::PreimageMissing{proposal_hash, ref_index: index});
+			Self::deposit_event(Event::<T>::PreimageMissing { proposal_hash, ref_index: index });
 			Err(Error::<T>::PreimageMissing.into())
 		}
 	}
@@ -1679,7 +1697,7 @@ impl<T: Config> Pallet<T> {
 		let approved = status.threshold.approved(status.tally, total_issuance);
 
 		if approved {
-			Self::deposit_event(Event::<T>::Passed{ref_index: index});
+			Self::deposit_event(Event::<T>::Passed { ref_index: index });
 			if status.delay.is_zero() {
 				let _ = Self::do_enact_proposal(status.proposal_hash, index);
 			} else {
@@ -1688,8 +1706,9 @@ impl<T: Config> Pallet<T> {
 				Preimages::<T>::mutate_exists(
 					&status.proposal_hash,
 					|maybe_pre| match *maybe_pre {
-						Some(PreimageStatus::Available { ref mut expiry, .. }) =>
-							*expiry = Some(when),
+						Some(PreimageStatus::Available { ref mut expiry, .. }) => {
+							*expiry = Some(when)
+						}
 						ref mut a => *a = Some(PreimageStatus::Missing(when)),
 					},
 				);
@@ -1708,7 +1727,7 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 		} else {
-			Self::deposit_event(Event::<T>::NotPassed{ref_index: index});
+			Self::deposit_event(Event::<T>::NotPassed { ref_index: index });
 		}
 
 		approved
@@ -1803,7 +1822,7 @@ impl<T: Config> Pallet<T> {
 			_ => {
 				sp_runtime::print("Failed to decode `PreimageStatus` variant");
 				Err(Error::<T>::NotImminent.into())
-			},
+			}
 		}
 	}
 
@@ -1831,8 +1850,8 @@ impl<T: Config> Pallet<T> {
 			Ok(0) => return Err(Error::<T>::PreimageMissing.into()),
 			_ => {
 				sp_runtime::print("Failed to decode `PreimageStatus` variant");
-				return Err(Error::<T>::PreimageMissing.into())
-			},
+				return Err(Error::<T>::PreimageMissing.into());
+			}
 		}
 
 		// Decode the length of the vector.
@@ -1865,7 +1884,7 @@ impl<T: Config> Pallet<T> {
 		};
 		<Preimages<T>>::insert(proposal_hash, a);
 
-		Self::deposit_event(Event::<T>::PreimageNoted{proposal_hash, who, deposit});
+		Self::deposit_event(Event::<T>::PreimageNoted { proposal_hash, who, deposit });
 
 		Ok(())
 	}
@@ -1891,7 +1910,7 @@ impl<T: Config> Pallet<T> {
 		};
 		<Preimages<T>>::insert(proposal_hash, a);
 
-		Self::deposit_event(Event::<T>::PreimageNoted{proposal_hash, who, deposit: free});
+		Self::deposit_event(Event::<T>::PreimageNoted { proposal_hash, who, deposit: free });
 
 		Ok(())
 	}
@@ -1910,6 +1929,6 @@ fn decode_compact_u32_at(key: &[u8]) -> Option<u32> {
 			sp_runtime::print("Failed to decode compact u32 at:");
 			sp_runtime::print(key);
 			None
-		},
+		}
 	}
 }

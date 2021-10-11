@@ -54,17 +54,19 @@ impl<
 	/// both.
 	pub fn merge(self, other: Self) -> Self {
 		match (self, other) {
-			(SignedImbalance::Positive(one), SignedImbalance::Positive(other)) =>
-				SignedImbalance::Positive(one.merge(other)),
-			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) =>
-				SignedImbalance::Negative(one.merge(other)),
+			(SignedImbalance::Positive(one), SignedImbalance::Positive(other)) => {
+				SignedImbalance::Positive(one.merge(other))
+			}
+			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) => {
+				SignedImbalance::Negative(one.merge(other))
+			}
 			(SignedImbalance::Positive(one), SignedImbalance::Negative(other)) => {
 				match one.offset(other) {
 					SameOrOther::Same(positive) => SignedImbalance::Positive(positive),
 					SameOrOther::Other(negative) => SignedImbalance::Negative(negative),
 					SameOrOther::None => SignedImbalance::Positive(P::zero()),
 				}
-			},
+			}
 			(one, other) => other.merge(one),
 		}
 	}

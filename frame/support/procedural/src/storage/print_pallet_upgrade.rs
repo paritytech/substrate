@@ -26,7 +26,7 @@ fn to_cleaned_string(t: impl quote::ToTokens) -> String {
 /// Print an incomplete upgrade from decl_storage macro to new pallet attribute.
 pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 	if !check_print_pallet_upgrade() {
-		return
+		return;
 	}
 
 	let scrate = &quote::quote!(frame_support);
@@ -58,8 +58,8 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			Ok(g) => g,
 			Err(err) => {
 				println!("Could not print upgrade due compile error: {:?}", err);
-				return
-			},
+				return;
+			}
 		};
 
 		let genesis_config_impl_gen =
@@ -216,7 +216,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 					comma_query_kind = comma_query_kind,
 					comma_default_value_getter_name = comma_default_value_getter_name,
 				)
-			},
+			}
 			StorageLineTypeDef::DoubleMap(double_map) => {
 				format!(
 					"StorageDoubleMap<_, {hasher1}, {key1}, {hasher2}, {key2}, {value_type}\
@@ -229,7 +229,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 					comma_query_kind = comma_query_kind,
 					comma_default_value_getter_name = comma_default_value_getter_name,
 				)
-			},
+			}
 			StorageLineTypeDef::NMap(map) => {
 				format!(
 					"StorageNMap<_, {keygen}, {value_type}{comma_query_kind}\
@@ -239,7 +239,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 					comma_query_kind = comma_query_kind,
 					comma_default_value_getter_name = comma_default_value_getter_name,
 				)
-			},
+			}
 			StorageLineTypeDef::Simple(_) => {
 				format!(
 					"StorageValue<_, {value_type}{comma_query_kind}\
@@ -248,7 +248,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 					comma_query_kind = comma_query_kind,
 					comma_default_value_getter_name = comma_default_value_getter_name,
 				)
-			},
+			}
 		};
 
 		let additional_comment = if line.is_option && line.default_value.is_some() {

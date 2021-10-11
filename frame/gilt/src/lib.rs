@@ -273,13 +273,23 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A bid was successfully placed.
-		BidPlaced{who: T::AccountId, amount: BalanceOf<T>, duration: u32},
+		BidPlaced { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
 		/// A bid was successfully removed (before being accepted as a gilt).
-		BidRetracted{who: T::AccountId, amount: BalanceOf<T>, duration: u32},
+		BidRetracted { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
 		/// A bid was accepted as a gilt. The balance may not be released until expiry.
-		GiltIssued{index: ActiveIndex, expiry: T::BlockNumber, who: T::AccountId, amount: BalanceOf<T>},
+		GiltIssued {
+			index: ActiveIndex,
+			expiry: T::BlockNumber,
+			who: T::AccountId,
+			amount: BalanceOf<T>,
+		},
 		/// An expired gilt has been thawed.
-		GiltThawed{index: ActiveIndex, who: T::AccountId, original_amount: BalanceOf<T>, additional_amount: BalanceOf<T>},
+		GiltThawed {
+			index: ActiveIndex,
+			who: T::AccountId,
+			original_amount: BalanceOf<T>,
+			additional_amount: BalanceOf<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -373,7 +383,7 @@ pub mod pallet {
 				qs[queue_index].0 += net.0;
 				qs[queue_index].1 = qs[queue_index].1.saturating_add(net.1);
 			});
-			Self::deposit_event(Event::BidPlaced{who: who.clone(), amount, duration});
+			Self::deposit_event(Event::BidPlaced { who: who.clone(), amount, duration });
 
 			Ok(().into())
 		}
@@ -411,7 +421,7 @@ pub mod pallet {
 			});
 
 			T::Currency::unreserve(&bid.who, bid.amount);
-			Self::deposit_event(Event::BidRetracted{who: bid.who, amount: bid.amount, duration});
+			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(().into())
 		}
@@ -490,7 +500,12 @@ pub mod pallet {
 					debug_assert!(err_amt.is_zero());
 				}
 
-				let e = Event::GiltThawed{index, who: gilt.who, original_amount: gilt.amount, additional_amount: gilt_value};
+				let e = Event::GiltThawed {
+					index,
+					who: gilt.who,
+					original_amount: gilt.amount,
+					additional_amount: gilt_value,
+				};
 				Self::deposit_event(e);
 			});
 
@@ -567,7 +582,7 @@ pub mod pallet {
 				QueueTotals::<T>::mutate(|qs| {
 					for duration in (1..=T::QueueCount::get()).rev() {
 						if qs[duration as usize - 1].0 == 0 {
-							continue
+							continue;
 						}
 						let queue_index = duration as usize - 1;
 						let expiry =
@@ -600,7 +615,8 @@ pub mod pallet {
 								totals.frozen += bid.amount;
 								totals.proportion = totals.proportion.saturating_add(proportion);
 								totals.index += 1;
-								let e = Event::GiltIssued{index, expiry, who: who.clone(), amount};
+								let e =
+									Event::GiltIssued { index, expiry, who: who.clone(), amount };
 								Self::deposit_event(e);
 								let gilt = ActiveGilt { amount, proportion, who, expiry };
 								Active::<T>::insert(index, gilt);
@@ -608,14 +624,14 @@ pub mod pallet {
 								bids_taken += 1;
 
 								if remaining.is_zero() || bids_taken == max_bids {
-									break
+									break;
 								}
 							}
 							queues_hit += 1;
 							qs[queue_index].0 = q.len() as u32;
 						});
 						if remaining.is_zero() || bids_taken == max_bids {
-							break
+							break;
 						}
 					}
 				});

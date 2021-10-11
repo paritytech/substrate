@@ -195,7 +195,7 @@ pub mod pallet {
 					// Take the weight of this function itself into account.
 					let base_weight = T::WeightInfo::batch(index.saturating_add(1) as u32);
 					// Return the actual used weight + base_weight of this call.
-					return Ok(Some(base_weight + weight).into())
+					return Ok(Some(base_weight + weight).into());
 				}
 				Self::deposit_event(Event::ItemCompleted);
 			}

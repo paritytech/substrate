@@ -24,7 +24,7 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	let genesis_config = if let Some(genesis_config) = &def.genesis_config {
 		genesis_config
 	} else {
-		return Default::default()
+		return Default::default();
 	};
 	let genesis_build = def.genesis_build.as_ref().expect("Checked by def parser");
 

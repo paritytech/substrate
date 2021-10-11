@@ -164,8 +164,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			events(),
 			[
 				Event::System(system::Event::NewAccount(1)),
-				Event::Balances(crate::Event::Endowed{account: 1, free_balance: 100}),
-				Event::Balances(crate::Event::BalanceSet{who: 1, free: 100, reserved: 0}),
+				Event::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
+				Event::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
 			]
 		);
 
@@ -182,7 +182,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			events(),
 			[
 				Event::System(system::Event::KilledAccount(1)),
-				Event::Balances(crate::Event::DustLost{account: 1, balance: 1}),
+				Event::Balances(crate::Event::DustLost { account: 1, balance: 1 }),
 				Event::Balances(crate::Event::Slashed{who: 1, amount_slashed: 1})
 			]
 		);

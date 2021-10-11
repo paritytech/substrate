@@ -258,11 +258,11 @@ pub trait Benchmarking {
 				item.reads += add.reads;
 				item.writes += add.writes;
 				item.whitelisted = item.whitelisted || add.whitelisted;
-			},
+			}
 			// If the key does not exist, add it.
 			None => {
 				whitelist.push(add);
-			},
+			}
 		}
 		self.set_whitelist(whitelist);
 	}

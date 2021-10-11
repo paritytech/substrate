@@ -244,14 +244,16 @@ impl RuntimeCosts {
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			DebugMessage => s.debug_message,
-			SetStorage(len) =>
-				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
+			SetStorage(len) => {
+				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into()))
+			}
 			ClearStorage => s.clear_storage,
 			GetStorageBase => s.get_storage,
 			GetStorageCopyOut(len) => s.get_storage_per_byte.saturating_mul(len.into()),
 			Transfer => s.transfer,
-			CallBase(len) =>
-				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			CallBase(len) => {
+				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into()))
+			}
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
 			InstantiateBase { input_data_len, salt_len } => s
@@ -388,11 +390,12 @@ where
 					let flags = ReturnFlags::from_bits(flags)
 						.ok_or_else(|| "used reserved bit in return flags")?;
 					Ok(ExecReturnValue { flags, data: Bytes(data) })
-				},
-				TrapReason::Termination =>
-					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
+				}
+				TrapReason::Termination => {
+					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+				}
 				TrapReason::SupervisorError(error) => Err(error)?,
-			}
+			};
 		}
 
 		// Check the exact type of the error.
@@ -407,8 +410,9 @@ where
 			// a trap for now. Eventually, we might want to revisit this.
 			Err(sp_sandbox::Error::Module) => Err("validation error")?,
 			// Any other kind of a trap should result in a failure.
-			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-				Err(Error::<E::T>::ContractTrapped)?,
+			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) => {
+				Err(Error::<E::T>::ContractTrapped)?
+			}
 		}
 	}
 
@@ -539,7 +543,7 @@ where
 		create_token: impl FnOnce(u32) -> Option<RuntimeCosts>,
 	) -> Result<(), DispatchError> {
 		if allow_skip && out_ptr == u32::MAX {
-			return Ok(())
+			return Ok(());
 		}
 
 		let buf_len = buf.len() as u32;
@@ -673,7 +677,7 @@ where
 				return Err(TrapReason::Return(ReturnData {
 					flags: return_value.flags.bits(),
 					data: return_value.data.0,
-				}))
+				}));
 			}
 		}
 

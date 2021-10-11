@@ -42,8 +42,8 @@ impl OriginDef {
 			syn::Item::Type(item) => (&item.vis, &item.ident, &item.generics),
 			_ => {
 				let msg = "Invalid pallet::origin, expected enum or struct or type";
-				return Err(syn::Error::new(item.span(), msg))
-			},
+				return Err(syn::Error::new(item.span(), msg));
+			}
 		};
 
 		let has_instance = generics.params.len() == 2;
@@ -59,12 +59,12 @@ impl OriginDef {
 
 		if !matches!(vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::origin, Origin must be public";
-			return Err(syn::Error::new(item_span, msg))
+			return Err(syn::Error::new(item_span, msg));
 		}
 
 		if ident != "Origin" {
 			let msg = "Invalid pallet::origin, ident must `Origin`";
-			return Err(syn::Error::new(ident.span(), msg))
+			return Err(syn::Error::new(ident.span(), msg));
 		}
 
 		Ok(OriginDef { index, has_instance, is_generic, instances })

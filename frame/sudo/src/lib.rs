@@ -52,7 +52,7 @@
 //! This is an example of a pallet that exposes a privileged function:
 //!
 //! ```
-//! 
+//!
 //! #[frame_support::pallet]
 //! pub mod logger {
 //! 	use frame_support::pallet_prelude::*;

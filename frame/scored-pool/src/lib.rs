@@ -428,10 +428,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<Members<T, I>>::put(&new_members);
 
 		match notify {
-			ChangeReceiver::MembershipInitialized =>
-				T::MembershipInitialized::initialize_members(&new_members),
-			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(&new_members[..], &old_members[..]),
+			ChangeReceiver::MembershipInitialized => {
+				T::MembershipInitialized::initialize_members(&new_members)
+			}
+			ChangeReceiver::MembershipChanged => {
+				T::MembershipChanged::set_members_sorted(&new_members[..], &old_members[..])
+			}
 		}
 	}
 

@@ -43,7 +43,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 						<#storage_struct as #scrate::#storage_trait>::get()
 					}
 				}
-			},
+			}
 			StorageLineTypeDef::Map(map) => {
 				let key = &map.key;
 				let value = &map.value;
@@ -53,7 +53,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 						<#storage_struct as #scrate::#storage_trait>::get(key)
 					}
 				}
-			},
+			}
 			StorageLineTypeDef::DoubleMap(map) => {
 				let key1 = &map.key1;
 				let key2 = &map.key2;
@@ -67,7 +67,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 						<#storage_struct as #scrate::#storage_trait>::get(k1, k2)
 					}
 				}
-			},
+			}
 			StorageLineTypeDef::NMap(map) => {
 				let keygen = map.to_keygen_struct(&def.hidden_crate);
 				let value = &map.value;
@@ -82,7 +82,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 						<#storage_struct as #scrate::#storage_trait>::get(key)
 					}
 				}
-			},
+			}
 		};
 		getters.extend(getter);
 	}

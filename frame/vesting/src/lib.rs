@@ -440,7 +440,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
-				return Ok(())
+				return Ok(());
 			};
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
@@ -479,7 +479,7 @@ impl<T: Config> Pallet<T> {
 			(true, false) => return Some(schedule2),
 			(false, true) => return Some(schedule1),
 			// If neither schedule has ended don't exit early.
-			_ => {},
+			_ => {}
 		}
 
 		let locked = schedule1
@@ -517,7 +517,7 @@ impl<T: Config> Pallet<T> {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		if !schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
@@ -658,13 +658,13 @@ impl<T: Config> Pallet<T> {
 				} // In the None case there was no new schedule to account for.
 
 				(schedules, locked_now)
-			},
+			}
 			_ => Self::report_schedule_updates(schedules.to_vec(), action),
 		};
 
 		debug_assert!(
-			locked_now > Zero::zero() && schedules.len() > 0 ||
-				locked_now == Zero::zero() && schedules.len() == 0
+			locked_now > Zero::zero() && schedules.len() > 0
+				|| locked_now == Zero::zero() && schedules.len() == 0
 		);
 
 		Ok((schedules, locked_now))
@@ -710,13 +710,13 @@ where
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
 		if locked.is_zero() {
-			return Ok(())
+			return Ok(());
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
 		if !vesting_schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
@@ -744,7 +744,7 @@ where
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		}
 
 		ensure!(

@@ -53,7 +53,7 @@ pub fn expand_outer_origin(
 					 be constructed: pallet `{}` must have generic `Origin`",
 					name
 				);
-				return Err(syn::Error::new(name.span(), msg))
+				return Err(syn::Error::new(name.span(), msg));
 			}
 
 			caller_variants.extend(expand_origin_caller_variant(
@@ -281,16 +281,16 @@ fn expand_origin_caller_variant(
 	match instance {
 		Some(inst) if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime, #path::#inst>),)
-		},
+		}
 		Some(inst) => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#path::#inst>),)
-		},
+		}
 		None if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime>),)
-		},
+		}
 		None => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin),)
-		},
+		}
 	}
 }
 

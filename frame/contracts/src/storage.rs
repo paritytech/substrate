@@ -115,7 +115,7 @@ where
 		ch: CodeHash<T>,
 	) -> Result<ContractInfo<T>, DispatchError> {
 		if <ContractInfoOf<T>>::contains_key(account) {
-			return Err(Error::<T>::DuplicateContract.into())
+			return Err(Error::<T>::DuplicateContract.into());
 		}
 
 		let contract = ContractInfo::<T> { code_hash: ch, trie_id, _reserved: None };
@@ -140,10 +140,10 @@ where
 	/// and weight limit.
 	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (u64, u32) {
 		let base_weight = T::WeightInfo::on_initialize();
-		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
-			T::WeightInfo::on_initialize_per_queue_item(0);
-		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0);
+		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1)
+			- T::WeightInfo::on_initialize_per_queue_item(0);
+		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1)
+			- T::WeightInfo::on_initialize_per_trie_key(0);
 		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as Weight);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
@@ -163,7 +163,7 @@ where
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
 		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
-			return 0
+			return 0;
 		}
 
 		let (weight_per_key, mut remaining_key_budget) =
@@ -173,7 +173,7 @@ where
 		// proceeding. Too little weight for decoding might happen during runtime upgrades
 		// which consume the whole block before the other `on_initialize` blocks are called.
 		if remaining_key_budget == 0 {
-			return weight_limit
+			return weight_limit;
 		}
 
 		let mut queue = <DeletionQueue<T>>::get();
@@ -189,7 +189,7 @@ where
 					// noone waits for the trie to be deleted.
 					queue.swap_remove(0);
 					count
-				},
+				}
 			};
 			remaining_key_budget = remaining_key_budget.saturating_sub(keys_removed);
 		}

@@ -133,7 +133,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 			SameOrOther::Other(rest) => {
 				debug_assert!(false, "ok withdraw return must be at least debt value; qed");
 				Err(rest)
-			},
+			}
 		}
 	}
 }

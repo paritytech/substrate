@@ -255,12 +255,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		leaf: LeafOf<T, I>,
 		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
-		if proof.leaf_count > Self::mmr_leaves() ||
-			proof.leaf_count == 0 ||
-			proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
+		if proof.leaf_count > Self::mmr_leaves()
+			|| proof.leaf_count == 0
+			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
 		{
 			return Err(primitives::Error::Verify
-				.log_debug("The proof has incorrect number of leaves or proof items."))
+				.log_debug("The proof has incorrect number of leaves or proof items."));
 		}
 
 		let mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(proof.leaf_count);

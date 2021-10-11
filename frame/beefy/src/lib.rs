@@ -123,7 +123,7 @@ impl<T: Config> Pallet<T> {
 
 	fn initialize_authorities(authorities: &[T::BeefyId]) {
 		if authorities.is_empty() {
-			return
+			return;
 		}
 
 		assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");

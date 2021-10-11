@@ -100,7 +100,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 				let revert = Self::mint_into(source, actual);
 				debug_assert!(revert.is_ok(), "withdrew funds previously; qed");
 				Err(err)
-			},
+			}
 		}
 	}
 }

@@ -95,49 +95,58 @@ impl Def {
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_pallet_attr(item)?;
 
 			match pallet_attr {
-				Some(PalletAttr::Config(span)) if config.is_none() =>
-					config = Some(config::ConfigDef::try_from(&frame_system, span, index, item)?),
+				Some(PalletAttr::Config(span)) if config.is_none() => {
+					config = Some(config::ConfigDef::try_from(&frame_system, span, index, item)?)
+				}
 				Some(PalletAttr::Pallet(span)) if pallet_struct.is_none() => {
 					let p = pallet_struct::PalletStructDef::try_from(span, index, item)?;
 					pallet_struct = Some(p);
-				},
+				}
 				Some(PalletAttr::Hooks(span)) if hooks.is_none() => {
 					let m = hooks::HooksDef::try_from(span, index, item)?;
 					hooks = Some(m);
-				},
-				Some(PalletAttr::Call(span)) if call.is_none() =>
-					call = Some(call::CallDef::try_from(span, index, item)?),
-				Some(PalletAttr::Error(span)) if error.is_none() =>
-					error = Some(error::ErrorDef::try_from(span, index, item)?),
-				Some(PalletAttr::Event(span)) if event.is_none() =>
-					event = Some(event::EventDef::try_from(span, index, item)?),
+				}
+				Some(PalletAttr::Call(span)) if call.is_none() => {
+					call = Some(call::CallDef::try_from(span, index, item)?)
+				}
+				Some(PalletAttr::Error(span)) if error.is_none() => {
+					error = Some(error::ErrorDef::try_from(span, index, item)?)
+				}
+				Some(PalletAttr::Event(span)) if event.is_none() => {
+					event = Some(event::EventDef::try_from(span, index, item)?)
+				}
 				Some(PalletAttr::GenesisConfig(_)) if genesis_config.is_none() => {
 					let g = genesis_config::GenesisConfigDef::try_from(index, item)?;
 					genesis_config = Some(g);
-				},
+				}
 				Some(PalletAttr::GenesisBuild(span)) if genesis_build.is_none() => {
 					let g = genesis_build::GenesisBuildDef::try_from(span, index, item)?;
 					genesis_build = Some(g);
-				},
-				Some(PalletAttr::Origin(_)) if origin.is_none() =>
-					origin = Some(origin::OriginDef::try_from(index, item)?),
-				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
-					inherent = Some(inherent::InherentDef::try_from(index, item)?),
-				Some(PalletAttr::Storage(span)) =>
-					storages.push(storage::StorageDef::try_from(span, index, item)?),
+				}
+				Some(PalletAttr::Origin(_)) if origin.is_none() => {
+					origin = Some(origin::OriginDef::try_from(index, item)?)
+				}
+				Some(PalletAttr::Inherent(_)) if inherent.is_none() => {
+					inherent = Some(inherent::InherentDef::try_from(index, item)?)
+				}
+				Some(PalletAttr::Storage(span)) => {
+					storages.push(storage::StorageDef::try_from(span, index, item)?)
+				}
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
 					let v = validate_unsigned::ValidateUnsignedDef::try_from(index, item)?;
 					validate_unsigned = Some(v);
-				},
-				Some(PalletAttr::TypeValue(span)) =>
-					type_values.push(type_value::TypeValueDef::try_from(span, index, item)?),
-				Some(PalletAttr::ExtraConstants(_)) =>
+				}
+				Some(PalletAttr::TypeValue(span)) => {
+					type_values.push(type_value::TypeValueDef::try_from(span, index, item)?)
+				}
+				Some(PalletAttr::ExtraConstants(_)) => {
 					extra_constants =
-						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?),
+						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?)
+				}
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
-					return Err(syn::Error::new(attr.span(), msg))
-				},
+					return Err(syn::Error::new(attr.span(), msg));
+				}
 				None => (),
 			}
 		}
@@ -150,7 +159,7 @@ impl Def {
 				genesis_config.as_ref().map_or("unused", |_| "used"),
 				genesis_build.as_ref().map_or("unused", |_| "used"),
 			);
-			return Err(syn::Error::new(item_span, msg))
+			return Err(syn::Error::new(item_span, msg));
 		}
 
 		let def = Def {
@@ -190,13 +199,13 @@ impl Def {
 					but enum `Event` is not declared (i.e. no use of `#[pallet::event]`). \
 					Note that type `Event` in trait is reserved to work alongside pallet event.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
-			},
+			}
 			(false, true) => {
 				let msg = "Invalid usage of Event, `Config` contains no associated type \
 					`Event`, but enum `Event` is declared (in use of `#[pallet::event]`). \
 					An Event associated type must be declare on trait `Config`.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
-			},
+			}
 			_ => Ok(()),
 		}
 	}
@@ -237,7 +246,7 @@ impl Def {
 
 		let mut errors = instances.into_iter().filter_map(|instances| {
 			if instances.has_instance == self.config.has_instance {
-				return None
+				return None;
 			}
 			let msg = if self.config.has_instance {
 				"Invalid generic declaration, trait is defined with instance but generic use none"
@@ -352,7 +361,7 @@ impl GenericKind {
 			GenericKind::Config => quote::quote_spanned!(span => T: Config),
 			GenericKind::ConfigAndInstance => {
 				quote::quote_spanned!(span => T: Config<I>, I: 'static)
-			},
+			}
 		}
 	}
 

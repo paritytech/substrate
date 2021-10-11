@@ -104,14 +104,14 @@ impl<
 					true => self.ayes = self.ayes.checked_add(&votes)?,
 					false => self.nays = self.nays.checked_add(&votes)?,
 				}
-			},
+			}
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
 				self.turnout = self.turnout.checked_add(&aye.capital)?.checked_add(&nay.capital)?;
 				self.ayes = self.ayes.checked_add(&aye.votes)?;
 				self.nays = self.nays.checked_add(&nay.votes)?;
-			},
+			}
 		}
 		Some(())
 	}
@@ -126,14 +126,14 @@ impl<
 					true => self.ayes = self.ayes.checked_sub(&votes)?,
 					false => self.nays = self.nays.checked_sub(&votes)?,
 				}
-			},
+			}
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
 				self.turnout = self.turnout.checked_sub(&aye.capital)?.checked_sub(&nay.capital)?;
 				self.ayes = self.ayes.checked_sub(&aye.votes)?;
 				self.nays = self.nays.checked_sub(&nay.votes)?;
-			},
+			}
 		}
 		Some(())
 	}

@@ -523,7 +523,7 @@ pub mod pallet {
 			});
 
 			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::AccumulateDummy{balance: increase_by});
+			Self::deposit_event(Event::AccumulateDummy { balance: increase_by });
 
 			// All good, no refund.
 			Ok(())
@@ -555,7 +555,7 @@ pub mod pallet {
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
 
-			Self::deposit_event(Event::SetDummy{balance: new_value});
+			Self::deposit_event(Event::SetDummy { balance: new_value });
 
 			// All good, no refund.
 			Ok(())
@@ -572,9 +572,16 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
-		AccumulateDummy{balance: BalanceOf<T>},
-		SetDummy{balance: BalanceOf<T>},
-		SetBar{account: T::AccountId, balance: BalanceOf<T>},
+		AccumulateDummy {
+			balance: BalanceOf<T>,
+		},
+		SetDummy {
+			balance: BalanceOf<T>,
+		},
+		SetBar {
+			account: T::AccountId,
+			balance: BalanceOf<T>,
+		},
 	}
 
 	// pallet::storage attributes allow for type-safe usage of the Substrate storage database,
@@ -731,7 +738,7 @@ where
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
 		if len > 200 {
-			return InvalidTransaction::ExhaustsResources.into()
+			return InvalidTransaction::ExhaustsResources.into();
 		}
 
 		// check for `set_dummy`
@@ -742,7 +749,7 @@ where
 				let mut valid_tx = ValidTransaction::default();
 				valid_tx.priority = Bounded::max_value();
 				Ok(valid_tx)
-			},
+			}
 			_ => Ok(Default::default()),
 		}
 	}

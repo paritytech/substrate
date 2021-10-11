@@ -250,8 +250,8 @@ pub mod pallet {
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
-			let deposit = T::TipReportDepositBase::get() +
-				T::DataDepositPerByte::get() * (reason.len() as u32).into();
+			let deposit = T::TipReportDepositBase::get()
+				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
 			Reasons::<T>::insert(&reason_hash, &reason);
@@ -501,11 +501,11 @@ impl<T: Config> Pallet<T> {
 				Some(m) => {
 					member = members_iter.next();
 					if m < a {
-						continue
+						continue;
 					} else {
-						break true
+						break true;
 					}
-				},
+				}
 			}
 		});
 	}

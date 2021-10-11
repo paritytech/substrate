@@ -747,25 +747,25 @@ fn metadata() {
 	match example_pallet_instance1_metadata.calls {
 		Some(ref mut calls_meta) => {
 			calls_meta.ty = scale_info::meta_type::<pallet::Call<Runtime, pallet::Instance1>>();
-		},
+		}
 		_ => unreachable!(),
 	}
 	match example_pallet_instance1_metadata.event {
 		Some(ref mut event_meta) => {
 			event_meta.ty = scale_info::meta_type::<pallet::Event<Runtime, pallet::Instance1>>();
-		},
+		}
 		_ => unreachable!(),
 	}
 	match example_pallet_instance1_metadata.error {
 		Some(ref mut error_meta) => {
 			error_meta.ty = scale_info::meta_type::<pallet::Error<Runtime, pallet::Instance1>>();
-		},
+		}
 		_ => unreachable!(),
 	}
 	match example_pallet_instance1_metadata.storage {
 		Some(ref mut storage_meta) => {
 			storage_meta.prefix = "Instance1Example";
-		},
+		}
 		_ => unreachable!(),
 	}
 

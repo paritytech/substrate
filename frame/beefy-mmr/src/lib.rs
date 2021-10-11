@@ -219,7 +219,7 @@ where
 		let current_next = Self::beefy_next_authorities();
 		// avoid computing the merkle tree if validator set id didn't change.
 		if id == current_next.id {
-			return current_next
+			return current_next;
 		}
 
 		let beefy_addresses = pallet_beefy::Pallet::<T>::next_authorities()

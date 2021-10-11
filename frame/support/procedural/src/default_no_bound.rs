@@ -37,7 +37,7 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 				});
 
 				quote::quote!( Self { #( #fields, )* } )
-			},
+			}
 			syn::Fields::Unnamed(unnamed) => {
 				let fields =
 					unnamed.unnamed.iter().enumerate().map(|(i, _)| syn::Index::from(i)).map(|i| {
@@ -47,12 +47,12 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 					});
 
 				quote::quote!( Self ( #( #fields, )* ) )
-			},
+			}
 			syn::Fields::Unit => {
 				quote::quote!(Self)
-			},
+			}
 		},
-		syn::Data::Enum(enum_) =>
+		syn::Data::Enum(enum_) => {
 			if let Some(first_variant) = enum_.variants.first() {
 				let variant_ident = &first_variant.ident;
 				match &first_variant.fields {
@@ -64,7 +64,7 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 						});
 
 						quote::quote!( #name :: #ty_generics :: #variant_ident { #( #fields, )* } )
-					},
+					}
 					syn::Fields::Unnamed(unnamed) => {
 						let fields = unnamed
 							.unnamed
@@ -78,16 +78,17 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 							});
 
 						quote::quote!( #name :: #ty_generics :: #variant_ident ( #( #fields, )* ) )
-					},
+					}
 					syn::Fields::Unit => quote::quote!( #name :: #ty_generics :: #variant_ident ),
 				}
 			} else {
 				quote::quote!(Self)
-			},
+			}
+		}
 		syn::Data::Union(_) => {
 			let msg = "Union type not supported by `derive(CloneNoBound)`";
-			return syn::Error::new(input.span(), msg).to_compile_error().into()
-		},
+			return syn::Error::new(input.span(), msg).to_compile_error().into();
+		}
 	};
 
 	quote::quote!(

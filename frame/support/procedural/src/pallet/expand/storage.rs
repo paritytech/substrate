@@ -60,7 +60,7 @@ fn check_prefix_duplicates(
 	if let Some(other_dup_err) = used_prefixes.insert(prefix.clone(), dup_err.clone()) {
 		let mut err = dup_err;
 		err.combine(other_dup_err);
-		return Err(err)
+		return Err(err);
 	}
 
 	if let Metadata::CountedMap { .. } = storage_def.metadata {
@@ -79,7 +79,7 @@ fn check_prefix_duplicates(
 		{
 			let mut err = counter_dup_err;
 			err.combine(other_dup_err);
-			return Err(err)
+			return Err(err);
 		}
 	}
 
@@ -135,7 +135,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
 					args.args.push(syn::GenericArgument::Type(on_empty));
-				},
+				}
 				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
 					args.args.push(syn::GenericArgument::Type(hasher));
 					args.args.push(syn::GenericArgument::Type(key));
@@ -146,7 +146,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
-				},
+				}
 				StorageGenerics::CountedMap {
 					hasher,
 					key,
@@ -164,7 +164,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
-				},
+				}
 				StorageGenerics::DoubleMap {
 					hasher1,
 					key1,
@@ -186,7 +186,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
-				},
+				}
 				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values } => {
 					args.args.push(syn::GenericArgument::Type(keygen));
 					args.args.push(syn::GenericArgument::Type(value));
@@ -196,7 +196,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
-				},
+				}
 			}
 		} else {
 			args.args[0] = syn::parse_quote!( #prefix_ident<#type_use_gen> );
@@ -215,7 +215,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 /// * generate metadatas
 pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	if let Err(e) = process_generics(def) {
-		return e.into_compile_error().into()
+		return e.into_compile_error().into();
 	}
 
 	// Check for duplicate prefixes
@@ -226,7 +226,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		.filter_map(|storage_def| check_prefix_duplicates(storage_def, &mut prefix_set).err());
 	if let Some(mut final_error) = errors.next() {
 		errors.for_each(|error| final_error.combine(error));
-		return final_error.into_compile_error()
+		return final_error.into_compile_error();
 	}
 
 	let frame_support = &def.frame_support;
@@ -291,7 +291,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							}
 						}
 					)
-				},
+				}
 				Metadata::Map { key, value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
@@ -312,7 +312,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							}
 						}
 					)
-				},
+				}
 				Metadata::CountedMap { key, value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
@@ -333,7 +333,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							}
 						}
 					)
-				},
+				}
 				Metadata::DoubleMap { key1, key2, value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
@@ -356,7 +356,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							}
 						}
 					)
-				},
+				}
 				Metadata::NMap { keygen, value, .. } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
@@ -382,7 +382,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							}
 						}
 					)
-				},
+				}
 			}
 		} else {
 			Default::default()

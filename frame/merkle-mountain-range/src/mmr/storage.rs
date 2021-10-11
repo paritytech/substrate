@@ -86,7 +86,7 @@ where
 		let mut leaves = crate::NumberOfLeaves::<T, I>::get();
 		let mut size = crate::mmr::utils::NodesUtils::new(leaves).size();
 		if pos != size {
-			return Err(mmr_lib::Error::InconsistentStore)
+			return Err(mmr_lib::Error::InconsistentStore);
 		}
 
 		for elem in elems {

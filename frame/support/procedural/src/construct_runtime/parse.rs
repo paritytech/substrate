@@ -77,9 +77,9 @@ impl Parse for WhereSection {
 			definitions.push(definition);
 			if !input.peek(Token![,]) {
 				if !input.peek(token::Brace) {
-					return Err(input.error("Expected `,` or `{`"))
+					return Err(input.error("Expected `,` or `{`"));
 				}
-				break
+				break;
 			}
 			input.parse::<Token![,]>()?;
 		}
@@ -92,7 +92,7 @@ impl Parse for WhereSection {
 				"`{:?}` was declared above. Please use exactly one declaration for `{:?}`.",
 				kind, kind
 			);
-			return Err(Error::new(*kind_span, msg))
+			return Err(Error::new(*kind_span, msg));
 		}
 		Ok(Self { block, node_block, unchecked_extrinsic })
 	}
@@ -122,7 +122,7 @@ impl Parse for WhereDefinition {
 		} else if lookahead.peek(keyword::UncheckedExtrinsic) {
 			(input.parse::<keyword::UncheckedExtrinsic>()?.span(), WhereKind::UncheckedExtrinsic)
 		} else {
-			return Err(lookahead.error())
+			return Err(lookahead.error());
 		};
 
 		Ok(Self {
@@ -205,17 +205,17 @@ impl Parse for PalletPath {
 		let mut lookahead = input.lookahead1();
 		let mut segments = Punctuated::new();
 
-		if lookahead.peek(Token![crate]) ||
-			lookahead.peek(Token![self]) ||
-			lookahead.peek(Token![super]) ||
-			lookahead.peek(Ident)
+		if lookahead.peek(Token![crate])
+			|| lookahead.peek(Token![self])
+			|| lookahead.peek(Token![super])
+			|| lookahead.peek(Ident)
 		{
 			let ident = input.call(Ident::parse_any)?;
 			segments.push(PathSegment { ident, arguments: PathArguments::None });
 			let _: Token![::] = input.parse()?;
 			lookahead = input.lookahead1();
 		} else {
-			return Err(lookahead.error())
+			return Err(lookahead.error());
 		}
 
 		while lookahead.peek(Ident) {
@@ -226,7 +226,7 @@ impl Parse for PalletPath {
 		}
 
 		if !lookahead.peek(token::Brace) && !lookahead.peek(Token![<]) {
-			return Err(lookahead.error())
+			return Err(lookahead.error());
 		}
 
 		Ok(Self { inner: Path { leading_colon: None, segments } })
@@ -252,7 +252,7 @@ fn parse_pallet_parts(input: ParseStream) -> Result<Vec<PalletPart>> {
 				"`{}` was already declared before. Please remove the duplicate declaration",
 				part.name(),
 			);
-			return Err(Error::new(part.keyword.span(), msg))
+			return Err(Error::new(part.keyword.span(), msg));
 		}
 	}
 
@@ -357,7 +357,7 @@ impl Parse for PalletPart {
 				keyword.name(),
 				valid_generics,
 			);
-			return Err(syn::Error::new(keyword.span(), msg))
+			return Err(syn::Error::new(keyword.span(), msg));
 		}
 
 		Ok(Self { keyword, generics })

@@ -490,14 +490,14 @@ pub mod body {
 					let current = *offset;
 					*offset += *increment_by;
 					vec![Instruction::I32Const(current as i32)]
-				},
+				}
 				DynInstr::RandomUnaligned(low, high) => {
 					let unaligned = rng.gen_range(*low, *high) | 1;
 					vec![Instruction::I32Const(unaligned as i32)]
-				},
+				}
 				DynInstr::RandomI32(low, high) => {
 					vec![Instruction::I32Const(rng.gen_range(*low, *high))]
-				},
+				}
 				DynInstr::RandomI32Repeated(num) => (&mut rng)
 					.sample_iter(Standard)
 					.take(*num)
@@ -510,19 +510,19 @@ pub mod body {
 					.collect(),
 				DynInstr::RandomGetLocal(low, high) => {
 					vec![Instruction::GetLocal(rng.gen_range(*low, *high))]
-				},
+				}
 				DynInstr::RandomSetLocal(low, high) => {
 					vec![Instruction::SetLocal(rng.gen_range(*low, *high))]
-				},
+				}
 				DynInstr::RandomTeeLocal(low, high) => {
 					vec![Instruction::TeeLocal(rng.gen_range(*low, *high))]
-				},
+				}
 				DynInstr::RandomGetGlobal(low, high) => {
 					vec![Instruction::GetGlobal(rng.gen_range(*low, *high))]
-				},
+				}
 				DynInstr::RandomSetGlobal(low, high) => {
 					vec![Instruction::SetGlobal(rng.gen_range(*low, *high))]
-				},
+				}
 			})
 			.chain(sp_std::iter::once(Instruction::End))
 			.collect();

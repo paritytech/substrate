@@ -5,7 +5,7 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	if !input.is_empty() {
 		return syn::Error::new(proc_macro2::Span::call_site(), "No arguments expected")
 			.to_compile_error()
-			.into()
+			.into();
 	}
 
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());

@@ -43,7 +43,7 @@ pub fn expand_outer_event(
 					 be constructed: pallet `{}` must have generic `Event`",
 					pallet_name,
 				);
-				return Err(syn::Error::new(pallet_name.span(), msg))
+				return Err(syn::Error::new(pallet_name.span(), msg));
 			}
 
 			let part_is_generic = !generics.params.is_empty();
@@ -101,16 +101,16 @@ fn expand_event_variant(
 	match instance {
 		Some(inst) if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
-		},
+		}
 		Some(inst) => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
-		},
+		}
 		None if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
-		},
+		}
 		None => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Event),)
-		},
+		}
 	}
 }
 

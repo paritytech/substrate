@@ -723,14 +723,14 @@ pub mod pallet {
 						Ok(_) => {
 							Self::on_initialize_open_signed();
 							T::WeightInfo::on_initialize_open_signed()
-						},
+						}
 						Err(why) => {
 							// Not much we can do about this at this point.
 							log!(warn, "failed to open signed phase due to {:?}", why);
 							T::WeightInfo::on_initialize_nothing()
-						},
+						}
 					}
-				},
+				}
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
@@ -762,11 +762,11 @@ pub mod pallet {
 							Ok(_) => {
 								Self::on_initialize_open_unsigned(enabled, now);
 								T::WeightInfo::on_initialize_open_unsigned()
-							},
+							}
 							Err(why) => {
 								log!(warn, "failed to open unsigned phase due to {:?}", why);
 								T::WeightInfo::on_initialize_nothing()
-							},
+							}
 						}
 					} else {
 						Self::on_initialize_open_unsigned(enabled, now);
@@ -792,10 +792,10 @@ pub mod pallet {
 			match lock.try_lock() {
 				Ok(_guard) => {
 					Self::do_synchronized_offchain_worker(now);
-				},
+				}
 				Err(deadline) => {
 					log!(debug, "offchain worker lock not released, deadline is {:?}", deadline);
-				},
+				}
 			};
 		}
 
@@ -886,7 +886,7 @@ pub mod pallet {
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
 			let ejected_a_solution = <QueuedSolution<T>>::exists();
 			<QueuedSolution<T>>::put(ready);
-			Self::deposit_event(Event::SolutionStored{
+			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Unsigned,
 				prev_ejected: ejected_a_solution,
 			});
@@ -958,8 +958,8 @@ pub mod pallet {
 
 			// ensure witness data is correct.
 			ensure!(
-				num_signed_submissions >=
-					<SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				num_signed_submissions
+					>= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
 				Error::<T>::SignedInvalidWitness,
 			);
 
@@ -1012,7 +1012,10 @@ pub mod pallet {
 			}
 
 			signed_submissions.put();
-			Self::deposit_event(Event::SolutionStored{election_compute: ElectionCompute::Signed, prev_ejected: ejected_a_solution});
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Signed,
+				prev_ejected: ejected_a_solution,
+			});
 			Ok(())
 		}
 	}
@@ -1026,18 +1029,18 @@ pub mod pallet {
 		/// solution is unsigned, this means that it has also been processed.
 		///
 		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
-		SolutionStored{election_compute: ElectionCompute, prev_ejected: bool},
+		SolutionStored { election_compute: ElectionCompute, prev_ejected: bool },
 		/// The election has been finalized, with `Some` of the given computation, or else if the
 		/// election failed, `None`.
-		ElectionFinalized{election_compute: Option<ElectionCompute>},
+		ElectionFinalized { election_compute: Option<ElectionCompute> },
 		/// An account has been rewarded for their signed submission being finalized.
-		Rewarded{account: <T as frame_system::Config>::AccountId, value: BalanceOf<T>},
+		Rewarded { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// An account has been slashed for submitting an invalid signed submission.
-		Slashed{account: <T as frame_system::Config>::AccountId, value: BalanceOf<T>},
+		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// The signed phase of the given round has started.
-		SignedPhaseStarted{round: u32},
+		SignedPhaseStarted { round: u32 },
 		/// The unsigned phase of the given round has started.
-		UnsignedPhaseStarted{round: u32},
+		UnsignedPhaseStarted { round: u32 },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1074,7 +1077,7 @@ pub mod pallet {
 			if let Call::submit_unsigned { raw_solution, .. } = call {
 				// Discard solution not coming from the local OCW.
 				match source {
-					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
+					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
 					_ => return InvalidTransaction::Call.into(),
 				}
 
@@ -1229,15 +1232,15 @@ impl<T: Config> Pallet<T> {
 					Self::mine_check_save_submit()
 				});
 				log!(debug, "initial offchain thread output: {:?}", initial_output);
-			},
+			}
 			Phase::Unsigned((true, opened)) if opened < now => {
 				// Try and resubmit the cached solution, and recompute ONLY if it is not
 				// feasible.
 				let resubmit_output = Self::ensure_offchain_repeat_frequency(now)
 					.and_then(|_| Self::restore_or_compute_then_maybe_submit());
 				log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
-			},
-			_ => {},
+			}
+			_ => {}
 		}
 	}
 
@@ -1245,7 +1248,7 @@ impl<T: Config> Pallet<T> {
 	pub fn on_initialize_open_signed() {
 		log!(info, "Starting signed phase round {}.", Self::round());
 		<CurrentPhase<T>>::put(Phase::Signed);
-		Self::deposit_event(Event::SignedPhaseStarted{round: Self::round()});
+		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
 	}
 
 	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
@@ -1253,7 +1256,7 @@ impl<T: Config> Pallet<T> {
 		let round = Self::round();
 		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
-		Self::deposit_event(Event::UnsignedPhaseStarted{round});
+		Self::deposit_event(Event::UnsignedPhaseStarted { round });
 	}
 
 	/// Parts of [`create_snapshot`] that happen inside of this pallet.
@@ -1307,7 +1310,7 @@ impl<T: Config> Pallet<T> {
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
 		}
 
 		Ok((targets, voters, desired_targets))
@@ -1417,7 +1420,7 @@ impl<T: Config> Pallet<T> {
 
 				// Check that all of the targets are valid based on the snapshot.
 				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote)
+					return Err(FeasibilityError::InvalidVote);
 				}
 				Ok(())
 			})
@@ -1473,14 +1476,14 @@ impl<T: Config> Pallet<T> {
 				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
-				Self::deposit_event(Event::ElectionFinalized{election_compute: Some(compute)});
+				Self::deposit_event(Event::ElectionFinalized { election_compute: Some(compute) });
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
 				supports
 			})
 			.map_err(|err| {
-				Self::deposit_event(Event::ElectionFinalized{election_compute: None});
+				Self::deposit_event(Event::ElectionFinalized { election_compute: None });
 				if Self::round() != 1 {
 					log!(warn, "Failed to finalize election round. reason {:?}", err);
 				}
@@ -1510,12 +1513,12 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
 				Ok(supports)
-			},
+			}
 			Err(why) => {
 				log!(error, "Entering emergency mode: {:?}", why);
 				<CurrentPhase<T>>::put(Phase::Emergency);
 				Err(why)
-			},
+			}
 		}
 	}
 }
@@ -1737,7 +1740,7 @@ mod tests {
 
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted{round: 1}]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1750,7 +1753,10 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::SignedPhaseStarted{round: 1}, Event::UnsignedPhaseStarted{round: 1}],
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 }
+				],
 			);
 			assert!(MultiPhase::snapshot().is_some());
 
@@ -1861,7 +1867,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(15);
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted{round: 1}]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1873,8 +1879,8 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted{round: 1},
-					Event::ElectionFinalized{election_compute: Some(ElectionCompute::Fallback)}
+					Event::SignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
 				],
 			);
 			// All storage items must be cleared.
@@ -1896,7 +1902,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(15);
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted{round: 1}]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -2061,9 +2067,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
-			active == all_voters
+		while weight_with(active)
+			<= <Runtime as frame_system::Config>::BlockWeights::get().max_block
+			|| active == all_voters
 		{
 			active += 1;
 		}

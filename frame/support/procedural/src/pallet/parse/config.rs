@@ -226,7 +226,7 @@ fn check_event_type(
 			if !type_.generics.params.is_empty() || type_.generics.where_clause.is_some() {
 				let msg = "Invalid `type Event`, associated type `Event` is reserved and must have\
 					no generics nor where_clause";
-				return Err(syn::Error::new(trait_item.span(), msg))
+				return Err(syn::Error::new(trait_item.span(), msg));
 			}
 			// Check bound contains IsType and From
 
@@ -241,7 +241,7 @@ fn check_event_type(
 					bound: `IsType<<Self as {}::Config>::Event>`",
 					frame_system,
 				);
-				return Err(syn::Error::new(type_.span(), msg))
+				return Err(syn::Error::new(type_.span(), msg));
 			}
 
 			let from_event_bound = type_
@@ -254,7 +254,7 @@ fn check_event_type(
 			} else {
 				let msg = "Invalid `type Event`, associated type `Event` is reserved and must \
 					bound: `From<Event>` or `From<Event<Self>>` or `From<Event<Self, I>>`";
-				return Err(syn::Error::new(type_.span(), msg))
+				return Err(syn::Error::new(type_.span(), msg));
 			};
 
 			if from_event_bound.is_generic && (from_event_bound.has_instance != trait_has_instance)
@@ -262,7 +262,7 @@ fn check_event_type(
 				let msg = "Invalid `type Event`, associated type `Event` bounds inconsistent \
 					`From<Event..>`. Config and generic Event must be both with instance or \
 					without instance";
-				return Err(syn::Error::new(type_.span(), msg))
+				return Err(syn::Error::new(type_.span(), msg));
 			}
 
 			Ok(true)
@@ -279,10 +279,12 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 	input
 		.into_iter()
 		.map(|token_tree| match token_tree {
-			proc_macro2::TokenTree::Group(group) =>
-				proc_macro2::Group::new(group.delimiter(), replace_self_by_t(group.stream())).into(),
-			proc_macro2::TokenTree::Ident(ident) if ident == "Self" =>
-				proc_macro2::Ident::new("T", ident.span()).into(),
+			proc_macro2::TokenTree::Group(group) => {
+				proc_macro2::Group::new(group.delimiter(), replace_self_by_t(group.stream())).into()
+			}
+			proc_macro2::TokenTree::Ident(ident) if ident == "Self" => {
+				proc_macro2::Ident::new("T", ident.span()).into()
+			}
 			other => other,
 		})
 		.collect()
@@ -299,12 +301,12 @@ impl ConfigDef {
 			item
 		} else {
 			let msg = "Invalid pallet::config, expected trait definition";
-			return Err(syn::Error::new(item.span(), msg))
+			return Err(syn::Error::new(item.span(), msg));
 		};
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::config, trait must be public";
-			return Err(syn::Error::new(item.span(), msg))
+			return Err(syn::Error::new(item.span(), msg));
 		}
 
 		syn::parse2::<keyword::Config>(item.ident.to_token_stream())?;
@@ -319,7 +321,7 @@ impl ConfigDef {
 
 		if item.generics.params.len() > 1 {
 			let msg = "Invalid pallet::config, expected no more than one generic";
-			return Err(syn::Error::new(item.generics.params[2].span(), msg))
+			return Err(syn::Error::new(item.generics.params[2].span(), msg));
 		}
 
 		let has_instance = if item.generics.params.first().is_some() {
@@ -341,7 +343,7 @@ impl ConfigDef {
 
 			if type_attrs_const.len() > 1 {
 				let msg = "Invalid attribute in pallet::config, only one attribute is expected";
-				return Err(syn::Error::new(type_attrs_const[1].span(), msg))
+				return Err(syn::Error::new(type_attrs_const[1].span(), msg));
 			}
 
 			if type_attrs_const.len() == 1 {
@@ -349,13 +351,13 @@ impl ConfigDef {
 					syn::TraitItem::Type(ref type_) => {
 						let constant = ConstMetadataDef::try_from(type_)?;
 						consts_metadata.push(constant);
-					},
+					}
 					_ => {
 						let msg =
 							"Invalid pallet::constant in pallet::config, expected type trait \
 							item";
-						return Err(syn::Error::new(trait_item.span(), msg))
-					},
+						return Err(syn::Error::new(trait_item.span(), msg));
+					}
 				}
 			}
 		}
@@ -390,7 +392,7 @@ impl ConfigDef {
 				To disable this check, use `#[pallet::disable_frame_system_supertrait_check]`",
 				frame_system, found,
 			);
-			return Err(syn::Error::new(item.span(), msg))
+			return Err(syn::Error::new(item.span(), msg));
 		}
 
 		Ok(Self { index, has_instance, consts_metadata, has_event_type, where_clause, attr_span })

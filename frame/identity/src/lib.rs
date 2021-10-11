@@ -242,26 +242,26 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A name was set or reset (which will remove all judgements).
-		IdentitySet{who: T::AccountId},
+		IdentitySet { who: T::AccountId },
 		/// A name was cleared, and the given balance returned.
-		IdentityCleared{who: T::AccountId, deposit: BalanceOf<T>},
+		IdentityCleared { who: T::AccountId, deposit: BalanceOf<T> },
 		/// A name was removed and the given balance slashed.
-		IdentityKilled{who: T::AccountId, deposit: BalanceOf<T>},
+		IdentityKilled { who: T::AccountId, deposit: BalanceOf<T> },
 		/// A judgement was asked from a registrar.
-		JudgementRequested{who: T::AccountId, registrar_index: RegistrarIndex},
+		JudgementRequested { who: T::AccountId, registrar_index: RegistrarIndex },
 		/// A judgement request was retracted.
-		JudgementUnrequested{who: T::AccountId, registrar_index: RegistrarIndex},
+		JudgementUnrequested { who: T::AccountId, registrar_index: RegistrarIndex },
 		/// A judgement was given by a registrar.
-		JudgementGiven{target: T::AccountId, registrar_index: RegistrarIndex},
+		JudgementGiven { target: T::AccountId, registrar_index: RegistrarIndex },
 		/// A registrar was added.
-		RegistrarAdded{registrar_index: RegistrarIndex},
+		RegistrarAdded { registrar_index: RegistrarIndex },
 		/// A sub-identity was added to an identity and the deposit paid.
-		SubIdentityAdded{sub: T::AccountId, main: T::AccountId, deposit: BalanceOf<T>},
+		SubIdentityAdded { sub: T::AccountId, main: T::AccountId, deposit: BalanceOf<T> },
 		/// A sub-identity was removed from an identity and the deposit freed.
-		SubIdentityRemoved{sub: T::AccountId, main: T::AccountId, deposit: BalanceOf<T>},
+		SubIdentityRemoved { sub: T::AccountId, main: T::AccountId, deposit: BalanceOf<T> },
 		/// A sub-identity was cleared, and the given deposit repatriated from the
 		/// main identity account to the sub-identity account.
-		SubIdentityRevoked{sub: T::AccountId, main: T::AccountId, deposit: BalanceOf<T>},
+		SubIdentityRevoked { sub: T::AccountId, main: T::AccountId, deposit: BalanceOf<T> },
 	}
 
 	#[pallet::call]
@@ -300,7 +300,7 @@ pub mod pallet {
 				},
 			)?;
 
-			Self::deposit_event(Event::RegistrarAdded{registrar_index: i});
+			Self::deposit_event(Event::RegistrarAdded { registrar_index: i });
 
 			Ok(Some(T::WeightInfo::add_registrar(registrar_count as u32)).into())
 		}
@@ -343,7 +343,7 @@ pub mod pallet {
 					id.judgements.retain(|j| j.1.is_sticky());
 					id.info = *info;
 					id
-				},
+				}
 				None => Registration {
 					info: *info,
 					judgements: BoundedVec::default(),
@@ -363,7 +363,7 @@ pub mod pallet {
 
 			let judgements = id.judgements.len();
 			<IdentityOf<T>>::insert(&sender, id);
-			Self::deposit_event(Event::IdentitySet{who: sender});
+			Self::deposit_event(Event::IdentitySet { who: sender });
 
 			Ok(Some(T::WeightInfo::set_identity(
 				judgements as u32, // R
@@ -488,7 +488,7 @@ pub mod pallet {
 			let err_amount = T::Currency::unreserve(&sender, deposit.clone());
 			debug_assert!(err_amount.is_zero());
 
-			Self::deposit_event(Event::IdentityCleared{who: sender, deposit});
+			Self::deposit_event(Event::IdentityCleared { who: sender, deposit });
 
 			Ok(Some(T::WeightInfo::clear_identity(
 				id.judgements.len() as u32,      // R
@@ -541,14 +541,16 @@ pub mod pallet {
 
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
-				Ok(i) =>
+				Ok(i) => {
 					if id.judgements[i].1.is_sticky() {
 						Err(Error::<T>::StickyJudgement)?
 					} else {
 						id.judgements[i] = item
-					},
-				Err(i) =>
-					id.judgements.try_insert(i, item).map_err(|_| Error::<T>::TooManyRegistrars)?,
+					}
+				}
+				Err(i) => {
+					id.judgements.try_insert(i, item).map_err(|_| Error::<T>::TooManyRegistrars)?
+				}
 			}
 
 			T::Currency::reserve(&sender, registrar.fee)?;
@@ -557,7 +559,10 @@ pub mod pallet {
 			let extra_fields = id.info.additional.len();
 			<IdentityOf<T>>::insert(&sender, id);
 
-			Self::deposit_event(Event::JudgementRequested{who: sender, registrar_index: reg_index});
+			Self::deposit_event(Event::JudgementRequested {
+				who: sender,
+				registrar_index: reg_index,
+			});
 
 			Ok(Some(T::WeightInfo::request_judgement(judgements as u32, extra_fields as u32))
 				.into())
@@ -607,7 +612,10 @@ pub mod pallet {
 			let extra_fields = id.info.additional.len();
 			<IdentityOf<T>>::insert(&sender, id);
 
-			Self::deposit_event(Event::JudgementUnrequested{who: sender, registrar_index: reg_index});
+			Self::deposit_event(Event::JudgementUnrequested {
+				who: sender,
+				registrar_index: reg_index,
+			});
 
 			Ok(Some(T::WeightInfo::cancel_request(judgements as u32, extra_fields as u32)).into())
 		}
@@ -780,7 +788,7 @@ pub mod pallet {
 						);
 					}
 					id.judgements[position] = item
-				},
+				}
 				Err(position) => id
 					.judgements
 					.try_insert(position, item)
@@ -790,7 +798,7 @@ pub mod pallet {
 			let judgements = id.judgements.len();
 			let extra_fields = id.info.additional.len();
 			<IdentityOf<T>>::insert(&target, id);
-			Self::deposit_event(Event::JudgementGiven{target, registrar_index: reg_index});
+			Self::deposit_event(Event::JudgementGiven { target, registrar_index: reg_index });
 
 			Ok(Some(T::WeightInfo::provide_judgement(judgements as u32, extra_fields as u32))
 				.into())
@@ -838,7 +846,7 @@ pub mod pallet {
 			// Slash their deposit from them.
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
-			Self::deposit_event(Event::IdentityKilled{who: target, deposit});
+			Self::deposit_event(Event::IdentityKilled { who: target, deposit });
 
 			Ok(Some(T::WeightInfo::kill_identity(
 				id.judgements.len() as u32,      // R
@@ -881,7 +889,7 @@ pub mod pallet {
 				sub_ids.try_push(sub.clone()).expect("sub ids length checked above; qed");
 				*subs_deposit = subs_deposit.saturating_add(deposit);
 
-				Self::deposit_event(Event::SubIdentityAdded{sub, main: sender.clone(), deposit});
+				Self::deposit_event(Event::SubIdentityAdded { sub, main: sender.clone(), deposit });
 				Ok(())
 			})
 		}
@@ -928,7 +936,7 @@ pub mod pallet {
 				*subs_deposit -= deposit;
 				let err_amount = T::Currency::unreserve(&sender, deposit);
 				debug_assert!(err_amount.is_zero());
-				Self::deposit_event(Event::SubIdentityRemoved{sub: sub, main: sender, deposit});
+				Self::deposit_event(Event::SubIdentityRemoved { sub, main: sender, deposit });
 			});
 			Ok(())
 		}
@@ -953,7 +961,11 @@ pub mod pallet {
 				*subs_deposit -= deposit;
 				let _ =
 					T::Currency::repatriate_reserved(&sup, &sender, deposit, BalanceStatus::Free);
-				Self::deposit_event(Event::SubIdentityRevoked{sub: sender, main: sup.clone(), deposit});
+				Self::deposit_event(Event::SubIdentityRevoked {
+					sub: sender,
+					main: sup.clone(),
+					deposit,
+				});
 			});
 			Ok(())
 		}

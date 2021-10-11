@@ -130,7 +130,7 @@ impl CallDef {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"))
+			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"));
 		};
 
 		let mut instances = vec![];
@@ -140,7 +140,7 @@ impl CallDef {
 		if let Some((_, _, for_)) = item.trait_ {
 			let msg = "Invalid pallet::call, expected no trait ident as in \
 				`impl<..> Pallet<..> { .. }`";
-			return Err(syn::Error::new(for_.span(), msg))
+			return Err(syn::Error::new(for_.span(), msg));
 		}
 
 		let mut methods = vec![];
@@ -155,22 +155,22 @@ impl CallDef {
 						_ => method.vis.span(),
 					};
 
-					return Err(syn::Error::new(span, msg))
+					return Err(syn::Error::new(span, msg));
 				}
 
 				match method.sig.inputs.first() {
 					None => {
 						let msg = "Invalid pallet::call, must have at least origin arg";
-						return Err(syn::Error::new(method.sig.span(), msg))
-					},
+						return Err(syn::Error::new(method.sig.span(), msg));
+					}
 					Some(syn::FnArg::Receiver(_)) => {
 						let msg = "Invalid pallet::call, first argument must be a typed argument, \
 							e.g. `origin: OriginFor<T>`";
-						return Err(syn::Error::new(method.sig.span(), msg))
-					},
+						return Err(syn::Error::new(method.sig.span(), msg));
+					}
 					Some(syn::FnArg::Typed(arg)) => {
 						check_dispatchable_first_arg_type(&*arg.ty)?;
-					},
+					}
 				}
 
 				if let syn::ReturnType::Type(_, type_) = &method.sig.output {
@@ -178,7 +178,7 @@ impl CallDef {
 				} else {
 					let msg = "Invalid pallet::call, require return type \
 						DispatchResultWithPostInfo";
-					return Err(syn::Error::new(method.sig.span(), msg))
+					return Err(syn::Error::new(method.sig.span(), msg));
 				}
 
 				let mut call_var_attrs: Vec<FunctionAttr> =
@@ -190,7 +190,7 @@ impl CallDef {
 					} else {
 						"Invalid pallet::call, too many weight attributes given"
 					};
-					return Err(syn::Error::new(method.sig.span(), msg))
+					return Err(syn::Error::new(method.sig.span(), msg));
 				}
 				let weight = call_var_attrs.pop().unwrap().weight;
 
@@ -207,14 +207,14 @@ impl CallDef {
 
 					if arg_attrs.len() > 1 {
 						let msg = "Invalid pallet::call, argument has too many attributes";
-						return Err(syn::Error::new(arg.span(), msg))
+						return Err(syn::Error::new(arg.span(), msg));
 					}
 
 					let arg_ident = if let syn::Pat::Ident(pat) = &*arg.pat {
 						pat.ident.clone()
 					} else {
 						let msg = "Invalid pallet::call, argument must be ident";
-						return Err(syn::Error::new(arg.pat.span(), msg))
+						return Err(syn::Error::new(arg.pat.span(), msg));
 					};
 
 					args.push((!arg_attrs.is_empty(), arg_ident, arg.ty.clone()));
@@ -225,7 +225,7 @@ impl CallDef {
 				methods.push(CallVariantDef { name: method.sig.ident.clone(), weight, args, docs });
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";
-				return Err(syn::Error::new(impl_item.span(), msg))
+				return Err(syn::Error::new(impl_item.span(), msg));
 			}
 		}
 

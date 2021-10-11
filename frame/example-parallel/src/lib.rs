@@ -111,7 +111,7 @@ impl EnlistedParticipant {
 			Ok(signature) => {
 				let public = sp_core::sr25519::Public::from_slice(self.account.as_ref());
 				signature.verify(event_id, &public)
-			},
+			}
 			_ => false,
 		}
 	}
@@ -125,7 +125,7 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 
 		for participant in participants {
 			if !participant.verify(&event_id) {
-				return false.encode()
+				return false.encode();
 			}
 		}
 		true.encode()
@@ -141,7 +141,7 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	for participant in &participants[participants.len() / 2 + 1..] {
 		if !participant.verify(event_id) {
 			result = false;
-			break
+			break;
 		}
 	}
 

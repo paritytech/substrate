@@ -30,7 +30,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			let docs = call.docs.clone();
 
 			(span, where_clause, methods, docs)
-		},
+		}
 		None => (def.item.span(), None, Vec::new(), Vec::new()),
 	};
 	let frame_support = &def.frame_support;

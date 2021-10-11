@@ -213,19 +213,19 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 				(Some(old), Some(new)) if old == new => {
 					old_i = old_iter.next();
 					new_i = new_iter.next();
-				},
+				}
 				(Some(old), Some(new)) if old < new => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				},
+				}
 				(Some(old), None) => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				},
+				}
 				(_, Some(new)) => {
 					incoming.push(new.clone());
 					new_i = new_iter.next();
-				},
+				}
 			}
 		}
 		(incoming, outgoing)

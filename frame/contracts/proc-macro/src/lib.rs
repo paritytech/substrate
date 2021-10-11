@@ -55,7 +55,7 @@ fn derive_debug(
 			name.span() =>
 			compile_error!("WeightDebug is only supported for structs.");
 		}
-		.into()
+		.into();
 	};
 
 	#[cfg(feature = "full")]
@@ -90,7 +90,7 @@ fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> Tok
 			let recurse = fields.named.iter().filter_map(|f| {
 				let name = f.ident.as_ref()?;
 				if name.to_string().starts_with('_') {
-					return None
+					return None;
 				}
 				let value = fmt(name);
 				let ret = quote_spanned! { f.span() =>
@@ -101,7 +101,7 @@ fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> Tok
 			quote! {
 				#( #recurse )*
 			}
-		},
+		}
 		Fields::Unnamed(fields) => quote_spanned! {
 			fields.span() =>
 			compile_error!("Unnamed fields are not supported")
