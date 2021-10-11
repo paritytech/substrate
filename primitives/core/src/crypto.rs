@@ -369,7 +369,7 @@ pub fn default_ss58_version() -> Ss58AddressFormat {
 /// Returns either the input address format or the default.
 #[cfg(feature = "std")]
 pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss58AddressFormat {
-	network.unwrap_or_else(|| DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into())
+	network.unwrap_or_else(|| DEFAULT_VERSION.load(std::sync::atomic::Ordering::Relaxed).into())
 }
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
