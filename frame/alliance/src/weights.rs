@@ -48,6 +48,10 @@ pub trait WeightInfo {
 	fn propose_proposed(b: u32, x: u32, y: u32, p: u32, ) -> Weight;
 	fn vote(x: u32, y: u32, ) -> Weight;
 	fn veto(p: u32, ) -> Weight;
+	fn close_early_disapproved(x: u32, y: u32, p: u32, ) -> Weight;
+	fn close_early_approved(b: u32, x: u32, y: u32, p: u32, ) -> Weight;
+	fn close_disapproved(x: u32, y: u32, p: u32, ) -> Weight;
+	fn close_approved(b: u32, x: u32, y: u32, p: u32, ) -> Weight;
 	fn init_members(x: u32, y: u32, z: u32, ) -> Weight;
 	fn set_rule() -> Weight;
 	fn announce() -> Weight;
@@ -71,25 +75,23 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Proposals (r:1 w:1)
 	// Storage: AllianceMotion ProposalCount (r:1 w:1)
 	// Storage: AllianceMotion Voting (r:0 w:1)
-	fn propose_proposed(_b: u32, x: u32, y: u32, p: u32, ) -> Weight {
-		(44_806_000 as Weight)
-			// Standard Error: 65_000
-			.saturating_add((7_000 as Weight).saturating_mul(x as Weight))
+	fn propose_proposed(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
+		(39_992_000 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((34_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((44_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 2_000
-			.saturating_add((301_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((323_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Alliance Members (r:2 w:0)
 	// Storage: AllianceMotion Voting (r:1 w:1)
 	fn vote(x: u32, y: u32, ) -> Weight {
-		(33_851_000 as Weight)
-			// Standard Error: 81_000
-			.saturating_add((209_000 as Weight).saturating_mul(x as Weight))
+		(36_649_000 as Weight)
+			// Standard Error: 90_000
+			.saturating_add((42_000 as Weight).saturating_mul(x as Weight))
 			// Standard Error: 3_000
-			.saturating_add((198_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((195_000 as Weight).saturating_mul(y as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -98,37 +100,107 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Proposals (r:1 w:1)
 	// Storage: AllianceMotion Voting (r:0 w:1)
 	fn veto(p: u32, ) -> Weight {
-		(30_478_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((320_000 as Weight).saturating_mul(p as Weight))
+		(30_301_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((330_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_early_disapproved(x: u32, y: u32, p: u32, ) -> Weight {
+		(40_472_000 as Weight)
+			// Standard Error: 69_000
+			.saturating_add((485_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 2_000
+			.saturating_add((192_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((330_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_early_approved(b: u32, x: u32, y: u32, p: u32, ) -> Weight {
+		(52_076_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((4_000 as Weight).saturating_mul(b as Weight))
+			// Standard Error: 77_000
+			.saturating_add((194_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 3_000
+			.saturating_add((188_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((329_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Prime (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_disapproved(x: u32, y: u32, p: u32, ) -> Weight {
+		(47_009_000 as Weight)
+			// Standard Error: 66_000
+			.saturating_add((256_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 2_000
+			.saturating_add((176_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((327_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(T::DbWeight::get().reads(6 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Prime (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_approved(b: u32, x: u32, y: u32, p: u32, ) -> Weight {
+		(43_650_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((3_000 as Weight).saturating_mul(b as Weight))
+			// Standard Error: 85_000
+			.saturating_add((124_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 3_000
+			.saturating_add((199_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 3_000
+			.saturating_add((326_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:3 w:3)
 	// Storage: AllianceMotion Members (r:1 w:1)
 	fn init_members(_x: u32, y: u32, z: u32, ) -> Weight {
-		(40_162_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((166_000 as Weight).saturating_mul(y as Weight))
-			// Standard Error: 2_000
-			.saturating_add((144_000 as Weight).saturating_mul(z as Weight))
+		(45_100_000 as Weight)
+			// Standard Error: 4_000
+			.saturating_add((162_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 4_000
+			.saturating_add((151_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Alliance Rule (r:0 w:1)
 	fn set_rule() -> Weight {
-		(14_337_000 as Weight)
+		(14_517_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn announce() -> Weight {
-		(16_721_000 as Weight)
+		(16_801_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn remove_announcement() -> Weight {
-		(17_663_000 as Weight)
+		(17_133_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -138,7 +210,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Alliance DepositOf (r:0 w:1)
 	fn submit_candidacy() -> Weight {
-		(57_289_000 as Weight)
+		(95_370_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -146,14 +218,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
 	// Storage: Alliance Candidates (r:1 w:1)
 	fn nominate_candidacy() -> Weight {
-		(42_350_000 as Weight)
+		(44_764_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Candidates (r:1 w:1)
 	// Storage: Alliance Members (r:4 w:1)
 	fn approve_candidate() -> Weight {
-		(44_364_000 as Weight)
+		(71_876_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -162,7 +234,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Alliance DepositOf (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn reject_candidate() -> Weight {
-		(69_210_000 as Weight)
+		(69_732_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -171,7 +243,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn elevate_ally() -> Weight {
-		(41_348_000 as Weight)
+		(44_013_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -183,7 +255,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn retire() -> Weight {
-		(58_139_000 as Weight)
+		(60_183_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -195,7 +267,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn kick_member() -> Weight {
-		(68_409_000 as Weight)
+		(67_467_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -203,10 +275,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
 	fn add_blacklist(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((2_590_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 2_000
-			.saturating_add((194_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 16_000
+			.saturating_add((2_673_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 7_000
+			.saturating_add((224_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -214,10 +286,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
 	fn remove_blacklist(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 332_000
-			.saturating_add((57_821_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 147_000
-			.saturating_add((6_544_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 343_000
+			.saturating_add((59_025_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 153_000
+			.saturating_add((6_725_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -230,25 +302,23 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Proposals (r:1 w:1)
 	// Storage: AllianceMotion ProposalCount (r:1 w:1)
 	// Storage: AllianceMotion Voting (r:0 w:1)
-	fn propose_proposed(_b: u32, x: u32, y: u32, p: u32, ) -> Weight {
-		(44_806_000 as Weight)
-			// Standard Error: 65_000
-			.saturating_add((7_000 as Weight).saturating_mul(x as Weight))
+	fn propose_proposed(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
+		(39_992_000 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((34_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((44_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 2_000
-			.saturating_add((301_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((323_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Alliance Members (r:2 w:0)
 	// Storage: AllianceMotion Voting (r:1 w:1)
 	fn vote(x: u32, y: u32, ) -> Weight {
-		(33_851_000 as Weight)
-			// Standard Error: 81_000
-			.saturating_add((209_000 as Weight).saturating_mul(x as Weight))
+		(36_649_000 as Weight)
+			// Standard Error: 90_000
+			.saturating_add((42_000 as Weight).saturating_mul(x as Weight))
 			// Standard Error: 3_000
-			.saturating_add((198_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((195_000 as Weight).saturating_mul(y as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -257,37 +327,107 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Proposals (r:1 w:1)
 	// Storage: AllianceMotion Voting (r:0 w:1)
 	fn veto(p: u32, ) -> Weight {
-		(30_478_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((320_000 as Weight).saturating_mul(p as Weight))
+		(30_301_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((330_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_early_disapproved(x: u32, y: u32, p: u32, ) -> Weight {
+		(40_472_000 as Weight)
+			// Standard Error: 69_000
+			.saturating_add((485_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 2_000
+			.saturating_add((192_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((330_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_early_approved(b: u32, x: u32, y: u32, p: u32, ) -> Weight {
+		(52_076_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((4_000 as Weight).saturating_mul(b as Weight))
+			// Standard Error: 77_000
+			.saturating_add((194_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 3_000
+			.saturating_add((188_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((329_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Prime (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_disapproved(x: u32, y: u32, p: u32, ) -> Weight {
+		(47_009_000 as Weight)
+			// Standard Error: 66_000
+			.saturating_add((256_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 2_000
+			.saturating_add((176_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((327_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Alliance Members (r:1 w:0)
+	// Storage: AllianceMotion ProposalOf (r:1 w:1)
+	// Storage: AllianceMotion Voting (r:1 w:1)
+	// Storage: AllianceMotion Members (r:1 w:0)
+	// Storage: AllianceMotion Prime (r:1 w:0)
+	// Storage: AllianceMotion Proposals (r:1 w:1)
+	fn close_approved(b: u32, x: u32, y: u32, p: u32, ) -> Weight {
+		(43_650_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((3_000 as Weight).saturating_mul(b as Weight))
+			// Standard Error: 85_000
+			.saturating_add((124_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 3_000
+			.saturating_add((199_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 3_000
+			.saturating_add((326_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:3 w:3)
 	// Storage: AllianceMotion Members (r:1 w:1)
 	fn init_members(_x: u32, y: u32, z: u32, ) -> Weight {
-		(40_162_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((166_000 as Weight).saturating_mul(y as Weight))
-			// Standard Error: 2_000
-			.saturating_add((144_000 as Weight).saturating_mul(z as Weight))
+		(45_100_000 as Weight)
+			// Standard Error: 4_000
+			.saturating_add((162_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 4_000
+			.saturating_add((151_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Alliance Rule (r:0 w:1)
 	fn set_rule() -> Weight {
-		(14_337_000 as Weight)
+		(14_517_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn announce() -> Weight {
-		(16_721_000 as Weight)
+		(16_801_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn remove_announcement() -> Weight {
-		(17_663_000 as Weight)
+		(17_133_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -297,7 +437,7 @@ impl WeightInfo for () {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Alliance DepositOf (r:0 w:1)
 	fn submit_candidacy() -> Weight {
-		(57_289_000 as Weight)
+		(95_370_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -305,14 +445,14 @@ impl WeightInfo for () {
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
 	// Storage: Alliance Candidates (r:1 w:1)
 	fn nominate_candidacy() -> Weight {
-		(42_350_000 as Weight)
+		(44_764_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Candidates (r:1 w:1)
 	// Storage: Alliance Members (r:4 w:1)
 	fn approve_candidate() -> Weight {
-		(44_364_000 as Weight)
+		(71_876_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -321,7 +461,7 @@ impl WeightInfo for () {
 	// Storage: Alliance DepositOf (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn reject_candidate() -> Weight {
-		(69_210_000 as Weight)
+		(69_732_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -330,7 +470,7 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn elevate_ally() -> Weight {
-		(41_348_000 as Weight)
+		(44_013_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
@@ -342,7 +482,7 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn retire() -> Weight {
-		(58_139_000 as Weight)
+		(60_183_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
@@ -354,7 +494,7 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn kick_member() -> Weight {
-		(68_409_000 as Weight)
+		(67_467_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
@@ -362,10 +502,10 @@ impl WeightInfo for () {
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
 	fn add_blacklist(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((2_590_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 2_000
-			.saturating_add((194_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 16_000
+			.saturating_add((2_673_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 7_000
+			.saturating_add((224_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -373,10 +513,10 @@ impl WeightInfo for () {
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
 	fn remove_blacklist(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 332_000
-			.saturating_add((57_821_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 147_000
-			.saturating_add((6_544_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 343_000
+			.saturating_add((59_025_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 153_000
+			.saturating_add((6_725_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}

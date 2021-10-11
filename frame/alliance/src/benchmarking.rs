@@ -22,7 +22,7 @@ use sp_std::{mem::size_of, prelude::*};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
-use frame_system::RawOrigin as SystemOrigin;
+use frame_system::{Pallet as System, RawOrigin as SystemOrigin};
 
 use super::{Call as AllianceCall, Pallet as Alliance, *};
 
@@ -118,21 +118,24 @@ benchmarks_instance_pallet! {
 		let y in 0 .. T::MaxFellows::get();
 		let p in 1 .. T::MaxProposals::get();
 
-		let bytes_in_storage = size_of::<Cid>() as u32 + 32;
+		let m = x + y;
+
+		let bytes_in_storage = b + size_of::<Cid>() as u32 + 32;
 
 		// Construct `members`.
-		let mut founders = (1 .. x - 1).map(founder::<T, I>).collect::<Vec<_>>();
-		let proposer = founder::<T, I>(0);
-		founders.push(proposer.clone());
+		let founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let proposer = founders[0].clone();
 		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 
 		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
-		let threshold = x + y;
+		let threshold = m;
 		// Add previous proposals.
 		for i in 0 .. p - 1 {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule { rule: rule(vec![i as u8; b as usize]) }.into();
+			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
+				rule: rule(vec![i as u8; b as usize])
+			}.into();
 			Alliance::<T, I>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -155,17 +158,16 @@ benchmarks_instance_pallet! {
 		let x in 3 .. T::MaxFounders::get();
 		let y in 2 .. T::MaxFellows::get();
 
+		let m = x + y;
+
 		let p = T::MaxProposals::get();
 		let b = MAX_BYTES;
-		let bytes_in_storage = size_of::<Cid>() as u32 + 32;
+		let bytes_in_storage = b + size_of::<Cid>() as u32 + 32;
 
 		// Construct `members`.
-		let mut founders = (1 .. x - 1).map(founder::<T, I>).collect::<Vec<_>>();
-		let proposer = founder::<T, I>(0);
-		founders.push(proposer.clone());
-		let mut fellows = (1 .. y - 1).map(fellow::<T, I>).collect::<Vec<_>>();
-		let voter = fellow::<T, I>(0);
-		fellows.push(voter.clone());
+		let founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let proposer = founders[0].clone();
+		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 
 		let mut members = Vec::with_capacity(founders.len() + fellows.len());
 		members.extend(founders.clone());
@@ -174,14 +176,15 @@ benchmarks_instance_pallet! {
 		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
 		// Threshold is 1 less than the number of members so that one person can vote nay
-		let m = x + y;
 		let threshold = m - 1;
 
 		// Add previous proposals
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule { rule: rule(vec![i as u8; b as usize]) }.into();
+			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
+				rule: rule(vec![i as u8; b as usize])
+			}.into();
 			Alliance::<T, I>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -195,21 +198,21 @@ benchmarks_instance_pallet! {
 		// Have almost everyone vote aye on last proposal, while keeping it from passing.
 		for j in 0 .. m - 3 {
 			let voter = &members[j as usize];
-			let approve = true;
 			Alliance::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
 				last_hash.clone(),
 				index,
-				approve,
+				true,
 			)?;
 		}
+
+		let voter = members[m as usize - 3].clone();
 		// Voter votes aye without resolving the vote.
-		let approve = true;
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
 			last_hash.clone(),
 			index,
-			approve,
+			true,
 		)?;
 
 		// Voter switches vote to nay, but does not kill the vote, just updates + inserts
@@ -230,9 +233,8 @@ benchmarks_instance_pallet! {
 		let bytes_in_storage = b + size_of::<Cid>() as u32 + 32;
 
 		// Construct `members`.
-		let mut founders = (1 .. m).map(founder::<T, I>).collect::<Vec<_>>();
-		let vetor = founder::<T, I>(0);
-		founders.push(vetor.clone());
+		let founders = (0 .. m).map(founder::<T, I>).collect::<Vec<_>>();
+		let vetor = founders[0].clone();
 
 		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, vec![], vec![])?;
 
@@ -243,7 +245,9 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule { rule: rule(vec![i as u8; b as usize]) }.into();
+			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
+				rule: rule(vec![i as u8; b as usize])
+			}.into();
 			Alliance::<T, I>::propose(
 				SystemOrigin::Signed(vetor.clone()).into(),
 				threshold,
@@ -259,34 +263,316 @@ benchmarks_instance_pallet! {
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
 	}
 
-	/*
 	close_early_disapproved {
+		// We choose 4 (2 founders + 2 fellows) as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let x in 2 .. T::MaxFounders::get();
+		let y in 2 .. T::MaxFellows::get();
+		let p in 1 .. T::MaxProposals::get();
+
+		let m = x + y;
+
+		let bytes = 100;
+		let bytes_in_storage = bytes + size_of::<Cid>() as u32 + 32;
+
+		// Construct `members`.
+		let founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
+
+		let mut members = Vec::with_capacity(founders.len() + fellows.len());
+		members.extend(founders.clone());
+		members.extend(fellows.clone());
+
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+
+		let proposer = members[0].clone();
+		let voter = members[1].clone();
+
+		// Threshold is total members so that one nay will disapprove the vote
+		let threshold = m;
+
+		// Add previous proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
+				rule: rule(vec![i as u8; bytes as usize])
+			}.into();
+			Alliance::<T, I>::propose(
+				SystemOrigin::Signed(proposer.clone()).into(),
+				threshold,
+				Box::new(proposal.clone()),
+				bytes_in_storage,
+			)?;
+			last_hash = T::Hashing::hash_of(&proposal);
+			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+		}
+
+		let index = p - 1;
+		// Have most everyone vote aye on last proposal, while keeping it from passing.
+		for j in 2 .. m - 1 {
+			let voter = &members[j as usize];
+			Alliance::<T, I>::vote(
+				SystemOrigin::Signed(voter.clone()).into(),
+				last_hash.clone(),
+				index,
+				true,
+			)?;
+		}
+
+		// Voter votes aye without resolving the vote.
+		Alliance::<T, I>::vote(
+			SystemOrigin::Signed(voter.clone()).into(),
+			last_hash.clone(),
+			index,
+			true,
+		)?;
+
+		// Voter switches vote to nay, which kills the vote
+		Alliance::<T, I>::vote(
+			SystemOrigin::Signed(voter.clone()).into(),
+			last_hash.clone(),
+			index,
+			false,
+		)?;
+
+		// Whitelist voter account from further DB operations.
+		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
+		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	verify {
+		// The last proposal is removed.
+		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
+	}
+
+	close_early_approved {
+		let b in 1 .. MAX_BYTES;
+		// We choose 4 (2 founders + 2 fellows) as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let x in 2 .. T::MaxFounders::get();
+		let y in 2 .. T::MaxFellows::get();
+		let p in 1 .. T::MaxProposals::get();
+
+		let m = x + y;
+		let bytes_in_storage = b + size_of::<Cid>() as u32 + 32;
+
+		// Construct `members`.
+		let founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
+
+		let mut members = Vec::with_capacity(founders.len() + fellows.len());
+		members.extend(founders.clone());
+		members.extend(fellows.clone());
+
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+
+		let proposer = members[0].clone();
+		let voter = members[1].clone();
+
+		// Threshold is 2 so any two ayes will approve the vote
+		let threshold = 2;
+
+		// Add previous proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
+				rule: rule(vec![i as u8; b as usize])
+			}.into();
+			Alliance::<T, I>::propose(
+				SystemOrigin::Signed(proposer.clone()).into(),
+				threshold,
+				Box::new(proposal.clone()),
+				bytes_in_storage,
+			)?;
+			last_hash = T::Hashing::hash_of(&proposal);
+			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+		}
+
+		let index = p - 1;
+		// Caller switches vote to nay on their own proposal, allowing them to be the deciding approval vote
+		Alliance::<T, I>::vote(
+			SystemOrigin::Signed(proposer.clone()).into(),
+			last_hash.clone(),
+			index,
+			false,
+		)?;
+
+		// Have almost everyone vote nay on last proposal, while keeping it from failing.
+		for j in 2 .. m - 1 {
+			let voter = &members[j as usize];
+			Alliance::<T, I>::vote(
+				SystemOrigin::Signed(voter.clone()).into(),
+				last_hash.clone(),
+				index,
+				false,
+			)?;
+		}
+
+		// Member zero is the first aye
+		Alliance::<T, I>::vote(
+			SystemOrigin::Signed(members[0].clone()).into(),
+			last_hash.clone(),
+			index,
+			true,
+		)?;
+
+		let voter = members[1].clone();
+		// Caller switches vote to aye, which passes the vote
+		Alliance::<T, I>::vote(
+			SystemOrigin::Signed(voter.clone()).into(),
+			last_hash.clone(),
+			index,
+			true,
+		)?;
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	verify {
+		// The last proposal is removed.
+		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
+	}
+
+	close_disapproved {
+		// We choose 2 (2 founders / 2 fellows) as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let x in 2 .. T::MaxFounders::get();
+		let y in 2 .. T::MaxFellows::get();
+		let p in 1 .. T::MaxProposals::get();
+
+		let m = x + y;
+
+		let bytes = 100;
+		let bytes_in_storage = bytes + size_of::<Cid>() as u32 + 32;
+
+		// Construct `members`.
+		let founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
+
+		let mut members = Vec::with_capacity(founders.len() + fellows.len());
+		members.extend(founders.clone());
+		members.extend(fellows.clone());
+
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+
+		let proposer = members[0].clone();
+		let voter = members[1].clone();
+
+		// Threshold is one less than total members so that two nays will disapprove the vote
+		let threshold = m - 1;
+
+		// Add proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
+				rule: rule(vec![i as u8; bytes as usize])
+			}.into();
+			Alliance::<T, I>::propose(
+				SystemOrigin::Signed(proposer.clone()).into(),
+				threshold,
+				Box::new(proposal.clone()),
+				bytes_in_storage,
+			)?;
+			last_hash = T::Hashing::hash_of(&proposal);
+			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+		}
+
+		let index = p - 1;
+		// Have almost everyone vote aye on last proposal, while keeping it from passing.
+		// A few abstainers will be the nay votes needed to fail the vote.
+		for j in 2 .. m - 1 {
+			let voter = &members[j as usize];
+			Alliance::<T, I>::vote(
+				SystemOrigin::Signed(voter.clone()).into(),
+				last_hash.clone(),
+				index,
+				true,
+			)?;
+		}
+
+		Alliance::<T, I>::vote(
+			SystemOrigin::Signed(voter.clone()).into(),
+			last_hash.clone(),
+			index,
+			false,
+		)?;
+
+		System::<T>::set_block_number(T::BlockNumber::max_value());
 
 	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
-		// assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		// assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
-	}
-
-	close_early_approved {
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
-	verify {
-
-	}
-
-	close_disapproved {
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
-	verify {
-
+		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
 	}
 
 	close_approved {
+		let b in 1 .. MAX_BYTES;
+		// We choose 4 (2 founders + 2 fellows) as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let x in 2 .. T::MaxFounders::get();
+		let y in 2 .. T::MaxFellows::get();
+		let p in 1 .. T::MaxProposals::get();
+
+		let m = x + y;
+		let bytes_in_storage = b + size_of::<Cid>() as u32 + 32;
+
+		// Construct `members`.
+		let founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
+
+		let mut members = Vec::with_capacity(founders.len() + fellows.len());
+		members.extend(founders.clone());
+		members.extend(fellows.clone());
+
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+
+		let proposer = members[0].clone();
+		let voter = members[1].clone();
+
+		// Threshold is two, so any two ayes will pass the vote
+		let threshold = 2;
+
+		// Add proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
+				rule: rule(vec![i as u8; b as usize])
+			}.into();
+			Alliance::<T, I>::propose(
+				SystemOrigin::Signed(proposer.clone()).into(),
+				threshold,
+				Box::new(proposal.clone()),
+				bytes_in_storage,
+			)?;
+			last_hash = T::Hashing::hash_of(&proposal);
+			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+		}
+
+		// The prime member votes aye, so abstentions default to aye.
+		Alliance::<T, I>::vote(
+			SystemOrigin::Signed(proposer.clone()).into(),
+			last_hash.clone(),
+			p - 1,
+			true // Vote aye.
+		)?;
+
+		let index = p - 1;
+		// Have almost everyone vote nay on last proposal, while keeping it from failing.
+		// A few abstainers will be the aye votes needed to pass the vote.
+		for j in 2 .. m - 1 {
+			let voter = &members[j as usize];
+			Alliance::<T, I>::vote(
+				SystemOrigin::Signed(voter.clone()).into(),
+				last_hash.clone(),
+				index,
+				false
+			)?;
+		}
+
+		// caller is prime, prime already votes aye by creating the proposal
+		System::<T>::set_block_number(T::BlockNumber::max_value());
+
 	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
-
+		// The last proposal is removed.
+		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
 	}
-	*/
 
 	init_members {
 		// at least 2 founders

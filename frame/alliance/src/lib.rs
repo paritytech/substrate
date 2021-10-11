@@ -466,7 +466,15 @@ pub mod pallet {
 		/// Add a new proposal to be voted on.
 		///
 		/// Requires the sender to be founder or fellow.
-		#[pallet::weight(0)]
+		#[pallet::weight((
+			T::WeightInfo::propose_proposed(
+				*length_bound, // B
+				T::MaxFounders::get(), // X
+				T::MaxFellows::get(), // Y
+				T::MaxProposals::get(), // P2
+			),
+			DispatchClass::Operational
+		))]
 		pub fn propose(
 			origin: OriginFor<T>,
 			#[pallet::compact] threshold: u32,
@@ -488,7 +496,10 @@ pub mod pallet {
 		/// Add an aye or nay vote for the sender to the given proposal.
 		///
 		/// Requires the sender to be founder or fellow.
-		#[pallet::weight(0)]
+		#[pallet::weight((
+			T::WeightInfo::vote(T::MaxFounders::get(), T::MaxFellows::get()),
+			DispatchClass::Operational
+		))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			proposal: T::Hash,
@@ -506,7 +517,7 @@ pub mod pallet {
 		/// the system, regardless of its current state.
 		///
 		/// Must be called by a founder.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::veto(T::MaxProposals::get()))]
 		pub fn veto(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResultWithPostInfo {
 			let proposor = ensure_signed(origin)?;
 			ensure!(Self::is_founder(&proposor), Error::<T, I>::NotFounder);
@@ -525,7 +536,21 @@ pub mod pallet {
 		/// Close a vote that is either approved, disapproved or whose voting period has ended.
 		///
 		/// Requires the sender to be founder or fellow.
-		#[pallet::weight(0)]
+		#[pallet::weight((
+			{
+				let b = *length_bound;
+				let x = T::MaxFounders::get();
+				let y = T::MaxFellows::get();
+				let p1 = *proposal_weight_bound;
+				let p2 = T::MaxProposals::get();
+				T::WeightInfo::close_early_approved(b, x, y, p2)
+					.max(T::WeightInfo::close_early_disapproved(x, y, p2))
+					.max(T::WeightInfo::close_approved(b, x, y, p2))
+					.max(T::WeightInfo::close_disapproved(x, y, p2))
+					.saturating_add(p1)
+			},
+			DispatchClass::Operational
+		))]
 		pub fn close(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
@@ -553,7 +578,7 @@ pub mod pallet {
 					<KickingMembers<T, I>>::remove(strike);
 				}
 			}
-			Ok(().into())
+			Ok(info.into())
 		}
 
 		/// Initialize the founders/fellows/allies.
