@@ -174,8 +174,8 @@ impl IdentityVerifier<u64> for AllianceIdentityVerifier {
 
 pub struct AllianceProposalProvider;
 impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
-	fn propose_proposal(who: u64, threshold: u32, proposal: Call, length_bound: u32) -> Result<(u32, u32), DispatchError> {
-		AllianceMotion::do_propose(who, threshold, proposal, length_bound)
+	fn propose_proposal(who: u64, threshold: u32, proposal: Box<Call>, length_bound: u32) -> Result<(u32, u32), DispatchError> {
+		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
 	}
 
 	fn vote_proposal(

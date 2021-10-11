@@ -515,21 +515,7 @@ pub mod pallet {
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
 			if threshold < 2 {
-				let proposal_len = proposal.using_encoded(|x| x.len());
-				ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
-
-				let proposal_hash = T::Hashing::hash_of(&proposal);
-				ensure!(
-					!<ProposalOf<T, I>>::contains_key(proposal_hash),
-					Error::<T, I>::DuplicateProposal
-				);
-
-				let seats = Self::members().len() as MemberCount;
-				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
-				Self::deposit_event(Event::Executed {
-					proposal_hash,
-					result: result.map(|_| ()).map_err(|e| e.error),
-				});
+				let (proposal_len, result) = Self::do_propose_execute(proposal, length_bound)?;
 
 				Ok(get_result_weight(result)
 					.map(|w| {
@@ -541,7 +527,7 @@ pub mod pallet {
 					})
 					.into())
 			} else {
-				let (proposal_len, active_proposals) = Self::do_propose(who, threshold, *proposal, length_bound)?;
+				let (proposal_len, active_proposals) = Self::do_propose_proposed(who, threshold, proposal, length_bound)?;
 
 				Ok(Some(T::WeightInfo::propose_proposed(
 					proposal_len as u32,  // B
@@ -690,11 +676,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::members().contains(who)
 	}
 
+	/// Execute immediately when adding a new proposal.
+	pub fn do_propose_execute(
+		proposal: Box<<T as Config<I>>::Proposal>,
+		length_bound: MemberCount,
+	) -> Result<(u32, DispatchResultWithPostInfo), DispatchError> {
+		let proposal_len = proposal.using_encoded(|x| x.len());
+		ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
+
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+		ensure!(
+			!<ProposalOf<T, I>>::contains_key(proposal_hash),
+			Error::<T, I>::DuplicateProposal
+		);
+
+		let seats = Self::members().len() as MemberCount;
+		let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
+		Self::deposit_event(Event::Executed(
+			proposal_hash,
+			result.map(|_| ()).map_err(|e| e.error),
+		));
+		Ok((proposal_len as u32, result))
+	}
+
 	/// Add a new proposal to be voted.
-	pub fn do_propose(
+	pub fn do_propose_proposed(
 		who: T::AccountId,
 		threshold: MemberCount,
-		proposal: <T as Config<I>>::Proposal,
+		proposal: Box<<T as Config<I>>::Proposal>,
 		length_bound: MemberCount,
 	) -> Result<(u32, u32), DispatchError> {
 		let proposal_len = proposal.using_encoded(|x| x.len());

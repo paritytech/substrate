@@ -17,16 +17,19 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use crate::{AllianceMotion, Authorship, Balances, Call, NegativeImbalance};
+use node_primitives::{AccountId, Hash};
+use sp_std::prelude::*;
+
 use frame_support::{
 	dispatch::{DispatchError, DispatchResultWithPostInfo},
 	traits::{Currency, OnUnbalanced},
 	weights::Weight,
 };
-use node_primitives::{AccountId, Hash};
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_identity::Judgement;
 use pallet_asset_tx_payment::HandleCredit;
+
+use crate::{AllianceMotion, Authorship, Balances, Call, NegativeImbalance};
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -97,10 +100,10 @@ impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
-		proposal: Call,
+		proposal: Box<Call>,
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError> {
-		AllianceMotion::do_propose(who, threshold, proposal, length_bound)
+		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
 	}
 
 	fn vote_proposal(

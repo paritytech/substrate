@@ -148,7 +148,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
-		proposal: Proposal,
+		proposal: Box<Proposal>,
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError>;
 
@@ -455,7 +455,7 @@ pub mod pallet {
 				<KickingMembers<T, I>>::insert(strike, true);
 			}
 
-			T::ProposalProvider::propose_proposal(proposor, threshold, *proposal, length_bound)?;
+			T::ProposalProvider::propose_proposal(proposor, threshold, proposal, length_bound)?;
 			Ok(().into())
 		}
 
