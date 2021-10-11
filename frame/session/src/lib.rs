@@ -119,12 +119,7 @@ use sp_runtime::{
 	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
 };
 use sp_staking::SessionIndex;
-use sp_std::{
-	marker::PhantomData,
-	ops::{Rem, Sub},
-	prelude::*,
-};
-
+use sp_std::{prelude::*, convert::TryFrom, marker::PhantomData, ops::{Rem, Sub}};
 use frame_support::{
 	codec::{Decode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResult},
@@ -377,7 +372,8 @@ pub mod pallet {
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize + MaxEncodedLen;
+		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize + MaxEncodedLen
+			+ TryFrom<Self::AccountId>;
 
 		/// A conversion from account ID to validator ID.
 		///
@@ -841,6 +837,10 @@ impl<T: Config> Pallet<T> {
 
 	fn do_purge_keys(account: &T::AccountId) -> DispatchResult {
 		let who = T::ValidatorIdOf::convert(account.clone())
+			// `purge_keys` may not have a controller-stash pair any more. If so then we expect the
+			// stash account to be passed in directly and convert that to a `ValidatorId` using the
+			// `TryFrom` trait if supported.
+			.or_else(|| T::ValidatorId::try_from(account.clone()).ok())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
 		let old_keys = Self::take_keys(&who).ok_or(Error::<T>::NoKeys)?;
