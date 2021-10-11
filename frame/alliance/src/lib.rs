@@ -557,8 +557,12 @@ pub mod pallet {
 
 		/// Initialize the founders/fellows/allies.
 		///
-		/// This should be called by the referendum and can only be called once.
-		#[pallet::weight(0)]
+		/// This should only be called once.
+		#[pallet::weight(T::WeightInfo::init_members(
+			T::MaxFounders::get(),
+			T::MaxFellows::get(),
+			T::MaxAllies::get()
+		))]
 		pub fn init_members(
 			origin: OriginFor<T>,
 			mut founders: Vec<T::AccountId>,

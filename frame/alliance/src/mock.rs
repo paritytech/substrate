@@ -229,7 +229,7 @@ impl Config for Test {
 	type IdentityVerifier = AllianceIdentityVerifier;
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxProposals = MaxProposals;
-	type MaxFounders = MaxMembers;
+	type MaxFounders = MaxFounders;
 	type MaxFellows = MaxFellows;
 	type MaxAllies = MaxAllies;
 	type MaxBlacklistCount = MaxBlacklistCount;

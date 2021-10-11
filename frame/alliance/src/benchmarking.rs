@@ -99,6 +99,26 @@ fn set_candidates<T: Config<I>, I: 'static>(indexes: Vec<u32>) {
 }
 
 benchmarks_instance_pallet! {
+	init_members {
+		// at least 2 founders
+		let a in 2 .. T::MaxFounders::get();
+		let b in 0 .. T::MaxFellows::get();
+		let c in 0 .. T::MaxAllies::get();
+
+		let mut founders = (2 .. a).map(founder::<T, I>).collect::<Vec<_>>();
+		let mut fellows = (0 .. b).map(fellow::<T, I>).collect::<Vec<_>>();
+		let mut allies = (0 .. c).map(ally::<T, I>).collect::<Vec<_>>();
+
+	}: _(RawOrigin::Root, founders.clone(), fellows.clone(), allies.clone())
+	verify {
+		founders.sort();
+		fellows.sort();
+		allies.sort();
+		assert_eq!(Alliance::<T, I>::members(MemberRole::Founder), founders);
+		assert_eq!(Alliance::<T, I>::members(MemberRole::Fellow), fellows);
+		assert_eq!(Alliance::<T, I>::members(MemberRole::Ally), allies);
+	}
+
 	set_rule {
 		set_members::<T, I>();
 
@@ -266,8 +286,8 @@ benchmarks_instance_pallet! {
 	}
 
 	add_blacklist {
-		let n in 0 .. T::MaxBlacklistCount::get();
-		let l in 0 .. T::MaxWebsiteUrlLength::get();
+		let n in 1 .. T::MaxBlacklistCount::get();
+		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 
@@ -286,8 +306,8 @@ benchmarks_instance_pallet! {
 	}
 
 	remove_blacklist {
-		let n in 0 .. T::MaxBlacklistCount::get();
-		let l in 0 .. T::MaxWebsiteUrlLength::get();
+		let n in 1 .. T::MaxBlacklistCount::get();
+		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 
