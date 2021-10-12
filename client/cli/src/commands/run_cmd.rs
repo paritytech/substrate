@@ -126,7 +126,7 @@ pub struct RunCmd {
 	/// Maximum number of WS RPC server connections.
 	///
 	/// Defalt is 100.
-	// {this is set in client/rpc-servers/src/lib.rs
+	// {this is set in client/rpc-servers/src/lib.rs}
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
