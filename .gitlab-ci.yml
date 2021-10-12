@@ -45,6 +45,7 @@ variables:                         &default-vars
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
+  SIMNET_FEATURES_PATH:            "simnet_tests/tests"
 
 default:
   cache:                           {}
@@ -54,6 +55,14 @@ default:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
     when:                          on_success
     expire_in:                     7 days
+    paths:
+      - artifacts/
+
+.collect-artifacts-short:          &collect-artifacts-short
+  artifacts:
+    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when:                          on_success
+    expire_in:                     3 hours
     paths:
       - artifacts/
 
@@ -188,13 +197,13 @@ default:
       file:                        false
     AWX_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWX_TOKEN@kv
-      file:                        false    
+      file:                        false
     CRATES_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/CRATES_TOKEN@kv
       file:                        false
     DOCKER_CHAOS_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_TOKEN@kv
-      file:                        false   
+      file:                        false
     DOCKER_CHAOS_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_USER@kv
       file:                        false
@@ -580,6 +589,12 @@ build-linux-substrate:             &build-binary
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
+#Build binary for simnet quick tests.
+build-linux-substrate-simnet:
+  <<:                              *build-binary
+  <<:                              *collect-artifacts-short
+  <<:                              *test-refs-no-trigger-prs-only
+
 build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
@@ -687,6 +702,25 @@ publish-docker-substrate:
     reports:
       # this artifact is used in trigger-simnet job
       # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
+      dotenv: ./artifacts/substrate/build.env
+
+#publish artifact for quick simnet tests
+publish-docker-substrate-simnet:
+  stage:                           publish
+  <<:                              *build-push-docker-image
+  <<:                              *test-refs-no-trigger-prs-only
+  needs:
+    - job:                         build-linux-substrate-simnet
+      artifacts:                   true
+  variables:
+    <<:                            *default-vars
+    GIT_STRATEGY:                  none
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    PRODUCT:                       substrate
+    IMAGE_NAME:                    docker.io/paritypr/$PRODUCT
+  artifacts:
+    reports:
+      # this artifact is used in simnet-tests-quick job
       dotenv: ./artifacts/substrate/build.env
 
 publish-docker-subkey:
@@ -871,7 +905,7 @@ simnet-tests:
   before_script:
     - echo "Simnet Tests Config
       docker.io/paritytech/simnet:${SIMNET_REF}
-      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
+      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
   script:
     - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
         --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
@@ -879,4 +913,31 @@ simnet-tests:
         --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
   retry: 2
   tags:
-    - parity-simnet
+    - substrate-simnet
+
+#run quick simnet-tests for each PR
+simnet-tests-quick:
+  stage:                           deploy
+  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
+  <<:                              *kubernetes-env
+  <<:                              *vault-secrets
+  <<:                              *test-refs-no-trigger-prs-only
+  variables:
+    SIMNET_FEATURES:               "${SIMNET_FEATURES_PATH}/quick"
+  needs:
+    - job:                         publish-docker-substrate-simnet
+  before_script:
+    - echo "Simnet Tests Config
+      docker.io/paritytech/simnet:${SIMNET_REF}
+      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
+  script:
+    - echo "Image=${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+    - echo "Features=${SIMNET_FEATURES}"
+    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
+        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
+        --config="simnet_tests/configs/default_local_testnet.toml"
+        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+        --features="${SIMNET_FEATURES}"
+  tags:
+    - substrate-simnet
+
