@@ -389,9 +389,10 @@ fn staking_should_work() {
 				total: 1500,
 				active: 1500,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![0])
-						.expect("Test configuration needs changing"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					vec![0]
+				)
+				.expect("Test configuration needs changing"),
 			})
 		);
 		// e.g. it cannot reserve more than 500 that it has free from the total 2000
@@ -966,9 +967,10 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![0])
-						.expect("Test configuration needs changing"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					vec![0]
+				)
+				.expect("Test configuration needs changing"),
 			})
 		);
 
@@ -996,9 +998,10 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![0, 1])
-						.expect("Test configuration needs changing"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					vec![0, 1]
+				)
+				.expect("Test configuration needs changing"),
 			})
 		);
 
@@ -1027,11 +1030,10 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![
-						0, 1, 2
-					])
-					.expect("Test configuration needs changing"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					vec![0, 1, 2]
+				)
+				.expect("Test configuration needs changing"),
 			})
 		);
 		// Check that amount in staked account is NOT increased.
@@ -2349,10 +2351,7 @@ fn slashing_performed_according_exposure() {
 		// Handle an offence with a historical exposure.
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (
-					11,
-					Exposure { total: 500, own: 500, others: Default::default() },
-				),
+				offender: (11, Exposure { total: 500, own: 500, others: Default::default() }),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(50)],
@@ -3458,9 +3457,10 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![1])
-						.expect("MaxHistoryDepth>1"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					vec![1]
+				)
+				.expect("MaxHistoryDepth>1"),
 			})
 		);
 
@@ -3482,11 +3482,10 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
-						(1..=14).collect::<Vec<_>>()
-					)
-					.expect("Test configuration should be changed")
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					(1..=14).collect::<Vec<_>>()
+				)
+				.expect("Test configuration should be changed")
 			})
 		);
 
@@ -3507,9 +3506,10 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![15, 98])
-						.expect("MaxHistoryDepth should be > 1"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					vec![15, 98]
+				)
+				.expect("MaxHistoryDepth should be > 1"),
 			})
 		);
 
@@ -3524,11 +3524,10 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![
-						15, 23, 42, 69, 98
-					])
-					.expect("MaxHistoryDepth should be > 4")
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					vec![15, 23, 42, 69, 98]
+				)
+				.expect("MaxHistoryDepth should be > 4")
 			})
 		);
 	});
@@ -3735,11 +3734,10 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
-						(0..5).collect::<Vec<_>>()
-					)
-					.expect("MaxHistoryDepth should be >= 5"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					(0..5).collect::<Vec<_>>()
+				)
+				.expect("MaxHistoryDepth should be >= 5"),
 			})
 		);
 		mock::start_active_era(99);
@@ -3751,11 +3749,10 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
-						(15..99).collect::<Vec<_>>()
-					)
-					.expect("Some test configuration may need changing"),
+				claimed_rewards: WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
+					(15..99).collect::<Vec<_>>()
+				)
+				.expect("Some test configuration may need changing"),
 			})
 		);
 	});
