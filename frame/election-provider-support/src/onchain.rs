@@ -61,11 +61,17 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
+	/// Maximum number of nominations per nominator.
+	type MaxNominations: Get<u32>;
+	/// Maximum number of potential targets (usually the number of validators).
+	type MaxTargets: Get<u32>;
 	/// Something that provides the data for election.
-	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber, Self::MaxTargets>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber, T::MaxTargets>
+	for OnChainSequentialPhragmen<T>
+{
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
@@ -79,12 +85,23 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 			.map(|(validator, vote_weight, _)| (validator.clone(), *vote_weight))
 			.collect();
 
+		let voters = voters
+			.iter()
+			.map(|(validator, vote_weight, targets)| {
+				(validator.clone(), *vote_weight, targets.to_vec())
+			})
+			.collect();
+
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners: _, assignments } =
-			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
-				.map_err(Error::from)?;
+		let ElectionResult { winners: _, assignments } = seq_phragmen::<_, T::Accuracy>(
+			desired_targets as usize,
+			targets.to_vec(),
+			voters,
+			None,
+		)
+		.map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 

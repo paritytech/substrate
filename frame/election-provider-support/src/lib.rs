@@ -161,7 +161,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::traits::Get;
+use frame_support::{traits::Get, BoundedVec};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
@@ -178,7 +178,8 @@ pub mod data_provider {
 }
 
 /// Something that can provide the data to an [`ElectionProvider`].
-pub trait ElectionDataProvider<AccountId, BlockNumber> {
+/// `MaxTarget` represents the maximum number of candidates.
+pub trait ElectionDataProvider<AccountId, BlockNumber, MaxTargets> {
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaximumVotesPerVoter: Get<u32>;
 
@@ -189,7 +190,9 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>>;
+	fn targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<AccountId, MaxTargets>>;
 
 	/// All possible voters for the election.
 	///
@@ -202,7 +205,9 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>;
+	) -> data_provider::Result<
+		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaximumVotesPerVoter>)>,
+	>;
 
 	/// The number of targets to elect.
 	///
@@ -222,8 +227,8 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// else a noop.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
-		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		_targets: Vec<AccountId>,
+		_voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaximumVotesPerVoter>)>,
+		_targets: BoundedVec<AccountId, Self::MaximumVotesPerVoter>,
 		_target_stake: Option<VoteWeight>,
 	) {
 	}
@@ -233,7 +238,12 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_voter(_voter: AccountId, _weight: VoteWeight, _targets: Vec<AccountId>) {}
+	fn add_voter(
+		_voter: AccountId,
+		_weight: VoteWeight,
+		_targets: BoundedVec<AccountId, Self::MaximumVotesPerVoter>,
+	) {
+	}
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
@@ -248,14 +258,20 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 }
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
+impl<AccountId, BlockNumber, MaxTargets> ElectionDataProvider<AccountId, BlockNumber, MaxTargets>
+	for ()
+{
 	type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<0>;
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn targets(
+		_maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<AccountId, MaxTargets>> {
 		Ok(Default::default())
 	}
 	fn voters(
 		_maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
+	) -> data_provider::Result<
+		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaximumVotesPerVoter>)>,
+	> {
 		Ok(Default::default())
 	}
 	fn desired_targets() -> data_provider::Result<u32> {
@@ -271,12 +287,13 @@ impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for ()
 /// This trait only provides an interface to _request_ an election, i.e.
 /// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
-pub trait ElectionProvider<AccountId, BlockNumber> {
+/// `MaxTargets` is the maximum number of candidates.
+pub trait ElectionProvider<AccountId, BlockNumber, MaxTargets> {
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
 	/// The data provider of the election.
-	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+	type DataProvider: ElectionDataProvider<AccountId, BlockNumber, MaxTargets>;
 
 	/// Elect a new set of winners.
 	///
@@ -288,7 +305,9 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 }
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
+impl<AccountId, BlockNumber, MaxTargets> ElectionProvider<AccountId, BlockNumber, MaxTargets>
+	for ()
+{
 	type Error = &'static str;
 	type DataProvider = ();
 
@@ -367,7 +386,9 @@ pub trait VoteWeightProvider<AccountId> {
 }
 
 /// Something that can compute the result to an NPoS solution.
-pub trait NposSolver {
+/// `MaxTargets` is the maximum number of candidates.
+/// `MaximumVotesPerVoter` bounds the voters per voter
+pub trait NposSolver<MaxTargets: Get<u32>, MaximumVotesPerVoter: Get<u32>> {
 	/// The account identifier type of this solver.
 	type AccountId: sp_npos_elections::IdentifierT;
 	/// The accuracy of this solver. This will affect the accuracy of the output.
@@ -379,8 +400,12 @@ pub trait NposSolver {
 	/// of `targets`.
 	fn solve(
 		to_elect: usize,
-		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		targets: BoundedVec<Self::AccountId, MaxTargets>,
+		voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			BoundedVec<Self::AccountId, MaximumVotesPerVoter>,
+		)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 }
 
@@ -393,18 +418,30 @@ pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(
 impl<
 		AccountId: IdentifierT,
 		Accuracy: PerThing128,
+		MaxTargets: Get<u32>,
+		MaximumVotesPerVoter: Get<u32>,
 		Balancing: Get<Option<(usize, ExtendedBalance)>>,
-	> NposSolver for SequentialPhragmen<AccountId, Accuracy, Balancing>
+	> NposSolver<MaxTargets, MaximumVotesPerVoter>
+	for SequentialPhragmen<AccountId, Accuracy, Balancing>
 {
 	type AccountId = AccountId;
 	type Accuracy = Accuracy;
 	type Error = sp_npos_elections::Error;
 	fn solve(
 		winners: usize,
-		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		targets: BoundedVec<Self::AccountId, MaxTargets>,
+		voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			BoundedVec<Self::AccountId, MaximumVotesPerVoter>,
+		)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
-		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
+		let mut voters_vec: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)> =
+			Vec::with_capacity(voters.len());
+		for voter in voters {
+			voters_vec.push((voter.0, voter.1, voter.2.to_vec()));
+		}
+		sp_npos_elections::seq_phragmen(winners, targets.to_vec(), voters_vec, Balancing::get())
 	}
 }
 
@@ -417,17 +454,28 @@ pub struct PhragMMS<AccountId, Accuracy, Balancing = ()>(
 impl<
 		AccountId: IdentifierT,
 		Accuracy: PerThing128,
+		MaxTargets: Get<u32>,
+		MaximumVotesPerVoter: Get<u32>,
 		Balancing: Get<Option<(usize, ExtendedBalance)>>,
-	> NposSolver for PhragMMS<AccountId, Accuracy, Balancing>
+	> NposSolver<MaxTargets, MaximumVotesPerVoter> for PhragMMS<AccountId, Accuracy, Balancing>
 {
 	type AccountId = AccountId;
 	type Accuracy = Accuracy;
 	type Error = sp_npos_elections::Error;
 	fn solve(
 		winners: usize,
-		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		targets: BoundedVec<Self::AccountId, MaxTargets>,
+		voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			BoundedVec<Self::AccountId, MaximumVotesPerVoter>,
+		)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
-		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+		let mut voters_vec: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)> =
+			Vec::with_capacity(voters.len());
+		for voter in voters {
+			voters_vec.push((voter.0, voter.1, voter.2.to_vec()));
+		}
+		sp_npos_elections::phragmms(winners, targets.to_vec(), voters_vec, Balancing::get())
 	}
 }

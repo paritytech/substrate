@@ -24,7 +24,7 @@ use crate::{
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolver, PerThing128};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
@@ -47,10 +47,11 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 
 /// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
 /// voted.
-pub type Voter<T> = (
+/// `Limit` bounds the vec size
+pub type Voter<T, Limit> = (
 	<T as frame_system::Config>::AccountId,
 	sp_npos_elections::VoteWeight,
-	Vec<<T as frame_system::Config>::AccountId>,
+	BoundedVec<<T as frame_system::Config>::AccountId, Limit>,
 );
 
 /// The relative distribution of a voter's stake among the winning targets.

@@ -682,7 +682,7 @@ impl<T: Config> Pallet<T> {
 	/// auto-chilled, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(
 		maybe_max_len: Option<usize>,
-	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	) -> Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxNominations>)> {
 		let max_allowed_len = {
 			let nominator_count = CounterForNominators::<T>::get() as usize;
 			let validator_count = CounterForValidators::<T>::get() as usize;
@@ -696,8 +696,10 @@ impl<T: Config> Pallet<T> {
 		let mut validators_taken = 0u32;
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
-			let self_vote =
-				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
+			let validator_bounded =
+				BoundedVec::<_, T::MaxNominations>::try_from(vec![validator.clone()])
+					.expect("T::MaxNominations>0");
+			let self_vote = (validator.clone(), Self::weight_of(&validator), validator_bounded);
 			all_voters.push(self_vote);
 			validators_taken.saturating_inc();
 		}
@@ -730,11 +732,7 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((
-						nominator.clone(),
-						Self::weight_of(&nominator),
-						targets.to_vec(),
-					));
+					all_voters.push((nominator.clone(), Self::weight_of(&nominator), targets));
 					nominators_taken.saturating_inc();
 				}
 			} else {
@@ -764,7 +762,7 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets() -> Vec<T::AccountId> {
+	pub fn get_npos_targets() -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		let mut validator_count = 0u32;
 		let targets = Validators::<T>::iter()
 			.map(|(v, _)| {
@@ -772,6 +770,9 @@ impl<T: Config> Pallet<T> {
 				v
 			})
 			.collect::<Vec<_>>();
+
+		let targets = BoundedVec::<_, T::MaxValidatorsCount>::try_from(targets)
+			.expect("Size is smaller than MaxValidatorsCount");
 
 		Self::register_weight(T::WeightInfo::get_npos_targets(validator_count));
 
@@ -871,7 +872,9 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
+impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>, T::MaxValidatorsCount>
+	for Pallet<T>
+{
 	type MaximumVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
@@ -881,7 +884,9 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
+	) -> data_provider::Result<
+		Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxNominations>)>,
+	> {
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
 		debug_assert_eq!(
@@ -897,7 +902,9 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		Ok(voters)
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+	fn targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		let target_count = CounterForValidators::<T>::get();
 
 		// We can't handle this case yet -- return an error.

@@ -83,6 +83,7 @@ pub mod pallet {
 		type ElectionProvider: frame_election_provider_support::ElectionProvider<
 			Self::AccountId,
 			Self::BlockNumber,
+			Self::MaxValidatorsCount,
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
@@ -91,6 +92,7 @@ pub mod pallet {
 		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
 			Self::AccountId,
 			Self::BlockNumber,
+			Self::MaxValidatorsCount,
 			DataProvider = Pallet<Self>,
 		>;
 

@@ -150,7 +150,9 @@ fn solution_with_size<T: Config>(
 	Ok(RawSolution { solution, score, round })
 }
 
-fn set_up_data_provider<T: Config>(v: u32, t: u32) {
+fn set_up_data_provider<T: Config>(v: u32) {
+	// number of targets in snapshot. Fixed to maximum.
+	let t = T::MaxTargets::get();
 	T::DataProvider::clear();
 	log!(
 		info,
@@ -394,8 +396,6 @@ frame_benchmarking::benchmarks! {
 	mine_solution_offchain_memory {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::MINER_MAXIMUM_VOTERS;
-		// number of targets in snapshot. Fixed to maximum.
-		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
 		set_up_data_provider::<T>(v, t);
 		let now = frame_system::Pallet::<T>::block_number();
@@ -416,8 +416,6 @@ frame_benchmarking::benchmarks! {
 	create_snapshot_memory {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
-		// number of targets in snapshot. Fixed to maximum.
-		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
 		set_up_data_provider::<T>(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
