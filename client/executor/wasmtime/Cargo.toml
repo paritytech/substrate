@@ -23,8 +23,9 @@ sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-in
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
-wasmtime = { version = "0.29.0", default-features = false, features = [
+wasmtime = { version = "0.30.0", default-features = false, features = [
     "cache",
+    "cranelift",
     "jitdump",
     "parallel-compilation",
 ] }

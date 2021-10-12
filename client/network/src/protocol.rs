@@ -710,8 +710,7 @@ impl<B: BlockT> Protocol<B> {
 		match self.sync.on_state_data(&peer_id, response) {
 			Ok(sync::OnStateData::Import(origin, block)) =>
 				CustomMessageOutcome::BlockImport(origin, vec![block]),
-			Ok(sync::OnStateData::Request(peer, req)) =>
-				prepare_state_request::<B>(&mut self.peers, peer, req),
+			Ok(sync::OnStateData::Continue) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -728,10 +727,7 @@ impl<B: BlockT> Protocol<B> {
 		response: crate::warp_request_handler::EncodedProof,
 	) -> CustomMessageOutcome<B> {
 		match self.sync.on_warp_sync_data(&peer_id, response) {
-			Ok(sync::OnWarpSyncData::WarpProofRequest(peer, req)) =>
-				prepare_warp_sync_request::<B>(&mut self.peers, peer, req),
-			Ok(sync::OnWarpSyncData::StateRequest(peer, req)) =>
-				prepare_state_request::<B>(&mut self.peers, peer, req),
+			Ok(()) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -1106,7 +1102,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Returns the list of reserved peers.
@@ -1116,12 +1112,26 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Sets the list of reserved peers for syncing purposes.
 	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers.clone());
+		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers);
+	}
+
+	/// Sets the list of reserved peers for the given protocol/peerset.
+	pub fn set_reserved_peerset_peers(&self, protocol: Cow<'static, str>, peers: HashSet<PeerId>) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.peerset_handle
+				.set_reserved_peers(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peers);
+		} else {
+			error!(
+				target: "sub-libp2p",
+				"set_reserved_peerset_peers with unknown protocol: {}",
+				protocol
+			);
+		}
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
