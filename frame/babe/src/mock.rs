@@ -68,7 +68,6 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -122,7 +121,6 @@ impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type WeightInfo = ();
 }
 
@@ -198,6 +196,7 @@ parameter_types! {
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 4_000;
 	pub const MaxUnlockingChunks: u32 = 32;
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
 impl onchain::Config for Test {
@@ -229,6 +228,7 @@ impl pallet_staking::Config for Test {
 	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
 	type MaxValidatorsCount = MaxValidatorsCount;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
+	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;

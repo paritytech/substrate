@@ -23,7 +23,7 @@ lru = "0.6.6"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-tracing = "0.1.25"
+tracing = "0.1.29"
 
 [dev-dependencies]
 async-std = "1.10.0"

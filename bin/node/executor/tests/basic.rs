@@ -387,10 +387,23 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Withdraw(alice().into(), fees)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Transfer(
 					alice().into(),
 					bob().into(),
 					69 * DOLLARS,
+				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Deposit(
+					pallet_treasury::Pallet::<Runtime>::account_id(),
+					fees * 8 / 10,
 				)),
 				topics: vec![],
 			},
@@ -441,10 +454,23 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Withdraw(bob().into(), fees)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Transfer(
 					bob().into(),
 					alice().into(),
 					5 * DOLLARS,
+				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Deposit(
+					pallet_treasury::Pallet::<Runtime>::account_id(),
+					fees * 8 / 10,
 				)),
 				topics: vec![],
 			},
@@ -463,10 +489,23 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
+				event: Event::Balances(pallet_balances::Event::Withdraw(alice().into(), fees)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
 				event: Event::Balances(pallet_balances::Event::Transfer(
 					alice().into(),
 					bob().into(),
 					15 * DOLLARS,
+				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
+				event: Event::Balances(pallet_balances::Event::Deposit(
+					pallet_treasury::Pallet::<Runtime>::account_id(),
+					fees * 8 / 10,
 				)),
 				topics: vec![],
 			},
