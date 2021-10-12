@@ -66,7 +66,7 @@ hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.6.1", default-features = false, optional = true }
 libsecp256k1 = { version = "0.6", default-features = false, features = ["hmac", "static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
-
+ss58-registry = "1.0.0"
 sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
