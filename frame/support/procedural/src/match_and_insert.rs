@@ -38,13 +38,13 @@ pub fn match_and_insert(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 }
 
 struct MatchAndInsertDef {
+	// Token stream to search and insert tokens into.
+	target: TokenStream,
 	// Pattern to match against, this is ensured to have no TokenTree::Group nor TokenTree::Literal
 	// (i.e. contains only Punct or Ident), and not being empty.
 	pattern: Vec<TokenTree>,
 	// Token stream to insert after the match pattern.
 	tokens: TokenStream,
-	// Token stream to search and insert tokens into.
-	target: TokenStream,
 }
 
 impl syn::parse::Parse for MatchAndInsertDef {
