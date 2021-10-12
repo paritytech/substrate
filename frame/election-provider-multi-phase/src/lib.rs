@@ -122,7 +122,8 @@
 //! If, for any of the below reasons:
 //!
 //! 1. No **signed** or **unsigned** solution submitted, and no successful [`Config::Fallback`] is
-//!    provided 2. Any other unforeseen internal error
+//!    provided
+//! 2. Any other unforeseen internal error
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
 //! proceeds to the [`Phase::Emergency`]. During this phase, any solution can be submitted from
