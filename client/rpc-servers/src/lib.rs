@@ -33,6 +33,11 @@ const MEGABYTE: usize = 1024 * 1024;
 /// Maximal payload accepted by RPC servers.
 pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 
+/// Maximal buffer size in RPC servers.
+///
+/// Only relevant in the WS context.
+pub const RPC_MAX_BUFFER_CAPACITY_DEFAULT: usize = 10 * MEGABYTE;
+
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
@@ -172,18 +177,29 @@ pub fn start_ws<
 	cors: Option<&Vec<String>>,
 	io: RpcHandler<M>,
 	maybe_max_payload_mb: Option<usize>,
+	maybe_max_in_buffer_capacity_mb: Option<usize>,
+	maybe_max_out_buffer_capacity_mb: Option<usize>,
 	server_metrics: ServerMetrics,
 	tokio_handle: tokio::runtime::Handle,
 ) -> io::Result<ws::Server> {
-	let rpc_max_payload = maybe_max_payload_mb
+	let max_payload = maybe_max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+	let max_in_buffer_capacity = maybe_max_in_buffer_capacity_mb
+		.map(|mb| mb.saturating_mul(MEGABYTE))
+		.unwrap_or(RPC_MAX_BUFFER_CAPACITY_DEFAULT);
+	let max_out_buffer_capacity = maybe_max_out_buffer_capacity_mb
+		.map(|mb| mb.saturating_mul(MEGABYTE))
+		.unwrap_or(RPC_MAX_BUFFER_CAPACITY_DEFAULT);
+
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| {
 		context.sender().into()
 	})
 	.event_loop_executor(tokio_handle)
-	.max_payload(rpc_max_payload)
+	.max_payload(max_payload)
 	.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
+	.max_in_buffer_capacity(max_in_buffer_capacity)
+	.max_out_buffer_capacity(max_out_buffer_capacity)
 	.allowed_origins(map_cors(cors))
 	.allowed_hosts(hosts_filtering(cors.is_some()))
 	.session_stats(server_metrics)

@@ -424,6 +424,8 @@ fn start_rpc_servers<
 					),
 				)?,
 				config.rpc_max_payload,
+				config.ws_max_in_buffer_capacity,
+				config.ws_max_out_buffer_capacity,
 				server_metrics.clone(),
 				config.tokio_handle.clone(),
 			)
