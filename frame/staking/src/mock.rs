@@ -34,6 +34,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
+use sp_std::collections::btree_map::BTreeMap;
 use std::cell::RefCell;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;

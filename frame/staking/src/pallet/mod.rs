@@ -502,7 +502,8 @@ pub mod pallet {
 	/// the era ends.
 	#[pallet::storage]
 	#[pallet::getter(fn offending_validators)]
-	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
+	pub type OffendingValidators<T: Config> =
+		StorageValue<_, BoundedVec<(u32, bool), T::MaxValidatorsCount>, ValueQuery>;
 
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.

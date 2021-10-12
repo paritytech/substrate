@@ -56,7 +56,7 @@ use crate::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, Imbalance, OnUnbalanced},
+	traits::{Currency, Imbalance, OnUnbalanced},
 	CloneNoBound, WeakBoundedVec,
 };
 use scale_info::TypeInfo;
@@ -346,7 +346,9 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 		match offending.binary_search_by_key(&validator_index_u32, |(index, _)| *index) {
 			// this is a new offending validator
 			Err(index) => {
-				offending.insert(index, (validator_index_u32, disable));
+				offending
+					.try_insert(index, (validator_index_u32, disable))
+					.expect("Cannot be more than MaxValidatorsCount");
 
 				let offending_threshold =
 					T::OffendingValidatorsThreshold::get() * validators.len() as u32;
