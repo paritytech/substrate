@@ -21,7 +21,7 @@
 
 use super::*;
 use core::convert::TryInto;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -297,6 +297,6 @@ benchmarks! {
 		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
 		assert!(!Calls::<T>::contains_key(call_hash));
 	}
-}
 
-impl_benchmark_test_suite!(Multisig, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Multisig, crate::tests::new_test_ext(), crate::tests::Test);
+}
