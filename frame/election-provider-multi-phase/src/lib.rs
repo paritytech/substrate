@@ -142,7 +142,7 @@
 //! in the case of massive network failure or misbehaviour, [`Config::ForceOrigin`] might decide to
 //! select only a small number of emergency winners (which would greatly restrict the next validator
 //! set, if this pallet is used with `pallet-staking`). If the failure is for other technical
-//! reasons, then a simple and safe way to to generate supports is using the staking-miner binary
+//! reasons, then a simple and safe way to generate supports is using the staking-miner binary
 //! provided in the Polkadot repository. This binary has a subcommand named `emergency-solution`
 //! which is capable of connecting to a live network, and generating appropriate `supports` using a
 //! standard algorithm, and outputting the `supports` in hex format, ready for submission. Note that
