@@ -25,11 +25,13 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	traits::{
-		DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet, OneSessionHandler,
+		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
+		OneSessionHandler,
 	},
 	weights::{Pays, Weight},
+	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::Public;
+use sp_application_crypto::{Public, TryFrom};
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
@@ -100,7 +102,7 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 	}
 }
 
-const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
+const UNDER_CONSTRUCTION_SEGMENT_LENGTH: u32 = 256;
 
 type MaybeRandomness = Option<schnorrkel::Randomness>;
 
@@ -113,6 +115,7 @@ pub mod pallet {
 	/// The BABE Pallet
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -169,6 +172,10 @@ pub mod pallet {
 		type HandleEquivocation: HandleEquivocation<Self>;
 
 		type WeightInfo: WeightInfo;
+
+		/// Max number of authorities allowed
+		#[pallet::constant]
+		type MaxAuthorities: Get<u32>;
 	}
 
 	#[pallet::error]
@@ -189,7 +196,11 @@ pub mod pallet {
 	/// Current epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub type Authorities<T> = StorageValue<_, Vec<(AuthorityId, BabeAuthorityWeight)>, ValueQuery>;
+	pub type Authorities<T: Config> = StorageValue<
+		_,
+		WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
+		ValueQuery,
+	>;
 
 	/// The slot at which the first epoch actually started. This is 0
 	/// until the first block of the chain.
@@ -229,8 +240,11 @@ pub mod pallet {
 
 	/// Next epoch authorities.
 	#[pallet::storage]
-	pub(super) type NextAuthorities<T> =
-		StorageValue<_, Vec<(AuthorityId, BabeAuthorityWeight)>, ValueQuery>;
+	pub(super) type NextAuthorities<T: Config> = StorageValue<
+		_,
+		WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
+		ValueQuery,
+	>;
 
 	/// Randomness under construction.
 	///
@@ -246,8 +260,13 @@ pub mod pallet {
 
 	/// TWOX-NOTE: `SegmentIndex` is an increasing integer, so this is okay.
 	#[pallet::storage]
-	pub(super) type UnderConstruction<T> =
-		StorageMap<_, Twox64Concat, u32, Vec<schnorrkel::Randomness>, ValueQuery>;
+	pub(super) type UnderConstruction<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		u32,
+		BoundedVec<schnorrkel::Randomness, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>,
+		ValueQuery,
+	>;
 
 	/// Temporary value (cleared at block finalization) which is `Some`
 	/// if per-block initialization has already been called for current block.
@@ -503,8 +522,8 @@ impl<T: Config> Pallet<T> {
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
 	/// manager logic like `pallet-session`.
 	pub fn enact_epoch_change(
-		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-		next_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+		authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
+		next_authorities: WeakBoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
@@ -541,8 +560,10 @@ impl<T: Config> Pallet<T> {
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::<T>::get();
 
-		let next_epoch =
-			NextEpochDescriptor { authorities: next_authorities, randomness: next_randomness };
+		let next_epoch = NextEpochDescriptor {
+			authorities: next_authorities.to_vec(),
+			randomness: next_randomness,
+		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
 		if let Some(next_config) = NextEpochConfig::<T>::get() {
@@ -571,7 +592,7 @@ impl<T: Config> Pallet<T> {
 			epoch_index: EpochIndex::<T>::get(),
 			start_slot: Self::current_epoch_start(),
 			duration: T::EpochDuration::get(),
-			authorities: Self::authorities(),
+			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
 			config: EpochConfig::<T>::get()
 				.expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
@@ -590,7 +611,7 @@ impl<T: Config> Pallet<T> {
 			epoch_index: next_epoch_index,
 			start_slot: Self::epoch_start(next_epoch_index),
 			duration: T::EpochDuration::get(),
-			authorities: NextAuthorities::<T>::get(),
+			authorities: NextAuthorities::<T>::get().to_vec(),
 			randomness: NextRandomness::<T>::get(),
 			config: NextEpochConfig::<T>::get().unwrap_or_else(|| {
 				EpochConfig::<T>::get().expect(
@@ -619,14 +640,18 @@ impl<T: Config> Pallet<T> {
 	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
 		let segment_idx = SegmentIndex::<T>::get();
 		let mut segment = UnderConstruction::<T>::get(&segment_idx);
-		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
+		if segment.try_push(*randomness).is_ok() {
 			// push onto current segment: not full.
-			segment.push(*randomness);
 			UnderConstruction::<T>::insert(&segment_idx, &segment);
 		} else {
 			// move onto the next segment and update the index.
 			let segment_idx = segment_idx + 1;
-			UnderConstruction::<T>::insert(&segment_idx, &vec![randomness.clone()]);
+			let bounded_randomness =
+				BoundedVec::<_, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>::try_from(vec![
+					randomness.clone(),
+				])
+				.expect("UNDER_CONSTRUCTION_SEGMENT_LENGTH >= 1");
+			UnderConstruction::<T>::insert(&segment_idx, bounded_randomness);
 			SegmentIndex::<T>::put(&segment_idx);
 		}
 	}
@@ -667,7 +692,7 @@ impl<T: Config> Pallet<T> {
 				// we use the same values as genesis because we haven't collected any
 				// randomness yet.
 				let next = NextEpochDescriptor {
-					authorities: Self::authorities(),
+					authorities: Self::authorities().to_vec(),
 					randomness: Self::randomness(),
 				};
 
@@ -732,7 +757,7 @@ impl<T: Config> Pallet<T> {
 		let segment_idx: u32 = SegmentIndex::<T>::mutate(|s| sp_std::mem::replace(s, 0));
 
 		// overestimate to the segment being full.
-		let rho_size = segment_idx.saturating_add(1) as usize * UNDER_CONSTRUCTION_SEGMENT_LENGTH;
+		let rho_size = (segment_idx.saturating_add(1) * UNDER_CONSTRUCTION_SEGMENT_LENGTH) as usize;
 
 		let next_randomness = compute_randomness(
 			this_randomness,
@@ -747,8 +772,11 @@ impl<T: Config> Pallet<T> {
 	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
-			Authorities::<T>::put(authorities);
-			NextAuthorities::<T>::put(authorities);
+			let bounded_authorities =
+				WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
+					.expect("Initial number of authorities should be lower than T::MaxAuthorities");
+			Authorities::<T>::put(&bounded_authorities);
+			NextAuthorities::<T>::put(&bounded_authorities);
 		}
 	}
 
@@ -878,14 +906,28 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
 		let authorities = validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
+		let bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
+			authorities,
+			Some(
+				"Warning: The session has more validators than expected. \
+				A runtime configuration adjustment may be needed.",
+			),
+		);
 
 		let next_authorities = queued_validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
+		let next_bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
+			next_authorities,
+			Some(
+				"Warning: The session has more queued validators than expected. \
+				A runtime configuration adjustment may be needed.",
+			),
+		);
 
-		Self::enact_epoch_change(authorities, next_authorities)
+		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
 	}
 
-	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
+	fn on_disabled(i: u32) {
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i))
 	}
 }
 

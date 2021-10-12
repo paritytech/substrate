@@ -29,7 +29,7 @@ use sc_service::{
 	config::{
 		BasePath, Configuration, DatabaseSource, KeystoreConfig, NetworkConfiguration,
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
-		TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
 };
@@ -229,7 +229,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
-			Database::ParityDb => DatabaseSource::ParityDb { path: rocksdb_path },
+			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
 			Database::Auto => DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size },
 		})
 	}
@@ -348,13 +348,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(None)
 	}
 
-	/// Get the RPC HTTP thread pool size (`None` for a default 4-thread pool config).
-	///
-	/// By default this is `None`.
-	fn rpc_http_threads(&self) -> Result<Option<usize>> {
-		Ok(None)
-	}
-
 	/// Get the RPC cors (`None` if disabled)
 	///
 	/// By default this is `Some(Vec::new())`.
@@ -465,7 +458,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: TaskExecutor,
+		tokio_handle: tokio::runtime::Handle,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -490,7 +483,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
-			task_executor,
+			tokio_handle,
 			transaction_pool: self.transaction_pool()?,
 			network: self.network_config(
 				&chain_spec,
@@ -518,7 +511,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
-			rpc_http_threads: self.rpc_http_threads()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
@@ -530,7 +522,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
 			tracing_receiver: self.tracing_receiver()?,
-			disable_log_reloading: self.is_log_filter_reloading_disabled()?,
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
@@ -550,9 +541,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
-	/// Is log reloading disabled (enabled by default)
-	fn is_log_filter_reloading_disabled(&self) -> Result<bool> {
-		Ok(self.shared_params().is_log_filter_reloading_disabled())
+	/// Is log reloading enabled?
+	fn enable_log_reloading(&self) -> Result<bool> {
+		Ok(self.shared_params().enable_log_reloading())
 	}
 
 	/// Should the log color output be disabled?
@@ -571,7 +562,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		let mut logger = LoggerBuilder::new(self.log_filters()?);
-		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
+		logger.with_log_reloading(self.enable_log_reloading()?);
 
 		if let Some(tracing_targets) = self.tracing_targets()? {
 			let tracing_receiver = self.tracing_receiver()?;

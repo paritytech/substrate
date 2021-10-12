@@ -39,7 +39,7 @@ macro_rules! decl_tests {
 		const ID_2: LockIdentifier = *b"2       ";
 
 		pub const CALL: &<$test as frame_system::Config>::Call =
-			&Call::Balances(pallet_balances::Call::transfer(0, 0));
+			&Call::Balances(pallet_balances::Call::transfer { dest: 0, value: 0 });
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -314,6 +314,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().monied(true).build().execute_with(|| {
 				assert_eq!(Balances::total_balance(&1), 10);
 				assert_ok!(Balances::deposit_into_existing(&1, 10).map(drop));
+				System::assert_last_event(Event::Balances(crate::Event::Deposit(1, 10)));
 				assert_eq!(Balances::total_balance(&1), 20);
 				assert_eq!(<TotalIssuance<$test>>::get(), 120);
 			});
@@ -341,6 +342,7 @@ macro_rules! decl_tests {
 		fn balance_works() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 42);
+				System::assert_has_event(Event::Balances(crate::Event::Deposit(1, 42)));
 				assert_eq!(Balances::free_balance(1), 42);
 				assert_eq!(Balances::reserved_balance(1), 0);
 				assert_eq!(Balances::total_balance(&1), 42);
@@ -432,6 +434,19 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::free_balance(1), 0);
 				assert_eq!(Balances::reserved_balance(1), 42);
 				assert_eq!(<TotalIssuance<$test>>::get(), 42);
+			});
+		}
+
+		#[test]
+		fn withdrawing_balance_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = Balances::deposit_creating(&2, 111);
+				let _ = Balances::withdraw(
+					&2, 11, WithdrawReasons::TRANSFER, ExistenceRequirement::KeepAlive
+				);
+				System::assert_last_event(Event::Balances(crate::Event::Withdraw(2, 11)));
+				assert_eq!(Balances::free_balance(2), 100);
+				assert_eq!(<TotalIssuance<$test>>::get(), 100);
 			});
 		}
 
@@ -749,6 +764,7 @@ macro_rules! decl_tests {
 						[
 							Event::System(system::Event::KilledAccount(1)),
 							Event::Balances(crate::Event::DustLost(1, 99)),
+							Event::Balances(crate::Event::Slashed(1, 1)),
 						]
 					);
 				});
@@ -777,7 +793,8 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::KilledAccount(1))
+							Event::System(system::Event::KilledAccount(1)),
+							Event::Balances(crate::Event::Slashed(1, 100)),
 						]
 					);
 				});
@@ -797,6 +814,7 @@ macro_rules! decl_tests {
 					assert_eq!(Balances::slash(&1, 900), (NegativeImbalance::new(900), 0));
 					// Account is still alive
 					assert!(System::account_exists(&1));
+					System::assert_last_event(Event::Balances(crate::Event::Slashed(1, 900)));
 
 					// SCENARIO: Slash will kill account because not enough balance left.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));

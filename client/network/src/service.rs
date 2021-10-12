@@ -132,7 +132,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+	pub fn new(mut params: Params<B, H>) -> Result<Self, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -218,9 +218,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
-			bootnodes.push(bootnode.peer_id.clone());
-			boot_node_ids.insert(bootnode.peer_id.clone());
-			known_addresses.push((bootnode.peer_id.clone(), bootnode.multiaddr.clone()));
+			bootnodes.push(bootnode.peer_id);
+			boot_node_ids.insert(bootnode.peer_id);
+			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
 
 		let boot_node_ids = Arc::new(boot_node_ids);
@@ -230,7 +230,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			if let Some(other) = known_addresses.iter().find(|o| o.1 == *addr && o.0 != *peer_id) {
 				Err(Error::DuplicateBootnode {
 					address: addr.clone(),
-					first_id: peer_id.clone(),
+					first_id: *peer_id,
 					second_id: other.0.clone(),
 				})
 			} else {
@@ -265,7 +265,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
-				config.with_user_defined(known_addresses);
+				config.with_permanent_addresses(known_addresses);
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
 				);
@@ -355,6 +355,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
+					peerset_handle.clone(),
 				);
 
 				match result {
@@ -364,7 +365,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			};
 
-			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
+			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id)
 				.connection_limits(
 					ConnectionLimits::default()
 						.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
@@ -743,7 +744,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
-				log::debug!(
+				debug!(
 					target: "sub-libp2p",
 					"Attempted to send notification on missing or closed substream: {}, {:?}",
 					target, protocol,
@@ -762,9 +763,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		trace!(
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {:?}, {} bytes)",
-			target,
-			protocol,
-			message.len()
+			target, protocol, message.len()
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
 		sink.send_sync_notification(message);
@@ -1093,6 +1092,44 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
 	}
 
+	/// Sets the reserved set of a protocol to the given set of peers.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	pub fn set_reserved_peers(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		let peers_addrs = self.split_multiaddr_and_peer_id(peers)?;
+
+		let mut peers: HashSet<PeerId> = HashSet::with_capacity(peers_addrs.len());
+
+		for (peer_id, addr) in peers_addrs.into_iter() {
+			// Make sure the local peer ID is never added to the PSM.
+			if peer_id == self.local_peer_id {
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+			}
+
+			peers.insert(peer_id);
+
+			if !addr.is_empty() {
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+			}
+		}
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetPeersetReserved(protocol, peers));
+
+		Ok(())
+	}
+
 	/// Add peers to a peer set.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
@@ -1127,25 +1164,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Remove peers from a peer set.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
-	// convenience.
-	pub fn remove_peers_from_reserved_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-		for (peer_id, _) in peers.into_iter() {
+	pub fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
 				.unbounded_send(ServiceToWorkerMsg::RemoveSetReserved(protocol.clone(), peer_id));
 		}
-		Ok(())
 	}
 
 	/// Configure an explicit fork sync request.
@@ -1196,25 +1220,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Remove peers from a peer set.
 	///
 	/// If we currently have an open substream with this peer, it will soon be closed.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
-	// convenience.
-	pub fn remove_from_peers_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-		for (peer_id, _) in peers.into_iter() {
+	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
 				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
 		}
-		Ok(())
 	}
 
 	/// Returns the number of peers we're connected to.
@@ -1260,7 +1271,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
 	fn is_major_syncing(&mut self) -> bool {
-		NetworkService::is_major_syncing(self)
+		Self::is_major_syncing(self)
 	}
 
 	fn is_offline(&mut self) -> bool {
@@ -1280,11 +1291,11 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for &'a Netwo
 
 impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		NetworkService::request_justification(self, hash, number);
+		Self::request_justification(self, hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		NetworkService::clear_justification_requests(self);
+		Self::clear_justification_requests(self);
 	}
 }
 
@@ -1300,7 +1311,7 @@ where
 
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId {
-		self.local_peer_id.clone()
+		self.local_peer_id
 	}
 }
 
@@ -1363,9 +1374,7 @@ impl<'a> NotificationSenderReady<'a> {
 		trace!(
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {}, {} bytes)",
-			self.peer_id,
-			self.protocol_name,
-			notification.len()
+			self.peer_id, self.protocol_name, notification.len(),
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Async notification", self.peer_id);
 
@@ -1403,6 +1412,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddReserved(PeerId),
 	RemoveReserved(PeerId),
 	SetReserved(HashSet<PeerId>),
+	SetPeersetReserved(Cow<'static, str>, HashSet<PeerId>),
 	AddSetReserved(Cow<'static, str>, PeerId),
 	RemoveSetReserved(Cow<'static, str>, PeerId),
 	AddToPeersSet(Cow<'static, str>, PeerId),
@@ -1477,9 +1487,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				match result {
 					Ok(()) => {},
 					Err(light_client_requests::sender::SendRequestError::TooManyRequests) => {
-						log::warn!(
-							"Couldn't start light client request: too many pending requests"
-						);
+						warn!("Couldn't start light client request: too many pending requests");
 					},
 				}
 
@@ -1546,6 +1554,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					.behaviour_mut()
 					.user_protocol_mut()
 					.set_reserved_peers(peers),
+				ServiceToWorkerMsg::SetPeersetReserved(protocol, peers) => this
+					.network_service
+					.behaviour_mut()
+					.user_protocol_mut()
+					.set_reserved_peerset_peers(protocol, peers),
 				ServiceToWorkerMsg::AddReserved(peer_id) => this
 					.network_service
 					.behaviour_mut()
@@ -1771,7 +1784,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(s) = peers_notifications_sinks.get_mut(&(remote, protocol)) {
 						*s = notifications_sink;
 					} else {
-						log::error!(
+						error!(
 							target: "sub-libp2p",
 							"NotificationStreamReplaced for non-existing substream"
 						);
@@ -1931,18 +1944,16 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				},
 				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error, .. }) => {
 					trace!(
-						target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
-						peer_id,
-						address,
-						error,
+						target: "sub-libp2p",
+						"Libp2p => Failed to reach {:?} through {:?}: {}",
+						peer_id, address, error,
 					);
 
 					if this.boot_node_ids.contains(&peer_id) {
 						if let PendingConnectionError::InvalidPeerId = error {
 							error!(
 								"💔 The bootnode you want to connect to at `{}` provided a different peer ID than the one you expect: `{}`.",
-								address,
-								peer_id,
+								address, peer_id,
 							);
 						}
 					}
@@ -1980,8 +1991,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					send_back_addr,
 					error,
 				}) => {
-					debug!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
-						local_addr, send_back_addr, error);
+					debug!(
+						target: "sub-libp2p",
+						"Libp2p => IncomingConnectionError({},{}): {}",
+						local_addr, send_back_addr, error,
+					);
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
@@ -1997,8 +2011,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
-					debug!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
-						peer_id, endpoint);
+					debug!(
+						target: "sub-libp2p",
+						"Libp2p => BannedPeer({}). Connected via {:?}.",
+						peer_id, endpoint,
+					);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics
 							.incoming_connections_errors_total

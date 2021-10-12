@@ -19,6 +19,8 @@ members = [
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
+	"client/beefy",
+	"client/beefy/rpc",
 	"client/block-builder",
 	"client/chain-spec",
 	"client/chain-spec/derive",
@@ -69,6 +71,9 @@ members = [
 	"frame/authorship",
 	"frame/babe",
 	"frame/balances",
+	"frame/beefy",
+	"frame/beefy-mmr",
+	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
 	"frame/bounties",
 	"frame/collective",
@@ -94,7 +99,6 @@ members = [
 	"frame/merkle-mountain-range",
 	"frame/merkle-mountain-range/primitives",
 	"frame/merkle-mountain-range/rpc",
-	"frame/metadata",
 	"frame/multisig",
 	"frame/nicks",
 	"frame/node-authorization",
@@ -129,6 +133,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/bags-list",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -138,6 +143,7 @@ members = [
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
 	"primitives/authorship",
+	"primitives/beefy",
 	"primitives/block-builder",
 	"primitives/blockchain",
 	"primitives/consensus/aura",
@@ -199,6 +205,8 @@ members = [
 	"utils/frame/try-runtime/cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
+	"utils/frame/generate-bags",
+	"utils/frame/generate-bags/node-runtime",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
@@ -261,7 +269,6 @@ wasmi = { opt-level = 3 }
 x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
-
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"

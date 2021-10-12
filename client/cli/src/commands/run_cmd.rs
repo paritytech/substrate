@@ -127,10 +127,6 @@ pub struct RunCmd {
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
-	/// Size of the RPC HTTP server thread pool.
-	#[structopt(long = "rpc-http-threads", value_name = "COUNT")]
-	pub rpc_http_threads: Option<usize>,
-
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	///
 	/// A comma-separated list of origins (protocol://domain or special `null`
@@ -245,6 +241,8 @@ pub struct RunCmd {
 	///
 	/// Note: the directory is random per process execution. This directory is used as base path
 	/// which includes: database, node key and keystore.
+	///
+	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
 }
@@ -381,10 +379,6 @@ impl CliConfiguration for RunCmd {
 		Ok(self.ws_max_connections)
 	}
 
-	fn rpc_http_threads(&self) -> Result<Option<usize>> {
-		Ok(self.rpc_http_threads)
-	}
-
 	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
 		Ok(self
 			.rpc_cors
@@ -452,7 +446,12 @@ impl CliConfiguration for RunCmd {
 		Ok(if self.tmp {
 			Some(BasePath::new_temp_dir()?)
 		} else {
-			self.shared_params().base_path()
+			match self.shared_params().base_path() {
+				Some(r) => Some(r),
+				// If `dev` is enabled, we use the temp base path.
+				None if self.shared_params().is_dev() => Some(BasePath::new_temp_dir()?),
+				None => None,
+			}
 		})
 	}
 }
