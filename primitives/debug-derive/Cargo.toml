@@ -22,6 +22,12 @@ syn = "1.0.80"
 proc-macro2 = "1.0"
 
 [features]
+default = [ "std" ]
 std = []
+# By default `RuntimeDebug` implements `Debug` that outputs `<wasm:stripped>` when `std` is
+# disabled. However, sometimes downstream users need to have the real `Debug` implementation for
+# debugging purposes. If this is required, a user only needs to add this crate as a dependency of
+# their runtime and enable the `force-debug` feature.
+force-debug = []
 
 [dev-dependencies]
