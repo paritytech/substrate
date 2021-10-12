@@ -274,7 +274,6 @@ fn node_config<
 		announce_block: true,
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
-		disable_log_reloading: false,
 	}
 }
 

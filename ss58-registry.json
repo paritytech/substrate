@@ -533,6 +533,15 @@
 			"website": "https://manta.network"
 		},
 		{
+			"prefix": 88,
+			"network": "polkadex",
+			"displayName": "Polkadex Mainnet",
+			"symbols": ["PDEX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://polkadex.trade"
+		},
+		{
 			"prefix": 98,
 			"network": "polkasmith",
 			"displayName": "PolkaSmith Canary Network",
@@ -632,6 +641,15 @@
 			"website": "https://moonbeam.network"
 		},
 		{
+			"prefix": 2349,
+			"network": "automata",
+			"displayName": "Automata Mainnet",
+			"symbols": ["ATA"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://ata.network"
+		},
+		{
 			"prefix": 10041,
 			"network": "basilisk",
 			"displayName": "Basilisk",
@@ -639,6 +657,15 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://bsx.fi"
+		},
+		{
+			"prefix": 11820,
+			"network": "contextfree",
+			"displayName": "Automata ContextFree",
+			"symbols": ["CTX"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://ata.network"
 		}
 	]
 }

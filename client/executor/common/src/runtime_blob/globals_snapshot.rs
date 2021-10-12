@@ -34,14 +34,14 @@ pub trait InstanceGlobals {
 	/// Get a handle to a global by it's export name.
 	///
 	/// The requested export is must exist in the exported list, and it should be a mutable global.
-	fn get_global(&self, export_name: &str) -> Self::Global;
+	fn get_global(&mut self, export_name: &str) -> Self::Global;
 	/// Get the current value of the global.
-	fn get_global_value(&self, global: &Self::Global) -> sp_wasm_interface::Value;
+	fn get_global_value(&mut self, global: &Self::Global) -> sp_wasm_interface::Value;
 	/// Update the current value of the global.
 	///
 	/// The global behind the handle is guaranteed to be mutable and the value to be the same type
 	/// as the global.
-	fn set_global_value(&self, global: &Self::Global, value: sp_wasm_interface::Value);
+	fn set_global_value(&mut self, global: &Self::Global, value: sp_wasm_interface::Value);
 }
 
 /// A set of exposed mutable globals.
@@ -79,7 +79,10 @@ impl<Global> GlobalsSnapshot<Global> {
 	///
 	/// This function panics if the instance doesn't correspond to the module from which the
 	/// [`ExposedMutableGlobalsSet`] was collected.
-	pub fn take<Instance>(mutable_globals: &ExposedMutableGlobalsSet, instance: &Instance) -> Self
+	pub fn take<Instance>(
+		mutable_globals: &ExposedMutableGlobalsSet,
+		instance: &mut Instance,
+	) -> Self
 	where
 		Instance: InstanceGlobals<Global = Global>,
 	{
@@ -98,7 +101,7 @@ impl<Global> GlobalsSnapshot<Global> {
 	/// Apply the snapshot to the given instance.
 	///
 	/// This instance must be the same that was used for creation of this snapshot.
-	pub fn apply<Instance>(&self, instance: &Instance)
+	pub fn apply<Instance>(&self, instance: &mut Instance)
 	where
 		Instance: InstanceGlobals<Global = Global>,
 	{

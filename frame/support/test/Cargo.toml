@@ -24,7 +24,7 @@ sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../pr
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 trybuild = "1.0.43"
-pretty_assertions = "0.6.1"
+pretty_assertions = "1.0.0"
 rustversion = "1.0.0"
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 # The "std" feature for this pallet is never activated on purpose, in order to test construct_runtime error message
@@ -48,3 +48,5 @@ try-runtime = ["frame-support/try-runtime"]
 # WARNING: CI only execute pallet test with this feature,
 # if the feature intended to be used outside, CI and this message need to be updated.
 conditional-storage = []
+# Disable ui tests
+disable-ui-tests = []

@@ -100,6 +100,13 @@
 //!
 //! An account can become a nominator via the [`nominate`](Call::nominate) call.
 //!
+//! #### Voting
+//!
+//! Staking is closely related to elections; actual validators are chosen from among all potential
+//! validators via election by the potential validators and nominators. To reduce use of the phrase
+//! "potential validators and nominators", we often use the term **voters**, who are simply
+//! the union of potential validators and nominators.
+//!
 //! #### Rewards and Slash
 //!
 //! The **reward and slashing** procedure is the core of the Staking pallet, attempting to _embrace
@@ -264,15 +271,16 @@
 //! - [Session](../pallet_session/index.html): Used to manage sessions. Also, a list of new
 //!   validators is stored in the Session pallet's `Validators` at the end of each era.
 
-#![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit = "256"]
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
-#[cfg(test)]
-mod mock;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod testing_utils;
+
+#[cfg(test)]
+pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
@@ -420,6 +428,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
+#[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -470,7 +479,9 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 	}
 
 	/// Re-bond funds that were scheduled for unlocking.
-	fn rebond(mut self, value: Balance) -> Self {
+	///
+	/// Returns the updated ledger, and the amount actually rebonded.
+	fn rebond(mut self, value: Balance) -> (Self, Balance) {
 		let mut unlocking_balance: Balance = Zero::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
@@ -491,7 +502,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 			}
 		}
 
-		self
+		(self, unlocking_balance)
 	}
 }
 
@@ -608,12 +619,9 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 ///
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `pallet_session::Config`
 pub trait SessionInterface<AccountId>: frame_system::Config {
-	/// Disable a given validator by stash ID.
-	///
-	/// Returns `true` if new era should be forced at the end of this session.
-	/// This allows preventing a situation where there is too many validators
-	/// disabled and block production stalls.
-	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
+	/// Disable the validator at the given index, returns `false` if the validator was already
+	/// disabled or the index is out of bounds.
+	fn disable_validator(validator_index: u32) -> bool;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -634,8 +642,8 @@ where
 		Option<<T as frame_system::Config>::AccountId>,
 	>,
 {
-	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> Result<bool, ()> {
-		<pallet_session::Pallet<T>>::disable(validator)
+	fn disable_validator(validator_index: u32) -> bool {
+		<pallet_session::Pallet<T>>::disable_index(validator_index)
 	}
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
@@ -727,11 +735,12 @@ enum Releases {
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
 	V7_0_0, // keep track of number of nominators / validators in map
+	V8_0_0, // populate `SortedListProvider`.
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V7_0_0
+		Releases::V8_0_0
 	}
 }
 
