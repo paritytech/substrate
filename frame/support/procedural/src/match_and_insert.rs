@@ -145,13 +145,15 @@ fn expand_in_stream(
 fn advance_match_cursor(other: &TokenTree, pattern: &[TokenTree], match_cursor: &mut usize) {
 	use TokenTree::{Ident, Punct};
 
-	let other_match_pattern = match (other, &pattern[*match_cursor]) {
+	let does_match_other_pattern = match (other, &pattern[*match_cursor]) {
 		(Ident(i1), Ident(i2)) => i1 == i2,
 		(Punct(p1), Punct(p2)) => p1.as_char() == p2.as_char(),
 		_ => false,
 	};
 
-	if other_match_pattern {
+	if does_match_other_pattern {
 		*match_cursor += 1;
+	} else {
+		*match_cursor = 0;
 	}
 }
