@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::*;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 
 // To actually run this benchmark on pallet-example, we need to put this pallet into the
@@ -65,12 +65,14 @@ benchmarks! {
 		// The benchmark execution phase could also be a closure with custom code
 		m.sort();
 	}
-}
 
-// This line generates test cases for benchmarking, and could be run by:
-//   `cargo test -p pallet-example --all-features`, you will see an additional line of:
-//   `test benchmarking::benchmark_tests::test_benchmarks ... ok` in the result.
-//
-// The line generates three steps per benchmark, with repeat=1 and the three steps are
-//   [low, mid, high] of the range.
-impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
+	// This line generates test cases for benchmarking, and could be run by:
+	//   `cargo test -p pallet-example --all-features`, you will see one line per case:
+	//   `test benchmarking::bench_sort_vector ... ok`
+	//   `test benchmarking::bench_accumulate_dummy ... ok`
+	//   `test benchmarking::bench_set_dummy_benchmark ... ok` in the result.
+	//
+	// The line generates three steps per benchmark, with repeat=1 and the three steps are
+	//   [low, mid, high] of the range.
+	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test)
+}

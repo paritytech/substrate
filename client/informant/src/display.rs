@@ -20,7 +20,7 @@ use crate::OutputFormat;
 use ansi_term::Colour;
 use log::info;
 use sc_client_api::ClientInfo;
-use sc_network::{NetworkStatus, SyncState};
+use sc_network::{NetworkStatus, SyncState, WarpSyncPhase, WarpSyncProgress};
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
 use std::{
 	convert::{TryFrom, TryInto},
@@ -97,11 +97,17 @@ impl<B: BlockT> InformantDisplay<B> {
 			net_status.state_sync,
 			net_status.warp_sync,
 		) {
+			(
+				_,
+				_,
+				_,
+				Some(WarpSyncProgress { phase: WarpSyncPhase::DownloadingBlocks(n), .. }),
+			) => ("⏩", "Block history".into(), format!(", #{}", n)),
 			(_, _, _, Some(warp)) => (
 				"⏩",
 				"Warping".into(),
 				format!(
-					", {}, ({:.2}) Mib",
+					", {}, {:.2} Mib",
 					warp.phase,
 					(warp.total_bytes as f32) / (1024f32 * 1024f32)
 				),
@@ -110,7 +116,7 @@ impl<B: BlockT> InformantDisplay<B> {
 				"⚙️ ",
 				"Downloading state".into(),
 				format!(
-					", {}%, ({:.2}) Mib",
+					", {}%, {:.2} Mib",
 					state.percentage,
 					(state.size as f32) / (1024f32 * 1024f32)
 				),

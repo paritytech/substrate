@@ -80,8 +80,14 @@ where
 }
 
 /// A custom voting rule that guarantees that our vote is always behind the best
-/// block by at least N blocks. In the best case our vote is exactly N blocks
-/// behind the best block.
+/// block by at least N blocks, unless the base number is < N blocks behind the
+/// best, in which case it votes for the base.
+///
+/// In the best case our vote is exactly N blocks
+/// behind the best block, but if there is a scenario where either
+/// >34% of validators run without this rule or the fork-choice rule
+/// can prioritize shorter chains over longer ones, the vote may be
+/// closer to the best block than N.
 #[derive(Clone)]
 pub struct BeforeBestBlockBy<N>(N);
 impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>>
@@ -92,7 +98,7 @@ where
 	fn restrict_vote(
 		&self,
 		backend: Arc<B>,
-		_base: &Block::Header,
+		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> VotingRuleResult<Block> {
@@ -100,6 +106,12 @@ where
 
 		if current_target.number().is_zero() {
 			return Box::pin(async { None })
+		}
+
+		// Constrain to the base number, if that's the minimal
+		// vote that can be placed.
+		if *base.number() + self.0 > *best_target.number() {
+			return Box::pin(std::future::ready(Some((base.hash(), *base.number()))))
 		}
 
 		// find the target number restricted by this rule
@@ -392,5 +404,35 @@ mod tests {
 		// would make the target block (#100) be lower than the base block, therefore
 		// only one of the rules is applied.
 		assert_eq!(number, 150);
+	}
+
+	#[test]
+	fn before_best_by_has_cutoff_at_base() {
+		let rule = BeforeBestBlockBy(2);
+
+		let mut client = Arc::new(TestClientBuilder::new().build());
+
+		for _ in 0..5 {
+			let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+
+			futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+		}
+
+		let best = client.header(&BlockId::Hash(client.info().best_hash)).unwrap().unwrap();
+		let best_number = best.number().clone();
+
+		for i in 0u32..5 {
+			let base = client.header(&BlockId::Number(i.into())).unwrap().unwrap();
+			let (_, number) = futures::executor::block_on(rule.restrict_vote(
+				client.clone(),
+				&base,
+				&best,
+				&best,
+			))
+			.unwrap();
+
+			let expected = std::cmp::max(best_number - 2, *base.number());
+			assert_eq!(number, expected, "best = {}, lag = 2, base = {}", best_number, i);
+		}
 	}
 }
