@@ -31,7 +31,7 @@ use sp_std::{
 ///
 /// Unlike a standard `BTreeSet`, there is an enforced upper limit to the number of items in the
 /// set. All internal operations ensure this bound is respected.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
 pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
 
 impl<T, S> Decode for BoundedBTreeSet<T, S>
