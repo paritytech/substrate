@@ -22,10 +22,10 @@ use crate::{
 	schema::v1::{StateEntry, StateRequest, StateResponse},
 };
 use codec::{Decode, Encode};
+use log::debug;
 use sc_client_api::CompactProof;
 use smallvec::SmallVec;
 use sp_core::storage::well_known_keys;
-use log::debug;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{collections::HashMap, sync::Arc};
 
