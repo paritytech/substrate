@@ -22,8 +22,7 @@ use crate as pallet_session;
 #[cfg(feature = "historical")]
 use crate::historical as pallet_session_historical;
 
-use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::{cell::RefCell, collections::BTreeMap};
 
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{

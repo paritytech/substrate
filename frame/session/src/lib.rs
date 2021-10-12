@@ -114,12 +114,6 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
-};
-use sp_staking::SessionIndex;
-use sp_std::{prelude::*, convert::TryFrom, marker::PhantomData, ops::{Rem, Sub}};
 use frame_support::{
 	codec::{Decode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResult},
@@ -130,6 +124,17 @@ use frame_support::{
 	},
 	weights::Weight,
 	Parameter,
+};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
+	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
+};
+use sp_staking::SessionIndex;
+use sp_std::{
+	convert::TryFrom,
+	marker::PhantomData,
+	ops::{Rem, Sub},
+	prelude::*,
 };
 
 pub use pallet::*;
@@ -372,7 +377,10 @@ pub mod pallet {
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize + MaxEncodedLen
+		type ValidatorId: Member
+			+ Parameter
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
 			+ TryFrom<Self::AccountId>;
 
 		/// A conversion from account ID to validator ID.
@@ -591,7 +599,7 @@ pub mod pallet {
 		}
 
 		/// Removes any session key(s) of the function caller.
-		/// 
+		///
 		/// This doesn't take effect until the next session.
 		///
 		/// The dispatch origin of this function must be Signed and the account must be either be
