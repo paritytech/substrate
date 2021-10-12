@@ -497,11 +497,11 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxRewardableIndividualExposures: u32 = 256;
 	pub OffchainRepeat: BlockNumber = 5;
-	pub const MaxIndividualExposures: u32 = 256;
+	pub const MaxIndividualExposures: u32 = 10_000;
 	pub const MaxNominations: u32 = MAX_NOMINATIONS;
 	pub const MaxUnappliedSlashes: u32 = 1_000;
 	pub const MaxInvulnerablesCount: u32 = 10;
-	pub const MaxErasForRewards: u32 = 10_000;
+	pub const MaxHistoryDepth: u32 = 10_000;
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 4_000;
@@ -545,7 +545,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominations = MaxNominations;
 	type MaxUnappliedSlashes = MaxUnappliedSlashes;
 	type MaxInvulnerablesCount = MaxInvulnerablesCount;
-	type MaxErasForRewards = MaxErasForRewards;
+	type MaxHistoryDepth = MaxHistoryDepth;
 	type MaxReportersCount = MaxReportersCount;
 	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
 	type MaxValidatorsCount = MaxValidatorsCount;

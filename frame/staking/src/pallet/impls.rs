@@ -211,7 +211,7 @@ impl<T: Config> Pallet<T> {
 			T::AccountId,
 			BalanceOf<T>,
 			T::MaxUnlockingChunks,
-			T::MaxErasForRewards,
+			T::MaxHistoryDepth,
 		>,
 	) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
@@ -957,8 +957,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: voter.clone(),
 				active: stake,
 				total: stake,
-				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				unlocking: Default::default(),
+				claimed_rewards: Default::default(),
 			},
 		);
 
@@ -977,8 +977,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: target.clone(),
 				active: stake,
 				total: stake,
-				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				unlocking: Default::default(),
+				claimed_rewards: Default::default(),
 			},
 		);
 		Self::do_add_validator(
@@ -1019,8 +1019,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: BoundedVec::default(),
-					claimed_rewards: WeakBoundedVec::default(),
+					unlocking: Default::default(),
+					claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_validator(
@@ -1040,8 +1040,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: BoundedVec::default(),
-					claimed_rewards: WeakBoundedVec::default(),
+					unlocking: Default::default(),
+					claimed_rewards: Default::default(),
 				},
 			);
 			let targets = BoundedVec::<_, T::MaxNominations>::try_from(t)

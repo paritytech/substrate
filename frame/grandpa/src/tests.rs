@@ -332,7 +332,7 @@ fn report_equivocation_current_set_works() {
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
-					others: WeakBoundedVec::default()
+					others: Default::default()
 				},
 			);
 		}
@@ -371,7 +371,7 @@ fn report_equivocation_current_set_works() {
 		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 		assert_eq!(
 			Staking::eras_stakers(2, equivocation_validator_id),
-			pallet_staking::Exposure { total: 0, own: 0, others: WeakBoundedVec::default() },
+			pallet_staking::Exposure { total: 0, own: 0, others: Default::default() },
 		);
 
 		// check that the balances of all other validators are left intact.
@@ -388,7 +388,7 @@ fn report_equivocation_current_set_works() {
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
-					others: WeakBoundedVec::default()
+					others: Default::default()
 				},
 			);
 		}
@@ -424,7 +424,7 @@ fn report_equivocation_old_set_works() {
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
-					others: WeakBoundedVec::default()
+					others: Default::default()
 				},
 			);
 		}
@@ -458,7 +458,7 @@ fn report_equivocation_old_set_works() {
 
 		assert_eq!(
 			Staking::eras_stakers(3, equivocation_validator_id),
-			pallet_staking::Exposure { total: 0, own: 0, others: WeakBoundedVec::default() },
+			pallet_staking::Exposure { total: 0, own: 0, others: Default::default() },
 		);
 
 		// check that the balances of all other validators are left intact.
@@ -475,7 +475,7 @@ fn report_equivocation_old_set_works() {
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
-					others: WeakBoundedVec::default()
+					others: Default::default()
 				},
 			);
 		}

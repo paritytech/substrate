@@ -711,8 +711,8 @@ where
 		Self {
 			validator: AccountId::default(),
 			own: Balance::default(),
-			others: WeakBoundedVec::default(),
-			reporters: WeakBoundedVec::default(),
+			others: Default::default(),
+			reporters: Default::default(),
 			payout: Balance::default(),
 		}
 	}

@@ -120,7 +120,7 @@ impl<Limit: Get<u32>> SlashingSpans<Limit> {
 			// the first slash is applied. setting equal to `window_start` would
 			// put a time limit on nominations.
 			last_nonzero_slash: 0,
-			prior: WeakBoundedVec::default(),
+			prior: Default::default(),
 		}
 	}
 
@@ -296,14 +296,14 @@ pub(crate) fn compute_slash<T: Config>(
 		}
 	}
 
-	let mut nominators_slashed = WeakBoundedVec::default();
+	let mut nominators_slashed = Default::default();
 	reward_payout += slash_nominators::<T>(params, prior_slash_p, &mut nominators_slashed);
 
 	Some(UnappliedSlash {
 		validator: stash.clone(),
 		own: val_slashed,
 		others: nominators_slashed,
-		reporters: WeakBoundedVec::default(),
+		reporters: Default::default(),
 		payout: reward_payout,
 	})
 }
@@ -698,7 +698,7 @@ mod tests {
 			span_index: 0,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: WeakBoundedVec::default(),
+			prior: Default::default(),
 		};
 
 		assert_eq!(
@@ -799,7 +799,7 @@ mod tests {
 			span_index: 1,
 			last_start: 10,
 			last_nonzero_slash: 0,
-			prior: WeakBoundedVec::default(),
+			prior: Default::default(),
 		};
 
 		assert!(spans.end_span(10));

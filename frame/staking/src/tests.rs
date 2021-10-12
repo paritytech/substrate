@@ -105,7 +105,7 @@ fn basic_setup_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
@@ -116,7 +116,7 @@ fn basic_setup_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		// Account 1 does not control any stash
@@ -139,7 +139,7 @@ fn basic_setup_works() {
 				total: 500,
 				active: 500,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
@@ -390,7 +390,7 @@ fn staking_should_work() {
 				active: 1500,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(vec![0])
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![0])
 						.expect("Test configuration needs changing"),
 			})
 		);
@@ -943,7 +943,7 @@ fn reward_destination_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -967,7 +967,7 @@ fn reward_destination_works() {
 				active: 1000 + total_payout_0,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(vec![0])
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![0])
 						.expect("Test configuration needs changing"),
 			})
 		);
@@ -997,7 +997,7 @@ fn reward_destination_works() {
 				active: 1000 + total_payout_0,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(vec![0, 1])
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![0, 1])
 						.expect("Test configuration needs changing"),
 			})
 		);
@@ -1028,7 +1028,7 @@ fn reward_destination_works() {
 				active: 1000 + total_payout_0,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(vec![
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![
 						0, 1, 2
 					])
 					.expect("Test configuration needs changing"),
@@ -1096,7 +1096,7 @@ fn bond_extra_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1113,7 +1113,7 @@ fn bond_extra_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1127,7 +1127,7 @@ fn bond_extra_works() {
 				total: 1000000,
 				active: 1000000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 	});
@@ -1165,12 +1165,12 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000, own: 1000, others: WeakBoundedVec::default() }
+			Exposure { total: 1000, own: 1000, others: Default::default() }
 		);
 
 		// deposit the extra 100 units
@@ -1183,13 +1183,13 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		// Exposure is a snapshot! only updated after the next era update.
 		assert_ne!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000 + 100, own: 1000 + 100, others: WeakBoundedVec::default() }
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: Default::default() }
 		);
 
 		// trigger next era.
@@ -1204,13 +1204,13 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		// Exposure is now updated.
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000 + 100, own: 1000 + 100, others: WeakBoundedVec::default() }
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: Default::default() }
 		);
 
 		// Unbond almost all of the funds in stash.
@@ -1225,7 +1225,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 					UnlockChunk { value: 1000, era: 2 + 3 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			}),
 		);
 
@@ -1241,7 +1241,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 					UnlockChunk { value: 1000, era: 2 + 3 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			}),
 		);
 
@@ -1260,7 +1260,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 					UnlockChunk { value: 1000, era: 2 + 3 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			}),
 		);
 
@@ -1276,7 +1276,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 100,
 				active: 100,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			}),
 		);
 	})
@@ -1334,7 +1334,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1356,7 +1356,7 @@ fn rebond_works() {
 					UnlockChunk { value: 900, era: 2 + 3 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1369,7 +1369,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1385,7 +1385,7 @@ fn rebond_works() {
 					UnlockChunk { value: 900, era: 5 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1401,7 +1401,7 @@ fn rebond_works() {
 					UnlockChunk { value: 400, era: 5 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1414,7 +1414,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1434,7 +1434,7 @@ fn rebond_works() {
 					UnlockChunk { value: 300, era: 5 },
 				])
 				.expect("MaxUnlockingChunks>3"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1451,7 +1451,7 @@ fn rebond_works() {
 					UnlockChunk { value: 100, era: 5 },
 				])
 				.expect("MaxUnlockingChunks>2"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 	})
@@ -1478,7 +1478,7 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1496,7 +1496,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 400, era: 2 + 3 },
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1515,7 +1515,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 300, era: 3 + 3 },
 				])
 				.expect("MaxUnlockingChunks>2"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1535,7 +1535,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 200, era: 4 + 3 },
 				])
 				.expect("MaxUnlockingChunks>3"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1552,7 +1552,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 100, era: 3 + 3 },
 				])
 				.expect("MaxUnlockingChunks>2"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 	})
@@ -1584,7 +1584,7 @@ fn rebond_emits_right_value_in_event() {
 					UnlockChunk { value: 900, era: 1 + 3 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 
@@ -1600,7 +1600,7 @@ fn rebond_emits_right_value_in_event() {
 					UnlockChunk { value: 800, era: 1 + 3 }
 				])
 				.expect("MaxUnlockingChunks>1"),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		// Event emitted should be correct
@@ -1615,7 +1615,7 @@ fn rebond_emits_right_value_in_event() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		// Event emitted should be correct, only 800
@@ -1646,7 +1646,7 @@ fn reward_to_stake_works() {
 			ErasStakers::<Test>::insert(
 				0,
 				21,
-				Exposure { total: 69, own: 69, others: WeakBoundedVec::default() },
+				Exposure { total: 69, own: 69, others: Default::default() },
 			);
 			<Ledger<Test>>::insert(
 				&20,
@@ -1655,7 +1655,7 @@ fn reward_to_stake_works() {
 					total: 69,
 					active: 69,
 					unlocking: BoundedVec::default(),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				},
 			);
 
@@ -1902,7 +1902,7 @@ fn bond_with_no_staked_value() {
 						vec![UnlockChunk { value: 5, era: 3 }]
 					)
 					.expect("MaxUnlockingChunks>1"),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				})
 			);
 
@@ -2123,7 +2123,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		let exposure = Exposure::<AccountId, Balance, <Test as Config>::MaxIndividualExposures> {
 			total: stake,
 			own: stake,
-			others: WeakBoundedVec::default(),
+			others: Default::default(),
 		};
 		let reward = EraRewardPoints {
 			total: 1,
@@ -2141,7 +2141,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			Exposure::<AccountId, Balance, <Test as Config>::MaxRewardableIndividualExposures> {
 				total: stake,
 				own: stake,
-				others: WeakBoundedVec::default(),
+				others: Default::default(),
 			};
 		ErasStakersClipped::<Test>::insert(0, 11, exposure_clipped);
 		ErasValidatorReward::<Test>::insert(0, stake);
@@ -2351,7 +2351,7 @@ fn slashing_performed_according_exposure() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Exposure { total: 500, own: 500, others: WeakBoundedVec::default() },
+					Exposure { total: 500, own: 500, others: Default::default() },
 				),
 				reporters: vec![],
 			}],
@@ -3329,8 +3329,8 @@ fn test_payout_stakers() {
 				active: 1000,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(vec![1])
-						.expect("MaxErasForRewards>1"),
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![1])
+						.expect("MaxHistoryDepth>1"),
 			})
 		);
 
@@ -3353,7 +3353,7 @@ fn test_payout_stakers() {
 				active: 1000,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
 						(1..=14).collect::<Vec<_>>()
 					)
 					.expect("Test configuration should be changed")
@@ -3378,8 +3378,8 @@ fn test_payout_stakers() {
 				active: 1000,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(vec![15, 98])
-						.expect("MaxErasForRewards should be > 1"),
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![15, 98])
+						.expect("MaxHistoryDepth should be > 1"),
 			})
 		);
 
@@ -3395,10 +3395,10 @@ fn test_payout_stakers() {
 				active: 1000,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(vec![
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(vec![
 						15, 23, 42, 69, 98
 					])
-					.expect("MaxErasForRewards should be > 4")
+					.expect("MaxHistoryDepth should be > 4")
 			})
 		);
 	});
@@ -3593,7 +3593,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: BoundedVec::default(),
-				claimed_rewards: WeakBoundedVec::default(),
+				claimed_rewards: Default::default(),
 			})
 		);
 		mock::start_active_era(5);
@@ -3606,10 +3606,10 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				active: 1000,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
 						(0..5).collect::<Vec<_>>()
 					)
-					.expect("MaxErasForRewards should be >= 5"),
+					.expect("MaxHistoryDepth should be >= 5"),
 			})
 		);
 		mock::start_active_era(99);
@@ -3622,7 +3622,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				active: 1000,
 				unlocking: BoundedVec::default(),
 				claimed_rewards:
-					WeakBoundedVec::<_, <Test as Config>::MaxErasForRewards>::try_from(
+					WeakBoundedVec::<_, <Test as Config>::MaxHistoryDepth>::try_from(
 						(15..99).collect::<Vec<_>>()
 					)
 					.expect("Some test configuration may need changing"),
@@ -3844,7 +3844,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 10 * 1000,
 					unlocking: BoundedVec::default(),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				}
 			);
 
@@ -3861,7 +3861,7 @@ fn cannot_rebond_to_lower_than_ed() {
 						vec![UnlockChunk { value: 10 * 1000, era: 3 }]
 					)
 					.expect("MaxUnlockingChunks>1"),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				}
 			);
 
@@ -3884,7 +3884,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 10 * 1000,
 					unlocking: BoundedVec::default(),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				}
 			);
 
@@ -3901,7 +3901,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 						vec![UnlockChunk { value: 10 * 1000, era: 3 }]
 					)
 					.expect("MaxUnlockingChunks>1"),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				}
 			);
 
@@ -3928,7 +3928,7 @@ fn do_not_die_when_active_is_ed() {
 					total: 1000 * ed,
 					active: 1000 * ed,
 					unlocking: BoundedVec::default(),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				}
 			);
 
@@ -3945,7 +3945,7 @@ fn do_not_die_when_active_is_ed() {
 					total: ed,
 					active: ed,
 					unlocking: BoundedVec::default(),
-					claimed_rewards: WeakBoundedVec::default(),
+					claimed_rewards: Default::default(),
 				}
 			);
 		})

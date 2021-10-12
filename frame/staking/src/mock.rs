@@ -253,7 +253,7 @@ parameter_types! {
 	pub const MaxNominations: u32 = 16;
 	pub const MaxUnappliedSlashes: u32 = 1_000;
 	pub const MaxInvulnerablesCount: u32 = 100;
-	pub const MaxErasForRewards: u32 = 10_000;
+	pub const MaxHistoryDepth: u32 = 10_000;
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 100;
@@ -297,7 +297,7 @@ impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;
 	type MaxUnappliedSlashes = MaxUnappliedSlashes;
 	type MaxInvulnerablesCount = MaxInvulnerablesCount;
-	type MaxErasForRewards = MaxErasForRewards;
+	type MaxHistoryDepth = MaxHistoryDepth;
 	type MaxReportersCount = MaxReportersCount;
 	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
 	type MaxValidatorsCount = MaxValidatorsCount;

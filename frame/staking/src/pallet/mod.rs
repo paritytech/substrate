@@ -157,7 +157,8 @@ pub mod pallet {
 		type MaxInvulnerablesCount: Get<u32>;
 
 		/// Maximum number of eras for which the stakers behind a validator have claimed rewards.
-		type MaxErasForRewards: Get<u32>;
+		/// This also corresponds to maximum value that `HistoryDepth` can take.
+		type MaxHistoryDepth: Get<u32>;
 
 		/// Maximum number of validators.
 		type MaxValidatorsCount: Get<u32>;
@@ -246,7 +247,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks, T::MaxErasForRewards>,
+		StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks, T::MaxHistoryDepth>,
 	>;
 
 	/// Where the reward payment should be made. Keyed by stash.
@@ -535,6 +536,11 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			assert!(
+				self.history_depth < T::MaxHistoryDepth::get(),
+				"history_depth too big, a runtime adjustment may be needed."
+			);
+
 			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
@@ -796,7 +802,7 @@ pub mod pallet {
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded(stash.clone(), value));
 
-			let claimed_rewards = WeakBoundedVec::<_, T::MaxErasForRewards>::force_from(
+			let claimed_rewards = WeakBoundedVec::<_, T::MaxHistoryDepth>::force_from(
 				(last_reward_era..current_era).collect(),
 				Some("StakingLedger.claimed_rewards"),
 			);
@@ -1463,6 +1469,10 @@ pub mod pallet {
 			#[pallet::compact] _era_items_deleted: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			ensure!(
+				new_history_depth < T::MaxHistoryDepth::get(),
+				Error::<T>::IncorrectHistoryDepth
+			);
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::<T>::mutate(|history_depth| {
 					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);

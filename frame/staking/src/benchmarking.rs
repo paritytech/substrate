@@ -119,7 +119,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	let individual = BoundedBTreeMap::<_, _, T::MaxValidatorsCount>::try_from(
 		points_individual.into_iter().collect::<BTreeMap<_, _>>(),
 	)
-	.map_err(|_| "Something weird, this means T:MaxValidatorsCount is zero")?;
+	.map_err(|_| "Something weird, this means T::MaxValidatorsCount is zero")?;
 	let reward =
 		EraRewardPoints::<T::AccountId, T::MaxValidatorsCount> { total: points_total, individual };
 
