@@ -368,8 +368,11 @@ impl SyncCryptoStore for KeyStore {
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error> {
 		let transcript = make_transcript(transcript_data);
-		let pair =
-			if let Some(k) = self.sr25519_key_pair(key_type, public) { k } else { return Ok(None) };
+		let pair = if let Some(k) = self.sr25519_key_pair(key_type, public) {
+			k
+		} else {
+			return Ok(None)
+		};
 
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 		Ok(Some(VRFSignature { output: inout.to_output(), proof }))
