@@ -591,9 +591,13 @@ pub mod pallet {
 		}
 
 		/// Removes any session key(s) of the function caller.
+		/// 
 		/// This doesn't take effect until the next session.
 		///
-		/// The dispatch origin of this function must be signed.
+		/// The dispatch origin of this function must be Signed and the account must be either be
+		/// convertible to a validator ID using the chain's typical addressing system (this usually
+		/// means being a controller account) or directly convertible into a validator ID (which
+		/// usually means being a stash account).
 		///
 		/// # <weight>
 		/// - Complexity: `O(1)` in number of key types. Actual cost depends on the number of length
