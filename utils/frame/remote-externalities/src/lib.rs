@@ -52,12 +52,12 @@ const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
 const BATCH_SIZE: usize = 1000;
 
 #[rpc(client)]
-pub trait RpcApi<B: BlockT> {
+pub trait RpcApi<Hash> {
 	#[method(name = "state_getStorage")]
 	fn get_storage(
 		&self,
 		prefix: StorageKey,
-		hash: Option<B::Hash>,
+		hash: Option<Hash>,
 	) -> Result<StorageData, RpcError>;
 
 	#[method(name = "state_getKeysPaged")]
@@ -66,11 +66,11 @@ pub trait RpcApi<B: BlockT> {
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
-		hash: Option<B::Hash>,
+		hash: Option<Hash>,
 	) -> Result<Vec<StorageKey>, RpcError>;
 
 	#[method(name = "chain_getFinalizedHead")]
-	fn finalized_head(&self) -> Result<B::Hash, RpcError>;
+	fn finalized_head(&self) -> Result<Hash, RpcError>;
 }
 
 /// The execution mode.
@@ -223,7 +223,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: get_storage");
-		RpcApiClient::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at)
+		self.as_online().rpc_client().get_storage(key, maybe_at)
 			.await
 			.map_err(|e| {
 				error!("Error = {:?}", e);
@@ -233,7 +233,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		RpcApiClient::<B>::finalized_head(self.as_online().rpc_client())
+		self.as_online().rpc_client().finalized_head()
 			.await
 			.map_err(|e| {
 				error!("Error = {:?}", e);
@@ -251,8 +251,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let mut last_key: Option<StorageKey> = None;
 		let mut all_keys: Vec<StorageKey> = vec![];
 		let keys = loop {
-			let page = RpcApiClient::<B>::get_keys_paged(
-				self.as_online().rpc_client(),
+			let page =
+				self.as_online().rpc_client().get_keys_paged(
 				Some(prefix.clone()),
 				PAGE,
 				last_key.clone(),
