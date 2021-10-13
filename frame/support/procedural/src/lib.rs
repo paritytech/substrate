@@ -344,11 +344,16 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// pallet4 .., // Here pallet4 is given index 1
 /// ```
 ///
-/// # Note
+/// # Note on Genesis Order
 ///
 /// The population of the genesis storage depends on the order of pallets. So, if one of your
 /// pallets depends on another pallet, the pallet that is depended upon needs to come before
 /// the pallet depending on it.
+///
+/// # Note on Hooks Order
+///
+/// Pallet [`Hooks`] (e.g. `on_initialize`) are currently executed in *reverse* declaration order
+/// (see https://github.com/paritytech/substrate/issues/6280).
 ///
 /// # Type definitions
 ///
