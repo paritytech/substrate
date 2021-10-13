@@ -127,7 +127,7 @@ pub struct RunCmd {
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
-	/// Set the the maximum RPC output buffer size. Default is 10MiB.
+	/// Set the the maximum RPC output buffer size in MiB. Default is 10.
 	#[structopt(long = "rpc-max-in-buffer-capacity")]
 	pub ws_max_in_buffer_capacity: Option<usize>,
 
