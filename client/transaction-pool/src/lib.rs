@@ -44,7 +44,7 @@ use futures::{
 	future::{self, ready},
 	prelude::*,
 };
-pub use graph::{ChainApi, Options, Pool, Transaction};
+pub use graph::{base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction};
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
@@ -56,7 +56,8 @@ use std::{
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
 	ChainEvent, ImportNotificationStream, MaintainedTransactionPool, PoolFuture, PoolStatus,
-	TransactionFor, TransactionPool, TransactionSource, TransactionStatusStreamFor, TxHash,
+	ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
+	TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
@@ -69,7 +70,7 @@ use crate::metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
 type BoxedReadyIterator<Hash, Data> =
-	Box<dyn Iterator<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
+	Box<dyn ReadyTransactions<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
 
 type ReadyIteratorFor<PoolApi> =
 	BoxedReadyIterator<graph::ExtrinsicHash<PoolApi>, graph::ExtrinsicFor<PoolApi>>;

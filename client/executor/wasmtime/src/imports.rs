@@ -16,13 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{state_holder, util};
+use crate::{
+	runtime::{Store, StoreData},
+	util,
+};
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, ValueType};
-use std::any::Any;
+use std::{any::Any, convert::TryInto};
 use wasmtime::{
-	Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module, Store,
-	Trap, Val,
+	Caller, Extern, ExternType, Func, FuncType, ImportType, Memory, MemoryType, Module, Trap, Val,
 };
 
 pub struct Imports {
@@ -34,11 +36,11 @@ pub struct Imports {
 
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
-pub fn resolve_imports(
-	store: &Store,
+pub(crate) fn resolve_imports(
+	store: &mut Store,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
-	heap_pages: u32,
+	heap_pages: u64,
 	allow_missing_func_imports: bool,
 ) -> Result<Imports, WasmError> {
 	let mut externs = vec![];
@@ -78,9 +80,9 @@ fn import_name<'a, 'b: 'a>(import: &'a ImportType<'b>) -> Result<&'a str, WasmEr
 }
 
 fn resolve_memory_import(
-	store: &Store,
+	store: &mut Store,
 	import_ty: &ImportType,
-	heap_pages: u32,
+	heap_pages: u64,
 ) -> Result<Extern, WasmError> {
 	let requested_memory_ty = match import_ty.ty() {
 		ExternType::Memory(memory_ty) => memory_ty,
@@ -94,8 +96,8 @@ fn resolve_memory_import(
 
 	// Increment the min (a.k.a initial) number of pages by `heap_pages` and check if it exceeds the
 	// maximum specified by the import.
-	let initial = requested_memory_ty.limits().min().saturating_add(heap_pages);
-	if let Some(max) = requested_memory_ty.limits().max() {
+	let initial = requested_memory_ty.minimum().saturating_add(heap_pages);
+	if let Some(max) = requested_memory_ty.maximum() {
 		if initial > max {
 			return Err(WasmError::Other(format!(
 				"incremented number of pages by heap_pages (total={}) is more than maximum requested\
@@ -106,7 +108,27 @@ fn resolve_memory_import(
 		}
 	}
 
-	let memory_ty = MemoryType::new(Limits::new(initial, requested_memory_ty.limits().max()));
+	// Note that the return value of `maximum` and `minimum`, while a u64,
+	// will always fit into a u32 for 32-bit memories.
+	// 64-bit memories are part of the memory64 proposal for WebAssembly which is not standardized
+	// yet.
+	let minimum: u32 = initial.try_into().map_err(|_| {
+		WasmError::Other(format!(
+			"minimum number of memory pages ({}) doesn't fit into u32",
+			initial
+		))
+	})?;
+	let maximum: Option<u32> = match requested_memory_ty.maximum() {
+		Some(max) => Some(max.try_into().map_err(|_| {
+			WasmError::Other(format!(
+				"maximum number of memory pages ({}) doesn't fit into u32",
+				max
+			))
+		})?),
+		None => None,
+	};
+
+	let memory_ty = MemoryType::new(minimum, maximum);
 	let memory = Memory::new(store, memory_ty).map_err(|e| {
 		WasmError::Other(format!(
 			"failed to create a memory during resolving of memory import: {}",
@@ -117,7 +139,7 @@ fn resolve_memory_import(
 }
 
 fn resolve_func_import(
-	store: &Store,
+	store: &mut Store,
 	import_ty: &ImportType,
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
@@ -162,19 +184,27 @@ struct HostFuncHandler {
 	host_func: &'static dyn Function,
 }
 
-fn call_static(
+fn call_static<'a>(
 	static_func: &'static dyn Function,
 	wasmtime_params: &[Val],
 	wasmtime_results: &mut [Val],
+	mut caller: Caller<'a, StoreData>,
 ) -> Result<(), wasmtime::Trap> {
-	let unwind_result = state_holder::with_context(|host_ctx| {
-		let mut host_ctx = host_ctx.expect(
-			"host functions can be called only from wasm instance;
-			wasm instance is always called initializing context;
-			therefore host_ctx cannot be None;
-			qed
-			",
-		);
+	let unwind_result = {
+		let host_state = caller
+			.data()
+			.host_state()
+			.expect(
+				"host functions can be called only from wasm instance;
+				wasm instance is always called initializing context;
+				therefore host_ctx cannot be None;
+				qed
+				",
+			)
+			.clone();
+
+		let mut host_ctx = host_state.materialize(&mut caller);
+
 		// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
 		// available in substrate.
 		//
@@ -185,7 +215,7 @@ fn call_static(
 		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			static_func.execute(&mut host_ctx, &mut params)
 		}))
-	});
+	};
 
 	let execution_result = match unwind_result {
 		Ok(execution_result) => execution_result,
@@ -219,11 +249,11 @@ impl HostFuncHandler {
 		Self { host_func }
 	}
 
-	fn into_extern(self, store: &Store) -> Extern {
+	fn into_extern(self, store: &mut Store) -> Extern {
 		let host_func = self.host_func;
 		let func_ty = wasmtime_func_sig(self.host_func);
-		let func = Func::new(store, func_ty, move |_, params, result| {
-			call_static(host_func, params, result)
+		let func = Func::new(store, func_ty, move |caller, params, result| {
+			call_static(host_func, params, result, caller)
 		});
 		Extern::Func(func)
 	}
@@ -243,7 +273,7 @@ impl MissingHostFuncHandler {
 		})
 	}
 
-	fn into_extern(self, store: &Store, func_ty: &FuncType) -> Extern {
+	fn into_extern(self, store: &mut Store, func_ty: &FuncType) -> Extern {
 		let Self { module, name } = self;
 		let func = Func::new(store, func_ty.clone(), move |_, _, _| {
 			Err(Trap::new(format!("call to a missing function {}:{}", module, name)))

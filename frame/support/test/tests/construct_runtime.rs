@@ -21,7 +21,7 @@
 
 #![recursion_limit = "128"]
 
-use frame_support::traits::PalletInfo as _;
+use frame_support::traits::{CrateVersion, PalletInfo as _};
 use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -327,19 +327,31 @@ mod origin_test {
 		assert_eq!(Origin::from(super::nested::module3::Origin).filter_call(&rejected_call), false);
 
 		let mut origin = Origin::from(Some(0));
-
 		origin.add_filter(|c| matches!(c, Call::Module3(_)));
 		assert_eq!(origin.filter_call(&accepted_call), false);
 		assert_eq!(origin.filter_call(&rejected_call), false);
 
+		// Now test for root origin and filters:
+		let mut origin = Origin::from(Some(0));
 		origin.set_caller_from(Origin::root());
 		assert!(matches!(origin.caller, OriginCaller::system(super::system::RawOrigin::Root)));
-		assert_eq!(origin.filter_call(&accepted_call), false);
-		assert_eq!(origin.filter_call(&rejected_call), false);
 
-		origin.reset_filter();
+		// Root origin bypass all filter.
+		assert_eq!(origin.filter_call(&accepted_call), true);
+		assert_eq!(origin.filter_call(&rejected_call), true);
+
+		origin.set_caller_from(Origin::from(Some(0)));
+
+		// Back to another signed origin, the filtered are now effective again
 		assert_eq!(origin.filter_call(&accepted_call), true);
 		assert_eq!(origin.filter_call(&rejected_call), false);
+
+		origin.set_caller_from(Origin::root());
+		origin.reset_filter();
+
+		// Root origin bypass all filter, even when they are reset.
+		assert_eq!(origin.filter_call(&accepted_call), true);
+		assert_eq!(origin.filter_call(&rejected_call), true);
 	}
 }
 
@@ -739,40 +751,66 @@ fn test_metadata() {
 fn pallet_in_runtime_is_correct() {
 	assert_eq!(PalletInfo::index::<System>().unwrap(), 30);
 	assert_eq!(PalletInfo::name::<System>().unwrap(), "System");
+	assert_eq!(PalletInfo::module_name::<System>().unwrap(), "system");
+	assert_eq!(PalletInfo::crate_version::<System>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_1>().unwrap(), 31);
 	assert_eq!(PalletInfo::name::<Module1_1>().unwrap(), "Module1_1");
+	assert_eq!(PalletInfo::module_name::<Module1_1>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_1>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module2>().unwrap(), 32);
 	assert_eq!(PalletInfo::name::<Module2>().unwrap(), "Module2");
+	assert_eq!(PalletInfo::module_name::<Module2>().unwrap(), "module2");
+	assert_eq!(PalletInfo::crate_version::<Module2>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_2>().unwrap(), 33);
 	assert_eq!(PalletInfo::name::<Module1_2>().unwrap(), "Module1_2");
+	assert_eq!(PalletInfo::module_name::<Module1_2>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_2>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<NestedModule3>().unwrap(), 34);
 	assert_eq!(PalletInfo::name::<NestedModule3>().unwrap(), "NestedModule3");
+	assert_eq!(PalletInfo::module_name::<NestedModule3>().unwrap(), "nested::module3");
+	assert_eq!(PalletInfo::crate_version::<NestedModule3>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module3>().unwrap(), 35);
 	assert_eq!(PalletInfo::name::<Module3>().unwrap(), "Module3");
+	assert_eq!(PalletInfo::module_name::<Module3>().unwrap(), "self::module3");
+	assert_eq!(PalletInfo::crate_version::<Module3>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_3>().unwrap(), 6);
 	assert_eq!(PalletInfo::name::<Module1_3>().unwrap(), "Module1_3");
+	assert_eq!(PalletInfo::module_name::<Module1_3>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_3>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_4>().unwrap(), 3);
 	assert_eq!(PalletInfo::name::<Module1_4>().unwrap(), "Module1_4");
+	assert_eq!(PalletInfo::module_name::<Module1_4>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_4>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_5>().unwrap(), 4);
 	assert_eq!(PalletInfo::name::<Module1_5>().unwrap(), "Module1_5");
+	assert_eq!(PalletInfo::module_name::<Module1_5>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_5>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_6>().unwrap(), 1);
 	assert_eq!(PalletInfo::name::<Module1_6>().unwrap(), "Module1_6");
+	assert_eq!(PalletInfo::module_name::<Module1_6>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_6>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_7>().unwrap(), 2);
 	assert_eq!(PalletInfo::name::<Module1_7>().unwrap(), "Module1_7");
+	assert_eq!(PalletInfo::module_name::<Module1_7>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_7>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_8>().unwrap(), 12);
 	assert_eq!(PalletInfo::name::<Module1_8>().unwrap(), "Module1_8");
+	assert_eq!(PalletInfo::module_name::<Module1_8>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_8>().unwrap(), CrateVersion::new(3, 0, 0));
 
 	assert_eq!(PalletInfo::index::<Module1_9>().unwrap(), 13);
 	assert_eq!(PalletInfo::name::<Module1_9>().unwrap(), "Module1_9");
+	assert_eq!(PalletInfo::module_name::<Module1_9>().unwrap(), "module1");
+	assert_eq!(PalletInfo::crate_version::<Module1_9>().unwrap(), CrateVersion::new(3, 0, 0));
 }

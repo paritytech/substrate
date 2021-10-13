@@ -18,16 +18,18 @@
 // Tests for the Session Pallet
 
 use super::*;
-use codec::Decode;
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
-use mock::{
+use crate::mock::{
 	authorities, before_session_end_called, force_new_session, new_test_ext,
 	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
 	Origin, PreUpgradeMockSessionKeys, Session, System, Test, SESSION_CHANGED,
 	TEST_SESSION_CHANGED,
 };
+
+use codec::Decode;
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
+
+use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 fn initialize_block(block: u64) {
 	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
@@ -336,7 +338,7 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 }
 
 #[test]
-fn return_true_if_more_than_third_is_disabled() {
+fn disable_index_returns_false_if_already_disabled() {
 	new_test_ext().execute_with(|| {
 		set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
 		force_new_session();
@@ -345,10 +347,9 @@ fn return_true_if_more_than_third_is_disabled() {
 		force_new_session();
 		initialize_block(2);
 
+		assert_eq!(Session::disable_index(0), true);
 		assert_eq!(Session::disable_index(0), false);
-		assert_eq!(Session::disable_index(1), false);
-		assert_eq!(Session::disable_index(2), true);
-		assert_eq!(Session::disable_index(3), true);
+		assert_eq!(Session::disable_index(1), true);
 	});
 }
 

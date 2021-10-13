@@ -23,8 +23,11 @@ use super::{
 };
 use crate::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::traits::Saturating;
+use sp_std::vec::Vec;
 
+pub mod approvals;
 mod balanced;
+pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
@@ -63,6 +66,18 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
+}
+
+/// Trait for reading metadata from a fungible asset.
+pub trait InspectMetadata<AccountId>: Inspect<AccountId> {
+	/// Return the name of an asset.
+	fn name(asset: &Self::AssetId) -> Vec<u8>;
+
+	/// Return the symbol of an asset.
+	fn symbol(asset: &Self::AssetId) -> Vec<u8>;
+
+	/// Return the decimals of an asset.
+	fn decimals(asset: &Self::AssetId) -> u8;
 }
 
 /// Trait for providing a set of named fungible assets which can be created and destroyed.
@@ -226,4 +241,40 @@ impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<Acc
 		};
 		<Self as fungibles::Balanced<AccountId>>::slash(asset, who, actual)
 	}
+}
+
+/// Trait for providing the ability to create new fungible assets.
+pub trait Create<AccountId>: Inspect<AccountId> {
+	/// Create a new fungible asset.
+	fn create(
+		id: Self::AssetId,
+		admin: AccountId,
+		is_sufficient: bool,
+		min_balance: Self::Balance,
+	) -> DispatchResult;
+}
+
+/// Trait for providing the ability to destroy existing fungible assets.
+pub trait Destroy<AccountId>: Inspect<AccountId> {
+	/// The witness data needed to destroy an asset.
+	type DestroyWitness;
+
+	/// Provide the appropriate witness data needed to destroy an asset.
+	fn get_destroy_witness(id: &Self::AssetId) -> Option<Self::DestroyWitness>;
+
+	/// Destroy an existing fungible asset.
+	/// * `id`: The `AssetId` to be destroyed.
+	/// * `witness`: Any witness data that needs to be provided to complete the operation
+	///   successfully.
+	/// * `maybe_check_owner`: An optional account id that can be used to authorize the destroy
+	///   command. If not provided, we will not do any authorization checks before destroying the
+	///   asset.
+	///
+	/// If successful, this function will return the actual witness data from the destroyed asset.
+	/// This may be different than the witness data provided, and can be used to refund weight.
+	fn destroy(
+		id: Self::AssetId,
+		witness: Self::DestroyWitness,
+		maybe_check_owner: Option<AccountId>,
+	) -> Result<Self::DestroyWitness, DispatchError>;
 }

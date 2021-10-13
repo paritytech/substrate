@@ -108,7 +108,6 @@ pub fn default_config(tokio_handle: Handle, mut chain_spec: Box<dyn ChainSpec>) 
 		base_path: Some(base_path),
 		wasm_runtime_overrides: None,
 		informant_output_format,
-		disable_log_reloading: false,
 		keystore_remote: None,
 		keep_blocks: KeepBlocks::All,
 		state_pruning: Default::default(),

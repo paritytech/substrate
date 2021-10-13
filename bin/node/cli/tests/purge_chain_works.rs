@@ -22,12 +22,12 @@ use tempfile::tempdir;
 
 pub mod common;
 
-#[test]
+#[tokio::test]
 #[cfg(unix)]
-fn purge_chain_works() {
+async fn purge_chain_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_node_for_a_while(base_path.path(), &["--dev"]);
+	common::run_node_for_a_while(base_path.path(), &["--dev"]).await;
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["purge-chain", "--dev", "-d"])
