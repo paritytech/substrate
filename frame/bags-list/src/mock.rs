@@ -140,7 +140,7 @@ impl ExtBuilder {
 	}
 }
 
-#[cfg(any(test, feature = "runtime-benchmarks"))]
+#[cfg(test)]
 pub(crate) mod test_utils {
 	use super::*;
 	use list::Bag;
