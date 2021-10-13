@@ -44,7 +44,8 @@ pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
