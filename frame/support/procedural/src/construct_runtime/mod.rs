@@ -191,6 +191,7 @@ fn construct_runtime_intermediary_expansion(
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_default_parts }]
+				frame_support = [{ #frame_support }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]
 					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]

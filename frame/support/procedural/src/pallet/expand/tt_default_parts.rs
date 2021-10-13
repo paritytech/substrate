@@ -20,7 +20,6 @@ use syn::spanned::Spanned;
 
 /// Generate the `tt_default_parts` macro.
 pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
-	let frame_support = &def.frame_support;
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 	let default_parts_unique_id =
 		syn::Ident::new(&format!("__tt_default_parts_{}", count), def.item.span());
@@ -59,8 +58,9 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		macro_rules! #default_parts_unique_id {
 			{
 				$caller:tt
+				frame_support = [{ $($frame_support:ident)::* }]
 			} => {
-				#frame_support::tt_return! {
+				$($frame_support)*::tt_return! {
 					$caller
 					tokens = [{
 						::{

@@ -2111,6 +2111,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-support-test-compile-pass"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+ "sp-version",
+]
+
+[[package]]
 name = "frame-support-test-pallet"
 version = "4.0.0-dev"
 dependencies = [
