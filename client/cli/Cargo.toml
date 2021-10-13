@@ -19,7 +19,7 @@ tokio = { version = "1.10", features = [ "signal", "rt-multi-thread" ] }
 futures = "0.3.9"
 fdlimit = "0.2.1"
 libp2p = "0.39.1"
-parity-scale-codec = "2.0.0"
+parity-scale-codec = "2.3.1"
 hex = "0.4.2"
 rand = "0.7.3"
 tiny-bip39 = "0.8.2"
