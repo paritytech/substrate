@@ -477,13 +477,6 @@ impl<B: BlockT> Builder<B> {
 		}
 		self
 	}
-
-	/// Inject a manual list of key and values to the storage.
-	#[deprecated(note = "use 'inject_hashed_key_value'")]
-	pub fn inject_key_value(self, injections: &[KeyPair]) -> Self {
-		self.inject_hashed_key_value(injections)
-	}
-
 	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
 	///
 	/// This should be used to inject a "PREFIX", like a storage (double) map.
@@ -502,7 +495,7 @@ impl<B: BlockT> Builder<B> {
 
 	/// Blacklist this hashed key from the final externalities. This is treated as-is, and should be
 	/// pre-hashed.
-	pub fn except_hashed_key(mut self, hashed: &[u8]) -> Self {
+	pub fn blacklist_hashed_key(mut self, hashed: &[u8]) -> Self {
 		self.hashed_blacklist.push(hashed.to_vec());
 		self
 	}
@@ -596,7 +589,7 @@ mod tests {
 			.mode(Mode::Offline(OfflineConfig {
 				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
 			}))
-			.except_hashed_key(&some_key)
+			.blacklist_hashed_key(&some_key)
 			.build()
 			.await
 			.expect("Can't read state snapshot file")
