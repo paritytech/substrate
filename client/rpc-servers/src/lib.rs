@@ -33,10 +33,8 @@ const MEGABYTE: usize = 1024 * 1024;
 /// Maximal payload accepted by RPC servers.
 pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 
-/// Maximal buffer size in RPC servers.
-///
-/// Only relevant in the WS context.
-pub const RPC_MAX_BUFFER_CAPACITY_DEFAULT: usize = 10 * MEGABYTE;
+/// Maximal buffer size in WS server.
+pub const WS_MAX_BUFFER_CAPACITY_DEFAULT: usize = 16 * MEGABYTE;
 
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
@@ -187,10 +185,18 @@ pub fn start_ws<
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 	let max_in_buffer_capacity = maybe_max_in_buffer_capacity_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
-		.unwrap_or(RPC_MAX_BUFFER_CAPACITY_DEFAULT);
+		.unwrap_or(WS_MAX_BUFFER_CAPACITY_DEFAULT);
 	let max_out_buffer_capacity = maybe_max_out_buffer_capacity_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
-		.unwrap_or(RPC_MAX_BUFFER_CAPACITY_DEFAULT);
+		.unwrap_or(WS_MAX_BUFFER_CAPACITY_DEFAULT);
+
+	if max_payload > max_out_buffer_capacity {
+		log::warn!(
+			"maximum payload ({}) is more than maximum output buffer ({}) size in ws server, this is a misconfiguration.",
+			max_payload,
+			max_out_buffer_capacity,
+		)
+	}
 
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| {
 		context.sender().into()
