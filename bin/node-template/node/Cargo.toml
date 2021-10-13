@@ -38,7 +38,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 
 # These dependencies are used for the node template's RPCs
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "f949d9b2567796068eb3c74de3318f8c34e6e2b6", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "2891ca11f7da6be8022a9e165eaa9a90017d3d43", features = ["server"] }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }

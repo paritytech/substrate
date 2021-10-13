@@ -32,8 +32,7 @@ pub mod helpers;
 #[rpc(client, server, namespace = "system")]
 pub trait SystemApi<Hash, Number> {
 	/// Get the node's implementation name. Plain old string.
-	// NOTE(niklasad1): resource limiting example.
-	#[method(name = "name", resources("CPU" = 2))]
+	#[method(name = "name")]
 	fn system_name(&self) -> RpcResult<String>;
 
 	/// Get the node implementation's version. Should be a semver string.

@@ -120,12 +120,8 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.custom_tokio_runtime(rt)
 		.build(addr)?;
 
-	let handle = server.stop_handle();
 	let rpc_api = build_rpc_api(module);
-
-	rt.spawn(async move {
-		let _ = server.start(rpc_api).await;
-	});
+	let handle = server.start(rpc_api)?;
 
 	Ok(handle)
 }
@@ -147,7 +143,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	let mut builder = WsServerBuilder::default()
 		.max_request_body_size(max_request_body_size as u32)
 		.max_connections(max_connections as u64)
-		.custom_tokio_runtime(rt);
+		.custom_tokio_runtime(rt.clone());
 
 	log::info!("Starting JSONRPC WS server: addr={}, allowed origins={:?}", addr, cors);
 

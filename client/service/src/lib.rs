@@ -268,9 +268,8 @@ mod waiting {
 
 	impl Drop for HttpServer {
 		fn drop(&mut self) {
-			if let Some(mut server) = self.0.take() {
-				let _ = futures::executor::block_on(server.stop());
-				let _ = futures::executor::block_on(server.wait_for_stop());
+			if let Some(server) = self.0.take() {
+				let _ = server.stop().map(|stop| futures::executor::block_on(stop));
 			}
 		}
 	}

@@ -19,7 +19,7 @@ serde_json = "1"
 sc-client-api = { version = "4.0.0-dev", path = "../../../../client/api" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = { version = "0.3.4", features = ["compat"] }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "f949d9b2567796068eb3c74de3318f8c34e6e2b6", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "2891ca11f7da6be8022a9e165eaa9a90017d3d43", features = ["server"] }
 log = "0.4.8"
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }

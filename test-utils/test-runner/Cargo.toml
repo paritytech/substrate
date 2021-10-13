@@ -51,5 +51,5 @@ futures = "0.3.16"
 tokio = { version = "1.10", features = ["signal"] }
 # Calling RPC
 
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "f949d9b2567796068eb3c74de3318f8c34e6e2b6", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "2891ca11f7da6be8022a9e165eaa9a90017d3d43", features = ["server"] }
 num-traits = "0.2.14"
