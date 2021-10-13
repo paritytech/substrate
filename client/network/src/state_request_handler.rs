@@ -66,7 +66,7 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
 	s.push_str(protocol_id.as_ref());
-	s.push_str("/state/1");
+	s.push_str("/state/2");
 	s
 }
 
