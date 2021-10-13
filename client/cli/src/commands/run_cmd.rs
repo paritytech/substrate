@@ -132,7 +132,7 @@ pub struct RunCmd {
 	pub ws_max_in_buffer_capacity: Option<usize>,
 
 	/// Set the the maximum RPC output buffer size. Default is 10MiB.
-	#[structopt(long = "rpc-max-out-buffer-capacity")]
+	#[structopt(long = "ws-max-out-buffer-capacity")]
 	pub ws_max_out_buffer_capacity: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
