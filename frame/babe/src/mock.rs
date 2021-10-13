@@ -357,7 +357,7 @@ pub fn make_vrf_output(
 	let vrf_inout = pair.vrf_sign(transcript);
 	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness =
 		vrf_inout.0.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
-	let vrf_output = VRFOutput(vrf_inout.0.to_output());
+	let vrf_output = VRFOutput(vrf_inout.0.to_preout());
 	let vrf_proof = VRFProof(vrf_inout.1);
 
 	(vrf_output, vrf_proof, vrf_randomness)

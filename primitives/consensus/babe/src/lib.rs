@@ -25,7 +25,7 @@ pub mod inherents;
 
 pub use merlin::Transcript;
 pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+	Randomness, RANDOMNESS_LENGTH, VRF_PREOUT_LENGTH, VRF_PROOF_LENGTH,
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -357,7 +357,7 @@ pub struct Epoch {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: [u8; VRF_PREOUT_LENGTH],
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
 }

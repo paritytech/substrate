@@ -27,12 +27,12 @@ use sp_std::{
 };
 
 pub use schnorrkel::{
-	vrf::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
+	vrf::{VRF_PREOUT_LENGTH, VRF_PROOF_LENGTH},
 	PublicKey, SignatureError,
 };
 
 /// The length of the Randomness.
-pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
+pub const RANDOMNESS_LENGTH: usize = VRF_PREOUT_LENGTH;
 
 /// VRF output type available for `std` environment, suitable for schnorrkel operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -61,15 +61,15 @@ impl EncodeLike for VRFOutput {}
 
 impl Decode for VRFOutput {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
-		let decoded = <[u8; VRF_OUTPUT_LENGTH]>::decode(i)?;
+		let decoded = <[u8; VRF_PREOUT_LENGTH]>::decode(i)?;
 		Ok(Self(schnorrkel::vrf::VRFOutput::from_bytes(&decoded).map_err(convert_error)?))
 	}
 }
 
-impl TryFrom<[u8; VRF_OUTPUT_LENGTH]> for VRFOutput {
+impl TryFrom<[u8; VRF_PREOUT_LENGTH]> for VRFOutput {
 	type Error = SignatureError;
 
-	fn try_from(raw: [u8; VRF_OUTPUT_LENGTH]) -> Result<Self, Self::Error> {
+	fn try_from(raw: [u8; VRF_PREOUT_LENGTH]) -> Result<Self, Self::Error> {
 		schnorrkel::vrf::VRFOutput::from_bytes(&raw).map(VRFOutput)
 	}
 }

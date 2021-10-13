@@ -372,7 +372,7 @@ impl SyncCryptoStore for KeyStore {
 			if let Some(k) = self.sr25519_key_pair(key_type, public) { k } else { return Ok(None) };
 
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
-		Ok(Some(VRFSignature { output: inout.to_output(), proof }))
+		Ok(Some(VRFSignature { output: inout.to_preout(), proof }))
 	}
 
 	fn ecdsa_sign_prehashed(

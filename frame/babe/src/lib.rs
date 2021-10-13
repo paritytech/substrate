@@ -47,7 +47,7 @@ use sp_consensus_babe::{
 };
 use sp_consensus_vrf::schnorrkel;
 
-pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
+pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_PREOUT_LENGTH};
 
 mod default_weights;
 mod equivocation;
@@ -941,7 +941,7 @@ fn compute_randomness(
 	rho: impl Iterator<Item = schnorrkel::Randomness>,
 	rho_size_hint: Option<usize>,
 ) -> schnorrkel::Randomness {
-	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
+	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_PREOUT_LENGTH);
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());
 
