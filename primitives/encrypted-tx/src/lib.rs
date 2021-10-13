@@ -30,7 +30,7 @@ pub enum ExtrinsicType<Hash>{
 }
 
 
-#[derive(Encode, Decode, PartialEq)]
+#[derive(Encode, Decode, PartialEq, Debug)]
 pub struct EncryptedTx<Hash>{
     pub tx_id: Hash,
     pub data: Vec<u8>,

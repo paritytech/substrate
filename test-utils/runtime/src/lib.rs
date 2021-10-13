@@ -136,6 +136,25 @@ impl Transfer {
 	}
 }
 
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub enum EncryptedExtrinsic{
+    DoublyEncrypted{
+        doubly_encrypted_call: Vec<u8>,
+        nonce: u32,
+        weight: Weight,
+        builder: AccountId32,
+        executor: AccountId32,
+    },
+    SinglyEncrypted{
+        identifier: Hash,
+        singly_encrypted_call: Vec<u8>,
+    },
+    Decrypted{
+        identifier: Hash,
+        decrypted_call: Vec<u8>,
+    },
+}
+
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
@@ -148,6 +167,8 @@ pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
+  SubmitEncryptedTransaction(Vec<u8>),
+  EncryptedTX(EncryptedExtrinsic),
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -176,6 +197,8 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
+			Extrinsic::EncryptedTX(e) => Ok(Extrinsic::EncryptedTX(e)),
+			Extrinsic::SubmitEncryptedTransaction(e) => Ok(Extrinsic::SubmitEncryptedTransaction(e)),
 		}
 	}
 }
@@ -570,8 +593,13 @@ cfg_if! {
 
 			impl sp_encrypted_tx::EncryptedTxApi<Block> for Runtime
 			{
-				fn create_submit_singly_encrypted_transaction(_identifier: <Block as BlockT>::Hash, _singly_encrypted_call: Vec<u8>) -> <Block as BlockT>::Extrinsic{
-					unimplemented!()
+				fn create_submit_singly_encrypted_transaction(identifier: <Block as BlockT>::Hash, singly_encrypted_call: Vec<u8>) -> <Block as BlockT>::Extrinsic{
+					Extrinsic::EncryptedTX(
+						EncryptedExtrinsic::SinglyEncrypted{
+							identifier,
+							singly_encrypted_call,
+						}
+					)
 				}
 
 				fn create_submit_decrypted_transaction(_identifier: <Block as BlockT>::Hash, _decrypted_call: Vec<u8>, _weight: Weight) -> <Block as BlockT>::Extrinsic{
@@ -583,11 +611,18 @@ cfg_if! {
 				}
 
 				fn get_double_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					let queue: Option<Vec<sp_encrypted_tx::EncryptedTx::<<crate::Block as BlockT>::Hash>>> = frame_support::storage::unhashed::get(b"FIFO");
+					match queue{
+						Some(q) => {
+							log::info!("found queue in storage!");
+							q
+						},
+						None => vec![]
+					}
 				}
 
 				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					frame_support::storage::unhashed::get_or(b"singly", vec![])
 				}
 
 				fn get_account_id(_block_builder_id: u32) -> AccountId32{
@@ -595,7 +630,8 @@ cfg_if! {
 				}
 
 				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
-					unimplemented!()
+					// '//Alice' public key
+					sp_core::ecdsa::Public::from_raw([2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161])
 				}
 			}
 
@@ -627,6 +663,17 @@ cfg_if! {
 							propagate: false,
 						});
 					}
+
+                    if let Extrinsic::SubmitEncryptedTransaction(data)  = utx {
+						return Ok(ValidTransaction {
+							priority: Default::default(),
+							requires: vec![],
+							provides: vec![data],
+							longevity: 1,
+							propagate: false,
+						});
+
+                    }
 
 					system::validate_transaction(utx)
 				}
@@ -864,11 +911,12 @@ cfg_if! {
 				}
 
 				fn get_double_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					unimplemented!()
 				}
 
+
 				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					frame_support::storage::unhashed::get_or(b"singly", vec![])
 				}
 
 				fn get_account_id(_block_builder_id: u32) -> AccountId32{
