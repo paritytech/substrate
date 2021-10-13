@@ -18,9 +18,9 @@
 //! WS RPC API for one off RPC calls to a substrate node.
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
-use jsonrpsee_ws_client::{
-	types::{traits::Client, v2::params::JsonRpcParams},
-	WsClient, WsClientBuilder,
+use jsonrpsee::{
+	types::{traits::Client, v2::ParamsSer as Params},
+	ws_client::{WsClient, WsClientBuilder},
 };
 use sp_runtime::{
 	generic::SignedBlock,
@@ -38,7 +38,7 @@ where
 	let client = build_client(from).await?;
 
 	client
-		.request::<Block::Header>("chain_getHeader", JsonRpcParams::Array(params))
+		.request::<Block::Header>("chain_getHeader", Some(Params::Array(params)))
 		.await
 		.map_err(|e| format!("chain_getHeader request failed: {:?}", e))
 }
@@ -52,7 +52,7 @@ where
 	let client = build_client(from).await?;
 
 	client
-		.request::<Block::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams)
+		.request::<Block::Hash>("chain_getFinalizedHead", None)
 		.await
 		.map_err(|e| format!("chain_getFinalizedHead request failed: {:?}", e))
 }
@@ -67,7 +67,7 @@ where
 	let params = vec![hash_to_json::<Block>(at)?];
 	let client = build_client(from).await?;
 	let signed_block = client
-		.request::<SignedBlock<Block>>("chain_getBlock", JsonRpcParams::Array(params))
+		.request::<SignedBlock<Block>>("chain_getBlock", Some(Params::Array(params)))
 		.await
 		.map_err(|e| format!("chain_getBlock request failed: {:?}", e))?;
 
@@ -104,7 +104,7 @@ where
 	client
 		.request::<sp_version::RuntimeVersion>(
 			"state_getRuntimeVersion",
-			JsonRpcParams::Array(params),
+			Some(Params::Array(params)),
 		)
 		.await
 		.map_err(|e| format!("state_getRuntimeVersion request failed: {:?}", e))
