@@ -94,7 +94,6 @@ pub fn default_config(tokio_handle: Handle, mut chain_spec: Box<dyn ChainSpec>) 
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
-		ws_max_in_buffer_capacity: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,

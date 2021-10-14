@@ -128,10 +128,6 @@ pub struct RunCmd {
 	pub ws_max_connections: Option<usize>,
 
 	/// Set the the maximum RPC output buffer size in MiB. Default is 16.
-	#[structopt(long = "ws-max-in-buffer-capacity")]
-	pub ws_max_in_buffer_capacity: Option<usize>,
-
-	/// Set the the maximum RPC output buffer size in MiB. Default is 16.
 	#[structopt(long = "ws-max-out-buffer-capacity")]
 	pub ws_max_out_buffer_capacity: Option<usize>,
 
@@ -440,10 +436,6 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_max_payload(&self) -> Result<Option<usize>> {
 		Ok(self.rpc_max_payload)
-	}
-
-	fn ws_max_in_buffer_capacity(&self) -> Result<Option<usize>> {
-		Ok(self.ws_max_in_buffer_capacity)
 	}
 
 	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
