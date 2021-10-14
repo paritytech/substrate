@@ -345,7 +345,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is `None`.
 	fn rpc_ws_max_connections(&self) -> Result<usize> {
-		Ok(usize::MAX)
+		Ok(100)
 	}
 
 	/// Get the RPC cors (`None` if disabled)
