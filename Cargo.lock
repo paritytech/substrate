@@ -1403,27 +1403,14 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "3.0.2"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f627126b946c25a4638eec0ea634fc52506dea98db118aae985118ce7c3d723f"
+checksum = "0b9fdf9972b2bd6af2d913799d9ebc165ea4d2e65878e329d9c6b372c4491b61"
 dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.5.1",
  "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "curve25519-dalek-ng"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2d05dbe571a5f832174d536b65101025c33693189830372032c005af68cbaec"
-dependencies = [
- "byteorder",
- "digest 0.9.0",
- "rand_core 0.6.2",
- "subtle-ng",
  "zeroize",
 ]
 
@@ -6355,9 +6342,9 @@ dependencies = [
 
 [[package]]
 name = "pbkdf2"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d95f5254224e617595d2cc3cc73ff0a5eaf2637519e25f03388154e9378b6ffa"
+checksum = "f05894bce6a1ba4be299d0c5f29563e08af2bc18bb7d48313113bed71e904739"
 dependencies = [
  "crypto-mac 0.11.1",
 ]
@@ -8592,16 +8579,16 @@ dependencies = [
 [[package]]
 name = "schnorrkel"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7bd2b0ecf15c5651c66e7f3484642780022d3fa6205512b709c75a93e11cd92"
+source = "git+https://github.com/gilescope/schnorrkel.git?rev=9d131c87d6fee37613727ac3d007a52c40bd3715#9d131c87d6fee37613727ac3d007a52c40bd3715"
 dependencies = [
  "arrayref",
- "arrayvec 0.5.2",
- "curve25519-dalek-ng",
+ "arrayvec 0.7.0",
+ "curve25519-dalek",
  "merlin",
  "rand_core 0.6.2",
+ "serde_bytes",
  "sha2",
- "subtle-ng",
+ "subtle",
  "zeroize",
 ]
 
@@ -9879,11 +9866,11 @@ dependencies = [
 
 [[package]]
 name = "substrate-bip39"
-version = "0.4.3"
-source = "git+https://github.com/paritytech/substrate-bip39.git?rev=c4bd2d236dd0a8fde3c2740737788929e7be13ee#c4bd2d236dd0a8fde3c2740737788929e7be13ee"
+version = "0.4.4"
+source = "git+https://github.com/gilescope/substrate-bip39.git?rev=9e993615111cde1866b4fdcc62afddb03aa4a7ca#9e993615111cde1866b4fdcc62afddb03aa4a7ca"
 dependencies = [
  "hmac 0.11.0",
- "pbkdf2 0.8.0",
+ "pbkdf2 0.9.0",
  "schnorrkel",
  "sha2",
  "zeroize",
@@ -10113,15 +10100,9 @@ dependencies = [
 
 [[package]]
 name = "subtle"
-version = "2.4.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e81da0851ada1f3e9d4312c704aa4f8806f0f9d69faaf8df2f3464b4a9437c2"
-
-[[package]]
-name = "subtle-ng"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
+checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "syn"
@@ -11705,9 +11686,9 @@ checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
 
 [[package]]
 name = "x25519-dalek"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc614d95359fd7afc321b66d2107ede58b246b844cf5d8a0adcca413e439f088"
+checksum = "5a0c105152107e3b96f6a00a65e86ce82d9b125230e1c4302940eca58ff71f4f"
 dependencies = [
  "curve25519-dalek",
  "rand_core 0.5.1",

@@ -17,7 +17,7 @@ async-trait = "0.1.50"
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 futures = { version = "0.3.1" }
-schnorrkel = { version = "0.10.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false }
+schnorrkel = {  git = "https://github.com/gilescope/schnorrkel.git", rev="9d131c87d6fee37613727ac3d007a52c40bd3715",  features = ["preaudit_deprecated", "u64_backend"], default-features = false }
 merlin = { version = "3.0.0", default-features = false }
 parking_lot = { version = "0.11.1", default-features = false }
 serde = { version = "1.0", optional = true}
