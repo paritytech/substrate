@@ -53,6 +53,11 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		// accept any arguments and simply returns the pallet parts, separated by commas, then
 		// wrapped inside of braces and finally prepended with double colons, to the caller inside
 		// of a key named `tokens`.
+		//
+		// We need to accept a frame_support argument here, because this macro gets expanded on the
+		// crate that called the `construct_runtime!` macro, and said crate may have renamed
+		// frame-support, and so we need to pass in the frame-support path that said crate
+		// recognizes.
 		#[macro_export]
 		#[doc(hidden)]
 		macro_rules! #default_parts_unique_id {

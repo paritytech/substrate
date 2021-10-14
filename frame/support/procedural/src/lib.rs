@@ -546,8 +546,9 @@ pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 /// ```nocompile
 /// match_and_insert!(
 ///     target = [{ Some content with { at some point match pattern } other match pattern are ignored }]
-///     pattern = [{ match pattern }] // the match pattern cannot contains any group: `[]`, `()`, `{}`.
-///     tokens = [{ expansion tokens }] // content inside braces can be anything including groups.
+///     pattern = [{ match pattern }] // the match pattern cannot contain any group: `[]`, `()`, `{}`
+/// 								  // can relax this constraint, but will require modifying the match logic in code
+///     tokens = [{ expansion tokens }] // content inside braces can be anything including groups
 /// );
 /// ```
 ///
