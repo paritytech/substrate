@@ -217,7 +217,7 @@ impl Configuration {
 					crate::DEFAULT_PROTOCOL_ID
 				);
 				crate::DEFAULT_PROTOCOL_ID
-			}
+			},
 		};
 		sc_network::config::ProtocolId::from(protocol_id_full)
 	}
