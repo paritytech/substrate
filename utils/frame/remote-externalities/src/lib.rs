@@ -614,7 +614,7 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-
+	use pallet_elections_phragmen::Members;
 	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
@@ -651,7 +651,6 @@ mod remote_tests {
 
 	#[tokio::test]
 	async fn sanity_check_decoding() {
-		use pallet_elections_phragmen::SeatHolder;
 		use sp_core::crypto::Ss58Codec;
 		type AccountId = sp_runtime::AccountId32;
 		type Balance = u128;
@@ -675,7 +674,7 @@ mod remote_tests {
 				let gav_polkadot =
 					AccountId::from_ss58check("13RDY9nrJpyTDBSUdBw12dGwhk19sGwsrVZ2bxkzYHBSagP2")
 						.unwrap();
-				let members = Members::get().unwrap();
+				let members = Members::get();
 				assert!(members
 					.iter()
 					.map(|s| s.who.clone())
