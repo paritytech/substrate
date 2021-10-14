@@ -124,8 +124,6 @@ pub struct RunCmd {
 	pub ws_port: Option<u16>,
 
 	/// Maximum number of WS RPC server connections.
-	///
-	/// Default is 100.
 	#[structopt(long = "ws-max-connections", value_name = "COUNT", default_value = "100")]
 	pub ws_max_connections: usize,
 
