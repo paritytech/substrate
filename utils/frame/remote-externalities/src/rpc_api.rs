@@ -19,7 +19,8 @@
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
 use jsonrpsee::{
-	types::{traits::Client, v2::ParamsSer as Params},
+	rpc_params,
+	types::traits::Client,
 	ws_client::{WsClient, WsClientBuilder},
 };
 use sp_runtime::{
@@ -34,11 +35,10 @@ where
 	Block::Header: serde::de::DeserializeOwned,
 	S: AsRef<str>,
 {
-	let params = vec![hash_to_json::<Block>(at)?];
 	let client = build_client(from).await?;
 
 	client
-		.request::<Block::Header>("chain_getHeader", Some(Params::Array(params)))
+		.request::<Block::Header>("chain_getHeader", rpc_params!(at))
 		.await
 		.map_err(|e| format!("chain_getHeader request failed: {:?}", e))
 }
@@ -64,20 +64,13 @@ where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Header: HeaderT,
 {
-	let params = vec![hash_to_json::<Block>(at)?];
 	let client = build_client(from).await?;
 	let signed_block = client
-		.request::<SignedBlock<Block>>("chain_getBlock", Some(Params::Array(params)))
+		.request::<SignedBlock<Block>>("chain_getBlock", rpc_params!(at))
 		.await
 		.map_err(|e| format!("chain_getBlock request failed: {:?}", e))?;
 
 	Ok(signed_block.block)
-}
-
-/// Convert a block hash to a serde json value.
-fn hash_to_json<Block: BlockT>(hash: Block::Hash) -> Result<serde_json::Value, String> {
-	serde_json::to_value(hash)
-		.map_err(|e| format!("Block hash could not be converted to JSON: {:?}", e))
 }
 
 /// Build a website client that connects to `from`.
@@ -99,13 +92,9 @@ where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Header: HeaderT,
 {
-	let params = if let Some(at) = at { vec![hash_to_json::<Block>(at)?] } else { vec![] };
 	let client = build_client(from).await?;
 	client
-		.request::<sp_version::RuntimeVersion>(
-			"state_getRuntimeVersion",
-			Some(Params::Array(params)),
-		)
+		.request::<sp_version::RuntimeVersion>("state_getRuntimeVersion", rpc_params!(at))
 		.await
 		.map_err(|e| format!("state_getRuntimeVersion request failed: {:?}", e))
 }

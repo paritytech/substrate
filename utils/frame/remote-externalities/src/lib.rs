@@ -24,7 +24,8 @@ use codec::{Decode, Encode};
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{traits::Client, v2::ParamsSer as Params, Error as RpcError},
+	rpc_params,
+	types::{traits::Client, Error as RpcError},
 	ws_client::{WsClient, WsClientBuilder},
 };
 
@@ -54,11 +55,7 @@ const BATCH_SIZE: usize = 1000;
 #[rpc(client)]
 pub trait RpcApi<Hash> {
 	#[method(name = "state_getStorage")]
-	fn get_storage(
-		&self,
-		prefix: StorageKey,
-		hash: Option<Hash>,
-	) -> Result<StorageData, RpcError>;
+	fn get_storage(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<StorageData, RpcError>;
 
 	#[method(name = "state_getKeysPaged")]
 	fn get_keys_paged(
@@ -227,22 +224,18 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: get_storage");
-		self.as_online().rpc_client().get_storage(key, maybe_at)
-			.await
-			.map_err(|e| {
-				error!("Error = {:?}", e);
-				"rpc get_storage failed."
-			})
+		self.as_online().rpc_client().get_storage(key, maybe_at).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc get_storage failed."
+		})
 	}
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		self.as_online().rpc_client().finalized_head()
-			.await
-			.map_err(|e| {
-				error!("Error = {:?}", e);
-				"rpc finalized_head failed."
-			})
+		self.as_online().rpc_client().finalized_head().await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc finalized_head failed."
+		})
 	}
 
 	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
@@ -255,18 +248,15 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let mut last_key: Option<StorageKey> = None;
 		let mut all_keys: Vec<StorageKey> = vec![];
 		let keys = loop {
-			let page =
-				self.as_online().rpc_client().get_keys_paged(
-				Some(prefix.clone()),
-				PAGE,
-				last_key.clone(),
-				Some(at),
-			)
-			.await
-			.map_err(|e| {
-				error!(target: LOG_TARGET, "Error = {:?}", e);
-				"rpc get_keys failed"
-			})?;
+			let page = self
+				.as_online()
+				.rpc_client()
+				.get_keys_paged(Some(prefix.clone()), PAGE, last_key.clone(), Some(at))
+				.await
+				.map_err(|e| {
+					error!(target: LOG_TARGET, "Error = {:?}", e);
+					"rpc get_keys failed"
+				})?;
 			let page_len = page.len();
 			all_keys.extend(page);
 
@@ -308,15 +298,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			let batch = chunk_keys
 				.iter()
 				.cloned()
-				.map(|key| {
-					(
-						"state_getStorage",
-						Some(Params::Array(vec![
-							to_value(key).expect("json serialization will work; qed."),
-							to_value(at).expect("json serialization will work; qed."),
-						])),
-					)
-				})
+				.map(|key| ("state_getStorage", rpc_params![key, at]))
 				.collect::<Vec<_>>();
 			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
 				log::error!(
