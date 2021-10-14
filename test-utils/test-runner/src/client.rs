@@ -211,7 +211,7 @@ where
 	};
 
 	let cloned_client = client.clone();
-	let create_inherent_data_providers = Box::new(move |parent, _| {
+	let create_inherent_data_providers = Box::new(move |_, _| {
 		let client = cloned_client.clone();
 		async move {
 			let timestamp =

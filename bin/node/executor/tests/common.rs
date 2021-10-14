@@ -130,6 +130,14 @@ pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalitie
 			.build_storage()
 			.unwrap(),
 	);
+
+	use sp_core::hashing::twox_128;
+	// set migration progress to Finished (no inherent provider),
+	// this could be remove when migration module got removed from test runtime.
+	let k =  [twox_128(b"StateMigrate0To1"), twox_128(b"MigrationProgress")].concat();
+	ext
+		.ext()
+		.place_storage(k, Some(vec![1u8])); // Finished encoded.
 	ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 	ext
 }
