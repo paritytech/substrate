@@ -206,7 +206,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 
         let api = self.client.runtime_api();
 		let public_key = api.get_authority_public_key(&self.parent_id, account_id).unwrap();
-		warn!(target:"basic_authorship","public_key id:  {:?}", public_key);
+		debug!(target:"basic_authorship","public_key id:  {:?}", public_key);
 
 		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx")).unwrap();
 
@@ -231,7 +231,6 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
-		println!("propose with");
 
         let api = self.client.runtime_api();
 
@@ -253,10 +252,6 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 
 		let doubly_encrypted_txs = api.get_double_encrypted_transactions(&self.parent_id, &account_id).unwrap();
 		let singly_encrypted_txs = api.get_singly_encrypted_transactions(&self.parent_id, &account_id).unwrap();
-
-		println!("found {} double encrypted transactions", doubly_encrypted_txs.len()); 
-		println!("found {} singly encrypted transactions", singly_encrypted_txs.len()); 
-
 
 		debug!(target:"basic_authorship", "found {} double encrypted transactions", doubly_encrypted_txs.len()); 
 		debug!(target:"basic_authorship", "found {} singly encrypted transactions", singly_encrypted_txs.len()); 
@@ -429,18 +424,14 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Proposer};
 	use sp_inherents::{InherentData, ProvideInherentData};
-	use sp_runtime::traits::NumberFor;
+	use sp_runtime::{DigestItem, traits::NumberFor};
 	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-	use sc_client_api::BlockImportOperation;
 	use sc_keystore::Store;
-	use sp_encrypted_tx::EncryptedTx;
-	use parking_lot::RwLock;
-    use sp_core::traits::BareCryptoStore;
-    use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519, ecdsa};
-    // use sp_application_crypto::Pair;
-    use sp_core::Pair;
-    use codec::Encode;
+    use sc_transaction_pool::FullChainApi;
     use ecies::utils::{aes_encrypt, encapsulate};
+    use sp_encrypted_tx::ExtrinsicType;
+    use std::collections::HashSet;
+    use sc_consensus_babe::CompatibleDigestItem;
 
 	use substrate_test_runtime_client::{
 		prelude::*,
@@ -483,24 +474,14 @@ mod tests {
 	}
 
 	fn create_key_store() -> KeyStorePtr{
-		let mut store = Store::new_in_memory();
+		let store = Store::new_in_memory();
         
 		let secret_uri = "//Alice";
-        let pair = sp_core::ecdsa::Pair::from_string(&secret_uri, None).unwrap();
-
-        println!("registering key!!!!!!!!!!!!!!!!!  {:?}", pair.public().as_ref());
-
 		store.write().insert_ephemeral_from_seed_by_type::<sp_core::ecdsa::Pair>(
 			secret_uri,
 			KeyTypeId(*b"xxtx"),
 		).expect("Inserts unknown key");
-
-        let public_key = sp_core::ecdsa::Public::from_raw([2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161]);
-		let key_pair = store.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx")).unwrap();
-
-
         store
-
 	}
 
 
@@ -665,8 +646,7 @@ mod tests {
 
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
-        env_logger::init();
-		// given
+        let _ = env_logger::try_init();
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
@@ -763,275 +743,292 @@ mod tests {
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
-    #[test]
-    fn mat_key() {
-		let secret_uri = "//Alice";
-        let pair = sp_core::ecdsa::Pair::from_string(&secret_uri, None);
-        let public = pair.unwrap().public();
-        let keystore = create_key_store();
 
-        let public_key = sp_core::ecdsa::Public::from_raw([2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161]);
-		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx")).unwrap();
-        println!("FETCHED SEED {:?}", key_pair.seed());
+    use substrate_test_runtime_client::Client;
+    use substrate_test_runtime_client::sc_client_db;
+	type TxPoolImpl = BasicPool< FullChainApi<Client<sc_client_db::Backend<Block>>, Block> , Block>;
+	type ClientImpl = Client<sc_client_db::Backend<Block>>;
+
+    struct BlockBuilderHelper{
+        pool: Arc<TxPoolImpl>,
+        client: Arc<ClientImpl>,
+        block_number: u64,
     }
 
-	#[test]
-	fn mat_test() {
-        env_logger::init();
-		// given
-		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full(
-			Default::default(),
-			None,
-			spawner,
-			client.clone(),
-		);
 
-        let transfer_extrinsic = extrinsic(0);
-        let encoded_extrinsic = transfer_extrinsic.encode();
-		let dummy_secret_key: SecretKey = SecretKey::default();
+	impl BlockBuilderHelper{
 
-        let collator_public_key = sp_core::ecdsa::Pair::from_string(&"//Alice", None).unwrap().public();
-        println!("PUB KEY {:?} size: {}", collator_public_key, collator_public_key.as_ref().len());
-        let pub_key = PublicKey::parse_slice(collator_public_key.as_ref(), None).unwrap();
-        // PublicKey::from_secret_key
-        let encryption_key = encapsulate(&dummy_secret_key, &pub_key).unwrap();
-        let encrypted_message = aes_encrypt(&encryption_key, b"hello world").unwrap();
+		fn new(pool: Arc<TxPoolImpl>,
+			client: Arc<ClientImpl>) -> Self{
+			BlockBuilderHelper{
+				pool,
+				client,
+				block_number: 0,
+			}
+		}
 
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-                // Extrinsic::StorageChange(b"FIFO".iter().cloned().collect(), Some(vec![1,2,3,4]))
-                // Extrinsic::Enc(b"FIFO".iter().cloned().collect(), Some(vec![1,2,3,4]))
-                Extrinsic::SubmitEncryptedTransaction(encrypted_message)
-                // Extrinsic::SubmitEncryptedTransaction(vec![1,2,34])
-				// extrinsic(0),
-			])
-		).unwrap();
-
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
-		let mut propose_block = |
-			client: &TestClient,
-			number,
-			expected_block_extrinsics,
-			expected_pool_transactions,
-		| {
+		fn produce_and_import_block(& mut self) -> Block {
+			let mut proposer_factory = ProposerFactory::new(self.client.clone(), self.pool.clone(), None, create_key_store());
+			let mut client = self.client.clone();
 			let proposer = proposer_factory.init_with_now(
-				&client.header(&BlockId::number(number)).unwrap().unwrap(),
+				&self.client.header(&BlockId::number(self.block_number)).unwrap().unwrap(),
 				Box::new(move || time::Instant::now()),
+			);
+
+			futures::executor::block_on(
+				self.pool.maintain(chain_event(
+						client.header(&BlockId::Number(self.block_number))
+						.expect("header get error")
+						.expect("there should be header")
+				))
 			);
 
 			// when
 			let deadline = time::Duration::from_secs(9);
+            let mut digests : DigestFor<Block> = Default::default();
+            let babe_pre = sc_consensus_babe::PreDigest::SecondaryPlain(sc_consensus_babe::SecondaryPlainPreDigest{
+                authority_index: 1,
+                slot_number: Default::default(),
+            });
+            digests.push(DigestItem::babe_pre_digest(babe_pre));
 			let block = futures::executor::block_on(
-				proposer.propose(create_inherents(), Default::default(), deadline, RecordProof::No)
+				proposer.propose(create_inherents(), digests, deadline, RecordProof::No)
 			).map(|r| r.block).unwrap();
+			client.import(BlockOrigin::Own, block.clone()).unwrap();
+			self.block_number += 1;
+			block
+		}
 
-			// then
-			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
-			assert_eq!(txpool.ready().count(), expected_pool_transactions);
+		fn encrypt_payload_using_pub_key(&self, pub_key: &sp_core::ecdsa::Public, payload: &[u8]) -> Vec<u8>{
+			let dummy_secret_key: SecretKey = SecretKey::default();
+			let pub_key = PublicKey::parse_slice(pub_key.as_ref(), None).unwrap();
+			let encryption_key = encapsulate(&dummy_secret_key, &pub_key).unwrap();
+			aes_encrypt(&encryption_key, &payload).unwrap()
+		}
 
-				block
-			};
-
-		futures::executor::block_on(
-			txpool.maintain(chain_event(
-				client.header(&BlockId::Number(0u64))
-					.expect("header get error")
-					.expect("there should be header")
-			))
-		);
-
-		// let's create one block and import it
-		let block = propose_block(&client, 0, 1, 1);
-		let block_hash = block.header().hash();
-        println!("{:?}", block.extrinsics());
-		client.import(BlockOrigin::Own, block).unwrap();
-        // txpool.clone().pool().prune_known(&BlockId::number(0), vec![Extrinsic::SubmitEncryptedTransaction(vec![1,2,3,4])]);
-        //
-		futures::executor::block_on(
-			txpool.maintain(chain_event(
-				client.header(&BlockId::Number(1))
-					.expect("header get error")
-					.expect("there should be header")
-			))
-		);
-
-
-		let block = propose_block(&client, 1, 0, 0);
-		let block_hash = block.header().hash();
-        println!("{:?}", block.extrinsics());
-		client.import(BlockOrigin::Own, block).unwrap();
-
-		futures::executor::block_on(
-			txpool.maintain(chain_event(
-				client.header(&BlockId::Number(2))
-					.expect("header get error")
-					.expect("there should be header")
-			))
-		);
-
-
-		let block = propose_block(&client, 1, 0, 0);
-		let block_hash = block.header().hash();
-        println!("{:?}", block.extrinsics());
-		client.import(BlockOrigin::Own, block).unwrap();
-
-		// push one extra block - extrinsics in the pool makred as 'exhausted_resources'
-		// to succeed needs to be executed as first in the processed block. Due to
-		// modifications in block_builder all extrinsics from previous block are applied
-		// beofre trying to validate extrinsics from the tx pool. Once we include empty
-		// block in between 'exhausted_resources' extrinsic from the pool is exeucted as
-		// the first one and the origin test logic is maintained
-		// let block = client.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
-		// 	.unwrap()
-		// 	.build(Default::default())
-		// 	.unwrap();
-		// client.import(BlockOrigin::Own, block.block).unwrap();
-
-		// let block = propose_block(&client, 0, 1, 0);
-		// let block_hash = block.header().hash();
-        // println!("extrinsics count: {}", block.extrinsics().len());
-		// client.import(BlockOrigin::Own, block.clone()).unwrap();
-        //
-		// futures::executor::block_on(
-		// 	txpool.maintain(chain_event(
-		// 		client.header(&BlockId::Hash(block_hash))
-		// 			.expect("header get error")
-		// 			.expect("there should be header")
-		// 	))
-		// );
-        //
-		// let block = client.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
-		// 	.unwrap()
-		// 	.build(Default::default())
-		// 	.unwrap();
-        // let block_hash = block.block.header().hash().clone();
-        // println!("extrinsics count: {}", block.block.extrinsics().len());
-		// client.import(BlockOrigin::Own, block.block).unwrap();
-        //
-		// futures::executor::block_on(
-		// 	txpool.maintain(chain_event(
-		// 		client.header(&BlockId::Hash(block_hash))
-		// 			.expect("header get error")
-		// 			.expect("there should be header")
-		// 	))
-		// );
-        //
-		// let block = propose_block(&client, 2, 1, 0);
-		// let block_hash = block.header().hash();
-        // println!("extrinsics count: {}", block.extrinsics().len());
-		// client.import(BlockOrigin::Own, block.clone()).unwrap();
-        //
-		// futures::executor::block_on(
-		// 	txpool.maintain(chain_event(
-		// 		client.header(&BlockId::Hash(block_hash))
-		// 			.expect("header get error")
-		// 			.expect("there should be header")
-		// 	))
-		// );
-        //
-		// let block = propose_block(&client, 0, 1, 0);
-		// let block_hash = block.header().hash();
-        // println!("extrinsics count: {}", block.extrinsics().len());
-		// client.import(BlockOrigin::Own, block.clone()).unwrap();
-        //
-		// futures::executor::block_on(
-		// 	txpool.maintain(chain_event(
-		// 		client.header(&BlockId::Hash(block_hash))
-		// 			.expect("header get error")
-		// 			.expect("there should be header")
-		// 	))
-		// );
-        //
-		// let block = propose_block(&client, 0, 1, 0);
-		// let block_hash = block.header().hash();
-        // println!("extrinsics count: {}", block.extrinsics().len());
-		// client.import(BlockOrigin::Own, block.clone()).unwrap();
-        //
-		// futures::executor::block_on(
-		// 	txpool.maintain(chain_event(
-		// 		client.header(&BlockId::Hash(block_hash))
-		// 			.expect("header get error")
-		// 			.expect("there should be header")
-		// 	))
-		// );
-        //
-
-		// // let's create one block and import it
-		// let block = propose_block(&client, 0, 1, 0);
-		// let block_hash = block.header().hash();
-		// client.import(BlockOrigin::Own, block).unwrap();
-        //
-		// let block = client.new_block_at(&BlockId::Number(0), Default::default(), false)
-		// 	.unwrap()
-		// 	.build(Default::default())
-		// 	.unwrap();
-		// client.import(BlockOrigin::Own, block.block).unwrap();
-        //
-		// futures::executor::block_on(
-		// 	txpool.maintain(chain_event(
-		// 		client.header(&BlockId::Number(1))
-		// 			.expect("header get error")
-		// 			.expect("there should be header")
-		// 	))
-		// );
-		// // now let's make sure that we can still make some progress
-		// let block = propose_block(&client, 2, 2, 5);
-		// client.import(BlockOrigin::Own, block).unwrap();
 	}
 
-	// #[test]
-	// fn mat_test() {
-    //
-	// 	let encrypted_tx: Vec<_> = vec![EncryptedTx::<<Block as BlockT>::Hash>{
-	// 		tx_id: Default::default(),
-	// 		data: vec![],
-	// 	}];
-    //
-	// 	// given
-	// 	let client = Arc::new(substrate_test_runtime_client::new());
-	// 	let spawner = sp_core::testing::TaskExecutor::new();
-	// 	let txpool = BasicPool::new_full(
-	// 		Default::default(),
-	// 		None,
-	// 		spawner,
-	// 		client.clone(),
-	// 	);
-    //
-	// 	futures::executor::block_on(
-	// 		txpool.submit_at(&BlockId::number(0), SOURCE, vec![Extrinsic::SubmitEncryptedTransaction(vec![])])
-	// 	).unwrap();
-    //
-	// 	futures::executor::block_on(
-	// 		txpool.maintain(chain_event(
-	// 			client.header(&BlockId::Number(0u64))
-	// 				.expect("header get error")
-	// 				.expect("there should be header")
-	// 		))
-	// 	);
-    //
-	// 	let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
-    //
-	// 	let proposer = proposer_factory.init_with_now(
-	// 		&client.header(&BlockId::number(0)).unwrap().unwrap(),
-	// 		Box::new(move || {
-	// 			time::Instant::now()
-	// 		}),
-	// 	);
-    //
-	// 	// when
-	// 	let deadline = time::Duration::from_secs(3);
-	// 	let block = futures::executor::block_on(proposer.propose(
-	// 		create_inherents(),
-	// 		Default::default(),
-	// 		deadline,
-	// 		RecordProof::No,
-	// 	))
-	// 	.map(|r| r.block)
-	// 	.unwrap();
-    //
-	// 	assert_eq!(block.extrinsics().len(), 1); // inherents only [set_timestamp, shuffling_seed]
-	// }
+	#[test]
+	fn inject_doubly_encrypted_tx_and_expect_singly_ecrypted_extrinsic() {
+        let _ = env_logger::try_init();
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
+		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &Default::default()).unwrap();
+
+		let encrypted_message = bb.encrypt_payload_using_pub_key(&collator_public_key, &payload);
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: false,
+					data:encrypted_message
+				}
+			])
+		).unwrap();
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 0);
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+		let extrinsic = &block.extrinsics()[0];
+		assert!(
+			matches!(extrinsic,
+				Extrinsic::EncryptedTX(
+					ExtrinsicType::<<Block as BlockT>::Hash>::SinglyEncryptedTx{
+						singly_encrypted_call, ..
+					}
+				) if singly_encrypted_call == &payload
+			)
+		);
+
+	}
+
+	#[test]
+	fn inject_multiple_doubly_encrypted_txs_and_expect_singly_ecrypted_extrinsic() {
+		// env_logger::init();
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &Default::default()).unwrap();
+		let payload1 = b"hello world1".iter().cloned().collect::<Vec<_>>();
+		let payload2 = b"hello world2".iter().cloned().collect::<Vec<_>>();
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: false,
+					data: bb.encrypt_payload_using_pub_key(&collator_public_key, &payload1)
+				},
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: false,
+					data: bb.encrypt_payload_using_pub_key(&collator_public_key, &payload2)
+				},
+			])
+		).unwrap();
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 2);
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 0);
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 2);
+
+        let decrypted_payloads : HashSet<_> = block.extrinsics().iter()
+            .map(|xt| match xt {
+				Extrinsic::EncryptedTX(
+					ExtrinsicType::<<Block as BlockT>::Hash>::SinglyEncryptedTx{
+						singly_encrypted_call, ..
+					}
+                ) => { singly_encrypted_call },
+                _ => { panic!("wrong extrinsic type") }
+        }).collect();
+
+        assert_eq!(HashSet::from([payload1, payload2].iter().collect()), decrypted_payloads);
+	}
+
+	#[test]
+	fn inject_doubly_encrypted_tx_and_expect_decrytped_transaction() {
+		let _ = env_logger::try_init();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
+		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &Default::default()).unwrap();
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: bb.encrypt_payload_using_pub_key(&collator_public_key, &payload),
+				}
+			])
+		).unwrap();
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 0);
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+		let extrinsic = &block.extrinsics()[0];
+		assert!(
+			matches!(extrinsic,
+				Extrinsic::EncryptedTX(
+					ExtrinsicType::<<Block as BlockT>::Hash>::DecryptedTx{
+						decrypted_call, ..
+					}
+				) if decrypted_call == &payload
+			)
+		);
+
+	}
+
+	#[test]
+	fn dont_panic_on_wrongly_encrypted_doubly_encrypted_tx(){
+		let _ = env_logger::try_init();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: false,
+					data: vec![1,2,3,4,5,6,7,8,9],
+				}
+			])
+		).unwrap();
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+	}
+
+	#[test]
+	fn dont_panic_on_wrongly_encrypted_singly_encrypted_tx(){
+		let _ = env_logger::try_init();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: vec![1,2,3,4,5,6,7,8,9],
+				}
+			])
+		).unwrap();
+
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+	}
+
+	#[test]
+	fn dont_panic_on_empty_payload_in_doubly_encrypted_tx(){
+		let _ = env_logger::try_init();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: false,
+					data: vec![],
+				}
+			])
+		).unwrap();
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+	}
+
+	#[test]
+	fn dont_panic_when_public_key_was_not_found(){
+		let _ = env_logger::try_init();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: vec![],
+				}
+			])
+		).unwrap();
+		let block = bb.produce_and_import_block();
+		assert_eq!(block.extrinsics().len(), 1);
+	}
+
+
 }

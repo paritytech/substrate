@@ -136,24 +136,26 @@ impl Transfer {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub enum EncryptedExtrinsic{
-    DoublyEncrypted{
-        doubly_encrypted_call: Vec<u8>,
-        nonce: u32,
-        weight: Weight,
-        builder: AccountId32,
-        executor: AccountId32,
-    },
-    SinglyEncrypted{
-        identifier: Hash,
-        singly_encrypted_call: Vec<u8>,
-    },
-    Decrypted{
-        identifier: Hash,
-        decrypted_call: Vec<u8>,
-    },
-}
+// #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+// pub enum EncryptedExtrinsic{
+//     DoublyEncrypted{
+//         doubly_encrypted_call: Vec<u8>,
+//         nonce: u32,
+//         weight: Weight,
+//         builder: AccountId32,
+//         executor: AccountId32,
+//     },
+//     SinglyEncrypted{
+//         identifier: Hash,
+//         singly_encrypted_call: Vec<u8>,
+//     },
+//     Decrypted{
+//         identifier: Hash,
+//         decrypted_call: Vec<u8>,
+//     },
+// }
+//
+
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
@@ -167,8 +169,11 @@ pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
-  SubmitEncryptedTransaction(Vec<u8>),
-  EncryptedTX(EncryptedExtrinsic),
+    SubmitEncryptedTransaction{
+		singly_encrypted: bool,
+		data: Vec<u8>,
+	},
+    EncryptedTX(ExtrinsicType<sp_core::H256>),
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -198,7 +203,7 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
 			Extrinsic::EncryptedTX(e) => Ok(Extrinsic::EncryptedTX(e)),
-			Extrinsic::SubmitEncryptedTransaction(e) => Ok(Extrinsic::SubmitEncryptedTransaction(e)),
+            Extrinsic::SubmitEncryptedTransaction{data, singly_encrypted} => Ok(Extrinsic::SubmitEncryptedTransaction{data, singly_encrypted})
 		}
 	}
 }
@@ -595,23 +600,31 @@ cfg_if! {
 			{
 				fn create_submit_singly_encrypted_transaction(identifier: <Block as BlockT>::Hash, singly_encrypted_call: Vec<u8>) -> <Block as BlockT>::Extrinsic{
 					Extrinsic::EncryptedTX(
-						EncryptedExtrinsic::SinglyEncrypted{
+						ExtrinsicType::<<Block as BlockT>::Hash>::SinglyEncryptedTx{
 							identifier,
 							singly_encrypted_call,
 						}
 					)
 				}
 
-				fn create_submit_decrypted_transaction(_identifier: <Block as BlockT>::Hash, _decrypted_call: Vec<u8>, _weight: Weight) -> <Block as BlockT>::Extrinsic{
-					unimplemented!()
+				fn create_submit_decrypted_transaction(identifier: <Block as BlockT>::Hash, decrypted_call: Vec<u8>, _weight: Weight) -> <Block as BlockT>::Extrinsic{
+					Extrinsic::EncryptedTX(
+						ExtrinsicType::<<Block as BlockT>::Hash>::DecryptedTx{
+							identifier,
+							decrypted_call,
+						}
+					)
 				}
 
-				fn get_type(_extrinsic: <Block as BlockT>::Extrinsic) -> ExtrinsicType<<Block as BlockT>::Hash>{
-					unimplemented!()
+				fn get_type(extrinsic: <Block as BlockT>::Extrinsic) -> ExtrinsicType<<Block as BlockT>::Hash>{
+					match extrinsic{
+                        Extrinsic::EncryptedTX(e) => e,
+                        _ => { panic!("should not be called on non encrypted extrinsics") }
+                    }
 				}
 
 				fn get_double_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					let queue: Option<Vec<sp_encrypted_tx::EncryptedTx::<<crate::Block as BlockT>::Hash>>> = frame_support::storage::unhashed::get(b"FIFO");
+					let queue: Option<Vec<EncryptedTx::<<crate::Block as BlockT>::Hash>>> = frame_support::storage::unhashed::get(system::FIFO_DOUBLE_ENCRYPTED);
 					match queue{
 						Some(q) => {
 							log::info!("found queue in storage!");
@@ -622,11 +635,22 @@ cfg_if! {
 				}
 
 				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					frame_support::storage::unhashed::get_or(b"singly", vec![])
+					let queue: Option<Vec<EncryptedTx::<<crate::Block as BlockT>::Hash>>> = frame_support::storage::unhashed::get(system::FIFO_SINGLY_ENCRYPTED);
+					match queue{
+						Some(q) => {
+							log::info!("found queue in storage!");
+							q
+						},
+						None => vec![]
+					}
 				}
 
-				fn get_account_id(_block_builder_id: u32) -> AccountId32{
-					Default::default()
+				fn get_account_id(block_builder_id: u32) -> AccountId32{
+                    if block_builder_id == 0 {
+                        Default::default()
+                    } else {
+                        panic!("unknown block builder id");
+                    }
 				}
 
 				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
@@ -664,7 +688,7 @@ cfg_if! {
 						});
 					}
 
-                    if let Extrinsic::SubmitEncryptedTransaction(data)  = utx {
+                    if let Extrinsic::SubmitEncryptedTransaction{data,..}  = utx {
 						return Ok(ValidTransaction {
 							priority: Default::default(),
 							requires: vec![],
@@ -1281,6 +1305,8 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 
 	#[test]
+    // TODO: fix before PR
+	#[ignore]
 	fn heap_pages_is_respected() {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 

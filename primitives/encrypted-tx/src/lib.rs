@@ -6,10 +6,11 @@ use sp_runtime::AccountId32;
 use sp_std::vec::Vec;
 
 
+use sp_core::RuntimeDebug;
 use frame_support::weights::Weight;
 
 
-#[derive(Encode, Decode, PartialEq)]
+#[derive(Encode, Decode, PartialEq, Clone, Eq, RuntimeDebug)]
 pub enum ExtrinsicType<Hash>{
 	DoublyEncryptedTx{
         doubly_encrypted_call: Vec<u8>,

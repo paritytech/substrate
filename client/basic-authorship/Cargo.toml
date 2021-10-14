@@ -44,6 +44,7 @@ env_logger = "0.9.0"
 # sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
 parking_lot = "0.10.0"
 pallet-random-seed = { path = "../../frame/random-seed", version = "2.0.0" }
+substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-ignore-tx = { "version" = "2.0.0", path = "../../primitives/ignore-tx" }
 frame-support = { "version" = "2.0.0", path = "../../frame/support" }
