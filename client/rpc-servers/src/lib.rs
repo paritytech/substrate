@@ -188,7 +188,7 @@ pub fn start_ws<
 
 	if max_payload > max_out_buffer_capacity {
 		log::warn!(
-			"maximum payload ({}) is more than maximum output buffer ({}) size in ws server, this is a misconfiguration.",
+			"maximum payload ({}) is more than maximum output buffer ({}) size in ws server, the payload will actually be limited by the buffer size",
 			max_payload,
 			max_out_buffer_capacity,
 		)
