@@ -257,7 +257,7 @@ fn node_config<
 		rpc_http: None,
 		rpc_ipc: None,
 		rpc_ws: None,
-		rpc_ws_max_connections: usize::MAX,
+		rpc_ws_max_connections: 100,
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
