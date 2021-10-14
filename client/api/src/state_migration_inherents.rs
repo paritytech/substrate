@@ -88,11 +88,18 @@ where
 	C: ExecutorProvider<B>,
 {
 	use crate::call_executor::CallExecutor;
+
 	let id = sp_runtime::generic::BlockId::Hash(parent.clone());
 	let executor = client.executor();
-	let fn_call = "StateMigrate0To1_calculate_pending_migration_size";
-	let result = executor.call(&id, fn_call, &[], ExecutionStrategy::NativeElseWasm, None)
-		.map_err(|_blockchain_err| Error::FatalErrorReported)?;
+	let fn_call = "CalcPayload_calculate_pending_migration_size";
+	let result = match executor.call(&id, fn_call, &[], ExecutionStrategy::NativeElseWasm, None) {
+		Ok(result) => result,
+		Err(e) => {
+			log::debug!("Inherent provider without runtime function: {:?}", e);
+			return Ok(InherentDataProvider { number_items: 0 });
+		},
+	};
+
 	let number_items = u64::decode(&mut result.as_slice())
 		.map_err(|_decode_err| Error::FatalErrorReported)?;
 

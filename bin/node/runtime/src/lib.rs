@@ -1241,6 +1241,18 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const MigrationWeight: Weight = 500_000_000_000;
+	pub const MigrationMaxSize: u32 = 300;
+	pub const Threshold: u32 = 33;
+}
+
+impl pallet_state_migrate_0_to_1::Config for Runtime {
+	type MigrationWeight = MigrationWeight;
+	type MigrationMaxSize = MigrationMaxSize;
+	type Threshold = Threshold;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1288,6 +1300,7 @@ construct_runtime!(
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 		TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Config<T>, Event<T>},
 		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
+		StateMigrate0To1: pallet_state_migrate_0_to_1::{Pallet, Call, Storage, Inherent},
 	}
 );
 
@@ -1377,6 +1390,12 @@ impl_runtime_apis! {
 
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult {
 			data.check_extrinsics(&block)
+		}
+	}
+
+	impl pallet_state_migrate_0_to_1::CalcPayload<Block> for Runtime {
+		fn calculate_pending_migration_size() -> u64 {
+			StateMigrate0To1::calculate_pending_migration_size()
 		}
 	}
 

@@ -31,6 +31,7 @@ use frame_support::pallet_prelude::*;
 use frame_system::{pallet_prelude::*, WeightInfo};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
+use sp_std::vec::Vec;
 
 pub use pallet::*;
 
@@ -151,7 +152,7 @@ pub mod pallet {
 				// probably ensure! macro do what I want: need check code, and pbbly Mandatory dispatch
 				// class.
 			}
-	
+
 			let migration_progress = MigrationProgress::<T>::get();
 			let (current_top, current_child, current_reserved) = match migration_progress {
 				MigrationState::Finished => return Ok(().into()),
@@ -230,6 +231,14 @@ pub mod pallet {
 		fn is_inherent(call: &Self::Call) -> bool {
 			matches!(call, Call::migrate { .. })
 		}
+	}
+}
+
+sp_api::decl_runtime_apis! {
+	/// Trait to use to expose runtime function used by the inherent provider.
+	pub trait CalcPayload {
+		/// Calculate the migration size given current block migration progress.
+		fn calculate_pending_migration_size() -> u64;
 	}
 }
 
@@ -524,7 +533,7 @@ mod mock {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			StateMigrate0To1: pallet_state_migrate_0_to_1::{Pallet, Storage},
+			StateMigrate0To1: pallet_state_migrate_0_to_1::{Pallet, Call, Storage, Inherent},
 		}
 	);
 
@@ -625,12 +634,14 @@ mod mock {
 		use sp_api::HeaderT;
 		let mut root = Default::default();
 		while System::block_number() < n {
-			System::on_finalize(System::block_number());
-			StateMigrate0To1::on_finalize(System::block_number());
 			System::set_block_number(System::block_number() + 1);
 			System::on_initialize(System::block_number());
 			StateMigrate0To1::on_initialize(System::block_number());
+			// no inherent in these tests, just use the fix threshold limits.
+			StateMigrate0To1::migrate(Origin::none(), u64::MAX).unwrap();
 			root = System::finalize().state_root().clone();
+			System::on_finalize(System::block_number());
+			StateMigrate0To1::on_finalize(System::block_number());
 		}
 		root
 	}

@@ -85,6 +85,7 @@ pallet-session = { version = "4.0.0-dev", features = [
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking/reward-curve" }
+pallet-state-migrate-0-to-1 = { version = "4.0.0-dev", default-features = false, path = "../../../frame/state-migrate-0-to-1" }
 pallet-scheduler = { version = "4.0.0-dev", default-features = false, path = "../../../frame/scheduler" }
 pallet-society = { version = "4.0.0-dev", default-features = false, path = "../../../frame/society" }
 pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../../frame/sudo" }
@@ -135,6 +136,7 @@ std = [
 	"pallet-multisig/std",
 	"pallet-identity/std",
 	"pallet-scheduler/std",
+	"pallet-state-migrate-0-to-1/std",
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",

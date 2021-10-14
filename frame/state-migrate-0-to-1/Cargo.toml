@@ -25,6 +25,7 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 
 [dev-dependencies]
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
