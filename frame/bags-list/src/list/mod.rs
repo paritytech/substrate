@@ -53,7 +53,7 @@ mod tests;
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
-pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
@@ -211,7 +211,7 @@ impl<T: Config> List<T> {
 	}
 
 	/// Returns `true` if the list contains `id`, otherwise returns `false`.
-	pub(crate) fn contains(id: &T::AccountId) -> bool {
+	pub fn contains(id: &T::AccountId) -> bool {
 		crate::ListNodes::<T>::contains_key(id)
 	}
 
@@ -219,7 +219,7 @@ impl<T: Config> List<T> {
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
 	/// `.take(n)`.
-	pub(crate) fn iter() -> impl Iterator<Item = Node<T>> {
+	pub fn iter() -> impl Iterator<Item = Node<T>> {
 		// We need a touch of special handling here: because we permit `T::BagThresholds` to
 		// omit the final bound, we need to ensure that we explicitly include that threshold in the
 		// list.
@@ -261,7 +261,7 @@ impl<T: Config> List<T> {
 	/// Insert a new id into the appropriate bag in the list.
 	///
 	/// Returns an error if the list already contains `id`.
-	pub(crate) fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
+	pub fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
 		if Self::contains(&id) {
 			return Err(Error::Duplicate)
 		}
@@ -291,7 +291,7 @@ impl<T: Config> List<T> {
 	}
 
 	/// Remove an id from the list.
-	pub(crate) fn remove(id: &T::AccountId) {
+	pub fn remove(id: &T::AccountId) {
 		Self::remove_many(sp_std::iter::once(id));
 	}
 
@@ -691,7 +691,7 @@ pub struct Node<T: Config> {
 
 impl<T: Config> Node<T> {
 	/// Get a node by id.
-	pub(crate) fn get(id: &T::AccountId) -> Option<Node<T>> {
+	pub fn get(id: &T::AccountId) -> Option<Node<T>> {
 		crate::ListNodes::<T>::try_get(id).ok()
 	}
 
@@ -735,7 +735,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// `true` when this voter is in the wrong bag.
-	pub(crate) fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 
@@ -745,7 +745,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// Get the underlying voter.
-	pub(crate) fn id(&self) -> &T::AccountId {
+	pub fn id(&self) -> &T::AccountId {
 		&self.id
 	}
 
