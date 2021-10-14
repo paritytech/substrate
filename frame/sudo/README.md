@@ -65,6 +65,6 @@ You need to set an initial superuser account as the sudo `key`.
 
 [`Call`]: ./enum.Call.html
 [`Config`]: ./trait.Config.html
-[`Origin`]: https://docs.substrate.dev/docs/substrate-types
+[`Origin`]: https://docs.substrate.io/v3/runtime/origins
 
 License: Apache-2.0
