@@ -126,9 +126,8 @@ pub struct RunCmd {
 	/// Maximum number of WS RPC server connections.
 	///
 	/// Default is 100.
-	// {this is set in client/rpc-servers/src/lib.rs}
-	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
-	pub ws_max_connections: Option<usize>,
+	#[structopt(long = "ws-max-connections", value_name = "COUNT", default_value = "100")]
+	pub ws_max_connections: usize,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	///
@@ -378,7 +377,7 @@ impl CliConfiguration for RunCmd {
 		Ok(self.no_grandpa)
 	}
 
-	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
+	fn rpc_ws_max_connections(&self) -> Result<usize> {
 		Ok(self.ws_max_connections)
 	}
 
@@ -463,19 +462,19 @@ impl CliConfiguration for RunCmd {
 pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
-		return Err("Node name too long")
+		return Err("Node name too long");
 	}
 
 	let invalid_chars = r"[\\.@]";
 	let re = Regex::new(invalid_chars).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain invalid chars such as '.' and '@'")
+		return Err("Node name should not contain invalid chars such as '.' and '@'");
 	}
 
 	let invalid_patterns = r"(https?:\\/+)?(www)+";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain urls")
+		return Err("Node name should not contain urls");
 	}
 
 	Ok(())
@@ -493,7 +492,7 @@ fn rpc_interface(
 			 a validator. Use `--unsafe-rpc-external` or `--rpc-methods=unsafe` if you understand \
 			 the risks. See the options description for more information."
 				.to_owned(),
-		))
+		));
 	}
 
 	if is_external || is_unsafe_external {
@@ -536,7 +535,7 @@ fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), Telem
 			let verbosity =
 				s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
 			Ok((url, verbosity))
-		},
+		}
 	}
 }
 
@@ -569,8 +568,8 @@ fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> 
 		match part {
 			"all" | "*" => {
 				is_all = true;
-				break
-			},
+				break;
+			}
 			other => origins.push(other.to_owned()),
 		}
 	}

@@ -344,8 +344,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the RPC websockets maximum connections (`None` if unlimited).
 	///
 	/// By default this is `None`.
-	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
-		Ok(None)
+	fn rpc_ws_max_connections(&self) -> Result<usize> {
+		Ok(usize::MAX)
 	}
 
 	/// Get the RPC cors (`None` if disabled)
@@ -598,7 +598,7 @@ pub fn generate_node_name() -> String {
 		let count = node_name.chars().count();
 
 		if count < NODE_NAME_MAX_LENGTH {
-			return node_name
+			return node_name;
 		}
 	}
 }

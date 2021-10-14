@@ -33,9 +33,6 @@ const MEGABYTE: usize = 1024 * 1024;
 /// Maximal payload accepted by RPC servers.
 pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 
-/// Default maximum number of connections for WS RPC servers.
-const WS_MAX_CONNECTIONS: usize = 100;
-
 /// The RPC IoHandler containing all requested APIs.
 pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
@@ -168,7 +165,7 @@ pub fn start_ws<
 	M: pubsub::PubSubMetadata + From<futures::channel::mpsc::UnboundedSender<String>>,
 >(
 	addr: &std::net::SocketAddr,
-	max_connections: Option<usize>,
+	max_connections: usize,
 	cors: Option<&Vec<String>>,
 	io: RpcHandler<M>,
 	maybe_max_payload_mb: Option<usize>,
@@ -183,7 +180,7 @@ pub fn start_ws<
 	})
 	.event_loop_executor(tokio_handle)
 	.max_payload(rpc_max_payload)
-	.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
+	.max_connections(max_connections)
 	.allowed_origins(map_cors(cors))
 	.allowed_hosts(hosts_filtering(cors.is_some()))
 	.session_stats(server_metrics)
@@ -194,7 +191,7 @@ pub fn start_ws<
 		e => {
 			error!("{}", e);
 			io::ErrorKind::Other.into()
-		},
+		}
 	})
 }
 

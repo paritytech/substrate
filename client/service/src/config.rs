@@ -89,8 +89,8 @@ pub struct Configuration {
 	pub rpc_ws: Option<SocketAddr>,
 	/// RPC over IPC binding path. `None` if disabled.
 	pub rpc_ipc: Option<String>,
-	/// Maximum number of connections for WebSockets RPC server. `None` if default.
-	pub rpc_ws_max_connections: Option<usize>,
+	/// Maximum number of connections for WebSockets RPC server.
+	pub rpc_ws_max_connections: usize,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).
@@ -217,7 +217,7 @@ impl Configuration {
 					crate::DEFAULT_PROTOCOL_ID
 				);
 				crate::DEFAULT_PROTOCOL_ID
-			},
+			}
 		};
 		sc_network::config::ProtocolId::from(protocol_id_full)
 	}
