@@ -90,7 +90,7 @@ pub fn default_config(tokio_handle: Handle, mut chain_spec: Box<dyn ChainSpec>) 
 		rpc_http: None,
 		rpc_ws: None,
 		rpc_ipc: None,
-		rpc_ws_max_connections: usize::MAX,
+		rpc_ws_max_connections: Default::default(),
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
