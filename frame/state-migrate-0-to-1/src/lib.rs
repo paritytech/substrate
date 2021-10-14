@@ -26,13 +26,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Compact};
 use frame_support::pallet_prelude::*;
 use frame_system::{pallet_prelude::*, WeightInfo};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 
 pub use pallet::*;
+
+/// Inherent identifier for migration state 0 to 1.
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"mig_s0-1";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -96,6 +99,11 @@ pub mod pallet {
 		MigrationState::default()
 	}
 
+	#[pallet::type_value]
+	pub(crate) fn DefaultBool() -> bool {
+		false
+	}
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		#[pallet::constant]
@@ -112,13 +120,41 @@ pub mod pallet {
 	pub(crate) type MigrationProgress<T> =
 		StorageValue<_, MigrationState, ValueQuery, MigrationProgressOnEmpty>;
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
-			let migration_progress = MigrationProgress::<T>::get();
+	/// Indicates if migration inherent was in block.
+	#[pallet::storage]
+	pub(crate) type MigrationInherentCalled<T> =
+		StorageValue<_, bool, ValueQuery, DefaultBool>;
 
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// Partial state migration  iterating over `item_limit` number of key values,
+		/// and rewriting those item to force use of new state format.
+		///
+		/// # <weight>
+		/// Maximum weight threshold use when calculating inherent
+		/// number of items.
+		/// Can be overestimate in case size threshold did trigger
+		/// before weight threshold.
+		/// # </weight>
+		/// TODO add read write state weigt to the weight threshold
+		/// TODO when item_limit = 1, then we may have a very big value that overweight
+		/// so maybe just use max block weight??
+		#[pallet::weight((T::MigrationWeight::get(), DispatchClass::Mandatory))]
+		pub fn migrate(
+			origin: OriginFor<T>,
+			item_limit: u64,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+			if item_limit == 0 {
+				unimplemented!("TODO error, but what is really needed here would be panic? we don't want block building without its inherent extrinsic");
+				// probably ensure! macro do what I want: need check code, and pbbly Mandatory dispatch
+				// class.
+			}
+	
+			let migration_progress = MigrationProgress::<T>::get();
 			let (current_top, current_child, current_reserved) = match migration_progress {
-				MigrationState::Finished => return T::DbWeight::get().reads(1),
+				MigrationState::Finished => return Ok(().into()),
 				MigrationState::Pending { current_top, current_child, reserved_big } =>
 					(current_top, current_child, reserved_big),
 			};
@@ -135,6 +171,9 @@ pub mod pallet {
 				max_size,
 				threshold,
 				touched: false,
+				simulate: false,
+				number_item_touched: 0,
+				item_limit: Some(item_limit),
 				_ph: sp_std::marker::PhantomData,
 			};
 			if pending.migrate() {
@@ -145,13 +184,95 @@ pub mod pallet {
 					current_child: pending.current_child,
 					reserved_big: pending.current_reserved,
 				});
+				MigrationInherentCalled::<T>::set(true);
 			}
-			T::DbWeight::get().reads(1)
-				+ T::SystemWeightInfo::set_storage(1) // TODO size incorrect for migration pending
-				+ pending.current_weight
+			Ok(().into())
+		}
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_finalize(_n: BlockNumberFor<T>) {
+			let migration_progress = MigrationProgress::<T>::get();
+			match migration_progress {
+				MigrationState::Finished => (),
+				MigrationState::Pending { .. } => {
+					if MigrationInherentCalled::<T>::get() {
+						MigrationInherentCalled::<T>::kill();
+					} else {
+						panic!("Block building without a migration inherent when one should be provided.");
+					}
+				},
+			};
+		}
+	}
+
+	#[pallet::inherent]
+	impl<T: Config> ProvideInherent for Pallet<T> {
+		type Call = Call<T>;
+		type Error = sp_inherents::MakeFatalError<()>;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+			data
+				.get_data::<Compact<u64>>(&Self::INHERENT_IDENTIFIER)
+				.unwrap_or(None)
+				.map(|compact| Call::migrate { item_limit: compact.0 })
 		}
 
-		fn on_finalize(_n: BlockNumberFor<T>) {}
+		fn check_inherent(
+			_call: &Self::Call,
+			_data: &InherentData,
+		) -> sp_std::result::Result<(), Self::Error> {
+			Ok(())
+		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::migrate { .. })
+		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	// exposed immutables.
+
+	/// Calculate the migration size given current block migration progress.
+	pub fn calculate_pending_migration_size() -> u64 {
+		let migration_progress = MigrationProgress::<T>::get();
+		let (current_top, current_child, current_reserved) = match migration_progress {
+			MigrationState::Finished => return 0,
+			MigrationState::Pending { current_top, current_child, reserved_big } =>
+				(current_top, current_child, reserved_big),
+		};
+		let max_weight = T::MigrationWeight::get();
+		let max_size = T::MigrationMaxSize::get();
+		let threshold = T::Threshold::get();
+		let mut pending = PendingMigration::<T> {
+			current_top,
+			current_child,
+			current_reserved,
+			current_weight: 0 as Weight,
+			current_size: 0u32,
+			max_weight,
+			max_size,
+			threshold,
+			touched: false,
+			simulate: true,
+			number_item_touched: 0,
+			item_limit: None,
+			_ph: sp_std::marker::PhantomData,
+		};
+		if pending.migrate() {
+			// enough item so we do touch last item without reaching limit.
+			pending.number_item_touched + 1
+		} else {
+			// number item touched, always at least one.
+			if pending.number_item_touched == 0 {
+				1
+			} else {
+				pending.number_item_touched
+			}
+		}
 	}
 }
 
@@ -165,6 +286,9 @@ struct PendingMigration<T> {
 	max_weight: Weight,
 	max_size: u32,
 	touched: bool,
+	simulate: bool,
+	number_item_touched: u64,
+	item_limit: Option<u64>,
 	_ph: sp_std::marker::PhantomData<T>,
 }
 
@@ -188,6 +312,12 @@ impl<T: frame_system::Config> PendingMigration<T> {
 	}
 
 	// return true if can continue and false if limit reached
+	fn increment_items_touched(&mut self) -> bool {
+		self.number_item_touched += 1;
+		self.item_limit.map(|limit| self.number_item_touched < limit).unwrap_or(true)
+	}
+
+	// return true if can continue and false if limit reached
 	fn process_child_key(&mut self) -> bool {
 		if let (Some(storage_key), Some(current_key)) =
 			(self.current_top.as_ref(), self.current_child.as_ref())
@@ -197,11 +327,13 @@ impl<T: frame_system::Config> PendingMigration<T> {
 			{
 				let len = encode.len() as u32;
 				if len >= self.threshold {
-					sp_io::default_child_storage::set(
-						child_io_key(storage_key),
-						current_key,
-						encode.as_slice(),
-					);
+					if !self.simulate {
+						sp_io::default_child_storage::set(
+							child_io_key(storage_key),
+							current_key,
+							encode.as_slice(),
+						);
+					}
 					if self.new_write(len) {
 						return false
 					}
@@ -225,7 +357,9 @@ impl<T: frame_system::Config> PendingMigration<T> {
 			if let Some(encode) = sp_io::storage::get(current_key) {
 				let len = encode.len() as u32;
 				if len >= self.threshold {
-					sp_io::storage::set(current_key, encode.as_slice());
+					if !self.simulate {
+						sp_io::storage::set(current_key, encode.as_slice());
+					}
 					if self.new_write(len) {
 						return false
 					}
@@ -247,10 +381,16 @@ impl<T: frame_system::Config> PendingMigration<T> {
 	fn migrate_child(&mut self) -> bool {
 		if self.current_child.is_none() {
 			self.current_child = Some(Vec::new());
+			if !self.increment_items_touched() {
+				return false
+			}
 			let _ = self.process_child_key();
 		}
 
 		loop {
+			if !self.increment_items_touched() {
+				return false
+			}
 			if let Some(current_child) = self.current_child.as_ref() {
 				if let Some(next_key) = if let Some(storage_key) = self.current_top.as_ref() {
 					sp_io::default_child_storage::next_key(child_io_key(storage_key), current_child)
@@ -276,9 +416,15 @@ impl<T: frame_system::Config> PendingMigration<T> {
 	fn migrate_top(&mut self) -> bool {
 		if self.current_top.is_none() {
 			self.current_top = Some(Vec::new());
+			if !self.increment_items_touched() {
+				return false
+			}
 			let _ = self.process_top_key();
 		}
 		loop {
+			if !self.increment_items_touched() {
+				return false
+			}
 			if let Some(current_top) = self.current_top.as_ref() {
 				if let Some(next_key) = sp_io::storage::next_key(current_top) {
 					self.new_next();

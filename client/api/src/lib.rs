@@ -29,6 +29,7 @@ pub mod leaves;
 pub mod light;
 pub mod notifications;
 pub mod proof_provider;
+pub mod state_migration_inherents;
 
 pub use backend::*;
 pub use call_executor::*;

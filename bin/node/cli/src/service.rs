@@ -422,7 +422,13 @@ pub fn new_full_base(
 							&parent,
 						)?;
 
-					Ok((timestamp, slot, uncles, storage_proof))
+					let state_migration =
+						sc_client_api::state_migration_inherents::new_migration_provider(
+							&*client_clone,
+							&parent,
+						)?;
+
+					Ok((timestamp, slot, uncles, storage_proof, state_migration))
 				}
 			},
 			force_authoring,

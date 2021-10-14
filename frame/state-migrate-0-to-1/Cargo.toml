@@ -23,6 +23,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 log = { version = "0.4.14", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
 
 [dev-dependencies]
@@ -39,6 +40,7 @@ std = [
 	"scale-info/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-inherents/std",
 	"sp-runtime/std",
   "sp-state-machine/std",
 	"sp-std/std"

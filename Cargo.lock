@@ -5968,6 +5968,7 @@ dependencies = [
  "scale-info",
  "sp-api",
  "sp-core",
+ "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
@@ -7575,6 +7576,7 @@ dependencies = [
 name = "sc-client-api"
 version = "4.0.0-dev"
 dependencies = [
+ "async-trait",
  "fnv",
  "futures 0.3.16",
  "hash-db",
@@ -7590,6 +7592,7 @@ dependencies = [
  "sp-core",
  "sp-database",
  "sp-externalities",
+ "sp-inherents",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
