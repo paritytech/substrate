@@ -80,10 +80,12 @@ impl frame_system::Config for Test {
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
+	pub const OperationalFeeMultiplier: u8 = 5;
 }
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
+	type OperationalFeeMultiplier = OperationalFeeMultiplier;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
@@ -165,11 +167,11 @@ fn transfer_dust_removal_tst1_should_work() {
 		assert_eq!(Balances::free_balance(&1), 1050);
 
 		// Verify the events
-		// Number of events expected is 8
-		assert_eq!(System::events().len(), 11);
+		assert_eq!(System::events().len(), 12);
 
 		System::assert_has_event(Event::Balances(crate::Event::Transfer(2, 3, 450)));
 		System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
+		System::assert_has_event(Event::Balances(crate::Event::Deposit(1, 50)));
 	});
 }
 
@@ -193,11 +195,11 @@ fn transfer_dust_removal_tst2_should_work() {
 		assert_eq!(Balances::free_balance(&1), 1500);
 
 		// Verify the events
-		// Number of events expected is 8
-		assert_eq!(System::events().len(), 9);
+		assert_eq!(System::events().len(), 10);
 
 		System::assert_has_event(Event::Balances(crate::Event::Transfer(2, 1, 450)));
 		System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
+		System::assert_has_event(Event::Balances(crate::Event::Deposit(1, 50)));
 	});
 }
 
@@ -230,8 +232,7 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		assert_eq!(Balances::free_balance(1), 1500);
 
 		// Verify the events
-		// Number of events expected is 10
-		assert_eq!(System::events().len(), 10);
+		assert_eq!(System::events().len(), 11);
 
 		System::assert_has_event(Event::Balances(crate::Event::ReserveRepatriated(
 			2,
@@ -239,7 +240,7 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 			450,
 			Status::Free,
 		)));
-
-		System::assert_last_event(Event::Balances(crate::Event::DustLost(2, 50)));
+		System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
+		System::assert_last_event(Event::Balances(crate::Event::Deposit(1, 50)));
 	});
 }

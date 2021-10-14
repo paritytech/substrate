@@ -69,7 +69,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	if get_doc_literals(&error_item.attrs).is_empty() {
 		error_item.attrs.push(syn::parse_quote!(
 			#[doc = r"
-			Custom [dispatch errors](https://substrate.dev/docs/en/knowledgebase/runtime/errors)
+			Custom [dispatch errors](https://docs.substrate.io/v3/runtime/events-and-errors)
 			of this pallet.
 			"]
 		));

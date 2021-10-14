@@ -338,7 +338,7 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 }
 
 #[test]
-fn return_true_if_more_than_third_is_disabled() {
+fn disable_index_returns_false_if_already_disabled() {
 	new_test_ext().execute_with(|| {
 		set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
 		force_new_session();
@@ -347,10 +347,9 @@ fn return_true_if_more_than_third_is_disabled() {
 		force_new_session();
 		initialize_block(2);
 
+		assert_eq!(Session::disable_index(0), true);
 		assert_eq!(Session::disable_index(0), false);
-		assert_eq!(Session::disable_index(1), false);
-		assert_eq!(Session::disable_index(2), true);
-		assert_eq!(Session::disable_index(3), true);
+		assert_eq!(Session::disable_index(1), true);
 	});
 }
 
