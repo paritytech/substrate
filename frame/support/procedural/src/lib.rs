@@ -354,6 +354,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///
 /// Pallet [`Hooks`] (e.g. `on_initialize`) are currently executed in *reverse* declaration order
 /// (see https://github.com/paritytech/substrate/issues/6280).
+/// `frame_system` is an exception and is executed first independent of its position.
 ///
 /// # Type definitions
 ///
