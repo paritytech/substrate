@@ -1411,6 +1411,7 @@ impl NetworkBehaviour for Notifications {
 
 	fn inject_disconnected(&mut self, _peer_id: &PeerId) {}
 
+	/*
 	fn inject_addr_reach_failure(
 		&mut self,
 		peer_id: Option<&PeerId>,
@@ -1478,6 +1479,16 @@ impl NetworkBehaviour for Notifications {
 				}
 			}
 		}
+	}
+	*/
+
+	fn inject_dial_failure(
+		&mut self,
+		peer_id: Option<PeerId>,
+		_: Self::ProtocolsHandler,
+		error: &libp2p::swarm::DialError,
+	) {
+		// FIXME
 	}
 
 	fn inject_event(&mut self, source: PeerId, connection: ConnectionId, event: NotifsHandlerOut) {

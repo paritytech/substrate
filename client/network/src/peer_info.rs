@@ -256,6 +256,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		}
 	}
 
+	/*
 	fn inject_addr_reach_failure(
 		&mut self,
 		peer_id: Option<&PeerId>,
@@ -269,6 +270,16 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
 		self.ping.inject_dial_failure(peer_id);
 		self.identify.inject_dial_failure(peer_id);
+	}
+	*/
+
+	fn inject_dial_failure(
+		&mut self,
+		peer_id: Option<PeerId>,
+		_: Self::ProtocolsHandler,
+		error: &libp2p::swarm::DialError,
+	) {
+		// FIXME
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {

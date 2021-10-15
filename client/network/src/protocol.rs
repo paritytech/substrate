@@ -1778,6 +1778,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		Poll::Pending
 	}
 
+	/*
 	fn inject_addr_reach_failure(
 		&mut self,
 		peer_id: Option<&PeerId>,
@@ -1789,6 +1790,16 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
 		self.behaviour.inject_dial_failure(peer_id)
+	}
+	*/
+
+	fn inject_dial_failure(
+		&mut self,
+		peer_id: Option<PeerId>,
+		_: Self::ProtocolsHandler,
+		error: &libp2p::swarm::DialError,
+	) {
+		// FIXME
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {

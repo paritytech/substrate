@@ -563,6 +563,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 	}
 
+	fn inject_dial_failure(
+		&mut self,
+		peer_id: Option<PeerId>,
+		_: Self::ProtocolsHandler,
+		error: &libp2p::swarm::DialError,
+	) {
+		// FIXME
+	}
+
+	/*
 	fn inject_addr_reach_failure(
 		&mut self,
 		peer_id: Option<&PeerId>,
@@ -579,6 +589,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			NetworkBehaviour::inject_addr_reach_failure(k, peer_id, addr, error)
 		}
 	}
+	*/
 
 	fn inject_event(
 		&mut self,
@@ -629,11 +640,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 	}
 
+	/*
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_dial_failure(k, peer_id)
 		}
 	}
+	*/
 
 	fn inject_new_listener(&mut self, id: ListenerId) {
 		for k in self.kademlias.values_mut() {
