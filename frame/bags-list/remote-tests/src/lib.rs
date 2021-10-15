@@ -21,7 +21,7 @@ use pallet_election_provider_multi_phase as EPM;
 use sp_std::convert::TryInto;
 
 /// A common log target to use.
-pub const LOG_TARGET: &'static str = "remote-tests::bags-list";
+pub const LOG_TARGET: &'static str = "runtime::bags-list::remote-tests";
 
 pub mod migration;
 pub mod sanity_check;
