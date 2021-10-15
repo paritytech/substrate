@@ -21,36 +21,18 @@
 //! This allows that the over threshold state query is not included in the block processing.
 //! This is relevant to avoid touching a big value when going over one of the thresholds.
 
-
 use std::result::Result;
 
-use codec::{Decode, Compact};
+use crate::ExecutorProvider;
+use codec::{Compact, Decode};
 use sp_inherents::{InherentData, InherentIdentifier};
 use sp_runtime::traits::Block as BlockT;
-use crate::ExecutorProvider;
 use sp_state_machine::ExecutionStrategy;
 
 pub use sp_inherents::Error;
 
 /// The identifier for the state migration.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"mig_s0-1"; // TODO get this from pallet
-
-/// Auxiliary trait to extract inherent data.
-/// TODO check if possible without trait
-/// TODO in runtime module do not accept size 0 if pending
-/// migration. (size 0 can be no provider define or finished
-/// migration (second would be a bug)).
-pub trait BlockMigrationPayloaldInherentData {
-	/// Get the number of items to process.
-	fn number_items(&self) -> Result<u64, Error>;
-}
-
-impl BlockMigrationPayloaldInherentData for InherentData {
-	fn number_items(&self) -> Result<u64, Error> {
-		let number_items: Option<Compact<u64>> = self.get_data(&INHERENT_IDENTIFIER)?;
-		Ok(number_items.map(|i| i.0).unwrap_or(0))
-	}
-}
 
 /// Provider for inherent data, already contains input.
 pub struct InherentDataProvider {
@@ -72,7 +54,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		_: &InherentIdentifier,
 		_: &[u8],
 	) -> Option<Result<(), Error>> {
-		None // TODO I am considering no error as migration is pretty simple, double check that is ok.
+		None
 	}
 }
 
@@ -96,12 +78,12 @@ where
 		Ok(result) => result,
 		Err(e) => {
 			log::debug!("Inherent provider without runtime function: {:?}", e);
-			return Ok(InherentDataProvider { number_items: 0 });
+			return Ok(InherentDataProvider { number_items: 0 })
 		},
 	};
 
-	let number_items = u64::decode(&mut result.as_slice())
-		.map_err(|_decode_err| Error::FatalErrorReported)?;
+	let number_items =
+		u64::decode(&mut result.as_slice()).map_err(|_decode_err| Error::FatalErrorReported)?;
 
 	Ok(InherentDataProvider { number_items })
 }

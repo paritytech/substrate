@@ -26,7 +26,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, Compact};
+use codec::{Compact, Decode, Encode};
 use frame_support::pallet_prelude::*;
 use frame_system::{pallet_prelude::*, WeightInfo};
 use scale_info::TypeInfo;
@@ -123,9 +123,7 @@ pub mod pallet {
 
 	/// Indicates if migration inherent was in block.
 	#[pallet::storage]
-	pub(crate) type MigrationInherentCalled<T> =
-		StorageValue<_, bool, ValueQuery, DefaultBool>;
-
+	pub(crate) type MigrationInherentCalled<T> = StorageValue<_, bool, ValueQuery, DefaultBool>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -137,20 +135,18 @@ pub mod pallet {
 		/// number of items.
 		/// Can be overestimate in case size threshold did trigger
 		/// before weight threshold.
+		/// Write of the pending state is estimated to a 150 byte len (considering
+		/// two long key of more than 64 byte as parent and child key).
 		/// # </weight>
-		/// TODO add read write state weigt to the weight threshold
-		/// TODO when item_limit = 1, then we may have a very big value that overweight
-		/// so maybe just use max block weight??
-		#[pallet::weight((T::MigrationWeight::get(), DispatchClass::Mandatory))]
-		pub fn migrate(
-			origin: OriginFor<T>,
-			item_limit: u64,
-		) -> DispatchResultWithPostInfo {
+		/// TODO when item_limit is forced to 1 from 0, then we may have a very big value that
+		/// overweight so in this case just use max block weight?? TODO how to know max block
+		/// weight.
+		#[pallet::weight((T::MigrationWeight::get() + T::SystemWeightInfo::set_storage(1) + T::SystemWeightInfo::set_storage(150), DispatchClass::Mandatory))]
+		pub fn migrate(origin: OriginFor<T>, item_limit: u64) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			if item_limit == 0 {
 				unimplemented!("TODO error, but what is really needed here would be panic? we don't want block building without its inherent extrinsic");
-				// probably ensure! macro do what I want: need check code, and pbbly Mandatory dispatch
-				// class.
+				// ensure! just return clean error, what I want is this block to be refused on eval
 			}
 
 			let migration_progress = MigrationProgress::<T>::get();
@@ -197,13 +193,12 @@ pub mod pallet {
 			let migration_progress = MigrationProgress::<T>::get();
 			match migration_progress {
 				MigrationState::Finished => (),
-				MigrationState::Pending { .. } => {
+				MigrationState::Pending { .. } =>
 					if MigrationInherentCalled::<T>::get() {
 						MigrationInherentCalled::<T>::kill();
 					} else {
 						panic!("Block building without a migration inherent when one should be provided.");
-					}
-				},
+					},
 			};
 		}
 	}
@@ -215,8 +210,7 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			data
-				.get_data::<Compact<u64>>(&Self::INHERENT_IDENTIFIER)
+			data.get_data::<Compact<u64>>(&Self::INHERENT_IDENTIFIER)
 				.unwrap_or(None)
 				.map(|compact| Call::migrate { item_limit: compact.0 })
 		}
@@ -303,7 +297,8 @@ struct PendingMigration<T> {
 
 impl<T: frame_system::Config> PendingMigration<T> {
 	fn new_read(&mut self, len: u32) -> bool {
-		// TODO should it take size in account?
+		// TODO should it take size of read content in account: would need bench?
+		// a T::SystemWeightInfo::get_storage(len) ?
 		self.current_weight += T::DbWeight::get().reads(1);
 		self.current_size += len;
 		self.current_size > self.max_size || self.current_weight > self.max_weight
@@ -317,7 +312,9 @@ impl<T: frame_system::Config> PendingMigration<T> {
 	}
 
 	fn new_next(&mut self) {
-		self.current_weight += T::DbWeight::get().reads(1); // TODO what is next key weight?
+		// TODO what is next key weight? here ~ it to a simple read, but
+		// in fact we will also count next key read.
+		self.current_weight += T::DbWeight::get().reads(1);
 	}
 
 	// return true if can continue and false if limit reached
