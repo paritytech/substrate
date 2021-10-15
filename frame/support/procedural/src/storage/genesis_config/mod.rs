@@ -87,6 +87,31 @@ fn decl_genesis_config_and_impl_default(
 				}
 			}
 		}
+
+		macro_rules! impl_substrate_pallet_config {
+			{
+				pallet = [{ $pallet_type:ident <$config_instance:ident : $config_name:ident $(<I>, $instance:ident : $instantiable:path)?> }]
+				where_bounds = [{ $( $other_where_bounds:tt )* }]
+			} => {
+				pub trait SubstratePalletConfig {
+					type GenesisConfig;
+				}
+
+				#[cfg(feature = "std")]
+				impl<$config_instance: $config_name $(<I>, $instance: $instantiable)?> SubstratePalletConfig
+					for $pallet_type<$config_instance $(, $instance)?>
+				where
+					$( $other_where_bounds )*
+				{
+					type GenesisConfig = GenesisConfig#genesis_struct;
+				}
+			};
+		}
+
+		#scrate::tt_call! {
+			macro = [{ tt_get_pallet_type }]
+			~~> impl_substrate_pallet_config
+		}
 	)
 }
 

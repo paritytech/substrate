@@ -61,7 +61,8 @@ mod module1 {
 		pub struct Module<T: Config<I>, I: Instance> for enum Call where
 			origin: <T as system::Config>::Origin,
 			system = system,
-			T::BlockNumber: From<u32>
+			T::BlockNumber: From<u32>,
+			T::BlockNumber: std::fmt::Display
 		{
 			fn offchain_worker() {}
 
@@ -95,6 +96,7 @@ mod module1 {
 		pub enum Error for Module<T: Config<I>, I: Instance> where
 			T::BlockNumber: From<u32>,
 			T::BlockNumber: Add,
+			T::BlockNumber: std::fmt::Display,
 			T::AccountId: AsRef<[u8]>,
 		{
 			/// Test
@@ -122,7 +124,7 @@ mod module1 {
 
 	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I>
 	where
-		T::BlockNumber: From<u32>,
+		T::BlockNumber: From<u32> + std::fmt::Display,
 	{
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<()>;
@@ -295,20 +297,20 @@ frame_support::construct_runtime!(
 	{
 		System: system::{Pallet, Call, Event},
 		Module1_1: module1::<Instance1>::{
-			Pallet, Call, Storage, Event, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event, Config, Origin<T>, Inherent
 		},
 		Module1_2: module1::<Instance2>::{
-			Pallet, Call, Storage, Event, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event, Config, Origin<T>, Inherent
 		},
-		Module2: module2::{Pallet, Call, Storage, Event, Config<T>, Origin<T>, Inherent},
+		Module2: module2::{Pallet, Call, Storage, Event, Config, Origin<T>, Inherent},
 		Module2_1: module2::<Instance1>::{
-			Pallet, Call, Storage, Event, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event, Config, Origin<T>, Inherent
 		},
 		Module2_2: module2::<Instance2>::{
-			Pallet, Call, Storage, Event, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event, Config, Origin<T>, Inherent
 		},
 		Module2_3: module2::<Instance3>::{
-			Pallet, Call, Storage, Event, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event, Config, Origin<T>, Inherent
 		},
 		Module3: module3::{Pallet, Call},
 	}

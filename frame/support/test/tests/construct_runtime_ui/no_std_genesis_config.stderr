@@ -15,7 +15,7 @@ error: `Pallet` does not have the std feature enabled, this will cause the `test
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/no_std_genesis_config.rs:19:11
    |
-19 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
+19 |         System: system::{Pallet, Call, Storage, Config, Event},
    |                 ^^^^^^ use of undeclared crate or module `system`
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`

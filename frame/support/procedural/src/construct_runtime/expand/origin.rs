@@ -31,7 +31,7 @@ pub fn expand_outer_origin(
 			syn::Error::new(
 				pallets_token.span,
 				"`System` pallet declaration is missing. \
-			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
+			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event},`",
 			)
 		})?;
 

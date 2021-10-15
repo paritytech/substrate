@@ -107,7 +107,22 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		_ => unreachable!("Checked by genesis_config parser"),
 	}
 
+	let config_ident = &genesis_config.genesis_config;
+	let config_use_gen = &genesis_config.gen_kind.type_use_gen(config_ident.span());
+	let config_where_clause = def.config.where_clause.iter();
+	let type_impl_gen = &def.type_impl_generics(config_ident.span());
+	let type_use_gen = &def.type_use_generics(config_ident.span());
+
 	quote::quote! {
+		pub trait SubstratePalletConfig {
+			type GenesisConfig;
+		}
+
+		#[cfg(feature = "std")]
+		impl<#type_impl_gen> SubstratePalletConfig for Pallet<#type_use_gen> #(#config_where_clause)* {
+			type GenesisConfig = #config_ident<#config_use_gen>;
+		}
+
 		#[doc(hidden)]
 		pub mod __substrate_genesis_config_check {
 			#[macro_export]

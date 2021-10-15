@@ -18,7 +18,7 @@ error: `Pallet` does not have #[pallet::validate_unsigned] defined, perhaps you 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_validate_unsigned_part.rs:28:11
    |
-28 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
+28 |         System: system::{Pallet, Call, Storage, Config, Event},
    |                 ^^^^^^ use of undeclared crate or module `system`
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`

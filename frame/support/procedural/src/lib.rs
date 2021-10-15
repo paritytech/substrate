@@ -230,7 +230,7 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 /// construct_runtime!(
 /// 	pub enum Runtime with ... {
 ///         ...,
-///         Example: example::{Pallet, Storage, ..., Config<T>},
+///         Example: example::{Pallet, Storage, ..., Config},
 ///         ...,
 /// 	}
 /// );
@@ -305,13 +305,13 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = node::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system::{Pallet, Call, Event<T>, Config<T>} = 0,
+///         System: system::{Pallet, Call, Event, Config} = 0,
 ///         Test: test::{Pallet, Call} = 1,
-///         Test2: test_with_long_module::{Pallet, Event<T>},
+///         Test2: test_with_long_module::{Pallet, Event},
 ///
 ///         // Pallets with instances
 ///         Test3_Instance1: test3::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
-///         Test3_DefaultInstance: test3::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
+///         Test3_DefaultInstance: test3::{Pallet, Call, Storage, Event, Config, Origin<T>} = 4,
 ///     }
 /// )
 /// ```
@@ -326,10 +326,9 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// - `Pallet` - Required for all pallets
 /// - `Call` - If the pallet has callable functions
 /// - `Storage` - If the pallet uses storage
-/// - `Event` or `Event<T>` (if the event is generic) - If the pallet emits events
+/// - `Event` - If the pallet emits events
 /// - `Origin` or `Origin<T>` (if the origin is generic) - If the pallet has instanciable origins
-/// - `Config` or `Config<T>` (if the config is generic) - If the pallet builds the genesis storage
-///   with `GenesisConfig`
+/// - `Config` - If the pallet builds the genesis storage with `GenesisConfig`
 /// - `Inherent` - If the pallet provides/can check inherents.
 /// - `ValidateUnsigned` - If the pallet validates unsigned extrinsics.
 ///

@@ -1983,6 +1983,7 @@ macro_rules! decl_module {
 		$crate::__create_tt_macro! {
 			tt_get_pallet_type,
 			pallet = [{ $mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> }]
+			where_bounds = [{ $( $other_where_bounds )* }]
 		}
 
 		$crate::decl_module! {

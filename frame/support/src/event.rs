@@ -308,13 +308,16 @@ macro_rules! impl_substrate_pallet_event {
 	{
 		event = [{ Event $( <$event_generic_param:ident $(, $event_instance:ident)?> )? }]
 		pallet = [{ $pallet_type:ident <$config_instance:ident : $config_name:ident $(<I>, $instance:ident : $instantiable:path)?> }]
+		where_bounds = [{ $( $other_where_bounds:tt )* }]
 	} => {
 		pub trait SubstratePalletEvent {
 			type Event;
 		}
 
-		impl<$config_instance: $config_name $(<I>, $instance: $instantiable)?>
-			SubstratePalletEvent for $pallet_type<$config_instance $(, $instance)?>
+		impl<$config_instance: $config_name $(<I>, $instance: $instantiable)?> SubstratePalletEvent
+			for $pallet_type<$config_instance $(, $instance)?>
+		where
+			$( $other_where_bounds )*
 		{
 			type Event = Event $( <$event_generic_param $(, $event_instance)?> )?;
 		}

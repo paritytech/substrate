@@ -18,7 +18,7 @@ error: `Pallet` does not have #[pallet::event] defined, perhaps you should remov
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_event_part.rs:28:11
    |
-28 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
+28 |         System: system::{Pallet, Call, Storage, Config, Event},
    |                 ^^^^^^ use of undeclared crate or module `system`
 
 error[E0412]: cannot find type `Event` in module `pallet`

@@ -32,16 +32,21 @@ pub fn expand_outer_config(
 	let mut query_genesis_config_part_macros = Vec::new();
 
 	for decl in pallet_decls {
-		if let Some(pallet_entry) = decl.find_part("Config") {
+		if decl.exists_part("Config") {
 			let path = &decl.path;
 			let pallet_name = &decl.name;
 			let path_str = path.into_token_stream().to_string();
-			let config = format_ident!("{}Config", pallet_name);
+			let config = &format_ident!("{}Config", pallet_name);
 			let field_name =
 				&Ident::new(&pallet_name.to_string().to_snake_case(), decl.name.span());
-			let part_is_generic = !pallet_entry.generics.params.is_empty();
+			let instance = decl.instance.as_ref().into_iter();
 
-			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
+			types.extend(quote! {
+				#[cfg(any(feature = "std", test))]
+				pub type #config = <
+					#path::Pallet<#runtime #(, #path::#instance)*> as #path::SubstratePalletConfig
+				>::GenesisConfig;
+			});
 			fields.extend(quote!(pub #field_name: #config,));
 			build_storage_calls.extend(expand_config_build_storage_call(
 				scrate,
@@ -88,30 +93,6 @@ pub fn expand_outer_config(
 				Ok(())
 			}
 		}
-	}
-}
-
-fn expand_config_types(
-	runtime: &Ident,
-	decl: &Pallet,
-	config: &Ident,
-	part_is_generic: bool,
-) -> TokenStream {
-	let path = &decl.path;
-
-	match (decl.instance.as_ref(), part_is_generic) {
-		(Some(inst), true) => quote! {
-			#[cfg(any(feature = "std", test))]
-			pub type #config = #path::GenesisConfig<#runtime, #path::#inst>;
-		},
-		(None, true) => quote! {
-			#[cfg(any(feature = "std", test))]
-			pub type #config = #path::GenesisConfig<#runtime>;
-		},
-		(_, false) => quote! {
-			#[cfg(any(feature = "std", test))]
-			pub type #config = #path::GenesisConfig;
-		},
 	}
 }
 

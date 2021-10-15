@@ -269,12 +269,12 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Pallet, Call, Event},
-		Example: pallet::{Pallet, Call, Event, Config<T>, Storage},
-		PalletOld: pallet_old::{Pallet, Call, Event, Config<T>, Storage},
-		Instance2Example: pallet::<Instance2>::{Pallet, Call, Event, Config<T>, Storage},
-		PalletOld2: pallet_old::<Instance2>::{Pallet, Call, Event, Config<T>, Storage},
-		Instance3Example: pallet::<Instance3>::{Pallet, Call, Event, Config<T>, Storage},
-		PalletOld3: pallet_old::<Instance3>::{Pallet, Call, Event, Config<T>, Storage},
+		Example: pallet::{Pallet, Call, Event, Config, Storage},
+		PalletOld: pallet_old::{Pallet, Call, Event, Config, Storage},
+		Instance2Example: pallet::<Instance2>::{Pallet, Call, Event, Config, Storage},
+		PalletOld2: pallet_old::<Instance2>::{Pallet, Call, Event, Config, Storage},
+		Instance3Example: pallet::<Instance3>::{Pallet, Call, Event, Config, Storage},
+		PalletOld3: pallet_old::<Instance3>::{Pallet, Call, Event, Config, Storage},
 	}
 );
 

@@ -307,8 +307,8 @@ frame_support::construct_runtime!(
 		Instance1Example: pallet::<Instance1>::{
 			Pallet, Call, Event, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
 		},
-		Example2: pallet2::{Pallet, Event, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Event, Config<T>, Storage},
+		Example2: pallet2::{Pallet, Event, Config, Storage},
+		Instance1Example2: pallet2::<Instance1>::{Pallet, Event, Config, Storage},
 	}
 );
 
