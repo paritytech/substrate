@@ -51,6 +51,8 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+const INVALID_COLLATOR_ID: &str = "invalid collator id";
+
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
 	/// The client instance.
@@ -205,10 +207,12 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		let keystore = self.keystore.clone();
 
         let api = self.client.runtime_api();
-		let public_key = api.get_authority_public_key(&self.parent_id, account_id).unwrap();
+		let public_key = api.get_authority_public_key(&self.parent_id, account_id)?
+            .ok_or(sp_blockchain::Error::Backend("public key not found".to_owned()))?;
 		debug!(target:"basic_authorship","public_key id:  {:?}", public_key);
 
-		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx")).unwrap();
+		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx"))
+            .map_err(|_| sp_blockchain::Error::Backend("key not found in storage".to_owned()))?;
 
 		let seed: [u8; 32] = key_pair.seed();
 		let priv_key: SecretKey = SecretKey::parse_slice(&seed).unwrap();
@@ -238,9 +242,10 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		// https://trello.com/c/YPt5RKOj/325-newsolve-problem-of-missing-blockbuilderid-information-in-substrate-tests
 		let block_builder_id = sc_consensus_babe::extract_pre_digest::<Block>(&inherent_digests)
 			.map(|pre_digest| pre_digest.authority_index())
-			.map_err(|e| sp_blockchain::Error::Backend(e.to_string())).unwrap_or_default();
+			.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?;
 
-		let account_id = api.get_account_id(&self.parent_id, block_builder_id).unwrap();
+		let account_id = api.get_account_id(&self.parent_id, block_builder_id)?
+            .ok_or(sp_blockchain::Error::Backend(INVALID_COLLATOR_ID.to_owned()))?;
 		debug!(target:"basic_authorship", "account id:  {:?}", account_id); 
 
 		let mut block_builder = self.client.new_block_at(
@@ -431,7 +436,7 @@ mod tests {
     use ecies::utils::{aes_encrypt, encapsulate};
     use sp_encrypted_tx::ExtrinsicType;
     use std::collections::HashSet;
-    use sc_consensus_babe::CompatibleDigestItem;
+    use sc_consensus_babe::{PreDigest, CompatibleDigestItem, SecondaryPlainPreDigest};
 
 	use substrate_test_runtime_client::{
 		prelude::*,
@@ -455,6 +460,16 @@ mod tests {
 		data
 	}
 
+    fn create_digest() -> DigestFor<Block>{
+        let mut digests : DigestFor<Block> = Default::default();
+        let babe_pre = sc_consensus_babe::PreDigest::SecondaryPlain(sc_consensus_babe::SecondaryPlainPreDigest{
+            authority_index: substrate_test_runtime::ALICE_COLLATOR_ID,
+            slot_number: Default::default(),
+        });
+        digests.push(DigestItem::babe_pre_digest(babe_pre));
+        digests
+    }
+
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
 			amount: Default::default(),
@@ -475,7 +490,7 @@ mod tests {
 
 	fn create_key_store() -> KeyStorePtr{
 		let store = Store::new_in_memory();
-        
+
 		let secret_uri = "//Alice";
 		store.write().insert_ephemeral_from_seed_by_type::<sp_core::ecdsa::Pair>(
 			secret_uri,
@@ -532,7 +547,7 @@ mod tests {
 		let deadline = time::Duration::from_secs(3);
 		let block = futures::executor::block_on(proposer.propose(
 			create_inherents(),
-			Default::default(),
+			create_digest(),
 			deadline,
 			RecordProof::No,
 		))
@@ -571,7 +586,7 @@ mod tests {
 		let deadline = time::Duration::from_secs(1);
 		futures::executor::block_on(proposer.propose(
 			create_inherents(),
-			Default::default(),
+			create_digest(),
 			deadline,
 			RecordProof::No,
 		))
@@ -614,7 +629,7 @@ mod tests {
 		let deadline = time::Duration::from_secs(9);
 		let proposal = futures::executor::block_on(proposer.propose(
 			create_inherents(),
-			Default::default(),
+			create_digest(),
 			deadline,
 			RecordProof::No,
 		))
@@ -693,7 +708,7 @@ mod tests {
 			// when
 			let deadline = time::Duration::from_secs(9);
 			let block = futures::executor::block_on(
-				proposer.propose(create_inherents(), Default::default(), deadline, RecordProof::No)
+				proposer.propose(create_inherents(), create_digest(), deadline, RecordProof::No)
 			).map(|r| r.block).unwrap();
 
 			// then
@@ -767,9 +782,9 @@ mod tests {
 			}
 		}
 
-		fn produce_and_import_block(& mut self) -> Block {
-			let mut proposer_factory = ProposerFactory::new(self.client.clone(), self.pool.clone(), None, create_key_store());
-			let mut client = self.client.clone();
+        fn produce_block(&self, inherent_data: InherentData, digests: DigestFor<Block>) -> sp_blockchain::Result<Block>{
+			let client = self.client.clone();
+			let mut proposer_factory = ProposerFactory::new(client.clone(), self.pool.clone(), None, create_key_store());
 			let proposer = proposer_factory.init_with_now(
 				&self.client.header(&BlockId::number(self.block_number)).unwrap().unwrap(),
 				Box::new(move || time::Instant::now()),
@@ -783,17 +798,15 @@ mod tests {
 				))
 			);
 
-			// when
 			let deadline = time::Duration::from_secs(9);
-            let mut digests : DigestFor<Block> = Default::default();
-            let babe_pre = sc_consensus_babe::PreDigest::SecondaryPlain(sc_consensus_babe::SecondaryPlainPreDigest{
-                authority_index: 1,
-                slot_number: Default::default(),
-            });
-            digests.push(DigestItem::babe_pre_digest(babe_pre));
-			let block = futures::executor::block_on(
-				proposer.propose(create_inherents(), digests, deadline, RecordProof::No)
-			).map(|r| r.block).unwrap();
+			futures::executor::block_on(
+				proposer.propose(inherent_data, digests, deadline, RecordProof::No)
+			).map(|r| r.block)
+        }
+
+		fn produce_and_import_block(& mut self) -> Block {
+            let block = self.produce_block(create_inherents(), create_digest()).unwrap();
+			let mut client = self.client.clone();
 			client.import(BlockOrigin::Own, block.clone()).unwrap();
 			self.block_number += 1;
 			block
@@ -817,7 +830,7 @@ mod tests {
 
 		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
 		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
-		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &Default::default()).unwrap();
+		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
 
 		let encrypted_message = bb.encrypt_payload_using_pub_key(&collator_public_key, &payload);
 
@@ -857,7 +870,7 @@ mod tests {
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &Default::default()).unwrap();
+		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
 		let payload1 = b"hello world1".iter().cloned().collect::<Vec<_>>();
 		let payload2 = b"hello world2".iter().cloned().collect::<Vec<_>>();
 
@@ -899,7 +912,7 @@ mod tests {
 	}
 
 	#[test]
-	fn inject_doubly_encrypted_tx_and_expect_decrytped_transaction() {
+	fn inject_singly_encrypted_tx_and_expect_decrytped_transaction() {
 		let _ = env_logger::try_init();
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -908,7 +921,7 @@ mod tests {
 
 		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
 		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
-		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &Default::default()).unwrap();
+		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
@@ -1028,6 +1041,137 @@ mod tests {
 		).unwrap();
 		let block = bb.produce_and_import_block();
 		assert_eq!(block.extrinsics().len(), 1);
+	}
+
+	#[test]
+	fn fail_to_create_block_on_missing_pre_digest(){
+		let _ = env_logger::try_init();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || time::Instant::now()),
+		);
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: vec![],
+				}
+			])
+		).unwrap();
+
+		assert!(
+			matches!(
+				futures::executor::block_on(proposer.propose(
+						create_inherents(),
+						Default::default(),
+						time::Duration::from_secs(9),
+						RecordProof::No,)
+				),
+				Err(sp_blockchain::Error::Backend(e)) if e == String::from("No BABE pre-runtime digest found")
+			)
+		);
+	}
+
+	#[test]
+	fn fail_to_create_block_on_uknown_collator_id(){
+		let _ = env_logger::try_init();
+        let mut digests : DigestFor<Block> = Default::default();
+		let unknown_autohrity_index = 10;
+        digests.push(DigestItem::babe_pre_digest(
+			PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+				authority_index: unknown_autohrity_index,
+				slot_number: Default::default(),
+		})));
+
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || time::Instant::now()),
+		);
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: vec![],
+				}
+			])
+		).unwrap();
+
+		assert!(
+			matches!(
+				futures::executor::block_on(proposer.propose(
+						create_inherents(),
+						digests,
+						time::Duration::from_secs(9),
+						RecordProof::No,)
+				),
+				Err(sp_blockchain::Error::Backend(e)) if e == String::from(INVALID_COLLATOR_ID)
+			)
+		);
+	}
+
+	#[test]
+	fn fail_to_create_block_on_uknown_collator_public_key(){
+		let _ = env_logger::try_init();
+        let mut digests : DigestFor<Block> = Default::default();
+		let unknown_autohrity_index = 0;
+        digests.push(DigestItem::babe_pre_digest(
+			PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+				authority_index: substrate_test_runtime::DUMMY_COLLATOR_ID,
+				slot_number: Default::default(),
+		})));
+
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || time::Instant::now()),
+		);
+
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: vec![],
+				}
+			])
+		).unwrap();
+				futures::executor::block_on(proposer.propose(
+						create_inherents(),
+						digests,
+						time::Duration::from_secs(9),
+						RecordProof::No,)).unwrap();
+
+                panic!("this test should panic!");
+
+		// assert!(
+		// 	matches!(
+		// 		futures::executor::block_on(proposer.propose(
+		// 				create_inherents(),
+		// 				digests,
+		// 				time::Duration::from_secs(9),
+		// 				RecordProof::No,)
+		// 		),
+		// 		Err(sp_blockchain::Error::Backend(e)) if e == String::from(INVALID_COLLATOR_ID)
+		// 	)
+		// );
 	}
 
 

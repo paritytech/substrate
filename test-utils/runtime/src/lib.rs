@@ -63,6 +63,12 @@ use cfg_if::cfg_if;
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
+pub const ALICE_COLLATOR_ID: u32 = 1;
+pub const ALICE_ACCOUNT_ID: [u8;32]  = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217];
+pub const ALICE_PUB_KEY: [u8;33] = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161];
+
+pub const DUMMY_COLLATOR_ID: u32 = 2;
+pub const DUMMY_ACCOUNT_ID: [u8;32]  = [0u8;32];
 
 // Include the WASM binary
 #[cfg(feature = "std")]
@@ -645,17 +651,22 @@ cfg_if! {
 					}
 				}
 
-				fn get_account_id(block_builder_id: u32) -> AccountId32{
-                    if block_builder_id == 0 {
-                        Default::default()
+				fn get_account_id(block_builder_id: u32) -> Option<AccountId32>{
+                    if block_builder_id == ALICE_COLLATOR_ID {
+                        Some(ALICE_ACCOUNT_ID.into())
+                    }else if block_builder_id == DUMMY_COLLATOR_ID {
+                        Some(DUMMY_ACCOUNT_ID.into())
                     } else {
-                        panic!("unknown block builder id");
+                        None
                     }
 				}
 
-				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
-					// '//Alice' public key
-					sp_core::ecdsa::Public::from_raw([2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161])
+				fn get_authority_public_key(authority_id: &AccountId32) -> Option<sp_core::ecdsa::Public>{
+                    if authority_id == &ALICE_ACCOUNT_ID.into() {
+                        Some(sp_core::ecdsa::Public::from_raw(ALICE_PUB_KEY))
+                    }else{
+                        None
+                    }
 				}
 			}
 
@@ -943,11 +954,11 @@ cfg_if! {
 					frame_support::storage::unhashed::get_or(b"singly", vec![])
 				}
 
-				fn get_account_id(_block_builder_id: u32) -> AccountId32{
-				    Default::default()
+				fn get_account_id(block_builder_id: u32) -> Option<AccountId32>{
+				    None
 				}
 
-				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
+				fn get_authority_public_key(_authority_id: &AccountId32) -> Option<sp_core::ecdsa::Public>{
 					unimplemented!()
 				}
 			}
