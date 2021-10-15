@@ -58,7 +58,7 @@ use libp2p::{
 	},
 	kad::record,
 	multiaddr,
-	ping::handler::PingFailure,
+	ping::Failure as PingFailure,
 	swarm::{
 		protocols_handler::NodeHandlerWrapperError, AddressScore, NetworkBehaviour, SwarmBuilder,
 		SwarmEvent,
