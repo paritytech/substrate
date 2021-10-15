@@ -58,7 +58,7 @@ pub use crate::request_responses::{
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll")]
+#[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll", event_process = true)]
 pub struct Behaviour<B: BlockT> {
 	/// All the substrate-specific protocols.
 	substrate: Protocol<B>,
