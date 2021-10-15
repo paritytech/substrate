@@ -18,14 +18,10 @@
 
 use crate::{RuntimeT, LOG_TARGET};
 use frame_election_provider_support::SortedListProvider;
-use frame_support::{
-	storage::generator::StorageMap,
-	traits::{Get, PalletInfo},
-};
+use frame_support::{storage::generator::StorageMap, traits::PalletInfo};
 use pallet_staking::Nominators;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::traits::Block as BlockT;
-use sp_std::convert::TryInto;
 
 /// Test voter bags migration. `currency_unit` is the number of planks per the the runtimes `UNITS`
 /// (i.e. number of decimal places per DOT, KSM etc)
@@ -52,9 +48,6 @@ pub async fn execute<Runtime: RuntimeT, Block: BlockT>(
 		.unwrap();
 
 	ext.execute_with(|| {
-		// set the ss58 prefix so addresses printed below are human friendly.
-		sp_core::crypto::set_default_ss58_version(Runtime::SS58Prefix::get().try_into().unwrap());
-
 		// get the nominator & validator count prior to migrating; these should be invariant.
 		let pre_migrate_nominator_count = <Nominators<Runtime>>::iter().count() as u32;
 		log::info!(target: LOG_TARGET, "Nominator count: {}", pre_migrate_nominator_count);

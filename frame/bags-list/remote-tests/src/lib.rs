@@ -17,7 +17,6 @@
 
 //! Utilities for remote-testing pallet-bags-list.
 
-use pallet_election_provider_multi_phase as EPM;
 use sp_std::convert::TryInto;
 
 /// A common log target to use.
@@ -25,43 +24,19 @@ pub const LOG_TARGET: &'static str = "runtime::bags-list::remote-tests";
 
 pub mod migration;
 pub mod sanity_check;
+pub mod snapshot;
 
 /// A wrapper for a runtime that the functions of this crate expect.
 ///
 /// For example, this can be the `Runtime` type of the Polkadot runtime.
 pub trait RuntimeT:
-	pallet_staking::Config + pallet_bags_list::Config + EPM::Config + frame_system::Config
+	pallet_staking::Config + pallet_bags_list::Config + frame_system::Config
 {
 }
-impl<T: pallet_staking::Config + pallet_bags_list::Config + EPM::Config + frame_system::Config>
-	RuntimeT for T
-{
-}
+impl<T: pallet_staking::Config + pallet_bags_list::Config + frame_system::Config> RuntimeT for T {}
 
 fn percent(portion: u32, total: u32) -> f64 {
 	(portion as f64 / total as f64) * 100f64
-}
-
-/// Create a voter snapshot with the given limit from the bags-list pallet.
-pub fn create_snapshot_with<Runtime: RuntimeT>(
-	voter_limit: Option<usize>,
-) -> Result<(), &'static str> {
-	use frame_election_provider_support::ElectionDataProvider;
-	let mut voters = <Runtime as EPM::Config>::DataProvider::voters(voter_limit)?;
-
-	voters.sort_by_key(|(_, w, _)| *w);
-
-	let min_voter = voters.first().cloned();
-	let max_voter = voters.last().cloned();
-	log::info!(
-		target: LOG_TARGET,
-		"a snapshot of {} has been created. min: {:?}, max: {:?}",
-		voters.len(),
-		min_voter,
-		max_voter
-	);
-
-	Ok(())
 }
 
 /// Display the number of nodes in each bag, while identifying those that need a rebag.
@@ -77,6 +52,8 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 	// go through every bag to track the total number of voters within bags and log some info about
 	// how voters are distributed within the bags.
 	let mut seen_in_bags = 0;
+	let mut rebaggable = 0;
+	let mut active_bags = 0;
 	for vote_weight_thresh in <Runtime as pallet_bags_list::Config>::BagThresholds::get() {
 		// threshold in terms of UNITS (e.g. KSM, DOT etc)
 		let vote_weight_thresh_as_unit = *vote_weight_thresh as f64 / currency_unit as f64;
@@ -90,7 +67,7 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 			},
 		};
 
-		let voters_in_bag = bag.std_iter().count() as u32;
+		active_bags += 1;
 
 		for id in bag.std_iter().map(|node| node.std_id().clone()) {
 			let vote_weight = pallet_staking::Pallet::<Runtime>::weight_of(&id);
@@ -109,7 +86,8 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 			let node =
 				pallet_bags_list::Node::<Runtime>::get(&id).expect("node in bag must exist.");
 			if node.is_misplaced(vote_weight) {
-				log::warn!(
+				rebaggable += 1;
+				log::trace!(
 					target: LOG_TARGET,
 					"Account {:?} can be rebagged from {:?} to {:?}",
 					id,
@@ -121,6 +99,7 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 		}
 
 		// update our overall counter
+		let voters_in_bag = bag.std_iter().count() as u32;
 		seen_in_bags += voters_in_bag;
 
 		// percentage of all nominators
@@ -143,4 +122,13 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 			voter_list_count,
 		)
 	}
+
+	log::info!(
+		target: LOG_TARGET,
+		"a total of {} nodes are in {} active bags [{} total bags], {} of which can be rebagged.",
+		voter_list_count,
+		active_bags,
+		<Runtime as pallet_bags_list::Config>::BagThresholds::get().len(),
+		rebaggable,
+	);
 }

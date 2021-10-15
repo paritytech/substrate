@@ -5176,7 +5176,6 @@ dependencies = [
  "frame-system",
  "log 0.4.14",
  "pallet-bags-list",
- "pallet-election-provider-multi-phase",
  "pallet-staking",
  "remote-externalities",
  "sp-core",

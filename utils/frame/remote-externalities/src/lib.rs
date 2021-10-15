@@ -385,7 +385,7 @@ impl<B: BlockT> Builder<B> {
 		};
 
 		for prefix in &self.hashed_prefixes {
-			debug!(
+			info!(
 				target: LOG_TARGET,
 				"adding data for hashed prefix: {:?}",
 				HexDisplay::from(prefix)
@@ -397,7 +397,7 @@ impl<B: BlockT> Builder<B> {
 
 		for key in &self.hashed_keys {
 			let key = StorageKey(key.to_vec());
-			debug!(target: LOG_TARGET, "adding data for hashed key: {:?}", HexDisplay::from(&key));
+			info!(target: LOG_TARGET, "adding data for hashed key: {:?}", HexDisplay::from(&key));
 			let value = self.rpc_get_storage(key.clone(), Some(at)).await?;
 			keys_and_values.push((key, value));
 		}
