@@ -211,7 +211,7 @@ impl<T: Config> List<T> {
 	}
 
 	/// Returns `true` if the list contains `id`, otherwise returns `false`.
-	pub fn contains(id: &T::AccountId) -> bool {
+	pub(crate) fn contains(id: &T::AccountId) -> bool {
 		crate::ListNodes::<T>::contains_key(id)
 	}
 
@@ -219,7 +219,7 @@ impl<T: Config> List<T> {
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
 	/// `.take(n)`.
-	pub fn iter() -> impl Iterator<Item = Node<T>> {
+	pub(crate) fn iter() -> impl Iterator<Item = Node<T>> {
 		// We need a touch of special handling here: because we permit `T::BagThresholds` to
 		// omit the final bound, we need to ensure that we explicitly include that threshold in the
 		// list.
@@ -261,7 +261,7 @@ impl<T: Config> List<T> {
 	/// Insert a new id into the appropriate bag in the list.
 	///
 	/// Returns an error if the list already contains `id`.
-	pub fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
+	pub(crate) fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
 		if Self::contains(&id) {
 			return Err(Error::Duplicate)
 		}
@@ -291,7 +291,7 @@ impl<T: Config> List<T> {
 	}
 
 	/// Remove an id from the list.
-	pub fn remove(id: &T::AccountId) {
+	pub(crate) fn remove(id: &T::AccountId) {
 		Self::remove_many(sp_std::iter::once(id));
 	}
 
