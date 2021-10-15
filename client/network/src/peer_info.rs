@@ -320,13 +320,8 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 	fn poll(
 		&mut self,
 		cx: &mut Context,
-		params: &mut impl PollParameters
-	) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent
-		>
-	>{
+		params: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		loop {
 			match self.ping.poll(cx, params) {
 				Poll::Pending => break,

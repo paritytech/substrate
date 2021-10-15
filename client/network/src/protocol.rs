@@ -1396,12 +1396,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent
-		>
-	>{
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}

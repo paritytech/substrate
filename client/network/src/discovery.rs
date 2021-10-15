@@ -676,12 +676,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent,
-		>,
-	>{
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		// Immediately process the content of `discovered`.
 		if let Some(ev) = self.pending_events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))

@@ -525,12 +525,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<
-		NetworkBehaviourAction<
-			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
-			Self::OutEvent,
-		>,
-	> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		'poll_all: loop {
 			if let Some(message_request) = self.message_request.take() {
 				// Now we can can poll `MessageRequest` until we get the reputation
