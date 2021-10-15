@@ -1,0 +1,145 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Utilities for remote-testing pallet-bags-list.
+
+use pallet_election_provider_multi_phase as EPM;
+use sp_std::convert::TryInto;
+
+const LOG_TARGET: &'static str = "remote-tests::bags-list";
+
+pub mod migration;
+pub mod sanity_check;
+
+/// A wrapper for a runtime that the functions of this crate expect.
+///
+/// For example, this can be the `Runtime` type of the Polkadot runtime.
+pub trait RuntimeT:
+	pallet_staking::Config + pallet_bags_list::Config + EPM::Config + frame_system::Config
+{
+}
+impl<T: pallet_staking::Config + pallet_bags_list::Config + EPM::Config + frame_system::Config>
+	RuntimeT for T
+{
+}
+
+fn percent(portion: u32, total: u32) -> f64 {
+	(portion as f64 / total as f64) * 100f64
+}
+
+/// Create a voter snapshot with the given limit from the bags-list pallet.
+pub fn create_snapshot_with<Runtime: RuntimeT>(
+	voter_limit: Option<usize>,
+) -> Result<(), &'static str> {
+	use frame_election_provider_support::ElectionDataProvider;
+	let mut voters = <Runtime as EPM::Config>::DataProvider::voters(voter_limit)?;
+
+	voters.sort_by_key(|(_, w, _)| *w);
+
+	let min_voter = voters.first().cloned();
+	let max_voter = voters.last().cloned();
+	log::info!(
+		target: LOG_TARGET,
+		"a snapshot of {} has been created. min: {:?}, max: {:?}",
+		voters.len(),
+		min_voter,
+		max_voter
+	);
+
+	Ok(())
+}
+
+/// Display the number of nodes in each bag, while identifying those that need a rebag.
+pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_name: &'static str) {
+	use frame_election_provider_support::SortedListProvider;
+	use frame_support::traits::Get;
+
+	let min_nominator_bond = <pallet_staking::MinNominatorBond<Runtime>>::get();
+	log::info!(target: LOG_TARGET, "min nominator bond is {:?}", min_nominator_bond);
+
+	let voter_list_count = <Runtime as pallet_staking::Config>::SortedListProvider::count();
+
+	// go through every bag to track the total number of voters within bags and log some info about
+	// how voters are distributed within the bags.
+	let mut seen_in_bags = 0;
+	for vote_weight_thresh in <Runtime as pallet_bags_list::Config>::BagThresholds::get() {
+		// threshold in terms of UNITS (e.g. KSM, DOT etc)
+		let vote_weight_thresh_as_unit = *vote_weight_thresh as f64 / currency_unit as f64;
+		let pretty_thresh = format!("Threshold: {}. {}", vote_weight_thresh_as_unit, currency_name);
+
+		let bag = match pallet_bags_list::Pallet::<Runtime>::list_bags_get(*vote_weight_thresh) {
+			Some(bag) => bag,
+			None => {
+				log::info!(target: LOG_TARGET, "{} NO VOTERS.", pretty_thresh);
+				continue
+			},
+		};
+
+		let voters_in_bag = bag.std_iter().count() as u32;
+
+		for id in bag.std_iter().map(|node| node.std_id().clone()) {
+			let vote_weight = pallet_staking::Pallet::<Runtime>::weight_of(&id);
+			let vote_weight_as_balance: pallet_staking::BalanceOf<Runtime> =
+				vote_weight.try_into().map_err(|_| "can't convert").unwrap();
+
+			if vote_weight_as_balance < min_nominator_bond {
+				log::warn!(
+					target: LOG_TARGET,
+					"{} Account found below min bond: {:?}.",
+					pretty_thresh,
+					id
+				);
+			}
+
+			let node =
+				pallet_bags_list::Node::<Runtime>::get(&id).expect("node in bag must exist.");
+			if node.is_misplaced(vote_weight) {
+				log::warn!(
+					target: LOG_TARGET,
+					"Account {:?} can be rebagged from {:?} to {:?}",
+					id,
+					vote_weight_thresh_as_unit,
+					pallet_bags_list::notional_bag_for::<Runtime>(vote_weight) as f64 /
+						currency_unit as f64
+				);
+			}
+		}
+
+		// update our overall counter
+		seen_in_bags += voters_in_bag;
+
+		// percentage of all nominators
+		let percent_of_voters = percent(voters_in_bag, voter_list_count);
+
+		log::info!(
+			target: LOG_TARGET,
+			"{} Nominators: {} [%{:.3}]",
+			pretty_thresh,
+			voters_in_bag,
+			percent_of_voters,
+		);
+	}
+
+	if seen_in_bags != voter_list_count {
+		log::error!(
+			target: LOG_TARGET,
+			"bags list population ({}) not on par whoever is voter_list ({})",
+			seen_in_bags,
+			voter_list_count,
+		)
+	}
+}
