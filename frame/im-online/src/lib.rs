@@ -919,7 +919,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		}
 	}
 
-	fn on_disabled(_i: usize) {
+	fn on_disabled(_i: u32) {
 		// ignore
 	}
 }
