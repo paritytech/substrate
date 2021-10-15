@@ -3338,9 +3338,9 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "libp2p"
-version = "0.40.0-rc.1"
+version = "0.40.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f428eafa931a28f3aaac8d35d03df815f4dca34b7333b12db2f04ae729a7bee"
+checksum = "17afad23643b307048a9b1780d452b292c9a2f9ad5f9c73141d9019b07760024"
 dependencies = [
  "atomic",
  "bytes 1.0.1",
@@ -3499,9 +3499,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-kad"
-version = "0.32.0-rc.1"
+version = "0.32.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1ef3be40e0b26c24ba27fabf30fec1b464d64d16e0e71a5b33bb4bd2772db4"
+checksum = "0e2dfe81d8f2d681ec638c3a7147b962d3a37213fb938de2a300f9b432d9683f"
 dependencies = [
  "arrayvec 0.5.2",
  "asynchronous-codec 0.6.0",
