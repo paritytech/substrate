@@ -26,7 +26,7 @@ use sp_core::{
 	storage::{ChildInfo, Storage},
 	StateVersion,
 };
-use sp_trie::{empty_trie_root, Layout, MemoryDB};
+use sp_trie::{empty_trie_root, LayoutV1, MemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
 /// Create a new empty instance of in-memory backend.
@@ -35,7 +35,8 @@ where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	TrieBackend::new(db, empty_trie_root::<Layout<H>>())
+	// V1 is same as V0 for an empty trie.
+	TrieBackend::new(db, empty_trie_root::<LayoutV1<H>>())
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>

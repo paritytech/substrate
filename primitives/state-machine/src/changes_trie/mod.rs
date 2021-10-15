@@ -80,11 +80,13 @@ use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use num_traits::{One, Zero};
 use sp_core::{self, storage::PrefixedStorageKey};
-use sp_trie::{trie_types::TrieDBMut, DBValue, MemoryDB, TrieMut};
+use sp_trie::{DBValue, MemoryDB, TrieMut};
 use std::{
 	collections::{HashMap, HashSet},
 	convert::TryInto,
 };
+// change trie using V0 trie (no need for attached node value).
+use sp_trie::trie_types::TrieDBMutV0 as TrieDBMut;
 
 /// Requirements for block number that can be used with changes tries.
 pub trait BlockNumber:

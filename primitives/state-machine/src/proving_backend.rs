@@ -30,7 +30,7 @@ use sp_core::{storage::ChildInfo, StateVersion};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
-	Layout, MemoryDB, Recorder, StorageProof,
+	LayoutV1, MemoryDB, Recorder, StorageProof,
 };
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -56,7 +56,8 @@ where
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H>>(
+		// V1 is equivalent to V0 on read.
+		read_trie_value_with::<LayoutV1<H>, _, Ephemeral<S, H>>(
 			&eph,
 			self.backend.root(),
 			key,
@@ -75,14 +76,16 @@ where
 		let root = self
 			.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
-			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
+			// V1 is equivalent to V0 on empty trie
+			.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value_with::<Layout<H>, _, _>(
+		// V1 is equivalent to V0 on read
+		read_child_trie_value_with::<LayoutV1<H>, _, _>(
 			child_info.keyspace(),
 			&eph,
 			&root.as_ref(),
@@ -99,7 +102,8 @@ where
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			record_all_keys::<Layout<H>, _>(&eph, root, &mut *self.proof_recorder)
+			// V1 and V is equivalent to V0 on read and recorder is key read.
+			record_all_keys::<LayoutV1<H>, _>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {

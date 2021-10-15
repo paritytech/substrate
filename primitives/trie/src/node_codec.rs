@@ -110,14 +110,14 @@ impl<H: Hasher> NodeCodec<H> {
 				let bitmap_range = input.take(BITMAP_LENGTH)?;
 				let bitmap = Bitmap::decode(&data[bitmap_range])?;
 				let value = if branch_has_value {
-					if contains_hash {
+					Some(if contains_hash {
 						ValuePlan::HashedValue(input.take(H::LENGTH)?)
 					} else {
 						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
 						ValuePlan::Value(input.take(count)?)
-					}
+					})
 				} else {
-					ValuePlan::NoValue
+					None
 				};
 				let mut children = [
 					None, None, None, None, None, None, None, None, None, None, None, None, None,
@@ -171,7 +171,7 @@ impl<H> NodeCodecT for NodeCodec<H>
 where
 	H: Hasher,
 {
-	const ESCAPE_HEADER: Option<&'static [u8]> = Some(&[trie_constants::ESCAPE_COMPACT_HEADER]);
+	const ESCAPE_HEADER: Option<u8> = Some(trie_constants::ESCAPE_COMPACT_HEADER);
 	type Error = Error;
 	type HashOut = H::Out;
 
@@ -207,7 +207,6 @@ where
 				debug_assert!(hash.len() == H::LENGTH);
 				output.extend_from_slice(hash);
 			},
-			Value::NoValue => unreachable!("Leaf node always with value."),
 		}
 		output
 	}
@@ -222,7 +221,7 @@ where
 
 	fn branch_node(
 		_children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
-		_maybe_value: Value,
+		_maybe_value: Option<Value>,
 	) -> Vec<u8> {
 		unreachable!("No extension codec.")
 	}
@@ -231,11 +230,11 @@ where
 		partial: impl Iterator<Item = u8>,
 		number_nibble: usize,
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
-		value: Value,
+		value: Option<Value>,
 	) -> Vec<u8> {
-		let contains_hash = matches!(&value, Value::HashedValue(..));
+		let contains_hash = matches!(&value, Some(Value::HashedValue(..)));
 		let mut output = match (&value, contains_hash) {
-			(&Value::NoValue, _) =>
+			(&None, _) =>
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue),
 			(_, false) =>
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchWithValue),
@@ -247,15 +246,15 @@ where
 		let mut bitmap: [u8; BITMAP_LENGTH] = [0; BITMAP_LENGTH];
 		(0..BITMAP_LENGTH).for_each(|_| output.push(0));
 		match value {
-			Value::Value(value) => {
+			Some(Value::Value(value)) => {
 				Compact(value.len() as u32).encode_to(&mut output);
 				output.extend_from_slice(value);
 			},
-			Value::HashedValue(hash, _) => {
+			Some(Value::HashedValue(hash, _)) => {
 				debug_assert!(hash.len() == H::LENGTH);
 				output.extend_from_slice(hash);
 			},
-			Value::NoValue => (),
+			None => (),
 		}
 		Bitmap::encode(
 			children.map(|maybe_child| match maybe_child.borrow() {

@@ -109,7 +109,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let state_hash = sp_runtime::StateVersion::default();
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
-		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
+		sp_state_machine::TrieDBMutV1::<HashFor<B>>::new(&mut mdb, &mut root);
 
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),

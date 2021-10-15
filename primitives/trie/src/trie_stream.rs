@@ -84,13 +84,11 @@ impl trie_root::TrieStream for TrieStream {
 
 	fn append_leaf(&mut self, key: &[u8], value: TrieStreamValue) {
 		let kind = match &value {
-			TrieStreamValue::NoValue => unreachable!(),
 			TrieStreamValue::Value(..) => NodeKind::Leaf,
 			TrieStreamValue::HashedValue(..) => NodeKind::HashedValueLeaf,
 		};
 		self.buffer.extend(fuse_nibbles_node(key, kind));
 		match &value {
-			TrieStreamValue::NoValue => unreachable!(),
 			TrieStreamValue::Value(value) => {
 				Compact(value.len() as u32).encode_to(&mut self.buffer);
 				self.buffer.extend_from_slice(value);
@@ -104,14 +102,14 @@ impl trie_root::TrieStream for TrieStream {
 	fn begin_branch(
 		&mut self,
 		maybe_partial: Option<&[u8]>,
-		maybe_value: TrieStreamValue,
+		maybe_value: Option<TrieStreamValue>,
 		has_children: impl Iterator<Item = bool>,
 	) {
 		if let Some(partial) = maybe_partial {
 			let kind = match &maybe_value {
-				TrieStreamValue::NoValue => NodeKind::BranchNoValue,
-				TrieStreamValue::Value(..) => NodeKind::BranchWithValue,
-				TrieStreamValue::HashedValue(..) => NodeKind::HashedValueBranch,
+				None => NodeKind::BranchNoValue,
+				Some(TrieStreamValue::Value(..)) => NodeKind::BranchWithValue,
+				Some(TrieStreamValue::HashedValue(..)) => NodeKind::HashedValueBranch,
 			};
 
 			self.buffer.extend(fuse_nibbles_node(partial, kind));
@@ -121,12 +119,12 @@ impl trie_root::TrieStream for TrieStream {
 			unreachable!("trie stream codec only for no extension trie");
 		}
 		match maybe_value {
-			TrieStreamValue::NoValue => (),
-			TrieStreamValue::Value(value) => {
+			None => (),
+			Some(TrieStreamValue::Value(value)) => {
 				Compact(value.len() as u32).encode_to(&mut self.buffer);
 				self.buffer.extend_from_slice(value);
 			},
-			TrieStreamValue::HashedValue(hash) => {
+			Some(TrieStreamValue::HashedValue(hash)) => {
 				self.buffer.extend_from_slice(hash.as_slice());
 			},
 		}

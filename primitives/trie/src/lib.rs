@@ -36,7 +36,7 @@ pub use memory_db::prefixed_key;
 pub use memory_db::KeyFunction;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-use sp_std::{borrow::Borrow, boxed::Box, fmt, marker::PhantomData, vec::Vec};
+use sp_std::{borrow::Borrow, boxed::Box, marker::PhantomData, vec::Vec};
 pub use storage_proof::{CompactProof, StorageProof};
 /// Trie codec reexport, mainly child trie support
 /// for trie compact proof.
@@ -54,62 +54,37 @@ pub use trie_db::{
 pub use trie_stream::TrieStream;
 
 /// substrate trie layout
-pub struct Layout<H>(Option<u32>, sp_std::marker::PhantomData<H>);
+pub struct LayoutV0<H>(sp_std::marker::PhantomData<H>);
 
-impl<H> fmt::Debug for Layout<H> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("Layout").finish()
-	}
-}
+/// substrate trie layout, with external value nodes.
+pub struct LayoutV1<H>(sp_std::marker::PhantomData<H>);
 
-impl<H> Clone for Layout<H> {
-	fn clone(&self) -> Self {
-		Layout(self.0, sp_std::marker::PhantomData)
-	}
-}
-
-impl<H> Default for Layout<H> {
-	fn default() -> Self {
-		Layout(None, sp_std::marker::PhantomData)
-	}
-}
-
-impl<H> Layout<H> {
-	/// Layout with inner hash value size limit active.
-	pub fn with_max_inline_value(threshold: u32) -> Self {
-		Layout(Some(threshold), sp_std::marker::PhantomData)
-	}
-}
-
-impl<H> TrieLayout for Layout<H>
+impl<H> TrieLayout for LayoutV0<H>
 where
 	H: Hasher,
 {
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
+	const MAX_INLINE_VALUE: Option<u32> = None;
 
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
-
-	fn max_inline_value(&self) -> Option<u32> {
-		self.0
-	}
 }
 
-impl<H> TrieConfiguration for Layout<H>
+impl<H> TrieConfiguration for LayoutV0<H>
 where
 	H: Hasher,
 {
-	fn trie_root<I, A, B>(&self, input: I) -> <Self::Hash as Hasher>::Out
+	fn trie_root<I, A, B>(input: I) -> <Self::Hash as Hasher>::Out
 	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input, self.max_inline_value())
+		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input, Self::MAX_INLINE_VALUE)
 	}
 
-	fn trie_root_unhashed<I, A, B>(&self, input: I) -> Vec<u8>
+	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8>
 	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
@@ -117,7 +92,49 @@ where
 	{
 		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(
 			input,
-			self.max_inline_value(),
+			Self::MAX_INLINE_VALUE,
+		)
+	}
+
+	fn encode_index(input: u32) -> Vec<u8> {
+		codec::Encode::encode(&codec::Compact(input))
+	}
+}
+
+impl<H> TrieLayout for LayoutV1<H>
+where
+	H: Hasher,
+{
+	const USE_EXTENSION: bool = false;
+	const ALLOW_EMPTY: bool = true;
+	const MAX_INLINE_VALUE: Option<u32> = sp_core::storage::DEFAULT_STATE_HASHING;
+
+	type Hash = H;
+	type Codec = NodeCodec<Self::Hash>;
+}
+
+impl<H> TrieConfiguration for LayoutV1<H>
+where
+	H: Hasher,
+{
+	fn trie_root<I, A, B>(input: I) -> <Self::Hash as Hasher>::Out
+	where
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>,
+	{
+		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input, Self::MAX_INLINE_VALUE)
+	}
+
+	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8>
+	where
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>,
+	{
+		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(
+			input,
+			Self::MAX_INLINE_VALUE,
 		)
 	}
 
@@ -161,13 +178,19 @@ pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
 /// This module is for non generic definition of trie type.
 /// Only the `Hasher` trait is generic in this case.
 pub mod trie_types {
-	pub type Layout<H> = super::Layout<H>;
+	use super::*;
+
 	/// Persistent trie database read-access interface for the a given hasher.
-	pub type TrieDB<'a, H> = super::TrieDB<'a, Layout<H>>;
+	/// Read only V1 and V0 are compatible, thus we always use V1.
+	pub type TrieDB<'a, H> = super::TrieDB<'a, LayoutV1<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
-	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, Layout<H>>;
+	pub type TrieDBMutV0<'a, H> = super::TrieDBMut<'a, LayoutV0<H>>;
+	/// Persistent trie database write-access interface for the a given hasher.
+	pub type TrieDBMutV1<'a, H> = super::TrieDBMut<'a, LayoutV1<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
-	pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, Layout<H>, Q>;
+	pub type LookupV0<'a, H, Q> = trie_db::Lookup<'a, LayoutV0<H>, Q>;
+	/// Querying interface, as in `trie_db` but less generic.
+	pub type LookupV1<'a, H, Q> = trie_db::Lookup<'a, LayoutV1<H>, Q>;
 	/// As in `trie_db`, but less generic, error type for the crate.
 	pub type TrieError<H> = trie_db::TrieError<H, super::Error>;
 }
@@ -208,14 +231,14 @@ pub fn verify_trie_proof<'a, L, I, K, V>(
 	root: &TrieHash<L>,
 	proof: &[Vec<u8>],
 	items: I,
-) -> Result<(), VerifyError<TrieHash<L>, error::Error>>
+) -> Result<(), VerifyError<TrieHash<L>, CError<L>>>
 where
 	L: TrieConfiguration,
 	I: IntoIterator<Item = &'a (K, Option<V>)>,
 	K: 'a + AsRef<[u8]>,
 	V: 'a + AsRef<[u8]>,
 {
-	verify_proof::<Layout<L::Hash>, _, _, _>(root, proof, items)
+	verify_proof::<L, _, _, _>(root, proof, items)
 }
 
 /// Determine a trie root given a hash DB and delta values.
@@ -223,7 +246,6 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
 	delta: I,
-	layout: L,
 ) -> Result<TrieHash<L>, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -233,7 +255,7 @@ where
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing_with_layout(db, &mut root, layout)?;
+		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -281,26 +303,23 @@ where
 
 /// Determine the empty trie root.
 pub fn empty_trie_root<L: TrieConfiguration>() -> <L::Hash as Hasher>::Out {
-	L::default().trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
+	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
 
 /// Determine the empty child trie root.
 pub fn empty_child_trie_root<L: TrieConfiguration>() -> <L::Hash as Hasher>::Out {
-	L::default().trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
+	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
-	layout: &L,
-	input: I,
-) -> <L::Hash as Hasher>::Out
+pub fn child_trie_root<L: TrieConfiguration, I, A, B>(input: I) -> <L::Hash as Hasher>::Out
 where
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
 {
-	layout.trie_root(input)
+	L::trie_root(input)
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher,
@@ -310,7 +329,6 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	db: &mut DB,
 	root_data: RD,
 	delta: I,
-	layout: L,
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -325,7 +343,7 @@ where
 	root.as_mut().copy_from_slice(root_data.as_ref());
 
 	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
-	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta, layout)
+	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta)
 }
 
 /// Record all keys for a given root.
@@ -515,11 +533,12 @@ mod tests {
 	use codec::{Compact, Decode, Encode};
 	use hash_db::{HashDB, Hasher};
 	use hex_literal::hex;
-	use sp_core::{storage::DEFAULT_MAX_INLINE_VALUE as TRESHOLD, Blake2Hasher};
+	use sp_core::Blake2Hasher;
 	use trie_db::{DBValue, NodeCodec as NodeCodecT, Trie, TrieMut};
 	use trie_standardmap::{Alphabet, StandardMap, ValueMode};
 
-	type Layout = super::Layout<Blake2Hasher>;
+	type LayoutV0 = super::LayoutV0<Blake2Hasher>;
+	type LayoutV1 = super::LayoutV1<Blake2Hasher>;
 
 	type MemoryDBMeta<H> =
 		memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue, MemTracker>;
@@ -528,15 +547,15 @@ mod tests {
 		<T::Codec as NodeCodecT>::hashed_null_node()
 	}
 
-	fn check_equivalent<T: TrieConfiguration>(input: &Vec<(&[u8], &[u8])>, layout: T) {
+	fn check_equivalent<T: TrieConfiguration>(input: &Vec<(&[u8], &[u8])>) {
 		{
-			let closed_form = layout.trie_root(input.clone());
-			let d = layout.trie_root_unhashed(input.clone());
+			let closed_form = T::trie_root(input.clone());
+			let d = T::trie_root_unhashed(input.clone());
 			println!("Data: {:#x?}, {:#x?}", d, Blake2Hasher::hash(&d[..]));
 			let persistent = {
 				let mut memdb = MemoryDBMeta::default();
 				let mut root = Default::default();
-				let mut t = TrieDBMut::<T>::new_with_layout(&mut memdb, &mut root, layout);
+				let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
 				for (x, y) in input.iter().rev() {
 					t.insert(x, y).unwrap();
 				}
@@ -546,17 +565,17 @@ mod tests {
 		}
 	}
 
-	fn check_iteration<T: TrieConfiguration>(input: &Vec<(&[u8], &[u8])>, layout: T) {
+	fn check_iteration<T: TrieConfiguration>(input: &Vec<(&[u8], &[u8])>) {
 		let mut memdb = MemoryDBMeta::default();
 		let mut root = Default::default();
 		{
-			let mut t = TrieDBMut::<T>::new_with_layout(&mut memdb, &mut root, layout.clone());
+			let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
 			for (x, y) in input.clone() {
 				t.insert(x, y).unwrap();
 			}
 		}
 		{
-			let t = TrieDB::<T>::new_with_layout(&mut memdb, &root, layout).unwrap();
+			let t = TrieDB::<T>::new(&mut memdb, &root).unwrap();
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter()
@@ -568,23 +587,20 @@ mod tests {
 	}
 
 	fn check_input(input: &Vec<(&[u8], &[u8])>) {
-		let layout = Layout::default();
-		check_equivalent::<Layout>(input, layout.clone());
-		check_iteration::<Layout>(input, layout);
-		let layout = Layout::with_max_inline_value(TRESHOLD);
-		check_equivalent::<Layout>(input, layout.clone());
-		check_iteration::<Layout>(input, layout);
+		check_equivalent::<LayoutV0>(input);
+		check_iteration::<LayoutV0>(input);
+		check_equivalent::<LayoutV1>(input);
+		check_iteration::<LayoutV1>(input);
 	}
 
 	#[test]
 	fn default_trie_root() {
 		let mut db = MemoryDB::default();
-		let mut root = TrieHash::<Layout>::default();
-		let mut empty = TrieDBMut::<Layout>::new(&mut db, &mut root);
+		let mut root = TrieHash::<LayoutV1>::default();
+		let mut empty = TrieDBMut::<LayoutV1>::new(&mut db, &mut root);
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
-		let root2: Vec<u8> = Layout::default()
-			.trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty())
+		let root2: Vec<u8> = LayoutV1::trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty())
 			.as_ref()
 			.iter()
 			.cloned()
@@ -688,12 +704,11 @@ mod tests {
 		db: &'db mut dyn HashDB<T::Hash, DBValue>,
 		root: &'db mut TrieHash<T>,
 		v: &[(Vec<u8>, Vec<u8>)],
-		layout: T,
 	) -> TrieDBMut<'db, T>
 	where
 		T: TrieConfiguration,
 	{
-		let mut t = TrieDBMut::<T>::new_with_layout(db, root, layout);
+		let mut t = TrieDBMut::<T>::new(db, root);
 		for i in 0..v.len() {
 			let key: &[u8] = &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -714,10 +729,10 @@ mod tests {
 
 	#[test]
 	fn random_should_work() {
-		random_should_work_inner(true);
-		random_should_work_inner(false);
+		random_should_work_inner::<LayoutV1>();
+		random_should_work_inner::<LayoutV0>();
 	}
-	fn random_should_work_inner(limit_inline_value: bool) {
+	fn random_should_work_inner<L: TrieConfiguration>() {
 		let mut seed = <Blake2Hasher as Hasher>::Out::zero();
 		for test_i in 0..10_000 {
 			if test_i % 50 == 0 {
@@ -732,16 +747,11 @@ mod tests {
 			}
 			.make_with(seed.as_fixed_bytes_mut());
 
-			let layout = if limit_inline_value {
-				Layout::with_max_inline_value(TRESHOLD)
-			} else {
-				Layout::default()
-			};
-			let real = layout.trie_root(x.clone());
+			let real = L::trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
 
-			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, &x, layout.clone());
+			let mut memtrie = populate_trie::<L>(&mut memdb, &mut root, &x);
 
 			memtrie.commit();
 			if *memtrie.root() != real {
@@ -753,9 +763,9 @@ mod tests {
 				}
 			}
 			assert_eq!(*memtrie.root(), real);
-			unpopulate_trie::<Layout>(&mut memtrie, &x);
+			unpopulate_trie::<L>(&mut memtrie, &x);
 			memtrie.commit();
-			let hashed_null_node = hashed_null_node::<Layout>();
+			let hashed_null_node = hashed_null_node::<L>();
 			if *memtrie.root() != hashed_null_node {
 				println!("- TRIE MISMATCH");
 				println!("");
@@ -774,18 +784,16 @@ mod tests {
 
 	#[test]
 	fn codec_trie_empty() {
-		let layout = Layout::default();
 		let input: Vec<(&[u8], &[u8])> = vec![];
-		let trie = layout.trie_root_unhashed(input);
+		let trie = LayoutV1::trie_root_unhashed(input);
 		println!("trie: {:#x?}", trie);
 		assert_eq!(trie, vec![0x0]);
 	}
 
 	#[test]
 	fn codec_trie_single_tuple() {
-		let layout = Layout::default();
 		let input = vec![(vec![0xaa], vec![0xbb])];
-		let trie = layout.trie_root_unhashed(input);
+		let trie = LayoutV1::trie_root_unhashed(input);
 		println!("trie: {:#x?}", trie);
 		assert_eq!(
 			trie,
@@ -800,9 +808,8 @@ mod tests {
 
 	#[test]
 	fn codec_trie_two_tuples_disjoint_keys() {
-		let layout = Layout::default();
 		let input = vec![(&[0x48, 0x19], &[0xfe]), (&[0x13, 0x14], &[0xff])];
-		let trie = layout.trie_root_unhashed(input);
+		let trie = LayoutV1::trie_root_unhashed(input);
 		println!("trie: {:#x?}", trie);
 		let mut ex = Vec::<u8>::new();
 		ex.push(0x80); // branch, no value (0b_10..) no nibble
@@ -826,16 +833,10 @@ mod tests {
 
 	#[test]
 	fn iterator_works() {
-		iterator_works_inner(true);
-		iterator_works_inner(false);
+		iterator_works_inner::<LayoutV1>();
+		iterator_works_inner::<LayoutV0>();
 	}
-	fn iterator_works_inner(limit_inline_value: bool) {
-		let layout = if limit_inline_value {
-			Layout::with_max_inline_value(TRESHOLD)
-		} else {
-			Layout::default()
-		};
-
+	fn iterator_works_inner<Layout: TrieConfiguration>() {
 		let pairs = vec![
 			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
 			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
@@ -843,9 +844,9 @@ mod tests {
 
 		let mut mdb = MemoryDB::default();
 		let mut root = Default::default();
-		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs, layout.clone());
+		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
 
-		let trie = TrieDB::<Layout>::new_with_layout(&mdb, &root, layout).unwrap();
+		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();
@@ -866,16 +867,15 @@ mod tests {
 
 		let mut memdb = MemoryDB::default();
 		let mut root = Default::default();
-		let layout = Layout::default();
-		populate_trie::<Layout>(&mut memdb, &mut root, &pairs, layout);
+		populate_trie::<LayoutV1>(&mut memdb, &mut root, &pairs);
 
 		let non_included_key: Vec<u8> = hex!("0909").to_vec();
 		let proof =
-			generate_trie_proof::<Layout, _, _, _>(&memdb, root, &[non_included_key.clone()])
+			generate_trie_proof::<LayoutV1, _, _, _>(&memdb, root, &[non_included_key.clone()])
 				.unwrap();
 
 		// Verifying that the K was not included into the trie should work.
-		assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
+		assert!(verify_trie_proof::<LayoutV1, _, _, Vec<u8>>(
 			&root,
 			&proof,
 			&[(non_included_key.clone(), None)],
@@ -883,7 +883,7 @@ mod tests {
 		.is_ok());
 
 		// Verifying that the K was included into the trie should fail.
-		assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
+		assert!(verify_trie_proof::<LayoutV1, _, _, Vec<u8>>(
 			&root,
 			&proof,
 			&[(non_included_key, Some(hex!("1010").to_vec()))],
@@ -900,14 +900,13 @@ mod tests {
 
 		let mut memdb = MemoryDB::default();
 		let mut root = Default::default();
-		let layout = Layout::default();
-		populate_trie::<Layout>(&mut memdb, &mut root, &pairs, layout);
+		populate_trie::<LayoutV1>(&mut memdb, &mut root, &pairs);
 
 		let proof =
-			generate_trie_proof::<Layout, _, _, _>(&memdb, root, &[pairs[0].0.clone()]).unwrap();
+			generate_trie_proof::<LayoutV1, _, _, _>(&memdb, root, &[pairs[0].0.clone()]).unwrap();
 
 		// Check that a K, V included into the proof are verified.
-		assert!(verify_trie_proof::<Layout, _, _, _>(
+		assert!(verify_trie_proof::<LayoutV1, _, _, _>(
 			&root,
 			&proof,
 			&[(pairs[0].0.clone(), Some(pairs[0].1.clone()))]
@@ -915,7 +914,7 @@ mod tests {
 		.is_ok());
 
 		// Absence of the V is not verified with the proof that has K, V included.
-		assert!(verify_trie_proof::<Layout, _, _, Vec<u8>>(
+		assert!(verify_trie_proof::<LayoutV1, _, _, Vec<u8>>(
 			&root,
 			&proof,
 			&[(pairs[0].0.clone(), None)]
@@ -923,7 +922,7 @@ mod tests {
 		.is_err());
 
 		// K not included into the trie is not verified.
-		assert!(verify_trie_proof::<Layout, _, _, _>(
+		assert!(verify_trie_proof::<LayoutV1, _, _, _>(
 			&root,
 			&proof,
 			&[(hex!("4242").to_vec(), Some(pairs[0].1.clone()))]
@@ -931,7 +930,7 @@ mod tests {
 		.is_err());
 
 		// K included into the trie but not included into the proof is not verified.
-		assert!(verify_trie_proof::<Layout, _, _, _>(
+		assert!(verify_trie_proof::<LayoutV1, _, _, _>(
 			&root,
 			&proof,
 			&[(pairs[1].0.clone(), Some(pairs[1].1.clone()))]
@@ -956,18 +955,16 @@ mod tests {
 		.unwrap();
 
 		let proof_db = proof.into_memory_db::<Blake2Hasher>();
-		let first_storage_root = delta_trie_root::<Layout, _, _, _, _, _>(
+		let first_storage_root = delta_trie_root::<LayoutV0, _, _, _, _, _>(
 			&mut proof_db.clone(),
 			storage_root,
 			valid_delta,
-			Default::default(),
 		)
 		.unwrap();
-		let second_storage_root = delta_trie_root::<Layout, _, _, _, _, _>(
+		let second_storage_root = delta_trie_root::<LayoutV0, _, _, _, _, _>(
 			&mut proof_db.clone(),
 			storage_root,
 			invalid_delta,
-			Default::default(),
 		)
 		.unwrap();
 

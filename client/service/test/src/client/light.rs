@@ -570,9 +570,9 @@ fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Heade
 }
 
 fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
-	use sp_trie::{trie_types::Layout, TrieConfiguration};
+	use sp_trie::{LayoutV0, TrieConfiguration};
 	let iter = extrinsics.iter().map(Encode::encode);
-	let extrinsics_root = Layout::<BlakeTwo256>::default().ordered_trie_root(iter);
+	let extrinsics_root = LayoutV0::<BlakeTwo256>::ordered_trie_root(iter);
 
 	// only care about `extrinsics_root`
 	Header::new(0, extrinsics_root, H256::zero(), H256::zero(), Default::default())
