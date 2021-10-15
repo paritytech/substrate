@@ -190,7 +190,6 @@ default:
           tee ./artifacts/substrate/VERSION;
     fi
   - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-  - printf '\n# building node-template\n\n'
   - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
   - sccache -s
 
@@ -600,6 +599,7 @@ build-linux-substrate:
     - mkdir -p ./artifacts/substrate/
   script:
     - *build-linux-substrate-script
+    - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
 
 
