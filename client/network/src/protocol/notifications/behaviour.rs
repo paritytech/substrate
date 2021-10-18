@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::protocol::notifications::handler::{
-	self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
+	self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
 };
 
 use bytes::BytesMut;
@@ -132,7 +132,7 @@ pub struct Notifications {
 	next_incoming_index: sc_peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: VecDeque<NetworkBehaviourAction<NotifsHandlerIn, NotificationsOut>>,
+	events: VecDeque<NetworkBehaviourAction<NotificationsOut, NotifsHandler>>,
 }
 
 /// Configuration for a notifications protocol.
@@ -2011,7 +2011,7 @@ impl NetworkBehaviour for Notifications {
 		&mut self,
 		cx: &mut Context,
 		_params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<NotifsHandlerIn, Self::OutEvent>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(event)
 		}

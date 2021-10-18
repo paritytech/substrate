@@ -946,7 +946,7 @@ impl MdnsWrapper {
 		&mut self,
 		cx: &mut Context<'_>,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<void::Void, MdnsEvent>> {
+	) -> Poll<NetworkBehaviourAction<MdnsEvent, <Mdns as NetworkBehaviour>::ProtocolsHandler>> {
 		loop {
 			match self {
 				Self::Instantiating(fut) =>
