@@ -287,7 +287,16 @@ impl LoggerBuilder {
 mod tests {
 	use super::*;
 	use crate as sc_tracing;
-	use std::{env, process::Command};
+	use log::info;
+	use std::{
+		collections::BTreeMap,
+		env,
+		process::Command,
+		sync::{
+			atomic::{AtomicBool, AtomicUsize, Ordering},
+			Arc,
+		},
+	};
 	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
 
 	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
@@ -488,6 +497,79 @@ mod tests {
 			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(Some("test=trace".into()), None));
 			assert_eq!("MAX_LOG_LEVEL=Debug", run_test(Some("test=debug".into()), None));
 			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(None, Some("test=info".into())));
+		}
+	}
+
+	// This creates a bunch of threads and makes sure they start executing
+	// a given callback almost exactly at the same time.
+	fn run_on_many_threads(thread_count: usize, callback: impl Fn(usize) + 'static + Send + Clone) {
+		let started_count = Arc::new(AtomicUsize::new(0));
+		let barrier = Arc::new(AtomicBool::new(false));
+		let threads: Vec<_> = (0..thread_count)
+			.map(|nth_thread| {
+				let started_count = started_count.clone();
+				let barrier = barrier.clone();
+				let callback = callback.clone();
+
+				std::thread::spawn(move || {
+					started_count.fetch_add(1, Ordering::SeqCst);
+					while !barrier.load(Ordering::SeqCst) {
+						std::thread::yield_now();
+					}
+
+					callback(nth_thread);
+				})
+			})
+			.collect();
+
+		while started_count.load(Ordering::SeqCst) != thread_count {
+			std::thread::yield_now();
+		}
+		barrier.store(true, Ordering::SeqCst);
+
+		for thread in threads {
+			if let Err(error) = thread.join() {
+				println!("error: failed to join thread: {:?}", error);
+				unsafe { libc::abort() }
+			}
+		}
+	}
+
+	#[test]
+	fn parallel_logs_from_multiple_threads_are_properly_gathered() {
+		const THREAD_COUNT: usize = 128;
+		const LOGS_PER_THREAD: usize = 1024;
+
+		let output = run_test_in_another_process(
+			"parallel_logs_from_multiple_threads_are_properly_gathered",
+			|| {
+				let builder = LoggerBuilder::new("");
+				builder.init().unwrap();
+
+				run_on_many_threads(THREAD_COUNT, |nth_thread| {
+					for _ in 0..LOGS_PER_THREAD {
+						info!("Thread <<{}>>", nth_thread);
+					}
+				});
+			},
+		);
+
+		if let Some(output) = output {
+			let stderr = String::from_utf8(output.stderr).unwrap();
+			let mut count_per_thread = BTreeMap::new();
+			for line in stderr.split("\n") {
+				if let Some(index_s) = line.find("Thread <<") {
+					let index_s = index_s + "Thread <<".len();
+					let index_e = line.find(">>").unwrap();
+					let nth_thread: usize = line[index_s..index_e].parse().unwrap();
+					*count_per_thread.entry(nth_thread).or_insert(0) += 1;
+				}
+			}
+
+			assert_eq!(count_per_thread.len(), THREAD_COUNT);
+			for (_, count) in count_per_thread {
+				assert_eq!(count, LOGS_PER_THREAD);
+			}
 		}
 	}
 }
