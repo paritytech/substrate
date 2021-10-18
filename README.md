@@ -5,7 +5,8 @@
 </p>
 
 Substrate is a next-generation framework for blockchain innovation 🚀.
-
+## THIS IS Trying, change this file for Substrate Course, from Aaron of #3 team,
+uid: 054
 ## Trying it out
 
 Simply go to [docs.substrate.io](https://docs.substrate.io) and follow the
