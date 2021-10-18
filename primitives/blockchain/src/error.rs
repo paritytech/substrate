@@ -132,7 +132,20 @@ pub enum Error {
 	TransactionPoolNotReady,
 	#[display(fmt = "Database: {}", _0)]
 	DatabaseError(sp_database::error::DatabaseError),
-	/// A convenience variant for String
+	#[display(fmt = "Missing public key for account {:?}", _0)]
+	#[from(ignore)]
+	MissingPublicKey(sp_runtime::AccountId32),
+	#[from(ignore)]
+	#[display(fmt = "Block author identity unknown")]
+	BlockAuthorIdentityUnknown,
+	#[display(fmt = "Cannot find account id of collator: {}", _0)]
+	UnknownCollatorId(u32),
+	#[display(fmt = "Block builder is unknown")]
+	UnknownBlockBuilder,
+	#[display(fmt = "Cannot find decryption key for public key {}", _0)]
+	#[from(ignore)]
+	CannotFindDecryptionKey(sp_core::ecdsa::Public),
+	// A convenience variant for String
 	#[display(fmt = "{}", _0)]
 	Msg(String),
 }

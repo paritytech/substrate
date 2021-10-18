@@ -51,8 +51,6 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-const INVALID_COLLATOR_ID: &str = "invalid collator id";
-
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
 	/// The client instance.
@@ -208,11 +206,12 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 
         let api = self.client.runtime_api();
 		let public_key = api.get_authority_public_key(&self.parent_id, account_id)?
-            .ok_or(sp_blockchain::Error::Backend("public key not found".to_owned()))?;
+            .ok_or(sp_blockchain::Error::MissingPublicKey(account_id.clone()))?;
+
 		debug!(target:"basic_authorship","public_key id:  {:?}", public_key);
 
 		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx"))
-            .map_err(|_| sp_blockchain::Error::Backend("key not found in storage".to_owned()))?;
+            .map_err(|_| sp_blockchain::Error::CannotFindDecryptionKey(public_key))?;
 
 		let seed: [u8; 32] = key_pair.seed();
 		let priv_key: SecretKey = SecretKey::parse_slice(&seed).unwrap();
@@ -242,10 +241,10 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		// https://trello.com/c/YPt5RKOj/325-newsolve-problem-of-missing-blockbuilderid-information-in-substrate-tests
 		let block_builder_id = sc_consensus_babe::extract_pre_digest::<Block>(&inherent_digests)
 			.map(|pre_digest| pre_digest.authority_index())
-			.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?;
+			.map_err(|_| sp_blockchain::Error::UnknownBlockBuilder)?;
 
 		let account_id = api.get_account_id(&self.parent_id, block_builder_id)?
-            .ok_or(sp_blockchain::Error::Backend(INVALID_COLLATOR_ID.to_owned()))?;
+            .ok_or(sp_blockchain::Error::UnknownCollatorId(block_builder_id))?;
 		debug!(target:"basic_authorship", "account id:  {:?}", account_id); 
 
 		let mut block_builder = self.client.new_block_at(
@@ -759,32 +758,36 @@ mod tests {
 	}
 
 
-    use substrate_test_runtime_client::Client;
-    use substrate_test_runtime_client::sc_client_db;
+	use substrate_test_runtime_client::Client;
+	use substrate_test_runtime_client::sc_client_db;
 	type TxPoolImpl = BasicPool< FullChainApi<Client<sc_client_db::Backend<Block>>, Block> , Block>;
 	type ClientImpl = Client<sc_client_db::Backend<Block>>;
 
-    struct BlockBuilderHelper{
-        pool: Arc<TxPoolImpl>,
-        client: Arc<ClientImpl>,
-        block_number: u64,
-    }
+	struct BlockBuilderHelper{
+		pool: Arc<TxPoolImpl>,
+		client: Arc<ClientImpl>,
+		keystore: KeyStorePtr,
+		block_number: u64,
+	}
 
 
 	impl BlockBuilderHelper{
 
 		fn new(pool: Arc<TxPoolImpl>,
-			client: Arc<ClientImpl>) -> Self{
+			client: Arc<ClientImpl>,
+			keystore: KeyStorePtr,
+		) -> Self{
 			BlockBuilderHelper{
 				pool,
 				client,
+				keystore,
 				block_number: 0,
 			}
 		}
 
-        fn produce_block(&self, inherent_data: InherentData, digests: DigestFor<Block>) -> sp_blockchain::Result<Block>{
+		fn produce_block(&self, inherent_data: InherentData, digests: DigestFor<Block>) -> sp_blockchain::Result<Block>{
 			let client = self.client.clone();
-			let mut proposer_factory = ProposerFactory::new(client.clone(), self.pool.clone(), None, create_key_store());
+			let mut proposer_factory = ProposerFactory::new(client.clone(), self.pool.clone(), None, self.keystore.clone());
 			let proposer = proposer_factory.init_with_now(
 				&self.client.header(&BlockId::number(self.block_number)).unwrap().unwrap(),
 				Box::new(move || time::Instant::now()),
@@ -802,10 +805,16 @@ mod tests {
 			futures::executor::block_on(
 				proposer.propose(inherent_data, digests, deadline, RecordProof::No)
 			).map(|r| r.block)
-        }
+		}
+
+		fn import_block(& mut self, block: Block){
+			let mut client = self.client.clone();
+			client.import(BlockOrigin::Own, block.clone()).unwrap();
+			self.block_number += 1;
+		}
 
 		fn produce_and_import_block(& mut self) -> Block {
-            let block = self.produce_block(create_inherents(), create_digest()).unwrap();
+			let block = self.produce_block(create_inherents(), create_digest()).unwrap();
 			let mut client = self.client.clone();
 			client.import(BlockOrigin::Own, block.clone()).unwrap();
 			self.block_number += 1;
@@ -823,12 +832,12 @@ mod tests {
 
 	#[test]
 	fn inject_doubly_encrypted_tx_and_expect_singly_ecrypted_extrinsic() {
-        let _ = env_logger::try_init();
+		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
 		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
 
@@ -874,7 +883,7 @@ mod tests {
 		let payload1 = b"hello world1".iter().cloned().collect::<Vec<_>>();
 		let payload2 = b"hello world2".iter().cloned().collect::<Vec<_>>();
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
@@ -898,17 +907,17 @@ mod tests {
 		let block = bb.produce_and_import_block();
 		assert_eq!(block.extrinsics().len(), 2);
 
-        let decrypted_payloads : HashSet<_> = block.extrinsics().iter()
-            .map(|xt| match xt {
+		let decrypted_payloads : HashSet<_> = block.extrinsics().iter()
+			.map(|xt| match xt {
 				Extrinsic::EncryptedTX(
 					ExtrinsicType::<<Block as BlockT>::Hash>::SinglyEncryptedTx{
 						singly_encrypted_call, ..
 					}
-                ) => { singly_encrypted_call },
-                _ => { panic!("wrong extrinsic type") }
-        }).collect();
+				) => { singly_encrypted_call },
+				_ => { panic!("wrong extrinsic type") }
+			}).collect();
 
-        assert_eq!(HashSet::from([payload1, payload2].iter().collect()), decrypted_payloads);
+		assert_eq!(HashSet::from([payload1, payload2].iter().collect()), decrypted_payloads);
 	}
 
 	#[test]
@@ -919,7 +928,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
 		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
 
@@ -961,7 +970,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
@@ -984,7 +993,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
@@ -1007,7 +1016,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
@@ -1029,7 +1038,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone());
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
@@ -1074,7 +1083,7 @@ mod tests {
 						time::Duration::from_secs(9),
 						RecordProof::No,)
 				),
-				Err(sp_blockchain::Error::Backend(e)) if e == String::from("No BABE pre-runtime digest found")
+				Err(sp_blockchain::Error::UnknownBlockBuilder)
 			)
 		);
 	}
@@ -1082,13 +1091,13 @@ mod tests {
 	#[test]
 	fn fail_to_create_block_on_uknown_collator_id(){
 		let _ = env_logger::try_init();
-        let mut digests : DigestFor<Block> = Default::default();
+		let mut digests : DigestFor<Block> = Default::default();
 		let unknown_autohrity_index = 10;
-        digests.push(DigestItem::babe_pre_digest(
-			PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-				authority_index: unknown_autohrity_index,
-				slot_number: Default::default(),
-		})));
+		digests.push(DigestItem::babe_pre_digest(
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+					authority_index: unknown_autohrity_index,
+					slot_number: Default::default(),
+				})));
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -1118,7 +1127,7 @@ mod tests {
 						time::Duration::from_secs(9),
 						RecordProof::No,)
 				),
-				Err(sp_blockchain::Error::Backend(e)) if e == String::from(INVALID_COLLATOR_ID)
+				Err(sp_blockchain::Error::UnknownCollatorId(index)) if index == unknown_autohrity_index
 			)
 		);
 	}
@@ -1126,25 +1135,18 @@ mod tests {
 	#[test]
 	fn fail_to_create_block_on_uknown_collator_public_key(){
 		let _ = env_logger::try_init();
-        let mut digests : DigestFor<Block> = Default::default();
-		let unknown_autohrity_index = 0;
-        digests.push(DigestItem::babe_pre_digest(
-			PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-				authority_index: substrate_test_runtime::DUMMY_COLLATOR_ID,
-				slot_number: Default::default(),
-		})));
+		let mut digests : DigestFor<Block> = Default::default();
+		digests.push(DigestItem::babe_pre_digest(
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+					authority_index: substrate_test_runtime::DUMMY_COLLATOR_ID,
+					slot_number: Default::default(),
+				})));
 
-		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
-		let proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			Box::new(move || time::Instant::now()),
-		);
-
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
 				Extrinsic::SubmitEncryptedTransaction{
@@ -1153,26 +1155,109 @@ mod tests {
 				}
 			])
 		).unwrap();
-				futures::executor::block_on(proposer.propose(
-						create_inherents(),
-						digests,
-						time::Duration::from_secs(9),
-						RecordProof::No,)).unwrap();
 
-                panic!("this test should panic!");
+		// include encrypted tx into the block
+		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		bb.import_block(block);
 
-		// assert!(
-		// 	matches!(
-		// 		futures::executor::block_on(proposer.propose(
-		// 				create_inherents(),
-		// 				digests,
-		// 				time::Duration::from_secs(9),
-		// 				RecordProof::No,)
-		// 		),
-		// 		Err(sp_blockchain::Error::Backend(e)) if e == String::from(INVALID_COLLATOR_ID)
-		// 	)
-		// );
+		// executed tx and insert encrypted tx into FIFO
+		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		bb.import_block(block);
+
+		// executed tx and insert encrypted tx into FIFO
+		let block = bb.produce_block(create_inherents(), digests.clone());
+
+		assert!(
+			matches!(
+				block,
+				Err(sp_blockchain::Error::MissingPublicKey(_))
+			)
+		);
 	}
 
+	#[test]
+	fn fail_to_create_block_on_missing_key_in_keystore(){
+		let _ = env_logger::try_init();
+		let mut digests : DigestFor<Block> = Default::default();
+		digests.push(DigestItem::babe_pre_digest(
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+					authority_index: substrate_test_runtime::ALICE_COLLATOR_ID,
+					slot_number: Default::default(),
+				})));
 
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), Store::new_in_memory());
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: vec![],
+				}
+			])
+		).unwrap();
+
+		// include encrypted tx into the block
+		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		bb.import_block(block);
+
+		// executed tx and insert encrypted tx into FIFO
+		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		bb.import_block(block);
+
+		// executed tx and insert encrypted tx into FIFO
+		let block = bb.produce_block(create_inherents(), digests.clone());
+
+		assert!(
+			matches!(
+				block,
+				Err(sp_blockchain::Error::CannotFindDecryptionKey(_))
+			)
+		);
+	}
+
+	#[test]
+	fn fail_to_create_block_on_missing_key_in_keystore(){
+		let _ = env_logger::try_init();
+		let mut digests : DigestFor<Block> = Default::default();
+		digests.push(DigestItem::babe_pre_digest(
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+					authority_index: substrate_test_runtime::ALICE_COLLATOR_ID,
+					slot_number: Default::default(),
+				})));
+
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+
+		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), Store::new_in_memory());
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+				Extrinsic::SubmitEncryptedTransaction{
+					singly_encrypted: true,
+					data: vec![],
+				}
+			])
+		).unwrap();
+
+		// include encrypted tx into the block
+		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		bb.import_block(block);
+
+		// executed tx and insert encrypted tx into FIFO
+		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		bb.import_block(block);
+
+		// executed tx and insert encrypted tx into FIFO
+		let block = bb.produce_block(create_inherents(), digests.clone());
+
+		assert!(
+			matches!(
+				block,
+				Err(sp_blockchain::Error::CannotFindDecryptionKey(_))
+			)
+		);
+	}
 }

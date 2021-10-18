@@ -7652,6 +7652,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "sp-block-builder",
  "sp-consensus",
+ "sp-core",
  "sp-database",
  "sp-runtime",
  "sp-state-machine",
