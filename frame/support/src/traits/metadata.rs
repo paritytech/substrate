@@ -17,6 +17,7 @@
 
 //! Traits for managing information attached to pallets and their constituents.
 
+use sp_std::prelude::*;
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 use impl_trait_for_tuples::impl_for_tuples;
