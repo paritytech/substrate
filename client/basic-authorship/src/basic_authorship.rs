@@ -1217,47 +1217,4 @@ mod tests {
 			)
 		);
 	}
-
-	#[test]
-	fn fail_to_create_block_on_missing_key_in_keystore(){
-		let _ = env_logger::try_init();
-		let mut digests : DigestFor<Block> = Default::default();
-		digests.push(DigestItem::babe_pre_digest(
-				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-					authority_index: substrate_test_runtime::ALICE_COLLATOR_ID,
-					slot_number: Default::default(),
-				})));
-
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), Store::new_in_memory());
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: vec![],
-				}
-			])
-		).unwrap();
-
-		// include encrypted tx into the block
-		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
-		bb.import_block(block);
-
-		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
-		bb.import_block(block);
-
-		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), digests.clone());
-
-		assert!(
-			matches!(
-				block,
-				Err(sp_blockchain::Error::CannotFindDecryptionKey(_))
-			)
-		);
-	}
 }
