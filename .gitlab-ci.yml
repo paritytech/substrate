@@ -178,6 +178,21 @@ default:
     | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
   - sccache -s
 
+.build-linux-substrate-script:     &build-linux-substrate-script
+  - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+  - mv ./target/release/substrate ./artifacts/substrate/.
+  - echo -n "Substrate version = "
+  - if [ "${CI_COMMIT_TAG}" ]; then
+      echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+    else
+      ./artifacts/substrate/substrate --version |
+        sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+          tee ./artifacts/substrate/VERSION;
+    fi
+  - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+  - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
+  - sccache -s
+
 #### Vault secrets
 .vault-secrets:                    &vault-secrets
   secrets:
@@ -571,7 +586,8 @@ check-dependent-cumulus:
   variables:
     DEPENDENT_REPO: cumulus
 
-build-linux-substrate:             &build-binary
+
+build-linux-substrate:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
@@ -582,27 +598,21 @@ build-linux-substrate:             &build-binary
   before_script:
     - mkdir -p ./artifacts/substrate/
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mv ./target/release/substrate ./artifacts/substrate/.
-    - echo -n "Substrate version = "
-    - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-      else
-        ./artifacts/substrate/substrate --version |
-          sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-            tee ./artifacts/substrate/VERSION;
-      fi
-    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+    - *build-linux-substrate-script
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
-    - sccache -s
+
 
 #Build binary for simnet quick tests.
 build-linux-substrate-simnet:
-  <<:                              *build-binary
+  stage:                           build
   <<:                              *collect-artifacts-short
+  <<:                              *docker-env
   <<:                              *test-refs-no-trigger-prs-only
+  before_script:
+    - mkdir -p ./artifacts/substrate/
+  script:
+    - *build-linux-substrate-script
 
 build-linux-subkey:                &build-subkey
   stage:                           build
