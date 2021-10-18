@@ -31,7 +31,7 @@ jobs:
         with:
           toolchain: nightly-2020-10-01
           command: build
-          args: --tests -j2
+          args: --tests -j1
       - name: Run UT
         uses: actions-rs/cargo@v1
         with:
