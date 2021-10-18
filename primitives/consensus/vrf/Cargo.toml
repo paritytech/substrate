@@ -6,7 +6,7 @@ description = "Primitives for VRF based consensus"
 edition = "2018"
 license = "Apache-2.0"
 repository = "https://github.com/paritytech/substrate/"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 readme = "README.md"
 
 [package.metadata.docs.rs]

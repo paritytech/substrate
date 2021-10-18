@@ -31,6 +31,9 @@ const MEGABYTE: usize = 1024 * 1024;
 /// Maximal payload accepted by RPC servers.
 pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 
+/// Maximal buffer size in WS server.
+pub const WS_MAX_BUFFER_CAPACITY_DEFAULT: usize = 16 * MEGABYTE;
+
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 

@@ -26,13 +26,13 @@ use frame_system::RawOrigin;
 // To actually run this benchmark on pallet-example, we need to put this pallet into the
 //   runtime and compile it with `runtime-benchmarks` feature. The detail procedures are
 //   documented at:
-//   https://substrate.dev/docs/en/knowledgebase/runtime/benchmarking#how-to-benchmark
+//   https://docs.substrate.io/v3/runtime/benchmarking#how-to-benchmark
 //
 // The auto-generated weight estimate of this pallet is copied over to the `weights.rs` file.
 // The exact command of how the estimate generated is printed at the top of the file.
 
 // Details on using the benchmarks macro can be seen at:
-//   https://substrate.dev/rustdocs/v3.0.0/frame_benchmarking/macro.benchmarks.html
+//   https://paritytech.github.io/substrate/master/frame_benchmarking/trait.Benchmarking.html#tymethod.benchmarks
 benchmarks! {
 	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
 	set_dummy_benchmark {
