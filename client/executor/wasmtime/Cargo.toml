@@ -4,7 +4,7 @@ version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Defines a `WasmRuntime` that uses the Wasmtime JIT to execute."
 readme = "README.md"
@@ -16,7 +16,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 libc = "0.2.90"
 cfg-if = "1.0"
 log = "0.4.8"
-scoped-tls = "1.0"
 parity-wasm = "0.42.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
@@ -24,8 +23,10 @@ sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-in
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
-wasmtime = { version = "0.27.0", default-features = false, features = [
+wasmtime = { version = "0.30.0", default-features = false, features = [
     "cache",
+    "cranelift",
+    "jitdump",
     "parallel-compilation",
 ] }
 

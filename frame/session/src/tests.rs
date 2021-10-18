@@ -18,16 +18,18 @@
 // Tests for the Session Pallet
 
 use super::*;
-use codec::Decode;
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
-use mock::{
+use crate::mock::{
 	authorities, before_session_end_called, force_new_session, new_test_ext,
 	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
-	Origin, PreUpgradeMockSessionKeys, Session, System, Test, SESSION_CHANGED,
+	Origin, PreUpgradeMockSessionKeys, Session, System, Test, TestValidatorIdOf, SESSION_CHANGED,
 	TEST_SESSION_CHANGED,
 };
+
+use codec::Decode;
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
+
+use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 fn initialize_block(block: u64) {
 	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
@@ -71,10 +73,34 @@ fn keys_cleared_on_kill() {
 }
 
 #[test]
+fn purge_keys_works_for_stash_id() {
+	let mut ext = new_test_ext();
+	ext.execute_with(|| {
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		TestValidatorIdOf::set(vec![(10, 1), (20, 2), (3, 3)].into_iter().collect());
+		assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
+		assert_eq!(Session::load_keys(&2), Some(UintAuthorityId(2).into()));
+
+		let id = DUMMY;
+		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
+
+		assert_ok!(Session::purge_keys(Origin::signed(10)));
+		assert_ok!(Session::purge_keys(Origin::signed(2)));
+
+		assert_eq!(Session::load_keys(&10), None);
+		assert_eq!(Session::load_keys(&20), None);
+		assert_eq!(Session::key_owner(id, UintAuthorityId(10).get_raw(id)), None);
+		assert_eq!(Session::key_owner(id, UintAuthorityId(20).get_raw(id)), None);
+	})
+}
+
+#[test]
 fn authorities_should_track_validators() {
 	reset_before_session_end_called();
 
 	new_test_ext().execute_with(|| {
+		TestValidatorIdOf::set(vec![(1, 1), (2, 2), (3, 3), (4, 4)].into_iter().collect());
+
 		set_next_validators(vec![1, 2]);
 		force_new_session();
 		initialize_block(1);
@@ -185,6 +211,8 @@ fn session_change_should_work() {
 #[test]
 fn duplicates_are_not_allowed() {
 	new_test_ext().execute_with(|| {
+		TestValidatorIdOf::set(vec![(1, 1), (2, 2), (3, 3), (4, 4)].into_iter().collect());
+
 		System::set_block_number(1);
 		Session::on_initialize(1);
 		assert_noop!(
@@ -203,6 +231,7 @@ fn session_changed_flag_works() {
 	reset_before_session_end_called();
 
 	new_test_ext().execute_with(|| {
+		TestValidatorIdOf::set(vec![(1, 1), (2, 2), (3, 3), (69, 69)].into_iter().collect());
 		TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
 
 		force_new_session();
@@ -336,7 +365,7 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 }
 
 #[test]
-fn return_true_if_more_than_third_is_disabled() {
+fn disable_index_returns_false_if_already_disabled() {
 	new_test_ext().execute_with(|| {
 		set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
 		force_new_session();
@@ -345,10 +374,9 @@ fn return_true_if_more_than_third_is_disabled() {
 		force_new_session();
 		initialize_block(2);
 
+		assert_eq!(Session::disable_index(0), true);
 		assert_eq!(Session::disable_index(0), false);
-		assert_eq!(Session::disable_index(1), false);
-		assert_eq!(Session::disable_index(2), true);
-		assert_eq!(Session::disable_index(3), true);
+		assert_eq!(Session::disable_index(1), true);
 	});
 }
 

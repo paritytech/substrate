@@ -36,7 +36,7 @@ use crate::{
 	Pallet as Contracts, *,
 };
 use codec::Encode;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
 use pwasm_utils::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
@@ -1425,7 +1425,7 @@ benchmarks! {
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
-				use secp256k1::{SecretKey, Message, sign};
+				use libsecp256k1::{SecretKey, Message, sign};
 
 				let private_key = SecretKey::random(&mut rng);
 				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
@@ -2241,7 +2241,7 @@ benchmarks! {
 			);
 		}
 		#[cfg(not(feature = "std"))]
-		return Err("Run this bench with a native runtime in order to see the schedule.".into());
+		Err("Run this bench with a native runtime in order to see the schedule.")?;
 	}: {}
 
 	// Execute one erc20 transfer using the ink! erc20 example contract.
@@ -2325,10 +2325,10 @@ benchmarks! {
 		)
 		.result?;
 	}
-}
 
-impl_benchmark_test_suite!(
-	Contracts,
-	crate::tests::ExtBuilder::default().build(),
-	crate::tests::Test,
-);
+	impl_benchmark_test_suite!(
+		Contracts,
+		crate::tests::ExtBuilder::default().build(),
+		crate::tests::Test,
+	)
+}
