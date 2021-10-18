@@ -148,9 +148,10 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 /// - `Block`: The block type of the runtime
 /// - `Context`: The context that is used when checking an extrinsic.
 /// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
-/// - `AllPallets`: Tuple that contains all modules. Will be used to call e.g. `on_initialize`.
-/// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
-///   already called by `AllPallets`. It will be called before all modules will be called.
+/// - `AllPallets`: Tuple that contains all pallets. Will be used to call e.g. `on_initialize`,
+///    it must include system pallet.
+/// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Pallets are
+///   already called by `AllPallets`. It will be called before all pallets will be called.
 pub struct Executive<System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade = ()>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade)>,
 );
