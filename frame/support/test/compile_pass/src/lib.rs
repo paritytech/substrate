@@ -19,6 +19,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
+//! This crate tests that `construct_runtime!` expands the pallet parts
+//! correctly even when frame-support is renamed in Cargo.toml
 
 use sp_core::{sr25519, H256};
 use sp_runtime::{
