@@ -513,7 +513,7 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPallets::on_initialize(1), 21);
 		AllPallets::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
+		AllPallets::on_runtime_upgrade();
 
 		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
@@ -540,6 +540,8 @@ fn pallet_hooks_expand() {
 			frame_system::Pallet::<Runtime>::events()[5].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
+
+		assert_eq!(<(Example, Instance1Example)>::on_runtime_upgrade(), 61);
 	})
 }
 

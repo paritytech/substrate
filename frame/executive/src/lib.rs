@@ -212,9 +212,6 @@ where
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
 		let mut weight = 0;
 		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
-		weight = weight.saturating_add(
-			<frame_system::Pallet<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
-		);
 		weight = weight.saturating_add(<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade());
 
 		weight
@@ -257,7 +254,7 @@ where
 	#[cfg(feature = "try-runtime")]
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
 		<
-			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
+			(COnRuntimeUpgrade, AllPallets)
 			as
 			OnRuntimeUpgrade
 		>::pre_upgrade().unwrap();
@@ -265,7 +262,7 @@ where
 		let weight = Self::execute_on_runtime_upgrade();
 
 		<
-			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
+			(COnRuntimeUpgrade, AllPallets)
 			as
 			OnRuntimeUpgrade
 		>::post_upgrade().unwrap();
@@ -306,9 +303,6 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
-		weight = weight.saturating_add(<frame_system::Pallet<System> as OnInitialize<
-			System::BlockNumber,
-		>>::on_initialize(*block_number));
 		weight = weight.saturating_add(
 			<AllPallets as OnInitialize<System::BlockNumber>>::on_initialize(*block_number),
 		);
@@ -419,26 +413,16 @@ where
 		let mut remaining_weight = max_weight.saturating_sub(weight.total());
 
 		if remaining_weight > 0 {
-			let mut used_weight =
-				<frame_system::Pallet<System> as OnIdle<System::BlockNumber>>::on_idle(
-					block_number,
-					remaining_weight,
-				);
-			remaining_weight = remaining_weight.saturating_sub(used_weight);
-			used_weight = <AllPallets as OnIdle<System::BlockNumber>>::on_idle(
+			let used_weight = <AllPallets as OnIdle<System::BlockNumber>>::on_idle(
 				block_number,
 				remaining_weight,
-			)
-			.saturating_add(used_weight);
+			);
 			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
 				used_weight,
 				DispatchClass::Mandatory,
 			);
 		}
 
-		<frame_system::Pallet<System> as OnFinalize<System::BlockNumber>>::on_finalize(
-			block_number,
-		);
 		<AllPallets as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
@@ -1364,8 +1348,6 @@ mod tests {
 			let frame_system_upgrade_weight = frame_system::Pallet::<Runtime>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight = <AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade();
-			let frame_system_on_initialize_weight =
-				frame_system::Pallet::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight =
 				<AllPallets as OnInitialize<u64>>::on_initialize(block_number);
 			let base_block_weight =
@@ -1377,7 +1359,6 @@ mod tests {
 				frame_system_upgrade_weight +
 					custom_runtime_upgrade_weight +
 					runtime_upgrade_weight +
-					frame_system_on_initialize_weight +
 					on_initialize_weight + base_block_weight,
 			);
 		});

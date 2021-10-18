@@ -206,32 +206,38 @@ fn decl_all_pallets<'a>(
 	}
 	// Make nested tuple structure like (((Babe, Consensus), Grandpa), ...)
 	// But ignore the system pallet.
-	let all_pallets = names
+	let all_pallets_without_system = names
 		.iter()
 		.filter(|n| **n != SYSTEM_PALLET_NAME)
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
-	let all_pallets_with_system = names
+	let all_pallets = names
 		.iter()
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
 	quote!(
 		#types
 		/// All pallets included in the runtime as a nested tuple of types.
-		/// Excludes the System pallet.
 		pub type AllPallets = ( #all_pallets );
+
 		/// All pallets included in the runtime as a nested tuple of types.
-		pub type AllPalletsWithSystem = ( #all_pallets_with_system );
+		#[deprecated(note = "use `AllPallets` instead")]
+		pub type AllPalletsWithSystem = AllPallets;
+
+		/// All pallets included in the runtime as a nested tuple of types.
+		/// Excludes the System pallet.
+		pub type AllPalletsWithoutSystem = ( #all_pallets_without_system );
 
 		/// All modules included in the runtime as a nested tuple of types.
 		/// Excludes the System pallet.
 		#[deprecated(note = "use `AllPallets` instead")]
 		#[allow(dead_code)]
-		pub type AllModules = ( #all_pallets );
+		#[allow(deprecated)]
+		pub type AllModules = AllPalletsWithoutSystem;
 		/// All modules included in the runtime as a nested tuple of types.
 		#[deprecated(note = "use `AllPalletsWithSystem` instead")]
 		#[allow(dead_code)]
-		pub type AllModulesWithSystem = ( #all_pallets_with_system );
+		pub type AllModulesWithSystem = AllPallets;
 	)
 }
 

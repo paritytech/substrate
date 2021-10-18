@@ -942,7 +942,7 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPallets::on_initialize(1), 10);
 		AllPallets::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
+		AllPallets::on_runtime_upgrade();
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -956,6 +956,8 @@ fn pallet_hooks_expand() {
 			frame_system::Pallet::<Runtime>::events()[2].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
+
+		assert_eq!(Example::on_runtime_upgrade(), 30);
 	})
 }
 
