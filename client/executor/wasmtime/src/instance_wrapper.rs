@@ -154,7 +154,7 @@ impl InstanceWrapper {
 	pub fn new(
 		module: &Module,
 		imports: &Imports,
-		heap_pages: u32,
+		heap_pages: u64,
 		mut ctx: impl AsContextMut,
 	) -> Result<Self> {
 		let instance = Instance::new(&mut ctx, module, &imports.externs)

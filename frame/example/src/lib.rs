@@ -316,8 +316,7 @@ const MILLICENTS: u32 = 1_000_000_000;
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
 //
 // More information can be read at:
-//   - https://substrate.dev/docs/en/knowledgebase/learn-substrate/weight
-//   - https://substrate.dev/docs/en/knowledgebase/runtime/fees#default-weight-annotations
+//   - https://docs.substrate.io/v3/runtime/weights-and-fees
 //
 // Manually configuring weight is an advanced operation and what you really need may well be
 //   fulfilled by running the benchmarking toolchain. Refer to `benchmarking.rs` file.
@@ -548,7 +547,8 @@ pub mod pallet {
 
 			// Print out log or debug message in the console via log::{error, warn, info, debug,
 			// trace}, accepting format strings similar to `println!`.
-			// https://substrate.dev/rustdocs/v3.0.0/log/index.html
+			// https://paritytech.github.io/substrate/master/sp_io/logging/fn.log.html
+			// https://paritytech.github.io/substrate/master/frame_support/constant.LOG_TARGET.html
 			info!("New value is now: {:?}", new_value);
 
 			// Put the new value into storage.

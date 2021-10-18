@@ -193,3 +193,72 @@ impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I>
 		Self::do_destroy(id, witness, maybe_check_owner)
 	}
 }
+
+impl<T: Config<I>, I: 'static> fungibles::metadata::Inspect<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	fn name(asset: T::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).name.to_vec()
+	}
+
+	fn symbol(asset: T::AssetId) -> Vec<u8> {
+		Metadata::<T, I>::get(asset).symbol.to_vec()
+	}
+
+	fn decimals(asset: T::AssetId) -> u8 {
+		Metadata::<T, I>::get(asset).decimals
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::metadata::Mutate<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	fn set(
+		asset: T::AssetId,
+		from: &<T as SystemConfig>::AccountId,
+		name: Vec<u8>,
+		symbol: Vec<u8>,
+		decimals: u8,
+	) -> DispatchResult {
+		Self::do_set_metadata(asset, from, name, symbol, decimals)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::approvals::Inspect<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	// Check the amount approved to be spent by an owner to a delegate
+	fn allowance(
+		asset: T::AssetId,
+		owner: &<T as SystemConfig>::AccountId,
+		delegate: &<T as SystemConfig>::AccountId,
+	) -> T::Balance {
+		Approvals::<T, I>::get((asset, &owner, &delegate))
+			.map(|x| x.amount)
+			.unwrap_or_else(Zero::zero)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	fn approve(
+		asset: T::AssetId,
+		owner: &<T as SystemConfig>::AccountId,
+		delegate: &<T as SystemConfig>::AccountId,
+		amount: T::Balance,
+	) -> DispatchResult {
+		Self::do_approve_transfer(asset, owner, delegate, amount)
+	}
+
+	// Aprove spending tokens from a given account
+	fn transfer_from(
+		asset: T::AssetId,
+		owner: &<T as SystemConfig>::AccountId,
+		delegate: &<T as SystemConfig>::AccountId,
+		dest: &<T as SystemConfig>::AccountId,
+		amount: T::Balance,
+	) -> DispatchResult {
+		Self::do_transfer_approved(asset, owner, delegate, dest, amount)
+	}
+}
