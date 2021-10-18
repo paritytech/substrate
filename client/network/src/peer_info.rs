@@ -196,9 +196,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
-		self.ping.inject_connection_established(peer_id, conn, endpoint);
-		self.identify.inject_connection_established(peer_id, conn, endpoint);
+		self.ping.inject_connection_established(peer_id, conn, endpoint, failed_addresses);
+		self.identify.inject_connection_established(peer_id, conn, endpoint, failed_addresses);
 		match self.nodes_info.entry(*peer_id) {
 			Entry::Vacant(e) => {
 				e.insert(NodeInfo::new(endpoint.clone()));
@@ -220,9 +221,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
-		self.ping.inject_connection_closed(peer_id, conn, endpoint);
-		self.identify.inject_connection_closed(peer_id, conn, endpoint);
+		self.ping.inject_connection_closed(peer_id, conn, endpoint, handler);
+		self.identify.inject_connection_closed(peer_id, conn, endpoint, handler);
 
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.endpoints.retain(|ep| ep != endpoint)
@@ -330,10 +332,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						self.handle_ping_report(&peer, rtt)
 					}
 				},
-				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
@@ -368,10 +370,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					IdentifyEvent::Pushed { .. } => {},
 					IdentifyEvent::Sent { .. } => {},
 				},
-				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,

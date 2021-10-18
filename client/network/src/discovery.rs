@@ -107,7 +107,7 @@ impl DiscoveryConfig {
 	/// Create a default configuration with the given public key.
 	pub fn new(local_public_key: PublicKey) -> Self {
 		Self {
-			local_peer_id: local_public_key.into_peer_id(),
+			local_peer_id: local_public_key.to_peer_id(),
 			permanent_addresses: Vec::new(),
 			dht_random_walk: true,
 			allow_private_ipv4: true,
@@ -532,10 +532,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
 		self.num_connections += 1;
 		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_connection_established(k, peer_id, conn, endpoint)
+			NetworkBehaviour::inject_connection_established(k, peer_id, conn, endpoint, failed_addresses)
 		}
 	}
 
@@ -550,10 +551,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		self.num_connections -= 1;
 		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_connection_closed(k, peer_id, conn, endpoint)
+			NetworkBehaviour::inject_connection_closed(k, peer_id, conn, endpoint, handler)
 		}
 	}
 
@@ -853,10 +855,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 						},
 					},
-					NetworkBehaviourAction::DialAddress { address } =>
-						return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-					NetworkBehaviourAction::DialPeer { peer_id, condition } =>
-						return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+					NetworkBehaviourAction::DialAddress { address, handler } =>
+						return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
+					NetworkBehaviourAction::DialPeer { peer_id, condition, handler } =>
+						return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
 					NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
 						return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 							peer_id,
@@ -894,10 +896,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					},
 					MdnsEvent::Expired(_) => {},
 				},
-				NetworkBehaviourAction::DialAddress { address } =>
-					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				NetworkBehaviourAction::DialPeer { peer_id, condition } =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+				NetworkBehaviourAction::DialAddress { address, handler } =>
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
+				NetworkBehaviourAction::DialPeer { peer_id, condition, handler } =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
 				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
 				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {

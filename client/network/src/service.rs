@@ -178,7 +178,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
-		let local_peer_id = local_public.clone().into_peer_id();
+		let local_peer_id = local_public.clone().to_peer_id();
 		info!(
 			target: "sub-libp2p",
 			"🏷 Local node identity is: {}",

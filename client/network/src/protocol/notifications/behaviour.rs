@@ -26,7 +26,7 @@ use futures::prelude::*;
 use libp2p::{
 	core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId},
 	swarm::{
-		DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
+		DialPeerCondition, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
 	},
 };
 use log::{error, trace, warn};
@@ -1094,6 +1094,7 @@ impl NetworkBehaviour for Notifications {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		_failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			match self.peers.entry((*peer_id, set_id)).or_insert(PeerState::Poisoned) {
@@ -1152,6 +1153,7 @@ impl NetworkBehaviour for Notifications {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		_endpoint: &ConnectedPoint,
+		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {

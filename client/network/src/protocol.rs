@@ -1362,8 +1362,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
-		self.behaviour.inject_connection_established(peer_id, conn, endpoint)
+		self.behaviour.inject_connection_established(peer_id, conn, endpoint, failed_addresses)
 	}
 
 	fn inject_connection_closed(
@@ -1371,8 +1372,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
-		self.behaviour.inject_connection_closed(peer_id, conn, endpoint)
+		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler)
 	}
 
 	fn inject_connected(&mut self, peer_id: &PeerId) {
@@ -1557,10 +1559,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+			Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
+			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 					peer_id,
