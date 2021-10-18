@@ -170,6 +170,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
+	use scale_info::TypeInfo;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -189,7 +190,8 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// Identifier for the class of asset.
 		type AssetId: Member
@@ -198,7 +200,8 @@ pub mod pallet {
 			+ Copy
 			+ HasCompact
 			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
