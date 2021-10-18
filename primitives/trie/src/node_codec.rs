@@ -111,10 +111,10 @@ impl<H: Hasher> NodeCodec<H> {
 				let bitmap = Bitmap::decode(&data[bitmap_range])?;
 				let value = if branch_has_value {
 					Some(if contains_hash {
-						ValuePlan::HashedValue(input.take(H::LENGTH)?)
+						ValuePlan::Node(input.take(H::LENGTH)?)
 					} else {
 						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-						ValuePlan::Value(input.take(count)?)
+						ValuePlan::Inline(input.take(count)?)
 					})
 				} else {
 					None
@@ -152,10 +152,10 @@ impl<H: Hasher> NodeCodec<H> {
 				)?;
 				let partial_padding = nibble_ops::number_padding(nibble_count);
 				let value = if contains_hash {
-					ValuePlan::HashedValue(input.take(H::LENGTH)?)
+					ValuePlan::Node(input.take(H::LENGTH)?)
 				} else {
 					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-					ValuePlan::Value(input.take(count)?)
+					ValuePlan::Inline(input.take(count)?)
 				};
 
 				Ok(NodePlan::Leaf {
@@ -192,18 +192,18 @@ where
 	}
 
 	fn leaf_node(partial: Partial, value: Value) -> Vec<u8> {
-		let contains_hash = matches!(&value, Value::HashedValue(..));
+		let contains_hash = matches!(&value, Value::Node(..));
 		let mut output = if contains_hash {
 			partial_encode(partial, NodeKind::HashedValueLeaf)
 		} else {
 			partial_encode(partial, NodeKind::Leaf)
 		};
 		match value {
-			Value::Value(value) => {
+			Value::Inline(value) => {
 				Compact(value.len() as u32).encode_to(&mut output);
 				output.extend_from_slice(value);
 			},
-			Value::HashedValue(hash, _) => {
+			Value::Node(hash, _) => {
 				debug_assert!(hash.len() == H::LENGTH);
 				output.extend_from_slice(hash);
 			},
@@ -232,7 +232,7 @@ where
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
 		value: Option<Value>,
 	) -> Vec<u8> {
-		let contains_hash = matches!(&value, Some(Value::HashedValue(..)));
+		let contains_hash = matches!(&value, Some(Value::Node(..)));
 		let mut output = match (&value, contains_hash) {
 			(&None, _) =>
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue),
@@ -246,11 +246,11 @@ where
 		let mut bitmap: [u8; BITMAP_LENGTH] = [0; BITMAP_LENGTH];
 		(0..BITMAP_LENGTH).for_each(|_| output.push(0));
 		match value {
-			Some(Value::Value(value)) => {
+			Some(Value::Inline(value)) => {
 				Compact(value.len() as u32).encode_to(&mut output);
 				output.extend_from_slice(value);
 			},
-			Some(Value::HashedValue(hash, _)) => {
+			Some(Value::Node(hash, _)) => {
 				debug_assert!(hash.len() == H::LENGTH);
 				output.extend_from_slice(hash);
 			},
