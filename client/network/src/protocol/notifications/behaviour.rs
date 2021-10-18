@@ -26,7 +26,8 @@ use futures::prelude::*;
 use libp2p::{
 	core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId},
 	swarm::{
-		DialPeerCondition, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
+		DialPeerCondition, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction,
+		NotifyHandler, PollParameters,
 	},
 };
 use log::{error, trace, warn};

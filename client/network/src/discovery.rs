@@ -536,7 +536,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	) {
 		self.num_connections += 1;
 		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_connection_established(k, peer_id, conn, endpoint, failed_addresses)
+			NetworkBehaviour::inject_connection_established(
+				k,
+				peer_id,
+				conn,
+				endpoint,
+				failed_addresses,
+			)
 		}
 	}
 
@@ -554,9 +560,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		self.num_connections -= 1;
-		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_connection_closed(k, peer_id, conn, endpoint, handler)
-		}
+		// NetworkBehaviour::inject_connection_closed on Kademlia<MemoryStore> does nothing.
 	}
 
 	fn inject_disconnected(&mut self, peer_id: &PeerId) {
@@ -858,7 +862,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					NetworkBehaviourAction::DialAddress { address, handler } =>
 						return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
 					NetworkBehaviourAction::DialPeer { peer_id, condition, handler } =>
-						return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
+						return Poll::Ready(NetworkBehaviourAction::DialPeer {
+							peer_id,
+							condition,
+							handler,
+						}),
 					NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
 						return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 							peer_id,
@@ -899,7 +907,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				NetworkBehaviourAction::DialAddress { address, handler } =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
 				NetworkBehaviourAction::DialPeer { peer_id, condition, handler } =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
+					return Poll::Ready(NetworkBehaviourAction::DialPeer {
+						peer_id,
+						condition,
+						handler,
+					}),
 				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
 				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
