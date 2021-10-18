@@ -1111,6 +1111,8 @@ impl pallet_society::Config for Runtime {
 	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
 	type MaxCandidateIntake = MaxCandidateIntake;
 	type ChallengePeriod = ChallengePeriod;
+	type Call = Call;
+	type ActionByteDeposit = PreimageByteDeposit;
 }
 
 parameter_types! {

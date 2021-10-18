@@ -56,6 +56,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
+	pub const ActionByteDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -119,6 +120,8 @@ impl Config for Test {
 	type ChallengePeriod = ChallengePeriod;
 	type MaxCandidateIntake = MaxCandidateIntake;
 	type PalletId = SocietyPalletId;
+	type Call = Call;
+	type ActionByteDeposit = ActionByteDeposit;
 }
 
 pub struct EnvBuilder {
@@ -144,6 +147,7 @@ impl EnvBuilder {
 				(70, 50),
 				(80, 50),
 				(90, 50),
+				(100, 50),
 			],
 			pot: 0,
 			max_members: 100,
@@ -206,10 +210,10 @@ pub fn run_to_block(n: u64) {
 }
 
 /// Creates a bid struct using input parameters.
-pub fn create_bid<AccountId, Balance>(
+pub fn create_bid<AccountId, Balance, Call>(
 	value: Balance,
 	who: AccountId,
-	kind: BidKind<AccountId, Balance>,
-) -> Bid<AccountId, Balance> {
+	kind: BidKind<AccountId, Balance, Call>,
+) -> Bid<AccountId, Balance, Call> {
 	Bid { who, kind, value }
 }

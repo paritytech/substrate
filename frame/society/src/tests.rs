@@ -549,27 +549,33 @@ fn founder_and_head_cannot_be_removed() {
 		assert_ok!(Society::bid(Origin::signed(70), 0));
 		run_to_block(48);
 		assert_eq!(Strikes::<Test>::get(50), 2);
-
-		// Replace the head
 		assert_ok!(Society::bid(Origin::signed(80), 0));
 		run_to_block(52);
-		assert_ok!(Society::vote(Origin::signed(10), 80, true));
-		assert_ok!(Society::vote(Origin::signed(50), 80, true));
-		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
+		assert_eq!(Strikes::<Test>::get(50), 2);
+
+		// Replace the head and suspend 50 (they are no longer head and have too many strikes)
+		assert_ok!(Society::bid(Origin::signed(90), 0));
 		run_to_block(56);
-		assert_eq!(Society::members(), vec![10, 50, 80]);
-		assert_eq!(Society::head(), Some(80));
+		assert_ok!(Society::vote(Origin::signed(10), 90, true));
+		assert_ok!(Society::vote(Origin::signed(50), 90, true));
+		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
+		run_to_block(60);
+		assert_eq!(Society::members(), vec![10, 50, 90]);
+		assert_eq!(Society::head(), Some(90));
 		assert_eq!(Society::founder(), Some(10));
 
-		// 50 can now be suspended for strikes
-		assert_ok!(Society::bid(Origin::signed(90), 0));
-		run_to_block(60);
-		// The candidate is rejected, so voting approve will give a strike
-		assert_ok!(Society::vote(Origin::signed(50), 90, true));
+		// 50 can now be suspended
 		run_to_block(64);
+		assert_ok!(Society::bid(Origin::signed(100), 0));
+		run_to_block(68);
+		assert_ok!(Society::vote(Origin::signed(90), 100, false));
+		assert_ok!(Society::vote(Origin::signed(10), 100, false));
+		assert_ok!(Society::vote(Origin::signed(50), 100, true));
+		// only being skeptic will give a strike, but 50 already had too many
+		run_to_block(72);
 		assert_eq!(Strikes::<Test>::get(50), 0);
 		assert_eq!(<SuspendedMembers<Test>>::get(50), true);
-		assert_eq!(Society::members(), vec![10, 80]);
+		assert_eq!(Society::members(), vec![10, 90]);
 	});
 }
 
@@ -660,12 +666,12 @@ fn bad_vote_slash_works() {
 		assert_ok!(Society::vote(Origin::signed(30), 50, false));
 		assert_ok!(Society::vote(Origin::signed(40), 50, false));
 		run_to_block(8);
-		// Wrong voter gained a strike
+		// Wrong voter gained no strike
 		assert_eq!(<Strikes<Test>>::get(10), 0);
-		assert_eq!(<Strikes<Test>>::get(20), 1);
+		assert_eq!(<Strikes<Test>>::get(20), 0);
 		assert_eq!(<Strikes<Test>>::get(30), 0);
 		assert_eq!(<Strikes<Test>>::get(40), 0);
-		// Their payout is slashed, a random person is rewarded
+		// But their payout is slashed, a random person is rewarded
 		assert_eq!(<Payouts<Test>>::get(10), vec![(5, 100), (9, 2)]);
 		assert_eq!(<Payouts<Test>>::get(20), vec![(5, 98)]);
 		assert_eq!(<Payouts<Test>>::get(30), vec![(5, 100)]);
