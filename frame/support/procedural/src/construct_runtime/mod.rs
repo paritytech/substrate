@@ -206,7 +206,7 @@ fn decl_all_pallets<'a>(
 	}
 
 	// Make nested tuple structure like:
-	// `((FirstPallet, (SecondPallet, ( ... , (LastPallet) ... ))))`
+	// `((FirstPallet, (SecondPallet, ( ... , LastPallet) ... ))))`
 	// But ignore the system pallet.
 	let all_pallets = names
 		.iter()
@@ -215,14 +215,14 @@ fn decl_all_pallets<'a>(
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
 	// Make nested tuple structure like:
-	// `((FirstPallet, (SecondPallet, ( ... , (LastPallet) ... ))))`
+	// `((FirstPallet, (SecondPallet, ( ... , LastPallet) ... ))))`
 	let all_pallets_with_system = names
 		.iter()
 		.rev()
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
 	// Make nested tuple structure like:
-	// `((LastPallet, (SecondLastPallet, ( ... , (FirstPallet) ... ))))`
+	// `((LastPallet, (SecondLastPallet, ( ... , FirstPallet) ... ))))`
 	// But ignore the system pallet.
 	let all_pallets_reversed = names
 		.iter()
@@ -230,7 +230,7 @@ fn decl_all_pallets<'a>(
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
 	// Make nested tuple structure like:
-	// `((LastPallet, (SecondLastPallet, ( ... , (FirstPallet) ... ))))`
+	// `((LastPallet, (SecondLastPallet, ( ... , FirstPallet) ... ))))`
 	let all_pallets_with_system_reversed = names
 		.iter()
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
