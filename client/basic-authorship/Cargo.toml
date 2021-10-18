@@ -17,11 +17,13 @@ codec = { package = "parity-scale-codec", version = "1.3.4" }
 futures = "0.3.4"
 futures-timer = "3.0.1"
 log = "0.4.8"
+hex-literal = { version = "0.3.1", default-features = false }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0"}
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sc-consensus-babe = { version = "0.8.0", default-features = false, path = "../../client/consensus/babe" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
 sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
@@ -32,6 +34,10 @@ extrinsic-info-runtime-api = { version = "2.0.0", path='../../primitives/extrins
 sc-proposer-metrics = { version = "0.8.0", path = "../proposer-metrics" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 sc-transaction-pool = {  version = "2.0.0", path = "../transaction-pool" }
+sp-encrypted-tx = {  version = "2.0.0", path = "../../primitives/encrypted-tx" }
+sc-keystore = { version = "2.0.0", path = "../keystore" }
+ecies = { version = "0.2", default-features = false, features = ["openssl"]}
+secp256k1 = { package = "libsecp256k1", version = "0.6" }
 
 [dev-dependencies]
 # sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }

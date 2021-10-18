@@ -85,7 +85,7 @@ use sp_consensus::import_queue::{
 use sp_core::{vrf::make_transcript, sr25519, crypto::Public, traits::BareCryptoStore, ShufflingSeed, vrf};
 use sp_application_crypto::AppKey;
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	generic::{BlockId, OpaqueDigestItemId, Digest}, Justification,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
@@ -266,7 +266,27 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
+impl<B: BlockT> std::convert::From<PreDigestFindError> for Error<B> {
+	fn from(error: PreDigestFindError) -> Error<B> {
+		match error{
+            PreDigestFindError::MultiplePreRuntimeDigests => Error::<B>::MultiplePreRuntimeDigests,
+            PreDigestFindError::NoPreRuntimeDigest => Error::<B>::NoPreRuntimeDigest
+        }
+	}
+}
+
+impl std::convert::From<PreDigestFindError> for String {
+	fn from(error: PreDigestFindError) -> String {
+		error.to_string()
+	}
+}
+
 fn babe_err<B: BlockT>(error: Error<B>) -> Error<B> {
+	debug!(target: "babe", "{}", error);
+	error
+}
+
+fn babe_pre_digest_err(error: PreDigestFindError) -> PreDigestFindError {
 	debug!(target: "babe", "{}", error);
 	error
 }
@@ -385,7 +405,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
 		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
-	C::Api: BabeApi<B>,
+    C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -750,9 +770,21 @@ where
 	}
 }
 
+#[derive(derive_more::Display, Debug)]
+/// Error triggered when pre digest is not found
+pub enum PreDigestFindError {
+	#[display(fmt = "Multiple BABE pre-runtime digests, rejecting!")]
+    /// multiple pre digests
+	MultiplePreRuntimeDigests,
+	#[display(fmt = "No BABE pre-runtime digest found")]
+    /// no pre digest 
+	NoPreRuntimeDigest,
+}
+
+
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
+pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, PreDigestFindError>
 {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
@@ -763,16 +795,21 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 		}));
 	}
 
+    extract_pre_digest::<B>(header.digest())
+}
+
+/// Extract the BABE pre digest from the the digest
+pub fn extract_pre_digest<B: BlockT>(digest: &Digest<B::Hash>) -> Result<PreDigest, PreDigestFindError>{
 	let mut pre_digest: Option<_> = None;
-	for log in header.digest().logs() {
+	for log in digest.logs() {
 		trace!(target: "babe", "Checking log {:?}, looking for pre runtime digest", log);
 		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => return Err(babe_err(Error::MultiplePreRuntimeDigests)),
+			(Some(_), true) => return Err(babe_pre_digest_err(PreDigestFindError::MultiplePreRuntimeDigests)),
 			(None, _) => trace!(target: "babe", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
 	}
-	pre_digest.ok_or_else(|| babe_err(Error::NoPreRuntimeDigest))
+	pre_digest.ok_or_else(|| babe_pre_digest_err(PreDigestFindError::NoPreRuntimeDigest))
 }
 
 /// Extract the BABE epoch change digest from the given header, if it exists.

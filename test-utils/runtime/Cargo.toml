@@ -31,6 +31,7 @@ frame-support = { version = "2.0.0", default-features = false, path = "../../fra
 sp-version = { version = "2.0.0", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "2.0.0", default-features = false, path = "../../primitives/api" }
+sp-encrypted-tx = { version = "2.0.0", default-features = false, path = "../../primitives/encrypted-tx" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "2.0.0", default-features = false, path = "../../frame/babe" }
 frame-system = { version = "2.0.0", default-features = false, path = "../../frame/system" }
@@ -45,7 +46,6 @@ sc-service = { version = "0.8.0", default-features = false, optional = true, fea
 sp-state-machine = { version = "0.8.0", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.8.0", default-features = false, path = "../../primitives/externalities" }
 extrinsic-info-runtime-api = { path = '../../primitives/extrinsic-info-runtime-api', default-features = false, version = '2.0.0' }
-pallet-random-seed = {path = '../../frame/random-seed', default-features = false, version = '2.0.0' }
 
 # 3rd party
 cfg-if = "0.1.10"
@@ -97,5 +97,6 @@ std = [
 	"sp-finality-grandpa/std",
 	"sp-trie/std",
 	"sp-transaction-pool/std",
+	"sp-encrypted-tx/std",
 	"trie-db/std",
 ]

@@ -1366,13 +1366,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 	let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
-	let expected_err = ConsensusError::ClientImport(
-		sp_blockchain::Error::NotInFinalizedChain.to_string()
-	);
 
-	assert_eq!(
-		import_err.to_string(),
-		expected_err.to_string(),
+	assert!(
+		import_err.to_string().contains(&sp_blockchain::Error::NotInFinalizedChain.to_string())
 	);
 
 	// adding a C1 block which is lower than the last finalized should also
@@ -1389,13 +1385,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 	let c1 = c1.build(Default::default()).unwrap().block;
 
 	let import_err = client.import(BlockOrigin::Own, c1).err().unwrap();
-	let expected_err = ConsensusError::ClientImport(
-		sp_blockchain::Error::NotInFinalizedChain.to_string()
-	);
 
-	assert_eq!(
-		import_err.to_string(),
-		expected_err.to_string(),
+	assert!(
+		import_err.to_string().contains(&sp_blockchain::Error::NotInFinalizedChain.to_string())
 	);
 }
 

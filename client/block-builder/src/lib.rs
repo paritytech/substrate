@@ -46,6 +46,7 @@ use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::Backend;
 use sc_client_api::backend;
+use std::collections::hash_set::HashSet;
 
 /// A block that was build by [`BlockBuilder`] plus some additional data.
 ///
@@ -226,7 +227,7 @@ where
 	}
 
 	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.
-	///
+	//
 	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
@@ -237,6 +238,7 @@ where
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
 
+
 		match self
 			.backend
 			.blockchain()
@@ -245,6 +247,7 @@ where
 		{
 			Some(previous_block_extrinsics) => {
 				log::debug!(target: "block_builder", "transaction count {}", previous_block_extrinsics.len());
+				let previous_hashes : HashSet<_> = previous_block_extrinsics.iter().map(|tx| BlakeTwo256::hash_of(tx)).collect();
 				let shuffled_extrinsics = if previous_block_extrinsics.len() <= 1 {
 					previous_block_extrinsics
 				}else{
@@ -270,6 +273,19 @@ where
 						}
 					})
 				}
+
+				//TODO: temporary fix that prevents execution of the same extrinsic twice
+				let inherents: Vec<_> = self.extrinsics.iter().take(1).cloned().collect();
+				let extrinsics: Vec<_> = self.extrinsics.into_iter().skip(1).filter(|xt| {
+					if previous_hashes.contains(&BlakeTwo256::hash_of(xt)){
+						false
+					}else{
+						log::debug!(target:"block_builder", "ignoring duplicated extrinsic {}", BlakeTwo256::hash_of(xt));
+						true
+					}
+				}).collect();
+
+				self.extrinsics = inherents.into_iter().chain(extrinsics.into_iter()).collect()
 			}
 			None => {
 				info!("No extrinsics found for previous block");
@@ -279,7 +295,6 @@ where
 		let mut header = self
 			.api
 			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
-
 
 		// store hash of all extrinsics include in given bloack
 		let extrinsics_root = HashFor::<Block>::ordered_trie_root(

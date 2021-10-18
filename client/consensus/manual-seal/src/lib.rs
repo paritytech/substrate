@@ -281,6 +281,7 @@ mod tests {
 	use sp_inherents::InherentDataProviders;
 	use sc_basic_authorship::ProposerFactory;
 	use sc_client_api::BlockBackend;
+    use sc_keystore::Store;
 
 	fn api() -> Arc<TestApi> {
 		Arc::new(TestApi::empty())
@@ -309,6 +310,7 @@ mod tests {
 			client.clone(),
 			pool.clone(),
 			None,
+			Store::new_in_memory(),
 		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
@@ -380,6 +382,7 @@ mod tests {
 			client.clone(),
 			pool.clone(),
 			None,
+			Store::new_in_memory(),
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
@@ -458,6 +461,7 @@ mod tests {
 			client.clone(),
 			pool.clone(),
 			None,
+			Store::new_in_memory(),
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
