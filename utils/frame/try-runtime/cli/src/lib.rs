@@ -281,7 +281,10 @@ use sp_core::{
 };
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
-use sp_runtime::{DeserializeOwned, traits::{Block as BlockT, NumberFor}};
+use sp_runtime::{
+	traits::{Block as BlockT, NumberFor},
+	DeserializeOwned,
+};
 use sp_state_machine::{OverlayedChanges, StateMachine};
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
