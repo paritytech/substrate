@@ -455,6 +455,17 @@ pub mod pallet2 {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> where
 		T::AccountId: From<SomeType1> + SomeAssociation1
 	{
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+			Self::deposit_event(Event::Something(11));
+			0
+		}
+		fn on_finalize(_: BlockNumberFor<T>) {
+			Self::deposit_event(Event::Something(21));
+		}
+		fn on_runtime_upgrade() -> Weight {
+			Self::deposit_event(Event::Something(31));
+			0
+		}
 	}
 
 	#[pallet::call]
@@ -468,6 +479,7 @@ pub mod pallet2 {
 		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::event]
+	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
 		/// Something
 		Something(u32),
@@ -950,14 +962,67 @@ fn pallet_hooks_expand() {
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example(pallet::Event::Something(20)),
+			Event::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example(pallet::Event::Something(30)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+	})
+}
+
+#[test]
+fn all_pallets_type_reversed_order_is_correct() {
+	TestExternalities::default().execute_with(|| {
+		frame_system::Pallet::<Runtime>::set_block_number(1);
+
+		#[allow(deprecated)]
+		{
+			assert_eq!(AllPalletsReversed::on_initialize(1), 10);
+			AllPalletsReversed::on_finalize(1);
+
+			assert_eq!(AllPalletsReversed::on_runtime_upgrade(), 30);
+		}
+
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[0].event,
+			Event::Example2(pallet2::Event::Something(11)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Example(pallet::Event::Something(10)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
 	})
 }
+
 
 #[test]
 fn pallet_on_genesis() {
