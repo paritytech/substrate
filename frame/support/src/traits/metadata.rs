@@ -19,6 +19,7 @@
 
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// Provides information about the pallet itself and its setup in the runtime.
 ///
@@ -35,6 +36,19 @@ pub trait PalletInfo {
 	fn crate_version<P: 'static>() -> Option<CrateVersion>;
 }
 
+/// Information regarding an instance of a pallet.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug)]
+pub struct PalletInfoData {
+	/// Index of the pallet as configured in the runtime.
+	pub index: usize,
+	/// Name of the pallet as configured in the runtime.
+	pub name: &'static str,
+	/// Name of the Rust module containing the pallet.
+	pub module_name: &'static str,
+	/// Version of the crate containing the pallet.
+	pub crate_version: CrateVersion,
+}
+
 /// Provides information about the pallet itself and its setup in the runtime.
 ///
 /// Declare some information and access the information provided by [`PalletInfo`] for a specific
@@ -48,6 +62,35 @@ pub trait PalletInfoAccess {
 	fn module_name() -> &'static str;
 	/// Version of the crate containing the pallet.
 	fn crate_version() -> CrateVersion;
+	/// Get all information at once.
+	fn info() -> PalletInfoData {
+		PalletInfoData {
+			index: Self::index(),
+			name: Self::name(),
+			module_name: Self::module_name(),
+			crate_version: Self::crate_version(),
+		}
+	}
+	/// All pallet information that this type represents. For tuples, this can be len more than 1.
+	fn infos() -> Vec<PalletInfoData> {
+		vec![Self::info()]
+	}
+}
+
+#[impl_for_tuples(60)]
+impl PalletInfoAccess for Tuple {
+	fn index() -> usize { unreachable!("fields not available on a tuple") }
+	fn name() -> &'static str { unreachable!("fields not available on a tuple") }
+	fn module_name() -> &'static str { unreachable!("fields not available on a tuple") }
+	fn crate_version() -> CrateVersion { unreachable!("fields not available on a tuple") }
+	fn info() -> PalletInfoData { unreachable!("fields not available on a tuple") }
+	fn infos() -> Vec<PalletInfoData> {
+		let mut result = vec![];
+		for_tuples!( #(
+			result.extend(Tuple::infos());
+		)* );
+		result
+	}
 }
 
 /// The function and pallet name of the Call.
@@ -205,6 +248,27 @@ pub trait GetStorageVersion {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	struct Pallet1;
+	impl PalletInfoAccess for Pallet1 {
+		fn index() -> usize { 1 }
+		fn name() -> &'static str { "Pallat1" } 
+		fn module_name() -> &'static str { "pallet1" }
+		fn crate_version() -> CrateVersion { CrateVersion::new(1, 0, 0) }
+	}
+	struct Pallet2;
+	impl PalletInfoAccess for Pallet2 {
+		fn index() -> usize { 2 }
+		fn name() -> &'static str { "Pallat2" } 
+		fn module_name() -> &'static str { "pallet2" }
+		fn crate_version() -> CrateVersion { CrateVersion::new(1, 0, 0) }
+	}
+
+	#[test]
+	fn check_tuples() {
+		use PalletInfoAccess;
+		assert!(<(Pallet1, Pallet2,)>::infos().len() == 2);
+	}
 
 	#[test]
 	fn check_storage_version_ordering() {
