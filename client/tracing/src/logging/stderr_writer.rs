@@ -135,6 +135,8 @@ extern "C" fn on_exit() {
 	}
 }
 
+/// A drop-in replacement for [`std::io::stderr`] for use anywhere
+/// a [`tracing_subscriber::fmt::MakeWriter`] is accepted.
 pub struct MakeStderrWriter;
 
 impl tracing_subscriber::fmt::MakeWriter for MakeStderrWriter {
