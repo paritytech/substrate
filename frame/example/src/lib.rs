@@ -486,7 +486,7 @@ pub mod pallet {
 		// the chain in a moderate rate.
 		//
 		// The parenthesized value of the `#[pallet::weight(..)]` attribute can be any type that
-		// implements a set of traits, namely [`WeighData`], [`ClassifyDispatch`], and 
+		// implements a set of traits, namely [`WeighData`], [`ClassifyDispatch`], and
 		// [`PaysFee`]. The first conveys the weight (a numeric representation of pure
 		// execution time and difficulty) of the transaction and the second demonstrates the
 		// [`DispatchClass`] of the call, the third gives whereas extrinsic must pay fees or not.
