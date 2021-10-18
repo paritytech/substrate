@@ -452,8 +452,9 @@ pub mod pallet2 {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> where
-		T::AccountId: From<SomeType1> + SomeAssociation1
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			Self::deposit_event(Event::Something(11));
@@ -1022,7 +1023,6 @@ fn all_pallets_type_reversed_order_is_correct() {
 		);
 	})
 }
-
 
 #[test]
 fn pallet_on_genesis() {
