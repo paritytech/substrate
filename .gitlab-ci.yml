@@ -46,6 +46,7 @@ variables:                         &default-vars
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
   SIMNET_FEATURES_PATH:            "simnet_tests/tests"
+  PIPELINE_SCRIPTS_TAG:            "v0.1"
 
 .gen-rustdoc-vars:                 &gen-rustdoc-vars
   DOC_INDEX_PAGE:                  "sc_service/index.html" # default redirected page
@@ -202,6 +203,27 @@ default:
     | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
   - sccache -s
 
+.build-linux-substrate-script:     &build-linux-substrate-script
+  - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+  - mv ./target/release/substrate ./artifacts/substrate/.
+  - echo -n "Substrate version = "
+  - if [ "${CI_COMMIT_TAG}" ]; then
+      echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
+    else
+      ./artifacts/substrate/substrate --version |
+        sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+          tee ./artifacts/substrate/VERSION;
+    fi
+  - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+  - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
+  - sccache -s
+
+.cargo-doc-script:                 &cargo-doc-script
+  # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
+  # Try to run with nightly rustc first. If failed, when use the stable rustc.
+  - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" &&
+    time cargo +nightly doc --no-deps --workspace --all-features --verbose
+
 .reset-gh-info-script:             &reset-gh-info-script
   # Reset git config
   - rm -rf .git/config
@@ -226,12 +248,6 @@ default:
   # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
   - yarn global add ejs
   - 'ejs ${INDEX_TPL} -i "{\"deploy_refs\":\"${RUSTDOCS_DEPLOY_REFS}\",\"repo_name\":\"${CI_PROJECT_NAME}\",\"latest\":\"${LATEST}\"}" > /tmp/index.html'
-
-.cargo-doc-script:                 &cargo-doc-script
-  # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
-  # Try to run with nightly rustc first. If failed, when use the stable rustc.
-  - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" &&
-    time cargo +nightly doc --no-deps --workspace --all-features --verbose
 
 #### Vault secrets
 .vault-secrets:                    &vault-secrets
@@ -594,31 +610,40 @@ cargo-check-macos:
 
 #### stage:                        build
 
-check-polkadot-companion-status:
-  stage:                           build
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
-  <<:                              *vault-secrets
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-    - ./.maintain/gitlab/check_polkadot_companion_status.sh
-
-check-polkadot-companion-build:
+.check-dependent-project:          &check-dependent-project
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
   <<:                              *vault-secrets
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
   script:
-    - ./.maintain/gitlab/check_polkadot_companion_build.sh
-  after_script:
-    - cd polkadot && git rev-parse --abbrev-ref HEAD
-  allow_failure:                   true
+    - git clone
+        --depth=1
+        "--branch=$PIPELINE_SCRIPTS_TAG"
+        https://github.com/paritytech/pipeline-scripts
+    - ./pipeline-scripts/check_dependent_project.sh
+        paritytech
+        substrate
+        --substrate
+        "$DEPENDENT_REPO"
+        "$GITHUB_PR_TOKEN"
+    - cd "$DEPENDENT_REPO" && git rev-parse --abbrev-ref HEAD
 
-build-linux-substrate:             &build-binary
+# Individual jobs are set up for each dependent project so that they can be ran in parallel.
+# Arguably we could generate a job for each companion in the PR's description using Gitlab's
+# parent-child pipelines but that's more complicated.
+
+check-dependent-polkadot:
+  <<: *check-dependent-project
+  variables:
+    DEPENDENT_REPO: polkadot
+
+check-dependent-cumulus:
+  <<: *check-dependent-project
+  variables:
+    DEPENDENT_REPO: cumulus
+
+
+build-linux-substrate:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
@@ -629,27 +654,21 @@ build-linux-substrate:             &build-binary
   before_script:
     - mkdir -p ./artifacts/substrate/
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-    - mv ./target/release/substrate ./artifacts/substrate/.
-    - echo -n "Substrate version = "
-    - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
-      else
-        ./artifacts/substrate/substrate --version |
-          sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-            tee ./artifacts/substrate/VERSION;
-      fi
-    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
+    - *build-linux-substrate-script
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
-    - sccache -s
+
 
 #Build binary for simnet quick tests.
 build-linux-substrate-simnet:
-  <<:                              *build-binary
+  stage:                           build
   <<:                              *collect-artifacts-short
+  <<:                              *docker-env
   <<:                              *test-refs-no-trigger-prs-only
+  before_script:
+    - mkdir -p ./artifacts/substrate/
+  script:
+    - *build-linux-substrate-script
 
 build-linux-subkey:                &build-subkey
   stage:                           build
@@ -967,7 +986,7 @@ deploy-prometheus-alerting-rules:
 # Runs "quick" and "long" tests on nightly schedule and on commit / merge to master
 # A "quick" test is a smoke test where basic check-expect tests run by
 # checking values from metrics exposed by the app.
-# A "long" test is the load testing where we send 50K transactions into the 
+# A "long" test is the load testing where we send 50K transactions into the
 # network and check if all completed successfully
 simnet-tests:
   stage:                           deploy
