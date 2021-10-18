@@ -229,7 +229,6 @@ fn decl_all_pallets<'a>(
 	// Make nested tuple structure like `((LastPallet, (SecondLastPallet, ( ... , (FirstPallet) ... ))))`
 	let all_pallets_with_system_reversed = names
 		.iter()
-		.filter(|n| **n != SYSTEM_PALLET_NAME)
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
 	quote!(
