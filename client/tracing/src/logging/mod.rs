@@ -297,9 +297,28 @@ mod tests {
 		let _ = LoggerBuilder::new(directives).init().unwrap();
 	}
 
+	fn run_test_in_another_process(
+		test_name: &str,
+		test_body: impl FnOnce(),
+	) -> Option<std::process::Output> {
+		if env::var("RUN_FORKED_TEST").is_ok() {
+			test_body();
+			None
+		} else {
+			let output = Command::new(env::current_exe().unwrap())
+				.arg(test_name)
+				.env("RUN_FORKED_TEST", "1")
+				.output()
+				.unwrap();
+
+			assert!(output.status.success());
+			Some(output)
+		}
+	}
+
 	#[test]
 	fn test_logger_filters() {
-		if env::var("RUN_TEST_LOGGER_FILTERS").is_ok() {
+		run_test_in_another_process("test_logger_filters", || {
 			let test_directives =
 				"afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
 			init_logger(&test_directives);
@@ -336,15 +355,7 @@ mod tests {
 				assert!(test_filter("telemetry", Level::TRACE));
 				assert!(test_filter("something-with-dash", Level::ERROR));
 			});
-		} else {
-			let status = Command::new(env::current_exe().unwrap())
-				.arg("test_logger_filters")
-				.env("RUN_TEST_LOGGER_FILTERS", "1")
-				.output()
-				.unwrap()
-				.status;
-			assert!(status.success());
-		}
+		});
 	}
 
 	/// This test ensures that using dash (`-`) in the target name in logs and directives actually
