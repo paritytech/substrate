@@ -1097,8 +1097,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
 	/// consist of only `/p2p/<peerid>`.
 	///
-	/// The node will start establishing/accepting connections and substreams to/from peers in this set,
-	/// if it doesn't have any substream open with them yet.
+	/// The node will start establishing/accepting connections and substreams to/from peers in this
+	/// set, if it doesn't have any substream open with them yet.
 	///
 	/// Note however, if a call to this function results in less peers on the reserved set, they
 	/// will not necessarily get disconnected (depending on available free slots in the peer set).
