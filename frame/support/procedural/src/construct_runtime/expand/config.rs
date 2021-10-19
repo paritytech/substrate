@@ -82,7 +82,7 @@ pub fn expand_outer_config(
 				#build_storage_calls
 
 				#scrate::BasicExternalities::execute_with_storage(storage, || {
-					<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
+					<PalletInstancesWithSystem as #scrate::traits::OnGenesis>::on_genesis();
 				});
 
 				Ok(())

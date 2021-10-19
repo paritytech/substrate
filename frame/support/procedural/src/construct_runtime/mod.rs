@@ -215,12 +215,27 @@ fn decl_all_pallets<'a>(
 		.iter()
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
+	let flat_pallets_with_system = quote!( (#( #names ),*) );
+	let names_without_system = 	names
+		.iter()
+		.filter(|n| **n != SYSTEM_PALLET_NAME);
+	let flat_pallets = quote!( (#( #names_without_system ),*) );
+
 	quote!(
 		#types
+
+		/// All pallets included in the runtime as a flat tuple of types.
+		/// Excludes the System pallet.
+		pub type PalletInstances = ( #flat_pallets );
+		/// All pallets included in the runtime as a flat tuple of types.
+		pub type PalletInstancesWithSystem = ( #flat_pallets_with_system );
+
 		/// All pallets included in the runtime as a nested tuple of types.
 		/// Excludes the System pallet.
+		#[deprecated(note = "use `PalletInstances` instead")]
 		pub type AllPallets = ( #all_pallets );
 		/// All pallets included in the runtime as a nested tuple of types.
+		#[deprecated(note = "use `PalletInstancesWithSystem` instead")]
 		pub type AllPalletsWithSystem = ( #all_pallets_with_system );
 
 		/// All modules included in the runtime as a nested tuple of types.
@@ -318,7 +333,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 
 			#[test]
 			pub fn runtime_integrity_tests() {
-				<AllPalletsWithSystem as #scrate::traits::IntegrityTest>::integrity_test();
+				<PalletInstancesWithSystem as #scrate::traits::IntegrityTest>::integrity_test();
 			}
 		}
 	)

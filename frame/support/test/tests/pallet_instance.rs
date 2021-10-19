@@ -508,7 +508,7 @@ fn storage_expand() {
 #[test]
 fn pallet_metadata_expands() {
 	use frame_support::traits::{CrateVersion, PalletInfoAccess, PalletInfoData};
-	let mut infos = AllPallets::infos();
+	let mut infos = PalletInstancesWithSystem::infos();
 	infos.sort_by_key(|x| x.index);
 	assert_eq!(
 		infos,
@@ -546,10 +546,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 21);
-		AllPallets::on_finalize(1);
+		assert_eq!(PalletInstances::on_initialize(1), 21);
+		PalletInstances::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
+		assert_eq!(PalletInstances::on_runtime_upgrade(), 61);
 
 		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(

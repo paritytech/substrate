@@ -71,7 +71,7 @@ pub trait StorageInfoTrait {
 	fn storage_info() -> Vec<StorageInfo>;
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(60)]
 impl StorageInfoTrait for Tuple {
 	fn storage_info() -> Vec<StorageInfo> {
 		let mut res = vec![];

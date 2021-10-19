@@ -42,7 +42,7 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 	}
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(60)]
 impl PalletVersionToStorageVersionHelper for T {
 	fn migrate(db_weight: &RuntimeDbWeight) -> Weight {
 		let mut weight: Weight = 0;
@@ -58,9 +58,9 @@ impl PalletVersionToStorageVersionHelper for T {
 ///
 /// This will remove all `PalletVersion's` from the state and insert the current storage version.
 pub fn migrate_from_pallet_version_to_storage_version<
-	AllPallets: PalletVersionToStorageVersionHelper,
+	PalletInstances: PalletVersionToStorageVersionHelper,
 >(
 	db_weight: &RuntimeDbWeight,
 ) -> Weight {
-	AllPallets::migrate(db_weight)
+	PalletInstances::migrate(db_weight)
 }

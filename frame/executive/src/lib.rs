@@ -59,7 +59,7 @@
 //! # type Context = frame_system::ChainContext<Runtime>;
 //! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 //! # pub type Balances = u64;
-//! # pub type AllPallets = u64;
+//! # pub type PalletInstances = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{
 //! #    TransactionValidity, UnknownTransaction, TransactionSource,
@@ -73,7 +73,7 @@
 //! #     }
 //! # }
 //! /// Executive: handles dispatch to the various modules.
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllPallets>;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, PalletInstances>;
 //! ```
 //!
 //! ### Custom `OnRuntimeUpgrade` logic
@@ -90,7 +90,7 @@
 //! # type Context = frame_system::ChainContext<Runtime>;
 //! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 //! # pub type Balances = u64;
-//! # pub type AllPallets = u64;
+//! # pub type PalletInstances = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{
 //! #    TransactionValidity, UnknownTransaction, TransactionSource,
@@ -111,7 +111,14 @@
 //!     }
 //! }
 //!
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllPallets, CustomOnRuntimeUpgrade>;
+//! pub type Executive = executive::Executive<
+//!     Runtime,
+//!     Block,
+//!     Context,
+//!     Runtime,
+//!     PalletInstances,
+//!     CustomOnRuntimeUpgrade,
+//! >;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -148,11 +155,11 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 /// - `Block`: The block type of the runtime
 /// - `Context`: The context that is used when checking an extrinsic.
 /// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
-/// - `AllPallets`: Tuple that contains all modules. Will be used to call e.g. `on_initialize`.
+/// - `PalletInstances`: Tuple that contains all modules. Will be used to call e.g. `on_initialize`.
 /// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
-///   already called by `AllPallets`. It will be called before all modules will be called.
-pub struct Executive<System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade = ()>(
-	PhantomData<(System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade)>,
+///   already called by `PalletInstances`. It will be called before all modules will be called.
+pub struct Executive<System, Block, Context, UnsignedValidator, PalletInstances, OnRuntimeUpgrade = ()>(
+	PhantomData<(System, Block, Context, UnsignedValidator, PalletInstances, OnRuntimeUpgrade)>,
 );
 
 impl<
@@ -160,14 +167,14 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPallets: OnRuntimeUpgrade
+		PalletInstances: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> ExecuteBlock<Block>
-	for Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
+	for Executive<System, Block, Context, UnsignedValidator, PalletInstances, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
@@ -182,7 +189,7 @@ where
 			Block,
 			Context,
 			UnsignedValidator,
-			AllPallets,
+			PalletInstances,
 			COnRuntimeUpgrade,
 		>::execute_block(block);
 	}
@@ -193,13 +200,13 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPallets: OnRuntimeUpgrade
+		PalletInstances: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
+	> Executive<System, Block, Context, UnsignedValidator, PalletInstances, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
@@ -215,7 +222,7 @@ where
 		weight = weight.saturating_add(
 			<frame_system::Pallet<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
 		);
-		weight = weight.saturating_add(<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade());
+		weight = weight.saturating_add(<PalletInstances as OnRuntimeUpgrade>::on_runtime_upgrade());
 
 		weight
 	}
@@ -257,7 +264,7 @@ where
 	#[cfg(feature = "try-runtime")]
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
 		<
-			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
+			(frame_system::Pallet::<System>, COnRuntimeUpgrade, PalletInstances)
 			as
 			OnRuntimeUpgrade
 		>::pre_upgrade().unwrap();
@@ -265,7 +272,7 @@ where
 		let weight = Self::execute_on_runtime_upgrade();
 
 		<
-			(frame_system::Pallet::<System>, COnRuntimeUpgrade, AllPallets)
+			(frame_system::Pallet::<System>, COnRuntimeUpgrade, PalletInstances)
 			as
 			OnRuntimeUpgrade
 		>::post_upgrade().unwrap();
@@ -310,7 +317,7 @@ where
 			System::BlockNumber,
 		>>::on_initialize(*block_number));
 		weight = weight.saturating_add(
-			<AllPallets as OnInitialize<System::BlockNumber>>::on_initialize(*block_number),
+			<PalletInstances as OnInitialize<System::BlockNumber>>::on_initialize(*block_number),
 		);
 		weight = weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
@@ -425,7 +432,7 @@ where
 					remaining_weight,
 				);
 			remaining_weight = remaining_weight.saturating_sub(used_weight);
-			used_weight = <AllPallets as OnIdle<System::BlockNumber>>::on_idle(
+			used_weight = <PalletInstances as OnIdle<System::BlockNumber>>::on_idle(
 				block_number,
 				remaining_weight,
 			)
@@ -439,7 +446,7 @@ where
 		<frame_system::Pallet<System> as OnFinalize<System::BlockNumber>>::on_finalize(
 			block_number,
 		);
-		<AllPallets as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<PalletInstances as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -568,7 +575,7 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		<AllPallets as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
+		<PalletInstances as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
 	}
 }
 
@@ -850,7 +857,7 @@ mod tests {
 		Block<TestXt>,
 		ChainContext<Runtime>,
 		Runtime,
-		AllPallets,
+		PalletInstances,
 		CustomOnRuntimeUpgrade,
 	>;
 
@@ -1363,11 +1370,11 @@ mod tests {
 			// All weights that show up in the `initialize_block_impl`
 			let frame_system_upgrade_weight = frame_system::Pallet::<Runtime>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
-			let runtime_upgrade_weight = <AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let runtime_upgrade_weight = <PalletInstances as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight =
 				frame_system::Pallet::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight =
-				<AllPallets as OnInitialize<u64>>::on_initialize(block_number);
+				<PalletInstances as OnInitialize<u64>>::on_initialize(block_number);
 			let base_block_weight =
 				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
