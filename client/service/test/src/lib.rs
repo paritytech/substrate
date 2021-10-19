@@ -33,9 +33,9 @@ use sc_service::{
 	SpawnTaskHandle, TaskManager, TransactionStorageMode,
 };
 use sc_transaction_pool_api::TransactionPool;
+use sp_api::BlockId;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::Block as BlockT;
-use sp_api::BlockId;
 use std::{iter, net::Ipv4Addr, pin::Pin, sync::Arc, task::Context, time::Duration};
 use tempfile::TempDir;
 use tokio::{runtime::Runtime, time};
@@ -347,10 +347,8 @@ fn tempdir_with_prefix(prefix: &str) -> TempDir {
 		.expect("Error creating test dir")
 }
 
-pub fn connectivity<G, E, Fb, F>(
-	spec: GenericChainSpec<G, E>,
-	full_builder: Fb,
-) where
+pub fn connectivity<G, E, Fb, F>(spec: GenericChainSpec<G, E>, full_builder: Fb)
+where
 	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 	Fb: Fn(Configuration) -> Result<F, Error>,
@@ -381,13 +379,11 @@ pub fn connectivity<G, E, Fb, F>(
 					.expect("Error adding reserved peer");
 			}
 
-			network.run_until_all_full(
-				move |_index, service| {
-					let connected = service.network().num_connected();
-					debug!("Got {}/{} full connections...", connected, expected_full_connections);
-					connected == expected_full_connections
-				},
-			);
+			network.run_until_all_full(move |_index, service| {
+				let connected = service.network().num_connected();
+				debug!("Got {}/{} full connections...", connected, expected_full_connections);
+				connected == expected_full_connections
+			});
 		};
 
 		temp.close().expect("Error removing temp dir");
@@ -418,13 +414,11 @@ pub fn connectivity<G, E, Fb, F>(
 				}
 			}
 
-			network.run_until_all_full(
-				move |_index, service| {
-					let connected = service.network().num_connected();
-					debug!("Got {}/{} full connections...", connected, expected_full_connections);
-					connected == expected_full_connections
-				},
-			);
+			network.run_until_all_full(move |_index, service| {
+				let connected = service.network().num_connected();
+				debug!("Got {}/{} full connections...", connected, expected_full_connections);
+				connected == expected_full_connections
+			});
 		}
 		temp.close().expect("Error removing temp dir");
 	}
@@ -481,10 +475,10 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 			.add_reserved_peer(first_address.to_string())
 			.expect("Error adding reserved peer");
 	}
-	
-	network.run_until_all_full(
-		|_index, service| service.client().info().best_number == (NUM_BLOCKS as u32).into(),
-	);
+
+	network.run_until_all_full(|_index, service| {
+		service.client().info().best_number == (NUM_BLOCKS as u32).into()
+	});
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
@@ -500,9 +494,7 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 	))
 	.expect("failed to submit extrinsic");
 
-	network.run_until_all_full(
-		|_index, service| service.transaction_pool().ready().count() == 1,
-	);
+	network.run_until_all_full(|_index, service| service.transaction_pool().ready().count() == 1);
 }
 
 pub fn consensus<G, E, Fb, F>(
@@ -542,17 +534,14 @@ pub fn consensus<G, E, Fb, F>(
 			.add_reserved_peer(first_address.to_string())
 			.expect("Error adding reserved peer");
 	}
-	network.run_until_all_full(
-		|_index, service| {
-			service.client().info().finalized_number >= (NUM_BLOCKS as u32 / 2).into()
-		},
-	);
+	network.run_until_all_full(|_index, service| {
+		service.client().info().finalized_number >= (NUM_BLOCKS as u32 / 2).into()
+	});
 
 	info!("Adding more peers");
 	network.insert_nodes(
 		&temp,
 		(0..NUM_FULL_NODES / 2).map(|_| |cfg| full_builder(cfg).map(|s| (s, ()))),
-	
 		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
 		// the type of the closure cannot be inferred.
 		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
@@ -563,8 +552,8 @@ pub fn consensus<G, E, Fb, F>(
 			.add_reserved_peer(first_address.to_string())
 			.expect("Error adding reserved peer");
 	}
-	
-	network.run_until_all_full(
-		|_index, service| service.client().info().finalized_number >= (NUM_BLOCKS as u32).into(),
-	);
+
+	network.run_until_all_full(|_index, service| {
+		service.client().info().finalized_number >= (NUM_BLOCKS as u32).into()
+	});
 }
