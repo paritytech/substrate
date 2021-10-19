@@ -431,14 +431,20 @@ impl DiscoveryBehaviour {
 
 	fn new_handler_with_replacement(
 		&mut self,
-		pid: &ProtocolId,
+		pid: ProtocolId,
 		handler: KademliaHandlerProto<QueryId>,
 	) -> <DiscoveryBehaviour as NetworkBehaviour>::ProtocolsHandler {
-		let iter = self.kademlias.iter_mut().map(|(p, k)| {
-			(p.clone(), if p == pid { handler } else { NetworkBehaviour::new_handler(k) })
-		});
+		let mut handlers: HashMap<_, _> = self
+			.kademlias
+			.iter_mut()
+			.map(|(p, k)| (p.clone(), NetworkBehaviour::new_handler(k)))
+			.collect();
 
-		IntoMultiHandler::try_from_iter(iter).expect(
+		if let Some(h) = handlers.get_mut(&pid) {
+			*h = handler
+		}
+
+		IntoMultiHandler::try_from_iter(handlers).expect(
 			"There can be at most one handler per `ProtocolId` and protocol names contain the \
 			 `ProtocolId` so no two protocol names in `self.kademlias` can be equal which is the \
 			 only error `try_from_iter` can return, therefore this call is guaranteed to succeed; \
@@ -877,10 +883,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						},
 					},
 					NetworkBehaviourAction::DialAddress { address, handler } => {
+						let pid = pid.clone();
 						let handler = self.new_handler_with_replacement(pid, handler);
 						return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler })
 					},
 					NetworkBehaviourAction::DialPeer { peer_id, condition, handler } => {
+						let pid = pid.clone();
 						let handler = self.new_handler_with_replacement(pid, handler);
 						return Poll::Ready(NetworkBehaviourAction::DialPeer {
 							peer_id,

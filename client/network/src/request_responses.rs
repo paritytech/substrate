@@ -447,7 +447,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_connection_closed(p, peer_id, conn, endpoint, p.new_handler())
+			let handler = p.new_handler();
+			NetworkBehaviour::inject_connection_closed(p, peer_id, conn, endpoint, handler);
 		}
 	}
 
