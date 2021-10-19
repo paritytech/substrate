@@ -1381,11 +1381,11 @@ mod tests {
 			let frame_system_upgrade_weight = frame_system::Pallet::<Runtime>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight =
-				<PalletInstanceOrder as OnRuntimeUpgrade>::on_runtime_upgrade();
+				<PalletInstancesRevExSystem as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight =
 				frame_system::Pallet::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight =
-				<PalletInstanceOrder as OnInitialize<u64>>::on_initialize(block_number);
+				<PalletInstancesRevExSystem as OnInitialize<u64>>::on_initialize(block_number);
 			let base_block_weight =
 				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
