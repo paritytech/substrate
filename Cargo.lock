@@ -2537,21 +2537,14 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
 
 [[package]]
 name = "hash256-std-hasher"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92c171d55b98633f4ed3860808f004099b36c1cc29c42cfc53aa8591b21efcf2"
-dependencies = [
- "crunchy",
-]
-
-[[package]]
-name = "hash256-std-hasher"
-version = "0.15.2"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
 dependencies = [
  "crunchy",
 ]
@@ -3185,17 +3178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
 dependencies = [
  "hash-db",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "tiny-keccak",
-]
-
-[[package]]
-name = "keccak-hasher"
-version = "0.15.3"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
-dependencies = [
- "hash-db",
- "hash256-std-hasher 0.15.2 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new)",
+ "hash256-std-hasher",
  "tiny-keccak",
 ]
 
@@ -4123,7 +4106,8 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.28.0"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d505169b746dacf02f7d14d8c80b34edfd8212159c63d23c977739a0d960c626"
 dependencies = [
  "hash-db",
  "hashbrown 0.11.2",
@@ -9252,7 +9236,7 @@ dependencies = [
  "ed25519-dalek",
  "futures 0.3.16",
  "hash-db",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256-std-hasher",
  "hex",
  "hex-literal",
  "impl-serde",
@@ -9480,7 +9464,7 @@ name = "sp-runtime"
 version = "4.0.0-dev"
 dependencies = [
  "either",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256-std-hasher",
  "impl-trait-for-tuples",
  "log 0.4.14",
  "parity-scale-codec",
@@ -9749,7 +9733,7 @@ dependencies = [
  "trie-bench",
  "trie-db",
  "trie-root",
- "trie-standardmap 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-standardmap",
 ]
 
 [[package]]
@@ -10697,22 +10681,24 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 [[package]]
 name = "trie-bench"
 version = "0.29.0"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36ac46f6503d0fa976193db46f9dbb1d454e5dbde76495f1316f576c7f3f0e6b"
 dependencies = [
  "criterion",
  "hash-db",
- "keccak-hasher 0.15.3 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new)",
+ "keccak-hasher",
  "memory-db 0.28.0",
  "parity-scale-codec",
  "trie-db",
  "trie-root",
- "trie-standardmap 0.15.2 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new)",
+ "trie-standardmap",
 ]
 
 [[package]]
 name = "trie-db"
 version = "0.23.0"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3ddae50680c12ef75bfbf58416ca6622fa43d879553f6cb2ed1a817346e1ffe"
 dependencies = [
  "hash-db",
  "hashbrown 0.11.2",
@@ -10724,7 +10710,8 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.17.0"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a36c5ca3911ed3c9a5416ee6c679042064b93fc637ded67e25f92e68d783891"
 dependencies = [
  "hash-db",
 ]
@@ -10736,16 +10723,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3161ba520ab28cd8e6b68e1126f1009f6e335339d1a73b978139011703264c8"
 dependencies = [
  "hash-db",
- "keccak-hasher 0.15.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "trie-standardmap"
-version = "0.15.2"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new#89b344dd525d6f7bb39ef67788131f099b40c09f"
-dependencies = [
- "hash-db",
- "keccak-hasher 0.15.3 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-new)",
+ "keccak-hasher",
 ]
 
 [[package]]
