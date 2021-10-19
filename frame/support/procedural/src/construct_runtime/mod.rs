@@ -220,7 +220,7 @@ fn decl_all_pallets<'a>(
 	let pallet_instances_rev = quote!( (#( #names_rev ),*) );
 	let names_ex_sys = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME);
 	let pallet_instances_ex_sys = quote!( (#( #names_ex_sys ),*) );
-	let names_rev_ex_sys = 	names.iter().rev().filter(|n| **n != SYSTEM_PALLET_NAME);
+	let names_rev_ex_sys = names.iter().rev().filter(|n| **n != SYSTEM_PALLET_NAME);
 	let pallet_instances_rev_ex_sys = quote!( (#( #names_rev_ex_sys ),*) );
 
 	quote!(
@@ -228,7 +228,7 @@ fn decl_all_pallets<'a>(
 
 		/// All pallets included in the runtime as a flat tuple of types.
 		pub type PalletInstances = ( #pallet_instances );
-		
+
 		// TODO: Remove these once executive is not sensitive to ordering.
 		/// All pallet instances excluding System which are in the runtime as a flat tuple of types.
 		pub type PalletInstancesExSystem = ( #pallet_instances_ex_sys );

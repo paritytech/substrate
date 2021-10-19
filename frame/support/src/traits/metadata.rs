@@ -68,9 +68,13 @@ pub trait PalletInfoAccess {
 /// Provide information about a bunch of pallets.
 pub trait PalletsInfoAccess {
 	/// Get information about a single pallet. Will give a result of `None` if called on a tuple.
-	fn info() -> Option<PalletInfoData> { None }
+	fn info() -> Option<PalletInfoData> {
+		None
+	}
 	/// All of the pallets' information that this type represents. Relevant for tuples.
-	fn infos() -> Vec<PalletInfoData> { Self::info().into_iter().collect() }
+	fn infos() -> Vec<PalletInfoData> {
+		Self::info().into_iter().collect()
+	}
 }
 
 #[impl_for_tuples(60)]

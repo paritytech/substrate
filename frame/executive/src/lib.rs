@@ -160,9 +160,14 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 ///   `construct_runtime` macro. This should exclude the System pallet.
 /// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
 ///   already called by `PalletInstanceOrder`. It will be called before all modules will be called.
-pub struct Executive<System, Block, Context, UnsignedValidator, PalletInstanceOrder, OnRuntimeUpgrade = ()>(
-	PhantomData<(System, Block, Context, UnsignedValidator, PalletInstanceOrder, OnRuntimeUpgrade)>,
-);
+pub struct Executive<
+	System,
+	Block,
+	Context,
+	UnsignedValidator,
+	PalletInstanceOrder,
+	OnRuntimeUpgrade = (),
+>(PhantomData<(System, Block, Context, UnsignedValidator, PalletInstanceOrder, OnRuntimeUpgrade)>);
 
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
@@ -224,7 +229,8 @@ where
 		weight = weight.saturating_add(
 			<frame_system::Pallet<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
 		);
-		weight = weight.saturating_add(<PalletInstanceOrder as OnRuntimeUpgrade>::on_runtime_upgrade());
+		weight =
+			weight.saturating_add(<PalletInstanceOrder as OnRuntimeUpgrade>::on_runtime_upgrade());
 
 		weight
 	}
@@ -318,9 +324,9 @@ where
 		weight = weight.saturating_add(<frame_system::Pallet<System> as OnInitialize<
 			System::BlockNumber,
 		>>::on_initialize(*block_number));
-		weight = weight.saturating_add(
-			<PalletInstanceOrder as OnInitialize<System::BlockNumber>>::on_initialize(*block_number),
-		);
+		weight = weight.saturating_add(<PalletInstanceOrder as OnInitialize<
+			System::BlockNumber,
+		>>::on_initialize(*block_number));
 		weight = weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
 		);
@@ -577,7 +583,9 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		<PalletInstanceOrder as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
+		<PalletInstanceOrder as OffchainWorker<System::BlockNumber>>::offchain_worker(
+			*header.number(),
+		)
 	}
 }
 
@@ -1372,7 +1380,8 @@ mod tests {
 			// All weights that show up in the `initialize_block_impl`
 			let frame_system_upgrade_weight = frame_system::Pallet::<Runtime>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
-			let runtime_upgrade_weight = <PalletInstanceOrder as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let runtime_upgrade_weight =
+				<PalletInstanceOrder as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight =
 				frame_system::Pallet::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight =
