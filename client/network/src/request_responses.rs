@@ -444,10 +444,10 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
-		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_connection_closed(p, peer_id, conn, endpoint, handler)
+			NetworkBehaviour::inject_connection_closed(p, peer_id, conn, endpoint, p.new_handler())
 		}
 	}
 
