@@ -64,6 +64,7 @@ mod metadata;
 pub use metadata::{
 	CallMetadata, CrateVersion, GetCallMetadata, GetCallName, GetStorageVersion, PalletInfo,
 	PalletInfoAccess, PalletInfoData, StorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX,
+	PalletsInfoAccess,
 };
 
 mod hooks;

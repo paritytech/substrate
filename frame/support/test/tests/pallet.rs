@@ -939,10 +939,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(PalletInstances::on_initialize(1), 10);
-		PalletInstances::on_finalize(1);
+		assert_eq!(PalletInstancesRevExSystem::on_initialize(1), 10);
+		PalletInstancesRevExSystem::on_finalize(1);
 
-		assert_eq!(PalletInstances::on_runtime_upgrade(), 30);
+		assert_eq!(PalletInstancesRevExSystem::on_runtime_upgrade(), 30);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -992,7 +992,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 
 		let db_weight = RuntimeDbWeight { read: 0, write: 5 };
 		let weight = frame_support::migrations::migrate_from_pallet_version_to_storage_version::<
-			PalletInstancesWithSystem,
+			PalletInstancesRev,
 		>(&db_weight);
 
 		// 3 pallets, 2 writes and every write costs 5 weight.

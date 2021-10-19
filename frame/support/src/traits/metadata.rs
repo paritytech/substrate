@@ -63,42 +63,24 @@ pub trait PalletInfoAccess {
 	fn module_name() -> &'static str;
 	/// Version of the crate containing the pallet.
 	fn crate_version() -> CrateVersion;
-	/// Get all information at once.
-	fn info() -> PalletInfoData {
-		PalletInfoData {
-			index: Self::index(),
-			name: Self::name(),
-			module_name: Self::module_name(),
-			crate_version: Self::crate_version(),
-		}
-	}
-	/// All pallet information that this type represents. For tuples, this can be len more than 1.
-	fn infos() -> Vec<PalletInfoData> {
-		vec![Self::info()]
-	}
+}
+
+/// Provide information about a bunch of pallets.
+pub trait PalletsInfoAccess {
+	/// Get information about a single pallet. Will give a result of `None` if called on a tuple.
+	fn info() -> Option<PalletInfoData> { None }
+	/// All of the pallets' information that this type represents. Relevant for tuples.
+	fn infos() -> Vec<PalletInfoData> { Self::info().into_iter().collect() }
 }
 
 #[impl_for_tuples(60)]
-impl PalletInfoAccess for Tuple {
-	fn index() -> usize {
-		unreachable!("fields not available on a tuple")
-	}
-	fn name() -> &'static str {
-		unreachable!("fields not available on a tuple")
-	}
-	fn module_name() -> &'static str {
-		unreachable!("fields not available on a tuple")
-	}
-	fn crate_version() -> CrateVersion {
-		unreachable!("fields not available on a tuple")
-	}
-	fn info() -> PalletInfoData {
-		unreachable!("fields not available on a tuple")
-	}
+impl PalletsInfoAccess for Tuple {
 	fn infos() -> Vec<PalletInfoData> {
 		let mut result = vec![];
 		for_tuples!( #(
-			result.extend(Tuple::infos());
+			if let Some(info) = Tuple::info() {
+				result.push(info);
+			}
 		)* );
 		result
 	}
@@ -289,12 +271,6 @@ mod tests {
 		fn crate_version() -> CrateVersion {
 			CrateVersion::new(1, 0, 0)
 		}
-	}
-
-	#[test]
-	fn check_tuples() {
-		use PalletInfoAccess;
-		assert!(<(Pallet1, Pallet2,)>::infos().len() == 2);
 	}
 
 	#[test]
