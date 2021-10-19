@@ -45,8 +45,8 @@ use libp2p::{
 		ConnectedPoint, Multiaddr, PeerId,
 	},
 	request_response::{
-		ProtocolSupport, RequestResponse, RequestResponseCodec, RequestResponseConfig,
-		RequestResponseEvent, RequestResponseMessage, ResponseChannel,
+		handler::RequestResponseHandler, ProtocolSupport, RequestResponse, RequestResponseCodec,
+		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
 	},
 	swarm::{
 		protocols_handler::multi::MultiHandler, IntoProtocolsHandler, NetworkBehaviour,
@@ -377,6 +377,21 @@ impl RequestResponsesBehaviour {
 			};
 		}
 	}
+
+	fn new_handler_with_replacement(
+		&mut self,
+		protocol: &Cow<str>,
+		handler: RequestResponseHandler<GenericCodec>,
+	) -> <RequestResponsesBehaviour as NetworkBehaviour>::ProtocolsHandler {
+		let iter = self.protocols.iter_mut().map(|(p, (r, _))| {
+			(p.to_string(), if p == protocol { handler } else { NetworkBehaviour::new_handler(r) })
+		});
+
+		MultiHandler::try_from_iter(iter).expect(
+			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
+			 which is the only possible error; qed",
+		)
+	}
 }
 
 impl NetworkBehaviour for RequestResponsesBehaviour {
@@ -678,17 +693,20 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							log::error!(
 								"The request-response isn't supposed to start dialing peers"
 							);
+							let handler = self.new_handler_with_replacement(protocol, handler);
 							return Poll::Ready(NetworkBehaviourAction::DialAddress {
 								address,
 								handler,
 							})
 						},
-						NetworkBehaviourAction::DialPeer { peer_id, condition, handler } =>
+						NetworkBehaviourAction::DialPeer { peer_id, condition, handler } => {
+							let handler = self.new_handler_with_replacement(protocol, handler);
 							return Poll::Ready(NetworkBehaviourAction::DialPeer {
 								peer_id,
 								condition,
 								handler,
-							}),
+							})
+						},
 						NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
 							return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 								peer_id,
