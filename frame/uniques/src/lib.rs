@@ -40,6 +40,8 @@ mod impl_nonfungibles;
 mod types;
 pub use types::*;
 
+mod migration;
+
 use codec::{Decode, Encode, HasCompact};
 use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
 use frame_system::Config as SystemConfig;
@@ -288,7 +290,11 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			migration::migrate_to_v1::<T, I, Self>()
+		}
+	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Get the owner of the asset instance, if the asset exists.
