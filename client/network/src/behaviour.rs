@@ -33,8 +33,8 @@ use libp2p::{
 	identify::IdentifyInfo,
 	kad::record,
 	swarm::{
-		toggle::Toggle, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
-		ProtocolsHandler,
+		toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess,
+		PollParameters, ProtocolsHandler,
 	},
 	NetworkBehaviour,
 };
@@ -535,11 +535,12 @@ impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B> {
 }
 
 impl<B: BlockT> Behaviour<B> {
-	fn poll<TEv: ProtocolsHandler>(
+	fn poll(
 		&mut self,
 		cx: &mut Context,
 		_: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<BehaviourOut<B>, TEv>> {
+	) -> Poll<NetworkBehaviourAction<BehaviourOut<B>, <Self as NetworkBehaviour>::ProtocolsHandler>>
+	{
 		use light_client_requests::sender::OutEvent;
 		while let Poll::Ready(Some(event)) = self.light_client_request_sender.poll_next_unpin(cx) {
 			match event {
