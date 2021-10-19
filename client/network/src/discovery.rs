@@ -599,14 +599,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
 
-		// NOTE: we might re-discover the same address multiple times
-		// in which case we just want to refrain from logging.
-		if self.known_external_addresses.insert(new_addr.clone()) {
-			info!(
-				target: "sub-libp2p",
-				"🔍 Discovered new external address for our node: {}",
-				new_addr,
-			);
+		if self.can_add_to_dht(addr) {
+			// NOTE: we might re-discover the same address multiple times
+			// in which case we just want to refrain from logging.
+			if self.known_external_addresses.insert(new_addr.clone()) {
+				info!(
+					target: "sub-libp2p",
+					"🔍 Discovered new external address for our node: {}",
+					new_addr,
+				);
+			}
 		}
 
 		for k in self.kademlias.values_mut() {
