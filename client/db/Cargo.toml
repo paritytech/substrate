@@ -41,6 +41,7 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 quickcheck = "1.0.3"
 kvdb-rocksdb = "0.14.0"
 tempfile = "3"
+criterion = "0.3.5"
 
 [features]
 default = []

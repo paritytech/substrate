@@ -31,6 +31,7 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type OpaqueCall = super::OpaqueCall<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -152,7 +153,7 @@ fn multisig_deposit_is_taken_and_returned() {
 			2,
 			vec![2, 3],
 			None,
-			data.clone(),
+			OpaqueCall::from_encoded(data.clone()),
 			false,
 			0
 		));
@@ -164,7 +165,7 @@ fn multisig_deposit_is_taken_and_returned() {
 			2,
 			vec![1, 3],
 			Some(now()),
-			data,
+			OpaqueCall::from_encoded(data),
 			false,
 			call_weight
 		));
@@ -185,7 +186,15 @@ fn multisig_deposit_is_taken_and_returned_with_call_storage() {
 		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
-		assert_ok!(Multisig::as_multi(Origin::signed(1), 2, vec![2, 3], None, data, true, 0));
+		assert_ok!(Multisig::as_multi(
+			Origin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			OpaqueCall::from_encoded(data),
+			true,
+			0
+		));
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::reserved_balance(1), 5);
 
@@ -231,7 +240,7 @@ fn multisig_deposit_is_taken_and_returned_with_alt_call_storage() {
 			3,
 			vec![1, 3],
 			Some(now()),
-			data,
+			OpaqueCall::from_encoded(data),
 			true,
 			0
 		));
@@ -316,7 +325,15 @@ fn timepoint_checking_works() {
 		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash, 0));
 
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(2), 2, vec![1, 3], None, call.clone(), false, 0),
+			Multisig::as_multi(
+				Origin::signed(2),
+				2,
+				vec![1, 3],
+				None,
+				OpaqueCall::from_encoded(call.clone()),
+				false,
+				0
+			),
 			Error::<Test>::NoTimepoint,
 		);
 		let later = Timepoint { index: 1, ..now() };
@@ -326,7 +343,7 @@ fn timepoint_checking_works() {
 				2,
 				vec![1, 3],
 				Some(later),
-				call.clone(),
+				OpaqueCall::from_encoded(call),
 				false,
 				0
 			),
@@ -347,7 +364,15 @@ fn multisig_2_of_3_works_with_call_storing() {
 		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
-		assert_ok!(Multisig::as_multi(Origin::signed(1), 2, vec![2, 3], None, data, true, 0));
+		assert_ok!(Multisig::as_multi(
+			Origin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			OpaqueCall::from_encoded(data),
+			true,
+			0
+		));
 		assert_eq!(Balances::free_balance(6), 0);
 
 		assert_ok!(Multisig::approve_as_multi(
@@ -382,7 +407,7 @@ fn multisig_2_of_3_works() {
 			2,
 			vec![1, 3],
 			Some(now()),
-			data,
+			OpaqueCall::from_encoded(data),
 			false,
 			call_weight
 		));
@@ -425,7 +450,7 @@ fn multisig_3_of_3_works() {
 			3,
 			vec![1, 2],
 			Some(now()),
-			data,
+			OpaqueCall::from_encoded(data),
 			false,
 			call_weight
 		));
@@ -473,7 +498,15 @@ fn cancel_multisig_with_call_storage_works() {
 	new_test_ext().execute_with(|| {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
-		assert_ok!(Multisig::as_multi(Origin::signed(1), 3, vec![2, 3], None, call, true, 0));
+		assert_ok!(Multisig::as_multi(
+			Origin::signed(1),
+			3,
+			vec![2, 3],
+			None,
+			OpaqueCall::from_encoded(call),
+			true,
+			0
+		));
 		assert_eq!(Balances::free_balance(1), 4);
 		assert_ok!(Multisig::approve_as_multi(
 			Origin::signed(2),
@@ -517,7 +550,7 @@ fn cancel_multisig_with_alt_call_storage_works() {
 			3,
 			vec![1, 3],
 			Some(now()),
-			call,
+			OpaqueCall::from_encoded(call),
 			true,
 			0
 		));
@@ -544,7 +577,7 @@ fn multisig_2_of_3_as_multi_works() {
 			2,
 			vec![2, 3],
 			None,
-			data.clone(),
+			OpaqueCall::from_encoded(data.clone()),
 			false,
 			0
 		));
@@ -555,7 +588,7 @@ fn multisig_2_of_3_as_multi_works() {
 			2,
 			vec![1, 3],
 			Some(now()),
-			data,
+			OpaqueCall::from_encoded(data),
 			false,
 			call_weight
 		));
@@ -583,7 +616,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 			2,
 			vec![2, 3],
 			None,
-			data1.clone(),
+			OpaqueCall::from_encoded(data1.clone()),
 			false,
 			0
 		));
@@ -592,7 +625,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 			2,
 			vec![1, 3],
 			None,
-			data2.clone(),
+			OpaqueCall::from_encoded(data2.clone()),
 			false,
 			0
 		));
@@ -601,7 +634,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 			2,
 			vec![1, 2],
 			Some(now()),
-			data1,
+			OpaqueCall::from_encoded(data1),
 			false,
 			call1_weight
 		));
@@ -610,7 +643,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 			2,
 			vec![1, 2],
 			Some(now()),
-			data2,
+			OpaqueCall::from_encoded(data2),
 			false,
 			call2_weight
 		));
@@ -637,7 +670,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 			2,
 			vec![2, 3],
 			None,
-			data.clone(),
+			OpaqueCall::from_encoded(data.clone()),
 			false,
 			0
 		));
@@ -646,7 +679,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 			2,
 			vec![1, 3],
 			Some(now()),
-			data.clone(),
+			OpaqueCall::from_encoded(data.clone()),
 			false,
 			call_weight
 		));
@@ -657,7 +690,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 			2,
 			vec![2, 3],
 			None,
-			data.clone(),
+			OpaqueCall::from_encoded(data.clone()),
 			false,
 			0
 		));
@@ -666,7 +699,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 			2,
 			vec![1, 2],
 			Some(now()),
-			data.clone(),
+			OpaqueCall::from_encoded(data),
 			false,
 			call_weight
 		));
@@ -683,11 +716,27 @@ fn minimum_threshold_check_works() {
 	new_test_ext().execute_with(|| {
 		let call = call_transfer(6, 15).encode();
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(1), 0, vec![2], None, call.clone(), false, 0),
+			Multisig::as_multi(
+				Origin::signed(1),
+				0,
+				vec![2],
+				None,
+				OpaqueCall::from_encoded(call.clone()),
+				false,
+				0
+			),
 			Error::<Test>::MinimumThreshold,
 		);
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(1), 1, vec![2], None, call.clone(), false, 0),
+			Multisig::as_multi(
+				Origin::signed(1),
+				1,
+				vec![2],
+				None,
+				OpaqueCall::from_encoded(call.clone()),
+				false,
+				0
+			),
 			Error::<Test>::MinimumThreshold,
 		);
 	});
@@ -698,7 +747,15 @@ fn too_many_signatories_fails() {
 	new_test_ext().execute_with(|| {
 		let call = call_transfer(6, 15).encode();
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(1), 2, vec![2, 3, 4], None, call.clone(), false, 0),
+			Multisig::as_multi(
+				Origin::signed(1),
+				2,
+				vec![2, 3, 4],
+				None,
+				OpaqueCall::from_encoded(call),
+				false,
+				0
+			),
 			Error::<Test>::TooManySignatories,
 		);
 	});
@@ -765,7 +822,15 @@ fn multisig_1_of_3_works() {
 			Error::<Test>::MinimumThreshold,
 		);
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(1), 1, vec![2, 3], None, call.clone(), false, 0),
+			Multisig::as_multi(
+				Origin::signed(1),
+				1,
+				vec![2, 3],
+				None,
+				OpaqueCall::from_encoded(call),
+				false,
+				0
+			),
 			Error::<Test>::MinimumThreshold,
 		);
 		let boxed_call = Box::new(call_transfer(6, 15));
@@ -801,14 +866,22 @@ fn weight_check_works() {
 			2,
 			vec![2, 3],
 			None,
-			data.clone(),
+			OpaqueCall::from_encoded(data.clone()),
 			false,
 			0
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), data, false, 0),
+			Multisig::as_multi(
+				Origin::signed(2),
+				2,
+				vec![1, 3],
+				Some(now()),
+				OpaqueCall::from_encoded(data),
+				false,
+				0
+			),
 			Error::<Test>::MaxWeightTooLow,
 		);
 	});
@@ -860,7 +933,7 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			3,
 			vec![1, 2],
 			Some(now()),
-			data,
+			OpaqueCall::from_encoded(data),
 			false,
 			call_weight
 		));
