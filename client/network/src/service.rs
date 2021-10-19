@@ -1097,6 +1097,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
 	/// consist of only `/p2p/<peerid>`.
 	///
+	/// The node will start establishing/accepting connections and substreams to/from peers in this
+	/// set, if it doesn't have any substream open with them yet.
+	///
+	/// Note however, if a call to this function results in less peers on the reserved set, they
+	/// will not necessarily get disconnected (depending on available free slots in the peer set).
+	/// If you want to also disconnect those removed peers, you will have to call
+	/// `remove_from_peers_set` on those in addition to updating the reserved set. You can omit
+	/// this step if the peer set is in reserved only mode.
+	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	pub fn set_reserved_peers(
