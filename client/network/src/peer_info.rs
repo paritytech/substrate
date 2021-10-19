@@ -336,17 +336,20 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						self.handle_ping_report(&peer, rtt)
 					}
 				},
-				Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialAddress {
-						address,
-						handler: IntoProtocolsHandler::select(handler, self.identify.new_handler()),
-					}),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) => {
+					let handler =
+						IntoProtocolsHandler::select(handler, self.identify.new_handler());
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler })
+				},
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) => {
+					let handler =
+						IntoProtocolsHandler::select(handler, self.identify.new_handler());
 					return Poll::Ready(NetworkBehaviourAction::DialPeer {
 						peer_id,
 						condition,
-						handler: IntoProtocolsHandler::select(handler, self.identify.new_handler()),
-					}),
+						handler,
+					})
+				},
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
@@ -381,14 +384,18 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 					IdentifyEvent::Pushed { .. } => {},
 					IdentifyEvent::Sent { .. } => {},
 				},
-				Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
+				Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) => {
+					let handler = IntoProtocolsHandler::select(self.ping.new_handler(), handler);
+					return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler })
+				},
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) => {
+					let handler = IntoProtocolsHandler::select(self.ping.new_handler(), handler);
 					return Poll::Ready(NetworkBehaviourAction::DialPeer {
 						peer_id,
 						condition,
 						handler,
-					}),
+					})
+				},
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
