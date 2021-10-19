@@ -40,7 +40,7 @@ use sp_state_machine::{
 	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
 };
 use sp_storage::{ChildInfo, StorageKey};
-use sp_trie::{LayoutV1, TrieConfiguration};
+use sp_trie::{LayoutV0, TrieConfiguration};
 use std::{
 	collections::{HashMap, HashSet},
 	sync::Arc,
@@ -170,7 +170,7 @@ fn construct_block(
 	let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
 	let iter = transactions.iter().map(Encode::encode);
-	let extrinsics_root = LayoutV1::<BlakeTwo256>::ordered_trie_root(iter).into();
+	let extrinsics_root = LayoutV0::<BlakeTwo256>::ordered_trie_root(iter).into();
 
 	let mut header = Header {
 		parent_hash,
