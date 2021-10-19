@@ -507,35 +507,38 @@ fn storage_expand() {
 
 #[test]
 fn pallet_metadata_expands() {
-	use frame_support::traits::{PalletInfoAccess, PalletInfoData, CrateVersion};
+	use frame_support::traits::{CrateVersion, PalletInfoAccess, PalletInfoData};
 	let mut infos = AllPallets::infos();
 	infos.sort_by_key(|x| x.index);
-	assert_eq!(infos, vec![
-		PalletInfoData {
-			index: 1,
-			name: "Example",
-			module_name: "pallet",
-			crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-		},
-		PalletInfoData {
-			index: 2,
-			name: "Instance1Example",
-			module_name: "pallet",
-			crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-		},
-		PalletInfoData {
-			index: 3,
-			name: "Example2",
-			module_name: "pallet2",
-			crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-		},
-		PalletInfoData {
-			index: 4,
-			name: "Instance1Example2",
-			module_name: "pallet2",
-			crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
-		},
-	]);
+	assert_eq!(
+		infos,
+		vec![
+			PalletInfoData {
+				index: 1,
+				name: "Example",
+				module_name: "pallet",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 2,
+				name: "Instance1Example",
+				module_name: "pallet",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 3,
+				name: "Example2",
+				module_name: "pallet2",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 4,
+				name: "Instance1Example2",
+				module_name: "pallet2",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+		]
+	);
 }
 
 #[test]

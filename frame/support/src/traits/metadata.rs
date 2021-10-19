@@ -17,10 +17,10 @@
 
 //! Traits for managing information attached to pallets and their constituents.
 
-use sp_std::prelude::*;
 use codec::{Decode, Encode};
-use sp_runtime::RuntimeDebug;
 use impl_trait_for_tuples::impl_for_tuples;
+use sp_runtime::RuntimeDebug;
+use sp_std::prelude::*;
 
 /// Provides information about the pallet itself and its setup in the runtime.
 ///
@@ -80,11 +80,21 @@ pub trait PalletInfoAccess {
 
 #[impl_for_tuples(60)]
 impl PalletInfoAccess for Tuple {
-	fn index() -> usize { unreachable!("fields not available on a tuple") }
-	fn name() -> &'static str { unreachable!("fields not available on a tuple") }
-	fn module_name() -> &'static str { unreachable!("fields not available on a tuple") }
-	fn crate_version() -> CrateVersion { unreachable!("fields not available on a tuple") }
-	fn info() -> PalletInfoData { unreachable!("fields not available on a tuple") }
+	fn index() -> usize {
+		unreachable!("fields not available on a tuple")
+	}
+	fn name() -> &'static str {
+		unreachable!("fields not available on a tuple")
+	}
+	fn module_name() -> &'static str {
+		unreachable!("fields not available on a tuple")
+	}
+	fn crate_version() -> CrateVersion {
+		unreachable!("fields not available on a tuple")
+	}
+	fn info() -> PalletInfoData {
+		unreachable!("fields not available on a tuple")
+	}
 	fn infos() -> Vec<PalletInfoData> {
 		let mut result = vec![];
 		for_tuples!( #(
@@ -252,17 +262,33 @@ mod tests {
 
 	struct Pallet1;
 	impl PalletInfoAccess for Pallet1 {
-		fn index() -> usize { 1 }
-		fn name() -> &'static str { "Pallat1" } 
-		fn module_name() -> &'static str { "pallet1" }
-		fn crate_version() -> CrateVersion { CrateVersion::new(1, 0, 0) }
+		fn index() -> usize {
+			1
+		}
+		fn name() -> &'static str {
+			"Pallat1"
+		}
+		fn module_name() -> &'static str {
+			"pallet1"
+		}
+		fn crate_version() -> CrateVersion {
+			CrateVersion::new(1, 0, 0)
+		}
 	}
 	struct Pallet2;
 	impl PalletInfoAccess for Pallet2 {
-		fn index() -> usize { 2 }
-		fn name() -> &'static str { "Pallat2" } 
-		fn module_name() -> &'static str { "pallet2" }
-		fn crate_version() -> CrateVersion { CrateVersion::new(1, 0, 0) }
+		fn index() -> usize {
+			2
+		}
+		fn name() -> &'static str {
+			"Pallat2"
+		}
+		fn module_name() -> &'static str {
+			"pallet2"
+		}
+		fn crate_version() -> CrateVersion {
+			CrateVersion::new(1, 0, 0)
+		}
 	}
 
 	#[test]
