@@ -133,7 +133,7 @@ pub struct Notifications {
 	next_incoming_index: sc_peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: VecDeque<NetworkBehaviourAction<NotificationsOut, NotifsHandler>>,
+	events: VecDeque<NetworkBehaviourAction<NotificationsOut, NotifsHandlerProto>>,
 }
 
 /// Configuration for a notifications protocol.
@@ -644,6 +644,7 @@ impl Notifications {
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: entry.key().0.clone(),
 					condition: DialPeerCondition::Disconnected,
+					handler: self.new_handler(),
 				});
 				entry.insert(PeerState::Requested);
 				return
@@ -680,6 +681,7 @@ impl Notifications {
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: occ_entry.key().0.clone(),
 					condition: DialPeerCondition::Disconnected,
+					handler: self.new_handler(),
 				});
 				*occ_entry.into_mut() = PeerState::Requested;
 			},
@@ -2065,6 +2067,7 @@ impl NetworkBehaviour for Notifications {
 					self.events.push_back(NetworkBehaviourAction::DialPeer {
 						peer_id,
 						condition: DialPeerCondition::Disconnected,
+						handler: self.new_handler(),
 					});
 					*peer_state = PeerState::Requested;
 				},
