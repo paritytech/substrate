@@ -85,6 +85,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
@@ -99,7 +100,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		base_path: Some(base_path),
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
-		disable_log_reloading: false,
 	};
 
 	node_cli::service::new_full_base(config, |_, _| ()).expect("Creates node")

@@ -316,8 +316,7 @@ const MILLICENTS: u32 = 1_000_000_000;
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
 //
 // More information can be read at:
-//   - https://substrate.dev/docs/en/knowledgebase/learn-substrate/weight
-//   - https://substrate.dev/docs/en/knowledgebase/runtime/fees#default-weight-annotations
+//   - https://docs.substrate.io/v3/runtime/weights-and-fees
 //
 // Manually configuring weight is an advanced operation and what you really need may well be
 //   fulfilled by running the benchmarking toolchain. Refer to `benchmarking.rs` file.
@@ -487,11 +486,12 @@ pub mod pallet {
 		// the chain in a moderate rate.
 		//
 		// The parenthesized value of the `#[pallet::weight(..)]` attribute can be any type that
-		// implements a set of traits, namely [`WeighData`] and [`ClassifyDispatch`].
-		// The former conveys the weight (a numeric representation of pure execution time and
-		// difficulty) of the transaction and the latter demonstrates the [`DispatchClass`] of the
-		// call. A higher weight means a larger transaction (less of which can be placed in a
-		// single block).
+		// implements a set of traits, namely [`WeighData`], [`ClassifyDispatch`], and
+		// [`PaysFee`]. The first conveys the weight (a numeric representation of pure
+		// execution time and difficulty) of the transaction and the second demonstrates the
+		// [`DispatchClass`] of the call, the third gives whereas extrinsic must pay fees or not.
+		// A higher weight means a larger transaction (less of which can be placed in a single
+		// block).
 		//
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
@@ -548,7 +548,8 @@ pub mod pallet {
 
 			// Print out log or debug message in the console via log::{error, warn, info, debug,
 			// trace}, accepting format strings similar to `println!`.
-			// https://substrate.dev/rustdocs/v3.0.0/log/index.html
+			// https://paritytech.github.io/substrate/master/sp_io/logging/fn.log.html
+			// https://paritytech.github.io/substrate/master/frame_support/constant.LOG_TARGET.html
 			info!("New value is now: {:?}", new_value);
 
 			// Put the new value into storage.
