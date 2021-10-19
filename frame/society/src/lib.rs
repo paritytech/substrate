@@ -358,7 +358,8 @@ pub enum BidKind<AccountId, Balance, Call> {
 	/// A member vouched for this bid. The account should be reinstated into `Members` once the
 	/// bid is successful (or if it is rescinded prior to launch).
 	Vouch(AccountId, Balance),
-	/// This is not a bid for membership, but a bid to action. The ActionDeposit was paid for this bid.
+	/// This is not a bid for membership, but a bid to action. The ActionDeposit was paid for this
+	/// bid.
 	Action(Balance, Call),
 }
 
@@ -537,8 +538,8 @@ pub mod pallet {
 		Unfounded(T::AccountId),
 		/// Some funds were deposited into the society account. \[value\]
 		Deposit(BalanceOf<T, I>),
-		/// A member just bid to enact an action. The given account is the member's ID and their reward if
-		/// the action passes is the second. \[member_id, value\]
+		/// A member just bid to enact an action. The given account is the member's ID and their
+		/// reward if the action passes is the second. \[member_id, value\]
 		ActionBid(T::AccountId, BalanceOf<T, I>),
 		/// A \[member\] dropped their bid to action (by their request).
 		ActionUnbid(T::AccountId),
@@ -795,10 +796,10 @@ pub mod pallet {
 						BidKind::Deposit(deposit) | BidKind::Action(deposit, _) => {
 							let err_amount = T::Currency::unreserve(&who, deposit);
 							debug_assert!(err_amount.is_zero());
-						}
+						},
 						BidKind::Vouch(voucher, _) => {
 							<Vouching<T, I>>::remove(&voucher);
-						}
+						},
 					}
 					Self::deposit_event(Event::<T, I>::Unbid(who));
 					Ok(())
@@ -1027,7 +1028,7 @@ pub mod pallet {
 					} else {
 						<Payouts<T, I>>::insert(&who, payouts);
 					}
-					return Ok(());
+					return Ok(())
 				}
 			}
 			Err(Error::<T, I>::NoPayout)?
@@ -1224,10 +1225,10 @@ pub mod pallet {
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
-						let maturity = <frame_system::Pallet<T>>::block_number()
-							+ Self::lock_duration(Self::members().len() as u32);
+						let maturity = <frame_system::Pallet<T>>::block_number() +
+							Self::lock_duration(Self::members().len() as u32);
 						Self::execute_accepted_candidate(&who, value, kind, maturity);
-					}
+					},
 					Judgement::Reject => {
 						// Founder has rejected this candidate
 						match kind {
@@ -1240,29 +1241,30 @@ pub mod pallet {
 									BalanceStatus::Free,
 								);
 								debug_assert!(res.is_ok());
-							}
+							},
 							BidKind::Vouch(voucher, _) => {
 								// Ban the voucher from vouching again
 								<Vouching<T, I>>::insert(&voucher, VouchingStatus::Banned);
-							}
+							},
 							BidKind::Action(deposit, _) => {
-								// Punish the member for the bad proposal, but do not do anything outside of that
-								// repatriate to the action account of the society instead of the "treasury"
+								// Punish the member for the bad proposal, but do not do anything
+								// outside of that repatriate to the action account of the society
+								// instead of the "treasury"
 								let _ = T::Currency::repatriate_reserved(
 									&who,
 									&Self::actions(),
 									deposit,
 									BalanceStatus::Free,
 								);
-							}
+							},
 						}
-					}
+					},
 					Judgement::Rebid => {
 						// Founder has taken no judgement, and candidate is placed back into the
 						// pool.
 						let bids = <Bids<T, I>>::get();
 						Self::put_bid(bids, &who, value, kind);
-					}
+					},
 				}
 
 				// Remove suspended candidate
@@ -1306,7 +1308,8 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `value`: The total reward to be paid to you if the action is carried out.
-		/// - `call`: The call being executed by the society action origin if this bid is successful.
+		/// - `call`: The call being executed by the society action origin if this bid is
+		///   successful.
 		///
 		/// # <weight>
 		/// Key: B (len of bids), C (len of candidates), M (len of members)
@@ -1317,7 +1320,8 @@ pub mod pallet {
 		/// 	- One storage read to retrieve all current bids. O(B)
 		/// 	- One storage read to retrieve all current candidates. O(C)
 		/// - Storage Writes:
-		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization w/ read)
+		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization
+		///    w/ read)
 		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT. O(1)
 		/// - Notable Computation:
 		/// 	- O(log M) search to check sender is a member.
@@ -1433,7 +1437,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				} else {
 					bids.push(Bid { value, who: who.clone(), kind: bid_kind });
 				}
-			}
+			},
 			Err(pos) => bids.insert(pos, Bid { value, who: who.clone(), kind: bid_kind }),
 		}
 		// Keep it reasonably small.
@@ -1443,10 +1447,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				BidKind::Deposit(deposit) | BidKind::Action(deposit, _) => {
 					let err_amount = T::Currency::unreserve(&popped, deposit);
 					debug_assert!(err_amount.is_zero());
-				}
+				},
 				BidKind::Vouch(voucher, _) => {
 					<Vouching<T, I>>::remove(&voucher);
-				}
+				},
 			}
 			Self::deposit_event(Event::<T, I>::AutoUnbid(popped));
 		}
@@ -1489,7 +1493,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members);
 				<Members<T, I>>::put(members);
 				Ok(())
-			}
+			},
 			// User is already a member, do nothing.
 			Ok(_) => Ok(()),
 		}
@@ -1511,7 +1515,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members[..]);
 				<Members<T, I>>::put(members);
 				Ok(())
-			}
+			},
 		}
 	}
 
@@ -1538,8 +1542,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// out of society.
 			members.reserve(candidates.len());
 
-			let maturity = <frame_system::Pallet<T>>::block_number()
-				+ Self::lock_duration(members.len() as u32);
+			let maturity = <frame_system::Pallet<T>>::block_number() +
+				Self::lock_duration(members.len() as u32);
 
 			let mut rewardees = Vec::new();
 			let mut total_approvals = 0;
@@ -1735,7 +1739,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// whole slash is accounted for.
 					*amount -= rest;
 					rest = Zero::zero();
-					break;
+					break
 				}
 			}
 			<Payouts<T, I>>::insert(who, &payouts[dropped..]);
@@ -1778,7 +1782,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let err_amount = T::Currency::unreserve(candidate, deposit);
 				debug_assert!(err_amount.is_zero());
 				value
-			}
+			},
 			BidKind::Vouch(voucher, tip) => {
 				// Check that the voucher is still vouching, else some other logic may have removed
 				// their status.
@@ -1790,7 +1794,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				} else {
 					value
 				}
-			}
+			},
 			BidKind::Action(deposit, call) => {
 				let _ = T::Currency::unreserve(candidate, deposit);
 				// build society call origin
@@ -1804,7 +1808,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let _ = decoded_call.dispatch(society_origin);
 				});
 				value
-			}
+			},
 		};
 
 		Self::bump_payout(candidate, maturity, value);
@@ -1930,7 +1934,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								selected.push(bid.clone());
 								zero_selected = true;
 								count += 1;
-								return false;
+								return false
 							}
 						} else {
 							total_cost += bid.value;
@@ -1938,7 +1942,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							if total_cost <= pot {
 								selected.push(bid.clone());
 								count += 1;
-								return false;
+								return false
 							}
 						}
 					}
