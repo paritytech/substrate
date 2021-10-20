@@ -1875,7 +1875,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					num_established,
 					concurrent_dial_errors,
 				}) => {
-					debug!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
+					if let Some(errors) = concurrent_dial_errors {
+						debug!(target: "sub-libp2p", "Libp2p => Connected({:?}) with errors: {:?}", peer_id, errors);
+					} else {
+						debug!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
+					}
 
 					if let Some(metrics) = this.metrics.as_ref() {
 						let direction = match endpoint {
