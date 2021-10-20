@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::protocol::notifications::handler::{
-	self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
+	self, NotificationsSink, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto,
 };
 
 use bytes::BytesMut;

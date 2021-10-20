@@ -939,10 +939,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					},
 					MdnsEvent::Expired(_) => {},
 				},
-				NetworkBehaviourAction::DialAddress { address, handler } => {
+				NetworkBehaviourAction::DialAddress { .. } => {
 					unreachable!("mDNS never dials!");
 				},
-				NetworkBehaviourAction::DialPeer { peer_id, condition, handler } => {
+				NetworkBehaviourAction::DialPeer { .. } => {
 					unreachable!("mDNS never dials!");
 				},
 				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */

@@ -1965,18 +1965,15 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match error {
 							DialError::ConnectionLimit(_) => "limit-reached",
 							DialError::InvalidPeerId => "invalid-peer-id",
-							DialError::Transport(_) | DialError::ConnectionIo(_) => "transport-error",
-							| DialError::Banned
-							| DialError::LocalPeerId
-							| DialError::NoAddresses
-							| DialError::DialPeerConditionFalse(_)
-							| DialError::Aborted
-								=> "other",
+							DialError::Transport(_) | DialError::ConnectionIo(_) =>
+								"transport-error",
+							| DialError::Banned |
+							DialError::LocalPeerId |
+							DialError::NoAddresses |
+							DialError::DialPeerConditionFalse(_) |
+							DialError::Aborted => "other",
 						};
-						metrics
-							.pending_connections_errors_total
-							.with_label_values(&[reason])
-							.inc();
+						metrics.pending_connections_errors_total.with_label_values(&[reason]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::Dialing(peer_id)) => {

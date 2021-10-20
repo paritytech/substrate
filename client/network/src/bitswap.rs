@@ -39,8 +39,7 @@ use libp2p::{
 		UpgradeInfo,
 	},
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
-		OneShotHandler, PollParameters, ProtocolsHandler,
+		NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler, PollParameters,
 	},
 };
 use log::{debug, error, trace};

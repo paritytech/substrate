@@ -34,7 +34,7 @@ use libp2p::{
 	kad::record,
 	swarm::{
 		toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess,
-		PollParameters, ProtocolsHandler,
+		PollParameters,
 	},
 	NetworkBehaviour,
 };
