@@ -323,7 +323,7 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	PalletInstancesRevExSystem,
+	AllPallets,
 >;
 
 impl_runtime_apis! {
@@ -474,7 +474,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_timestamp, Timestamp);
 			list_benchmark!(list, extra, pallet_template, TemplateModule);
 
-			let storage_info = PalletInstances::storage_info();
+			let storage_info = AllPalletsWithSystem::storage_info();
 
 			return (list, storage_info)
 		}

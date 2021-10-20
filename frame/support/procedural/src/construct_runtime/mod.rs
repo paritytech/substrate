@@ -215,34 +215,13 @@ fn decl_all_pallets<'a>(
 		.iter()
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
-	let pallet_instances = quote!( (#( #names ),*) );
-	let names_rev = names.iter().rev();
-	let pallet_instances_rev = quote!( (#( #names_rev ),*) );
-	let names_ex_sys = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME);
-	let pallet_instances_ex_sys = quote!( (#( #names_ex_sys ),*) );
-	let names_rev_ex_sys = names.iter().rev().filter(|n| **n != SYSTEM_PALLET_NAME);
-	let pallet_instances_rev_ex_sys = quote!( (#( #names_rev_ex_sys ),*) );
-
 	quote!(
 		#types
 
-		/// All pallets included in the runtime as a flat tuple of types.
-		pub type PalletInstances = ( #pallet_instances );
-
-		// TODO: Remove these once executive is not sensitive to ordering.
-		/// All pallet instances excluding System which are in the runtime as a flat tuple of types.
-		pub type PalletInstancesExSystem = ( #pallet_instances_ex_sys );
-		/// All pallet instances excluding System which are in the runtime as a flat tuple of types.
-		pub type PalletInstancesRev = ( #pallet_instances_rev );
-		/// All pallets included in the runtime as a flat tuple of types.
-		pub type PalletInstancesRevExSystem = ( #pallet_instances_rev_ex_sys );
-
 		/// All pallets included in the runtime as a nested tuple of types.
 		/// Excludes the System pallet.
-		#[deprecated(note = "use `PalletInstancesRev` (or possibly `PalletInstances`) instead")]
 		pub type AllPallets = ( #all_pallets );
 		/// All pallets included in the runtime as a nested tuple of types.
-		#[deprecated(note = "use `PalletInstancesRevWithSystem` (or possibly `PalletInstancesWithSystem`) instead")]
 		pub type AllPalletsWithSystem = ( #all_pallets_with_system );
 
 		/// All modules included in the runtime as a nested tuple of types.
@@ -340,7 +319,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 
 			#[test]
 			pub fn runtime_integrity_tests() {
-				<PalletInstances as #scrate::traits::IntegrityTest>::integrity_test();
+				<AllPallets as #scrate::traits::IntegrityTest>::integrity_test();
 			}
 		}
 	)

@@ -40,7 +40,7 @@ pub type Executive = executive::Executive<
     Block,
     Context,
     Runtime,
-    PalletInstancesRevExSystem,
+    AllPallets,
 >;
 ```
 
@@ -65,7 +65,7 @@ pub type Executive = executive::Executive<
     Block,
     Context,
     Runtime,
-    PalletInstancesRevExSystem,
+    AllPallets,
     CustomOnRuntimeUpgrade,
 >;
 ```

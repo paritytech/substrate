@@ -156,7 +156,7 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 /// - `Context`: The context that is used when checking an extrinsic.
 /// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
 /// - `PalletInstanceOrder`: Tuple that contains all modules in order used to call e.g.
-///   `on_initialize`. Generally this should be the `PalletInstancesRevExSystem` type coming from
+///   `on_initialize`. Generally this should be the `AllPallets` type coming from
 ///   `construct_runtime` macro. This should exclude the System pallet.
 /// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
 ///   already called by `PalletInstanceOrder`. It will be called before all modules will be called.
@@ -867,7 +867,7 @@ mod tests {
 		Block<TestXt>,
 		ChainContext<Runtime>,
 		Runtime,
-		PalletInstancesRevExSystem,
+		AllPallets,
 		CustomOnRuntimeUpgrade,
 	>;
 
@@ -1381,11 +1381,11 @@ mod tests {
 			let frame_system_upgrade_weight = frame_system::Pallet::<Runtime>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight =
-				<PalletInstancesRevExSystem as OnRuntimeUpgrade>::on_runtime_upgrade();
+				<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight =
 				frame_system::Pallet::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight =
-				<PalletInstancesRevExSystem as OnInitialize<u64>>::on_initialize(block_number);
+				<AllPallets as OnInitialize<u64>>::on_initialize(block_number);
 			let base_block_weight =
 				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 

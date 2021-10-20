@@ -237,14 +237,15 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen>
 			#config_where_clause
 		{
-			fn info() -> Option<#frame_support::traits::PalletInfoData> {
-				use #frame_support::traits::PalletInfoAccess;
-				Some(#frame_support::traits::PalletInfoData {
+			fn count() -> usize { 1 }
+			fn accumulate(acc: &mut Vec<#frame_support::traits::PalletInfoData>) {
+				let item = #frame_support::traits::PalletInfoData {
 					index: Self::index(),
 					name: Self::name(),
 					module_name: Self::module_name(),
 					crate_version: Self::crate_version(),
-				})
+				};
+				acc.push(item);
 			}
 		}
 

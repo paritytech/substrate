@@ -67,26 +67,36 @@ pub trait PalletInfoAccess {
 
 /// Provide information about a bunch of pallets.
 pub trait PalletsInfoAccess {
-	/// Get information about a single pallet. Will give a result of `None` if called on a tuple.
-	fn info() -> Option<PalletInfoData> {
-		None
-	}
+	/// The number of pallets' information that this type represents. Relevant for nested tuples.
+	///
+	/// You probably don't want this function but `infos()` instead.
+	fn count() -> usize { 0 }
+
+	/// Extend the given vector by all of the pallets' information that this type represents.
+	/// Relevant for tuples.
+	///
+	/// You probably don't want this function but `infos()` instead.
+	fn accumulate(_accumulator: &mut Vec<PalletInfoData>) {}
+
 	/// All of the pallets' information that this type represents. Relevant for tuples.
 	fn infos() -> Vec<PalletInfoData> {
-		Self::info().into_iter().collect()
+		let mut result = Vec::with_capacity(Self::infos_len());
+		Self::accumulate_infos(&mut result);
+		result
 	}
 }
 
-#[impl_for_tuples(60)]
-impl PalletsInfoAccess for Tuple {
-	fn infos() -> Vec<PalletInfoData> {
-		let mut result = vec![];
-		for_tuples!( #(
-			if let Some(info) = Tuple::info() {
-				result.push(info);
-			}
-		)* );
-		result
+impl PalletsInfoAccess for () {}
+impl<T: PalletsInfoAccess> PalletsInfoAccess for (T,) {
+	fn count() -> usize { T::count() }
+	fn accumulate(acc: &mut Vec<PalletInfoData>) { T::accumulate(acc) }
+}
+
+impl<T1: PalletsInfoAccess, T2: PalletsInfoAccess> PalletsInfoAccess for (T1, T2) {
+	fn count() -> usize { T1::count() + T2::count() }
+	fn accumulate(acc: &mut Vec<PalletInfoData>) {
+		T1::accumulate(acc);
+		T2::accumulate(acc);
 	}
 }
 
