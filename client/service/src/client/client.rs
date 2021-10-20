@@ -1278,7 +1278,7 @@ where
 		storage: &Storage,
 		executor: &E,
 	) -> sp_blockchain::Result<StateVersion> {
-		Ok(if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
+		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
 			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
 			let code_fetcher = crate::client::wasm_override::WasmBlob::new(wasm.clone());
 			let hash = code_fetcher.hash.clone();
@@ -1290,10 +1290,12 @@ where
 			let runtime_version =
 				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
 					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?;
-			runtime_version.state_version()
+			Ok(runtime_version.state_version())
 		} else {
-			Default::default()
-		})
+			Err(sp_blockchain::Error::VersionInvalid(
+				"Could not fetch runtime from storage.".to_string(),
+			))
+		}
 	}
 }
 
