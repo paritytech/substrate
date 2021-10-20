@@ -577,10 +577,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 	fn inject_connection_closed(
 		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		_peer_id: &PeerId,
+		_conn: &ConnectionId,
+		_endpoint: &ConnectedPoint,
+		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		self.num_connections -= 1;
 		// NetworkBehaviour::inject_connection_closed on Kademlia<MemoryStore> does nothing.
