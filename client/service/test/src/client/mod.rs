@@ -37,7 +37,7 @@ use sc_service::client::{self, Client, LocalCallExecutor, new_in_mem};
 use sp_runtime::traits::{
 	BlakeTwo256, Block as BlockT, Header as HeaderT,
 };
-use substrate_test_runtime::TestAPI;
+use substrate_test_runtime::{TestAPI, Extrinsic};
 use sp_state_machine::backend::Backend as _;
 use sp_api::{ProvideRuntimeApi, OffchainOverlayedChanges};
 use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::TaskExecutor};
@@ -51,6 +51,8 @@ use sp_storage::StorageKey;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_runtime::{generic::BlockId, DigestItem};
 use hex_literal::hex;
+use sc_consensus_babe::{PreDigest, CompatibleDigestItem, SecondaryPlainPreDigest};
+use substrate_test_runtime::{ALICE_ACCOUNT_ID, ALICE_COLLATOR_ID, ALICE_PUB_KEY, UNKNOWN_COLLATOR_ID};
 
 mod light;
 mod db;
@@ -60,6 +62,24 @@ native_executor_instance!(
 	substrate_test_runtime_client::runtime::api::dispatch,
 	substrate_test_runtime_client::runtime::native_version,
 );
+
+use ecies::{utils::{aes_decrypt, decapsulate}, SecretKey, PublicKey};
+use sc_keystore::{KeyStorePtr, Store};
+use ecies::utils::{aes_encrypt, encapsulate};
+use sp_core::crypto::KeyTypeId;
+use sp_encrypted_tx::EncryptedTxApi;
+
+use sp_runtime::traits::DigestFor;
+
+fn create_digest() -> DigestFor<Block>{
+    let mut digests : DigestFor<Block> = Default::default();
+    let babe_pre = sc_consensus_babe::PreDigest::SecondaryPlain(sc_consensus_babe::SecondaryPlainPreDigest{
+        authority_index: ALICE_COLLATOR_ID,
+        slot_number: Default::default(),
+    });
+    digests.push(DigestItem::babe_pre_digest(babe_pre));
+    digests
+}
 
 fn executor() -> sc_executor::NativeExecutor<Executor> {
 	sc_executor::NativeExecutor::new(
@@ -1829,57 +1849,271 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	assert_eq!(client.finality_notification_sinks().lock().len(), 0);
 }
 
-/// Test that ensures that we always send an import notification for re-orgs.
 #[test]
-fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifications() {
-	let mut client = TestClientBuilder::new().build();
+fn mat_block_import_failure_missing_singly_encrypted_tx() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
 
-	let mut notification_stream = futures::executor::block_on_stream(
-		client.import_notification_stream()
-	);
+	let mut builder = client.new_block(create_digest()).unwrap();
 
-	let a1 = client.new_block_at(
-		&BlockId::Number(0),
-		Default::default(),
-		false,
-	).unwrap().build(Default::default()).unwrap().block;
-	client.import(BlockOrigin::NetworkInitialSync, a1.clone()).unwrap();
-
-	let a2 = client.new_block_at(
-		&BlockId::Hash(a1.hash()),
-		Default::default(),
-		false,
-	).unwrap().build(Default::default()).unwrap().block;
-	client.import(BlockOrigin::NetworkInitialSync, a2.clone()).unwrap();
-
-	let mut b1 = client.new_block_at(
-		&BlockId::Number(0),
-		Default::default(),
-		false,
+	builder.push(
+        Extrinsic::SubmitEncryptedTransaction{
+            singly_encrypted: false,
+            data: vec![],
+        }
 	).unwrap();
-	// needed to make sure B1 gets a different hash from A1
-	b1.push_transfer(Transfer {
-		from: AccountKeyring::Alice.into(),
-		to: AccountKeyring::Ferdie.into(),
-		amount: 1,
-		nonce: 0,
-	}).unwrap();
-	let b1 = b1.build(Default::default()).unwrap().block;
-	client.import(BlockOrigin::NetworkInitialSync, b1.clone()).unwrap();
+	let mut block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
-	let b2 = client.new_block_at(
-		&BlockId::Hash(b1.hash()),
-		Default::default(),
-		false,
-	).unwrap().build(Default::default()).unwrap().block;
+	let builder = client.new_block(create_digest()).unwrap();
+	let mut block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
-	// Should trigger a notification because we reorg
-	client.import_as_best(BlockOrigin::NetworkInitialSync, b2.clone()).unwrap();
+	let builder = client.new_block(create_digest()).unwrap();
+	let mut block = builder.build(Default::default()).unwrap().block;
 
-	// There should be one notification
-	let notification = notification_stream.next().unwrap();
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) 
+                if err == sp_blockchain::Error::MissingSinglyEncryptedTransaction(ALICE_ACCOUNT_ID.into())
+                          .to_string()
+        )
+    )
+}
 
-	// We should have a tree route of the re-org
-	let tree_route = notification.tree_route.unwrap();
-	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
+#[test]
+fn mat_block_import_failure_missing_singly_decrypted_tx() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+
+	builder.push(
+        Extrinsic::SubmitEncryptedTransaction{
+            singly_encrypted: true,
+            data: vec![],
+        }
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let builder = client.new_block(create_digest()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let builder = client.new_block(create_digest()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+
+    // client.import(BlockOrigin::Own, block.clone()).unwrap();
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) if err == sp_blockchain::Error::MissingDecryptedTransaction(ALICE_ACCOUNT_ID.into()).to_string()
+        )
+    )
+}
+
+#[test]
+fn mat_block_import_failure_missing_block_builder_information() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+
+	let mut builder = client.new_block(Default::default()).unwrap();
+
+	builder.push(
+        Extrinsic::SubmitEncryptedTransaction{
+            singly_encrypted: true,
+            data: vec![],
+        }
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) if err == sp_blockchain::Error::UnknownBlockBuilder.to_string()
+        )
+    )
+}
+
+fn inject_collator_id(block: & mut Block, authority_index: u32) {
+    block.header.digest.push(DigestItem::babe_pre_digest(
+            PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+                authority_index,
+                slot_number: Default::default(),
+            })));
+}
+
+#[test]
+fn mat_block_import_failure_unknown_collator_id() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+
+	let mut builder = client.new_block(Default::default()).unwrap();
+
+	builder.push(
+        Extrinsic::SubmitEncryptedTransaction{
+            singly_encrypted: true,
+            data: vec![],
+        }
+	).unwrap();
+	let mut block = builder.build(Default::default()).unwrap().block;
+    inject_collator_id(& mut block, UNKNOWN_COLLATOR_ID);
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) if err == sp_blockchain::Error::UnknownCollatorId(UNKNOWN_COLLATOR_ID).to_string()
+        )
+    )
+}
+
+#[test]
+fn mat_block_import_failure_missing_pre_digest() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+
+	let mut builder = client.new_block(Default::default()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) if err == sp_blockchain::Error::UnknownBlockBuilder.to_string()
+        )
+    )
+}
+
+fn encrypt_payload_using_pub_key(pub_key: &sp_core::ecdsa::Public, payload: &[u8]) -> Vec<u8>{
+    let dummy_secret_key: SecretKey = SecretKey::default();
+    let pub_key = PublicKey::parse_slice(pub_key.as_ref(), None).unwrap();
+    let encryption_key = encapsulate(&dummy_secret_key, &pub_key).unwrap();
+    aes_encrypt(&encryption_key, &payload).unwrap()
+}
+
+fn create_key_store() -> KeyStorePtr{
+    let store = Store::new_in_memory();
+
+    let secret_uri = "//Alice";
+    store.write().insert_ephemeral_from_seed_by_type::<sp_core::ecdsa::Pair>(
+        secret_uri,
+        KeyTypeId(*b"xxtx"),
+    ).expect("Inserts unknown key");
+    store
+}
+
+
+#[test]
+fn mat_block_import_failure_on_wrongly_singly_encrypted_transaction() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+
+	builder.push(
+        Extrinsic::SubmitEncryptedTransaction{
+            singly_encrypted: true,
+            data: vec![1,2,3,4],
+        }
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let builder = client.new_block(create_digest()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+	builder.push(
+        Extrinsic::EncryptedTX(
+            sp_encrypted_tx::ExtrinsicType::<sp_core::H256>::DecryptedTx{
+                identifier: Default::default(),
+                decrypted_call: Default::default(),
+            }
+        )
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) if err == sp_blockchain::Error::DecryptedPayloadMismatch.to_string()
+        )
+    )
+}
+
+#[test]
+fn mat_block_import_failure_on_wrongly_doubly_encrypted_transaction() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+
+	builder.push(
+        Extrinsic::SubmitEncryptedTransaction{
+            singly_encrypted: false,
+            data: vec![1,2,3,4],
+        }
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let builder = client.new_block(create_digest()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+	builder.push(
+        Extrinsic::EncryptedTX(
+            sp_encrypted_tx::ExtrinsicType::<sp_core::H256>::SinglyEncryptedTx{
+                identifier: Default::default(),
+                singly_encrypted_call: Default::default(),
+            }
+        )
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) if err == sp_blockchain::Error::DecryptedPayloadMismatch.to_string()
+        )
+    )
+}
+
+#[test]
+fn mat_block_import_success_on_correctly_decrypted_transaction() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+    let api = client.runtime_api();
+    let origin_payload = vec![1,2,3,4];
+    let collator_public_key = api
+        .get_authority_public_key(&BlockId::Number(0), &ALICE_ACCOUNT_ID.into())
+        .unwrap().unwrap();
+    let singly_encrypted_payload = encrypt_payload_using_pub_key(&collator_public_key, &origin_payload[..]);
+
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+
+	builder.push(
+        Extrinsic::SubmitEncryptedTransaction{
+            singly_encrypted: true,
+            data: singly_encrypted_payload.clone(),
+        }
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let builder = client.new_block(create_digest()).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+	builder.push(
+        Extrinsic::EncryptedTX(
+            sp_encrypted_tx::ExtrinsicType::<sp_core::H256>::DecryptedTx{
+                identifier: Default::default(),
+                decrypted_call: origin_payload,
+            }
+        )
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+    assert!(client.import(BlockOrigin::Own, block.clone()).is_ok());
 }

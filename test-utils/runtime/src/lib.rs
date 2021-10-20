@@ -70,6 +70,8 @@ pub const ALICE_PUB_KEY: [u8;33] = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 2
 pub const DUMMY_COLLATOR_ID: u32 = 2;
 pub const DUMMY_ACCOUNT_ID: [u8;32]  = [0u8;32];
 
+pub const UNKNOWN_COLLATOR_ID: u32 = 3;
+
 // Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -656,6 +658,8 @@ cfg_if! {
                         Some(ALICE_ACCOUNT_ID.into())
                     }else if block_builder_id == DUMMY_COLLATOR_ID {
                         Some(DUMMY_ACCOUNT_ID.into())
+                    }else if block_builder_id == UNKNOWN_COLLATOR_ID {
+                        None
                     } else {
                         None
                     }

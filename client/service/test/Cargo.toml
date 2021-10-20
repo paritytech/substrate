@@ -12,6 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+env_logger = "0.9.0"
 hex-literal = "0.3.1"
 tempfile = "3.1.0"
 tokio = "0.1.22"
@@ -27,10 +28,12 @@ sp-externalities = { version = "0.8.0", path = "../../../primitives/externalitie
 sp-trie = { version = "2.0.0", path = "../../../primitives/trie" }
 sp-storage = { version = "2.0.0", path = "../../../primitives/storage" }
 sc-client-db = { version = "0.8.0", default-features = false, path = "../../db" }
+sc-consensus-babe = { version = "0.8.0", default-features = false, path = "../../consensus/babe" }
 futures = { version = "0.3.1", features = ["compat"] }
 sc-service = { version = "0.8.0", default-features = false, features = ["test-helpers"], path = "../../service" }
 sc-network = { version = "0.8.0", path = "../../network" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
+sp-encrypted-tx = { version = "2.0.0", path = "../../../primitives/encrypted-tx" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
@@ -42,6 +45,8 @@ sc-executor = { version = "0.8.0", path = "../../executor" }
 sp-panic-handler = { version = "2.0.0", path = "../../../primitives/panic-handler" }
 parity-scale-codec = "1.3.4"
 sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
+sc-keystore = { version = "2.0.0", path = "../../keystore" }
+ecies = { version = "0.2", default-features = false, features = ["openssl"]}
 
 [dev-dependencies]
 sc-client-db = { version = "0.8.0", default-features = false, path = "../../db", features=["with-kvdb-rocksdb"] }
