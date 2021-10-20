@@ -67,8 +67,8 @@ use libp2p::{
 	mdns::{Mdns, MdnsConfig, MdnsEvent},
 	multiaddr::Protocol,
 	swarm::{
-		protocols_handler::multi::IntoMultiHandler, IntoProtocolsHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters, ProtocolsHandler,
+		protocols_handler::multi::IntoMultiHandler, DialError, IntoProtocolsHandler,
+		NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler,
 	},
 };
 use log::{debug, error, info, trace, warn};
@@ -596,29 +596,23 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		&mut self,
 		peer_id: Option<PeerId>,
 		_: Self::ProtocolsHandler,
-		error: &libp2p::swarm::DialError,
-	) {
-		// FIXME
-	}
-
-	/*
-	fn inject_addr_reach_failure(
-		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn std::error::Error,
+		error: &DialError,
 	) {
 		if let Some(peer_id) = peer_id {
-			if let Some(list) = self.ephemeral_addresses.get_mut(peer_id) {
-				list.retain(|a| a != addr);
+			if let DialError::Transport(errors) = error {
+				if let Some(list) = self.ephemeral_addresses.get_mut(&peer_id) {
+					for (addr, _error) in errors {
+						list.retain(|a| a != addr);
+					}
+				}
 			}
 		}
 
 		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_addr_reach_failure(k, peer_id, addr, error)
+			let handler = k.new_handler();
+			NetworkBehaviour::inject_dial_failure(k, peer_id, handler, error);
 		}
 	}
-	*/
 
 	fn inject_event(
 		&mut self,
