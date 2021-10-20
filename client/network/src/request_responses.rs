@@ -386,9 +386,7 @@ impl RequestResponsesBehaviour {
 		let mut handlers: HashMap<_, _> = self
 			.protocols
 			.iter_mut()
-			.map(|(p, (r, _))| {
-				(p.to_string(), NetworkBehaviour::new_handler(r))
-			})
+			.map(|(p, (r, _))| (p.to_string(), NetworkBehaviour::new_handler(r)))
 			.collect();
 
 		if let Some(h) = handlers.get_mut(&protocol) {
