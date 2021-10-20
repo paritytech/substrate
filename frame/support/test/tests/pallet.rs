@@ -992,7 +992,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 
 		let db_weight = RuntimeDbWeight { read: 0, write: 5 };
 		let weight = frame_support::migrations::migrate_from_pallet_version_to_storage_version::<
-			AllPallets,
+			AllPalletsWithSystem,
 		>(&db_weight);
 
 		// 3 pallets, 2 writes and every write costs 5 weight.
