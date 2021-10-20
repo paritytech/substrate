@@ -120,6 +120,7 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 use sp_std::{
+	convert::TryFrom,
 	marker::PhantomData,
 	ops::{Rem, Sub},
 	prelude::*,
@@ -134,7 +135,7 @@ use frame_support::{
 		StorageVersion, ValidatorRegistration, ValidatorSet,
 	},
 	weights::Weight,
-	Parameter,
+	BoundedVec, Parameter, WeakBoundedVec,
 };
 
 pub use pallet::*;
@@ -224,7 +225,7 @@ impl<
 }
 
 /// A trait for managing creation of new validator set.
-pub trait SessionManager<ValidatorId> {
+pub trait SessionManager<ValidatorId, MaxValidatorsCount> {
 	/// Plan a new session, and optionally provide the new validator set.
 	///
 	/// Even if the validator-set is the same as before, if any underlying economic conditions have
@@ -238,12 +239,14 @@ pub trait SessionManager<ValidatorId> {
 	///
 	/// `new_session(session)` is guaranteed to be called before `end_session(session-1)`. In other
 	/// words, a new session must always be planned before an ongoing one can be finished.
-	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	fn new_session(new_index: SessionIndex) -> Option<BoundedVec<ValidatorId, MaxValidatorsCount>>;
 	/// Same as `new_session`, but it this should only be called at genesis.
 	///
 	/// The session manager might decide to treat this in a different way. Default impl is simply
 	/// using [`new_session`](Self::new_session).
-	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<ValidatorId>> {
+	fn new_session_genesis(
+		new_index: SessionIndex,
+	) -> Option<BoundedVec<ValidatorId, MaxValidatorsCount>> {
 		Self::new_session(new_index)
 	}
 	/// End the session.
@@ -257,8 +260,8 @@ pub trait SessionManager<ValidatorId> {
 	fn start_session(start_index: SessionIndex);
 }
 
-impl<A> SessionManager<A> for () {
-	fn new_session(_: SessionIndex) -> Option<Vec<A>> {
+impl<A, L> SessionManager<A, L> for () {
+	fn new_session(_: SessionIndex) -> Option<BoundedVec<A, L>> {
 		None
 	}
 	fn start_session(_: SessionIndex) {}
@@ -369,6 +372,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -393,16 +397,27 @@ pub mod pallet {
 		type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
 
 		/// Handler for managing new session.
-		type SessionManager: SessionManager<Self::ValidatorId>;
+		type SessionManager: SessionManager<Self::ValidatorId, Self::MaxValidatorsCount>;
 
 		/// Handler when a session has changed.
 		type SessionHandler: SessionHandler<Self::ValidatorId>;
 
 		/// The keys.
-		type Keys: OpaqueKeys + Member + Parameter + Default + MaybeSerializeDeserialize;
+		type Keys: OpaqueKeys
+			+ Member
+			+ Parameter
+			+ Default
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Maximum number of validators.
+		type MaxValidatorsCount: Get<u32>;
+
+		/// Maximum size of the encoding of the validator's keys
+		type MaxKeysEncodingSize: Get<u32>;
 	}
 
 	#[pallet::genesis_config]
@@ -455,7 +470,10 @@ pub mod pallet {
 						"No initial validator provided by `SessionManager`, use \
 						session config keys to generate initial validator set.",
 					);
-					self.keys.iter().map(|x| x.1.clone()).collect()
+					BoundedVec::<_, T::MaxValidatorsCount>::try_from(
+						self.keys.iter().map(|x| x.1.clone()).collect::<Vec<_>>(),
+					)
+					.expect("Number of validators provided for session 0 is too big")
 				});
 			assert!(
 				!initial_validators_0.is_empty(),
@@ -469,14 +487,11 @@ pub mod pallet {
 				"Empty validator set for session 1 in genesis block!"
 			);
 
-			let queued_keys: Vec<_> = initial_validators_1
-				.iter()
-				.cloned()
-				.map(|v| (v.clone(), <Pallet<T>>::load_keys(&v).unwrap_or_default()))
-				.collect();
+			let queued_keys = initial_validators_1
+				.map_collect(|v| (v.clone(), <Pallet<T>>::load_keys(&v).unwrap_or_default()));
 
 			// Tell everyone about the genesis session keys
-			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
+			T::SessionHandler::on_genesis_session::<T::Keys>(&(queued_keys.to_vec()));
 
 			<Validators<T>>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
@@ -488,7 +503,8 @@ pub mod pallet {
 	/// The current set of validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+	pub type Validators<T: Config> =
+		StorageValue<_, BoundedVec<T::ValidatorId, T::MaxValidatorsCount>, ValueQuery>;
 
 	/// Current index of the session.
 	#[pallet::storage]
@@ -504,7 +520,8 @@ pub mod pallet {
 	/// will be used to determine the validator's session keys.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_keys)]
-	pub type QueuedKeys<T: Config> = StorageValue<_, Vec<(T::ValidatorId, T::Keys)>, ValueQuery>;
+	pub type QueuedKeys<T: Config> =
+		StorageValue<_, BoundedVec<(T::ValidatorId, T::Keys), T::MaxValidatorsCount>, ValueQuery>;
 
 	/// Indices of disabled validators.
 	///
@@ -513,7 +530,8 @@ pub mod pallet {
 	/// a new set of identities.
 	#[pallet::storage]
 	#[pallet::getter(fn disabled_validators)]
-	pub type DisabledValidators<T> = StorageValue<_, Vec<u32>, ValueQuery>;
+	pub type DisabledValidators<T: Config> =
+		StorageValue<_, BoundedVec<u32, T::MaxValidatorsCount>, ValueQuery>;
 
 	/// The next session keys for a validator.
 	#[pallet::storage]
@@ -522,8 +540,13 @@ pub mod pallet {
 
 	/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
 	#[pallet::storage]
-	pub type KeyOwner<T: Config> =
-		StorageMap<_, Twox64Concat, (KeyTypeId, Vec<u8>), T::ValidatorId, OptionQuery>;
+	pub type KeyOwner<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		(KeyTypeId, WeakBoundedVec<u8, T::MaxKeysEncodingSize>),
+		T::ValidatorId,
+		OptionQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -631,8 +654,7 @@ impl<T: Config> Pallet<T> {
 
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
-		let validators =
-			session_keys.iter().map(|(validator, _)| validator.clone()).collect::<Vec<_>>();
+		let validators = session_keys.map_collect_ref(|(validator, _)| validator.clone());
 		<Validators<T>>::put(&validators);
 
 		if changed {
@@ -667,7 +689,7 @@ impl<T: Config> Pallet<T> {
 			let mut now_session_keys = session_keys.iter();
 			let mut check_next_changed = |keys: &T::Keys| {
 				if changed {
-					return
+					return;
 				}
 				// since a new validator set always leads to `changed` starting
 				// as true, we can ensure that `now_session_keys` and `next_validators`
@@ -675,18 +697,15 @@ impl<T: Config> Pallet<T> {
 				if let Some(&(_, ref old_keys)) = now_session_keys.next() {
 					if old_keys != keys {
 						changed = true;
-						return
+						return;
 					}
 				}
 			};
-			let queued_amalgamated = next_validators
-				.into_iter()
-				.map(|a| {
-					let k = Self::load_keys(&a).unwrap_or_default();
-					check_next_changed(&k);
-					(a, k)
-				})
-				.collect::<Vec<_>>();
+			let queued_amalgamated = next_validators.map_collect(|a| {
+				let k = Self::load_keys(&a).unwrap_or_default();
+				check_next_changed(&k);
+				(a, k)
+			});
 
 			(queued_amalgamated, changed)
 		};
@@ -704,14 +723,18 @@ impl<T: Config> Pallet<T> {
 	/// Disable the validator of index `i`, returns `false` if the validator was already disabled.
 	pub fn disable_index(i: u32) -> bool {
 		if i >= Validators::<T>::decode_len().unwrap_or(0) as u32 {
-			return false
+			return false;
 		}
 
 		<DisabledValidators<T>>::mutate(|disabled| {
 			if let Err(index) = disabled.binary_search(&i) {
-				disabled.insert(index, i);
+				if disabled.try_insert(index, i).is_err() {
+					// This should never fail
+					log::warn!(target: "runtime::session", "disabling validator index {:?}", i);
+					return false;
+				}
 				T::SessionHandler::on_disabled(i);
-				return true
+				return true;
 			}
 
 			false
@@ -772,12 +795,11 @@ impl<T: Config> Pallet<T> {
 			Some(new_keys)
 		});
 
-		let _ = <QueuedKeys<T>>::translate::<Vec<(T::ValidatorId, Old)>, _>(|k| {
-			k.map(|k| {
-				k.into_iter()
-					.map(|(val, old_keys)| (val.clone(), upgrade(val, old_keys)))
-					.collect::<Vec<_>>()
-			})
+		let _ = <QueuedKeys<T>>::translate::<
+			BoundedVec<(T::ValidatorId, Old), T::MaxValidatorsCount>,
+			_,
+		>(|k| {
+			k.map(|k| k.map_collect(|(val, old_keys)| (val.clone(), upgrade(val, old_keys))))
 		});
 	}
 
@@ -826,7 +848,7 @@ impl<T: Config> Pallet<T> {
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
 				if key == old {
-					continue
+					continue;
 				}
 
 				Self::clear_key_owner(*id, old);
@@ -867,15 +889,27 @@ impl<T: Config> Pallet<T> {
 
 	/// Query the owner of a session key by returning the owner's validator ID.
 	pub fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		<KeyOwner<T>>::get((id, key_data))
+		let key_data_bounded = WeakBoundedVec::<_, T::MaxKeysEncodingSize>::force_from(
+			key_data.to_vec(),
+			Some("frame_session.key_owner"),
+		);
+		<KeyOwner<T>>::get((id, key_data_bounded))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		<KeyOwner<T>>::insert((id, key_data), v)
+		let key_data_bounded = WeakBoundedVec::<_, T::MaxKeysEncodingSize>::force_from(
+			key_data.to_vec(),
+			Some("frame_session.put_key_owner"),
+		);
+		<KeyOwner<T>>::insert((id, key_data_bounded), v)
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		<KeyOwner<T>>::remove((id, key_data));
+		let key_data_bounded = WeakBoundedVec::<_, T::MaxKeysEncodingSize>::force_from(
+			key_data.to_vec(),
+			Some("frame_session.clear_key_owner"),
+		);
+		<KeyOwner<T>>::remove((id, key_data_bounded));
 	}
 }
 
@@ -894,7 +928,7 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		Pallet::<T>::validators()
+		Pallet::<T>::validators().to_vec()
 	}
 }
 

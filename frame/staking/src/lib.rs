@@ -498,7 +498,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 
@@ -636,7 +636,10 @@ where
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
-	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
+	T::SessionManager: pallet_session::SessionManager<
+		<T as frame_system::Config>::AccountId,
+		<T as Config>::MaxValidatorsCount,
+	>,
 	T::ValidatorIdOf: Convert<
 		<T as frame_system::Config>::AccountId,
 		Option<<T as frame_system::Config>::AccountId>,
@@ -647,7 +650,7 @@ where
 	}
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
-		<pallet_session::Pallet<T>>::validators()
+		<pallet_session::Pallet<T>>::validators().to_vec()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {

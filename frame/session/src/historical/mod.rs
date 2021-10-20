@@ -31,7 +31,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	decl_module, decl_storage, print,
 	traits::{ValidatorSet, ValidatorSetWithIdentification},
-	Parameter,
+	BoundedVec, Parameter,
 };
 use sp_runtime::{
 	traits::{Convert, OpaqueKeys},
@@ -94,7 +94,7 @@ impl<T: Config> Module<T> {
 			let up_to = sp_std::cmp::min(up_to, end);
 
 			if up_to < start {
-				return // out of bounds. harmless.
+				return; // out of bounds. harmless.
 			}
 
 			(start..up_to).for_each(<Self as Store>::HistoricalSessions::remove);
@@ -118,7 +118,7 @@ impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		super::Pallet::<T>::validators()
+		super::Pallet::<T>::validators().to_vec()
 	}
 }
 
@@ -129,16 +129,18 @@ impl<T: Config> ValidatorSetWithIdentification<T::AccountId> for Module<T> {
 
 /// Specialization of the crate-level `SessionManager` which returns the set of full identification
 /// when creating a new session.
-pub trait SessionManager<ValidatorId, FullIdentification>:
-	crate::SessionManager<ValidatorId>
+pub trait SessionManager<ValidatorId, FullIdentification, MaxValidatorsCount>:
+	crate::SessionManager<ValidatorId, MaxValidatorsCount>
 {
 	/// If there was a validator set change, its returns the set of new validators along with their
 	/// full identifications.
-	fn new_session(new_index: SessionIndex) -> Option<Vec<(ValidatorId, FullIdentification)>>;
+	fn new_session(
+		new_index: SessionIndex,
+	) -> Option<BoundedVec<(ValidatorId, FullIdentification), MaxValidatorsCount>>;
 	fn new_session_genesis(
 		new_index: SessionIndex,
-	) -> Option<Vec<(ValidatorId, FullIdentification)>> {
-		<Self as SessionManager<_, _>>::new_session(new_index)
+	) -> Option<BoundedVec<(ValidatorId, FullIdentification), MaxValidatorsCount>> {
+		<Self as SessionManager<_, _, _>>::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex);
 	fn end_session(end_index: SessionIndex);
@@ -148,20 +150,27 @@ pub trait SessionManager<ValidatorId, FullIdentification>:
 /// sets the historical trie root of the ending session.
 pub struct NoteHistoricalRoot<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
-impl<T: Config, I: SessionManager<T::ValidatorId, T::FullIdentification>> NoteHistoricalRoot<T, I> {
-	fn do_new_session(new_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::ValidatorId>> {
+impl<
+		T: Config,
+		I: SessionManager<T::ValidatorId, T::FullIdentification, T::MaxValidatorsCount>,
+	> NoteHistoricalRoot<T, I>
+{
+	fn do_new_session(
+		new_index: SessionIndex,
+		is_genesis: bool,
+	) -> Option<BoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (new_index, new_index)).1 = new_index + 1;
 		});
 
 		let new_validators_and_id = if is_genesis {
-			<I as SessionManager<_, _>>::new_session_genesis(new_index)
+			<I as SessionManager<_, _, _>>::new_session_genesis(new_index)
 		} else {
-			<I as SessionManager<_, _>>::new_session(new_index)
+			<I as SessionManager<_, _, _>>::new_session(new_index)
 		};
 		let new_validators_opt = new_validators_and_id
 			.as_ref()
-			.map(|new_validators| new_validators.iter().map(|(v, _id)| v.clone()).collect());
+			.map(|new_validators| new_validators.map_collect_ref(|(v, _id)| v.clone()));
 
 		if let Some(new_validators) = new_validators_and_id {
 			let count = new_validators.len() as ValidatorCount;
@@ -170,7 +179,7 @@ impl<T: Config, I: SessionManager<T::ValidatorId, T::FullIdentification>> NoteHi
 				Err(reason) => {
 					print("Failed to generate historical ancestry-inclusion proof.");
 					print(reason);
-				},
+				}
 			};
 		} else {
 			let previous_index = new_index.saturating_sub(1);
@@ -183,25 +192,30 @@ impl<T: Config, I: SessionManager<T::ValidatorId, T::FullIdentification>> NoteHi
 	}
 }
 
-impl<T: Config, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T, I>
+impl<T: Config, I> crate::SessionManager<T::ValidatorId, T::MaxValidatorsCount>
+	for NoteHistoricalRoot<T, I>
 where
-	I: SessionManager<T::ValidatorId, T::FullIdentification>,
+	I: SessionManager<T::ValidatorId, T::FullIdentification, T::MaxValidatorsCount>,
 {
-	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session(
+		new_index: SessionIndex,
+	) -> Option<BoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
 		Self::do_new_session(new_index, false)
 	}
 
-	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session_genesis(
+		new_index: SessionIndex,
+	) -> Option<BoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
 		Self::do_new_session(new_index, true)
 	}
 
 	fn start_session(start_index: SessionIndex) {
-		<I as SessionManager<_, _>>::start_session(start_index)
+		<I as SessionManager<_, _, _>>::start_session(start_index)
 	}
 
 	fn end_session(end_index: SessionIndex) {
 		onchain::store_session_validator_set_to_offchain::<T>(end_index);
-		<I as SessionManager<_, _>>::end_session(end_index)
+		<I as SessionManager<_, _, _>>::end_session(end_index)
 	}
 }
 
@@ -341,7 +355,7 @@ impl<T: Config, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyT
 					let count = <SessionModule<T>>::validators().len() as ValidatorCount;
 
 					if count != proof.validator_count {
-						return None
+						return None;
 					}
 
 					Some((owner, id))
@@ -351,7 +365,7 @@ impl<T: Config, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyT
 			let (root, count) = <HistoricalSessions<T>>::get(&proof.session)?;
 
 			if count != proof.validator_count {
-				return None
+				return None;
 			}
 
 			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);

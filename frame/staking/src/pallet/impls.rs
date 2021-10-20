@@ -143,7 +143,7 @@ impl<T: Config> Pallet<T> {
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
 		}
 
 		// This is the fraction of the total reward that the validator and the
@@ -235,14 +235,18 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) =>
-				Some(T::Currency::deposit_creating(&dest_account, amount)),
+			RewardDestination::Account(dest_account) => {
+				Some(T::Currency::deposit_creating(&dest_account, amount))
+			}
 			RewardDestination::None => None,
 		}
 	}
 
 	/// Plan a new session potentially trigger a new era.
-	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
+	fn new_session(
+		session_index: SessionIndex,
+		is_genesis: bool,
+	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -264,14 +268,14 @@ impl<T: Config> Pallet<T> {
 				_ => {
 					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
-					return None
-				},
+					return None;
+				}
 			}
 
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
-			if maybe_new_era_validators.is_some() &&
-				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			if maybe_new_era_validators.is_some()
+				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
 			}
@@ -398,7 +402,7 @@ impl<T: Config> Pallet<T> {
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
 		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
-	) -> Vec<T::AccountId> {
+	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
@@ -424,7 +428,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn try_trigger_new_era(
 		start_session_index: SessionIndex,
 		is_genesis: bool,
-	) -> Option<Vec<T::AccountId>> {
+	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		let election_result = if is_genesis {
 			T::GenesisElectionProvider::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
@@ -457,12 +461,12 @@ impl<T: Config> Pallet<T> {
 					// TODO: this should be simplified #8911
 					CurrentEra::<T>::put(0);
 					ErasStartSessionIndex::<T>::insert(&0, &start_session_index);
-				},
+				}
 				_ => (),
 			}
 
 			Self::deposit_event(Event::StakingElectionFailed);
-			return None
+			return None;
 		}
 
 		Self::deposit_event(Event::StakersElected);
@@ -475,7 +479,7 @@ impl<T: Config> Pallet<T> {
 	pub fn store_stakers_info(
 		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
 		new_planned_era: EraIndex,
-	) -> Vec<T::AccountId> {
+	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
 
 		// Populate stakers, exposures, and the snapshot of validator prefs.
@@ -698,7 +702,7 @@ impl<T: Config> Pallet<T> {
 				Some(nominator) => {
 					nominators_seen.saturating_inc();
 					nominator
-				},
+				}
 				None => break,
 			};
 
@@ -876,7 +880,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
-			return Err("Target snapshot too big")
+			return Err("Target snapshot too big");
 		}
 
 		Ok(Self::get_npos_targets())
@@ -1022,13 +1026,17 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 ///
 /// Once the first new_session is planned, all session must start and then end in order, though
 /// some session can lag in between the newest session planned and the latest session started.
-impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
-	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+impl<T: Config> pallet_session::SessionManager<T::AccountId, T::MaxValidatorsCount> for Pallet<T> {
+	fn new_session(
+		new_index: SessionIndex,
+	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		log!(trace, "planning new session {}", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
 		Self::new_session(new_index, false)
 	}
-	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+	fn new_session_genesis(
+		new_index: SessionIndex,
+	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		log!(trace, "planning new session {} at genesis", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
 		Self::new_session(new_index, true)
@@ -1043,12 +1051,18 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>
-	for Pallet<T>
+impl<T: Config>
+	historical::SessionManager<
+		T::AccountId,
+		Exposure<T::AccountId, BalanceOf<T>>,
+		T::MaxValidatorsCount,
+	> for Pallet<T>
 {
 	fn new_session(
 		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+	) -> Option<
+		BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), T::MaxValidatorsCount>,
+	> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
@@ -1065,7 +1079,9 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 	}
 	fn new_session_genesis(
 		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+	) -> Option<
+		BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), T::MaxValidatorsCount>,
+	> {
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
 				let current_era = Self::current_era()
@@ -1117,7 +1133,10 @@ where
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
-	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
+	T::SessionManager: pallet_session::SessionManager<
+		<T as frame_system::Config>::AccountId,
+		<T as Config>::MaxValidatorsCount,
+	>,
 	T::ValidatorIdOf: Convert<
 		<T as frame_system::Config>::AccountId,
 		Option<<T as frame_system::Config>::AccountId>,
@@ -1142,7 +1161,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// This offence need not be re-submitted.
-				return consumed_weight
+				return consumed_weight;
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -1188,7 +1207,7 @@ where
 
 			// Skip if the validator is invulnerable.
 			if invulnerables.contains(stash) {
-				continue
+				continue;
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {

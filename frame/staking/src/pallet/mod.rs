@@ -141,6 +141,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
+		type MaxValidatorsCount: Get<u32>;
+
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
