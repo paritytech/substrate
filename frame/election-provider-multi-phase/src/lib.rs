@@ -236,6 +236,7 @@ use frame_support::{
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
+	BoundedVec, RuntimeDebugNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -289,6 +290,7 @@ pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
 pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider<
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
+	<T as crate::Config>::MaxTargets,
 >>::Error;
 
 /// Configuration for the benchmarks of the pallet.
@@ -305,8 +307,6 @@ pub trait BenchmarkingConfig {
 	const SNAPSHOT_MAXIMUM_VOTERS: u32;
 	/// Maximum number of voters expected. This is used only for memory-benchmarking of miner.
 	const MINER_MAXIMUM_VOTERS: u32;
-	/// Maximum number of targets expected. This is used only for memory-benchmarking.
-	const MAXIMUM_TARGETS: u32;
 }
 
 impl BenchmarkingConfig for () {
@@ -316,13 +316,12 @@ impl BenchmarkingConfig for () {
 	const DESIRED_TARGETS: [u32; 2] = [400, 800];
 	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 10_000;
 	const MINER_MAXIMUM_VOTERS: u32 = 10_000;
-	const MAXIMUM_TARGETS: u32 = 2_000;
 }
 
 /// A fallback implementation that transitions the pallet to the emergency phase.
 pub struct NoFallback<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for NoFallback<T> {
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber, T::MaxTargets> for NoFallback<T> {
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
 
@@ -458,12 +457,15 @@ pub struct ReadySolution<A> {
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
 /// These are stored together because they are often accessed together.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct RoundSnapshot<A> {
+/// `MaxVotes` bounds the number of voters per voter
+/// `MaxTargets` bounds the number of targets
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebugNoBound, Default, TypeInfo)]
+#[scale_info(skip_type_params(MaxVotes, MaxTargets))]
+pub struct RoundSnapshot<A: sp_std::fmt::Debug, MaxVotes: Get<u32>, MaxTargets: Get<u32>> {
 	/// All of the voters.
-	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
+	pub voters: Vec<(A, VoteWeight, BoundedVec<A, MaxVotes>)>,
 	/// All of the targets.
-	pub targets: Vec<A>,
+	pub targets: BoundedVec<A, MaxTargets>,
 }
 
 /// Encodes the length of a solution or a snapshot.
@@ -656,6 +658,9 @@ pub mod pallet {
 		/// Handler for the rewards.
 		type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
+		/// Maximum number of targets for the data provider.
+		type MaxTargets: Get<u32>;
+
 		/// Maximum length (bytes) that the mined solution should consume.
 		///
 		/// The miner will ensure that the total length of the unsigned solution will not exceed
@@ -664,7 +669,11 @@ pub mod pallet {
 		type MinerMaxLength: Get<u32>;
 
 		/// Something that will provide the election data.
-		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+		type DataProvider: ElectionDataProvider<
+			Self::AccountId,
+			Self::BlockNumber,
+			Self::MaxTargets,
+		>;
 
 		/// The solution type.
 		type Solution: codec::Codec
@@ -681,6 +690,7 @@ pub mod pallet {
 		type Fallback: ElectionProvider<
 			Self::AccountId,
 			Self::BlockNumber,
+			Self::MaxTargets,
 			DataProvider = Self::DataProvider,
 		>;
 
@@ -828,7 +838,11 @@ pub mod pallet {
 			// NOTE that this pallet does not really need to enforce this in runtime. The
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
-				<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MaximumVotesPerVoter::get(),
+				<T::DataProvider as ElectionDataProvider<
+					T::AccountId,
+					T::BlockNumber,
+					T::MaxTargets,
+				>>::MaximumVotesPerVoter::get(),
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
 		}
@@ -1145,7 +1159,18 @@ pub mod pallet {
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot)]
-	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId>>;
+	pub type Snapshot<T: Config> = StorageValue<
+		_,
+		RoundSnapshot<
+			T::AccountId,
+			<T::DataProvider as ElectionDataProvider<
+				T::AccountId,
+				T::BlockNumber,
+				T::MaxTargets,
+			>>::MaximumVotesPerVoter,
+			T::MaxTargets,
+		>,
+	>;
 
 	/// Desired number of targets to elect for this round.
 	///
@@ -1260,8 +1285,17 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
-		targets: Vec<T::AccountId>,
-		voters: Vec<crate::unsigned::Voter<T>>,
+		targets: BoundedVec<T::AccountId, T::MaxTargets>,
+		voters: Vec<
+			crate::unsigned::Voter<
+				T,
+				<T::DataProvider as ElectionDataProvider<
+					T::AccountId,
+					T::BlockNumber,
+					T::MaxTargets,
+				>>::MaximumVotesPerVoter,
+			>,
+		>,
 		desired_targets: u32,
 	) {
 		let metadata =
@@ -1291,8 +1325,23 @@ impl<T: Config> Pallet<T> {
 	/// Parts of [`create_snapshot`] that happen outside of this pallet.
 	///
 	/// Extracted for easier weight calculation.
-	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
+	fn create_snapshot_external() -> Result<
+		(
+			BoundedVec<T::AccountId, T::MaxTargets>,
+			Vec<
+				crate::unsigned::Voter<
+					T,
+					<T::DataProvider as ElectionDataProvider<
+						T::AccountId,
+						T::BlockNumber,
+						T::MaxTargets,
+					>>::MaximumVotesPerVoter,
+				>,
+			>,
+			u32,
+		),
+		ElectionError<T>,
+	> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		// for now we have just a single block snapshot.
 		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
@@ -1499,7 +1548,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber, T::MaxTargets> for Pallet<T> {
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 

@@ -18,6 +18,8 @@
 //! Some helper functions/macros for this crate.
 
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
+use frame_election_provider_support::ElectionDataProvider;
+use frame_support::{storage::bounded_btree_map::BoundedBTreeMap, BoundedVec};
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
 #[macro_export]
@@ -30,15 +32,22 @@ macro_rules! log {
 	};
 }
 
+type MaximumVotesPerVoter<T: Config> = <T::DataProvider as ElectionDataProvider<
+	T::AccountId,
+	T::BlockNumber,
+	T::MaxTargets,
+>>::MaximumVotesPerVoter;
+
 /// Generate a btree-map cache of the voters and their indices.
 ///
 /// This can be used to efficiently build index getter closures.
 pub fn generate_voter_cache<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> BTreeMap<T::AccountId, usize> {
-	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
+	snapshot: &Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, MaximumVotesPerVoter<T>>)>,
+) -> BoundedBTreeMap<T::AccountId, usize, MaximumVotesPerVoter<T>> {
+	let mut cache: BoundedBTreeMap<T::AccountId, usize, MaximumVotesPerVoter<T>> =
+		BoundedBTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
-		let _existed = cache.insert(x.clone(), i);
+		let _existed = cache.try_insert(x.clone(), i).expect("Size is MaximumVotesPerVoter");
 		// if a duplicate exists, we only consider the last one. Defensive only, should never
 		// happen.
 		debug_assert!(_existed.is_none());
@@ -148,7 +157,7 @@ pub fn target_index_fn_linear<T: Config>(
 /// Create a function that can map a voter index ([`SolutionVoterIndexOf`]) to the actual voter
 /// account using a linearly indexible snapshot.
 pub fn voter_at_fn<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, MaximumVotesPerVoter<T>>)>,
 ) -> impl Fn(SolutionVoterIndexOf<T>) -> Option<T::AccountId> + '_ {
 	move |i| {
 		<SolutionVoterIndexOf<T> as TryInto<usize>>::try_into(i)
@@ -192,8 +201,12 @@ pub fn stake_of_fn_linear<T: Config>(
 /// The cache need must be derived from the same snapshot. Zero is returned if a voter is
 /// non-existent.
 pub fn stake_of_fn<'a, T: Config>(
-	snapshot: &'a Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-	cache: &'a BTreeMap<T::AccountId, usize>,
+	snapshot: &'a Vec<(
+		T::AccountId,
+		VoteWeight,
+		BoundedVec<T::AccountId, MaximumVotesPerVoter<T>>,
+	)>,
+	cache: &'a BoundedBTreeMap<T::AccountId, usize, MaximumVotesPerVoter<T>>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
 	move |who| {
 		if let Some(index) = cache.get(who) {

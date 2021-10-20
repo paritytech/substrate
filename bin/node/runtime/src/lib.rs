@@ -606,7 +606,6 @@ impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfi
 	const DESIRED_TARGETS: [u32; 2] = [200, 400];
 	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
 	const MINER_MAXIMUM_VOTERS: u32 = 1000;
-	const MAXIMUM_TARGETS: u32 = 300;
 }
 
 /// Maximum number of iterations for balancing that will be executed in the embedded OCW
