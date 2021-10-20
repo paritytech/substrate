@@ -50,20 +50,24 @@
 //! Based on research at <https://w3f-research.readthedocs.io/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, EraIndex, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill,
-	SessionInterface, Store, UnappliedSlash,
+	BalanceOf, Config, EraIndex, Error, Exposure, Get, NegativeImbalanceOf, Pallet, Perbill,
+	SessionInterface, Store, UnappliedSlash, Vec,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, Imbalance, OnUnbalanced},
+	traits::{Currency, Imbalance, OnUnbalanced},
+	CloneNoBound, WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchResult, RuntimeDebug,
 };
-use sp_std::vec::Vec;
+use sp_std::{convert::TryFrom, ops::Deref};
+
+#[cfg(test)]
+use frame_support::pallet_prelude::ConstU32;
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
 /// This is f_1 in the paper.
@@ -88,8 +92,11 @@ impl SlashingSpan {
 }
 
 /// An encoding of all of a nominator's slashing spans.
-#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct SlashingSpans {
+/// `Limit` bounds the size of the prior slashing spans vector.
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(Limit))]
+#[codec(mel_bound(Limit: Get<u32>))]
+pub struct SlashingSpans<Limit: Get<u32>> {
 	// the index of the current slashing span of the nominator. different for
 	// every stash, resets when the account hits free balance 0.
 	span_index: SpanIndex,
@@ -99,10 +106,10 @@ pub struct SlashingSpans {
 	last_nonzero_slash: EraIndex,
 	// all prior slashing spans' start indices, in reverse order (most recent first)
 	// encoded as offsets relative to the slashing span after it.
-	prior: Vec<EraIndex>,
+	prior: WeakBoundedVec<EraIndex, Limit>,
 }
 
-impl SlashingSpans {
+impl<Limit: Get<u32>> SlashingSpans<Limit> {
 	// creates a new record of slashing spans for a stash, starting at the beginning
 	// of the bonding period, relative to now.
 	pub(crate) fn new(window_start: EraIndex) -> Self {
@@ -113,7 +120,7 @@ impl SlashingSpans {
 			// the first slash is applied. setting equal to `window_start` would
 			// put a time limit on nominations.
 			last_nonzero_slash: 0,
-			prior: Vec::new(),
+			prior: Default::default(),
 		}
 	}
 
@@ -127,7 +134,7 @@ impl SlashingSpans {
 		}
 
 		let last_length = next_start - self.last_start;
-		self.prior.insert(0, last_length);
+		self.prior.force_insert(0, last_length, Some("SlashingSpans.prior"));
 		self.last_start = next_start;
 		self.span_index += 1;
 		true
@@ -181,7 +188,7 @@ impl SlashingSpans {
 }
 
 /// A slashing-span record for a particular stash.
-#[derive(Encode, Decode, Default, TypeInfo)]
+#[derive(Encode, Decode, Default, TypeInfo, MaxEncodedLen)]
 pub(crate) struct SpanRecord<Balance> {
 	slashed: Balance,
 	paid_out: Balance,
@@ -196,14 +203,14 @@ impl<Balance> SpanRecord<Balance> {
 }
 
 /// Parameters for performing a slash.
-#[derive(Clone)]
+#[derive(CloneNoBound)]
 pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The stash account being slashed.
 	pub(crate) stash: &'a T::AccountId,
 	/// The proportion of the slash.
 	pub(crate) slash: Perbill,
 	/// The exposure of the stash and all nominators.
-	pub(crate) exposure: &'a Exposure<T::AccountId, BalanceOf<T>>,
+	pub(crate) exposure: &'a Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 	/// The era where the offence occurred.
 	pub(crate) slash_era: EraIndex,
 	/// The first era in the current bonding period.
@@ -223,7 +230,9 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 /// to be set at a higher level, if any.
 pub(crate) fn compute_slash<T: Config>(
 	params: SlashParams<T>,
-) -> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>> {
+) -> Option<
+	UnappliedSlash<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures, T::MaxReportersCount>,
+> {
 	let SlashParams { stash, slash, exposure, slash_era, window_start, now, reward_proportion } =
 		params.clone();
 
@@ -285,14 +294,14 @@ pub(crate) fn compute_slash<T: Config>(
 	// the duration of the era
 	add_offending_validator::<T>(params.stash, true);
 
-	let mut nominators_slashed = Vec::new();
+	let mut nominators_slashed = Default::default();
 	reward_payout += slash_nominators::<T>(params, prior_slash_p, &mut nominators_slashed);
 
 	Some(UnappliedSlash {
 		validator: stash.clone(),
 		own: val_slashed,
 		others: nominators_slashed,
-		reporters: Vec::new(),
+		reporters: Default::default(),
 		payout: reward_payout,
 	})
 }
@@ -337,7 +346,9 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 		match offending.binary_search_by_key(&validator_index_u32, |(index, _)| *index) {
 			// this is a new offending validator
 			Err(index) => {
-				offending.insert(index, (validator_index_u32, disable));
+				offending
+					.try_insert(index, (validator_index_u32, disable))
+					.expect("Cannot be more than MaxValidatorsCount");
 
 				let offending_threshold =
 					T::OffendingValidatorsThreshold::get() * validators.len() as u32;
@@ -369,15 +380,19 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 fn slash_nominators<T: Config>(
 	params: SlashParams<T>,
 	prior_slash_p: Perbill,
-	nominators_slashed: &mut Vec<(T::AccountId, BalanceOf<T>)>,
+	nominators_slashed: &mut WeakBoundedVec<
+		(T::AccountId, BalanceOf<T>),
+		T::MaxIndividualExposures,
+	>,
 ) -> BalanceOf<T> {
 	let SlashParams { stash: _, slash, exposure, slash_era, window_start, now, reward_proportion } =
 		params;
 
 	let mut reward_payout = Zero::zero();
 
-	nominators_slashed.reserve(exposure.others.len());
-	for nominator in &exposure.others {
+	let mut slashed_nominators = Vec::with_capacity(exposure.others.len());
+
+	for nominator in exposure.others.to_vec().into_iter() {
 		let stash = &nominator.who;
 		let mut nom_slashed = Zero::zero();
 
@@ -417,8 +432,13 @@ fn slash_nominators<T: Config>(
 			}
 		}
 
-		nominators_slashed.push((stash.clone(), nom_slashed));
+		slashed_nominators.push((stash.clone(), nom_slashed));
 	}
+
+	*nominators_slashed = WeakBoundedVec::<_, T::MaxIndividualExposures>::try_from(
+		slashed_nominators,
+	)
+	.expect("slashed_nominators has a size of exposure.others which is MaxIndividualExposures");
 
 	reward_payout
 }
@@ -434,7 +454,7 @@ struct InspectingSpans<'a, T: Config + 'a> {
 	dirty: bool,
 	window_start: EraIndex,
 	stash: &'a T::AccountId,
-	spans: SlashingSpans,
+	spans: SlashingSpans<T::MaxPriorSlashingSpans>,
 	paid_out: &'a mut BalanceOf<T>,
 	slash_of: &'a mut BalanceOf<T>,
 	reward_proportion: Perbill,
@@ -628,7 +648,14 @@ pub fn do_slash<T: Config>(
 }
 
 /// Apply a previously-unapplied slash.
-pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>) {
+pub(crate) fn apply_slash<T: Config>(
+	unapplied_slash: UnappliedSlash<
+		T::AccountId,
+		BalanceOf<T>,
+		T::MaxIndividualExposures,
+		T::MaxReportersCount,
+	>,
+) {
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 	let mut reward_payout = unapplied_slash.payout;
 
@@ -639,7 +666,7 @@ pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountI
 		&mut slashed_imbalance,
 	);
 
-	for &(ref nominator, nominator_slash) in &unapplied_slash.others {
+	for &(ref nominator, nominator_slash) in unapplied_slash.others.deref() {
 		do_slash::<T>(&nominator, nominator_slash, &mut reward_payout, &mut slashed_imbalance);
 	}
 
@@ -707,11 +734,11 @@ mod tests {
 
 	#[test]
 	fn single_slashing_span() {
-		let spans = SlashingSpans {
+		let spans = SlashingSpans::<ConstU32<10>> {
 			span_index: 0,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: Vec::new(),
+			prior: Default::default(),
 		};
 
 		assert_eq!(
@@ -726,7 +753,7 @@ mod tests {
 			span_index: 10,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: vec![10, 9, 8, 10],
+			prior: WeakBoundedVec::<_, ConstU32<10>>::try_from(vec![10, 9, 8, 10]).expect("10>3"),
 		};
 
 		assert_eq!(
@@ -747,7 +774,7 @@ mod tests {
 			span_index: 10,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: vec![10, 9, 8, 10],
+			prior: WeakBoundedVec::<_, ConstU32<10>>::try_from(vec![10, 9, 8, 10]).expect("10>3"),
 		};
 
 		assert_eq!(spans.prune(981), Some((6, 8)));
@@ -797,7 +824,7 @@ mod tests {
 			span_index: 10,
 			last_start: 1000,
 			last_nonzero_slash: 0,
-			prior: vec![10, 9, 8, 10],
+			prior: WeakBoundedVec::<_, ConstU32<10>>::try_from(vec![10, 9, 8, 10]).expect("10>4"),
 		};
 		assert_eq!(spans.prune(2000), Some((6, 10)));
 		assert_eq!(
@@ -808,11 +835,11 @@ mod tests {
 
 	#[test]
 	fn ending_span() {
-		let mut spans = SlashingSpans {
+		let mut spans = SlashingSpans::<ConstU32<10>> {
 			span_index: 1,
 			last_start: 10,
 			last_nonzero_slash: 0,
-			prior: Vec::new(),
+			prior: Default::default(),
 		};
 
 		assert!(spans.end_span(10));

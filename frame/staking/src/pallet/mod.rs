@@ -25,6 +25,7 @@ use frame_support::{
 		LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
+	BoundedVec, WeakBoundedVec,
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
@@ -32,7 +33,11 @@ use sp_runtime::{
 	DispatchError, Perbill, Percent,
 };
 use sp_staking::SessionIndex;
-use sp_std::{convert::From, prelude::*, result};
+use sp_std::{
+	convert::{From, TryFrom},
+	prelude::*,
+	result,
+};
 
 mod impls;
 
@@ -45,7 +50,6 @@ use crate::{
 	ValidatorPrefs,
 };
 
-pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
@@ -54,6 +58,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -90,7 +95,7 @@ pub mod pallet {
 		>;
 
 		/// Maximum number of nominations per nominator.
-		const MAX_NOMINATIONS: u32;
+		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -136,10 +141,39 @@ pub mod pallet {
 
 		/// The maximum number of nominators rewarded for each validator.
 		///
-		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can
+		/// For each validator only the `$MaxRewardableIndividualExposures` biggest stakers can
 		/// claim their reward. This used to limit the i/o cost for the nominator payout.
 		#[pallet::constant]
-		type MaxNominatorRewardedPerValidator: Get<u32>;
+		type MaxRewardableIndividualExposures: Get<u32>;
+
+		/// The maximum number of exposure of a certain validator at a given era.
+		type MaxIndividualExposures: Get<u32>;
+
+		/// The maximum number of unapplied slashes to be stored in `UnappliedSlashes`.
+		type MaxUnappliedSlashes: Get<u32>;
+
+		/// The maximum number of invulnerables, we expect no more than four invulnerables and
+		/// restricted to testnets.
+		type MaxInvulnerablesCount: Get<u32>;
+
+		/// Maximum number of eras for which the stakers behind a validator have claimed rewards.
+		/// This also corresponds to maximum value that `HistoryDepth` can take.
+		type MaxHistoryDepth: Get<u32>;
+
+		/// Maximum number of validators.
+		type MaxValidatorsCount: Get<u32>;
+
+		/// Maximum number of reporters for slashing.
+		type MaxReportersCount: Get<u32>;
+
+		/// Maximum number of slashing spans that is stored.
+		type MaxPriorSlashingSpans: Get<u32>;
+
+		/// Note that there is a limitation to the number of fund-chunks that can be scheduled to be
+		/// unlocked in the future via [`unbond`](Call::unbond). In case this maximum
+		/// (`MaxUnlockingChunks`) is reached, the bonded account _must_ first wait until a
+		/// successful call to `withdraw_unbonded` to remove some of the chunks.
+		type MaxUnlockingChunks: Get<u32>;
 
 		type MaxValidatorsCount: Get<u32>;
 
@@ -161,7 +195,7 @@ pub mod pallet {
 		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
 		#[allow(non_snake_case)]
 		fn MaxNominations() -> u32 {
-			T::MAX_NOMINATIONS
+			T::MaxNominations::get()
 		}
 	}
 
@@ -191,12 +225,13 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_validator_count)]
 	pub type MinimumValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
-	/// easy to initialize and the performance hit is minimal (we expect no more than four
-	/// invulnerables) and restricted to testnets.
+	/// Any validators that may never be slashed or forcibly kicked. It's a `BoundedVec`
+	/// since they're easy to initialize and are bounded in size, and the performance hit
+	/// is minimal (we expect no more than four invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
-	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	pub type Invulnerables<T: Config> =
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxInvulnerablesCount>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
 	#[pallet::storage]
@@ -214,8 +249,12 @@ pub mod pallet {
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
-	pub type Ledger<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T::AccountId, BalanceOf<T>>>;
+	pub type Ledger<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks, T::MaxHistoryDepth>,
+	>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	#[pallet::storage]
@@ -235,25 +274,19 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CounterForValidators<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// The maximum validator count before we stop allowing new validators to join.
-	///
-	/// When this value is not set, no limits are enforced.
-	#[pallet::storage]
-	pub type MaxValidatorsCount<T> = StorageValue<_, u32, OptionQuery>;
-
 	/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 	///
 	/// When updating this storage item, you must also update the `CounterForNominators`.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
+		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId, T::MaxNominations>>;
 
 	/// A tracker to keep count of the number of items in the `Nominators` map.
 	#[pallet::storage]
 	pub type CounterForNominators<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// The maximum nominator count before we stop allowing new validators to join.
+	/// The maximum nominator count before we stop allowing new nominators to join.
 	///
 	/// When this value is not set, no limits are enforced.
 	#[pallet::storage]
@@ -297,14 +330,14 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 		ValueQuery,
 	>;
 
 	/// Clipped Exposure of validator at era.
 	///
 	/// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
-	/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+	/// `T::MaxRewardableIndividualExposures` biggest stakers.
 	/// (Note: the field `total` and `own` of the exposure remains unchanged).
 	/// This is used to limit the i/o cost for the nominator payout.
 	///
@@ -320,7 +353,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxRewardableIndividualExposures>,
 		ValueQuery,
 	>;
 
@@ -353,8 +386,13 @@ pub mod pallet {
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_reward_points)]
-	pub type ErasRewardPoints<T: Config> =
-		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
+	pub type ErasRewardPoints<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		EraIndex,
+		EraRewardPoints<T::AccountId, T::MaxValidatorsCount>,
+		ValueQuery,
+	>;
 
 	/// The total amount staked for the last `HISTORY_DEPTH` eras.
 	/// If total hasn't been set or has been removed then 0 stake is returned.
@@ -387,7 +425,15 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		EraIndex,
-		Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>,
+		WeakBoundedVec<
+			UnappliedSlash<
+				T::AccountId,
+				BalanceOf<T>,
+				T::MaxIndividualExposures,
+				T::MaxReportersCount,
+			>,
+			T::MaxUnappliedSlashes,
+		>,
 		ValueQuery,
 	>;
 
@@ -397,7 +443,7 @@ pub mod pallet {
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
 	pub(crate) type BondedEras<T: Config> =
-		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
+		StorageValue<_, WeakBoundedVec<(EraIndex, SessionIndex), T::BondingDuration>, ValueQuery>;
 
 	/// All slashing events on validators, mapped by era to the highest slash proportion
 	/// and slash value of the era.
@@ -418,8 +464,12 @@ pub mod pallet {
 
 	/// Slashing spans for stash accounts.
 	#[pallet::storage]
-	pub(crate) type SlashingSpans<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
+	pub(crate) type SlashingSpans<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		slashing::SlashingSpans<T::MaxPriorSlashingSpans>,
+	>;
 
 	/// Records information about the maximum slash of a stash within a slashing span,
 	/// as well as how much reward has been paid out.
@@ -454,7 +504,8 @@ pub mod pallet {
 	/// the era ends.
 	#[pallet::storage]
 	#[pallet::getter(fn offending_validators)]
-	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
+	pub type OffendingValidators<T: Config> =
+		StorageValue<_, BoundedVec<(u32, bool), T::MaxValidatorsCount>, ValueQuery>;
 
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
@@ -505,16 +556,27 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			assert!(
+				self.history_depth < T::MaxHistoryDepth::get(),
+				"history_depth too big, a runtime adjustment may be needed."
+			);
+
 			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
-			Invulnerables::<T>::put(&self.invulnerables);
 			ForceEra::<T>::put(self.force_era);
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
 			StorageVersion::<T>::put(Releases::V7_0_0);
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
+
+			let invulnerables =
+				BoundedVec::<_, T::MaxInvulnerablesCount>::try_from(self.invulnerables.clone())
+					.expect(
+					"Too many invulnerables passed, a runtime parameters adjustment may be needed",
+				);
+			Invulnerables::<T>::put(&invulnerables);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
 				log!(
@@ -644,6 +706,10 @@ pub mod pallet {
 		/// There are too many validators in the system. Governance needs to adjust the staking
 		/// settings to keep things safe for the runtime.
 		TooManyValidators,
+		/// Too many invulnerables are passed, a runtime configuration adjustment may be needed.
+		TooManyInvulnerables,
+		/// Too many Rewards Eras are passed, a runtime configuration adjustment may be needed.
+		TooManyRewardsEras,
 	}
 
 	#[pallet::hooks]
@@ -755,12 +821,17 @@ pub mod pallet {
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded(stash.clone(), value));
+
+			let claimed_rewards = WeakBoundedVec::<_, T::MaxHistoryDepth>::force_from(
+				(last_reward_era..current_era).collect(),
+				Some("StakingLedger.claimed_rewards"),
+			);
 			let item = StakingLedger {
 				stash,
 				total: value,
 				active: value,
-				unlocking: vec![],
-				claimed_rewards: (last_reward_era..current_era).collect(),
+				unlocking: BoundedVec::<_, T::MaxUnlockingChunks>::default(),
+				claimed_rewards,
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
@@ -824,7 +895,7 @@ pub mod pallet {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
-		/// No more than a limited number of unlocking chunks (see `MAX_UNLOCKING_CHUNKS`)
+		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
@@ -841,7 +912,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS, Error::<T>::NoMoreChunks,);
 
 			let mut value = value.min(ledger.active);
 
@@ -868,7 +938,10 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				ledger.unlocking.push(UnlockChunk { value, era });
+				ledger
+					.unlocking
+					.try_push(UnlockChunk { value, era })
+					.map_err(|_| Error::<T>::NoMoreChunks)?;
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 
@@ -957,12 +1030,10 @@ pub mod pallet {
 				// If this error is reached, we need to adjust the `MinValidatorBond` and start
 				// calling `chill_other`. Until then, we explicitly block new validators to protect
 				// the runtime.
-				if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
-					ensure!(
-						CounterForValidators::<T>::get() < max_validators,
-						Error::<T>::TooManyValidators
-					);
-				}
+				ensure!(
+					CounterForValidators::<T>::get() < T::MaxValidatorsCount::get(),
+					Error::<T>::TooManyValidators
+				);
 			}
 
 			Self::do_remove_nominator(stash);
@@ -978,7 +1049,7 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
-		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
+		/// which is capped at CompactAssignments::LIMIT (T::MaxNominations).
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
@@ -1006,9 +1077,8 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
 
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.to_vec());
 
 			let targets = targets
 				.into_iter()
@@ -1023,6 +1093,9 @@ pub mod pallet {
 					})
 				})
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
+
+			let targets = BoundedVec::<_, T::MaxNominations>::try_from(targets)
+				.map_err(|_| Error::<T>::TooManyTargets)?;
 
 			let nominations = Nominations {
 				targets,
@@ -1227,6 +1300,8 @@ pub mod pallet {
 			invulnerables: Vec<T::AccountId>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			let invulnerables = BoundedVec::<_, T::MaxInvulnerablesCount>::try_from(invulnerables)
+				.map_err(|_| Error::<T>::TooManyInvulnerables)?;
 			<Invulnerables<T>>::put(invulnerables);
 			Ok(())
 		}
@@ -1318,14 +1393,14 @@ pub mod pallet {
 		/// Pay out all the stakers behind a single validator for a single era.
 		///
 		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
-		///   `T::MaxNominatorRewardedPerValidator`, will also receive their rewards.
+		///   `T::MaxRewardableIndividualExposures`, will also receive their rewards.
 		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
 		///
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
 		/// # <weight>
-		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
+		/// - Time complexity: at most O(MaxRewardableIndividualExposures).
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
@@ -1337,7 +1412,7 @@ pub mod pallet {
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(
-			T::MaxNominatorRewardedPerValidator::get()
+			T::MaxRewardableIndividualExposures::get()
 		))]
 		pub fn payout_stakers(
 			origin: OriginFor<T>,
@@ -1354,10 +1429,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - Time complexity: O(L), where L is unlocking chunks
-		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Bounded by `MaxUnlockingChunks`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS as u32))]
+		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get()))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
@@ -1414,6 +1489,10 @@ pub mod pallet {
 			#[pallet::compact] _era_items_deleted: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			ensure!(
+				new_history_depth < T::MaxHistoryDepth::get(),
+				Error::<T>::IncorrectHistoryDepth
+			);
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::<T>::mutate(|history_depth| {
 					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);
@@ -1517,14 +1596,12 @@ pub mod pallet {
 			min_nominator_bond: BalanceOf<T>,
 			min_validator_bond: BalanceOf<T>,
 			max_nominator_count: Option<u32>,
-			max_validator_count: Option<u32>,
 			threshold: Option<Percent>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			MinNominatorBond::<T>::set(min_nominator_bond);
 			MinValidatorBond::<T>::set(min_validator_bond);
 			MaxNominatorsCount::<T>::set(max_nominator_count);
-			MaxValidatorsCount::<T>::set(max_validator_count);
 			ChillThreshold::<T>::set(threshold);
 			Ok(())
 		}
@@ -1542,8 +1619,8 @@ pub mod pallet {
 		/// must be met:
 		/// * A `ChillThreshold` must be set and checked which defines how close to the max
 		///   nominators or validators we must reach before users can start chilling one-another.
-		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
-		///   how close we are to the threshold.
+		/// * A `MaxNominatorCount` must be set which is used to determine how close we are to the
+		///   threshold.
 		/// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
 		///   if this is a person that should be chilled because they have not met the threshold
 		///   bond required.
@@ -1560,8 +1637,7 @@ pub mod pallet {
 			// In order for one user to chill another user, the following conditions must be met:
 			// * A `ChillThreshold` is set which defines how close to the max nominators or
 			//   validators we must reach before users can start chilling one-another.
-			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
-			//   we are to the threshold.
+			// * A `MaxNominatorCount` which is used to determine how close we are to the threshold.
 			// * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
 			//   determine this is a person that should be chilled because they have not met the
 			//   threshold bond required.
@@ -1579,8 +1655,7 @@ pub mod pallet {
 					);
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&stash) {
-					let max_validator_count =
-						MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+					let max_validator_count = T::MaxValidatorsCount::get();
 					let current_validator_count = CounterForValidators::<T>::get();
 					ensure!(
 						threshold * max_validator_count < current_validator_count,

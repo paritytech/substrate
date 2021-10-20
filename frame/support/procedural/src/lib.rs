@@ -26,6 +26,7 @@ mod debug_no_bound;
 mod default_no_bound;
 mod dummy_part_checker;
 mod key_prefix;
+mod ord_no_bound;
 mod pallet;
 mod partial_eq_no_bound;
 mod storage;
@@ -433,6 +434,12 @@ pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 	{
 		debug_no_bound::derive_debug_no_bound(input)
 	}
+}
+
+/// Derive [`Ord`] but do not bound any generic. Docs are at `frame_support::OrdNoBound`.
+#[proc_macro_derive(OrdNoBound)]
+pub fn derive_ord_no_bound(input: TokenStream) -> TokenStream {
+	ord_no_bound::derive_ord_no_bound(input)
 }
 
 /// Derive [`PartialEq`] but do not bound any generic. Docs are at

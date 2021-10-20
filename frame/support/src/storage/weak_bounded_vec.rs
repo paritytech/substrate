@@ -22,12 +22,12 @@ use crate::{
 	storage::{StorageDecodeLength, StorageTryAppend},
 	traits::Get,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{alloc::vec::Drain, Decode, Encode, MaxEncodedLen};
 use core::{
-	ops::{Deref, Index, IndexMut},
+	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
+use sp_std::{cmp::Ordering, convert::TryFrom, marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///
@@ -76,6 +76,23 @@ impl<T, S> WeakBoundedVec<T, S> {
 		self.0.remove(index)
 	}
 
+	/// Exactly the same semantics as [`Vec::drain`].
+	pub fn drain<R>(&mut self, range: R) -> Drain<'_, T>
+	where
+		R: RangeBounds<usize>,
+	{
+		self.0.drain(range)
+	}
+
+	/// Exactly the same semantics as [`Vec::truncate`].
+	///
+	/// # Panics
+	///
+	/// Panics if `index` is out of bounds.
+	pub fn truncate(&mut self, index: usize) {
+		self.0.truncate(index)
+	}
+
 	/// Exactly the same semantics as [`Vec::swap_remove`].
 	///
 	/// # Panics
@@ -105,10 +122,7 @@ impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
 		S::get() as usize
 	}
 
-	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
-	/// respected. The additional scope can be used to indicate where a potential overflow is
-	/// happening.
-	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
+	fn check_bound_and_log(t: &Vec<T>, scope: Option<&'static str>) {
 		if t.len() > Self::bound() {
 			log::warn!(
 				target: crate::LOG_TARGET,
@@ -116,8 +130,35 @@ impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
 				scope.unwrap_or("UNKNOWN"),
 			);
 		}
+	}
+
+	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
+	/// respected. The additional scope can be used to indicate where a potential overflow is
+	/// happening.
+	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
+		Self::check_bound_and_log(&t, scope);
 
 		Self::unchecked_from(t)
+	}
+
+	/// Exactly the same semantics as [`Vec::push`], this function unlike `try_push`
+	/// does no check, but only logs warnings if the bound is not being respected.
+	/// The additional scope can be used to indicate where a potential overflow is
+	/// happening.
+	pub fn force_push(&mut self, element: T, scope: Option<&'static str>) {
+		Self::check_bound_and_log(self, scope);
+
+		self.0.push(element);
+	}
+
+	/// Exactly the same semantics as [`Vec::insert`], this function unlike `try_insert`
+	/// does no check, but only logs warnings if the bound is not being respected.
+	/// The additional scope can be used to indicate where a potential overflow is
+	/// happening.
+	pub fn force_insert(&mut self, index: usize, element: T, scope: Option<&'static str>) {
+		Self::check_bound_and_log(self, scope);
+
+		self.0.insert(index, element);
 	}
 
 	/// Consumes self and mutates self via the given `mutate` function.
@@ -267,6 +308,18 @@ impl<T, S> codec::DecodeLength for WeakBoundedVec<T, S> {
 		// `WeakBoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
 		// `Compact` form, and same implementation as `Vec<T>` can be used.
 		<Vec<T> as codec::DecodeLength>::len(self_encoded)
+	}
+}
+
+impl<T: PartialOrd, S> PartialOrd for WeakBoundedVec<T, S> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		PartialOrd::partial_cmp(&self.0, &other.0)
+	}
+}
+
+impl<T: Ord, S> Ord for WeakBoundedVec<T, S> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(&self.0, &other.0)
 	}
 }
 

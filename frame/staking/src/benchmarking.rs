@@ -32,7 +32,7 @@ use sp_runtime::{
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub use frame_benchmarking::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
@@ -42,7 +42,7 @@ use sp_runtime::traits::{Bounded, One};
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
-const MAX_VALIDATORS: u32 = 1000;
+const MAX_VALIDATORS: u32 = 100;
 const MAX_NOMINATORS: u32 = 1000;
 const MAX_SLASHES: u32 = 1000;
 
@@ -116,10 +116,12 @@ pub fn create_validator_with_nominators<T: Config>(
 	assert_ne!(CounterForNominators::<T>::get(), 0);
 
 	// Give Era Points
-	let reward = EraRewardPoints::<T::AccountId> {
-		total: points_total,
-		individual: points_individual.into_iter().collect(),
-	};
+	let individual = BoundedBTreeMap::<_, _, T::MaxValidatorsCount>::try_from(
+		points_individual.into_iter().collect::<BTreeMap<_, _>>(),
+	)
+	.map_err(|_| "Something weird, this means T::MaxValidatorsCount is zero")?;
+	let reward =
+		EraRewardPoints::<T::AccountId, T::MaxValidatorsCount> { total: points_total, individual };
 
 	let current_era = CurrentEra::<T>::get().unwrap();
 	ErasRewardPoints::<T>::insert(current_era, reward);
@@ -355,17 +357,17 @@ benchmarks! {
 	kick {
 		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
 		// we'll assume that `k` is under 128 for the purposes of determining the slope.
-		// each nominator should have `T::MAX_NOMINATIONS` validators nominated, and our validator
+		// each nominator should have `T::MaxNominations` validators nominated, and our validator
 		// should be somewhere in there.
 		let k in 1 .. 128;
 
-		// these are the other validators; there are `T::MAX_NOMINATIONS - 1` of them, so
-		// there are a total of `T::MAX_NOMINATIONS` validators in the system.
-		let rest_of_validators = create_validators_with_seed::<T>(T::MAX_NOMINATIONS - 1, 100, 415)?;
+		// these are the other validators; there are `T::MaxNominations - 1` of them, so
+		// there are a total of `T::MaxNominations` validators in the system.
+		let rest_of_validators = create_validators_with_seed::<T>(T::MaxNominations::get() - 1, 100, 415)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
-			T::MAX_NOMINATIONS - 1,
+			T::MaxNominations::get() - 1,
 			100,
 			Default::default(),
 		)?;
@@ -380,7 +382,7 @@ benchmarks! {
 		for i in 0 .. k {
 			// create a nominator stash.
 			let (n_stash, n_controller) = create_stash_controller::<T>(
-				T::MAX_NOMINATIONS + i,
+				T::MaxNominations::get() + i,
 				100,
 				Default::default(),
 			)?;
@@ -415,9 +417,9 @@ benchmarks! {
 		}
 	}
 
-	// Worst case scenario, T::MAX_NOMINATIONS
+	// Worst case scenario, T::MaxNominations
 	nominate {
-		let n in 1 .. T::MAX_NOMINATIONS;
+		let n in 1 .. T::MaxNominations::get();
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -428,7 +430,7 @@ benchmarks! {
 		// we are just doing an insert into the origin position.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
-			SEED + T::MAX_NOMINATIONS + 1, // make sure the account does not conflict with others
+			SEED + T::MaxNominations::get() + 1, // make sure the account does not conflict with others
 			origin_weight,
 			Default::default(),
 		).unwrap();
@@ -537,8 +539,11 @@ benchmarks! {
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
 		for _ in 0 .. MAX_SLASHES {
-			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default());
+			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures,
+				T::MaxReportersCount>::default());
 		}
+		let unapplied_slashes = WeakBoundedVec::<_, T::MaxUnappliedSlashes>::try_from(unapplied_slashes)
+			.expect("MAX_SLASHES should be <= MaxUnappliedSlashes, runtime benchmarks need adjustment");
 		UnappliedSlashes::<T>::insert(era, &unapplied_slashes);
 
 		let slash_indices: Vec<u32> = (0 .. s).collect();
@@ -548,10 +553,10 @@ benchmarks! {
 	}
 
 	payout_stakers_dead_controller {
-		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let n in 1 .. T::MaxRewardableIndividualExposures::get() as u32;
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
-			T::MaxNominatorRewardedPerValidator::get() as u32,
+			T::MaxRewardableIndividualExposures::get() as u32,
 			true,
 			RewardDestination::Controller,
 		)?;
@@ -581,10 +586,10 @@ benchmarks! {
 	}
 
 	payout_stakers_alive_staked {
-		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let n in 1 .. T::MaxRewardableIndividualExposures::get() as u32;
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
-			T::MaxNominatorRewardedPerValidator::get() as u32,
+			T::MaxRewardableIndividualExposures::get() as u32,
 			false,
 			RewardDestination::Staked,
 		)?;
@@ -617,7 +622,7 @@ benchmarks! {
 	}
 
 	rebond {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. <T as Config>::MaxUnlockingChunks::get() as u32;
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -651,7 +656,8 @@ benchmarks! {
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone())
+				.expect("Size is smaller than MaxUnlockingChunks, qed");
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
@@ -669,11 +675,11 @@ benchmarks! {
 		HistoryDepth::<T>::put(e);
 		CurrentEra::<T>::put(e);
 		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::default());
+			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::default());
 			<ErasValidatorPrefs<T>>::insert(i, T::AccountId::default(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
-			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
+			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::default());
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
 			ErasStartSessionIndex::<T>::insert(i, i);
 		}
@@ -715,7 +721,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MAX_NOMINATIONS as usize,
+			<T as Config>::MaxNominations::get() as usize,
 			false,
 			None,
 		)?;
@@ -733,7 +739,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MAX_NOMINATIONS as usize,
+			<T as Config>::MaxNominations::get() as usize,
 			false,
 			None,
 		)?;
@@ -753,9 +759,13 @@ benchmarks! {
 		}
 
 		// Give Era Points
-		let reward = EraRewardPoints::<T::AccountId> {
+		let individual = BoundedBTreeMap::<_, _, T::MaxValidatorsCount>::try_from(
+			points_individual.into_iter().collect::<BTreeMap<_, _>>(),
+		)
+		.map_err(|_| "Too many validators, some runtime benchmarks may need adjustment")?;
+		let reward = EraRewardPoints {
 			total: points_total,
-			individual: points_individual.into_iter().collect(),
+			individual,
 		};
 
 		ErasRewardPoints::<T>::insert(current_era, reward);
@@ -779,7 +789,7 @@ benchmarks! {
 
 	#[extra]
 	do_slash {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. <T as Config>::MaxUnlockingChunks::get() as u32;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -787,7 +797,8 @@ benchmarks! {
 			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone())
+				.expect("Size is smaller than MaxUnlockingChunks, qed");
 		}
 		Ledger::<T>::insert(controller, staking_ledger);
 		let slash_amount = T::Currency::minimum_balance() * 10u32.into();
@@ -813,7 +824,7 @@ benchmarks! {
 		let s in 1 .. 20;
 
 		let validators = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MAX_NOMINATIONS as usize, false, None
+			v, n, T::MaxNominations::get() as usize, false, None
 		)?
 		.into_iter()
 		.map(|v| T::Lookup::lookup(v).unwrap())
@@ -836,7 +847,7 @@ benchmarks! {
 		let n = MAX_NOMINATORS;
 
 		let _ = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MAX_NOMINATIONS as usize, false, None
+			v, n, T::MaxNominations::get() as usize, false, None
 		)?;
 	}: {
 		let targets = <Staking<T>>::get_npos_targets();
@@ -850,13 +861,11 @@ benchmarks! {
 		BalanceOf::<T>::max_value(),
 		BalanceOf::<T>::max_value(),
 		Some(u32::MAX),
-		Some(u32::MAX),
 		Some(Percent::max_value())
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
-		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
 	}
 
@@ -877,7 +886,6 @@ benchmarks! {
 			RawOrigin::Root.into(),
 			BalanceOf::<T>::max_value(),
 			BalanceOf::<T>::max_value(),
-			Some(0),
 			Some(0),
 			Some(Percent::from_percent(0))
 		)?;
@@ -911,7 +919,7 @@ mod tests {
 			create_validators_with_nominators_for_era::<Test>(
 				v,
 				n,
-				<Test as Config>::MAX_NOMINATIONS as usize,
+				<Test as Config>::MaxNominations::get() as usize,
 				false,
 				None,
 			)
@@ -935,7 +943,7 @@ mod tests {
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxRewardableIndividualExposures::get() as u32,
 				false,
 				RewardDestination::Staked,
 			)
@@ -960,7 +968,7 @@ mod tests {
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxRewardableIndividualExposures::get() as u32,
 				false,
 				RewardDestination::Staked,
 			)

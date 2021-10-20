@@ -99,7 +99,7 @@
 //!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
-//!         const MAXIMUM_VOTES_PER_VOTER: u32 = 1;
+//!         type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<1>;
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
@@ -180,7 +180,7 @@ pub mod data_provider {
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// Maximum number of votes per voter that this data provider is providing.
-	const MAXIMUM_VOTES_PER_VOTER: u32;
+	type MaximumVotesPerVoter: Get<u32>;
 
 	/// All possible targets for the election, i.e. the candidates.
 	///
@@ -249,7 +249,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
+	type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<0>;
 	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}

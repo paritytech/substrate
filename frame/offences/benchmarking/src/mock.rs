@@ -89,7 +89,7 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
+	type FullIdentification = pallet_staking::Exposure<AccountId, Balance, MaxIndividualExposures>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
 
@@ -144,10 +144,19 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxRewardableIndividualExposures: u32 = 64;
+	pub const MaxIndividualExposures: u32 = 64;
 	pub const MaxKeys: u32 = 10_000;
-	  pub const MaxPeerInHeartbeats: u32 = 10_000;
-	  pub const MaxPeerDataEncodingSize: u32 = 1_000;
+	pub const MaxPeerInHeartbeats: u32 = 10_000;
+	pub const MaxPeerDataEncodingSize: u32 = 1_000;
+	pub const MaxNominations: u32 = 16;
+	pub const MaxUnappliedSlashes: u32 = 1_000;
+	pub const MaxInvulnerablesCount: u32 = 10;
+	pub const MaxHistoryDepth: u32 = 10_000;
+	pub const MaxReportersCount: u32 = 1_000;
+	pub const MaxPriorSlashingSpans: u32 = 1_000;
+	pub const MaxValidatorsCount: u32 = 4_000;
+	pub const MaxUnlockingChunks: u32 = 32;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -158,7 +167,6 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -173,7 +181,16 @@ impl pallet_staking::Config for Test {
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxRewardableIndividualExposures = MaxRewardableIndividualExposures;
+	type MaxIndividualExposures = MaxIndividualExposures;
+	type MaxNominations = MaxNominations;
+	type MaxUnappliedSlashes = MaxUnappliedSlashes;
+	type MaxInvulnerablesCount = MaxInvulnerablesCount;
+	type MaxHistoryDepth = MaxHistoryDepth;
+	type MaxReportersCount = MaxReportersCount;
+	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;

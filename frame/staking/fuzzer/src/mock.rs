@@ -146,7 +146,7 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxRewardableIndividualExposures: u32 = 64;
 	pub const MaxIterations: u32 = 20;
 }
 
@@ -194,7 +194,7 @@ impl pallet_staking::Config for Test {
 	type Call = Call;
 	type MaxIterations = MaxIterations;
 	type MinSolutionScoreBump = ();
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxRewardableIndividualExposures = MaxRewardableIndividualExposures;
 	type UnsignedPriority = ();
 	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();

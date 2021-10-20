@@ -28,6 +28,7 @@ use frame_support::{
 		OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
+	WeakBoundedVec,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_session::historical;
@@ -39,7 +40,7 @@ use sp_staking::{
 	offence::{OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, convert::TryFrom, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
@@ -117,7 +118,10 @@ impl<T: Config> Pallet<T> {
 		match ledger.claimed_rewards.binary_search(&era) {
 			Ok(_) => Err(Error::<T>::AlreadyClaimed
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
-			Err(pos) => ledger.claimed_rewards.insert(pos, era),
+			Err(pos) => ledger
+				.claimed_rewards
+				.try_insert(pos, era)
+				.map_err(|_| Error::<T>::TooManyRewardsEras)?,
 		}
 
 		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
@@ -194,7 +198,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
+		debug_assert!(nominator_payout_count <= T::MaxRewardableIndividualExposures::get());
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
@@ -203,7 +207,12 @@ impl<T: Config> Pallet<T> {
 	/// This will also update the stash lock.
 	pub(crate) fn update_ledger(
 		controller: &T::AccountId,
-		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
+		ledger: &StakingLedger<
+			T::AccountId,
+			BalanceOf<T>,
+			T::MaxUnlockingChunks,
+			T::MaxHistoryDepth,
+		>,
 	) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
@@ -346,7 +355,7 @@ impl<T: Config> Pallet<T> {
 		let bonding_duration = T::BondingDuration::get();
 
 		BondedEras::<T>::mutate(|bonded| {
-			bonded.push((active_era, start_session));
+			bonded.force_push((active_era, start_session), None);
 
 			if active_era > bonding_duration {
 				let first_kept = active_era - bonding_duration;
@@ -401,7 +410,10 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: Vec<(
+			T::AccountId,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
+		)>,
 	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
@@ -477,7 +489,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: Vec<(
+			T::AccountId,
+			Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
+		)>,
 		new_planned_era: EraIndex,
 	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
@@ -488,12 +503,21 @@ impl<T: Config> Pallet<T> {
 			total_stake = total_stake.saturating_add(exposure.total);
 			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
-			let mut exposure_clipped = exposure;
-			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
-			if exposure_clipped.others.len() > clipped_max_len {
-				exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
-				exposure_clipped.others.truncate(clipped_max_len);
+			let mut others = exposure.others.to_vec();
+			let clipped_max_len = T::MaxRewardableIndividualExposures::get() as usize;
+			if others.len() > clipped_max_len {
+				others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
+				others.truncate(clipped_max_len);
 			}
+
+			let others = WeakBoundedVec::<_, T::MaxRewardableIndividualExposures>::try_from(others)
+				.expect("Vec was clipped, so this has to work, qed");
+			let exposure_clipped =
+				Exposure::<T::AccountId, BalanceOf<T>, T::MaxRewardableIndividualExposures> {
+					total: exposure.total,
+					own: exposure.own,
+					others,
+				};
 			<ErasStakersClipped<T>>::insert(&new_planned_era, &stash, exposure_clipped);
 		});
 
@@ -522,7 +546,7 @@ impl<T: Config> Pallet<T> {
 	/// [`Exposure`].
 	fn collect_exposures(
 		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>)> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
@@ -548,10 +572,15 @@ impl<T: Config> Pallet<T> {
 						total = total.saturating_add(stake);
 					});
 
+				let others = WeakBoundedVec::<_, T::MaxIndividualExposures>::force_from(
+					others,
+					Some("exposure.others"),
+				);
+
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.collect::<Vec<(T::AccountId, Exposure<_, _, T::MaxIndividualExposures>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -641,7 +670,7 @@ impl<T: Config> Pallet<T> {
 	pub fn add_era_stakers(
 		current_era: EraIndex,
 		controller: T::AccountId,
-		exposure: Exposure<T::AccountId, BalanceOf<T>>,
+		exposure: Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 	) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
 	}
@@ -715,7 +744,11 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), Self::weight_of(&nominator), targets));
+					all_voters.push((
+						nominator.clone(),
+						Self::weight_of(&nominator),
+						targets.to_vec(),
+					));
 					nominators_taken.saturating_inc();
 				}
 			} else {
@@ -767,7 +800,10 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
 	/// to `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
+	pub fn do_add_nominator(
+		who: &T::AccountId,
+		nominations: Nominations<T::AccountId, T::MaxNominations>,
+	) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update the counter.
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
@@ -850,7 +886,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
+	type MaximumVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
@@ -919,9 +955,12 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		)
 	}
 
+	/// # Panic
+	///
+	/// Panics if `targets` size is bigger than T::MaxNominations, or if it cannot convert `weight`
+	/// into a `BalanceOf`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
-		use sp_std::convert::TryFrom;
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -932,10 +971,13 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: voter.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
-				claimed_rewards: vec![],
+				unlocking: Default::default(),
+				claimed_rewards: Default::default(),
 			},
 		);
+
+		let targets = BoundedVec::<_, T::MaxNominations>::try_from(targets)
+			.expect("targets Vec length too large, benchmark needs reconfiguring");
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
@@ -949,8 +991,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				stash: target.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
-				claimed_rewards: vec![],
+				unlocking: Default::default(),
+				claimed_rewards: Default::default(),
 			},
 		);
 		Self::do_add_validator(
@@ -970,13 +1012,16 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		let _ = T::SortedListProvider::clear(None);
 	}
 
+	/// # Panic
+	///
+	/// Panics if `voters` 3rd element is larger than T::MaxNominations, or if the 2nd element
+	/// cannot be converted into a `BalanceOf`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
-		use sp_std::convert::TryFrom;
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
@@ -988,8 +1033,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
-					claimed_rewards: vec![],
+					unlocking: Default::default(),
+					claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_validator(
@@ -1009,14 +1054,13 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
-					claimed_rewards: vec![],
+					unlocking: Default::default(),
+					claimed_rewards: Default::default(),
 				},
 			);
-			Self::do_add_nominator(
-				&v,
-				Nominations { targets: t, submitted_in: 0, suppressed: false },
-			);
+			let targets = BoundedVec::<_, T::MaxNominations>::try_from(t)
+				.expect("targets vec too large, benchmark needs reconfiguring.");
+			Self::do_add_nominator(&v, Nominations { targets, submitted_in: 0, suppressed: false });
 		});
 	}
 }
@@ -1054,14 +1098,17 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId, T::MaxValidatorsCou
 impl<T: Config>
 	historical::SessionManager<
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>>,
+		Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
 		T::MaxValidatorsCount,
 	> for Pallet<T>
 {
 	fn new_session(
 		new_index: SessionIndex,
 	) -> Option<
-		BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), T::MaxValidatorsCount>,
+		BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
+			T::MaxValidatorsCount,
+		>,
 	> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
@@ -1080,7 +1127,10 @@ impl<T: Config>
 	fn new_session_genesis(
 		new_index: SessionIndex,
 	) -> Option<
-		BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), T::MaxValidatorsCount>,
+		BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
+			T::MaxValidatorsCount,
+		>,
 	> {
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
@@ -1129,7 +1179,11 @@ impl<T: Config>
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+		FullIdentification = Exposure<
+			<T as frame_system::Config>::AccountId,
+			BalanceOf<T>,
+			T::MaxIndividualExposures,
+		>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
@@ -1229,7 +1283,10 @@ where
 					let rw = upper_bound + nominators_len * upper_bound;
 					add_db_reads_writes(rw, rw);
 				}
-				unapplied.reporters = details.reporters.clone();
+				unapplied.reporters = WeakBoundedVec::<_, T::MaxReportersCount>::force_from(
+					details.reporters.clone(),
+					Some("unapplied.reporters"),
+				);
 				if slash_defer_duration == 0 {
 					// Apply right away.
 					slashing::apply_slash::<T>(unapplied);
@@ -1244,7 +1301,7 @@ where
 				} else {
 					// Defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(active_era, move |for_later| {
-						for_later.push(unapplied)
+						for_later.force_push(unapplied, Some("UnappliedStashes.unapplied"))
 					});
 					add_db_reads_writes(1, 1);
 				}

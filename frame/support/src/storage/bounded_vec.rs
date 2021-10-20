@@ -26,9 +26,9 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
-	slice::SliceIndex,
+	slice::{IterMut, SliceIndex},
 };
-use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
+use sp_std::{convert::TryFrom, marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain};
 
 /// A bounded vector.
 ///
@@ -114,6 +114,29 @@ impl<T, S> BoundedVec<T, S> {
 	/// Panics if `index` is out of bounds.
 	pub fn remove(&mut self, index: usize) -> T {
 		self.0.remove(index)
+	}
+
+	/// Exactly the same semantics as [`Vec::pop`].
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
+	}
+
+	/// Exactly the same semantics as [`Vec::drain`].
+	pub fn drain<R>(&mut self, range: R) -> Drain<'_, T>
+	where
+		R: RangeBounds<usize>,
+	{
+		self.0.drain(range)
+	}
+
+	/// Exactly the same semantics as [`Vec::last_mut`].
+	pub fn last_mut(&mut self) -> Option<&mut T> {
+		self.0.last_mut()
+	}
+
+	/// Exactly the same semantics as [`Vec::iter_mut`].
+	pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+		self.0.iter_mut()
 	}
 
 	/// Exactly the same semantics as [`Vec::swap_remove`].

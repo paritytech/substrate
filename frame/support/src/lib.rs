@@ -633,6 +633,24 @@ pub use frame_support_procedural::EqNoBound;
 /// ```
 pub use frame_support_procedural::PartialEqNoBound;
 
+/// Derive [`Ord`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::{EqNoBound, OrdNoBound, PartialEqNoBound};
+/// trait Config {
+/// 		type C: Ord;
+/// }
+///
+/// // `Foo` implements [`Ord`] because `C` bounds [`Ord`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Ord`].
+/// #[derive(PartialEqNoBound, EqNoBound, OrdNoBound)]
+/// struct Foo<T: Config> {
+/// 		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::OrdNoBound;
+
 /// Derive [`Debug`] but do not bound any generic.
 ///
 /// This is useful for type generic over runtime:

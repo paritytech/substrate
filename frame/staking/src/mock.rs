@@ -34,6 +34,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
+use sp_std::collections::btree_map::BTreeMap;
 use std::cell::RefCell;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -182,7 +183,7 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentification = crate::Exposure<AccountId, Balance, MaxIndividualExposures>;
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 impl pallet_authorship::Config for Test {
@@ -213,7 +214,8 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxRewardableIndividualExposures: u32 = 64;
+	pub const MaxIndividualExposures: u32 = 64;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 
@@ -237,6 +239,14 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub const MaxNominations: u32 = 16;
+	pub const MaxUnappliedSlashes: u32 = 1_000;
+	pub const MaxInvulnerablesCount: u32 = 100;
+	pub const MaxHistoryDepth: u32 = 10_000;
+	pub const MaxReportersCount: u32 = 1_000;
+	pub const MaxPriorSlashingSpans: u32 = 1_000;
+	pub const MaxValidatorsCount: u32 = 100;
+	pub const MaxUnlockingChunks: u32 = 32;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -252,7 +262,6 @@ impl onchain::Config for Test {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -267,13 +276,22 @@ impl crate::pallet::pallet::Config for Test {
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxRewardableIndividualExposures = MaxRewardableIndividualExposures;
+	type MaxIndividualExposures = MaxIndividualExposures;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
+	type MaxNominations = MaxNominations;
+	type MaxUnappliedSlashes = MaxUnappliedSlashes;
+	type MaxInvulnerablesCount = MaxInvulnerablesCount;
+	type MaxHistoryDepth = MaxHistoryDepth;
+	type MaxReportersCount = MaxReportersCount;
+	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxUnlockingChunks = MaxUnlockingChunks;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test

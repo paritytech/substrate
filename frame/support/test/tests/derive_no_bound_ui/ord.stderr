@@ -1,0 +1,9 @@
+error[E0599]: the method `cmp` exists for associated type `<T as Config>::C`, but its trait bounds were not satisfied
+ --> $DIR/ord.rs:9:2
+  |
+9 |     c: T::C,
+  |     ^ method cannot be called on `<T as Config>::C` due to unsatisfied trait bounds
+  |
+  = note: the following trait bounds were not satisfied:
+          `<T as Config>::C: Iterator`
+          which is required by `&mut <T as Config>::C: Iterator`

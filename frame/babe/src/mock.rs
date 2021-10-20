@@ -125,7 +125,7 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<u64, u128>;
+	type FullIdentification = pallet_staking::Exposure<u64, u128, MaxIndividualExposures>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
 
@@ -184,9 +184,18 @@ parameter_types! {
 	pub const SlashDeferDuration: EraIndex = 0;
 	pub const AttestationPeriod: u64 = 100;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxRewardableIndividualExposures: u32 = 64;
+	pub const MaxIndividualExposures: u32 = 64;
 	pub const ElectionLookahead: u64 = 0;
 	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
+	pub const MaxNominations: u32 = 16;
+	pub const MaxUnappliedSlashes: u32 = 1_000;
+	pub const MaxInvulnerablesCount: u32 = 10;
+	pub const MaxHistoryDepth: u32 = 10_000;
+	pub const MaxReportersCount: u32 = 1_000;
+	pub const MaxPriorSlashingSpans: u32 = 1_000;
+	pub const MaxValidatorsCount: u32 = 4_000;
+	pub const MaxUnlockingChunks: u32 = 32;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
@@ -196,7 +205,6 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
@@ -210,7 +218,16 @@ impl pallet_staking::Config for Test {
 	type SessionInterface = Self;
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxRewardableIndividualExposures = MaxRewardableIndividualExposures;
+	type MaxIndividualExposures = MaxIndividualExposures;
+	type MaxNominations = MaxNominations;
+	type MaxUnappliedSlashes = MaxUnappliedSlashes;
+	type MaxInvulnerablesCount = MaxInvulnerablesCount;
+	type MaxHistoryDepth = MaxHistoryDepth;
+	type MaxReportersCount = MaxReportersCount;
+	type MaxPriorSlashingSpans = MaxPriorSlashingSpans;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;

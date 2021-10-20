@@ -114,7 +114,7 @@
 //!
 //! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 //! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-//! validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
+//! validator as well as its nominators. Only the [`Config::MaxRewardableIndividualExposures`]
 //! biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 //! nominator's account.
 //!
@@ -157,22 +157,31 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! use frame_system::ensure_signed;
+//! use frame_support::pallet_prelude::*;
+//! use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 //! use pallet_staking::{self as staking};
 //!
-//! pub trait Config: staking::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//!   use super::*;
 //!
-//! decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//!         /// Reward a validator.
-//!         #[weight = 0]
-//!         pub fn reward_myself(origin) -> dispatch::DispatchResult {
-//!             let reported = ensure_signed(origin)?;
-//!             <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
-//!             Ok(())
-//!         }
+//!   #[pallet::pallet]
+//!   #[pallet::generate_store(pub(crate) trait Store)]
+//!   pub struct Pallet<T>(_);
+//!
+//!   #[pallet::config]
+//!   pub trait Config: frame_system::Config + staking::Config {}
+//!
+//!   #[pallet::call]
+//!   impl<T: Config> Pallet<T> {
+//!     /// Reward a validator.
+//!     #[pallet::weight(0)]
+//!     pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
+//!       let reported = ensure_signed(origin)?;
+//!       <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
+//!       Ok(())
 //!     }
+//!   }
 //! }
 //! # fn main() { }
 //! ```
@@ -201,7 +210,7 @@
 //! calculated using the era duration and the staking rate (the total amount of tokens staked by
 //! nominators and validators, divided by the total token supply). It aims to incentivize toward a
 //! defined staking rate. The full specification can be found
-//! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
+//! [here](https://w3f-research.readthedocs.io/en/latest/polkadot/overview/2-token-economics.html#inflation-model).
 //!
 //! Total reward is split among validators and their nominators depending on the number of points
 //! they received during the era. Points are added to a validator using
@@ -246,7 +255,7 @@
 //!
 //! Note that there is a limitation to the number of fund-chunks that can be scheduled to be
 //! unlocked in the future via [`unbond`](Call::unbond). In case this maximum
-//! (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
+//! (`MaxUnlockingChunks`) is reached, the bonded account _must_ first wait until a successful
 //! call to `withdraw_unbonded` to remove some of the chunks.
 //!
 //! ### Election Algorithm
@@ -291,10 +300,13 @@ pub mod weights;
 
 mod pallet;
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
+	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get},
 	weights::Weight,
+	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, OrdNoBound, PartialEqNoBound,
+	RuntimeDebugNoBound, WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -306,7 +318,11 @@ use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
+use sp_std::{
+	convert::{From, TryFrom},
+	fmt,
+	prelude::*,
+};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
@@ -342,7 +358,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 
 /// Information regarding the active era (era in used in session).
-#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ActiveEraInfo {
 	/// Index of era.
 	pub index: EraIndex,
@@ -356,12 +372,21 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
-pub struct EraRewardPoints<AccountId: Ord> {
+/// `Limit` bounds the number of points earned by a given validator.
+#[derive(
+	PartialEqNoBound, Encode, Decode, DefaultNoBound, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
+)]
+#[scale_info(skip_type_params(Limit))]
+#[codec(mel_bound(Limit: Get<u32>))]
+pub struct EraRewardPoints<AccountId, Limit>
+where
+	AccountId: Ord + MaxEncodedLen + Default + PartialEq + fmt::Debug,
+	Limit: Get<u32>,
+{
 	/// Total number of points. Equals the sum of reward points for each validator.
 	total: RewardPoint,
 	/// The reward points earned by a given validator.
-	individual: BTreeMap<AccountId, RewardPoint>,
+	individual: BoundedBTreeMap<AccountId, RewardPoint, Limit>,
 }
 
 /// Indicates the initial status of the staker.
@@ -377,7 +402,7 @@ pub enum StakerStatus<AccountId> {
 }
 
 /// A destination account for payment.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RewardDestination<AccountId> {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
 	Staked,
@@ -398,7 +423,7 @@ impl<AccountId> Default for RewardDestination<AccountId> {
 }
 
 /// Preference of what happens regarding validation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ValidatorPrefs {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.
@@ -417,7 +442,7 @@ impl Default for ValidatorPrefs {
 }
 
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct UnlockChunk<Balance: HasCompact> {
 	/// Amount of funds to be unlocked.
 	#[codec(compact)]
@@ -428,9 +453,28 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-#[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct StakingLedger<AccountId, Balance: HasCompact> {
+/// `UnlockingLimit` is the size limit of the `WeakBoundedVec` representing `unlocking`.
+/// `RewardsLimit` is the size limit of the `WeakBoundedVec` representing `claimed_rewards`.
+#[derive(
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	CloneNoBound,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[cfg_attr(feature = "runtime-benchmarks", derive(DefaultNoBound))]
+#[codec(mel_bound(UnlockingLimit: Get<u32>, RewardsLimit: Get<u32>))]
+#[scale_info(skip_type_params(UnlockingLimit, RewardsLimit))]
+pub struct StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
+where
+	Balance: HasCompact + MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
+	AccountId: MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
+	UnlockingLimit: Get<u32>,
+	RewardsLimit: Get<u32>,
+{
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
 	/// The total amount of the stash's balance that we are currently accounting for.
@@ -443,31 +487,40 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub active: Balance,
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
-	pub unlocking: Vec<UnlockChunk<Balance>>,
+	pub unlocking: BoundedVec<UnlockChunk<Balance>, UnlockingLimit>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
-	pub claimed_rewards: Vec<EraIndex>,
+	pub claimed_rewards: WeakBoundedVec<EraIndex, RewardsLimit>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
-	StakingLedger<AccountId, Balance>
+impl<AccountId, Balance, UnlockingLimit, RewardsLimit>
+	StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
+where
+	Balance:
+		HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Clone + Default + Eq + fmt::Debug,
+	AccountId: MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
+	Balance: MaxEncodedLen + Clone + Default,
+	UnlockingLimit: Get<u32>,
+	RewardsLimit: Get<u32>,
 {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
-		let unlocking = self
-			.unlocking
-			.into_iter()
-			.filter(|chunk| {
-				if chunk.era > current_era {
-					true
-				} else {
-					total = total.saturating_sub(chunk.value);
-					false
-				}
-			})
-			.collect();
+		let unlocking = BoundedVec::<_, UnlockingLimit>::try_from(
+			self.unlocking
+				.into_iter()
+				.filter(|chunk| {
+					if chunk.era > current_era {
+						true
+					} else {
+						total = total.saturating_sub(chunk.value);
+						false
+					}
+				})
+				.collect::<Vec<UnlockChunk<Balance>>>(),
+		)
+		.expect("unlocking vector only reduced in size here.");
 
 		Self {
 			stash: self.stash,
@@ -504,12 +557,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 
 		(self, unlocking_balance)
 	}
-}
 
-impl<AccountId, Balance> StakingLedger<AccountId, Balance>
-where
-	Balance: AtLeast32BitUnsigned + Saturating + Copy,
-{
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`
 	/// active funds. Returns the amount of funds actually slashed.
@@ -559,10 +607,17 @@ where
 }
 
 /// A record of the nominations made by a specific account.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Nominations<AccountId> {
+/// `Limit` bounds the number of `targets`.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(Limit))]
+#[codec(mel_bound(Limit: Get<u32>))]
+pub struct Nominations<AccountId, Limit>
+where
+	AccountId: MaxEncodedLen,
+	Limit: Get<u32>,
+{
 	/// The targets of nomination.
-	pub targets: Vec<AccountId>,
+	pub targets: BoundedVec<AccountId, Limit>,
 	/// The era the nominations were submitted.
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
@@ -575,7 +630,9 @@ pub struct Nominations<AccountId> {
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(
+	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
 	pub who: AccountId,
@@ -585,10 +642,27 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
+/// `Limit` is the size limit of `others`.
 #[derive(
-	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, RuntimeDebug, TypeInfo,
+	PartialEqNoBound,
+	EqNoBound,
+	OrdNoBound,
+	Encode,
+	Decode,
+	CloneNoBound,
+	DefaultNoBound,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	MaxEncodedLen,
 )]
-pub struct Exposure<AccountId, Balance: HasCompact> {
+#[scale_info(skip_type_params(Limit))]
+#[codec(mel_bound(Limit: Get<u32>, Balance: HasCompact))]
+pub struct Exposure<AccountId, Balance, Limit>
+where
+	AccountId: MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
+	Limit: Get<u32>,
+{
 	/// The total balance backing this validator.
 	#[codec(compact)]
 	pub total: Balance,
@@ -596,23 +670,52 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	#[codec(compact)]
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+	pub others: WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>,
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
-#[derive(Encode, Decode, Default, RuntimeDebug, TypeInfo)]
-pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
+/// `SlashedLimit` bounds the number of slashed accounts.
+/// `ReportersLimit` bounds the number of reporters.
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(SlashedLimit: Get<u32>, ReportersLimit: Get<u32>))]
+#[scale_info(skip_type_params(SlashedLimit, ReportersLimit))]
+pub struct UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
+where
+	AccountId: MaxEncodedLen,
+	Balance: HasCompact + MaxEncodedLen,
+	SlashedLimit: Get<u32>,
+	ReportersLimit: Get<u32>,
+{
 	/// The stash ID of the offending validator.
 	validator: AccountId,
 	/// The validator's own slash.
 	own: Balance,
 	/// All other slashed stakers and amounts.
-	others: Vec<(AccountId, Balance)>,
+	others: WeakBoundedVec<(AccountId, Balance), SlashedLimit>,
 	/// Reporters of the offence; bounty payout recipients.
-	reporters: Vec<AccountId>,
+	reporters: WeakBoundedVec<AccountId, ReportersLimit>,
 	/// The amount of payout.
 	payout: Balance,
+}
+
+impl<AccountId, Balance, SlashedLimit, ReportersLimit> Default
+	for UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
+where
+	Balance: HasCompact + MaxEncodedLen + Default,
+	AccountId: MaxEncodedLen + Default,
+	SlashedLimit: Get<u32>,
+	ReportersLimit: Get<u32>,
+{
+	fn default() -> Self {
+		Self {
+			validator: AccountId::default(),
+			own: Balance::default(),
+			others: Default::default(),
+			reporters: Default::default(),
+			payout: Balance::default(),
+		}
+	}
 }
 
 /// Means for interacting with a specialized version of the `session` trait.
@@ -632,7 +735,11 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+		FullIdentification = Exposure<
+			<T as frame_system::Config>::AccountId,
+			BalanceOf<T>,
+			T::MaxIndividualExposures,
+		>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
@@ -705,7 +812,7 @@ impl<Balance: AtLeast32BitUnsigned + Clone, T: Get<&'static PiecewiseLinear<'sta
 }
 
 /// Mode of era-forcing.
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.
@@ -729,7 +836,7 @@ impl Default for Forcing {
 // A value placed in storage that represents the current version of the Staking storage. This value
 // is used by the `on_runtime_upgrade` logic to determine whether we run storage migration logic.
 // This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum Releases {
 	V1_0_0Ancient,
 	V2_0_0,
@@ -764,10 +871,13 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 /// `active_era`. It can differ from the latest planned exposure in `current_era`.
 pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
+impl<T: Config>
+	Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>>>
 	for ExposureOf<T>
 {
-	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
+	fn convert(
+		validator: T::AccountId,
+	) -> Option<Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>> {
 		<Pallet<T>>::active_era()
 			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
 	}

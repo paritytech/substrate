@@ -90,7 +90,7 @@ valid behavior_ while _punishing any misbehavior or lack of availability_.
 
 Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
+validator as well as its nominators. Only the [`Config::MaxRewardableIndividualExposures`]
 biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 nominator's account.
 
@@ -133,22 +133,31 @@ The Staking module contains many public storage items and (im)mutable functions.
 ### Example: Rewarding a validator by id.
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::ensure_signed;
+use frame_support::pallet_prelude::*;
+use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 use pallet_staking::{self as staking};
 
-pub trait Config: staking::Config {}
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
 
-decl_module! {
-    pub struct Module<T: Config> for enum Call where origin: T::Origin {
-        /// Reward a validator.
-        #[weight = 0]
-        pub fn reward_myself(origin) -> dispatch::DispatchResult {
-            let reported = ensure_signed(origin)?;
-            <staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
-            Ok(())
-        }
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(crate) trait Store)]
+	pub struct Pallet<T>(_);
+
+  #[pallet::config]
+	pub trait Config: frame_system::Config + staking::Config {}
+
+  #[pallet::call]
+	impl<T: Config> Pallet<T> {
+    /// Reward a validator.
+    #[pallet::weight(0)]
+    pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
+      let reported = ensure_signed(origin)?;
+      <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
+      Ok(())
     }
+  }
 }
 ```
 
@@ -176,7 +185,7 @@ Validators and nominators are rewarded at the end of each era. The total reward 
 calculated using the era duration and the staking rate (the total amount of tokens staked by
 nominators and validators, divided by the total token supply). It aims to incentivize toward a
 defined staking rate. The full specification can be found
-[here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model).
+[here](https://w3f-research.readthedocs.io/en/latest/polkadot/overview/2-token-economics.html#inflation-model).
 
 Total reward is split among validators and their nominators depending on the number of points
 they received during the era. Points are added to a validator using
@@ -221,7 +230,7 @@ call can be used to actually withdraw the funds.
 
 Note that there is a limitation to the number of fund-chunks that can be scheduled to be
 unlocked in the future via [`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond). In case this maximum
-(`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
+(`MaxUnlockingChunks`) is reached, the bonded account _must_ first wait until a successful
 call to `withdraw_unbonded` to remove some of the chunks.
 
 ### Election Algorithm

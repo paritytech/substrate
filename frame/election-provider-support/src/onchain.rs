@@ -160,7 +160,7 @@ mod tests {
 
 		pub struct DataProvider;
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
-			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
+			type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<2>;
 			fn voters(
 				_: Option<usize>,
 			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
