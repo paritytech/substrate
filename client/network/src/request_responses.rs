@@ -464,19 +464,6 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		}
 	}
 
-	/*
-	fn inject_addr_reach_failure(
-		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn std::error::Error,
-	) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_addr_reach_failure(p, peer_id, addr, error)
-		}
-	}
-	*/
-
 	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
