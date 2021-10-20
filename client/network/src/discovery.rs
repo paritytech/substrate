@@ -752,11 +752,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							let ev = DiscoveryOut::Discovered(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 						},
-						KademliaEvent::InboundPutRecordRequest { .. } => {
-							// FIXME
-						},
+						KademliaEvent::InboundPutRecordRequest { .. } |
 						KademliaEvent::InboundAddProviderRequest { .. } => {
-							// FIXME
+							unreachable!("We don't use kad filtering at the moment");
 						},
 						KademliaEvent::PendingRoutablePeer { .. } |
 						KademliaEvent::InboundRequestServed { .. } => {
