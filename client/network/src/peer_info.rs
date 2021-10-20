@@ -262,30 +262,15 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		}
 	}
 
-	/*
-	fn inject_addr_reach_failure(
-		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn std::error::Error,
-	) {
-		self.ping.inject_addr_reach_failure(peer_id, addr, error);
-		self.identify.inject_addr_reach_failure(peer_id, addr, error);
-	}
-
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		self.ping.inject_dial_failure(peer_id);
-		self.identify.inject_dial_failure(peer_id);
-	}
-	*/
-
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
-		_: Self::ProtocolsHandler,
+		handler: Self::ProtocolsHandler,
 		error: &libp2p::swarm::DialError,
 	) {
-		// FIXME
+		let (ping_handler, identity_handler) = handler.into_inner();
+		self.identify.inject_dial_failure(peer_id, identity_handler, error);
+		self.ping.inject_dial_failure(peer_id, ping_handler, error);
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {
