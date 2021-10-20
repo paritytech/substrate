@@ -507,7 +507,7 @@ fn storage_expand() {
 
 #[test]
 fn pallet_metadata_expands() {
-	use frame_support::traits::{CrateVersion, PalletsInfoAccess, PalletInfoData};
+	use frame_support::traits::{CrateVersion, PalletInfoData, PalletsInfoAccess};
 	let mut infos = AllPalletsWithSystem::infos();
 	infos.sort_by_key(|x| x.index);
 	assert_eq!(

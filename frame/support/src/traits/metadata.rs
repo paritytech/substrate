@@ -69,7 +69,9 @@ pub trait PalletsInfoAccess {
 	/// The number of pallets' information that this type represents. Relevant for nested tuples.
 	///
 	/// You probably don't want this function but `infos()` instead.
-	fn count() -> usize { 0 }
+	fn count() -> usize {
+		0
+	}
 
 	/// Extend the given vector by all of the pallets' information that this type represents.
 	/// Relevant for tuples.
@@ -87,12 +89,18 @@ pub trait PalletsInfoAccess {
 
 impl PalletsInfoAccess for () {}
 impl<T: PalletsInfoAccess> PalletsInfoAccess for (T,) {
-	fn count() -> usize { T::count() }
-	fn accumulate(acc: &mut Vec<PalletInfoData>) { T::accumulate(acc) }
+	fn count() -> usize {
+		T::count()
+	}
+	fn accumulate(acc: &mut Vec<PalletInfoData>) {
+		T::accumulate(acc)
+	}
 }
 
 impl<T1: PalletsInfoAccess, T2: PalletsInfoAccess> PalletsInfoAccess for (T1, T2) {
-	fn count() -> usize { T1::count() + T2::count() }
+	fn count() -> usize {
+		T1::count() + T2::count()
+	}
 	fn accumulate(acc: &mut Vec<PalletInfoData>) {
 		T2::accumulate(acc);
 		T1::accumulate(acc);
