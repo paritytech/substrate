@@ -507,12 +507,18 @@ fn storage_expand() {
 
 #[test]
 fn pallet_metadata_expands() {
-	use frame_support::traits::{CrateVersion, PalletInfoAccess, PalletInfoData};
+	use frame_support::traits::{CrateVersion, PalletsInfoAccess, PalletInfoData};
 	let mut infos = AllPalletsWithSystem::infos();
 	infos.sort_by_key(|x| x.index);
 	assert_eq!(
 		infos,
 		vec![
+			PalletInfoData {
+				index: 0,
+				name: "System",
+				module_name: "frame_system",
+				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
+			},
 			PalletInfoData {
 				index: 1,
 				name: "Example",

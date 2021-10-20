@@ -18,7 +18,6 @@
 //! Traits for managing information attached to pallets and their constituents.
 
 use codec::{Decode, Encode};
-use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
@@ -80,8 +79,8 @@ pub trait PalletsInfoAccess {
 
 	/// All of the pallets' information that this type represents. Relevant for tuples.
 	fn infos() -> Vec<PalletInfoData> {
-		let mut result = Vec::with_capacity(Self::infos_len());
-		Self::accumulate_infos(&mut result);
+		let mut result = Vec::with_capacity(Self::count());
+		Self::accumulate(&mut result);
 		result
 	}
 }
@@ -95,8 +94,8 @@ impl<T: PalletsInfoAccess> PalletsInfoAccess for (T,) {
 impl<T1: PalletsInfoAccess, T2: PalletsInfoAccess> PalletsInfoAccess for (T1, T2) {
 	fn count() -> usize { T1::count() + T2::count() }
 	fn accumulate(acc: &mut Vec<PalletInfoData>) {
-		T1::accumulate(acc);
 		T2::accumulate(acc);
+		T1::accumulate(acc);
 	}
 }
 
