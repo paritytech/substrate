@@ -269,7 +269,7 @@ mod tests {
 			1
 		}
 		fn name() -> &'static str {
-			"Pallat1"
+			"Pallet1"
 		}
 		fn module_name() -> &'static str {
 			"pallet1"
@@ -284,7 +284,7 @@ mod tests {
 			2
 		}
 		fn name() -> &'static str {
-			"Pallat2"
+			"Pallet2"
 		}
 		fn module_name() -> &'static str {
 			"pallet2"
