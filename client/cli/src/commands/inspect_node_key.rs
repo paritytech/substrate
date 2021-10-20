@@ -47,7 +47,7 @@ impl InspectNodeKeyCmd {
 			ed25519::SecretKey::from_bytes(&mut file_content).map_err(|_| "Bad node key file")?;
 
 		let keypair = ed25519::Keypair::from(secret);
-		let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
 
 		println!("{}", peer_id);
 

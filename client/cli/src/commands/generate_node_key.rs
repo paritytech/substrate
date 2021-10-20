@@ -42,7 +42,7 @@ impl GenerateNodeKeyCmd {
 	pub fn run(&self) -> Result<(), Error> {
 		let keypair = libp2p_ed25519::Keypair::generate();
 		let secret = keypair.secret();
-		let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
 		let secret_hex = hex::encode(secret.as_ref());
 
 		match &self.file {
