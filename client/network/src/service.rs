@@ -1962,20 +1962,21 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 
 					if let Some(metrics) = this.metrics.as_ref() {
-						match error {
-							DialError::ConnectionLimit(_) => metrics
-								.pending_connections_errors_total
-								.with_label_values(&["limit-reached"])
-								.inc(),
-							DialError::InvalidPeerId => metrics
-								.pending_connections_errors_total
-								.with_label_values(&["invalid-peer-id"])
-								.inc(),
-							DialError::Transport(_) | DialError::ConnectionIo(_) => metrics
-								.pending_connections_errors_total
-								.with_label_values(&["transport-error"])
-								.inc(),
-						}
+						let reason = match error {
+							DialError::ConnectionLimit(_) => "limit-reached",
+							DialError::InvalidPeerId => "invalid-peer-id",
+							DialError::Transport(_) | DialError::ConnectionIo(_) => "transport-error",
+							| DialError::Banned
+							| DialError::LocalPeerId
+							| DialError::NoAddresses
+							| DialError::DialPeerConditionFalse(_)
+							| DialError::Aborted
+								=> "other",
+						};
+						metrics
+							.pending_connections_errors_total
+							.with_label_values(&[reason])
+							.inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::Dialing(peer_id)) => {
@@ -2000,6 +2001,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					);
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
+							PendingConnectionError::Aborted => "aborted",
 							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
 							PendingConnectionError::InvalidPeerId => "invalid-peer-id",
 							PendingConnectionError::Transport(_) |
