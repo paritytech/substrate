@@ -299,7 +299,7 @@ pub trait ExecuteBlock<Block: BlockT> {
 /// but cannot preform any alterations. More specifically alterations are
 /// not forbidden, but they are not persisted in any way after the worker
 /// has finished.
-#[impl_trait_for_tuples::impl_for_tuples(60)]
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called after every block import (when fully synced).
 	///
