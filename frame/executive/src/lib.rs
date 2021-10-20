@@ -59,7 +59,7 @@
 //! # type Context = frame_system::ChainContext<Runtime>;
 //! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 //! # pub type Balances = u64;
-//! # pub type Pallets = u64;
+//! # pub type AllPallets = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{
 //! #    TransactionValidity, UnknownTransaction, TransactionSource,
@@ -73,7 +73,7 @@
 //! #     }
 //! # }
 //! /// Executive: handles dispatch to the various modules.
-//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, Pallets>;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllPallets>;
 //! ```
 //!
 //! ### Custom `OnRuntimeUpgrade` logic
@@ -90,7 +90,7 @@
 //! # type Context = frame_system::ChainContext<Runtime>;
 //! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 //! # pub type Balances = u64;
-//! # pub type Pallets = u64;
+//! # pub type AllPallets = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{
 //! #    TransactionValidity, UnknownTransaction, TransactionSource,
@@ -111,14 +111,7 @@
 //!     }
 //! }
 //!
-//! pub type Executive = executive::Executive<
-//!     Runtime,
-//!     Block,
-//!     Context,
-//!     Runtime,
-//!     Pallets,
-//!     CustomOnRuntimeUpgrade,
-//! >;
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllPallets, CustomOnRuntimeUpgrade>;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -155,19 +148,12 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 /// - `Block`: The block type of the runtime
 /// - `Context`: The context that is used when checking an extrinsic.
 /// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
-/// - `AllPallets`: Tuple that contains all modules in order used to call e.g.
-///   `on_initialize`. Generally this should be the `AllPallets` type coming from
-///   `construct_runtime` macro. This should exclude the System pallet.
+/// - `AllPallets`: Tuple that contains all modules. Will be used to call e.g. `on_initialize`.
 /// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
 ///   already called by `AllPallets`. It will be called before all modules will be called.
-pub struct Executive<
-	System,
-	Block,
-	Context,
-	UnsignedValidator,
-	AllPallets,
-	OnRuntimeUpgrade = (),
->(PhantomData<(System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade)>);
+pub struct Executive<System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade = ()>(
+	PhantomData<(System, Block, Context, UnsignedValidator, AllPallets, OnRuntimeUpgrade)>,
+);
 
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
@@ -229,8 +215,7 @@ where
 		weight = weight.saturating_add(
 			<frame_system::Pallet<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
 		);
-		weight =
-			weight.saturating_add(<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade());
+		weight = weight.saturating_add(<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade());
 
 		weight
 	}
@@ -324,9 +309,9 @@ where
 		weight = weight.saturating_add(<frame_system::Pallet<System> as OnInitialize<
 			System::BlockNumber,
 		>>::on_initialize(*block_number));
-		weight = weight.saturating_add(<AllPallets as OnInitialize<
-			System::BlockNumber,
-		>>::on_initialize(*block_number));
+		weight = weight.saturating_add(
+			<AllPallets as OnInitialize<System::BlockNumber>>::on_initialize(*block_number),
+		);
 		weight = weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
 		);
@@ -583,9 +568,7 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		<AllPallets as OffchainWorker<System::BlockNumber>>::offchain_worker(
-			*header.number(),
-		)
+		<AllPallets as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
 	}
 }
 
@@ -1380,8 +1363,7 @@ mod tests {
 			// All weights that show up in the `initialize_block_impl`
 			let frame_system_upgrade_weight = frame_system::Pallet::<Runtime>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
-			let runtime_upgrade_weight =
-				<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let runtime_upgrade_weight = <AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight =
 				frame_system::Pallet::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight =
