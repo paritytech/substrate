@@ -30,7 +30,7 @@ use sc_client_api::{
 	RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
 	RemoteReadChildRequest, RemoteReadRequest, Storage, StorageProof, StorageProvider,
 };
-use sc_executor::{NativeElseWasmExecutor, RuntimeVersion, WasmExecutionMethod};
+use sc_executor::{NativeElseWasmExecutor, RuntimeVersion, WasmExecutionMethod, RuntimeVersionOf};
 use sc_light::{
 	backend::{Backend, GenesisOrUnavailableState},
 	blockchain::{Blockchain, BlockchainCache},
@@ -254,6 +254,16 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_: &str,
 		_: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), ClientError> {
+		unreachable!()
+	}
+}
+
+impl RuntimeVersionOf for DummyCallExecutor {
+	fn runtime_version(
+		&self,
+		_: &mut dyn sp_externalities::Externalities,
+		_: &sp_core::traits::RuntimeCode,
+	) -> Result<RuntimeVersion, sc_executor::error::Error> {
 		unreachable!()
 	}
 }

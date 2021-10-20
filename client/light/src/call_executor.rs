@@ -157,7 +157,7 @@ where
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
 		if self.backend.is_local_state_available(id) {
-			self.local.runtime_version(id)
+			<Local as CallExecutor<_>>::runtime_version(&self.local, id)
 		} else {
 			Err(ClientError::NotAvailableOnLightClient)
 		}
