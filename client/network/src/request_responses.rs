@@ -380,14 +380,22 @@ impl RequestResponsesBehaviour {
 
 	fn new_handler_with_replacement(
 		&mut self,
-		protocol: &Cow<str>,
+		protocol: String,
 		handler: RequestResponseHandler<GenericCodec>,
 	) -> <RequestResponsesBehaviour as NetworkBehaviour>::ProtocolsHandler {
-		let iter = self.protocols.iter_mut().map(|(p, (r, _))| {
-			(p.to_string(), if p == protocol { handler } else { NetworkBehaviour::new_handler(r) })
-		});
+		let mut handlers: HashMap<_, _> = self
+			.protocols
+			.iter_mut()
+			.map(|(p, (r, _))| {
+				(p.to_string(), NetworkBehaviour::new_handler(r))
+			})
+			.collect();
 
-		MultiHandler::try_from_iter(iter).expect(
+		if let Some(h) = handlers.get_mut(&protocol) {
+			*h = handler
+		}
+
+		MultiHandler::try_from_iter(handlers).expect(
 			"Protocols are in a HashMap and there can be at most one handler per protocol name, \
 			 which is the only possible error; qed",
 		)
@@ -694,6 +702,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							log::error!(
 								"The request-response isn't supposed to start dialing peers"
 							);
+							let protocol = protocol.to_string();
 							let handler = self.new_handler_with_replacement(protocol, handler);
 							return Poll::Ready(NetworkBehaviourAction::DialAddress {
 								address,
@@ -701,6 +710,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							})
 						},
 						NetworkBehaviourAction::DialPeer { peer_id, condition, handler } => {
+							let protocol = protocol.to_string();
 							let handler = self.new_handler_with_replacement(protocol, handler);
 							return Poll::Ready(NetworkBehaviourAction::DialPeer {
 								peer_id,
