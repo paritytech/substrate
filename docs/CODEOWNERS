@@ -60,3 +60,7 @@
 
 # Transaction weight stuff
 /frame/support/src/weights.rs @shawntabrizi
+
+# Files in this section require approval from @paritytech/substrateteamleads
+**/runtime/**/lib.rs @paritytech/substrateteamleads
+**/runtime-interface/**/lib.rs @paritytech/substrateteamleads
