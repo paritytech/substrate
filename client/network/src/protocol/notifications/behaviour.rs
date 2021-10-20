@@ -629,6 +629,7 @@ impl Notifications {
 	/// Function that is called when the peerset wants us to connect to a peer.
 	fn peerset_report_connect(&mut self, peer_id: PeerId, set_id: sc_peerset::SetId) {
 		// If `PeerId` is unknown to us, insert an entry, start dialing, and return early.
+		let handler = self.new_handler();
 		let mut occ_entry = match self.peers.entry((peer_id, set_id)) {
 			Entry::Occupied(entry) => entry,
 			Entry::Vacant(entry) => {
@@ -644,7 +645,7 @@ impl Notifications {
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: entry.key().0.clone(),
 					condition: DialPeerCondition::Disconnected,
-					handler: self.new_handler(),
+					handler,
 				});
 				entry.insert(PeerState::Requested);
 				return
@@ -681,7 +682,7 @@ impl Notifications {
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: occ_entry.key().0.clone(),
 					condition: DialPeerCondition::Disconnected,
-					handler: self.new_handler(),
+					handler,
 				});
 				*occ_entry.into_mut() = PeerState::Requested;
 			},
@@ -2048,6 +2049,8 @@ impl NetworkBehaviour for Notifications {
 		while let Poll::Ready(Some((delay_id, peer_id, set_id))) =
 			Pin::new(&mut self.delays).poll_next(cx)
 		{
+			let handler = self.new_handler();
+
 			let peer_state = match self.peers.get_mut(&(peer_id, set_id)) {
 				Some(s) => s,
 				// We intentionally never remove elements from `delays`, and it may
@@ -2067,7 +2070,7 @@ impl NetworkBehaviour for Notifications {
 					self.events.push_back(NetworkBehaviourAction::DialPeer {
 						peer_id,
 						condition: DialPeerCondition::Disconnected,
-						handler: self.new_handler(),
+						handler,
 					});
 					*peer_state = PeerState::Requested;
 				},
