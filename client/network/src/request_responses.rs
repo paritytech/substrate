@@ -510,21 +510,16 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		}
 	}
 
-	/*
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_dial_failure(p, peer_id)
-		}
-	}
-	*/
-
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
 		_: Self::ProtocolsHandler,
 		error: &libp2p::swarm::DialError,
 	) {
-		// FIXME
+		for (p, _) in self.protocols.values_mut() {
+			let handler = p.new_handler();
+			NetworkBehaviour::inject_dial_failure(p, peer_id, handler, error)
+		}
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {
