@@ -226,9 +226,9 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		let (ping_handler, identity_handler) = handler.into_inner();
-		self.ping.inject_connection_closed(peer_id, conn, endpoint, ping_handler);
 		self.identify
 			.inject_connection_closed(peer_id, conn, endpoint, identity_handler);
+		self.ping.inject_connection_closed(peer_id, conn, endpoint, ping_handler);
 
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.endpoints.retain(|ep| ep != endpoint)

@@ -663,14 +663,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 	}
 
-	/*
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_dial_failure(k, peer_id)
-		}
-	}
-	*/
-
 	fn inject_new_listener(&mut self, id: ListenerId) {
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_new_listener(k, id)
