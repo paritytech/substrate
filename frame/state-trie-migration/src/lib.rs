@@ -267,13 +267,13 @@ pub mod pallet {
 				self.current_child.clone().expect("value checked to be `Some`; qed");
 			let current_top = self.current_top.clone().expect("value checked to be `Some`; qed");
 
-			let child_key = Pallet::<T>::child_io_key(&current_child);
-			if let Some(data) = sp_io::default_child_storage::get(child_key, &current_top) {
+			let child_key = Pallet::<T>::child_io_key(&current_top);
+			if let Some(data) = sp_io::default_child_storage::get(child_key, &current_child) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::default_child_storage::set(child_key, &current_top, &data)
+				sp_io::default_child_storage::set(child_key, &current_child, &data)
 			}
 			self.dyn_child_items.saturating_inc();
-			let next_key = sp_io::default_child_storage::next_key(child_key, &current_top);
+			let next_key = sp_io::default_child_storage::next_key(child_key, &current_child);
 			self.current_child = next_key;
 			log!(
 				trace,
@@ -856,7 +856,7 @@ mod mock {
 			.collect(),
 			children_default: vec![
 				(
-					b":child_storage:default:chk1".to_vec(),
+					b"chk1".to_vec(),
 					sp_core::storage::StorageChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 10]),
@@ -864,11 +864,11 @@ mod mock {
 						]
 						.into_iter()
 						.collect(),
-						child_info: ChildInfo::new_default(b":child_storage:default:chk1"),
+						child_info: ChildInfo::new_default(b"chk1"),
 					},
 				),
 				(
-					b":child_storage:default:chk2".to_vec(),
+					b"chk2".to_vec(),
 					sp_core::storage::StorageChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 10]),
@@ -876,7 +876,7 @@ mod mock {
 						]
 						.into_iter()
 						.collect(),
-						child_info: ChildInfo::new_default(b":child_storage:default:chk2"),
+						child_info: ChildInfo::new_default(b"chk2"),
 					},
 				),
 			]

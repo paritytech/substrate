@@ -123,7 +123,6 @@ where
 		overlay.set_collect_extrinsics(changes_trie_config.is_some());
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
