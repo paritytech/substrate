@@ -264,7 +264,7 @@ fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchRes
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 	Scheduler::on_initialize(System::block_number());
-	assert!(Democracy::begin_block(System::block_number()).is_ok());
+	Democracy::begin_block(System::block_number());
 }
 
 fn fast_forward_to(n: u64) {

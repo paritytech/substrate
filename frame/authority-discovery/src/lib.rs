@@ -166,7 +166,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		}
 	}
 
-	fn on_disabled(_i: usize) {
+	fn on_disabled(_i: u32) {
 		// ignore
 	}
 }
@@ -218,7 +218,6 @@ mod tests {
 		type Event = Event;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
-		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 		type WeightInfo = ();
 	}
@@ -276,7 +275,7 @@ mod tests {
 		) {
 		}
 
-		fn on_disabled(_validator_index: usize) {}
+		fn on_disabled(_validator_index: u32) {}
 
 		fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AuthorityId, Ks)]) {}
 	}

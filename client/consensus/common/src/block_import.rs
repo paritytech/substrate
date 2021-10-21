@@ -74,7 +74,7 @@ impl ImportResult {
 		&self,
 		hash: &B::Hash,
 		number: NumberFor<B>,
-		justification_sync_link: &mut dyn JustificationSyncLink<B>,
+		justification_sync_link: &dyn JustificationSyncLink<B>,
 	) where
 		B: BlockT,
 	{

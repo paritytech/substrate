@@ -1092,6 +1092,53 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
 	}
 
+	/// Sets the reserved set of a protocol to the given set of peers.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// The node will start establishing/accepting connections and substreams to/from peers in this
+	/// set, if it doesn't have any substream open with them yet.
+	///
+	/// Note however, if a call to this function results in less peers on the reserved set, they
+	/// will not necessarily get disconnected (depending on available free slots in the peer set).
+	/// If you want to also disconnect those removed peers, you will have to call
+	/// `remove_from_peers_set` on those in addition to updating the reserved set. You can omit
+	/// this step if the peer set is in reserved only mode.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	pub fn set_reserved_peers(
+		&self,
+		protocol: Cow<'static, str>,
+		peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		let peers_addrs = self.split_multiaddr_and_peer_id(peers)?;
+
+		let mut peers: HashSet<PeerId> = HashSet::with_capacity(peers_addrs.len());
+
+		for (peer_id, addr) in peers_addrs.into_iter() {
+			// Make sure the local peer ID is never added to the PSM.
+			if peer_id == self.local_peer_id {
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+			}
+
+			peers.insert(peer_id);
+
+			if !addr.is_empty() {
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+			}
+		}
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetPeersetReserved(protocol, peers));
+
+		Ok(())
+	}
+
 	/// Add peers to a peer set.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
@@ -1126,25 +1173,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Remove peers from a peer set.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
-	// convenience.
-	pub fn remove_peers_from_reserved_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-		for (peer_id, _) in peers.into_iter() {
+	pub fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
 				.unbounded_send(ServiceToWorkerMsg::RemoveSetReserved(protocol.clone(), peer_id));
 		}
-		Ok(())
 	}
 
 	/// Configure an explicit fork sync request.
@@ -1195,25 +1229,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Remove peers from a peer set.
 	///
 	/// If we currently have an open substream with this peer, it will soon be closed.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for
-	// convenience.
-	pub fn remove_from_peers_set(
-		&self,
-		protocol: Cow<'static, str>,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-		for (peer_id, _) in peers.into_iter() {
+	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
 				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
 		}
-		Ok(())
 	}
 
 	/// Returns the number of peers we're connected to.
@@ -1400,6 +1421,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddReserved(PeerId),
 	RemoveReserved(PeerId),
 	SetReserved(HashSet<PeerId>),
+	SetPeersetReserved(Cow<'static, str>, HashSet<PeerId>),
 	AddSetReserved(Cow<'static, str>, PeerId),
 	RemoveSetReserved(Cow<'static, str>, PeerId),
 	AddToPeersSet(Cow<'static, str>, PeerId),
@@ -1541,6 +1563,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					.behaviour_mut()
 					.user_protocol_mut()
 					.set_reserved_peers(peers),
+				ServiceToWorkerMsg::SetPeersetReserved(protocol, peers) => this
+					.network_service
+					.behaviour_mut()
+					.user_protocol_mut()
+					.set_reserved_peerset_peers(protocol, peers),
 				ServiceToWorkerMsg::AddReserved(peer_id) => this
 					.network_service
 					.behaviour_mut()
@@ -2005,8 +2032,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>
-					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}", address, error),
+				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) => {
+					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}", address, error)
+				},
 				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses, .. }) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.listeners_local_addresses.sub(addresses.len() as u64);

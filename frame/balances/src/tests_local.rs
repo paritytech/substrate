@@ -78,10 +78,12 @@ impl frame_system::Config for Test {
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
+	pub const OperationalFeeMultiplier: u8 = 5;
 }
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
+	type OperationalFeeMultiplier = OperationalFeeMultiplier;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
@@ -171,7 +173,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(res, (NegativeImbalance::new(98), 0));
 
 		// no events
-		assert_eq!(events(), []);
+		assert_eq!(events(), [Event::Balances(crate::Event::Slashed(1, 98))]);
 
 		let res = Balances::slash(&1, 1);
 		assert_eq!(res, (NegativeImbalance::new(1), 0));
@@ -181,6 +183,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			[
 				Event::System(system::Event::KilledAccount(1)),
 				Event::Balances(crate::Event::DustLost(1, 1)),
+				Event::Balances(crate::Event::Slashed(1, 1)),
 			]
 		);
 	});

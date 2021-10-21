@@ -160,13 +160,16 @@ impl Default for SnapshotConfig {
 
 /// Builder for remote-externalities.
 pub struct Builder<B: BlockT> {
-	/// Custom key-pairs to be injected into the externalities.
-	inject: Vec<KeyPair>,
+	/// Custom key-pairs to be injected into the externalities. The *hashed* keys and values must
+	/// be given.
+	hashed_key_values: Vec<KeyPair>,
 	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must
 	/// be given.
 	hashed_prefixes: Vec<Vec<u8>>,
 	/// Storage entry keys to be injected into the externalities. The *hashed* key must be given.
 	hashed_keys: Vec<Vec<u8>>,
+	/// The keys that will be excluded from the final externality. The *hashed* key must be given.
+	hashed_blacklist: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
 }
@@ -176,10 +179,11 @@ pub struct Builder<B: BlockT> {
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
 		Self {
-			inject: Default::default(),
 			mode: Default::default(),
+			hashed_key_values: Default::default(),
 			hashed_prefixes: Default::default(),
 			hashed_keys: Default::default(),
+			hashed_blacklist: Default::default(),
 		}
 	}
 }
@@ -435,12 +439,26 @@ impl<B: BlockT> Builder<B> {
 			},
 		};
 
-		debug!(
-			target: LOG_TARGET,
-			"extending externalities with {} manually injected key-values",
-			self.inject.len()
-		);
-		base_kv.extend(self.inject.clone());
+		// inject manual key values.
+		if !self.hashed_key_values.is_empty() {
+			debug!(
+				target: LOG_TARGET,
+				"extending externalities with {} manually injected key-values",
+				self.hashed_key_values.len()
+			);
+			base_kv.extend(self.hashed_key_values.clone());
+		}
+
+		// exclude manual key values.
+		if !self.hashed_blacklist.is_empty() {
+			debug!(
+				target: LOG_TARGET,
+				"excluding externalities from {} keys",
+				self.hashed_blacklist.len()
+			);
+			base_kv.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
+		}
+
 		Ok(base_kv)
 	}
 }
@@ -453,13 +471,12 @@ impl<B: BlockT> Builder<B> {
 	}
 
 	/// Inject a manual list of key and values to the storage.
-	pub fn inject_key_value(mut self, injections: &[KeyPair]) -> Self {
+	pub fn inject_hashed_key_value(mut self, injections: &[KeyPair]) -> Self {
 		for i in injections {
-			self.inject.push(i.clone());
+			self.hashed_key_values.push(i.clone());
 		}
 		self
 	}
-
 	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
 	///
 	/// This should be used to inject a "PREFIX", like a storage (double) map.
@@ -473,6 +490,13 @@ impl<B: BlockT> Builder<B> {
 	/// This should be used to inject a "KEY", like a storage value.
 	pub fn inject_hashed_key(mut self, hashed: &[u8]) -> Self {
 		self.hashed_keys.push(hashed.to_vec());
+		self
+	}
+
+	/// Blacklist this hashed key from the final externalities. This is treated as-is, and should be
+	/// pre-hashed.
+	pub fn blacklist_hashed_key(mut self, hashed: &[u8]) -> Self {
+		self.hashed_blacklist.push(hashed.to_vec());
 		self
 	}
 
@@ -541,11 +565,43 @@ mod tests {
 			.expect("Can't read state snapshot file")
 			.execute_with(|| {});
 	}
+
+	#[tokio::test]
+	async fn can_exclude_from_cache() {
+		init_logger();
+
+		// get the first key from the cache file.
+		let some_key = Builder::<Block>::new()
+			.mode(Mode::Offline(OfflineConfig {
+				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
+			}))
+			.build()
+			.await
+			.expect("Can't read state snapshot file")
+			.execute_with(|| {
+				let key =
+					sp_io::storage::next_key(&[]).expect("some key must exist in the snapshot");
+				assert!(sp_io::storage::get(&key).is_some());
+				key
+			});
+
+		Builder::<Block>::new()
+			.mode(Mode::Offline(OfflineConfig {
+				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
+			}))
+			.blacklist_hashed_key(&some_key)
+			.build()
+			.await
+			.expect("Can't read state snapshot file")
+			.execute_with(|| assert!(sp_io::storage::get(&some_key).is_none()));
+	}
 }
 
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
+
+	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
 	async fn can_build_one_pallet() {
@@ -557,7 +613,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect("Can't reach the remote node. Is it running?")
+			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
 	}
 
@@ -575,7 +631,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect("Can't reach the remote node. Is it running?")
+			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
 	}
 
@@ -599,7 +655,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect("Can't reach the remote node. Is it running?")
+			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {
 				// Gav's polkadot account. 99% this will be in the council.
 				let gav_polkadot =
@@ -625,7 +681,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect("Can't reach the remote node. Is it running?")
+			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(SnapshotConfig::default().path)
@@ -648,7 +704,7 @@ mod remote_tests {
 		Builder::<Block>::new()
 			.build()
 			.await
-			.expect("Can't reach the remote node. Is it running?")
+			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
 	}
 }

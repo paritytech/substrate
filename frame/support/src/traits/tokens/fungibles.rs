@@ -25,7 +25,9 @@ use crate::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::traits::Saturating;
 use sp_std::vec::Vec;
 
+pub mod approvals;
 mod balanced;
+pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};

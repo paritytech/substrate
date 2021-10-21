@@ -18,7 +18,7 @@
 //! Implementation of the `insert` subcommand
 
 use crate::{
-	utils, with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams, SharedParams, SubstrateCli,
+	utils, with_crypto_scheme, CryptoScheme, Error, KeystoreParams, SharedParams, SubstrateCli,
 };
 use sc_keystore::LocalKeystore;
 use sc_service::config::{BasePath, KeystoreConfig};
@@ -49,9 +49,14 @@ pub struct InsertKeyCmd {
 	#[structopt(flatten)]
 	pub keystore_params: KeystoreParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub crypto_scheme: CryptoSchemeFlag,
+	/// The cryptography scheme that should be used to generate the key out of the given URI.
+	#[structopt(
+		long,
+		value_name = "SCHEME",
+		possible_values = &CryptoScheme::variants(),
+		case_insensitive = true,
+	)]
+	pub scheme: CryptoScheme,
 }
 
 impl InsertKeyCmd {
@@ -68,10 +73,7 @@ impl InsertKeyCmd {
 
 		let (keystore, public) = match self.keystore_params.keystore_config(&config_dir)? {
 			(_, KeystoreConfig::Path { path, password }) => {
-				let public = with_crypto_scheme!(
-					self.crypto_scheme.scheme,
-					to_vec(&suri, password.clone())
-				)?;
+				let public = with_crypto_scheme!(self.scheme, to_vec(&suri, password.clone()))?;
 				let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(path, password)?);
 				(keystore, public)
 			},
@@ -161,6 +163,7 @@ mod tests {
 			"test",
 			"--suri",
 			&uri,
+			"--scheme=sr25519",
 		]);
 		assert!(inspect.run(&Cli).is_ok());
 

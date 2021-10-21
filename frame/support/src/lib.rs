@@ -1476,11 +1476,11 @@ pub mod pallet_prelude {
 /// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
 /// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
 ///
-/// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
+/// It declares `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
 /// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet
 /// informations given by [`frame_support::traits::PalletInfo`].
-/// (The implementation use the associated type `frame_system::Config::PalletInfo`).
+/// (The implementation uses the associated type `frame_system::Config::PalletInfo`).
 ///
 /// It implements [`traits::StorageInfoTrait`] on `Pallet` which give information about all
 /// storages.

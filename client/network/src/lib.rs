@@ -328,5 +328,5 @@ pub struct NetworkStatus<B: BlockT> {
 	/// State sync in progress.
 	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
 	/// Warp sync in progress.
-	pub warp_sync: Option<protocol::sync::WarpSyncProgress>,
+	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
 }

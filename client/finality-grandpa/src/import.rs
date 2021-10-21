@@ -551,6 +551,32 @@ where
 			return self.import_state(block, new_cache).await
 		}
 
+		if number <= self.inner.info().finalized_number {
+			// Importing an old block. Just save justifications and authority set changes
+			if self.check_new_change(&block.header, hash).is_some() {
+				if block.justifications.is_none() {
+					return Err(ConsensusError::ClientImport(
+						"Justification required when importing \
+							an old block with authority set change."
+							.into(),
+					))
+				}
+				assert!(block.justifications.is_some());
+				let mut authority_set = self.authority_set.inner_locked();
+				authority_set.authority_set_changes.insert(number);
+				crate::aux_schema::update_authority_set::<Block, _, _>(
+					&authority_set,
+					None,
+					|insert| {
+						block
+							.auxiliary
+							.extend(insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
+					},
+				);
+			}
+			return (&*self.inner).import_block(block, new_cache).await
+		}
+
 		// on initial sync we will restrict logging under info to avoid spam.
 		let initial_sync = block.origin == BlockOrigin::NetworkInitialSync;
 

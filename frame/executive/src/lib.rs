@@ -800,10 +800,12 @@ mod tests {
 
 	parameter_types! {
 		pub const TransactionByteFee: Balance = 0;
+		pub const OperationalFeeMultiplier: u8 = 5;
 	}
 	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
+		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
@@ -1110,8 +1112,6 @@ mod tests {
 		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned {}), None);
 		let mut t = new_test_ext(1);
 
-		let mut default_with_prio_3 = ValidTransaction::default();
-		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
 				Executive::validate_transaction(
@@ -1119,7 +1119,7 @@ mod tests {
 					valid.clone(),
 					Default::default(),
 				),
-				Ok(default_with_prio_3),
+				Ok(ValidTransaction::default()),
 			);
 			assert_eq!(
 				Executive::validate_transaction(
