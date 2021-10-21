@@ -170,15 +170,17 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
 .build-rustdoc-rules:              &build-rustdoc-rules
-  - if: $CI_PIPELINE_SOURCE == "pipeline"
-    when: never
-  - if: $CI_PIPELINE_SOURCE == "web" && $RM_RUSTDOC_REF
-    when: never
-  - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "push" ||
-      ($CI_PIPELINE_SOURCE == "web" && $BUILD_RUSTDOC_REF)
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" && $RM_RUSTDOC_REF
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "push" ||
+        ($CI_PIPELINE_SOURCE == "web" && $BUILD_RUSTDOC_REF)
 
 .rm-rustdoc-rules:                 &rm-rustdoc-rules
-  - if: $CI_PIPELINE_SOURCE == "web" && $RM_RUSTDOC_REF
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web" && $RM_RUSTDOC_REF
 
 .merge-ref-into-master-script:     &merge-ref-into-master-script
   - if [ $CI_COMMIT_REF_NAME != "master" ]; then
@@ -709,8 +711,7 @@ build-macos-subkey:
 build-rustdoc:
   stage:                           build
   <<:                              *docker-env
-  rules:
-    - *build-rustdoc-rules
+  <<:                              *build-rustdoc-rules
   variables:
     <<:                            *default-vars
     <<:                            *build-rustdoc-vars
@@ -849,6 +850,7 @@ publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
   <<:                              *vault-secrets
+  <<:                              *build-rustdoc-rules
   # `needs:` can be removed after CI image gets nonroot. In this case `needs:` stops other
   # artifacts from being dowloaded by this job.
   needs:
@@ -857,8 +859,6 @@ publish-rustdoc:
   variables:
     <<:                            *default-vars
     <<:                            *build-rustdoc-vars
-  rules:
-    - *build-rustdoc-rules
   image:                           node:16
   script:
     - *test-build-rustdoc-script
@@ -881,11 +881,10 @@ rm-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
   <<:                              *vault-secrets
+  <<:                              *rm-rustdoc-rules
   variables:
     <<: *default-vars
     <<: *build-rustdoc-vars
-  rules:
-    - *rm-rustdoc-rules
   image:                           node:16
   script:
     - *reset-gh-info-script
