@@ -1044,13 +1044,13 @@ mod tests {
 					config.finish()
 				};
 
-				let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
+				let mut swarm = Swarm::new(transport, behaviour, keypair.public().to_peer_id());
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
 				if i == 0 {
 					first_swarm_peer_id_and_addr =
-						Some((keypair.public().into_peer_id(), listen_addr.clone()))
+						Some((keypair.public().to_peer_id(), listen_addr.clone()))
 				}
 
 				swarm.listen_on(listen_addr.clone()).unwrap();
