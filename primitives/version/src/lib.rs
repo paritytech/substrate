@@ -217,7 +217,12 @@ impl RuntimeVersion {
 
 	/// Returns state version to use for update.
 	pub fn state_version(&self) -> StateVersion {
-		StateVersion::V0
+		let core_api_id = sp_runtime::hashing::blake2_64(b"Core");
+		if self.has_api_with(&core_api_id, |v| v >= 4) {
+			StateVersion::V1
+		} else {
+			StateVersion::V0
+		}
 	}
 }
 

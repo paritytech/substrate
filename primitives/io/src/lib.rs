@@ -195,6 +195,16 @@ pub trait Storage {
 		self.storage_root(sp_core::StateVersion::V0)
 	}
 
+	#[version(2)]
+	/// "Commit" all existing operations and compute the resulting storage root.
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	fn root(&mut self) -> Vec<u8> {
+		self.storage_root(sp_core::StateVersion::V1)
+	}
+
 	/// "Commit" all existing operations and get the resulting storage change root.
 	/// `parent_hash` is a SCALE encoded hash.
 	///
@@ -381,6 +391,18 @@ pub trait DefaultChildStorage {
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage_root(&child_info, sp_core::StateVersion::V0)
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2)]
+	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info, sp_core::StateVersion::V1)
 	}
 
 	/// Child storage key iteration.
