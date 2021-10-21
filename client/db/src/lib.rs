@@ -85,9 +85,8 @@ use sp_runtime::{
 	Justification, Justifications, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, 
-	ChildStorageCollection, DBValue, IndexOperation, OffchainChangesCollection, StateMachineStats,
-	StorageCollection, UsageInfo as StateUsageInfo,
+	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IndexOperation,
+	OffchainChangesCollection, StateMachineStats, StorageCollection, UsageInfo as StateUsageInfo,
 };
 use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
 
@@ -774,9 +773,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		});
 
 		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.iter().map(|(k, v)| {
-				(&k[..], Some(&v[..]))
-			}),
+			storage.top.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
 			child_delta,
 		);
 
@@ -1201,13 +1198,7 @@ impl<Block: BlockT> Backend<Block> {
 		self.ensure_sequential_finalization(header, last_finalized)?;
 		let with_state = sc_client_api::Backend::have_state_at(self, &hash, number);
 
-		self.note_finalized(
-			transaction,
-			header,
-			*hash,
-			finalization_displaced,
-			with_state,
-		)?;
+		self.note_finalized(transaction, header, *hash, finalization_displaced, with_state)?;
 
 		if let Some(justification) = justification {
 			transaction.set_from_vec(

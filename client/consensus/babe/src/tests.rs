@@ -44,7 +44,7 @@ use sp_core::crypto::Pair;
 use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
 use sp_runtime::{
 	generic::{Digest, DigestItem},
-	traits::{Block as BlockT},
+	traits::Block as BlockT,
 };
 use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 use std::{cell::RefCell, task::Poll, time::Duration};

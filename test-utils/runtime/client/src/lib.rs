@@ -31,8 +31,9 @@ pub use substrate_test_runtime as runtime;
 pub use self::block_builder_ext::BlockBuilderExt;
 
 use sp_core::{
-	sr25519, Pair,
+	sr25519,
 	storage::{ChildInfo, Storage, StorageChild},
+	Pair,
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use substrate_test_runtime::genesismap::{additional_storage_with_genesis, GenesisConfig};
@@ -46,8 +47,8 @@ pub mod prelude {
 	};
 	// Client structs
 	pub use super::{
-		Backend, ExecutorDispatch, LocalExecutorDispatch,
-		NativeElseWasmExecutor, TestClient, TestClientBuilder, WasmExecutionMethod,
+		Backend, ExecutorDispatch, LocalExecutorDispatch, NativeElseWasmExecutor, TestClient,
+		TestClientBuilder, WasmExecutionMethod,
 	};
 	// Keyring
 	pub use super::{AccountKeyring, Sr25519Keyring};

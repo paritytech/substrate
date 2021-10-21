@@ -25,10 +25,7 @@ use futures::{
 };
 use jsonrpc_core::MetaIoHandler;
 use manual_seal::EngineCommand;
-use sc_client_api::{
-	backend::Backend,
-	CallExecutor, ExecutorProvider,
-};
+use sc_client_api::{backend::Backend, CallExecutor, ExecutorProvider};
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
 use sc_transaction_pool_api::TransactionPool;
@@ -173,12 +170,7 @@ where
 			.state_at(id.clone())
 			.expect(&format!("State at block {} not found", id));
 
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&state_backend,
-			Some(&mut extensions),
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &state_backend, Some(&mut extensions));
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)
 	}
 

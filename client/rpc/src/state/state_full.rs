@@ -26,10 +26,7 @@ use futures::{
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
 use rpc::Result as RpcResult;
-use std::{
-	collections::HashMap,
-	sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{
@@ -42,10 +39,7 @@ use sp_core::{
 	},
 	Bytes,
 };
-use sp_runtime::{
-	generic::BlockId,
-	traits::Block as BlockT,
-};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_version::RuntimeVersion;
 
 use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
@@ -145,9 +139,7 @@ where
 			hashes
 		};
 
-		Ok(QueryStorageRange {
-			hashes,
-		})
+		Ok(QueryStorageRange { hashes })
 	}
 
 	/// Iterates through range.unfiltered_range and check each block for changes of keys' values.

@@ -20,8 +20,9 @@ use crate::{
 	bitswap::Bitswap,
 	config::ProtocolId,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
+	peer_info,
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
-	peer_info, request_responses, DhtEvent, ObservedRole,
+	request_responses, DhtEvent, ObservedRole,
 };
 
 use bytes::Bytes;
@@ -422,12 +423,10 @@ impl<B: BlockT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behavi
 				self.events.push_back(BehaviourOut::NotificationsReceived { remote, messages });
 			},
 			CustomMessageOutcome::PeerNewBest(_peer_id, _number) => {},
-			CustomMessageOutcome::SyncConnected(peer_id) => {
-				self.events.push_back(BehaviourOut::SyncConnected(peer_id))
-			},
-			CustomMessageOutcome::SyncDisconnected(peer_id) => {
-				self.events.push_back(BehaviourOut::SyncDisconnected(peer_id))
-			},
+			CustomMessageOutcome::SyncConnected(peer_id) =>
+				self.events.push_back(BehaviourOut::SyncConnected(peer_id)),
+			CustomMessageOutcome::SyncDisconnected(peer_id) =>
+				self.events.push_back(BehaviourOut::SyncDisconnected(peer_id)),
 			CustomMessageOutcome::None => {},
 		}
 	}

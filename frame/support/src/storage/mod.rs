@@ -1509,9 +1509,7 @@ mod test {
 
 			let value = unhashed::get_raw(&Storage::storage_value_final_key()).unwrap();
 
-			let expected = Digest {
-				logs: vec![DigestItem::Other(Vec::new())],
-			};
+			let expected = Digest { logs: vec![DigestItem::Other(Vec::new())] };
 			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
 		});
 	}

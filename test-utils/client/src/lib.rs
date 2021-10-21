@@ -45,11 +45,7 @@ use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::{
-	codec::Encode,
-	traits::Block as BlockT,
-	OpaqueExtrinsic,
-};
+use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,

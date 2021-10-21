@@ -61,9 +61,9 @@ use sp_core::crypto::{Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	DigestItem,
 	generic::BlockId,
 	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
+	DigestItem,
 };
 
 mod import_queue;
@@ -378,11 +378,7 @@ where
 		})
 	}
 
-	fn pre_digest_data(
-		&self,
-		slot: Slot,
-		_claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem> {
+	fn pre_digest_data(&self, slot: Slot, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
 		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot)]
 	}
 
@@ -575,7 +571,10 @@ mod tests {
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
 	use sp_keyring::sr25519::Keyring;
-	use sp_runtime::{Digest, traits::{Block as BlockT, Header as _}};
+	use sp_runtime::{
+		traits::{Block as BlockT, Header as _},
+		Digest,
+	};
 	use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 	use std::{
 		task::Poll,

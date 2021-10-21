@@ -26,8 +26,8 @@ fn system_digest_item_encoding() {
 	let encoded = item.encode();
 	assert_eq!(
 		encoded,
-		vec![4, 
-			// type = DigestItemType::Consensus
+		vec![
+			4, // type = DigestItemType::Consensus
 			1, 2, 3, 4, 16, 5, 6, 7, 8,
 		]
 	);

@@ -730,8 +730,8 @@ where
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
 
-		let (block_import, justification_import, data) =
-			self.make_block_import(PeersClient { client: client.clone(), backend: backend.clone() });
+		let (block_import, justification_import, data) = self
+			.make_block_import(PeersClient { client: client.clone(), backend: backend.clone() });
 
 		let verifier = self.make_verifier(
 			PeersClient { client: client.clone(), backend: backend.clone() },

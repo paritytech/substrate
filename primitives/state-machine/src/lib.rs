@@ -404,12 +404,7 @@ mod execution {
 				.enter_runtime()
 				.expect("StateMachine is never called from the runtime; qed");
 
-			let mut ext = Ext::new(
-				self.overlay,
-				cache,
-				self.backend,
-				Some(&mut self.extensions),
-			);
+			let mut ext = Ext::new(self.overlay, cache, self.backend, Some(&mut self.extensions));
 
 			let ext_id = ext.id;
 
@@ -1169,12 +1164,7 @@ mod tests {
 		let overlay_limit = overlay.clone();
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			ext.clear_prefix(b"ab", None);
 		}
 		overlay.commit_transaction().unwrap();
@@ -1198,12 +1188,7 @@ mod tests {
 		let mut overlay = overlay_limit;
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!((false, 1), ext.clear_prefix(b"ab", Some(1)));
 		}
 		overlay.commit_transaction().unwrap();
@@ -1245,12 +1230,7 @@ mod tests {
 
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				&backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
 		}
 
@@ -1285,12 +1265,7 @@ mod tests {
 		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&backend,
-			None,
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), (false, 0));
 		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), (false, 1));
 		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
@@ -1309,12 +1284,7 @@ mod tests {
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			backend,
-			None,
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 		ext.set_child_storage(child_info, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_info, b"abc"), Some(b"def".to_vec()));
@@ -1331,24 +1301,14 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			ext.storage_append(key.clone(), reference_data[0].encode());
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 		overlay.start_transaction();
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			for i in reference_data.iter().skip(1) {
 				ext.storage_append(key.clone(), i.encode());
@@ -1357,12 +1317,7 @@ mod tests {
 		}
 		overlay.rollback_transaction().unwrap();
 		{
-			let ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 	}
@@ -1384,12 +1339,7 @@ mod tests {
 
 		// For example, block initialization with event.
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			ext.clear_storage(key.as_slice());
 			ext.storage_append(key.clone(), Item::InitializationItem.encode());
 		}
@@ -1397,12 +1347,7 @@ mod tests {
 
 		// For example, first transaction resulted in panic during block building
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()));
 
@@ -1417,12 +1362,7 @@ mod tests {
 
 		// Then we apply next transaction which is valid this time.
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()));
 
@@ -1437,12 +1377,7 @@ mod tests {
 
 		// Then only initlaization item and second (commited) item should persist.
 		{
-			let ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(
 				ext.storage(key.as_slice()),
 				Some(vec![Item::InitializationItem, Item::CommitedItem].encode()),
@@ -1718,12 +1653,7 @@ mod tests {
 		let mut transaction = {
 			let backend = test_trie();
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				&backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
 			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
@@ -1760,12 +1690,7 @@ mod tests {
 
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(ext.storage(b"bbb"), Some(vec![]));
 			assert_eq!(ext.storage(b"ccc"), Some(vec![]));
 			ext.clear_storage(b"ccc");

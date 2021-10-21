@@ -34,10 +34,7 @@ pub fn config(code: Option<&[u8]>) -> GenesisConfig {
 
 /// Create genesis runtime configuration for tests with some extra
 /// endowed accounts.
-pub fn config_endowed(
-	code: Option<&[u8]>,
-	extra_endowed: Vec<AccountId>,
-) -> GenesisConfig {
+pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> GenesisConfig {
 	let mut endowed = vec![
 		(alice(), 111 * DOLLARS),
 		(bob(), 100 * DOLLARS),

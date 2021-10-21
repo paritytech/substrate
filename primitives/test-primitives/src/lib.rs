@@ -80,4 +80,3 @@ pub type Digest = sp_runtime::generic::Digest;
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
-

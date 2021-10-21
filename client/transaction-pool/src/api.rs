@@ -28,10 +28,7 @@ use futures::{
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use sc_client_api::{
-	blockchain::HeaderBackend,
-	BlockBackend,
-};
+use sc_client_api::{blockchain::HeaderBackend, BlockBackend};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{

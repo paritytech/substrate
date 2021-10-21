@@ -25,11 +25,7 @@ use codec::{Decode, Encode, KeyedVec};
 use frame_support::{decl_module, decl_storage, storage};
 use frame_system::Config;
 use sp_core::storage::well_known_keys;
-use sp_io::{
-	hashing::blake2_256,
-	storage::root as storage_root,
-	trie,
-};
+use sp_io::{hashing::blake2_256, storage::root as storage_root, trie};
 use sp_runtime::{
 	generic,
 	traits::Header as _,

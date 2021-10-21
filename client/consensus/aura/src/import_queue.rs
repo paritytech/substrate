@@ -44,9 +44,9 @@ use sp_consensus_slots::Slot;
 use sp_core::{crypto::Pair, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
-	DigestItem,
 	generic::{BlockId, OpaqueDigestItemId},
 	traits::{Block as BlockT, Header},
+	DigestItem,
 };
 use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
 
@@ -189,11 +189,7 @@ where
 #[async_trait::async_trait]
 impl<B: BlockT, C, P, CAW, CIDP> Verifier<B> for AuraVerifier<C, P, CAW, CIDP>
 where
-	C: ProvideRuntimeApi<B>
-		+ Send
-		+ Sync
-		+ sc_client_api::backend::AuxStore
-		+ BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,

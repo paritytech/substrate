@@ -191,20 +191,13 @@ impl<Transaction, H: Hasher> StorageTransactionCache<Transaction, H> {
 	}
 }
 
-impl<Transaction, H: Hasher> Default
-	for StorageTransactionCache<Transaction, H>
-{
+impl<Transaction, H: Hasher> Default for StorageTransactionCache<Transaction, H> {
 	fn default() -> Self {
-		Self {
-			transaction: None,
-			transaction_storage_root: None,
-		}
+		Self { transaction: None, transaction_storage_root: None }
 	}
 }
 
-impl<Transaction: Default, H: Hasher> Default
-	for StorageChanges<Transaction, H>
-{
+impl<Transaction: Default, H: Hasher> Default for StorageChanges<Transaction, H> {
 	fn default() -> Self {
 		Self {
 			main_storage_changes: Default::default(),
@@ -859,12 +852,7 @@ mod tests {
 		overlay.set_storage(b"doug".to_vec(), None);
 
 		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&backend,
-			None,
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 

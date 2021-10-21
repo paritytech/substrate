@@ -30,9 +30,8 @@ use log::info;
 use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
 use sc_client_api::{
-	execution_extensions::ExecutionExtensions,
-	proof_provider::ProofProvider, BadBlocks, BlockBackend, BlockchainEvents, ExecutorProvider,
-	ForkBlocks, StorageProvider, UsageProvider,
+	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, BadBlocks,
+	BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;

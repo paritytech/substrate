@@ -512,12 +512,7 @@ fn should_query_storage() {
 	}
 
 	run_tests(Arc::new(substrate_test_runtime_client::new()));
-	run_tests(
-		Arc::new(
-			TestClientBuilder::new()
-				.build(),
-		),
-	);
+	run_tests(Arc::new(TestClientBuilder::new().build()));
 }
 
 #[test]

@@ -32,7 +32,7 @@ use sp_consensus_babe::{
 };
 use sp_consensus_slots::Slot;
 use sp_core::{Pair, Public};
-use sp_runtime::{ DigestItem, traits::Header };
+use sp_runtime::{traits::Header, DigestItem};
 
 /// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {

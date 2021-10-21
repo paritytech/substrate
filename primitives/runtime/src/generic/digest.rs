@@ -63,18 +63,12 @@ impl Digest {
 	}
 
 	/// Get reference to the first digest item that matches the passed predicate.
-	pub fn log<T: ?Sized, F: Fn(&DigestItem) -> Option<&T>>(
-		&self,
-		predicate: F,
-	) -> Option<&T> {
+	pub fn log<T: ?Sized, F: Fn(&DigestItem) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
 		self.logs().iter().find_map(predicate)
 	}
 
 	/// Get a conversion of the first digest item that successfully converts using the function.
-	pub fn convert_first<T, F: Fn(&DigestItem) -> Option<T>>(
-		&self,
-		predicate: F,
-	) -> Option<T> {
+	pub fn convert_first<T, F: Fn(&DigestItem) -> Option<T>>(&self, predicate: F) -> Option<T> {
 		self.logs().iter().find_map(predicate)
 	}
 }
@@ -145,47 +139,37 @@ impl TypeInfo for DigestItem {
 	type Identity = Self;
 
 	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new("DigestItem", module_path!()))
-			.variant(
-				Variants::new()
-					.variant("PreRuntime", |v| {
-						v.index(DigestItemType::PreRuntime as u8).fields(
-							Fields::unnamed()
-								.field(|f| {
-									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
-								})
-								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
-						)
-					})
-					.variant("Consensus", |v| {
-						v.index(DigestItemType::Consensus as u8).fields(
-							Fields::unnamed()
-								.field(|f| {
-									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
-								})
-								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
-						)
-					})
-					.variant("Seal", |v| {
-						v.index(DigestItemType::Seal as u8).fields(
-							Fields::unnamed()
-								.field(|f| {
-									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
-								})
-								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
-						)
-					})
-					.variant("Other", |v| {
-						v.index(DigestItemType::Other as u8).fields(
-							Fields::unnamed().field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
-						)
-					})
-					.variant("RuntimeEnvironmentUpdated", |v| {
-						v.index(DigestItemType::RuntimeEnvironmentUpdated as u8)
-							.fields(Fields::unit())
-					}),
-			)
+		Type::builder().path(Path::new("DigestItem", module_path!())).variant(
+			Variants::new()
+				.variant("PreRuntime", |v| {
+					v.index(DigestItemType::PreRuntime as u8).fields(
+						Fields::unnamed()
+							.field(|f| f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId"))
+							.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+					)
+				})
+				.variant("Consensus", |v| {
+					v.index(DigestItemType::Consensus as u8).fields(
+						Fields::unnamed()
+							.field(|f| f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId"))
+							.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+					)
+				})
+				.variant("Seal", |v| {
+					v.index(DigestItemType::Seal as u8).fields(
+						Fields::unnamed()
+							.field(|f| f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId"))
+							.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+					)
+				})
+				.variant("Other", |v| {
+					v.index(DigestItemType::Other as u8)
+						.fields(Fields::unnamed().field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")))
+				})
+				.variant("RuntimeEnvironmentUpdated", |v| {
+					v.index(DigestItemType::RuntimeEnvironmentUpdated as u8).fields(Fields::unit())
+				}),
+		)
 	}
 }
 
@@ -464,10 +448,7 @@ mod tests {
 	#[test]
 	fn should_serialize_digest() {
 		let digest = Digest {
-			logs: vec![
-				DigestItem::Other(vec![1, 2, 3]),
-				DigestItem::Seal(*b"test", vec![1, 2, 3]),
-			],
+			logs: vec![DigestItem::Other(vec![1, 2, 3]), DigestItem::Seal(*b"test", vec![1, 2, 3])],
 		};
 
 		assert_eq!(

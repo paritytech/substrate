@@ -141,11 +141,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn notify_slot(&self, _header: &B::Header, _slot: Slot, _epoch_data: &Self::EpochData) {}
 
 	/// Return the pre digest data to include in a block authored with the given claim.
-	fn pre_digest_data(
-		&self,
-		slot: Slot,
-		claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem>;
+	fn pre_digest_data(&self, slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem>;
 
 	/// Returns a function which produces a `BlockImportParams`.
 	fn block_import_params(

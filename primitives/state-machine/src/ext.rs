@@ -648,11 +648,7 @@ where
 			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
 		}
 		self.overlay
-			.drain_storage_changes(
-				self.backend,
-				Default::default(),
-				self.storage_transaction_cache,
-			)
+			.drain_storage_changes(self.backend, Default::default(), self.storage_transaction_cache)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
@@ -667,11 +663,7 @@ where
 		}
 		let changes = self
 			.overlay
-			.drain_storage_changes(
-				self.backend,
-				Default::default(),
-				self.storage_transaction_cache,
-			)
+			.drain_storage_changes(self.backend, Default::default(), self.storage_transaction_cache)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend
 			.commit(
@@ -869,9 +861,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		InMemoryBackend,
-	};
+	use crate::InMemoryBackend;
 	use codec::Encode;
 	use sp_core::{
 		map,

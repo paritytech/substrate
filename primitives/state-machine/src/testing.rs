@@ -23,9 +23,8 @@ use std::{
 };
 
 use crate::{
-	backend::Backend,
-	ext::Ext,
-	InMemoryBackend, OverlayedChanges, StorageKey, StorageTransactionCache, StorageValue,
+	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
+	StorageTransactionCache, StorageValue,
 };
 
 use hash_db::Hasher;

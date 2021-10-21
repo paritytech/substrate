@@ -20,9 +20,8 @@
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	DigestItem,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
-	Justification, Justifications,
+	DigestItem, Justification, Justifications,
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 

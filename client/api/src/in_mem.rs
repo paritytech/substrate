@@ -29,8 +29,8 @@ use sp_runtime::{
 	Justification, Justifications, Storage,
 };
 use sp_state_machine::{
-	Backend as StateBackend, ChildStorageCollection, InMemoryBackend,
-	IndexOperation, StorageCollection,
+	Backend as StateBackend, ChildStorageCollection, InMemoryBackend, IndexOperation,
+	StorageCollection,
 };
 use std::{
 	collections::{HashMap, HashSet},

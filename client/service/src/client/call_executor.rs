@@ -26,10 +26,7 @@ use sp_core::{
 	NativeOrEncoded, NeverNativeValue,
 };
 use sp_externalities::Extensions;
-use sp_runtime::{
-	generic::BlockId,
-	traits::Block as BlockT,
-};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
 	self, backend::Backend as _, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
 	StateMachine, StorageProof,

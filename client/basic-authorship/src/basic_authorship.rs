@@ -40,9 +40,9 @@ use sp_consensus::{
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
-	Digest,
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
+	Digest,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -690,9 +690,7 @@ mod tests {
 
 		let state = backend.state_at(block_id).unwrap();
 
-		let storage_changes = api
-			.into_storage_changes(&state, genesis_hash)
-			.unwrap();
+		let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,

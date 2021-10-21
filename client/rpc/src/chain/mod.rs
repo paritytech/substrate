@@ -32,9 +32,7 @@ use rpc::{
 use std::sync::Arc;
 
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
-use sc_client_api::{
-	BlockchainEvents,
-};
+use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},

@@ -30,9 +30,8 @@ use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
-		self, apply_aux, BlockImportOperation, ClientImportOperation,
-		Finalizer, ImportSummary, LockImportRun, NewBlockState,
-		StorageProvider,
+		self, apply_aux, BlockImportOperation, ClientImportOperation, Finalizer, ImportSummary,
+		LockImportRun, NewBlockState, StorageProvider,
 	},
 	client::{
 		BadBlocks, BlockBackend, BlockImportNotification, BlockOf, BlockchainEvents, ClientInfo,
@@ -68,23 +67,17 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
-		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One,
-		SaturatedConversion, Zero,
+		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion, Zero,
 	},
-	Digest, BuildStorage, Justification, Justifications,
+	BuildStorage, Digest, Justification, Justifications,
 };
 use sp_state_machine::{
-	prove_child_read, prove_range_read_with_size, prove_read,
-	read_range_proof_check, Backend as StateBackend,
+	prove_child_read, prove_range_read_with_size, prove_read, read_range_proof_check,
+	Backend as StateBackend,
 };
 use sp_trie::StorageProof;
 use std::{
-	collections::HashMap,
-	marker::PhantomData,
-	panic::UnwindSafe,
-	path::PathBuf,
-	result,
-	sync::Arc,
+	collections::HashMap, marker::PhantomData, panic::UnwindSafe, path::PathBuf, result, sync::Arc,
 };
 
 #[cfg(feature = "test-helpers")]

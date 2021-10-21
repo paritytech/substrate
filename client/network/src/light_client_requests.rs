@@ -45,4 +45,3 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 		inbound_queue: None,
 	}
 }
-

@@ -41,10 +41,7 @@ use sp_state_machine::{
 };
 use sp_storage::{ChildInfo, StorageKey};
 use sp_trie::{trie_types::Layout, TrieConfiguration};
-use std::{
-	collections::HashSet,
-	sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
 	prelude::*,

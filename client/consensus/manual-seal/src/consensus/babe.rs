@@ -48,9 +48,9 @@ use sp_consensus_babe::{
 use sp_consensus_slots::Slot;
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
-	DigestItem,
 	generic::{BlockId, Digest},
 	traits::{Block as BlockT, Header, Zero},
+	DigestItem,
 };
 use sp_timestamp::{InherentType, TimestampInherentData, INHERENT_IDENTIFIER};
 
@@ -194,11 +194,7 @@ where
 {
 	type Transaction = TransactionFor<C, B>;
 
-	fn create_digest(
-		&self,
-		parent: &B::Header,
-		inherents: &InherentData,
-	) -> Result<Digest, Error> {
+	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
 		let slot = inherents
 			.babe_inherent_data()?
 			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;

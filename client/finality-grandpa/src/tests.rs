@@ -149,11 +149,7 @@ impl TestNetFactory for GrandpaTestNet {
 		)
 		.expect("Could not create block import for fresh peer.");
 		let justification_import = Box::new(import.clone());
-		(
-			BlockImportAdapter::new(import),
-			Some(justification_import),
-			Mutex::new(Some(link)),
-		)
+		(BlockImportAdapter::new(import), Some(justification_import), Mutex::new(Some(link)))
 	}
 
 	fn peer(&mut self, i: usize) -> &mut GrandpaPeer {

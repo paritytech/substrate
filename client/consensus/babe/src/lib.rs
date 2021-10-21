@@ -103,9 +103,7 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE}
 use sp_api::{ApiExt, NumberFor, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{
-	Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
-};
+use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain, SlotData,
@@ -116,9 +114,9 @@ use sp_core::{crypto::Public, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	DigestItem,
 	generic::{BlockId, OpaqueDigestItemId},
 	traits::{Block as BlockT, Header, Zero},
+	DigestItem,
 };
 
 pub use sc_consensus_slots::SlotProportion;
@@ -676,9 +674,7 @@ impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B>
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = ClientError>,
+	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error> + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -772,11 +768,7 @@ where
 		});
 	}
 
-	fn pre_digest_data(
-		&self,
-		_slot: Slot,
-		claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem> {
+	fn pre_digest_data(&self, _slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
 		vec![<DigestItem as CompatibleDigestItem>::babe_pre_digest(claim.0.clone())]
 	}
 
@@ -818,8 +810,7 @@ where
 					.clone()
 					.try_into()
 					.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-				let digest_item =
-					<DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
+				let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
 
 				let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 				import_block.post_digests.push(digest_item);

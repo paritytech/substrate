@@ -425,10 +425,7 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 		Self { algorithm, _marker: PhantomData }
 	}
 
-	fn check_header(
-		&self,
-		mut header: B::Header,
-	) -> Result<(B::Header, DigestItem), Error<B>>
+	fn check_header(&self, mut header: B::Header) -> Result<(B::Header, DigestItem), Error<B>>
 	where
 		Algorithm: PowAlgorithm<B>,
 	{
@@ -702,10 +699,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 }
 
 /// Fetch PoW seal.
-fn fetch_seal<B: BlockT>(
-	digest: Option<&DigestItem>,
-	hash: B::Hash,
-) -> Result<Vec<u8>, Error<B>> {
+fn fetch_seal<B: BlockT>(digest: Option<&DigestItem>, hash: B::Hash) -> Result<Vec<u8>, Error<B>> {
 	match digest {
 		Some(DigestItem::Seal(id, seal)) =>
 			if id == &POW_ENGINE_ID {

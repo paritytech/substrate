@@ -38,10 +38,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},
 };
-use sp_runtime::{
-	generic::BlockId,
-	traits::Block,
-};
+use sp_runtime::{generic::BlockId, traits::Block};
 use std::sync::Arc;
 
 const LOG_TARGET: &str = "light-client-request-handler";
