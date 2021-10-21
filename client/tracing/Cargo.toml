@@ -25,8 +25,8 @@ rustc-hash = "1.1.0"
 serde = "1.0.126"
 thiserror = "1.0.21"
 tracing = "0.1.29"
-tracing-log = "0.1.2"
-tracing-subscriber = "0.2.19"
+tracing-log = { version = "0.1.2", features = ["interest-cache"] }
+tracing-subscriber = "0.2.25"
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
