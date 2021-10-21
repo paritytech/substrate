@@ -217,6 +217,7 @@ fn decl_all_pallets<'a>(
 
 	quote!(
 		#types
+
 		/// All pallets included in the runtime as a nested tuple of types.
 		/// Excludes the System pallet.
 		pub type AllPallets = ( #all_pallets );

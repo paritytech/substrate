@@ -46,7 +46,6 @@ variables:                         &default-vars
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
   SIMNET_FEATURES_PATH:            "simnet_tests/tests"
-  PIPELINE_SCRIPTS_TAG:            "v0.1"
 
 default:
   cache:                           {}
