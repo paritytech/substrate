@@ -979,7 +979,11 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>, T::MaxVali
 	/// Panics if `targets` size is bigger than T::MaxNominations, or if it cannot convert `weight`
 	/// into a `BalanceOf`.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
+	fn add_voter(
+		voter: T::AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<T::AccountId, Self::MaximumVotesPerVoter>,
+	) {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -995,8 +999,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>, T::MaxVali
 			},
 		);
 
-		let targets = BoundedVec::<_, T::MaxNominations>::try_from(targets)
-			.expect("targets Vec length too large, benchmark needs reconfiguring");
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
@@ -1033,12 +1035,15 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>, T::MaxVali
 
 	/// # Panic
 	///
-	/// Panics if `voters` 3rd element is larger than T::MaxNominations, or if the 2nd element
-	/// cannot be converted into a `BalanceOf`.
+	/// Panics if `voters` 2nd element cannot be converted into a `BalanceOf`.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-		targets: Vec<T::AccountId>,
+		voters: Vec<(
+			T::AccountId,
+			VoteWeight,
+			BoundedVec<T::AccountId, Self::MaximumVotesPerVoter>,
+		)>,
+		targets: BoundedVec<T::AccountId, Self::MaximumVotesPerVoter>,
 		target_stake: Option<VoteWeight>,
 	) {
 		targets.into_iter().for_each(|v| {
@@ -1077,9 +1082,11 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>, T::MaxVali
 					claimed_rewards: Default::default(),
 				},
 			);
-			let targets = BoundedVec::<_, T::MaxNominations>::try_from(t)
-				.expect("targets vec too large, benchmark needs reconfiguring.");
-			Self::do_add_nominator(&v, Nominations { targets, submitted_in: 0, suppressed: false });
+
+			Self::do_add_nominator(
+				&v,
+				Nominations { targets: t, submitted_in: 0, suppressed: false },
+			);
 		});
 	}
 }
