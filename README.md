@@ -4,6 +4,7 @@
   <img src="/docs/media/sub.gif">
 </p>
 
+
 Substrate is a next-generation framework for blockchain innovation 🚀.
 
 ## Trying it out
