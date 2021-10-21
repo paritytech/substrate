@@ -99,7 +99,10 @@ pub mod pallet {
 	use sp_core::storage::well_known_keys::{
 		CHILD_STORAGE_KEY_PREFIX, DEFAULT_CHILD_STORAGE_KEY_PREFIX,
 	};
-	use sp_runtime::traits::{Bounded, Saturating};
+	use sp_runtime::{
+		offchain::storage::{MutateStorageError, StorageValueRef},
+		traits::{Bounded, Saturating},
+	};
 	use sp_std::prelude::*;
 
 	pub(crate) type BalanceOf<T> =
@@ -117,10 +120,9 @@ pub mod pallet {
 	/// A migration task stored in state.
 	///
 	/// It tracks the last top and child keys read.
-	#[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
+	#[derive(Clone, Encode, Decode, scale_info::TypeInfo, PartialEq, Eq)]
 	#[codec(mel_bound(T: Config))]
 	#[scale_info(skip_type_params(T))]
-	#[cfg_attr(test, derive(PartialEq, Eq))]
 	pub struct MigrationTask<T: Config> {
 		/// The top key that we currently have to iterate.
 		///
@@ -133,6 +135,9 @@ pub mod pallet {
 		/// If this is set, no further top keys are processed until the child key migration is
 		/// complete.
 		pub(crate) current_child: Option<Vec<u8>>,
+
+		/// A marker to indicate if the previous tick was a child tree migration or not.
+		pub(crate) prev_tick_child: bool,
 
 		/// dynamic counter for the number of items that we have processed in this execution from
 		/// the top trie.
@@ -155,7 +160,12 @@ pub mod pallet {
 		pub(crate) dyn_size: u32,
 
 		#[codec(skip)]
-		_ph: sp_std::marker::PhantomData<T>,
+		pub(crate) _ph: sp_std::marker::PhantomData<T>,
+
+		// TODO: I might remove these if they end up not being used.
+		pub(crate) size: u32,
+		pub(crate) top_items: u32,
+		pub(crate) child_items: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -170,9 +180,13 @@ pub mod pallet {
 					"child",
 					&self.current_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
 				)
+				.field("prev_tick_child", &self.prev_tick_child)
 				.field("dyn_top_items", &self.dyn_top_items)
 				.field("dyn_child_items", &self.dyn_child_items)
 				.field("dyn_size", &self.dyn_size)
+				.field("size", &self.size)
+				.field("top_items", &self.top_items)
+				.field("child_items", &self.child_items)
 				.finish()
 		}
 	}
@@ -185,7 +199,11 @@ pub mod pallet {
 				dyn_child_items: Default::default(),
 				dyn_top_items: Default::default(),
 				dyn_size: Default::default(),
+				prev_tick_child: Default::default(),
 				_ph: Default::default(),
+				size: Default::default(),
+				top_items: Default::default(),
+				child_items: Default::default(),
 			}
 		}
 	}
@@ -204,12 +222,17 @@ pub mod pallet {
 		/// bounded (e.g. a parachain), but it is acceptable otherwise (relay chain, offchain
 		/// workers).
 		pub(crate) fn migrate_until_exhaustion(&mut self, limits: MigrationLimits) {
+			log!(debug, "running migrations until {:?}", limits);
 			loop {
 				self.migrate_tick();
 				if self.exhausted(limits) {
 					break
 				}
 			}
+			self.size = self.size.saturating_add(self.dyn_size);
+			self.child_items = self.child_items.saturating_add(self.dyn_child_items);
+			self.top_items = self.top_items.saturating_add(self.dyn_top_items);
+			log!(debug, "finished with {:?}", self);
 		}
 
 		/// Check if there's any work left, or if we have exhausted the limits already.
@@ -230,21 +253,25 @@ pub mod pallet {
 				(Some(_), Some(_)) => {
 					// we're in the middle of doing work on a child tree.
 					self.migrate_child();
-					if self.current_child.is_none() {
-						// this is the end of this child trie. process the top trie as well.
-						self.migrate_top()
-					}
 				},
 				(Some(ref top_key), None) => {
-					if top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX) {
+					if top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX) &&
+						!self.prev_tick_child
+					{
 						// no child migration at hand, but one will begin here.
-						self.current_child = Some(vec![]);
-						self.migrate_child();
-						if self.current_child.is_none() {
-							// this is the end of this child trie. process the top trie as well.
-							self.migrate_top()
+						let maybe_first_child_key = {
+							let child_top_key = Pallet::<T>::child_io_key(top_key);
+							sp_io::default_child_storage::next_key(child_top_key, &vec![])
+						};
+						if let Some(first_child_key) = maybe_first_child_key {
+							self.current_child = Some(first_child_key);
+							self.prev_tick_child = true;
+							self.migrate_child();
+						} else {
+							self.migrate_top();
 						}
 					} else {
+						self.prev_tick_child = false;
 						self.migrate_top();
 					}
 				},
@@ -267,13 +294,13 @@ pub mod pallet {
 				self.current_child.clone().expect("value checked to be `Some`; qed");
 			let current_top = self.current_top.clone().expect("value checked to be `Some`; qed");
 
-			let child_key = Pallet::<T>::child_io_key(&current_top);
-			if let Some(data) = sp_io::default_child_storage::get(child_key, &current_child) {
+			let child_top_key = Pallet::<T>::child_io_key(&current_top);
+			if let Some(data) = sp_io::default_child_storage::get(child_top_key, &current_child) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::default_child_storage::set(child_key, &current_child, &data)
+				sp_io::default_child_storage::set(child_top_key, &current_child, &data)
 			}
 			self.dyn_child_items.saturating_inc();
-			let next_key = sp_io::default_child_storage::next_key(child_key, &current_child);
+			let next_key = sp_io::default_child_storage::next_key(child_top_key, &current_child);
 			self.current_child = next_key;
 			log!(
 				trace,
@@ -360,6 +387,9 @@ pub mod pallet {
 
 		/// The priority used for unsigned transactions.
 		type Priority: Get<TransactionPriority>;
+
+		/// The repeat frequency of offchain workers.
+		type OffchainRepeat: Get<Self::BlockNumber>;
 	}
 
 	/// Migration progress.
@@ -464,6 +494,7 @@ pub mod pallet {
 				task.dyn_child_items,
 				MigrationCompute::Unsigned,
 			));
+			MigrationProcess::<T>::put(task);
 
 			Ok(().into())
 		}
@@ -625,7 +656,12 @@ pub mod pallet {
 			}
 		}
 
-		fn offchain_worker(_: BlockNumberFor<T>) {
+		fn offchain_worker(now: BlockNumberFor<T>) {
+			if Self::ensure_offchain_repeat_frequency(now).is_err() {
+				return
+			}
+
+			log!(debug, "started offchain worker thread.");
 			if let Some(unsigned_size_limit) = Self::unsigned_size_limit() {
 				let mut task = Self::migration_process();
 				let limits =
@@ -646,10 +682,17 @@ pub mod pallet {
 				match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 					Ok(_) => {
 						log!(
-							debug,
+							info,
 							"submitted a call to migrate {} items of {} bytes.",
 							safe_items_to_read,
-							task.dyn_size
+							{
+								let mut t = Self::migration_process();
+								t.migrate_until_exhaustion(MigrationLimits {
+									item: safe_items_to_read,
+									size: Bounded::max_value(),
+								});
+								t.dyn_size
+							}
 						)
 					},
 					Err(why) => {
@@ -701,6 +744,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		const OFFCHAIN_LAST_BLOCK: &'static [u8] = b"parity/state-migration/last-block";
+
 		/// The real weight of a migration of the given number of `items` with total `size`.
 		fn dynamic_weight(items: u32, size: u32) -> frame_support::pallet_prelude::Weight {
 			let items = items as Weight;
@@ -721,6 +766,48 @@ pub mod pallet {
 			match ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(storage_key)) {
 				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
 				None => unreachable!(),
+			}
+		}
+
+		/// Checks if an execution of the offchain worker is permitted at the given block number, or
+		/// not.
+		///
+		/// This makes sure that
+		/// 1. we don't run on previous blocks in case of a re-org
+		/// 2. we don't run twice within a window of length `T::OffchainRepeat`.
+		///
+		/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If
+		/// `Ok()` is returned, `now` is written in storage and will be used in further calls as the
+		/// baseline.
+		pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), &'static str> {
+			let threshold = T::OffchainRepeat::get();
+			let last_block = StorageValueRef::persistent(&Self::OFFCHAIN_LAST_BLOCK);
+
+			let mutate_stat = last_block.mutate::<_, &'static str, _>(
+				|maybe_head: Result<Option<T::BlockNumber>, _>| {
+					match maybe_head {
+						Ok(Some(head)) if now < head => Err("fork."),
+						Ok(Some(head)) if now >= head && now <= head + threshold =>
+							Err("recently executed."),
+						Ok(Some(head)) if now > head + threshold => {
+							// we can run again now. Write the new head.
+							Ok(now)
+						},
+						_ => {
+							// value doesn't exists. Probably this node just booted up. Write, and
+							// okay.
+							Ok(now)
+						},
+					}
+				},
+			);
+
+			match mutate_stat {
+				Ok(_) => Ok(()),
+				Err(MutateStorageError::ConcurrentModification(_)) =>
+					Err("failed to write to offchain db (ConcurrentModification)."),
+				Err(MutateStorageError::ValueFunctionFailed(_)) =>
+					Err("failed to write to offchain db (ValueFunctionFailed)."),
 			}
 		}
 	}
@@ -748,14 +835,21 @@ mod benchmarks {
 
 #[cfg(test)]
 mod mock {
+	use parking_lot::RwLock;
+	use std::sync::Arc;
+
 	use super::*;
 	use crate as pallet_state_trie_migration;
 	use frame_support::{parameter_types, traits::Hooks};
 	use frame_system::EnsureRoot;
 	use sp_core::H256;
 	use sp_runtime::{
+		offchain::{
+			testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
+			OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+		},
 		testing::Header,
-		traits::{BlakeTwo256, IdentityLookup},
+		traits::{BlakeTwo256, Dispatchable, Header as _, IdentityLookup},
 		StateVersion,
 	};
 
@@ -808,6 +902,7 @@ mod mock {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
+		pub const OffchainRepeat: u64 = 4;
 	}
 
 	impl pallet_balances::Config for Test {
@@ -829,6 +924,7 @@ mod mock {
 		type SignedDepositPerItem = ();
 		type WeightInfo = ();
 		type Priority = ();
+		type OffchainRepeat = OffchainRepeat;
 	}
 
 	impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -841,10 +937,10 @@ mod mock {
 
 	pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-	pub fn new_test_ext() -> sp_io::TestExternalities {
+	pub fn new_test_ext(version: StateVersion) -> sp_io::TestExternalities {
 		use sp_core::storage::ChildInfo;
 
-		let mut storage = sp_core::storage::Storage {
+		let storage = sp_core::storage::Storage {
 			top: vec![
 				(b"key1".to_vec(), vec![1u8; 10]), // 6b657931
 				(b"key2".to_vec(), vec![2u8; 20]), // 6b657932
@@ -884,31 +980,111 @@ mod mock {
 			.collect(),
 		};
 
-		// let t = frame_system::GenesisConfig::default();
-		// t.assimilate_storage::<Test>(&mut storage).unwrap();
-
 		sp_tracing::try_init_simple();
-		(storage, StateVersion::V0).into()
+		(storage, version).into()
 	}
 
-	pub fn run_to_block(n: u64) {
+	pub fn new_offchain_ext(
+		version: StateVersion,
+	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
+		let mut ext = new_test_ext(version);
+		let (offchain, _offchain_state) = TestOffchainExt::new();
+		let (pool, pool_state) = TestTransactionPoolExt::new();
+
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
+		ext.register_extension(TransactionPoolExt::new(pool));
+
+		(ext, pool_state)
+	}
+
+	pub fn run_to_block(n: u64) -> H256 {
+		let mut root = Default::default();
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
 			System::on_initialize(System::block_number());
+
 			StateTrieMigration::on_initialize(System::block_number());
 
+			root = System::finalize().state_root().clone();
 			System::on_finalize(System::block_number());
 		}
+		root
+	}
+
+	pub fn run_to_block_and_drain_pool(n: u64, pool: Arc<RwLock<PoolState>>) -> H256 {
+		let mut root = Default::default();
+		while System::block_number() < n {
+			System::set_block_number(System::block_number() + 1);
+			System::on_initialize(System::block_number());
+
+			StateTrieMigration::on_initialize(System::block_number());
+
+			// drain previous transactions
+			pool.read()
+				.transactions
+				.clone()
+				.into_iter()
+				.map(|uxt| <Extrinsic as codec::Decode>::decode(&mut &*uxt).unwrap())
+				.for_each(|xt| {
+					// dispatch them all with no origin.
+					xt.call.dispatch(frame_system::RawOrigin::None.into()).unwrap();
+				});
+			pool.try_write().unwrap().transactions.clear();
+
+			StateTrieMigration::offchain_worker(System::block_number());
+
+			root = System::finalize().state_root().clone();
+			System::on_finalize(System::block_number());
+		}
+		root
 	}
 }
 
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
+	use sp_runtime::StateVersion;
+	use std::sync::Arc;
 
 	#[test]
-	fn auto_migrate_works() {
-		new_test_ext().execute_with(|| {
+	fn auto_migrate_works_single_item_per_block() {
+		let mut ext = new_test_ext(StateVersion::V0);
+		let root_upgraded = ext.execute_with(|| {
+			assert_eq!(AutoLimits::<Test>::get(), None);
+			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// nothing happens if we don't set the limits.
+			let _ = run_to_block(50);
+			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// this should allow 1 item per block to be migrated.
+			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1, size: 150 }));
+
+			let root = run_to_block(70);
+
+			// eventually everything is over.
+			assert!(matches!(
+				StateTrieMigration::migration_process(),
+				MigrationTask { current_child: None, current_top: None, .. }
+			));
+			root
+		});
+
+		let mut ext2 = new_test_ext(StateVersion::V1);
+		let root = ext2.execute_with(|| {
+			// update ex2 to contain the new items
+			let _ = run_to_block(50);
+			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1, size: 150 }));
+			run_to_block(70)
+		});
+		assert_eq!(root, root_upgraded);
+	}
+
+	#[test]
+	fn auto_migrate_works_multi_item_per_block() {
+		let mut ext = new_test_ext(StateVersion::V0);
+		let root_upgraded = ext.execute_with(|| {
 			assert_eq!(AutoLimits::<Test>::get(), None);
 			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
@@ -917,15 +1093,45 @@ mod test {
 			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
 			// this should allow 1 item per block to be migrated.
-			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1, size: 150 }));
+			AutoLimits::<Test>::put(Some(MigrationLimits { item: 5, size: 150 }));
 
-			run_to_block(80);
-		})
+			let root = run_to_block(70);
+
+			// eventually everything is over.
+			assert!(matches!(
+				StateTrieMigration::migration_process(),
+				MigrationTask { current_child: None, current_top: None, .. }
+			));
+
+			root
+		});
+
+		let mut ext2 = new_test_ext(StateVersion::V1);
+		let root = ext2.execute_with(|| {
+			// update ex2 to contain the new items
+			run_to_block(50);
+			AutoLimits::<Test>::put(Some(MigrationLimits { item: 5, size: 150 }));
+			run_to_block(70)
+		});
+		assert_eq!(root, root_upgraded);
 	}
 
 	#[test]
 	fn unsigned_migration_works() {
-		todo!();
+		let (mut ext, pool) = new_offchain_ext(StateVersion::V0);
+		ext.execute_with(|| {
+			assert_eq!(UnsignedSizeLimit::<Test>::get(), None);
+			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// nothing happens if we don't set the limits.
+			run_to_block_and_drain_pool(50, Arc::clone(&pool));
+			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+
+			// allow 50 bytes per run.
+			UnsignedSizeLimit::<Test>::put(Some(50));
+
+			run_to_block_and_drain_pool(70, Arc::clone(&pool));
+		});
 	}
 
 	#[test]

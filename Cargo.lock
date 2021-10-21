@@ -5962,6 +5962,7 @@ dependencies = [
  "log 0.4.14",
  "pallet-balances",
  "parity-scale-codec",
+ "parking_lot 0.11.1",
  "scale-info",
  "sp-core",
  "sp-io",

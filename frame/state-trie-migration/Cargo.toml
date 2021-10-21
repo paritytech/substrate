@@ -28,6 +28,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 
 [dev-dependencies]
 pallet-balances = { path = "../balances", version = "4.0.0-dev" }
+parking_lot = "0.11.0"
 sp-tracing = { path = "../../primitives/tracing", version = "4.0.0-dev" }
 
 [features]
