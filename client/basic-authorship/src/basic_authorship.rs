@@ -738,7 +738,7 @@ mod tests {
 		// beofre trying to validate extrinsics from the tx pool. Once we include empty
 		// block in between 'exhausted_resources' extrinsic from the pool is exeucted as
 		// the first one and the origin test logic is maintained
-		let block = client.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
+		let block = client.new_block_at(&BlockId::Hash(block_hash), create_digest(), false)
 			.unwrap()
 			.build(Default::default())
 			.unwrap();
@@ -904,7 +904,7 @@ mod tests {
 		let block = bb.produce_and_import_block();
 		assert_eq!(block.extrinsics().len(), 0);
 
-		let block = bb.produce_and_import_block();
+		let block = bb.produce_block(create_inherents(), create_digest()).unwrap();
 		assert_eq!(block.extrinsics().len(), 2);
 
 		let decrypted_payloads : HashSet<_> = block.extrinsics().iter()
@@ -1132,15 +1132,19 @@ mod tests {
 		);
 	}
 
+
 	#[test]
 	fn fail_to_create_block_on_uknown_collator_public_key(){
 		let _ = env_logger::try_init();
-		let mut digests : DigestFor<Block> = Default::default();
-		digests.push(DigestItem::babe_pre_digest(
-				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-					authority_index: substrate_test_runtime::DUMMY_COLLATOR_ID,
-					slot_number: Default::default(),
-				})));
+        let create_digest_with_missing_pub_key = || {
+            let mut digests : DigestFor<Block> = Default::default();
+            digests.push(DigestItem::babe_pre_digest(
+                    PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
+                        authority_index: substrate_test_runtime::DUMMY_COLLATOR_ID,
+                        slot_number: Default::default(),
+                    })));
+            digests
+        };
 
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -1157,15 +1161,15 @@ mod tests {
 		).unwrap();
 
 		// include encrypted tx into the block
-		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		let block = bb.produce_block(create_inherents(), create_digest()).unwrap();
 		bb.import_block(block);
 
 		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
+		let block = bb.produce_block(create_inherents(), create_digest()).unwrap();
 		bb.import_block(block);
 
 		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), digests.clone());
+		let block = bb.produce_block(create_inherents(), create_digest_with_missing_pub_key());
 
 		assert!(
 			matches!(

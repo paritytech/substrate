@@ -955,11 +955,11 @@ cfg_if! {
 
 
 				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					frame_support::storage::unhashed::get_or(b"singly", vec![])
+					unimplemented!()
 				}
 
 				fn get_account_id(block_builder_id: u32) -> Option<AccountId32>{
-				    None
+					unimplemented!()
 				}
 
 				fn get_authority_public_key(_authority_id: &AccountId32) -> Option<sp_core::ecdsa::Public>{
