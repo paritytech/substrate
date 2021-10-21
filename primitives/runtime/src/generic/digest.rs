@@ -472,7 +472,7 @@ mod tests {
 
 		assert_eq!(
 			serde_json::to_string(&digest).unwrap(),
-			r#"{"logs":["0x0204000000","0x000c010203","0x05746573740c010203"]}"#
+			r#"{"logs":["0x000c010203","0x05746573740c010203"]}"#
 		);
 	}
 

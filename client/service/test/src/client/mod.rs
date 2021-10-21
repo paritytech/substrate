@@ -1124,12 +1124,8 @@ fn doesnt_import_blocks_that_revert_finality() {
 	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 	let import_err = block_on(client.import(BlockOrigin::Own, b3)).err().unwrap();
-	let expected_err = ConsensusError::ClientImport(
-		sp_blockchain::Error::RuntimeApiError(sp_api::ApiError::Application(Box::new(
-			sp_blockchain::Error::NotInFinalizedChain,
-		)))
-		.to_string(),
-	);
+	let expected_err =
+		ConsensusError::ClientImport(sp_blockchain::Error::NotInFinalizedChain.to_string());
 
 	assert_eq!(import_err.to_string(), expected_err.to_string());
 
