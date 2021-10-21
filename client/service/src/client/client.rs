@@ -1034,7 +1034,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
                             for tx in pre_singly_encrypted_txs.iter(){
                                 if let Some(ExtrinsicType::DecryptedTx { identifier, decrypted_call }) = decrypted_transactions.get(&tx.tx_id){
                                     let iv = parse_iv(&tx.data).unwrap_or_default();
-                                    // let iv = parse_iv(&tx.data).ok_or(sp_blockchain::Error::MissingDecryptedTransaction(block_builder_id.clone()))?;
                                     let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &decrypted_call, iv);
                                     if tx.data != encrypted_payload {
                                         return Err(sp_blockchain::Error::DecryptedPayloadMismatch);
