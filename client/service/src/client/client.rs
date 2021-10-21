@@ -103,14 +103,16 @@ use {
 	super::call_executor::LocalCallExecutor,
 };
 
-use ecies::{utils::{aes_encrypt, aes_decrypt, encapsulate, decapsulate}, SecretKey, PublicKey};
+use ecies::{SecretKey, PublicKey};
+use ecies::utils::{aes_encrypt_with_iv, parse_iv, encapsulate};
+use ecies::consts::AES_IV_LENGTH;
 use sc_keystore::{KeyStorePtr, Store};
 
-fn encrypt_payload_using_pub_key(pub_key: &sp_core::ecdsa::Public, payload: &[u8]) -> Vec<u8>{
+fn encrypt_payload_using_pub_key(pub_key: &sp_core::ecdsa::Public, payload: &[u8], iv: [u8;AES_IV_LENGTH]) -> Vec<u8>{
     let dummy_secret_key: SecretKey = SecretKey::default();
     let pub_key = PublicKey::parse_slice(pub_key.as_ref(), None).unwrap();
     let encryption_key = encapsulate(&dummy_secret_key, &pub_key).unwrap();
-    aes_encrypt(&encryption_key, &payload).unwrap()
+    aes_encrypt_with_iv(&encryption_key, &payload, iv).unwrap()
 }
 
 
@@ -1031,7 +1033,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
                             for tx in pre_singly_encrypted_txs.iter(){
                                 if let Some(ExtrinsicType::DecryptedTx { identifier, decrypted_call }) = decrypted_transactions.get(&tx.tx_id){
-                                    let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &decrypted_call);
+                                    let iv = parse_iv(&tx.data).unwrap_or_default();
+                                    // let iv = parse_iv(&tx.data).ok_or(sp_blockchain::Error::MissingDecryptedTransaction(block_builder_id.clone()))?;
+                                    let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &decrypted_call, iv);
                                     if tx.data != encrypted_payload {
                                         return Err(sp_blockchain::Error::DecryptedPayloadMismatch);
                                     }
@@ -1047,7 +1051,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
                             for tx in pre_doubly_encrypted_txs.iter(){
                                 if let Some(ExtrinsicType::SinglyEncryptedTx { identifier, singly_encrypted_call }) = singly_encrypted_transaction.get(&tx.tx_id){
-                                    let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &singly_encrypted_call);
+                                    let iv = parse_iv(&tx.data).unwrap_or_default();
+                                    let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &singly_encrypted_call, iv);
                                     if tx.data != encrypted_payload {
                                         return Err(sp_blockchain::Error::DecryptedPayloadMismatch);
                                     }

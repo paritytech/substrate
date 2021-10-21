@@ -82,7 +82,7 @@ parity-util-mem = { version = "0.7.0", default-features = false, features = ["pr
 extrinsic-info-runtime-api = { version='2.0.0', path="../../primitives/extrinsic-info-runtime-api" }
 pallet-random-seed = { version="2.0.0", path="../../frame/random-seed"}
 extrinsic-shuffler = { version="0.8.0", path="../shuffler" }
-ecies = { version = "0.2", default-features = false, features = ["openssl"]}
+ecies = { path="/home/dev/ecies", version = "0.2", default-features = false, features = ["openssl"]}
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
