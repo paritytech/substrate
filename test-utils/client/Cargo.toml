@@ -23,7 +23,6 @@ sc-client-db = { version = "0.10.0-dev", features = [
 ], path = "../../client/db" }
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
 sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
-sc-light = { version = "4.0.0-dev", path = "../../client/light" }
 sc-offchain = { version = "4.0.0-dev", path = "../../client/offchain" }
 sc-service = { version = "0.10.0-dev", default-features = false, features = [
     "test-helpers",

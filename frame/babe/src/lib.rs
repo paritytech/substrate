@@ -633,7 +633,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
+		let log = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
 		<frame_system::Pallet<T>>::deposit_log(log.into())
 	}
 

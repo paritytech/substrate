@@ -47,7 +47,7 @@ use serde::Deserialize;
 use sp_core::storage::ChildInfo;
 use sp_runtime::{
 	codec::Encode,
-	traits::{BlakeTwo256, Block as BlockT},
+	traits::Block as BlockT,
 	OpaqueExtrinsic,
 };
 use std::{
@@ -55,10 +55,6 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-
-/// Test client light database backend.
-pub type LightBackend<Block> =
-	sc_light::Backend<sc_client_db::light::LightStorage<Block>, BlakeTwo256>;
 
 /// A genesis storage initialization trait.
 pub trait GenesisInit: Default {

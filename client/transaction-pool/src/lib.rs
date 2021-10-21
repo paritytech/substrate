@@ -38,7 +38,7 @@ pub mod test_helpers {
 	};
 }
 
-pub use crate::api::{FullChainApi, LightChainApi};
+pub use crate::api::FullChainApi;
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
@@ -79,9 +79,6 @@ type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output = ReadyIteratorFor<Pool
 
 /// A transaction pool for a full node.
 pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
-/// A transaction pool for a light node.
-pub type LightPool<Block, Client, Fetcher> =
-	BasicPool<LightChainApi<Client, Fetcher, Block>, Block>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -361,33 +358,6 @@ where
 
 	fn ready(&self) -> ReadyIteratorFor<PoolApi> {
 		Box::new(self.pool.validated_pool().ready())
-	}
-}
-
-impl<Block, Client, Fetcher> LightPool<Block, Client, Fetcher>
-where
-	Block: BlockT,
-	Client: sp_blockchain::HeaderBackend<Block> + sc_client_api::UsageProvider<Block> + 'static,
-	Fetcher: sc_client_api::Fetcher<Block> + 'static,
-{
-	/// Create new basic transaction pool for a light node with the provided api.
-	pub fn new_light(
-		options: graph::Options,
-		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnEssentialNamed,
-		client: Arc<Client>,
-		fetcher: Arc<Fetcher>,
-	) -> Self {
-		let pool_api = Arc::new(LightChainApi::new(client.clone(), fetcher));
-		Self::with_revalidation_type(
-			options,
-			false.into(),
-			pool_api,
-			prometheus,
-			RevalidationType::Light,
-			spawner,
-			client.usage_info().chain.best_number,
-		)
 	}
 }
 

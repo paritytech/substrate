@@ -26,7 +26,7 @@ use futures::{
 use jsonrpc_core::MetaIoHandler;
 use manual_seal::EngineCommand;
 use sc_client_api::{
-	backend::{self, Backend},
+	backend::Backend,
 	CallExecutor, ExecutorProvider,
 };
 use sc_executor::NativeElseWasmExecutor;
@@ -160,9 +160,6 @@ where
 	{
 		let id = BlockId::Hash(self.client.info().best_hash);
 		let mut overlay = OverlayedChanges::default();
-		let changes_trie =
-			backend::changes_tries_state_at_block(&id, self.backend.changes_trie_storage())
-				.unwrap();
 		let mut cache = StorageTransactionCache::<
 			T::Block,
 			<TFullBackend<T::Block> as Backend<T::Block>>::State,
@@ -180,7 +177,6 @@ where
 			&mut overlay,
 			&mut cache,
 			&state_backend,
-			changes_trie.clone(),
 			Some(&mut extensions),
 		);
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)

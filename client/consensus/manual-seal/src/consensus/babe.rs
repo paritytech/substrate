@@ -48,8 +48,9 @@ use sp_consensus_babe::{
 use sp_consensus_slots::Slot;
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
+	DigestItem,
 	generic::{BlockId, Digest},
-	traits::{Block as BlockT, DigestFor, DigestItemFor, Header, Zero},
+	traits::{Block as BlockT, Header, Zero},
 };
 use sp_timestamp::{InherentType, TimestampInherentData, INHERENT_IDENTIFIER};
 
@@ -197,7 +198,7 @@ where
 		&self,
 		parent: &B::Header,
 		inherents: &InherentData,
-	) -> Result<DigestFor<B>, Error> {
+	) -> Result<Digest, Error> {
 		let slot = inherents
 			.babe_inherent_data()?
 			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
@@ -207,7 +208,7 @@ where
 		let logs = if let Some((predigest, _)) =
 			authorship::claim_slot(slot, &epoch, &self.keystore)
 		{
-			vec![<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(predigest)]
+			vec![<DigestItem as CompatibleDigestItem>::babe_pre_digest(predigest)]
 		} else {
 			// well we couldn't claim a slot because this is an existing chain and we're not in the
 			// authorities. we need to tell BabeBlockImport that the epoch has changed, and we put
@@ -244,13 +245,13 @@ where
 					});
 
 					vec![
-						DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
-						DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode()),
+						DigestItem::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
+						DigestItem::Consensus(BABE_ENGINE_ID, next_epoch.encode()),
 					]
 				},
 				ViableEpochDescriptor::UnimportedGenesis(_) => {
 					// since this is the genesis, secondary predigest works for now.
-					vec![DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode())]
+					vec![DigestItem::PreRuntime(BABE_ENGINE_ID, predigest.encode())]
 				},
 			}
 		};

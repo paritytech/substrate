@@ -68,7 +68,7 @@ use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use sc_network::config::{OnDemand, TransactionImport, TransactionImportFuture};
+pub use sc_network::config::{TransactionImport, TransactionImportFuture};
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;

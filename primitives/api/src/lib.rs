@@ -97,7 +97,7 @@ pub use sp_runtime::{
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	Backend as StateBackend, ChangesTrieState, InMemoryBackend, OverlayedChanges, StorageProof,
+	Backend as StateBackend, InMemoryBackend, OverlayedChanges, StorageProof,
 };
 #[cfg(feature = "std")]
 use sp_std::result;
@@ -394,14 +394,12 @@ pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<<B as BlockT>::Hash>
 pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
 	<Backend as StateBackend<HashFor<Block>>>::Transaction,
 	HashFor<Block>,
-	NumberFor<Block>,
 >;
 
 #[cfg(feature = "std")]
 pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
 	<SBackend as StateBackend<HashFor<Block>>>::Transaction,
 	HashFor<Block>,
-	NumberFor<Block>,
 >;
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
@@ -514,7 +512,6 @@ pub trait ApiExt<Block: BlockT> {
 	fn into_storage_changes(
 		&self,
 		backend: &Self::StateBackend,
-		changes_trie_state: Option<&ChangesTrieState<HashFor<Block>, NumberFor<Block>>>,
 		parent_hash: Block::Hash,
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
 	where

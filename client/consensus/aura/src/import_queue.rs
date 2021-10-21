@@ -33,7 +33,7 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
-	HeaderBackend, ProvideCache,
+	HeaderBackend,
 };
 use sp_consensus::{CanAuthorWith, Error as ConsensusError};
 use sp_consensus_aura::{
@@ -44,8 +44,9 @@ use sp_consensus_slots::Slot;
 use sp_core::{crypto::Pair, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
+	DigestItem,
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, DigestItemFor, Header},
+	traits::{Block as BlockT, Header},
 };
 use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
 
@@ -61,9 +62,8 @@ fn check_header<C, B: BlockT, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	check_for_equivocation: CheckForEquivocation,
-) -> Result<CheckedHeader<B::Header, (Slot, DigestItemFor<B>)>, Error<B>>
+) -> Result<CheckedHeader<B::Header, (Slot, DigestItem)>, Error<B>>
 where
-	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
@@ -193,10 +193,8 @@ where
 		+ Send
 		+ Sync
 		+ sc_client_api::backend::AuxStore
-		+ ProvideCache<B>
 		+ BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
-	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
@@ -385,7 +383,6 @@ where
 	C: 'static
 		+ ProvideRuntimeApi<Block>
 		+ BlockOf
-		+ ProvideCache<Block>
 		+ Send
 		+ Sync
 		+ AuxStore
@@ -395,7 +392,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	DigestItemFor<Block>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,

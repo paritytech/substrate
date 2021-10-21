@@ -21,7 +21,7 @@ use super::Error;
 
 use sc_consensus::BlockImportParams;
 use sp_inherents::InherentData;
-use sp_runtime::traits::{Block as BlockT, DigestFor};
+use sp_runtime::{Digest, traits::Block as BlockT};
 
 pub mod babe;
 
@@ -36,7 +36,7 @@ pub trait ConsensusDataProvider<B: BlockT>: Send + Sync {
 		&self,
 		parent: &B::Header,
 		inherents: &InherentData,
-	) -> Result<DigestFor<B>, Error>;
+	) -> Result<Digest, Error>;
 
 	/// set up the neccessary import params.
 	fn append_block_import(

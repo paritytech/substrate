@@ -297,7 +297,6 @@ pub fn testnet_genesis(
 	GenesisConfig {
 		system: SystemConfig {
 			code: wasm_binary_unwrap().to_vec(),
-			changes_trie_config: Default::default(),
 		},
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),

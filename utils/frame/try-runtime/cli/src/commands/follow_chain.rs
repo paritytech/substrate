@@ -152,9 +152,8 @@ where
 			.map_err(|e| format!("failed to decode output: {:?}", e))?;
 
 		let storage_changes = changes
-			.drain_storage_changes::<_, _, NumberFor<Block>>(
+			.drain_storage_changes(
 				&state_ext.backend,
-				None,
 				Default::default(),
 				&mut Default::default(),
 			)
