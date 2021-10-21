@@ -570,7 +570,6 @@ cargo-check-macos:
         --substrate
         "$DEPENDENT_REPO"
         "$GITHUB_PR_TOKEN"
-    - cd "$DEPENDENT_REPO" && git rev-parse --abbrev-ref HEAD
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
