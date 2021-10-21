@@ -100,8 +100,10 @@ frame_support::construct_runtime!(
 );
 
 thread_local! {
-	pub static VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
-	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
+	pub static VALIDATORS: RefCell<BoundedVec<u64, MaxValidatorsCount>> =
+		RefCell::new(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxValidatorsCount > 3"));
+	pub static NEXT_VALIDATORS: RefCell<BoundedVec<u64, MaxValidatorsCount>> =
+		RefCell::new(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxValidatorsCount > 3"));
 	pub static AUTHORITIES: RefCell<Vec<UintAuthorityId>> =
 		RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 	pub static FORCE_SESSION_END: RefCell<bool> = RefCell::new(false);
@@ -117,8 +119,8 @@ pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
 		let l = SESSION_LENGTH.with(|l| *l.borrow());
-		now % l == 0 ||
-			FORCE_SESSION_END.with(|l| {
+		now % l == 0
+			|| FORCE_SESSION_END.with(|l| {
 				let r = *l.borrow();
 				*l.borrow_mut() = false;
 				r
@@ -152,10 +154,10 @@ impl SessionHandler<u64> for TestSessionHandler {
 }
 
 pub struct TestSessionManager;
-impl SessionManager<u64> for TestSessionManager {
+impl SessionManager<u64, MaxValidatorsCount> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
-	fn new_session(_: SessionIndex) -> Option<Vec<u64>> {
+	fn new_session(_: SessionIndex) -> Option<BoundedVec<u64, MaxValidatorsCount>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
 			VALIDATORS.with(|v| {
 				let mut v = v.borrow_mut();
@@ -173,12 +175,12 @@ impl SessionManager<u64> for TestSessionManager {
 }
 
 #[cfg(feature = "historical")]
-impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
+impl crate::historical::SessionManager<u64, u64, MaxValidatorsCount> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
-	fn new_session(new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
-		<Self as SessionManager<_>>::new_session(new_index)
-			.map(|vals| vals.into_iter().map(|val| (val, val)).collect())
+	fn new_session(new_index: SessionIndex) -> Option<BoundedVec<(u64, u64), MaxValidatorsCount>> {
+		<Self as SessionManager<_, _>>::new_session(new_index)
+			.map(|vals| vals.map_collect(|val| (val, val)))
 	}
 }
 
@@ -199,6 +201,8 @@ pub fn session_changed() -> bool {
 }
 
 pub fn set_next_validators(next: Vec<u64>) {
+	let next = BoundedVec::<_, MaxValidatorsCount>::try_from(next)
+		.expect("frame_session.set_next_validators: some test parameters need changing");
 	NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next);
 }
 
@@ -231,6 +235,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 	pub const BlockHashCount: u64 = 250;
+	pub const MaxValidatorsCount: u32 = 1_000;
+	pub const MaxKeysEncodingSize: u32 = 1_000;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -279,6 +285,8 @@ impl Config for Test {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = Event;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxKeysEncodingSize = MaxKeysEncodingSize;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }

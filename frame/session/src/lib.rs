@@ -95,7 +95,7 @@
 //! use pallet_session as session;
 //!
 //! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
-//! 	<pallet_session::Pallet<T>>::validators()
+//! 	<pallet_session::Pallet<T>>::validators().to_vec()
 //! }
 //! # fn main(){}
 //! ```

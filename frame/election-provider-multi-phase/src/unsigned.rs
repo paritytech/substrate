@@ -47,11 +47,17 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 
 /// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
 /// voted.
-/// `Limit` bounds the vec size
-pub type Voter<T, Limit> = (
+pub type Voter<T> = (
 	<T as frame_system::Config>::AccountId,
 	sp_npos_elections::VoteWeight,
-	BoundedVec<<T as frame_system::Config>::AccountId, Limit>,
+	BoundedVec<
+		<T as frame_system::Config>::AccountId,
+		<<T as Config>::DataProvider as ElectionDataProvider<
+			<T as frame_system::Config>::AccountId,
+			<T as frame_system::Config>::BlockNumber,
+			<T as Config>::MaxTargets,
+		>>::MaximumVotesPerVoter,
+	>,
 );
 
 /// The relative distribution of a voter's stake among the winning targets.

@@ -78,7 +78,7 @@ pub fn voter_index_fn<T: Config>(
 /// Same as [`voter_index_fn`] but the returned function owns all its necessary data; nothing is
 /// borrowed.
 pub fn voter_index_fn_owned<T: Config>(
-	cache: BTreeMap<T::AccountId, usize>,
+	cache: BoundedBTreeMap<T::AccountId, usize, MaximumVotesPerVoter<T>>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> {
 	move |who| {
 		cache

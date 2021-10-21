@@ -1294,16 +1294,7 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
 		targets: BoundedVec<T::AccountId, T::MaxTargets>,
-		voters: Vec<
-			crate::unsigned::Voter<
-				T,
-				<T::DataProvider as ElectionDataProvider<
-					T::AccountId,
-					T::BlockNumber,
-					T::MaxTargets,
-				>>::MaximumVotesPerVoter,
-			>,
-		>,
+		voters: Vec<crate::unsigned::Voter<T>>,
 		desired_targets: u32,
 	) {
 		let metadata =
@@ -1334,20 +1325,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external() -> Result<
-		(
-			BoundedVec<T::AccountId, T::MaxTargets>,
-			Vec<
-				crate::unsigned::Voter<
-					T,
-					<T::DataProvider as ElectionDataProvider<
-						T::AccountId,
-						T::BlockNumber,
-						T::MaxTargets,
-					>>::MaximumVotesPerVoter,
-				>,
-			>,
-			u32,
-		),
+		(BoundedVec<T::AccountId, T::MaxTargets>, Vec<crate::unsigned::Voter<T>>, u32),
 		ElectionError<T>,
 	> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
@@ -2026,10 +2004,32 @@ mod tests {
 			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			// On-chain backup works though.
+			// On-chain backup works though as long as size is less than MaxValidatorsCount.
 			roll_to(29);
 			let supports = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+		});
+	}
+
+	#[test]
+	fn snapshot_too_big_failure_onchain_fallback_fail() {
+		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
+		ExtBuilder::default().build_and_execute(|| {
+			Targets::set((0..(crate::mock::MaxValidatorsCount::get() as u64 + 1)).collect::<Vec<_>>());
+
+			// Signed phase failed to open.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// Unsigned phase failed to open.
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// On-chain backup will not work when size is more than MaxValidatorsCount.
+			roll_to(29);
+			let err = MultiPhase::elect().unwrap_err();
+			assert_eq!(err, ElectionError::Fallback("OnChainSequentialPhragmen failed"));
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 		});
 	}
 

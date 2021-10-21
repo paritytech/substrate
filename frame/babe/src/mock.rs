@@ -121,6 +121,8 @@ impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxKeysEncodingSize = MaxKeysEncodingSize;
 	type WeightInfo = ();
 }
 
@@ -195,6 +197,7 @@ parameter_types! {
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 4_000;
+	pub const MaxKeysEncodingSize: u32 = 1_000;
 	pub const MaxUnlockingChunks: u32 = 32;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
@@ -202,6 +205,8 @@ parameter_types! {
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+	type MaxNominations = MaxNominations;
+	type MaxTargets = MaxValidatorsCount;
 }
 
 impl pallet_staking::Config for Test {

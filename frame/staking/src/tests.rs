@@ -282,9 +282,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2 / 3
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -320,9 +320,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -3308,48 +3308,48 @@ fn six_session_delay() {
 		let init_active_era = active_era();
 
 		// pallet-session is delaying session by one, thus the next session to plan is +2.
-		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
+		assert_eq!(<Staking as SessionManager<_, _>>::new_session(init_session + 2), None);
 		assert_eq!(
-			<Staking as SessionManager<_>>::new_session(init_session + 3),
+			<Staking as SessionManager<_, _>>::new_session(init_session + 3),
 			Some(val_set.clone())
 		);
-		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 4), None);
-		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 5), None);
+		assert_eq!(<Staking as SessionManager<_, _>>::new_session(init_session + 4), None);
+		assert_eq!(<Staking as SessionManager<_, _>>::new_session(init_session + 5), None);
 		assert_eq!(
-			<Staking as SessionManager<_>>::new_session(init_session + 6),
+			<Staking as SessionManager<_, _>>::new_session(init_session + 6),
 			Some(val_set.clone())
 		);
 
-		<Staking as SessionManager<_>>::end_session(init_session);
-		<Staking as SessionManager<_>>::start_session(init_session + 1);
+		<Staking as SessionManager<_, _>>::end_session(init_session);
+		<Staking as SessionManager<_, _>>::start_session(init_session + 1);
 		assert_eq!(active_era(), init_active_era);
 
-		<Staking as SessionManager<_>>::end_session(init_session + 1);
-		<Staking as SessionManager<_>>::start_session(init_session + 2);
+		<Staking as SessionManager<_, _>>::end_session(init_session + 1);
+		<Staking as SessionManager<_, _>>::start_session(init_session + 2);
 		assert_eq!(active_era(), init_active_era);
 
 		// Reward current era
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		// New active era is triggered here.
-		<Staking as SessionManager<_>>::end_session(init_session + 2);
-		<Staking as SessionManager<_>>::start_session(init_session + 3);
+		<Staking as SessionManager<_, _>>::end_session(init_session + 2);
+		<Staking as SessionManager<_, _>>::start_session(init_session + 3);
 		assert_eq!(active_era(), init_active_era + 1);
 
-		<Staking as SessionManager<_>>::end_session(init_session + 3);
-		<Staking as SessionManager<_>>::start_session(init_session + 4);
+		<Staking as SessionManager<_, _>>::end_session(init_session + 3);
+		<Staking as SessionManager<_, _>>::start_session(init_session + 4);
 		assert_eq!(active_era(), init_active_era + 1);
 
-		<Staking as SessionManager<_>>::end_session(init_session + 4);
-		<Staking as SessionManager<_>>::start_session(init_session + 5);
+		<Staking as SessionManager<_, _>>::end_session(init_session + 4);
+		<Staking as SessionManager<_, _>>::start_session(init_session + 5);
 		assert_eq!(active_era(), init_active_era + 1);
 
 		// Reward current era
 		Staking::reward_by_ids(vec![(21, 2)]);
 
 		// New active era is triggered here.
-		<Staking as SessionManager<_>>::end_session(init_session + 5);
-		<Staking as SessionManager<_>>::start_session(init_session + 6);
+		<Staking as SessionManager<_, _>>::end_session(init_session + 5);
+		<Staking as SessionManager<_, _>>::start_session(init_session + 6);
 		assert_eq!(active_era(), init_active_era + 2);
 
 		// That reward are correct
@@ -4093,8 +4093,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -4111,8 +4111,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -4139,12 +4139,16 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
-					.unwrap()
-					.iter()
-					.find(|x| x.0 == 101)
-					.unwrap()
-					.2,
+				<Staking as ElectionDataProvider<
+					AccountId,
+					BlockNumber,
+					MaxValidatorsCount,
+				>>::voters(None)
+				.unwrap()
+				.iter()
+				.find(|x| x.0 == 101)
+				.unwrap()
+				.2,
 				vec![11, 21]
 			);
 
@@ -4154,7 +4158,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider<AccountId, BlockNumber, MaxValidatorsCount>>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4166,7 +4170,7 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider<AccountId, BlockNumber, MaxValidatorsCount>>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4184,8 +4188,8 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					5
 				);
 
@@ -4224,8 +4228,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					7
 				);
 
@@ -4269,8 +4273,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					6
 				);
 

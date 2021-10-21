@@ -84,32 +84,36 @@
 //! type AccountId = u64;
 //! type Balance = u64;
 //! type BlockNumber = u32;
+//! type MaxTargets = frame_support::pallet_prelude::ConstU32<10>;
 //!
 //! mod data_provider_mod {
 //!     use super::*;
+//!     use frame_support::BoundedVec;
+//!     use sp_std::convert::TryFrom;
 //!
 //!     pub trait Config: Sized {
 //!         type ElectionProvider: ElectionProvider<
 //!             AccountId,
 //!             BlockNumber,
+//!             MaxTargets,
 //!             DataProvider = Module<Self>,
 //!         >;
 //!     }
 //!
 //!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
 //!
-//!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
+//!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber, MaxTargets> for Module<T> {
 //!         type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<1>;
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
 //!         fn voters(maybe_max_len: Option<usize>)
-//!         -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
+//!         -> data_provider::Result<Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaximumVotesPerVoter>)>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-//!             Ok(vec![10, 20, 30])
+//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<BoundedVec<AccountId, MaxTargets>> {
+//!             Ok(BoundedVec::try_from(vec![10, 20, 30]).expect("MaxTargets >=3"))
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 //!             0
@@ -124,10 +128,10 @@
 //!     pub struct GenericElectionProvider<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     pub trait Config {
-//!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+//!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber, MaxTargets>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
+//!     impl<T: Config> ElectionProvider<AccountId, BlockNumber, MaxTargets> for GenericElectionProvider<T> {
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!

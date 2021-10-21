@@ -179,6 +179,8 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxKeysEncodingSize = MaxKeysEncodingSize;
 	type WeightInfo = ();
 }
 
@@ -246,6 +248,7 @@ parameter_types! {
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 100;
+	pub const MaxKeysEncodingSize: u32 = 1_000;
 	pub const MaxUnlockingChunks: u32 = 32;
 }
 
@@ -259,6 +262,8 @@ impl pallet_bags_list::Config for Test {
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+	type MaxNominations = MaxNominations;
+	type MaxTargets = MaxValidatorsCount;
 }
 
 impl crate::pallet::pallet::Config for Test {
@@ -603,7 +608,7 @@ fn check_nominators() {
 						e.others.iter().filter(|e| e.who == nominator).collect::<Vec<_>>();
 					let len = individual.len();
 					match len {
-						0 => { /* not supporting this validator at all. */ },
+						0 => { /* not supporting this validator at all. */ }
 						1 => sum += individual[0].value,
 						_ => panic!("nominator cannot back a validator more than once."),
 					};
@@ -787,9 +792,9 @@ pub(crate) fn on_offence_in_era(
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
 			let _ = Staking::on_offence(offenders, slash_fraction, start_session);
-			return
+			return;
 		} else if bonded_era > era {
-			break
+			break;
 		}
 	}
 

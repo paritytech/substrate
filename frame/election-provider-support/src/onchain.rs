@@ -123,6 +123,8 @@ mod tests {
 
 	type AccountId = u64;
 	type BlockNumber = u64;
+	type MaxTargets = frame_support::pallet_prelude::ConstU32<10>;
+	type MaxNominations = frame_support::pallet_prelude::ConstU32<2>;
 
 	pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
 	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, (), (), ()>;
@@ -167,25 +169,35 @@ mod tests {
 	impl Config for Runtime {
 		type Accuracy = Perbill;
 		type DataProvider = mock_data_provider::DataProvider;
+		type MaxNominations = MaxNominations;
+		type MaxTargets = MaxTargets;
 	}
 
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
 		use super::*;
-		use crate::data_provider;
+		use crate::{data_provider, BoundedVec};
+		use std::convert::TryFrom;
 
 		pub struct DataProvider;
-		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
-			type MaximumVotesPerVoter = frame_support::pallet_prelude::ConstU32<2>;
+		impl ElectionDataProvider<AccountId, BlockNumber, MaxTargets> for DataProvider {
+			type MaximumVotesPerVoter = MaxNominations;
 			fn voters(
 				_: Option<usize>,
-			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])])
+			) -> data_provider::Result<
+				Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaximumVotesPerVoter>)>,
+			> {
+				let vec_1 = BoundedVec::try_from(vec![10, 20]).expect("MaximumVotesPerVoter >= 2");
+				let vec_2 = BoundedVec::try_from(vec![30, 20]).expect("MaximumVotesPerVoter >= 2");
+				let vec_3 = BoundedVec::try_from(vec![10, 30]).expect("MaximumVotesPerVoter >= 2");
+				Ok(vec![(1, 10, vec_1), (2, 20, vec_2), (3, 30, vec_3)])
 			}
 
-			fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-				Ok(vec![10, 20, 30])
+			fn targets(
+				_: Option<usize>,
+			) -> data_provider::Result<BoundedVec<AccountId, MaxTargets>> {
+				Ok(BoundedVec::try_from(vec![10, 20, 30]).expect("MaxTargets >= 3"))
 			}
 
 			fn desired_targets() -> data_provider::Result<u32> {
