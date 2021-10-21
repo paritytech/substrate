@@ -77,8 +77,7 @@ static BUFFER: Mutex<Vec<u8>> = parking_lot::const_mutex(Vec::new());
 /// A spare buffer which we'll swap with the main buffer on each flush to minimize lock contention.
 static SPARE_BUFFER: Mutex<Vec<u8>> = parking_lot::const_mutex(Vec::new());
 
-/// A mutex used only as a cheap channel to trigger asynchronous flushes.
-static ASYNC_FLUSH_MUTEX: Mutex<()> = parking_lot::const_mutex(());
+/// A conditional variable used to forcefully trigger asynchronous flushes.
 static ASYNC_FLUSH_CONDVAR: Condvar = Condvar::new();
 
 static ENABLE_ASYNC_LOGGING: AtomicBool = AtomicBool::new(true);
@@ -97,10 +96,9 @@ fn flush_logs(mut buffer: parking_lot::lock_api::MutexGuard<parking_lot::RawMute
 }
 
 fn log_autoflush_thread() {
-	let mut lock = ASYNC_FLUSH_MUTEX.lock();
+	let mut buffer = BUFFER.lock();
 	loop {
-		ASYNC_FLUSH_CONDVAR.wait_for(&mut lock, AUTOFLUSH_EVERY);
-		let mut buffer = BUFFER.lock();
+		ASYNC_FLUSH_CONDVAR.wait_for(&mut buffer, AUTOFLUSH_EVERY);
 		loop {
 			flush_logs(buffer);
 
