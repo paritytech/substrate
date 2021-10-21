@@ -18,9 +18,9 @@
 //! The unsigned phase, and its miner.
 
 use crate::{
-	helpers, Call, Config, ElectionCompute, Error, FeasibilityError, Pallet, RawSolution,
-	ReadySolution, RoundSnapshot, SolutionAccuracyOf, SolutionOf, SolutionOrSnapshotSize, Weight,
-	WeightInfo,
+	helpers, Call, Config, ElectionCompute, ElectionDataProvider, Error, FeasibilityError, Pallet,
+	RawSolution, ReadySolution, RoundSnapshot, SolutionAccuracyOf, SolutionOf,
+	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolver, PerThing128};
@@ -63,7 +63,14 @@ pub type Assignment<T> =
 pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<T>>;
 
 /// Error type of the pallet's [`crate::Config::Solver`].
-pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
+pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver<
+	<T as Config>::MaxTargets,
+	<<T as Config>::DataProvider as ElectionDataProvider<
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::BlockNumber,
+		<T as Config>::MaxTargets,
+	>>::MaximumVotesPerVoter,
+>>::Error;
 /// Error type for operations related to the OCW npos solution miner.
 #[derive(frame_support::DebugNoBound, frame_support::PartialEqNoBound)]
 pub enum MinerError<T: Config> {
@@ -109,15 +116,16 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError<T>> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 		Ok(_) => Ok(()),
-		Err(MutateStorageError::ConcurrentModification(_)) =>
-			Err(MinerError::FailedToStoreSolution),
+		Err(MutateStorageError::ConcurrentModification(_)) => {
+			Err(MinerError::FailedToStoreSolution)
+		}
 		Err(MutateStorageError::ValueFunctionFailed(_)) => {
 			// this branch should be unreachable according to the definition of
 			// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
 			// pass it returns an error. however, for safety in case the definition changes, we do
 			// not optimize the branch away or panic.
 			Err(MinerError::FailedToStoreSolution)
-		},
+		}
 	}
 }
 
@@ -180,7 +188,7 @@ impl<T: Config> Pallet<T> {
 						let call = Self::mine_checked_call()?;
 						save_solution(&call)?;
 						Ok(call)
-					},
+					}
 					MinerError::Feasibility(_) => {
 						log!(trace, "wiping infeasible solution.");
 						// kill the infeasible solution, hopefully in the next runs (whenever they
@@ -188,11 +196,11 @@ impl<T: Config> Pallet<T> {
 						kill_ocw_solution::<T>();
 						clear_offchain_repeat_frequency();
 						Err(error)
-					},
+					}
 					_ => {
 						// nothing to do. Return the error as-is.
 						Err(error)
-					},
+					}
 				}
 			})?;
 
@@ -276,7 +284,16 @@ impl<T: Config> Pallet<T> {
 	pub fn mine_solution<S>(
 	) -> Result<(RawSolution<SolutionOf<T>>, SolutionOrSnapshotSize), MinerError<T>>
 	where
-		S: NposSolver<AccountId = T::AccountId, Error = SolverErrorOf<T>>,
+		S: NposSolver<
+			T::MaxTargets,
+			<T::DataProvider as ElectionDataProvider<
+				T::AccountId,
+				T::BlockNumber,
+				T::MaxTargets,
+			>>::MaximumVotesPerVoter,
+			AccountId = T::AccountId,
+			Error = SolverErrorOf<T>,
+		>,
 	{
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
@@ -444,7 +461,7 @@ impl<T: Config> Pallet<T> {
 
 		// not much we can do if assignments are already empty.
 		if high == low {
-			return Ok(())
+			return Ok(());
 		}
 
 		while high - low > 1 {
@@ -455,8 +472,8 @@ impl<T: Config> Pallet<T> {
 				high = test;
 			}
 		}
-		let maximum_allowed_voters = if low < assignments.len() &&
-			encoded_size_of(&assignments[..low + 1])? <= max_allowed_length
+		let maximum_allowed_voters = if low < assignments.len()
+			&& encoded_size_of(&assignments[..low + 1])? <= max_allowed_length
 		{
 			low + 1
 		} else {
@@ -468,8 +485,8 @@ impl<T: Config> Pallet<T> {
 			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
 		);
 		debug_assert!(if maximum_allowed_voters < assignments.len() {
-			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap() >
-				max_allowed_length
+			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap()
+				> max_allowed_length
 		} else {
 			true
 		});
@@ -499,7 +516,7 @@ impl<T: Config> Pallet<T> {
 		max_weight: Weight,
 	) -> u32 {
 		if size.voters < 1 {
-			return size.voters
+			return size.voters;
 		}
 
 		let max_voters = size.voters.max(1);
@@ -518,7 +535,7 @@ impl<T: Config> Pallet<T> {
 						Some(voters) if voters < max_voters => Ok(voters),
 						_ => Err(()),
 					}
-				},
+				}
 				Ordering::Greater => voters.checked_sub(step).ok_or(()),
 				Ordering::Equal => Ok(voters),
 			}
@@ -533,7 +550,7 @@ impl<T: Config> Pallet<T> {
 				// proceed with the binary search
 				Ok(next) if next != voters => {
 					voters = next;
-				},
+				}
 				// we are out of bounds, break out of the loop.
 				Err(()) => break,
 				// we found the right value - early exit the function.
@@ -579,16 +596,17 @@ impl<T: Config> Pallet<T> {
 			|maybe_head: Result<Option<T::BlockNumber>, _>| {
 				match maybe_head {
 					Ok(Some(head)) if now < head => Err("fork."),
-					Ok(Some(head)) if now >= head && now <= head + threshold =>
-						Err("recently executed."),
+					Ok(Some(head)) if now >= head && now <= head + threshold => {
+						Err("recently executed.")
+					}
 					Ok(Some(head)) if now > head + threshold => {
 						// we can run again now. Write the new head.
 						Ok(now)
-					},
+					}
 					_ => {
 						// value doesn't exists. Probably this node just booted up. Write, and run
 						Ok(now)
-					},
+					}
 				}
 			},
 		);
@@ -597,8 +615,9 @@ impl<T: Config> Pallet<T> {
 			// all good
 			Ok(_) => Ok(()),
 			// failed to write.
-			Err(MutateStorageError::ConcurrentModification(_)) =>
-				Err(MinerError::Lock("failed to write to offchain db (concurrent modification).")),
+			Err(MutateStorageError::ConcurrentModification(_)) => {
+				Err(MinerError::Lock("failed to write to offchain db (concurrent modification)."))
+			}
 			// fork etc.
 			Err(MutateStorageError::ValueFunctionFailed(why)) => Err(MinerError::Lock(why)),
 		}
@@ -622,8 +641,8 @@ impl<T: Config> Pallet<T> {
 
 		// ensure correct number of winners.
 		ensure!(
-			Self::desired_targets().unwrap_or_default() ==
-				raw_solution.solution.unique_targets().len() as u32,
+			Self::desired_targets().unwrap_or_default()
+				== raw_solution.solution.unique_targets().len() as u32,
 			Error::<T>::PreDispatchWrongWinnerCount,
 		);
 

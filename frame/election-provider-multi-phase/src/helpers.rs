@@ -32,10 +32,10 @@ macro_rules! log {
 	};
 }
 
-type MaximumVotesPerVoter<T: Config> = <T::DataProvider as ElectionDataProvider<
-	T::AccountId,
-	T::BlockNumber,
-	T::MaxTargets,
+type MaximumVotesPerVoter<T> = <<T as Config>::DataProvider as ElectionDataProvider<
+	<T as frame_system::Config>::AccountId,
+	<T as frame_system::Config>::BlockNumber,
+	<T as Config>::MaxTargets,
 >>::MaximumVotesPerVoter;
 
 /// Generate a btree-map cache of the voters and their indices.
