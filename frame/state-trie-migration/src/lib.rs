@@ -96,7 +96,9 @@ pub mod pallet {
 		offchain::{SendTransactionTypes, SubmitTransaction},
 		pallet_prelude::*,
 	};
-	use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+	use sp_core::storage::well_known_keys::{
+		CHILD_STORAGE_KEY_PREFIX, DEFAULT_CHILD_STORAGE_KEY_PREFIX,
+	};
 	use sp_runtime::traits::{Bounded, Saturating};
 	use sp_std::prelude::*;
 
@@ -234,7 +236,7 @@ pub mod pallet {
 					}
 				},
 				(Some(ref top_key), None) => {
-					if top_key.starts_with(CHILD_STORAGE_KEY_PREFIX) {
+					if top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX) {
 						// no child migration at hand, but one will begin here.
 						self.current_child = Some(vec![]);
 						self.migrate_child();
@@ -275,9 +277,8 @@ pub mod pallet {
 			self.current_child = next_key;
 			log!(
 				trace,
-				"migrating child key {:?} from top key {:?}, next task: {:?}",
+				"migrating child key {:?}, next task: {:?}",
 				sp_core::hexdisplay::HexDisplay::from(&current_child),
-				sp_core::hexdisplay::HexDisplay::from(&current_top),
 				self
 			);
 		}
@@ -719,7 +720,7 @@ pub mod pallet {
 			use sp_core::storage::{ChildType, PrefixedStorageKey};
 			match ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(storage_key)) {
 				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
-				None => &[], // Ignore TODO
+				None => unreachable!(),
 			}
 		}
 	}
@@ -843,7 +844,6 @@ mod mock {
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		use sp_core::storage::ChildInfo;
 
-		let t = frame_system::GenesisConfig::default();
 		let mut storage = sp_core::storage::Storage {
 			top: vec![
 				(b"key1".to_vec(), vec![1u8; 10]), // 6b657931
@@ -856,7 +856,7 @@ mod mock {
 			.collect(),
 			children_default: vec![
 				(
-					b":child_storage:chk1".to_vec(),
+					b":child_storage:default:chk1".to_vec(),
 					sp_core::storage::StorageChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 10]),
@@ -864,11 +864,11 @@ mod mock {
 						]
 						.into_iter()
 						.collect(),
-						child_info: ChildInfo::new_default(b"chk1"),
+						child_info: ChildInfo::new_default(b":child_storage:default:chk1"),
 					},
 				),
 				(
-					b":child_storage:chk2".to_vec(),
+					b":child_storage:default:chk2".to_vec(),
 					sp_core::storage::StorageChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 10]),
@@ -876,16 +876,18 @@ mod mock {
 						]
 						.into_iter()
 						.collect(),
-						child_info: ChildInfo::new_default(b"chk2"),
+						child_info: ChildInfo::new_default(b":child_storage:default:chk2"),
 					},
 				),
 			]
 			.into_iter()
 			.collect(),
 		};
-		t.assimilate_storage::<Test>(&mut storage).unwrap();
-		sp_tracing::try_init_simple();
 
+		// let t = frame_system::GenesisConfig::default();
+		// t.assimilate_storage::<Test>(&mut storage).unwrap();
+
+		sp_tracing::try_init_simple();
 		(storage, StateVersion::V0).into()
 	}
 
