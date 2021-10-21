@@ -364,28 +364,29 @@ cargo-check-benches:
   script:
     - *cargo-check-benches-script
 
-node-bench-regression-guard:
-  # it's not belong to `build` semantically, but dag jobs can't depend on each other
-  # within the single stage - https://gitlab.com/gitlab-org/gitlab/-/issues/30632
-  # more: https://github.com/paritytech/substrate/pull/8519#discussion_r608012402
-  stage:                           build
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger-prs-only
-  needs:
-    # this is a DAG
-    - job:                         cargo-check-benches
-      artifacts:                   true
-    # this does not like a DAG, just polls the artifact
-    - project:                     $CI_PROJECT_PATH
-      job:                         cargo-check-benches
-      ref:                         master
-      artifacts:                   true
-  variables:
-    CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
-  before_script: [""]
-  script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-*
-       --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
+# TODO: re-enable after dedicated bench hosts provisioning 
+# node-bench-regression-guard:
+#   # it's not belong to `build` semantically, but dag jobs can't depend on each other
+#   # within the single stage - https://gitlab.com/gitlab-org/gitlab/-/issues/30632
+#   # more: https://github.com/paritytech/substrate/pull/8519#discussion_r608012402
+#   stage:                           build
+#   <<:                              *docker-env
+#   <<:                              *test-refs-no-trigger-prs-only
+#   needs:
+#     # this is a DAG
+#     - job:                         cargo-check-benches
+#       artifacts:                   true
+#     # this does not like a DAG, just polls the artifact
+#     - project:                     $CI_PROJECT_PATH
+#       job:                         cargo-check-benches
+#       ref:                         master
+#       artifacts:                   true
+#   variables:
+#     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
+#   before_script: [""]
+#   script:
+#     - 'node-bench-regression-guard --reference artifacts/benches/master-*
+#        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
   stage:                           test
