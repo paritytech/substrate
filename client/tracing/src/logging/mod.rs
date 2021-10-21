@@ -177,7 +177,7 @@ where
 
 	let builder = builder.with_span_events(format::FmtSpan::NONE);
 
-	let builder = builder.with_writer(MakeStderrWriter);
+	let builder = builder.with_writer(MakeStderrWriter::default());
 
 	let builder = builder.event_format(event_format);
 

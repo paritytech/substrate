@@ -137,7 +137,18 @@ extern "C" fn on_exit() {
 
 /// A drop-in replacement for [`std::io::stderr`] for use anywhere
 /// a [`tracing_subscriber::fmt::MakeWriter`] is accepted.
-pub struct MakeStderrWriter;
+pub struct MakeStderrWriter {
+	// A dummy field so that the structure is not publicly constructible.
+	_dummy: (),
+}
+
+impl Default for MakeStderrWriter {
+	fn default() -> Self {
+		static ONCE: Once = Once::new();
+		ONCE.call_once(initialize);
+		MakeStderrWriter { _dummy: () }
+	}
+}
 
 impl tracing_subscriber::fmt::MakeWriter for MakeStderrWriter {
 	type Writer = StderrWriter;
@@ -160,9 +171,6 @@ pub struct StderrWriter {
 
 impl StderrWriter {
 	fn new(mut sync_flush_on_drop: bool) -> Self {
-		static ONCE: Once = Once::new();
-		ONCE.call_once(initialize);
-
 		if !ENABLE_ASYNC_LOGGING.load(Ordering::Relaxed) {
 			sync_flush_on_drop = true;
 		}
