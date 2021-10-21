@@ -34,6 +34,15 @@ sp_api::decl_runtime_apis! {
 		/// the total allowed block weight of the runtime.
 		fn on_runtime_upgrade() -> (Weight, Weight);
 
+		/// dry-run runtime upgrades
+		///
+		/// This should do EXACTLY the same operations as the runtime would have done in the case of
+		/// a runtime upgrade (e.g. pallet ordering must be the same)
+		///
+		/// This function can be timed to give a reasonable benchmark of the upgrade
+		/// Returns the total allowed block weight
+		fn on_runtime_upgrade_bench() -> Weight;
+
 		/// Execute the given block, but don't check that its state root matches that of yours.
 		///
 		/// This is only sensible where the incoming block is from a different network, yet it has

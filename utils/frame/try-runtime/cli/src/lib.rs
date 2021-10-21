@@ -367,6 +367,9 @@ pub enum Command {
 	/// initializes the state from the remote node, and starts applying that block, plus all the
 	/// blocks that follow, to the same growing state.
 	FollowChain(commands::follow_chain::FollowChainCmd),
+
+	/// Benchmark Upgrade
+	BenchmarkUpgrade(commands::benchmark_upgrade::BenchmarkUpgradeCmd),
 }
 
 /// Shared parameters of the `try-runtime` commands
@@ -537,6 +540,13 @@ impl TryRuntimeCmd {
 				.await,
 			Command::FollowChain(cmd) =>
 				commands::follow_chain::follow_chain::<Block, ExecDispatch>(
+					self.shared.clone(),
+					cmd.clone(),
+					config,
+				)
+				.await,
+			Command::BenchmarkUpgrade(cmd) =>
+				commands::benchmark_upgrade::on_runtime_upgrade_bench::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
