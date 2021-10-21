@@ -538,7 +538,8 @@ where
 		H::Out: Ord,
 	{
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.storage_root(delta, state_version),
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				state.storage_root(delta, state_version),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
@@ -554,7 +555,8 @@ where
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(child_info, delta, state_version);
+				let (root, is_equal, _) =
+					state.child_storage_root(child_info, delta, state_version);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable => (H::Out::default(), true, Default::default()),
