@@ -249,7 +249,7 @@ default:
   - git push origin gh-pages --force
   - rm -rf .git/ ./*
 
-.test-build-rustdoc:  &test-build-rustdoc
+.test-build-rustdoc-script:        &test-build-rustdoc-script
   # The actual check on whether we need to build rustdocs. This task will run if it is one of
   #   branch/tag in CONT_RUSTDOC_BUILT_REFS or triggered via web with BUILD_RUSTDOC_REF set to
   #   a branch/tag name.
@@ -709,7 +709,6 @@ build-macos-subkey:
 build-rustdoc:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *test-refs
   rules:
     - *build-rustdoc-rules
   variables:
@@ -722,7 +721,7 @@ build-rustdoc:
     paths:
       - crate-docs
   script:
-    - *test-build-rustdoc
+    - *test-build-rustdoc-script
     # Check if we are at the right branch/tag. if not check out the branch
     - if [[ -n "${BUILD_RUSTDOC_REF}" ]]; then
         git fetch --all;
@@ -862,7 +861,7 @@ publish-rustdoc:
     - *build-rustdoc-rules
   image:                           node:16
   script:
-    - *test-build-rustdoc
+    - *test-build-rustdoc-script
     - rm -rf /tmp/*
     - mv -f crate-docs/${BUILD_REF} /tmp/docs
     - *reset-gh-info-script
