@@ -58,9 +58,9 @@ impl PalletVersionToStorageVersionHelper for T {
 ///
 /// This will remove all `PalletVersion's` from the state and insert the current storage version.
 pub fn migrate_from_pallet_version_to_storage_version<
-	AllPallets: PalletVersionToStorageVersionHelper,
+	Pallets: PalletVersionToStorageVersionHelper,
 >(
 	db_weight: &RuntimeDbWeight,
 ) -> Weight {
-	AllPallets::migrate(db_weight)
+	Pallets::migrate(db_weight)
 }
