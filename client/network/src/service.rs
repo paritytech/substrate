@@ -1967,17 +1967,22 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
-							DialError::ConnectionLimit(_) => "limit-reached",
-							DialError::InvalidPeerId => "invalid-peer-id",
+							DialError::ConnectionLimit(_) => Some("limit-reached"),
+							DialError::InvalidPeerId => Some("invalid-peer-id"),
 							DialError::Transport(_) | DialError::ConnectionIo(_) =>
-								"transport-error",
-							| DialError::Banned |
+								Some("transport-error"),
+							DialError::Banned |
 							DialError::LocalPeerId |
 							DialError::NoAddresses |
 							DialError::DialPeerConditionFalse(_) |
-							DialError::Aborted => "other",
+							DialError::Aborted => None, // ignore them
 						};
-						metrics.pending_connections_errors_total.with_label_values(&[reason]).inc();
+						if let Some(reason) = reason {
+							metrics
+								.pending_connections_errors_total
+								.with_label_values(&[reason])
+								.inc();
+						}
 					}
 				},
 				Poll::Ready(SwarmEvent::Dialing(peer_id)) => {
@@ -2002,17 +2007,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					);
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
-							PendingConnectionError::Aborted => "aborted",
-							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
-							PendingConnectionError::InvalidPeerId => "invalid-peer-id",
+							PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
+							PendingConnectionError::InvalidPeerId => Some("invalid-peer-id"),
 							PendingConnectionError::Transport(_) |
-							PendingConnectionError::IO(_) => "transport-error",
+							PendingConnectionError::IO(_) => Some("transport-error"),
+							PendingConnectionError::Aborted => None, // ignore it
 						};
 
-						metrics
-							.incoming_connections_errors_total
-							.with_label_values(&[reason])
-							.inc();
+						if let Some(reason) = reason {
+							metrics
+								.incoming_connections_errors_total
+								.with_label_values(&[reason])
+								.inc();
+						}
 					}
 				},
 				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
