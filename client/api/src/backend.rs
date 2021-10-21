@@ -171,14 +171,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 		&mut self,
 		storage: Storage,
 		commit: bool,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(
 		&mut self,
 		storage: Storage,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Set storage changes.

@@ -594,7 +594,7 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
@@ -608,7 +608,7 @@ where
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
-			state_hash,
+			state_version,
 		);
 
 		if commit {
@@ -663,17 +663,17 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, commit, state_hash)
+		self.apply_storage(storage, commit, state_version)
 	}
 
 	fn reset_storage(
 		&mut self,
 		storage: Storage,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, true, state_hash)
+		self.apply_storage(storage, true, state_version)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>
