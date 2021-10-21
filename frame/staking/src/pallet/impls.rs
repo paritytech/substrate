@@ -410,10 +410,10 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: Vec<(
-			T::AccountId,
-			Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
-		)>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
+			T::MaxValidatorsCount,
+		>,
 	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
@@ -489,13 +489,13 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: Vec<(
-			T::AccountId,
-			Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>,
-		)>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
+			T::MaxValidatorsCount,
+		>,
 		new_planned_era: EraIndex,
 	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
-		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
+		let elected_stashes = exposures.clone().map_collect(|(x, _)| x);
 
 		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
@@ -525,7 +525,7 @@ impl<T: Config> Pallet<T> {
 		<ErasTotalStake<T>>::insert(&new_planned_era, total_stake);
 
 		// Collect the pref of all winners.
-		for stash in &elected_stashes {
+		for stash in AsRef::<Vec<_>>::as_ref(&elected_stashes) {
 			let pref = Self::validators(stash);
 			<ErasValidatorPrefs<T>>::insert(&new_planned_era, stash, pref);
 		}
@@ -546,41 +546,53 @@ impl<T: Config> Pallet<T> {
 	/// [`Exposure`].
 	fn collect_exposures(
 		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>)> {
+	) -> BoundedVec<
+		(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
+		T::MaxValidatorsCount,
+	> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
 		};
 
-		supports
-			.into_iter()
-			.map(|(validator, support)| {
-				// Build `struct exposure` from `support`.
-				let mut others = Vec::with_capacity(support.voters.len());
-				let mut own: BalanceOf<T> = Zero::zero();
-				let mut total: BalanceOf<T> = Zero::zero();
-				support
-					.voters
-					.into_iter()
-					.map(|(nominator, weight)| (nominator, to_currency(weight)))
-					.for_each(|(nominator, stake)| {
-						if nominator == validator {
-							own = own.saturating_add(stake);
-						} else {
-							others.push(IndividualExposure { who: nominator, value: stake });
-						}
-						total = total.saturating_add(stake);
-					});
+		let exposures = BoundedVec::<_, T::MaxValidatorsCount>::try_from(
+			supports
+				.into_iter()
+				.map(|(validator, support)| {
+					// Build `struct exposure` from `support`.
+					let mut others = Vec::with_capacity(support.voters.len());
+					let mut own: BalanceOf<T> = Zero::zero();
+					let mut total: BalanceOf<T> = Zero::zero();
+					support
+						.voters
+						.into_iter()
+						.map(|(nominator, weight)| (nominator, to_currency(weight)))
+						.for_each(|(nominator, stake)| {
+							if nominator == validator {
+								own = own.saturating_add(stake);
+							} else {
+								others.push(IndividualExposure { who: nominator, value: stake });
+							}
+							total = total.saturating_add(stake);
+						});
 
-				let others = WeakBoundedVec::<_, T::MaxIndividualExposures>::force_from(
-					others,
-					Some("exposure.others"),
-				);
+					let others = WeakBoundedVec::<_, T::MaxIndividualExposures>::force_from(
+						others,
+						Some("exposure.others"),
+					);
 
-				let exposure = Exposure { own, others, total };
-				(validator, exposure)
-			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _, T::MaxIndividualExposures>)>>()
+					let exposure = Exposure { own, others, total };
+					(validator, exposure)
+				})
+				.collect::<Vec<(T::AccountId, Exposure<_, _, T::MaxIndividualExposures>)>>(),
+		);
+
+		// This should never happen
+		if exposures.is_err() {
+			log!(error, "Too many validators in frame_staking.collect_exposures")
+		}
+
+		exposures.unwrap_or_default()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -1117,20 +1129,18 @@ impl<T: Config>
 			T::MaxValidatorsCount,
 		>,
 	> {
-		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
+		<Self as pallet_session::SessionManager<_, _>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
 				.unwrap_or(0);
 
-			validators
-				.into_iter()
-				.map(|v| {
-					let exposure = Self::eras_stakers(current_era, &v);
-					(v, exposure)
-				})
-				.collect()
+			validators.map_collect(|v| {
+				let exposure = Self::eras_stakers(current_era, &v);
+				(v, exposure)
+			})
 		})
 	}
+
 	fn new_session_genesis(
 		new_index: SessionIndex,
 	) -> Option<
@@ -1139,27 +1149,26 @@ impl<T: Config>
 			T::MaxValidatorsCount,
 		>,
 	> {
-		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
+		<Self as pallet_session::SessionManager<_, _>>::new_session_genesis(new_index).map(
 			|validators| {
 				let current_era = Self::current_era()
 					// Must be some as a new era has been created.
 					.unwrap_or(0);
 
-				validators
-					.into_iter()
-					.map(|v| {
-						let exposure = Self::eras_stakers(current_era, &v);
-						(v, exposure)
-					})
-					.collect()
+				validators.map_collect(|v| {
+					let exposure = Self::eras_stakers(current_era, &v);
+					(v, exposure)
+				})
 			},
 		)
 	}
+
 	fn start_session(start_index: SessionIndex) {
-		<Self as pallet_session::SessionManager<_>>::start_session(start_index)
+		<Self as pallet_session::SessionManager<_, _>>::start_session(start_index)
 	}
+
 	fn end_session(end_index: SessionIndex) {
-		<Self as pallet_session::SessionManager<_>>::end_session(end_index)
+		<Self as pallet_session::SessionManager<_, _>>::end_session(end_index)
 	}
 }
 

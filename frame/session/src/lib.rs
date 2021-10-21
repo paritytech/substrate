@@ -730,7 +730,7 @@ impl<T: Config> Pallet<T> {
 			if let Err(index) = disabled.binary_search(&i) {
 				if disabled.try_insert(index, i).is_err() {
 					// This should never fail
-					log::warn!(target: "runtime::session", "disabling validator index {:?}", i);
+					log::error!(target: "runtime::session", "disabling validator index {:?}", i);
 					return false;
 				}
 				T::SessionHandler::on_disabled(i);
