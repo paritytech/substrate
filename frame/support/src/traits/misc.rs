@@ -21,6 +21,7 @@ use crate::dispatch::Parameter;
 use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
+use sp_std::cmp::Ordering;
 use sp_std::prelude::*;
 
 /// Anything that can have a `::len()` method.
@@ -287,6 +288,30 @@ pub trait ExecuteBlock<Block: BlockT> {
 	///
 	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
 	fn execute_block(block: Block);
+}
+
+/// Something that can compare privileges of two origins.
+pub trait PrivilegeCmp<Origin> {
+	/// Compare the `left` to the `right` origin.
+	///
+	/// The returned ordering should be from the pov of the `left` origin.
+	///
+	/// Should return `None` when it can not compare the given origins.
+	fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering>;
+}
+
+/// Implementation of [`PrivilegeCmp`] that only checks for equal origins.
+///
+/// This means it will either return [`Origin::Equal`] or `None`.
+pub struct EqualPrivilegeOnly;
+impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
+	fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering> {
+		if left == right {
+			Some(Ordering::Equal)
+		} else {
+			None
+		}
+	}
 }
 
 /// Off-chain computation trait.
