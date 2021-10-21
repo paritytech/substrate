@@ -572,4 +572,27 @@ mod tests {
 			}
 		}
 	}
+
+	#[test]
+	fn huge_single_line_log_is_properly_printed_out() {
+		let mut line = String::new();
+		line.push_str("$$START$$");
+		for n in 0..16 * 1024 * 1024 {
+			let ch = b'a' + (n as u8 % (b'z' - b'a'));
+			line.push(char::from(ch));
+		}
+		line.push_str("$$END$$");
+
+		let output =
+			run_test_in_another_process("huge_single_line_log_is_properly_printed_out", || {
+				let builder = LoggerBuilder::new("");
+				builder.init().unwrap();
+				info!("{}", line);
+			});
+
+		if let Some(output) = output {
+			let stderr = String::from_utf8(output.stderr).unwrap();
+			assert!(stderr.contains(&line));
+		}
+	}
 }
