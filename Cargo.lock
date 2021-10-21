@@ -2740,7 +2740,7 @@ dependencies = [
  "socket2 0.4.0",
  "tokio",
  "tower-service",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "want",
 ]
 
@@ -3644,7 +3644,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
- "lru",
+ "lru 0.6.6",
  "minicbor",
  "rand 0.7.3",
  "smallvec 1.7.0",
@@ -3974,6 +3974,15 @@ name = "lru"
 version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ea2d928b485416e8908cff2d97d621db22b27f7b3b6729e438bcf42c671ba91"
+dependencies = [
+ "hashbrown 0.11.2",
+]
+
+[[package]]
+name = "lru"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c748cfe47cb8da225c37595b3108bea1c198c84aaae8ea0ba76d01dda9fc803"
 dependencies = [
  "hashbrown 0.11.2",
 ]
@@ -7876,7 +7885,7 @@ dependencies = [
  "sp-version",
  "sp-wasm-interface",
  "substrate-test-runtime",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-subscriber",
  "wasmi",
  "wat",
@@ -8077,7 +8086,7 @@ dependencies = [
  "linked-hash-map",
  "linked_hash_set",
  "log 0.4.14",
- "lru",
+ "lru 0.6.6",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "pin-project 1.0.8",
@@ -8120,13 +8129,13 @@ dependencies = [
  "futures-timer 3.0.2",
  "libp2p",
  "log 0.4.14",
- "lru",
+ "lru 0.6.6",
  "quickcheck",
  "sc-network",
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -8365,7 +8374,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-futures",
 ]
 
@@ -8482,7 +8491,7 @@ dependencies = [
  "sp-runtime",
  "sp-tracing",
  "thiserror",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-log",
  "tracing-subscriber",
 ]
@@ -9112,7 +9121,7 @@ version = "4.0.0-dev"
 dependencies = [
  "futures 0.3.16",
  "log 0.4.14",
- "lru",
+ "lru 0.6.6",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sp-api",
@@ -9339,7 +9348,7 @@ dependencies = [
  "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-core",
 ]
 
@@ -9519,7 +9528,7 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-runtime-interface-test-wasm-deprecated",
  "sp-state-machine",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-core",
 ]
 
@@ -9611,7 +9620,7 @@ dependencies = [
  "sp-std",
  "sp-trie",
  "thiserror",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-db",
  "trie-root",
 ]
@@ -9678,7 +9687,7 @@ version = "4.0.0-dev"
 dependencies = [
  "parity-scale-codec",
  "sp-std",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-core",
  "tracing-subscriber",
 ]
@@ -10583,6 +10592,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing"
+version = "0.1.29"
+source = "git+https://github.com/tokio-rs/tracing.git?rev=4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad#4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad"
+dependencies = [
+ "cfg-if 1.0.0",
+ "pin-project-lite 0.2.6",
+ "tracing-core",
+]
+
+[[package]]
 name = "tracing-attributes"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10596,8 +10615,7 @@ dependencies = [
 [[package]]
 name = "tracing-core"
 version = "0.1.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f4ed65637b8390770814083d20756f87bfa2c21bf2f110babdc5438351746e4"
+source = "git+https://github.com/tokio-rs/tracing.git?rev=4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad#4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad"
 dependencies = [
  "lazy_static",
 ]
@@ -10609,25 +10627,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
  "pin-project 1.0.8",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "tracing-log"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6923477a48e41c1951f1999ef8bb5a3023eb723ceadafe78ffb65dc366761e3"
+source = "git+https://github.com/tokio-rs/tracing.git?rev=4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad#4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad"
 dependencies = [
+ "ahash",
  "lazy_static",
  "log 0.4.14",
+ "lru 0.7.0",
  "tracing-core",
 ]
 
 [[package]]
 name = "tracing-serde"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb65ea441fbb84f9f6748fd496cf7f63ec9af5bca94dd86456978d055e8eb28b"
+source = "git+https://github.com/tokio-rs/tracing.git?rev=4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad#4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad"
 dependencies = [
  "serde",
  "tracing-core",
@@ -10635,9 +10653,8 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab69019741fca4d98be3c62d2b75254528b5432233fd8a4d2739fec20278de48"
+version = "0.2.25"
+source = "git+https://github.com/tokio-rs/tracing.git?rev=4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad#4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",
@@ -10649,7 +10666,7 @@ dependencies = [
  "sharded-slab",
  "smallvec 1.7.0",
  "thread_local",
- "tracing",
+ "tracing 0.1.29 (git+https://github.com/tokio-rs/tracing.git?rev=4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad)",
  "tracing-core",
  "tracing-log",
  "tracing-serde",
@@ -11204,7 +11221,7 @@ dependencies = [
  "rayon",
  "serde",
  "smallvec 1.7.0",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmer-compiler",
  "wasmer-types",
  "wasmer-vm",
@@ -11292,7 +11309,7 @@ dependencies = [
  "libloading 0.6.7",
  "serde",
  "tempfile",
- "tracing",
+ "tracing 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmer-compiler",
  "wasmer-engine",
  "wasmer-object",

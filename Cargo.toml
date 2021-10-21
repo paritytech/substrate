@@ -272,3 +272,8 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+tracing-core = { git = "https://github.com/tokio-rs/tracing.git", rev = "4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad" }
+tracing-subscriber = { git = "https://github.com/tokio-rs/tracing.git", rev = "4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad" }
+tracing-log = { git = "https://github.com/tokio-rs/tracing.git", rev = "4e5f0f06abb7e38e2f0051f83885952fc0e0e9ad" }
