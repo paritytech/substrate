@@ -148,7 +148,6 @@ parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxRewardableIndividualExposures: u32 = 64;
 	pub const MaxIndividualExposures: u32 = 64;
-	pub const MaxKeys: u32 = 10_000;
 	pub const MaxPeerInHeartbeats: u32 = 10_000;
 	pub const MaxPeerDataEncodingSize: u32 = 1_000;
 	pub const MaxNominations: u32 = 16;
@@ -211,7 +210,7 @@ impl pallet_im_online::Config for Test {
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
 	type WeightInfo = ();
-	type MaxKeys = MaxKeys;
+	type MaxKeys = MaxValidatorsCount;
 	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
 	type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
 }
