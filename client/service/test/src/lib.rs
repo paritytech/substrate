@@ -167,8 +167,7 @@ where
 		let full_nodes = self.full_nodes.clone();
 		let future = async move {
 			let mut interval = time::interval(Duration::from_millis(100));
-			let mut full_ready = false;
-			while !full_ready {
+			loop {
 				interval.tick().await;
 
 				full_ready = full_nodes
