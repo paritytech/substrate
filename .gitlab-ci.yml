@@ -226,7 +226,7 @@ default:
   # generate index.html based on BUILD_REF
   - yarn global add @jimmychu0807/index-tpl-crud
   - '[[ "${RESET_INDEX}" == "true" ]] && index-tpl-crud init
-    "${GH_REPO:-CI_PROJECT_NAME}" "Substrate" /tmp/index.html'
+    "${GH_REPO:-$CI_PROJECT_NAME}" "Substrate" /tmp/index.html'
   - '[[ "${LATEST}" == "${BUILD_REF}" ]]
     && index-tpl-crud upsert -l /tmp/index.html ${BUILD_REF}
     || index-tpl-crud upsert /tmp/index.html ${BUILD_REF}'
