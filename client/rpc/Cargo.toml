@@ -46,6 +46,7 @@ futures01 = { package = "futures", version = "0.1.29" }
 sc-network = { version = "0.8.0", path = "../network" }
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+substrate-test-encrypted-tx = { version = "2.0.0", path = "../../test-utils/encrypted-tx" }
 tokio = "0.1.22"
 sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
 lazy_static = { version = "1.4.0" }

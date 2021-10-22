@@ -581,7 +581,7 @@ fn propose_and_import_block<Transaction>(
 		logs: vec![
 			Item::babe_pre_digest(
 				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-					authority_index: 0,
+					authority_index: substrate_test_encrypted_tx::ALICE_COLLATOR_ID,
 					slot_number,
 				}),
 			),

@@ -24,6 +24,7 @@ use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{ValidTransaction, TransactionSource, InvalidTransaction},
 };
+use substrate_test_encrypted_tx::create_digest;
 use substrate_test_runtime_client::{
 	runtime::{Block, Hash, Index, Header, Extrinsic, Transfer}, AccountKeyring::*,
 	ClientBlockImportExt,
@@ -982,7 +983,7 @@ fn import_notification_to_pool_maintain_works() {
 	let mut import_stream = block_on_stream(client.import_notification_stream());
 
 	// Build the block with the transaction included
-	let mut block_builder = client.new_block(Default::default()).unwrap();
+	let mut block_builder = client.new_block(create_digest()).unwrap();
 	block_builder.push(xt).unwrap();
 	let block = block_builder.build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block).unwrap();

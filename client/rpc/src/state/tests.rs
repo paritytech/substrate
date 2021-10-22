@@ -35,6 +35,7 @@ use substrate_test_runtime_client::{
 use sp_runtime::generic::BlockId;
 use crate::testing::TaskExecutor;
 use futures::{executor, compat::Future01CompatExt};
+use substrate_test_encrypted_tx::create_digest;
 
 const STORAGE_KEY: &[u8] = b"child";
 
@@ -155,7 +156,7 @@ fn should_notify_about_storage_changes() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let mut builder = client.new_block(Default::default()).unwrap();
+		let mut builder = client.new_block(create_digest()).unwrap();
 		builder.push_transfer(runtime::Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
@@ -193,7 +194,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let mut builder = client.new_block(Default::default()).unwrap();
+		let mut builder = client.new_block(create_digest()).unwrap();
 		builder.push_transfer(runtime::Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
@@ -204,7 +205,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 		client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 		// add extra block so previous one can be executed
-		let builder = client.new_block_at(&BlockId::Hash(block.header().hash()), Default::default(), false).unwrap();
+		let builder = client.new_block_at(&BlockId::Hash(block.header().hash()), create_digest(), false).unwrap();
 		let block = builder.build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
@@ -226,7 +227,7 @@ fn should_query_storage() {
 		let mut c = client.clone();
 
 		let mut add_empty_block = || {
-			let builder = client.new_block(Default::default()).unwrap();
+			let builder = client.new_block(create_digest()).unwrap();
 			let block = builder.build(Default::default()).unwrap().block;
 			let hash = block.header.hash();
 			c.import(BlockOrigin::Own, block).unwrap();
@@ -235,7 +236,7 @@ fn should_query_storage() {
 
 		let mut c = client.clone();
 		let mut add_block = |nonce| {
-			let mut builder = client.new_block(Default::default()).unwrap();
+			let mut builder = client.new_block(create_digest()).unwrap();
 			// fake change: None -> None -> None
 			builder.push_storage_change(vec![1], None).unwrap();
 			// fake change: None -> Some(value) -> Some(value)

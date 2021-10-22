@@ -575,6 +575,7 @@ pub mod tests {
 	use sp_core::{H256, crypto::Public};
 	use sc_client_api::{in_mem::Blockchain as InMemoryAuxStore, StorageProof, BlockBackend};
 	use substrate_test_runtime_client::runtime::{Block, Header};
+	use substrate_test_encrypted_tx::create_digest;
 	use crate::tests::TestApi;
 	use crate::finality_proof::{
 		FinalityProofFragment,
@@ -706,7 +707,7 @@ pub mod tests {
 				number: 1,
 				parent_hash: client.chain_info().best_hash,
 				state_root: Default::default(),
-				digest: Default::default(),
+				digest: create_digest(),
 				extrinsics_root: Default::default(),
                 seed: Default::default(),
 			},

@@ -6313,6 +6313,7 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "tempfile",
 ]
@@ -6388,6 +6389,7 @@ dependencies = [
  "sp-timestamp",
  "sp-transaction-pool",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "tempfile",
@@ -6580,6 +6582,7 @@ dependencies = [
  "sp-tracing",
  "sp-utils",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.22",
@@ -6736,6 +6739,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-tracing",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -6830,6 +6834,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "sp-version",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "tokio 0.1.22",
 ]
@@ -6997,6 +7002,7 @@ dependencies = [
  "sp-tracing",
  "sp-transaction-pool",
  "sp-trie",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -7105,6 +7111,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "wasm-timer",
@@ -8525,6 +8532,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-test-encrypted-tx"
+version = "2.0.1"
+dependencies = [
+ "sc-consensus-babe",
+ "sp-runtime",
+ "substrate-test-runtime",
+]
+
+[[package]]
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
@@ -8589,6 +8605,7 @@ dependencies = [
  "sp-encrypted-tx",
  "sp-runtime",
  "substrate-test-client",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime",
 ]
 

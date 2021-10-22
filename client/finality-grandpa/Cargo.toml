@@ -52,6 +52,7 @@ finality-grandpa = { version = "0.12.3", features = ["derive-codec", "test-helpe
 sc-network = { version = "0.8.0", path = "../network" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
+substrate-test-encrypted-tx = { version = "2.0.0",  path = "../../test-utils/encrypted-tx" }
 substrate-test-runtime-client = { version = "2.0.0",  path = "../../test-utils/runtime/client" }
 sp-consensus-babe = { version = "0.8.0", path = "../../primitives/consensus/babe" }
 sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }

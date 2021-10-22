@@ -29,6 +29,7 @@ use sc_client_api::backend;
 use sc_client_api::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use sp_consensus::BlockOrigin;
 use substrate_test_runtime::{self, Transfer};
+use substrate_test_encrypted_tx::create_digest;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sc_block_builder::BlockBuilderProvider;
@@ -40,6 +41,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	backend::StateBackendFor<B, substrate_test_runtime::Block>:
 		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
+	let digest = create_digest();
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//		A1 -> B2 -> B3 -> B4
@@ -56,7 +58,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 		vec![genesis_hash]);
 
 	// G -> A1
-	let a1 = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+	let a1 = client.new_block(digest.clone()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
@@ -66,7 +68,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// A1 -> A2
 	let a2 = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
@@ -80,7 +82,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// A2 -> A3
 	let a3 = client.new_block_at(
 		&BlockId::Hash(a2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a3.clone()).unwrap();
@@ -93,7 +95,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// A3 -> A4
 	let a4 = client.new_block_at(
 		&BlockId::Hash(a3.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a4.clone()).unwrap();
@@ -105,7 +107,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// A4 -> A5
 	let a5 = client.new_block_at(
 		&BlockId::Hash(a4.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 
@@ -118,7 +120,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// A1 -> B2
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 
@@ -139,7 +141,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// B2 -> B3
 	let b3 = client.new_block_at(
 		&BlockId::Hash(b2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 
@@ -152,7 +154,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// B3 -> B4
 	let b4 = client.new_block_at(
 		&BlockId::Hash(b3.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, b4.clone()).unwrap();
@@ -164,7 +166,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// // B2 -> C3
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(b2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
@@ -184,7 +186,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	// A1 -> D2
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
@@ -202,6 +204,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	);
 }
 
+
 /// helper to test the `children` implementation for various backends
 pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	B: backend::LocalBackend<substrate_test_runtime::Block>,
@@ -209,6 +212,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	<B as backend::Backend<substrate_test_runtime::Block>>::State:
 		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
+	let digest = create_digest();
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//		A1 -> B2 -> B3 -> B4
@@ -219,13 +223,13 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	let blockchain = backend.blockchain();
 
 	// G -> A1
-	let a1 = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+	let a1 = client.new_block(digest.clone()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 	// A1 -> A2
 	let a2 = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
@@ -233,7 +237,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// A2 -> A3
 	let a3 = client.new_block_at(
 		&BlockId::Hash(a2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a3.clone()).unwrap();
@@ -241,7 +245,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// A3 -> A4
 	let a4 = client.new_block_at(
 		&BlockId::Hash(a3.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a4.clone()).unwrap();
@@ -249,7 +253,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// A4 -> A5
 	let a5 = client.new_block_at(
 		&BlockId::Hash(a4.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a5.clone()).unwrap();
@@ -257,7 +261,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// A1 -> B2
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
@@ -273,7 +277,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// B2 -> B3
 	let b3 = client.new_block_at(
 		&BlockId::Hash(b2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, b3.clone()).unwrap();
@@ -281,7 +285,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// B3 -> B4
 	let b4 = client.new_block_at(
 		&BlockId::Hash(b3.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, b4).unwrap();
@@ -289,7 +293,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// // B2 -> C3
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(b2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
@@ -305,7 +309,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	// A1 -> D2
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported
@@ -339,6 +343,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	<B as backend::Backend<substrate_test_runtime::Block>>::State:
 		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
+	let digest = create_digest();
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//		A1 -> B2 -> B3 -> B4
@@ -348,13 +353,13 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	let blockchain = backend.blockchain();
 
 	// G -> A1
-	let a1 = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+	let a1 = client.new_block(digest.clone()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 	// A1 -> A2
 	let a2 = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
@@ -362,7 +367,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// A2 -> A3
 	let a3 = client.new_block_at(
 		&BlockId::Hash(a2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a3.clone()).unwrap();
@@ -370,7 +375,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// A3 -> A4
 	let a4 = client.new_block_at(
 		&BlockId::Hash(a3.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a4.clone()).unwrap();
@@ -378,7 +383,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// A4 -> A5
 	let a5 = client.new_block_at(
 		&BlockId::Hash(a4.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, a5.clone()).unwrap();
@@ -386,7 +391,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// A1 -> B2
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise B2 has the same hash as A2 and won't get imported
@@ -402,7 +407,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// B2 -> B3
 	let b3 = client.new_block_at(
 		&BlockId::Hash(b2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, b3.clone()).unwrap();
@@ -410,7 +415,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// B3 -> B4
 	let b4 = client.new_block_at(
 		&BlockId::Hash(b3.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, b4).unwrap();
@@ -418,7 +423,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// // B2 -> C3
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(b2.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
@@ -434,7 +439,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	// A1 -> D2
 	let mut builder = client.new_block_at(
 		&BlockId::Hash(a1.hash()),
-		Default::default(),
+		digest.clone(),
 		false,
 	).unwrap();
 	// this push is required as otherwise D2 has the same hash as B2 and won't get imported

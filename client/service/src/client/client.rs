@@ -303,7 +303,8 @@ where
         .map_err(|e| sp_blockchain::Error::UnknownBlockBuilder)?;
 
 	Ok(
-        api.get_account_id(block_id, authority_id).unwrap()
+        api.get_account_id(block_id, authority_id)//.unwrap()
+            .map_err(|_| sp_blockchain::Error::NotInFinalizedChain)?
             .ok_or_else(|| sp_blockchain::Error::UnknownCollatorId(authority_id))?
     )
 }

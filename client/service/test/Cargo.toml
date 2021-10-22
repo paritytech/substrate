@@ -38,6 +38,7 @@ sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
+substrate-test-encrypted-tx = { version = "2.0.0", path = "../../../test-utils/encrypted-tx" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 sc-block-builder = { version = "0.8.0", path = "../../block-builder" }
