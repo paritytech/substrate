@@ -75,17 +75,18 @@ where
 
 	let mut sum = 0;
 	let iter_num = command.steps;
+	let mut encoded_result = Vec::new();
 	for _ in 0..iter_num {
 		let timer = time::SystemTime::now();
-		let (_, _) = state_machine_call::<Block, ExecDispatch>(
+		encoded_result = state_machine_call::<Block, ExecDispatch>(
 			&ext,
 			&executor,
 			execution,
 			"TryRuntime_on_runtime_upgrade_bench",
 			&[],
 			Default::default(), // we don't really need any extensions here.
-		)?;
-
+		)?
+		.1;
 		if let Some(elapsed) = timer.elapsed().ok() {
 			sum += elapsed.as_nanos() as u64;
 		}
@@ -95,14 +96,6 @@ where
 	// weight is represented as 1_000 nanoseconds
 	let absolute_weight = average_time_nanos * 1000;
 
-	let (_, encoded_result) = state_machine_call::<Block, ExecDispatch>(
-		&ext,
-		&executor,
-		execution,
-		"TryRuntime_on_runtime_upgrade_bench",
-		&[],
-		Default::default(), // we don't really need any extensions here.
-	)?;
 	let total_weight = <u64 as Decode>::decode(&mut &*encoded_result)
 		.map_err(|e| format!("failed to decode output: {:?}", e))?;
 
