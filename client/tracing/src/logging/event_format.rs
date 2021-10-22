@@ -328,9 +328,9 @@ impl<'a> ControlCodeSanitizer<'a> {
 	/// Write the buffered content to the `inner_writer`.
 	fn write(&mut self) -> fmt::Result {
 		lazy_static::lazy_static! {
-			// This regexs will match all valid VT100 escape codes, as well as any other ASCII
-			// control codes different than a newline.
-			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m|[\x00-\x09\x0B-\x1F\x7F]").expect("regex parsing doesn't fail; qed");
+			// This regex will match all valid VT100 escape codes, as well as any other
+			// ASCII and Unicode (both C0 and C1) control codes different than a newline.
+			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m|[\x00-\x09\x0B-\x1F\x7F\\u{80}-\\u{9F}]").expect("regex parsing doesn't fail; qed");
 		}
 
 		if self.sanitize {

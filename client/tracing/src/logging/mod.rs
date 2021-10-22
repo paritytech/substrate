@@ -598,7 +598,7 @@ mod tests {
 
 	#[test]
 	fn control_characters_are_always_stripped_out_from_the_log_messages() {
-		const RAW_LINE: &str = "$$START$$\x1B[1;32mInner\n\r\x7ftext!\x1B[0m$$END$$";
+		const RAW_LINE: &str = "$$START$$\x1B[1;32mInner\n\r\x7ftext!\u{80}\u{9f}\x1B[0m$$END$$";
 		const SANITIZED_LINE: &str = "$$START$$Inner\ntext!$$END$$";
 
 		let output = run_test_in_another_process(
