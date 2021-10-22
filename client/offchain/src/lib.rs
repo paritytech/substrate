@@ -81,18 +81,30 @@ where
 	}
 }
 
+/// Options for [`OffchainWorkers`]
+pub struct OffchainWorkerOptions {
+	/// Enable http requests from offchain workers?
+	///
+	/// If not enabled, any http request will fail.
+	pub enable_http_requests: bool,
+}
+
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Block: traits::Block> {
 	client: Arc<Client>,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
-	shared_client: api::SharedClient,
+	shared_http_client: Option<api::SharedClient>,
 }
 
 impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
-	/// Creates new `OffchainWorkers`.
+	/// Creates new [`OffchainWorkers`].
 	pub fn new(client: Arc<Client>) -> Self {
-		let shared_client = api::SharedClient::new();
+		Self::new_with_options(client, OffchainWorkerOptions { enable_http_requests: true })
+	}
+
+	/// Creates new [`OffchainWorkers`] using the given `options`.
+	pub fn new_with_options(client: Arc<Client>, options: OffchainWorkerOptions) -> Self {
 		Self {
 			client,
 			_block: PhantomData,
@@ -100,7 +112,7 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 				"offchain-worker".into(),
 				num_cpus::get(),
 			)),
-			shared_client,
+			shared_http_client: options.enable_http_requests.then(|| api::SharedClient::new()),
 		}
 	}
 }
@@ -140,9 +152,9 @@ where
 			},
 		};
 		debug!("Checking offchain workers at {:?}: version:{}", at, version);
-		if version > 0 {
+		let process = if version > 0 {
 			let (api, runner) =
-				api::AsyncApi::new(network_provider, is_validator, self.shared_client.clone());
+				api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
 			debug!("Spawning offchain workers at {:?}", at);
 			let header = header.clone();
 			let client = self.client.clone();
@@ -166,9 +178,17 @@ where
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 				}
 			});
-			futures::future::Either::Left(runner.process())
+
+			runner.process()
 		} else {
-			futures::future::Either::Right(futures::future::ready(()))
+			None
+		};
+
+		async move {
+			match process {
+				Some(process) => process.await,
+				None => {},
+			}
 		}
 	}
 
