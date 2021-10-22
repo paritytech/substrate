@@ -322,6 +322,16 @@ impl<'a> fmt::Write for ControlCodeSanitizer<'a> {
 	}
 }
 
+fn strip_control_codes(input: &str) -> std::borrow::Cow<str> {
+	lazy_static::lazy_static! {
+		// This regex will match all valid VT100 escape codes, as well as any other
+		// ASCII and Unicode (both C0 and C1) control codes different than a newline.
+		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m|[\x00-\x09\x0B-\x1F\x7F\\u{80}-\\u{9F}]").expect("regex parsing doesn't fail; qed");
+	}
+
+	RE.replace_all(input, "")
+}
+
 impl<'a> ControlCodeSanitizer<'a> {
 	/// Creates a new instance.
 	fn new(sanitize: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
@@ -330,14 +340,8 @@ impl<'a> ControlCodeSanitizer<'a> {
 
 	/// Write the buffered content to the `inner_writer`.
 	fn flush(&mut self) -> fmt::Result {
-		lazy_static::lazy_static! {
-			// This regex will match all valid VT100 escape codes, as well as any other
-			// ASCII and Unicode (both C0 and C1) control codes different than a newline.
-			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m|[\x00-\x09\x0B-\x1F\x7F\\u{80}-\\u{9F}]").expect("regex parsing doesn't fail; qed");
-		}
-
 		if self.sanitize {
-			let replaced = RE.replace_all(&self.buffer, "");
+			let replaced = strip_control_codes(&self.buffer);
 			self.inner_writer.write_str(&replaced)?
 		} else {
 			self.inner_writer.write_str(&self.buffer)?
