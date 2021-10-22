@@ -913,3 +913,68 @@ fn bids_ordered_correctly() {
 		assert_eq!(<Bids<Test>>::get(), final_list);
 	});
 }
+
+#[test]
+fn bidding_action_works() {
+	EnvBuilder::new().execute(|| {
+		// 10 is the only member, founder, and head
+		assert_eq!(Society::members(), vec![10]);
+
+		// Users make bids
+		assert_ok!(Society::bid(Origin::signed(20), 1000));
+		assert_ok!(Society::bid(Origin::signed(30), 500));
+
+		// 10 makes an action bid that transfers 500 from Treasury to itself
+		let boxed_call = Box::new(call_transfer(10, 500));
+		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
+
+		// 10 tries to bid another action (must fail as 10 has already made a bid)
+		assert_noop!(
+			Society::bid_action(Origin::signed(10), 200, boxed_call.clone()),
+			Error::<Test, _>::AlreadyBid
+		);
+
+		// 40 tries to bid another action (must fail as 40 is not a member)
+		assert_noop!(
+			Society::bid_action(Origin::signed(40), 300, boxed_call.clone()),
+			Error::<Test, _>::NotMember
+		);
+
+		run_to_block(4);
+
+		// Pot is 1000 after "PeriodSpend"
+		assert_eq!(Society::pot(), 1000);
+
+		// Treasury balance
+		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+
+		// Checking candidates (20 is not a candidate because its bid's value > pot)
+		assert_eq!(
+			Society::candidates(),
+			vec![
+				create_bid(50, 10, BidKind::Action(50, boxed_call.clone())),
+				create_bid(500, 30, BidKind::Deposit(25))
+			]
+		);
+
+		// 10 votes for the bid_action created by itself
+		assert_ok!(Society::vote(Origin::signed(10), 10, true));
+
+		run_to_block(8);
+
+		// Pot is 1950 after second "PeriodSpend" (2000) minus 50 from the bid action's payout
+		assert_eq!(Society::pot(), 1950);
+
+		// The value was transferred (Treasury -> 10)
+		assert_eq!(Balances::free_balance(10), 550);
+		// Treasury balance: 10_000 -       500         -    50
+		//                            (transfer action)   (payout)
+		assert_eq!(Balances::free_balance(Society::account_id()), 9_450);
+
+		// Checking candidates (20 is now a candidate)
+		assert_eq!(Society::candidates(), vec![create_bid(1000, 20, BidKind::Deposit(25))]);
+
+		// 10 is still the only member
+		assert_eq!(Society::members(), vec![10]);
+	});
+}

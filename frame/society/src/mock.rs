@@ -217,3 +217,10 @@ pub fn create_bid<AccountId, Balance, Call>(
 ) -> Bid<AccountId, Balance, Call> {
 	Bid { who, kind, value }
 }
+
+pub type BalancesCall = pallet_balances::Call<Test>;
+
+/// Creates a transfer Call to be used by bid_action().
+pub fn call_transfer(dest: u128, value: u64) -> Call {
+	Call::Balances(BalancesCall::transfer { dest, value })
+}

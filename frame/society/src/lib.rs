@@ -289,8 +289,6 @@ type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
-pub type OpaqueCall = Vec<u8>;
-
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum Vote {
@@ -561,8 +559,11 @@ pub mod pallet {
 	/// The current set of candidates; bidders that are attempting to become members.
 	#[pallet::storage]
 	#[pallet::getter(fn candidates)]
-	pub type Candidates<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>, ValueQuery>;
+	pub type Candidates<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		Vec<Bid<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>>,
+		ValueQuery,
+	>;
 
 	/// The set of suspended candidates.
 	#[pallet::storage]
@@ -571,7 +572,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>, OpaqueCall>),
+		(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>),
 	>;
 
 	/// Amount of our account balance that is specifically for the next round's bid(s).
@@ -598,8 +599,11 @@ pub mod pallet {
 
 	/// The current bids, stored ordered by the value of the bid.
 	#[pallet::storage]
-	pub(super) type Bids<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>, ValueQuery>;
+	pub(super) type Bids<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		Vec<Bid<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>>,
+		ValueQuery,
+	>;
 
 	/// Members currently vouching or banned from vouching again
 	#[pallet::storage]
@@ -1247,12 +1251,10 @@ pub mod pallet {
 								<Vouching<T, I>>::insert(&voucher, VouchingStatus::Banned);
 							},
 							BidKind::Action(deposit, _) => {
-								// Punish the member for the bad proposal, but do not do anything
-								// outside of that repatriate to the action account of the society
-								// instead of the "treasury"
+								// Slash deposit and move it to the society treasury account
 								let _ = T::Currency::repatriate_reserved(
 									&who,
-									&Self::actions(),
+									&Self::account_id(),
 									deposit,
 									BalanceStatus::Free,
 								);
@@ -1343,8 +1345,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let actor = ensure_signed(origin)?;
 			// Check value is at least per-byte deposit for call
-			let encoded_call = call.encode();
-			let min_value = <BalanceOf<T, I>>::from(encoded_call.len() as u32)
+			let min_value = <BalanceOf<T, I>>::from(call.encode().len() as u32)
 				.saturating_mul(T::ActionByteDeposit::get());
 			ensure!(value >= min_value, Error::<T, I>::InsufficientActionDeposit);
 			// Check user is not suspended.
@@ -1360,12 +1361,7 @@ pub mod pallet {
 			ensure!(Self::is_member(&members, &actor), Error::<T, I>::NotMember);
 			// Reserve the value of the action.
 			T::Currency::reserve(&actor, value.clone())?;
-			Self::put_bid(
-				bids,
-				&actor,
-				value.clone(),
-				BidKind::Action(value.clone(), encoded_call),
-			);
+			Self::put_bid(bids, &actor, value.clone(), BidKind::Action(value.clone(), call));
 			Self::deposit_event(Event::ActionBid(actor, value));
 			Ok(())
 		}
@@ -1408,10 +1404,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
 	fn put_bid(
-		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>,
+		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>>,
 		who: &T::AccountId,
 		value: BalanceOf<T, I>,
-		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>, OpaqueCall>,
+		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>,
 	) {
 		const MAX_BID_COUNT: usize = 1000;
 
@@ -1460,7 +1456,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Check a user is a bid.
 	fn is_bid(
-		bids: &Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>,
+		bids: &Vec<Bid<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>>,
 		who: &T::AccountId,
 	) -> bool {
 		// Bids are ordered by `value`, so we cannot binary search for a user.
@@ -1469,7 +1465,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Check a user is a candidate.
 	fn is_candidate(
-		candidates: &Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>,
+		candidates: &Vec<Bid<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>>,
 		who: &T::AccountId,
 	) -> bool {
 		// Looking up a candidate is the same as looking up a bid
@@ -1610,7 +1606,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					if is_accepted {
 						total_approvals += approval_count;
 						total_payouts += value;
-						members.push(candidate.clone());
+
+						match kind {
+							BidKind::Deposit(_) | BidKind::Vouch(_, _) => {
+								members.push(candidate.clone());
+							},
+							// Winning action bid does not become member
+							BidKind::Action(_, _) => {},
+						}
 
 						Self::execute_accepted_candidate(&candidate, value, kind, maturity);
 
@@ -1772,7 +1775,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn execute_accepted_candidate(
 		candidate: &T::AccountId,
 		value: BalanceOf<T, I>,
-		kind: BidKind<T::AccountId, BalanceOf<T, I>, OpaqueCall>,
+		kind: BidKind<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>,
 		maturity: T::BlockNumber,
 	) {
 		let value = match kind {
@@ -1798,14 +1801,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			BidKind::Action(deposit, call) => {
 				let _ = T::Currency::unreserve(candidate, deposit);
 				// build society call origin
-				let society_account = Self::actions();
-				let society_origin: T::Origin =
-					frame_system::RawOrigin::Signed(society_account).into();
+				let treasury_account = Self::account_id();
+				let treasury_origin: T::Origin =
+					frame_system::RawOrigin::Signed(treasury_account).into();
 				let call_option: Option<<T as Config<I>>::Call> =
-					Decode::decode(&mut &call[..]).ok();
+					Decode::decode(&mut &call.encode()[..]).ok();
 				call_option.map(|decoded_call| {
 					// execute call
-					let _ = decoded_call.dispatch(society_origin);
+					let _ = decoded_call.dispatch(treasury_origin);
 				});
 				value
 			},
@@ -1879,14 +1882,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::PalletId::get().into_sub_account(b"payouts")
 	}
 
-	/// The account ID of the payouts pot. This is where payouts are made from.
-	///
-	/// This actually does computation. If you need to keep using it, then make sure you cache the
-	/// value and only call this once.
-	pub fn actions() -> T::AccountId {
-		T::PalletId::get().into_sub_account(b"actions")
-	}
-
 	/// Return the duration of the lock, in blocks, with the given number of members.
 	///
 	/// This is a rather opaque calculation based on the formula here:
@@ -1903,7 +1898,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn take_selected(
 		members_len: usize,
 		pot: BalanceOf<T, I>,
-	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>> {
+	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>, Box<<T as Config<I>>::Call>>> {
 		let max_members = MaxMembers::<T, I>::get() as usize;
 		let mut max_selections: usize =
 			(T::MaxCandidateIntake::get() as usize).min(max_members.saturating_sub(members_len));
