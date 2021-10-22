@@ -370,8 +370,9 @@ pub mod pallet {
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
-		/// Payment: `DepositBase` will be reserved if this is the first appromes `DepositFactor`.
-		/// It is returned once this dispatch happens or is cancelled.
+		/// Payment: `DepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `DepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -663,7 +664,8 @@ impl<T: Config> Pallet<T> {
 		ensure!(!Calls::<T>::contains_key(hash), Error::<T>::AlreadyStored);
 		let deposit = other_deposit +
 			T::DepositBase::get() +
-			T::DepositFactor::get() * BalanceOf::<T>::from(((data.encoded_len() + 31) / 32) as u32);
+			T::DepositFactor::get() *
+				BalanceOf::<T>::from(((data.encoded_len() + 31) / 32) as u32);
 		T::Currency::reserve(&who, deposit)?;
 		Calls::<T>::insert(&hash, (data, who, deposit));
 		Ok(())
