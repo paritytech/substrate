@@ -1599,7 +1599,7 @@ impl_runtime_apis! {
 
 		fn on_runtime_upgrade_bench() -> Weight {
 			Executive::execute_on_runtime_upgrade();
-			BlockWeights::get().max_block
+			RuntimeBlockWeights::get().max_block
 		}
 
 		fn execute_block_no_check(block: Block) -> Weight {
