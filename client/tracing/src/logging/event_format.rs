@@ -104,14 +104,14 @@ where
 		// to sanitize everything we need to flush out what was already buffered as-is and only
 		// force-sanitize what follows.
 		if !writer.sanitize {
-			writer.write()?;
+			writer.flush()?;
 			writer.sanitize = true;
 		}
 
 		ctx.format_fields(writer, event)?;
 		writeln!(writer)?;
 
-		writer.write()
+		writer.flush()
 	}
 }
 
@@ -306,7 +306,7 @@ where
 ///
 /// This is used by [`EventFormat`] to sanitize the log messages.
 ///
-/// It is required to call [`ControlCodeSanitizer::write`] after all writes are done,
+/// It is required to call [`ControlCodeSanitizer::flush`] after all writes are done,
 /// because the content of these writes is buffered and will only be written to the
 /// `inner_writer` at that point.
 struct ControlCodeSanitizer<'a> {
@@ -329,7 +329,7 @@ impl<'a> ControlCodeSanitizer<'a> {
 	}
 
 	/// Write the buffered content to the `inner_writer`.
-	fn write(&mut self) -> fmt::Result {
+	fn flush(&mut self) -> fmt::Result {
 		lazy_static::lazy_static! {
 			// This regex will match all valid VT100 escape codes, as well as any other
 			// ASCII and Unicode (both C0 and C1) control codes different than a newline.
@@ -338,9 +338,12 @@ impl<'a> ControlCodeSanitizer<'a> {
 
 		if self.sanitize {
 			let replaced = RE.replace_all(&self.buffer, "");
-			self.inner_writer.write_str(&replaced)
+			self.inner_writer.write_str(&replaced)?
 		} else {
-			self.inner_writer.write_str(&self.buffer)
+			self.inner_writer.write_str(&self.buffer)?
 		}
+
+		self.buffer.clear();
+		Ok(())
 	}
 }

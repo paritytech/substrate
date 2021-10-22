@@ -621,6 +621,10 @@ mod tests {
 			// The part where the timestamp, the logging level, etc. is printed out doesn't
 			// always have to be sanitized unless it's necessary, and here it shouldn't be.
 			assert!(stderr.contains("\x1B[31mERROR\x1B[0m"));
+
+			// Make sure the logs aren't being duplicated.
+			assert_eq!(stderr.find("ERROR"), stderr.rfind("ERROR"));
+			assert_eq!(stderr.find(SANITIZED_LINE), stderr.rfind(SANITIZED_LINE));
 		}
 	}
 }
