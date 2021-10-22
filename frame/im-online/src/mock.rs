@@ -21,7 +21,7 @@
 
 use std::cell::RefCell;
 
-use frame_support::{parameter_types, weights::Weight};
+use frame_support::{parameter_types, weights::Weight, BoundedVec};
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
 use sp_runtime::{
@@ -35,7 +35,7 @@ use sp_staking::{
 };
 
 use crate as imonline;
-use crate::Config;
+use crate::{Config, TryFrom};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -54,29 +54,23 @@ frame_support::construct_runtime!(
 );
 
 thread_local! {
-	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![
-		1,
-		2,
-		3,
-	]));
+	pub static VALIDATORS: RefCell<Option<BoundedVec<u64, MaxKeys>>> =
+		RefCell::new(Some(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxKeys > 3")));
 }
 
 pub struct TestSessionManager;
-impl pallet_session::SessionManager<u64> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<u64>> {
+impl pallet_session::SessionManager<u64, MaxKeys> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<BoundedVec<u64, MaxKeys>> {
 		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
 }
 
-impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
-		VALIDATORS.with(|l| {
-			l.borrow_mut()
-				.take()
-				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
-		})
+impl pallet_session::historical::SessionManager<u64, u64, MaxKeys> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<BoundedVec<(u64, u64), MaxKeys>> {
+		VALIDATORS
+			.with(|l| l.borrow_mut().take().map(|validators| validators.map_collect(|v| (v, v))))
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
@@ -156,6 +150,8 @@ impl pallet_session::Config for Runtime {
 	type Keys = UintAuthorityId;
 	type Event = Event;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type MaxValidatorsCount = MaxKeys;
+	type MaxKeysEncodingSize = MaxKeysEncodingSize;
 	type WeightInfo = ();
 }
 
@@ -213,6 +209,7 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 	pub const MaxKeys: u32 = 10_000;
+	pub const MaxKeysEncodingSize: u32 = 1_000;
 	pub const MaxPeerInHeartbeats: u32 = 10_000;
 	pub const MaxPeerDataEncodingSize: u32 = 1_000;
 }

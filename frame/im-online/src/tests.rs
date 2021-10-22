@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::mock::*;
-use frame_support::{assert_noop, dispatch};
+use frame_support::{assert_noop, dispatch, BoundedVec};
 use sp_core::{
 	offchain::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
@@ -65,7 +65,7 @@ fn should_report_offline_validators() {
 		// buffer new validators
 		advance_session();
 		// enact the change and buffer another one
-		let validators = vec![1, 2, 3, 4, 5, 6];
+		let validators = BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6");
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		advance_session();
 
@@ -89,7 +89,8 @@ fn should_report_offline_validators() {
 
 		// should not report when heartbeat is sent
 		for (idx, v) in validators.into_iter().take(4).enumerate() {
-			let _ = heartbeat(block, 3, idx as u32, v.into(), Session::validators()).unwrap();
+			let _ =
+				heartbeat(block, 3, idx as u32, v.into(), Session::validators().to_vec()).unwrap();
 		}
 		advance_session();
 
@@ -135,8 +136,9 @@ fn heartbeat(
 		signature: signature.clone(),
 	})
 	.map_err(|e| match e {
-		TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) =>
-			"invalid validators len",
+		TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) => {
+			"invalid validators len"
+		}
 		e @ _ => <&'static str>::from(e),
 	})?;
 	ImOnline::heartbeat(Origin::none(), heartbeat, signature)
@@ -147,7 +149,10 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() =
+				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -160,7 +165,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert!(!ImOnline::is_online(2));
 
 		// when
-		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators()).unwrap();
+		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators().to_vec()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online(0));
@@ -168,7 +173,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert!(!ImOnline::is_online(2));
 
 		// and when
-		let _ = heartbeat(1, 2, 2, 3.into(), Session::validators()).unwrap();
+		let _ = heartbeat(1, 2, 2, 3.into(), Session::validators().to_vec()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online(0));
@@ -182,7 +187,10 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() =
+				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -192,11 +200,11 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 
 		// when
 		assert_noop!(
-			heartbeat(1, 3, 0, 1.into(), Session::validators()),
+			heartbeat(1, 3, 0, 1.into(), Session::validators().to_vec()),
 			"Transaction is outdated"
 		);
 		assert_noop!(
-			heartbeat(1, 1, 0, 1.into(), Session::validators()),
+			heartbeat(1, 1, 0, 1.into(), Session::validators().to_vec()),
 			"Transaction is outdated"
 		);
 
@@ -224,7 +232,10 @@ fn should_generate_heartbeats() {
 		// buffer new validators
 		Session::rotate_session();
 		// enact the change and buffer another one
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() =
+				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+		});
 		Session::rotate_session();
 
 		// when
@@ -260,7 +271,9 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() = Some(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxKeys >= 3"))
+		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 
 		// enact the change and buffer another one
@@ -270,7 +283,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		// send an heartbeat from authority id 0 at session 2
-		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators()).unwrap();
+		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators().to_vec()).unwrap();
 
 		// the heartbeat is stored
 		assert!(!ImOnline::received_heartbeats(&2, &0).is_none());
@@ -291,7 +304,10 @@ fn should_mark_online_validator_when_block_is_authored() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() =
+				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -328,7 +344,10 @@ fn should_not_send_a_report_if_already_online() {
 	ext.execute_with(|| {
 		advance_session();
 		// given
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() =
+				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -391,7 +410,9 @@ fn should_handle_missing_progress_estimates() {
 		Session::rotate_session();
 
 		// enact the change and buffer another one
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() = Some(BoundedVec::try_from(vec![0, 1, 2]).expect("MaxKeys >= 3"))
+		});
 		Session::rotate_session();
 
 		// we will return `None` on the next call to `estimate_current_session_progress`
@@ -425,7 +446,9 @@ fn should_handle_non_linear_session_progress() {
 
 		// mock the session length as being 10 blocks long,
 		// enact the change and buffer another one
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
+		VALIDATORS.with(|l| {
+			*l.borrow_mut() = Some(BoundedVec::try_from(vec![0, 1, 2]).expect("MaxKeys >= 3"))
+		});
 
 		// mock the session length has being 10 which should make us assume the fallback for half
 		// session will be reached by block 5.
