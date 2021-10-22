@@ -31,7 +31,6 @@ pub use call_executor::*;
 
 use sc_client_api::light::Storage as BlockchainStorage;
 
-
 /// Create an instance of light client backend.
 pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HashFor<B>>>
 where
