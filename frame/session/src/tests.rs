@@ -21,7 +21,7 @@ use super::*;
 use crate::mock::{
 	authorities, before_session_end_called, force_new_session, new_test_ext,
 	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
-	Origin, PreUpgradeMockSessionKeys, Session, System, Test, SESSION_CHANGED,
+	Origin, PreUpgradeMockSessionKeys, Session, System, Test, TestValidatorIdOf, SESSION_CHANGED,
 	TEST_SESSION_CHANGED,
 };
 
@@ -73,10 +73,34 @@ fn keys_cleared_on_kill() {
 }
 
 #[test]
+fn purge_keys_works_for_stash_id() {
+	let mut ext = new_test_ext();
+	ext.execute_with(|| {
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		TestValidatorIdOf::set(vec![(10, 1), (20, 2), (3, 3)].into_iter().collect());
+		assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
+		assert_eq!(Session::load_keys(&2), Some(UintAuthorityId(2).into()));
+
+		let id = DUMMY;
+		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
+
+		assert_ok!(Session::purge_keys(Origin::signed(10)));
+		assert_ok!(Session::purge_keys(Origin::signed(2)));
+
+		assert_eq!(Session::load_keys(&10), None);
+		assert_eq!(Session::load_keys(&20), None);
+		assert_eq!(Session::key_owner(id, UintAuthorityId(10).get_raw(id)), None);
+		assert_eq!(Session::key_owner(id, UintAuthorityId(20).get_raw(id)), None);
+	})
+}
+
+#[test]
 fn authorities_should_track_validators() {
 	reset_before_session_end_called();
 
 	new_test_ext().execute_with(|| {
+		TestValidatorIdOf::set(vec![(1, 1), (2, 2), (3, 3), (4, 4)].into_iter().collect());
+
 		set_next_validators(vec![1, 2]);
 		force_new_session();
 		initialize_block(1);
@@ -187,6 +211,8 @@ fn session_change_should_work() {
 #[test]
 fn duplicates_are_not_allowed() {
 	new_test_ext().execute_with(|| {
+		TestValidatorIdOf::set(vec![(1, 1), (2, 2), (3, 3), (4, 4)].into_iter().collect());
+
 		System::set_block_number(1);
 		Session::on_initialize(1);
 		assert_noop!(
@@ -205,6 +231,7 @@ fn session_changed_flag_works() {
 	reset_before_session_end_called();
 
 	new_test_ext().execute_with(|| {
+		TestValidatorIdOf::set(vec![(1, 1), (2, 2), (3, 3), (69, 69)].into_iter().collect());
 		TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
 
 		force_new_session();
