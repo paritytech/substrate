@@ -100,6 +100,9 @@ where
 			}
 		}
 
+		// The writer only sanitizes its output once it's flushed, so if we don't actually need
+		// to sanitize everything we need to flush out what was already buffered as-is and only
+		// force-sanitize what follows.
 		if !writer.sanitize {
 			writer.write()?;
 			writer.sanitize = true;

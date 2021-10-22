@@ -614,8 +614,12 @@ mod tests {
 
 		if let Some(output) = output {
 			let stderr = String::from_utf8(output.stderr).unwrap();
+			// The log messages should always be sanitized.
 			assert!(!stderr.contains(RAW_LINE));
 			assert!(stderr.contains(SANITIZED_LINE));
+
+			// The part where the timestamp, the logging level, etc. is printed out doesn't
+			// always have to be sanitized unless it's necessary, and here it shouldn't be.
 			assert!(stderr.contains("\x1B[31mERROR\x1B[0m"));
 		}
 	}
