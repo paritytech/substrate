@@ -204,6 +204,7 @@ mod tests {
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 		pub const MaxAuthorities: u32 = 100;
+		pub const MaxKeysEncodingSize: u32 = 1_000;
 	}
 
 	impl Config for Test {
@@ -219,6 +220,8 @@ mod tests {
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+		type MaxValidatorsCount = MaxAuthorities;
+		type MaxKeysEncodingSize = MaxKeysEncodingSize;
 		type WeightInfo = ();
 	}
 

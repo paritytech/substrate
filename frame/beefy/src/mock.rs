@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::vec;
+use std::{convert::TryFrom, vec};
 
 use frame_support::{
 	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
-	BasicExternalities,
+	BasicExternalities, BoundedVec,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -94,6 +94,8 @@ parameter_types! {
 	pub const Period: u64 = 1;
 	pub const Offset: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+	pub const MaxValidatorsCount: u32 = 100;
+	pub const MaxKeysEncodingSize: u32 = 1_000;
 }
 
 impl pallet_session::Config for Test {
@@ -105,19 +107,21 @@ impl pallet_session::Config for Test {
 	type SessionManager = MockSessionManager;
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxKeysEncodingSize = MaxKeysEncodingSize;
 	type WeightInfo = ();
 }
 
 pub struct MockSessionManager;
 
-impl pallet_session::SessionManager<u64> for MockSessionManager {
+impl pallet_session::SessionManager<u64, MaxValidatorsCount> for MockSessionManager {
 	fn end_session(_: sp_staking::SessionIndex) {}
 	fn start_session(_: sp_staking::SessionIndex) {}
-	fn new_session(idx: sp_staking::SessionIndex) -> Option<Vec<u64>> {
+	fn new_session(idx: sp_staking::SessionIndex) -> Option<BoundedVec<u64, MaxValidatorsCount>> {
 		if idx == 0 || idx == 1 {
-			Some(vec![1, 2])
+			Some(BoundedVec::try_from(vec![1, 2]).expect("MaxValidatorsCount >=2"))
 		} else if idx == 2 {
-			Some(vec![3, 4])
+			Some(BoundedVec::try_from(vec![3, 4]).expect("MaxValidatorsCount >=2"))
 		} else {
 			None
 		}

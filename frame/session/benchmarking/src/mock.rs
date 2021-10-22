@@ -129,6 +129,8 @@ impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
+	type MaxValidatorsCount = MaxValidatorsCount;
+	type MaxKeysEncodingSize = MaxKeysEncodingSize;
 	type WeightInfo = ();
 }
 pallet_staking_reward_curve::build! {
@@ -153,6 +155,7 @@ parameter_types! {
 	pub const MaxReportersCount: u32 = 1_000;
 	pub const MaxPriorSlashingSpans: u32 = 1_000;
 	pub const MaxValidatorsCount: u32 = 4_000;
+	pub const MaxKeysEncodingSize: u32 = 1_000;
 	pub const MaxUnlockingChunks: u32 = 32;
 }
 
@@ -169,6 +172,8 @@ where
 impl onchain::Config for Test {
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
+	type MaxNominations = MaxNominations;
+	type MaxTargets = MaxValidatorsCount;
 }
 
 impl pallet_staking::Config for Test {
