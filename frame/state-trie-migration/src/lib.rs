@@ -209,6 +209,12 @@ pub mod pallet {
 	}
 
 	impl<T: Config> MigrationTask<T> {
+		/// Return true if the task is finished.
+		#[cfg(test)]
+		pub(crate) fn finished(&self) -> bool {
+			self.current_top.is_none() && self.current_child.is_none()
+		}
+
 		/// get the total number of keys affected by the current task.
 		pub(crate) fn dyn_total_items(&self) -> u32 {
 			self.dyn_child_items.saturating_add(self.dyn_top_items)
@@ -870,7 +876,7 @@ mod mock {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
+		pub const BlockHashCount: u32 = 250;
 		pub const SS58Prefix: u8 = 42;
 	}
 
@@ -881,12 +887,12 @@ mod mock {
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;
-		type BlockNumber = u64;
+		type BlockNumber = u32;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type DbWeight = ();
@@ -902,7 +908,7 @@ mod mock {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const OffchainRepeat: u64 = 4;
+		pub const OffchainRepeat: u32 = 4;
 	}
 
 	impl pallet_balances::Config for Test {
@@ -998,7 +1004,7 @@ mod mock {
 		(ext, pool_state)
 	}
 
-	pub fn run_to_block(n: u64) -> H256 {
+	pub fn run_to_block(n: u32) -> H256 {
 		let mut root = Default::default();
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
@@ -1012,7 +1018,7 @@ mod mock {
 		root
 	}
 
-	pub fn run_to_block_and_drain_pool(n: u64, pool: Arc<RwLock<PoolState>>) -> H256 {
+	pub fn run_to_block_and_drain_pool(n: u32, pool: Arc<RwLock<PoolState>>) -> H256 {
 		let mut root = Default::default();
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
@@ -1142,5 +1148,38 @@ mod test {
 	#[test]
 	fn custom_migrate_works() {
 		todo!("test custom keys to be migrated via signed")
+	}
+}
+
+#[cfg(all(test, feature = "remote-tests"))]
+mod remote_tests {
+	use super::{mock::*, *};
+	use remote_externalities::Mode;
+	use sp_runtime::StateVersion;
+
+	// we only use the hash type from this (I hope).
+	type Block = sp_runtime::testing::Block<Extrinsic>;
+
+	#[tokio::test]
+	async fn on_initialize_migration() {
+		sp_tracing::try_init_simple();
+		let mut ext = remote_externalities::Builder::<Block>::new()
+			.mode(Mode::Online(std::env!("WS_API").to_owned().into()))
+			.build()
+			.await
+			.unwrap();
+
+		ext.execute_with(|| {
+			// requires the block number type in our tests to be same as with mainnet, u32.
+			let mut now = frame_system::Pallet::<Test>::block_number();
+			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }));
+			loop {
+				run_to_block(now + 1);
+				if StateTrieMigration::migration_process().finished() {
+					break
+				}
+				now += 1;
+			}
+		})
 	}
 }

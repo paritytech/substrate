@@ -139,6 +139,12 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	}
 }
 
+impl<B: BlockT> From<String> for OnlineConfig<B> {
+	fn from(s: String) -> Self {
+		Self { transport: s.into(), ..Default::default() }
+	}
+}
+
 /// Configuration of the state snapshot.
 #[derive(Clone)]
 pub struct SnapshotConfig {

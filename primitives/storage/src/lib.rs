@@ -119,8 +119,7 @@ impl DerefMut for PrefixedStorageKey {
 }
 
 impl PrefixedStorageKey {
-	/// Create a prefixed storage key from its byte array
-	/// representation.
+	/// Create a prefixed storage key from its byte array representation.
 	pub fn new(inner: Vec<u8>) -> Self {
 		PrefixedStorageKey(inner)
 	}
@@ -130,9 +129,7 @@ impl PrefixedStorageKey {
 		PrefixedStorageKey::ref_cast(inner)
 	}
 
-	/// Get inner key, this should
-	/// only be needed when writing
-	/// into parent trie to avoid an
+	/// Get inner key, this should only be needed when writing into parent trie to avoid an
 	/// allocation.
 	pub fn into_inner(self) -> Vec<u8> {
 		self.0

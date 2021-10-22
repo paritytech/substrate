@@ -30,6 +30,8 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 pallet-balances = { path = "../balances", version = "4.0.0-dev" }
 parking_lot = "0.11.0"
 sp-tracing = { path = "../../primitives/tracing", version = "4.0.0-dev" }
+remote-externalities = { path = "../../utils/frame/remote-externalities", version = "0.10.0-dev" }
+tokio = { version = "1.10", features = ["macros"] }
 
 [features]
 default = ["std"]
@@ -48,3 +50,4 @@ std = [
 
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]
+remote-tests = ["std"]
