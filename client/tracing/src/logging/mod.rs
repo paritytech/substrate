@@ -595,4 +595,28 @@ mod tests {
 			assert!(stderr.contains(&line));
 		}
 	}
+
+	#[test]
+	fn control_characters_are_always_stripped_out_from_the_log_messages() {
+		const RAW_LINE: &str = "$$START$$\x1B[1;32mInner\n\r\x7ftext!\x1B[0m$$END$$";
+		const SANITIZED_LINE: &str = "$$START$$Inner\ntext!$$END$$";
+
+		let output = run_test_in_another_process(
+			"control_characters_are_always_stripped_out_from_the_log_messages",
+			|| {
+				std::env::set_var("RUST_LOG", "trace");
+				let mut builder = LoggerBuilder::new("");
+				builder.with_colors(true);
+				builder.init().unwrap();
+				log::error!("{}", RAW_LINE);
+			},
+		);
+
+		if let Some(output) = output {
+			let stderr = String::from_utf8(output.stderr).unwrap();
+			assert!(!stderr.contains(RAW_LINE));
+			assert!(stderr.contains(SANITIZED_LINE));
+			assert!(stderr.contains("\x1B[31mERROR\x1B[0m"));
+		}
+	}
 }
