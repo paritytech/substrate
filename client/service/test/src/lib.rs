@@ -172,7 +172,10 @@ where
 
 				if full_nodes
 					.iter()
-					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service)) { break }
+					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service))
+				{
+					break
+				}
 			}
 		};
 
