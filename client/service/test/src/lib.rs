@@ -170,9 +170,9 @@ where
 			loop {
 				interval.tick().await;
 
-				full_ready = full_nodes
+				if full_nodes
 					.iter()
-					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service));
+					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service)) { break }
 			}
 		};
 
