@@ -627,7 +627,7 @@ cfg_if! {
 				fn get_type(extrinsic: <Block as BlockT>::Extrinsic) -> ExtrinsicType<<Block as BlockT>::Hash>{
 					match extrinsic{
                         Extrinsic::EncryptedTX(e) => e,
-                        _ => { panic!("should not be called on non encrypted extrinsics") }
+                        _ => { ExtrinsicType::<<Block as BlockT>::Hash>::Other }
                     }
 				}
 

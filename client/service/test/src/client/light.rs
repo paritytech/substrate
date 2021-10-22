@@ -29,7 +29,7 @@ use sc_light::{
 use std::sync::Arc;
 use sp_runtime::{
 	traits::{BlakeTwo256, HashFor, NumberFor},
-	generic::BlockId, traits::{Block as _, Header as HeaderT}, Digest,
+	generic::BlockId, traits::{Block as _, Header as HeaderT}
 };
 use std::collections::HashMap;
 use parking_lot::Mutex;

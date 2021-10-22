@@ -44,7 +44,7 @@ use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::TaskExecutor}
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use sp_consensus::{
-	BlockOrigin, SelectChain, BlockImport, Error as ConsensusError, BlockCheckParams, ImportResult,
+	BlockOrigin, SelectChain, BlockImport, BlockCheckParams, ImportResult,
 	BlockStatus, BlockImportParams, ForkChoiceStrategy,
 };
 use sp_storage::StorageKey;
@@ -52,7 +52,7 @@ use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_runtime::{generic::BlockId, DigestItem};
 use hex_literal::hex;
 use sc_consensus_babe::{PreDigest, CompatibleDigestItem, SecondaryPlainPreDigest};
-use substrate_test_runtime::{ALICE_ACCOUNT_ID, ALICE_COLLATOR_ID, ALICE_PUB_KEY, UNKNOWN_COLLATOR_ID};
+use substrate_test_runtime::{ALICE_ACCOUNT_ID, UNKNOWN_COLLATOR_ID};
 use substrate_test_encrypted_tx::create_digest;
 
 mod light;
@@ -64,13 +64,11 @@ native_executor_instance!(
 	substrate_test_runtime_client::runtime::native_version,
 );
 
-use ecies::{utils::{aes_decrypt, decapsulate}, SecretKey, PublicKey};
+use ecies::{SecretKey, PublicKey};
 use sc_keystore::{KeyStorePtr, Store};
 use ecies::utils::{aes_encrypt, encapsulate};
 use sp_core::crypto::KeyTypeId;
 use sp_encrypted_tx::EncryptedTxApi;
-
-use sp_runtime::traits::DigestFor;
 
 fn executor() -> sc_executor::NativeExecutor<Executor> {
 	sc_executor::NativeExecutor::new(
@@ -1853,15 +1851,15 @@ fn mat_block_import_failure_missing_singly_encrypted_tx() {
             data: vec![],
         }
 	).unwrap();
-	let mut block = builder.build(Default::default()).unwrap().block;
+	let block = builder.build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	let builder = client.new_block(create_digest()).unwrap();
-	let mut block = builder.build(Default::default()).unwrap().block;
+	let block = builder.build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	let builder = client.new_block(create_digest()).unwrap();
-	let mut block = builder.build(Default::default()).unwrap().block;
+	let block = builder.build(Default::default()).unwrap().block;
 
 	assert!(
         matches!(
@@ -1963,7 +1961,7 @@ fn mat_block_import_failure_missing_pre_digest() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
-	let mut builder = client.new_block(Default::default()).unwrap();
+	let builder = client.new_block(Default::default()).unwrap();
 	let block = builder.build(Default::default()).unwrap().block;
 
 	assert!(

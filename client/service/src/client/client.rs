@@ -106,59 +106,57 @@ use {
 use ecies::{SecretKey, PublicKey};
 use ecies::utils::{aes_encrypt_with_iv, parse_iv, encapsulate};
 use ecies::consts::AES_IV_LENGTH;
-use sc_keystore::{KeyStorePtr, Store};
 
 fn encrypt_payload_using_pub_key(pub_key: &sp_core::ecdsa::Public, payload: &[u8], iv: [u8;AES_IV_LENGTH]) -> Vec<u8>{
-    let dummy_secret_key: SecretKey = SecretKey::default();
-    let pub_key = PublicKey::parse_slice(pub_key.as_ref(), None).unwrap();
-    let encryption_key = encapsulate(&dummy_secret_key, &pub_key).unwrap();
-    aes_encrypt_with_iv(&encryption_key, &payload, iv).unwrap()
+	let dummy_secret_key: SecretKey = SecretKey::default();
+	let pub_key = PublicKey::parse_slice(pub_key.as_ref(), None).unwrap();
+	let encryption_key = encapsulate(&dummy_secret_key, &pub_key).unwrap();
+	aes_encrypt_with_iv(&encryption_key, &payload, iv).unwrap()
 }
 
-// HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>;
 
 fn filter_singly_encrypted_transactions<'a, Api, Block>(
-    api: ApiRef<'a, Api>,
-    at: BlockId<Block>,
-    transactions: &Vec<<Block as BlockT>::Extrinsic>
-    ) -> HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
+	api: ApiRef<'a, Api>,
+	at: BlockId<Block>,
+	transactions: &Vec<<Block as BlockT>::Extrinsic>
+) -> HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
 where
-    Block: BlockT,
-    Api: EncryptedTxApi<Block>
+	Block: BlockT,
+	Api: EncryptedTxApi<Block>
 {
-    transactions.iter()
-    .filter_map(|tx| {
-        match  api.get_type(&at, tx.to_owned()).unwrap(){
-            ExtrinsicType::SinglyEncryptedTx{identifier, singly_encrypted_call} => 
-                Some(
-                    (identifier.clone(),
-                    ExtrinsicType::SinglyEncryptedTx{identifier, singly_encrypted_call})
-                    ),
-            _ => None
-        }
-    }).collect()
+	transactions.iter()
+		.filter_map(|tx| {
+			match  api.get_type(&at, tx.to_owned()).unwrap(){
+				ExtrinsicType::SinglyEncryptedTx{identifier, singly_encrypted_call} => 
+					Some(
+						(identifier.clone(),
+						ExtrinsicType::SinglyEncryptedTx{identifier, singly_encrypted_call})
+					),
+				_ => None
+			}
+		}).collect()
 }
 
 fn filter_decrypted_transactions<'a, Api, Block>(
-    api: ApiRef<'a, Api>,
-    at: BlockId<Block>,
-    transactions: &Vec<<Block as BlockT>::Extrinsic>
-    ) -> HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
+	api: ApiRef<'a, Api>,
+	at: BlockId<Block>,
+	transactions: &Vec<<Block as BlockT>::Extrinsic>
+) -> HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
 where
-    Block: BlockT,
-    Api: EncryptedTxApi<Block>
+	Block: BlockT,
+	Api: EncryptedTxApi<Block>
 {
-    transactions.iter()
-    .filter_map(|tx| {
-        match  api.get_type(&at, tx.to_owned()).unwrap(){
-            ExtrinsicType::DecryptedTx{identifier, decrypted_call} => 
-                Some(
-                    (identifier.clone(),
-                    ExtrinsicType::DecryptedTx{identifier, decrypted_call})
-                    ),
-            _ => None
-        }
-    }).collect()
+	transactions.iter()
+		.filter_map(|tx| {
+			match  api.get_type(&at, tx.to_owned()).unwrap(){
+				ExtrinsicType::DecryptedTx{identifier, decrypted_call} => 
+					Some(
+						(identifier.clone(),
+						ExtrinsicType::DecryptedTx{identifier, decrypted_call})
+					),
+				_ => None
+			}
+		}).collect()
 }
 
 
@@ -347,7 +345,7 @@ where
 {
 	let authority_id = sc_consensus_babe::find_pre_digest::<Block>(&header)
 		.map(|pre_digest| pre_digest.authority_index())
-        .map_err(|e| sp_blockchain::Error::UnknownBlockBuilder)?;
+        .map_err(|_| sp_blockchain::Error::UnknownBlockBuilder)?;
 
 	Ok(
         api.get_account_id(block_id, authority_id)//.unwrap()
@@ -961,100 +959,28 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							block,
 						)?;
 
-                        // TODO: solve problem of missing pre_digest in testing framework
-                        // https://trello.com/c/YPt5RKOj/325-newsolve-problem-of-missing-blockbuilderid-information-in-substrate-tests
-                        let block_builder_id = get_block_author::<Block, Self>(&self.runtime_api(), &at, &import_block.header)?;
-                        let block_builder_public_key = api
-                            .get_authority_public_key(&at, &block_builder_id)?
-                            .ok_or(sp_blockchain::Error::MissingPublicKey(block_builder_id.clone()))?;
+						let this_block_extrinsics = import_block.body.clone().unwrap();
 
+						let block_builder_id = get_block_author::<Block, Self>(&self.runtime_api(), &at, &import_block.header)?;
+						let block_builder_public_key = api
+							.get_authority_public_key(&at, &block_builder_id)?
+							.ok_or(sp_blockchain::Error::MissingPublicKey(block_builder_id.clone()))?;
 
-                        let pre_doubly_encrypted_txs: Vec<_> = api.get_double_encrypted_transactions(&at, &block_builder_id)
-                                .map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?
-                                .into_iter().collect();
+						self.assert_doubly_encrypted_transactions_are_decrypted(
+							*parent_hash,
+							block_builder_id.clone(),
+							&block_builder_public_key,
+							&previous_block_extrinsics,
+							&this_block_extrinsics,
+						)?;
 
-                        let pre_doubly_encrypted_tx_ids = pre_doubly_encrypted_txs
-                                .iter()
-                                .map(|tx| tx.tx_id)
-                                .collect::<HashSet<_>>();
-
-                        let pre_singly_encrypted_txs: Vec<_> = api.get_singly_encrypted_transactions(&at, &block_builder_id)
-                                .map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?
-                                .into_iter().collect();
-
-                        let pre_singly_encrypted_tx_ids = pre_singly_encrypted_txs
-                                .iter()
-                                .map(|tx| tx.tx_id)
-                                .collect::<HashSet<_>>();
-
-                        for tx in pre_doubly_encrypted_tx_ids.iter(){
-                            log::debug!(target: "encrypted", "{:?} - doubly encrypted TX assigned to {:?}", tx, block_builder_id);
-                        }
-
-                        for tx in pre_singly_encrypted_tx_ids.iter(){
-                            log::debug!(target: "encrypted", "{:?} - singly encrypted TX  assigned to {:?}", tx, block_builder_id);
-                        }
-
-
-						if !pre_singly_encrypted_tx_ids.is_empty() || !pre_doubly_encrypted_tx_ids.is_empty() {
-                            let this_block_extrinsics = import_block.body.clone().unwrap();
-
-							let singly_encrypted_transactions_from_prev_block = filter_singly_encrypted_transactions::<_, Block>(self.runtime_api(), at, &previous_block_extrinsics);
-                            let singly_encrypted_transactions_from_prev_block_ids: HashSet<_> = singly_encrypted_transactions_from_prev_block.keys().cloned().collect();
-
-							let singly_encrypted_transactions_from_this_block = filter_singly_encrypted_transactions::<_, Block>(self.runtime_api(), at, &this_block_extrinsics);
-                            let singly_encrypted_transactions_from_this_block_ids: HashSet<_> = singly_encrypted_transactions_from_this_block.keys().cloned().collect();
-
-							let decrypted_transactions_from_this_block: HashMap<_,_> = filter_decrypted_transactions::<_, Block>(self.runtime_api(), at, &this_block_extrinsics);
-                            let decrypted_transactions_from_this_block_ids: HashSet<_> = decrypted_transactions_from_this_block.keys().cloned().collect();
-                            
-							let decrypted_transactions_from_prev_block: HashMap<_,_> = filter_decrypted_transactions::<_, Block>(self.runtime_api(), at, &previous_block_extrinsics);
-                            let decrypted_transactions_from_prev_block_ids: HashSet<_> = decrypted_transactions_from_this_block.keys().cloned().collect();
-
-							for tx in singly_encrypted_transactions_from_prev_block_ids.iter(){
-								log::debug!(target: "encrypted", "{:?} - singly encrypted TX found in executed block", tx);
-							}
-
-							for tx in decrypted_transactions_from_prev_block_ids.iter(){
-								log::debug!(target: "encrypted", "{:?} - singly encrypted TX found in executed block", tx);
-							}
-
-							for tx in singly_encrypted_transactions_from_this_block_ids.iter(){
-								log::debug!(target: "encrypted", "{:?} - singly encrypted TX found in block", tx);
-							}
-
-							for tx in decrypted_transactions_from_this_block_ids.iter(){
-								log::debug!(target: "encrypted", "{:?} - decrypted TX found in block", tx);
-							}
-
-							// if !decrypted_transactions_from_this_block_ids.union(&decrypted_transactions_from_prev_block_ids).cloned().collect::<HashSet<_>>().is_superset(&pre_singly_encrypted_tx_ids){
-							// 	return Err(sp_blockchain::Error::MissingDecryptedTransaction(block_builder_id));
-							// }
-                            //
-							// if !singly_encrypted_transactions_from_this_block_ids.union(&singly_encrypted_transactions_from_prev_block_ids).cloned().collect::<HashSet<_>>().is_superset(&pre_doubly_encrypted_tx_ids){
-							// 	return Err(sp_blockchain::Error::MissingSinglyEncryptedTransaction(block_builder_id));
-							// }
-                            //
-                            let mut decrypted_transactions = decrypted_transactions_from_this_block.clone();
-                            decrypted_transactions.extend(decrypted_transactions_from_prev_block);
-
-                            self.validate_decrypted_transaction(
-                                block_builder_id.clone(),
-                                &block_builder_public_key,
-                                pre_singly_encrypted_txs,
-                                decrypted_transactions,
-                            )?;
-
-                            let mut singly_encrypted_transaction = singly_encrypted_transactions_from_this_block.clone();
-                            singly_encrypted_transaction.extend(singly_encrypted_transactions_from_prev_block);
-                            self.validate_singly_encrypted_transaction(
-                                block_builder_id.clone(),
-                                &block_builder_public_key,
-                                pre_doubly_encrypted_txs,
-                                singly_encrypted_transaction,
-                            )?;
-
-						}
+						self.assert_singly_encrypted_transactions_are_decrypted(
+							*parent_hash,
+							block_builder_id.clone(),
+							&block_builder_public_key,
+							&previous_block_extrinsics,
+							&this_block_extrinsics,
+						)?;
 
 					}
 					None => {
@@ -1090,45 +1016,127 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(None)
 	}
 
-    fn validate_decrypted_transaction(&self,
-        block_builder_id: AccountId32,
-        block_builder_public_key: &sp_core::ecdsa::Public,
-        encrypted: Vec<EncryptedTx<<Block as BlockT>::Hash>>,
-        decrypted: HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
-        ) -> sp_blockchain::Result<()>{
-        for tx in encrypted.iter(){
-            if let Some(ExtrinsicType::DecryptedTx { decrypted_call, .. }) = decrypted.get(&tx.tx_id){
-                let iv = parse_iv(&tx.data).unwrap_or_default();
-                let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &decrypted_call, iv);
-                if tx.data != encrypted_payload {
-                    return Err(sp_blockchain::Error::DecryptedPayloadMismatch);
-                }
-            }else{
-                return Err(sp_blockchain::Error::MissingDecryptedTransaction(block_builder_id));
-            }
-        }
-        Ok(())
-    }
+	fn assert_doubly_encrypted_transactions_are_decrypted(&self,
+		hash: <Block as BlockT>::Hash,
+		block_builder_id: AccountId32,
+		block_builder_public_key: &sp_core::ecdsa::Public,
+		previous_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
+		this_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
+	) -> sp_blockchain::Result<()> 
+	where
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
+			+ ApiExt<Block, StateBackend = B::State>
+			+ ExtrinsicInfoRuntimeApi<Block>
+			+ EncryptedTxApi<Block>
+			+ BlockBuilderRuntimeApi<Block>,
+	{
+		let api = self.runtime_api();
+		let at = BlockId::Hash(hash);
 
-    fn validate_singly_encrypted_transaction(&self,
-        block_builder_id: AccountId32,
-        block_builder_public_key: &sp_core::ecdsa::Public,
-        encrypted: Vec<EncryptedTx<<Block as BlockT>::Hash>>,
-        decrypted: HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
-        ) -> sp_blockchain::Result<()>{
-        for tx in encrypted.iter(){
-            if let Some(ExtrinsicType::SinglyEncryptedTx { singly_encrypted_call, .. }) = decrypted.get(&tx.tx_id){
-                let iv = parse_iv(&tx.data).unwrap_or_default();
-                let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &singly_encrypted_call, iv);
-                if tx.data != encrypted_payload {
-                    return Err(sp_blockchain::Error::DecryptedPayloadMismatch);
-                }
-            }else{
-                return Err(sp_blockchain::Error::MissingSinglyEncryptedTransaction(block_builder_id));
-            }
-        }
-        Ok(())
-    }
+		let doubly_encrypted_txs: Vec<_> = api
+			.get_double_encrypted_transactions(&at, &block_builder_id)
+			.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?
+			.into_iter().collect();
+
+		let mut singly_encrypted_transaction = filter_singly_encrypted_transactions::<_, Block>(
+			self.runtime_api(),
+			at,
+			previous_block_txs);
+
+		singly_encrypted_transaction.extend(filter_singly_encrypted_transactions::<_, Block>(
+				self.runtime_api(),
+				at,
+				this_block_txs));
+
+		self.validate_singly_encrypted_transaction(
+			block_builder_id.clone(),
+			&block_builder_public_key,
+			doubly_encrypted_txs,
+			singly_encrypted_transaction,
+		)
+	}
+
+	fn assert_singly_encrypted_transactions_are_decrypted(&self,
+		hash: <Block as BlockT>::Hash,
+		block_builder_id: AccountId32,
+		block_builder_public_key: &sp_core::ecdsa::Public,
+		previous_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
+		this_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
+	) -> sp_blockchain::Result<()> 
+	where
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>
+			+ ApiExt<Block, StateBackend = B::State>
+			+ ExtrinsicInfoRuntimeApi<Block>
+			+ EncryptedTxApi<Block>
+			+ BlockBuilderRuntimeApi<Block>,
+	{
+		let api = self.runtime_api();
+		let at = BlockId::Hash(hash);
+
+		let singly_encrypted_txs: Vec<_> = api
+			.get_singly_encrypted_transactions(&at, &block_builder_id)
+			.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?
+			.into_iter().collect();
+
+		let mut decrypted_txs = filter_decrypted_transactions::<_, Block>(
+			self.runtime_api(),
+			at,
+			previous_block_txs);
+
+		decrypted_txs.extend(filter_decrypted_transactions::<_, Block>(
+				self.runtime_api(),
+				at,
+				this_block_txs));
+
+		self.validate_decrypted_transaction(
+			block_builder_id.clone(),
+			&block_builder_public_key,
+			singly_encrypted_txs,
+			decrypted_txs,
+		)
+	}
+
+	fn validate_decrypted_transaction(&self,
+		block_builder_id: AccountId32,
+		block_builder_public_key: &sp_core::ecdsa::Public,
+		encrypted: Vec<EncryptedTx<<Block as BlockT>::Hash>>,
+		decrypted: HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
+	) -> sp_blockchain::Result<()>{
+		for tx in encrypted.iter(){
+			if let Some(ExtrinsicType::DecryptedTx { decrypted_call, .. }) = decrypted.get(&tx.tx_id){
+				let iv = parse_iv(&tx.data).unwrap_or_default();
+				let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &decrypted_call, iv);
+				if tx.data != encrypted_payload {
+					return Err(sp_blockchain::Error::DecryptedPayloadMismatch);
+				}
+			}else{
+				return Err(sp_blockchain::Error::MissingDecryptedTransaction(block_builder_id));
+			}
+		}
+		Ok(())
+	}
+
+	fn validate_singly_encrypted_transaction(&self,
+		block_builder_id: AccountId32,
+		block_builder_public_key: &sp_core::ecdsa::Public,
+		encrypted: Vec<EncryptedTx<<Block as BlockT>::Hash>>,
+		decrypted: HashMap<<Block as BlockT>::Hash, ExtrinsicType<<Block as BlockT>::Hash>>
+	) -> sp_blockchain::Result<()>{
+		for tx in encrypted.iter(){
+			if let Some(ExtrinsicType::SinglyEncryptedTx { singly_encrypted_call, .. }) = decrypted.get(&tx.tx_id){
+				let iv = parse_iv(&tx.data).unwrap_or_default();
+				let encrypted_payload = encrypt_payload_using_pub_key(&block_builder_public_key, &singly_encrypted_call, iv);
+				if tx.data != encrypted_payload {
+					return Err(sp_blockchain::Error::DecryptedPayloadMismatch);
+				}
+			}else{
+				return Err(sp_blockchain::Error::MissingSinglyEncryptedTransaction(block_builder_id));
+			}
+		}
+		Ok(())
+	}
 
 	fn apply_finality_with_block_hash(
 		&self,
