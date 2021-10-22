@@ -322,6 +322,7 @@ impl<'a> fmt::Write for ControlCodeSanitizer<'a> {
 	}
 }
 
+// NOTE: When making any changes here make sure to also change this function in `sp-panic-handler`.
 fn strip_control_codes(input: &str) -> std::borrow::Cow<str> {
 	lazy_static::lazy_static! {
 		// This regex will match all valid VT100 escape codes, as well as any other
