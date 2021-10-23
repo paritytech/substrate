@@ -52,6 +52,6 @@ In the pipeline screen, pick:
 
 ## Config branch/tag for rebuilding rustdoc when there is new commit
 
-In the [`.gitlab-ci.yml`](../.gitlab-ci.yml), there is [`CONT_RUSTDOC_BUILT_REFS` variable](../.gitlab-ci.yml#52). Tags branches specified in this var will be rebuilt everytime when new
+In the [`.gitlab-ci.yml`](../.gitlab-ci.yml), there is [`CONT_RUSTDOC_BUILT_REFS` variable](../.gitlab-ci.yml#L52). Tags branches specified in this var will be rebuilt everytime when new
 commits are pushed. Currently it is set to `master` only. It supports multiple value by separating
 with a space, e.g. `master development`.
