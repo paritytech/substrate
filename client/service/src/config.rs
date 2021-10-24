@@ -97,6 +97,8 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
+	/// Maximum size of the output buffer capacity for websocket connections.
+	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.

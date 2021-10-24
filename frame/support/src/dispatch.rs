@@ -2165,6 +2165,22 @@ macro_rules! decl_module {
 			}
 		}
 
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::PalletsInfoAccess
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn count() -> usize { 1 }
+			fn accumulate(acc: &mut $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData>) {
+				use $crate::traits::PalletInfoAccess;
+				let item = $crate::traits::PalletInfoData {
+					index: Self::index(),
+					name: Self::name(),
+					module_name: Self::module_name(),
+					crate_version: Self::crate_version(),
+				};
+				acc.push(item);
+			}
+		}
+
 		// Implement GetCallName for the Call.
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallName
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
