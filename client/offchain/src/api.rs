@@ -144,13 +144,7 @@ pub(crate) struct Api {
 	/// Is this node a potential validator?
 	is_validator: bool,
 	/// Everything HTTP-related is handled by a different struct.
-	http: Option<http::HttpApi>,
-}
-
-impl Api {
-	fn http(&mut self) -> &mut http::HttpApi {
-		self.http.as_mut().expect("`OffchainWorkers` are not build with `enable_http_requests` option enabled.")
-	}
+	http: http::HttpApi,
 }
 
 impl offchain::Externalities for Api {
@@ -183,7 +177,7 @@ impl offchain::Externalities for Api {
 		uri: &str,
 		_meta: &[u8],
 	) -> Result<HttpRequestId, ()> {
-		self.http().request_start(method, uri)
+		self.http.request_start(method, uri)
 	}
 
 	fn http_request_add_header(
@@ -192,7 +186,7 @@ impl offchain::Externalities for Api {
 		name: &str,
 		value: &str,
 	) -> Result<(), ()> {
-		self.http().request_add_header(request_id, name, value)
+		self.http.request_add_header(request_id, name, value)
 	}
 
 	fn http_request_write_body(
@@ -201,7 +195,7 @@ impl offchain::Externalities for Api {
 		chunk: &[u8],
 		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
-		self.http().request_write_body(request_id, chunk, deadline)
+		self.http.request_write_body(request_id, chunk, deadline)
 	}
 
 	fn http_response_wait(
@@ -209,11 +203,11 @@ impl offchain::Externalities for Api {
 		ids: &[HttpRequestId],
 		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
-		self.http().response_wait(ids, deadline)
+		self.http.response_wait(ids, deadline)
 	}
 
 	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.http().response_headers(request_id)
+		self.http.response_headers(request_id)
 	}
 
 	fn http_response_read_body(
@@ -222,7 +216,7 @@ impl offchain::Externalities for Api {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
-		self.http().response_read_body(request_id, buffer, deadline)
+		self.http.response_read_body(request_id, buffer, deadline)
 	}
 
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
@@ -304,23 +298,20 @@ impl AsyncApi {
 	pub fn new(
 		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 		is_validator: bool,
-		shared_http_client: Option<SharedClient>,
+		shared_http_client: SharedClient,
 	) -> (Api, Self) {
-		let (http_api, http_worker) = match shared_http_client.map(http::http) {
-			Some((api, worker)) => (Some(api), Some(worker)),
-			None => (None, None)
-		};
+		let (http_api, http_worker) = http::http(shared_http_client);
 
 		let api = Api { network_provider, is_validator, http: http_api };
 
-		let async_api = Self { http: http_worker };
+		let async_api = Self { http: Some(http_worker) };
 
 		(api, async_api)
 	}
 
 	/// Run a processing task for the API
-	pub fn process(self) -> Option<impl Future<Output = ()>> {
-		self.http
+	pub fn process(self) -> impl Future<Output = ()> {
+		self.http.expect("`process` is only called once; qed")
 	}
 }
 
@@ -335,7 +326,7 @@ mod tests {
 		time::SystemTime,
 	};
 
-	struct TestNetwork();
+	pub(super) struct TestNetwork();
 
 	impl NetworkProvider for TestNetwork {
 		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
@@ -362,7 +353,7 @@ mod tests {
 		let mock = Arc::new(TestNetwork());
 		let shared_client = SharedClient::new();
 
-		AsyncApi::new(mock, false, Some(shared_client))
+		AsyncApi::new(mock, false, shared_client)
 	}
 
 	fn offchain_db() -> Db<LocalStorage> {
@@ -481,15 +472,5 @@ mod tests {
 		let seed = api.random_seed();
 		// then
 		assert_ne!(seed, [0; 32]);
-	}
-
-	#[test]
-	#[should_panic(expected = "are not build with `enable_http_requests`")]
-	fn disabled_http_leads_to_panic() {
-		let mock = Arc::new(TestNetwork());
-
-		let (mut api, _async_api) = AsyncApi::new(mock, false, None);
-
-		let _ = api.http_request_start("lol", "nope", &[]);
 	}
 }

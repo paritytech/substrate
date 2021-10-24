@@ -94,7 +94,8 @@ pub struct OffchainWorkers<Client, Block: traits::Block> {
 	client: Arc<Client>,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
-	shared_http_client: Option<api::SharedClient>,
+	shared_http_client: api::SharedClient,
+	enable_http: bool,
 }
 
 impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
@@ -112,7 +113,8 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 				"offchain-worker".into(),
 				num_cpus::get(),
 			)),
-			shared_http_client: options.enable_http_requests.then(|| api::SharedClient::new()),
+			shared_http_client: api::SharedClient::new(),
+			enable_http: options.enable_http_requests,
 		}
 	}
 }
@@ -152,18 +154,26 @@ where
 			},
 		};
 		debug!("Checking offchain workers at {:?}: version:{}", at, version);
-		let process = if version > 0 {
+		let process = (version > 0).then(|| {
 			let (api, runner) =
 				api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
 			debug!("Spawning offchain workers at {:?}", at);
 			let header = header.clone();
 			let client = self.client.clone();
+
+			let mut capabilities = offchain::Capabilities::all();
+
+			// Disable http if requested.
+			if !self.enable_http {
+				capabilities.toggle(offchain::Capabilities::HTTP);
+			}
+
 			self.spawn_worker(move || {
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
 				debug!("Running offchain workers at {:?}", at);
-				let context =
-					ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all())));
+
+				let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
 				let run = if version == 2 {
 					runtime.offchain_worker_with_context(&at, context, &header)
 				} else {
@@ -180,15 +190,10 @@ where
 			});
 
 			runner.process()
-		} else {
-			None
-		};
+		});
 
 		async move {
-			match process {
-				Some(process) => process.await,
-				None => {},
-			}
+			futures::future::OptionFuture::from(process).await;
 		}
 	}
 
