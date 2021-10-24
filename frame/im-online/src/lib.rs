@@ -78,7 +78,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use core::convert::TryFrom;
 use frame_support::{
 	traits::{
-		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
+		EstimateNextSessionRotation, Get, OneSessionHandler, ReportOffence, ValidatorSet,
 		ValidatorSetWithIdentification, WrapperOpaque,
 	},
 	BoundedSlice, WeakBoundedVec,
@@ -94,7 +94,7 @@ use sp_runtime::{
 	PerThing, Perbill, Permill, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{
-	offence::{Kind, Offence, ReportOffence},
+	offence::{Kind, Offence},
 	SessionIndex,
 };
 use sp_std::{convert::TryInto, prelude::*};
@@ -193,10 +193,10 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 			OffchainErr::TooEarly => write!(fmt, "Too early to send heartbeat."),
 			OffchainErr::WaitingForInclusion(ref block) => {
 				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block)
-			},
+			}
 			OffchainErr::AlreadyOnline(auth_idx) => {
 				write!(fmt, "Authority {} is already online", auth_idx)
-			},
+			}
 			OffchainErr::FailedSigning => write!(fmt, "Failed to sign heartbeat"),
 			OffchainErr::FailedToAcquireLock => write!(fmt, "Failed to acquire lock"),
 			OffchainErr::NetworkState => write!(fmt, "Failed to fetch network state"),
@@ -354,11 +354,15 @@ pub mod pallet {
 		/// chance the authority will produce a block and they won't be necessary.
 		type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
 
+		/// Maximum number of reporters of unreponsiveness offences.
+		type MaxReportersCount: Get<u32>;
+
 		/// A type that gives us the ability to submit unresponsiveness offence reports.
 		type ReportUnresponsiveness: ReportOffence<
 			Self::AccountId,
 			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
+			Self::MaxReportersCount,
 		>;
 
 		/// A configuration for base priority of unsigned transactions.
@@ -555,19 +559,19 @@ pub mod pallet {
 			if let Call::heartbeat { heartbeat, signature } = call {
 				if <Pallet<T>>::is_online(heartbeat.authority_index) {
 					// we already received a heartbeat for this authority
-					return InvalidTransaction::Stale.into()
+					return InvalidTransaction::Stale.into();
 				}
 
 				// check if session index from heartbeat is recent
 				let current_session = T::ValidatorSet::session_index();
 				if heartbeat.session_index != current_session {
-					return InvalidTransaction::Stale.into()
+					return InvalidTransaction::Stale.into();
 				}
 
 				// verify that the incoming (unverified) pubkey is actually an authority id
 				let keys = Keys::<T>::get();
 				if keys.len() as u32 != heartbeat.validators_len {
-					return InvalidTransaction::Custom(INVALID_VALIDATORS_LEN).into()
+					return InvalidTransaction::Custom(INVALID_VALIDATORS_LEN).into();
 				}
 				let authority_id = match keys.get(heartbeat.authority_index as usize) {
 					Some(id) => id,
@@ -580,7 +584,7 @@ pub mod pallet {
 				});
 
 				if !signature_valid {
-					return InvalidTransaction::BadProof.into()
+					return InvalidTransaction::BadProof.into();
 				}
 
 				ValidTransaction::with_tag_prefix("ImOnline")
@@ -624,7 +628,7 @@ impl<T: Config> Pallet<T> {
 		let current_validators = T::ValidatorSet::validators();
 
 		if authority_index >= current_validators.len() as u32 {
-			return false
+			return false;
 		}
 
 		let authority = &current_validators[authority_index as usize];
@@ -635,8 +639,8 @@ impl<T: Config> Pallet<T> {
 	fn is_online_aux(authority_index: AuthIndex, authority: &ValidatorId<T>) -> bool {
 		let current_session = T::ValidatorSet::session_index();
 
-		ReceivedHeartbeats::<T>::contains_key(&current_session, &authority_index) ||
-			AuthoredBlocks::<T>::get(&current_session, authority) != 0
+		ReceivedHeartbeats::<T>::contains_key(&current_session, &authority_index)
+			|| AuthoredBlocks::<T>::get(&current_session, authority) != 0
 	}
 
 	/// Returns `true` if a heartbeat has been received for the authority at `authority_index` in
@@ -686,8 +690,8 @@ impl<T: Config> Pallet<T> {
 			// haven't sent an heartbeat yet we'll send one unconditionally. the idea is to prevent
 			// all nodes from sending the heartbeats at the same block and causing a temporary (but
 			// deterministic) spike in transactions.
-			progress >= START_HEARTBEAT_FINAL_PERIOD ||
-				progress >= START_HEARTBEAT_RANDOM_PERIOD && random_choice(progress)
+			progress >= START_HEARTBEAT_FINAL_PERIOD
+				|| progress >= START_HEARTBEAT_RANDOM_PERIOD && random_choice(progress)
 		} else {
 			// otherwise we fallback to using the block number calculated at the beginning
 			// of the session that should roughly correspond to the middle of the session
@@ -696,7 +700,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		if !should_heartbeat {
-			return Err(OffchainErr::TooEarly)
+			return Err(OffchainErr::TooEarly);
 		}
 
 		let session_index = T::ValidatorSet::session_index();
@@ -738,7 +742,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		if Self::is_online(authority_index) {
-			return Err(OffchainErr::AlreadyOnline(authority_index))
+			return Err(OffchainErr::AlreadyOnline(authority_index));
 		}
 
 		// acquire lock for that authority at current heartbeat to make sure we don't
@@ -804,15 +808,16 @@ impl<T: Config> Pallet<T> {
 				// we will re-send it.
 				match status {
 					// we are still waiting for inclusion.
-					Ok(Some(status)) if status.is_recent(session_index, now) =>
-						Err(OffchainErr::WaitingForInclusion(status.sent_at)),
+					Ok(Some(status)) if status.is_recent(session_index, now) => {
+						Err(OffchainErr::WaitingForInclusion(status.sent_at))
+					}
 					// attempt to set new status
 					_ => Ok(HeartbeatStatus { session_index, sent_at: now }),
 				}
 			},
 		);
 		if let Err(MutateStorageError::ValueFunctionFailed(err)) = res {
-			return Err(err)
+			return Err(err);
 		}
 
 		let mut new_status = res.map_err(|_| OffchainErr::FailedToAcquireLock)?;
@@ -913,7 +918,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
-			if let Err(e) = T::ReportUnresponsiveness::report_offence(vec![], offence) {
+			if let Err(e) = T::ReportUnresponsiveness::report_offence(Default::default(), offence) {
 				sp_runtime::print(e);
 			}
 		}

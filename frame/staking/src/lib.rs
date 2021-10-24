@@ -303,7 +303,7 @@ mod pallet;
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, Get},
+	traits::{Currency, Get, ReportOffence},
 	weights::Weight,
 	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, OrdNoBound, PartialEqNoBound,
 	RuntimeDebugNoBound, WeakBoundedVec,
@@ -315,7 +315,7 @@ use sp_runtime::{
 	Perbill, RuntimeDebug,
 };
 use sp_staking::{
-	offence::{Offence, OffenceError, ReportOffence},
+	offence::{Offence, OffenceError},
 	SessionIndex,
 };
 use sp_std::{
@@ -888,14 +888,18 @@ pub struct FilterHistoricalOffences<T, R> {
 	_inner: sp_std::marker::PhantomData<(T, R)>,
 }
 
-impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
-	for FilterHistoricalOffences<Pallet<T>, R>
+impl<T, Reporter, Offender, R, O, MaxReportersCount>
+	ReportOffence<Reporter, Offender, O, MaxReportersCount> for FilterHistoricalOffences<Pallet<T>, R>
 where
 	T: Config,
-	R: ReportOffence<Reporter, Offender, O>,
+	R: ReportOffence<Reporter, Offender, O, MaxReportersCount>,
 	O: Offence<Offender>,
+	MaxReportersCount: Get<u32>,
 {
-	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
+	fn report_offence(
+		reporters: WeakBoundedVec<Reporter, MaxReportersCount>,
+		offence: O,
+	) -> Result<(), OffenceError> {
 		// Disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::<T>::get();

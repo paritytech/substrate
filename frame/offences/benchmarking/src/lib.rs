@@ -25,7 +25,7 @@ use sp_std::{convert::TryFrom, prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks};
 use frame_support::{
-	traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification},
+	traits::{Currency, Get, ReportOffence, ValidatorSet, ValidatorSetWithIdentification},
 	WeakBoundedVec,
 };
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::{Convert, Saturating, StaticLookup, UniqueSaturatedInto},
 	Perbill,
 };
-use sp_staking::offence::{Offence, ReportOffence};
+use sp_staking::offence::Offence;
 
 use pallet_babe::BabeEquivocationOffence;
 use pallet_balances::Config as BalancesConfig;
@@ -52,7 +52,6 @@ use pallet_staking::{
 
 const SEED: u32 = 0;
 
-const MAX_REPORTERS: u32 = 100;
 const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
 
@@ -276,7 +275,7 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 
 benchmarks! {
 	report_offence_im_online {
-		let r in 1 .. MAX_REPORTERS;
+		let r in 1 .. <T as pallet_staking::Config>::MaxReportersCount::get();
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
 		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
@@ -306,7 +305,7 @@ benchmarks! {
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
 		let _ = <T as ImOnlineConfig>::ReportUnresponsiveness::report_offence(
-			reporters.clone(),
+			WeakBoundedVec::try_from(reporters.clone()).expect("We pushed less than MaxReportersCount"),
 			offence
 		);
 	}
@@ -389,7 +388,7 @@ benchmarks! {
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = vec![account("reporter", 1, SEED)];
+		let reporters = WeakBoundedVec::try_from(vec![account("reporter", 1, SEED)]).expect("MaxReportersCount > 0");
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
@@ -424,7 +423,7 @@ benchmarks! {
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = vec![account("reporter", 1, SEED)];
+		let reporters = WeakBoundedVec::try_from(vec![account("reporter", 1, SEED)]).expect("MaxReportersCount > 0");
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());

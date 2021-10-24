@@ -26,11 +26,16 @@ mod migration;
 mod mock;
 mod tests;
 
-use codec::{Decode, Encode};
-use frame_support::weights::Weight;
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{
+	pallet_prelude::Get,
+	traits::{OffenceDetails, OnOffenceHandler, ReportOffence},
+	weights::Weight,
+	WeakBoundedVec,
+};
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
-	offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
+	offence::{Kind, Offence, OffenceError},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -81,9 +86,16 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 		/// Full identification of the validator.
-		type IdentificationTuple: Parameter + Ord;
+		type IdentificationTuple: Parameter + Ord + MaxEncodedLen;
 		/// A handler called for every offence report.
-		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
+		type OnOffenceHandler: OnOffenceHandler<
+			Self::AccountId,
+			Self::IdentificationTuple,
+			Weight,
+			Self::MaxReportersCount,
+		>;
+		/// Maximum number of reporters.
+		type MaxReportersCount: Get<u32>;
 	}
 
 	/// The primary structure that holds all offence records keyed by report identifiers.
@@ -93,7 +105,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ReportIdOf<T>,
-		OffenceDetails<T::AccountId, T::IdentificationTuple>,
+		OffenceDetails<T::AccountId, T::IdentificationTuple, T::MaxReportersCount>,
 	>;
 
 	/// A vector of reports of the same kind that happened at the same time slot.
@@ -142,11 +154,14 @@ pub mod pallet {
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>>
-	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Pallet<T>
+	ReportOffence<T::AccountId, T::IdentificationTuple, O, T::MaxReportersCount> for Pallet<T>
 where
 	T::IdentificationTuple: Clone,
 {
-	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
+	fn report_offence(
+		reporters: WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
+		offence: O,
+	) -> Result<(), OffenceError> {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 		let validator_set_count = offence.validator_set_count();
@@ -204,7 +219,7 @@ impl<T: Config> Pallet<T> {
 	/// Triages the offence report and returns the set of offenders that was involved in unique
 	/// reports along with the list of the concurrent offences.
 	fn triage_offence_report<O: Offence<T::IdentificationTuple>>(
-		reporters: Vec<T::AccountId>,
+		reporters: WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
 	) -> Option<TriageOutcome<T>> {
@@ -244,7 +259,8 @@ impl<T: Config> Pallet<T> {
 
 struct TriageOutcome<T: Config> {
 	/// Other reports for the same report kinds.
-	concurrent_offenders: Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
+	concurrent_offenders:
+		Vec<OffenceDetails<T::AccountId, T::IdentificationTuple, T::MaxReportersCount>>,
 }
 
 /// An auxiliary struct for working with storage of indexes localized for a specific offence

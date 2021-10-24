@@ -25,7 +25,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, LockableCurrency,
-		OnUnbalanced, UnixTime, WithdrawReasons,
+		OffenceDetails, OnOffenceHandler, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 	WeakBoundedVec,
@@ -36,10 +36,7 @@ use sp_runtime::{
 	traits::{Bounded, Convert, SaturatedConversion, Saturating, Zero},
 	Perbill,
 };
-use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
-	SessionIndex,
-};
+use sp_staking::SessionIndex;
 use sp_std::{collections::btree_map::BTreeMap, convert::TryFrom, prelude::*};
 
 use crate::{
@@ -1197,8 +1194,12 @@ where
 
 /// This is intended to be used with `FilterHistoricalOffences`.
 impl<T: Config>
-	OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>, Weight>
-	for Pallet<T>
+	OnOffenceHandler<
+		T::AccountId,
+		pallet_session::historical::IdentificationTuple<T>,
+		Weight,
+		T::MaxReportersCount,
+	> for Pallet<T>
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
@@ -1223,6 +1224,7 @@ where
 		offenders: &[OffenceDetails<
 			T::AccountId,
 			pallet_session::historical::IdentificationTuple<T>,
+			T::MaxReportersCount,
 		>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
@@ -1306,10 +1308,7 @@ where
 					let rw = upper_bound + nominators_len * upper_bound;
 					add_db_reads_writes(rw, rw);
 				}
-				unapplied.reporters = WeakBoundedVec::<_, T::MaxReportersCount>::force_from(
-					details.reporters.clone(),
-					Some("unapplied.reporters"),
-				);
+				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
 					// Apply right away.
 					slashing::apply_slash::<T>(unapplied);

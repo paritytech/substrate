@@ -45,6 +45,9 @@ pub use validation::{
 	ValidatorSetWithIdentification, VerifySeal,
 };
 
+mod staking;
+pub use staking::{OffenceDetails, OnOffenceHandler, ReportOffence};
+
 mod filter;
 pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
 

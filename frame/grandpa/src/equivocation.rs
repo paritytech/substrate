@@ -38,7 +38,7 @@
 use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::traits::{Get, KeyOwnerProofSystem};
+use frame_support::traits::{Get, KeyOwnerProofSystem, ReportOffence};
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	transaction_validity::{
@@ -48,7 +48,7 @@ use sp_runtime::{
 	DispatchResult, Perbill,
 };
 use sp_staking::{
-	offence::{Kind, Offence, OffenceError, ReportOffence},
+	offence::{Kind, Offence, OffenceError},
 	SessionIndex,
 };
 
@@ -68,7 +68,7 @@ pub trait HandleEquivocation<T: Config> {
 
 	/// Report an offence proved by the given reporters.
 	fn report_offence(
-		reporters: Vec<T::AccountId>,
+		reporters: frame_support::WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
 		offence: Self::Offence,
 	) -> Result<(), OffenceError>;
 
@@ -93,7 +93,7 @@ impl<T: Config> HandleEquivocation<T> for () {
 	type ReportLongevity = ();
 
 	fn report_offence(
-		_reporters: Vec<T::AccountId>,
+		_reporters: frame_support::WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
 		_offence: GrandpaEquivocationOffence<T::KeyOwnerIdentification>,
 	) -> Result<(), OffenceError> {
 		Ok(())
@@ -140,7 +140,7 @@ where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
 	// A system for reporting offences after valid equivocation reports are
 	// processed.
-	R: ReportOffence<T::AccountId, T::KeyOwnerIdentification, O>,
+	R: ReportOffence<T::AccountId, T::KeyOwnerIdentification, O, T::MaxReportersCount>,
 	// The longevity (in blocks) that the equivocation report is valid for. When using the staking
 	// pallet this should be the bonding duration.
 	L: Get<u64>,
@@ -150,7 +150,10 @@ where
 	type Offence = O;
 	type ReportLongevity = L;
 
-	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
+	fn report_offence(
+		reporters: frame_support::WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
+		offence: O,
+	) -> Result<(), OffenceError> {
 		R::report_offence(reporters, offence)
 	}
 
@@ -208,15 +211,15 @@ impl<T: Config> Pallet<T> {
 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
 			// discard equivocation report not coming from the local node
 			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
 				_ => {
 					log::warn!(
 						target: "runtime::afg",
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
 
-					return InvalidTransaction::Call.into()
-				},
+					return InvalidTransaction::Call.into();
+				}
 			}
 
 			// check report staleness

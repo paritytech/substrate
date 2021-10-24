@@ -33,7 +33,7 @@
 //! that the `ValidateUnsigned` for the BABE pallet is used in the runtime
 //! definition.
 
-use frame_support::traits::{Get, KeyOwnerProofSystem};
+use frame_support::traits::{Get, KeyOwnerProofSystem, ReportOffence};
 use sp_consensus_babe::{EquivocationProof, Slot};
 use sp_runtime::{
 	transaction_validity::{
@@ -43,7 +43,7 @@ use sp_runtime::{
 	DispatchResult, Perbill,
 };
 use sp_staking::{
-	offence::{Kind, Offence, OffenceError, ReportOffence},
+	offence::{Kind, Offence, OffenceError},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -62,7 +62,7 @@ pub trait HandleEquivocation<T: Config> {
 
 	/// Report an offence proved by the given reporters.
 	fn report_offence(
-		reporters: Vec<T::AccountId>,
+		reporters: frame_support::WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
 		offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
 	) -> Result<(), OffenceError>;
 
@@ -83,7 +83,7 @@ impl<T: Config> HandleEquivocation<T> for () {
 	type ReportLongevity = ();
 
 	fn report_offence(
-		_reporters: Vec<T::AccountId>,
+		_reporters: frame_support::WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
 		_offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
 	) -> Result<(), OffenceError> {
 		Ok(())
@@ -131,6 +131,7 @@ where
 		T::AccountId,
 		T::KeyOwnerIdentification,
 		BabeEquivocationOffence<T::KeyOwnerIdentification>,
+		T::MaxReportersCount,
 	>,
 	// The longevity (in blocks) that the equivocation report is valid for. When using the staking
 	// pallet this should be the bonding duration.
@@ -139,7 +140,7 @@ where
 	type ReportLongevity = L;
 
 	fn report_offence(
-		reporters: Vec<T::AccountId>,
+		reporters: frame_support::WeakBoundedVec<T::AccountId, T::MaxReportersCount>,
 		offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
 	) -> Result<(), OffenceError> {
 		R::report_offence(reporters, offence)
@@ -189,15 +190,15 @@ impl<T: Config> Pallet<T> {
 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
 			// discard equivocation report not coming from the local node
 			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
 				_ => {
 					log::warn!(
 						target: "runtime::babe",
 						"rejecting unsigned report equivocation transaction because it is not local/in-block.",
 					);
 
-					return InvalidTransaction::Call.into()
-				},
+					return InvalidTransaction::Call.into();
+				}
 			}
 
 			// check report staleness

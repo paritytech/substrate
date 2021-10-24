@@ -197,6 +197,7 @@ impl pallet_randomness_collective_flip::Config for Runtime {}
 
 parameter_types! {
 	pub const MaxAuthorities: u32 = 32;
+	pub const MaxReportersCount: u32 = 100;
 }
 
 impl pallet_aura::Config for Runtime {
@@ -223,6 +224,7 @@ impl pallet_grandpa::Config for Runtime {
 
 	type WeightInfo = ();
 	type MaxAuthorities = MaxAuthorities;
+	type MaxReportersCount = MaxReportersCount;
 }
 
 parameter_types! {
