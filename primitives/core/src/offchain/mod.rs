@@ -785,7 +785,7 @@ mod tests {
 
 	#[test]
 	fn capabilities() {
-		let none = Capabilities::none();
+		let none = Capabilities::empty();
 		let all = Capabilities::all();
 		let some = Capabilities::KEYSTORE | Capabilities::RANDOMNESS;
 
