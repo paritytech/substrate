@@ -85,7 +85,7 @@ where
 pub struct OffchainWorkerOptions {
 	/// Enable http requests from offchain workers?
 	///
-	/// If not enabled, any http request will fail.
+	/// If not enabled, any http request will panic.
 	pub enable_http_requests: bool,
 }
 
