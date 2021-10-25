@@ -2,6 +2,7 @@ on:
   pull_request:
     branches:
       - mangata-dev
+      - feature/block_builder_module_tests
   push:
     branches: [ mangata-dev ]
 
