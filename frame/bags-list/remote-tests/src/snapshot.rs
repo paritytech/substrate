@@ -32,7 +32,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
 			transport: ws_url.to_string().into(),
 			// NOTE: we don't scrape pallet-staking, this kinda ensures that the source of the data
 			// is bags-list.
-			pallets: vec![pallet_bags_list::Pallet<Runtime>::name().to_string()],
+			pallets: vec![pallet_bags_list::Pallet::<Runtime>::name().to_string()],
 			at: None,
 			state_snapshot: None,
 		}))

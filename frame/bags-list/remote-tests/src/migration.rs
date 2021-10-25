@@ -33,7 +33,7 @@ pub async fn execute<Runtime: RuntimeT, Block: BlockT>(
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
-			pallets: vec![pallet_staking::Pallet<Runtime>::name().to_string()],
+			pallets: vec![pallet_staking::Pallet::<Runtime>::name().to_string()],
 			at: None,
 			state_snapshot: None,
 		}))
