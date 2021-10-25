@@ -99,7 +99,7 @@ pub mod crypto {
 		type GenericPublic = sp_core::sr25519::Public;
 	}
 	
-	 // implemented for mock runtime in test
+	// implemented for mock runtime in test
 	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
 		for TestAuthId
 	{
