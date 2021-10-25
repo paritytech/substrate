@@ -1837,7 +1837,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 }
 
 #[test]
-fn mat_block_import_failure_missing_singly_encrypted_tx() {
+fn block_import_failure_missing_singly_encrypted_tx() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
@@ -1870,7 +1870,7 @@ fn mat_block_import_failure_missing_singly_encrypted_tx() {
 }
 
 #[test]
-fn mat_block_import_failure_missing_singly_decrypted_tx() {
+fn block_import_failure_missing_singly_decrypted_tx() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
@@ -1902,7 +1902,7 @@ fn mat_block_import_failure_missing_singly_decrypted_tx() {
 }
 
 #[test]
-fn mat_block_import_failure_missing_block_builder_information() {
+fn block_import_failure_missing_block_builder_information() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
@@ -1924,7 +1924,7 @@ fn mat_block_import_failure_missing_block_builder_information() {
 }
 
 #[test]
-fn mat_block_import_failure_unknown_collator_id() {
+fn block_import_failure_unknown_collator_id() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
@@ -1946,7 +1946,7 @@ fn mat_block_import_failure_unknown_collator_id() {
 }
 
 #[test]
-fn mat_block_import_failure_missing_pre_digest() {
+fn block_import_failure_missing_pre_digest() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
@@ -1981,7 +1981,7 @@ fn create_key_store() -> KeyStorePtr{
 
 
 #[test]
-fn mat_block_import_failure_on_wrongly_singly_encrypted_transaction() {
+fn block_import_failure_on_wrongly_singly_encrypted_transaction() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
@@ -2019,7 +2019,7 @@ fn mat_block_import_failure_on_wrongly_singly_encrypted_transaction() {
 }
 
 #[test]
-fn mat_block_import_failure_on_wrongly_doubly_encrypted_transaction() {
+fn block_import_failure_on_wrongly_doubly_encrypted_transaction() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
@@ -2057,7 +2057,7 @@ fn mat_block_import_failure_on_wrongly_doubly_encrypted_transaction() {
 }
 
 #[test]
-fn mat_block_import_success_on_correctly_decrypted_transaction() {
+fn block_import_success_on_correctly_decrypted_transaction() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
     let api = client.runtime_api();
@@ -2097,7 +2097,7 @@ fn mat_block_import_success_on_correctly_decrypted_transaction() {
 }
 
 #[test]
-fn mat_block_import_failure_on_unexpected_decryption_transaction() {
+fn block_import_failure_on_unexpected_decryption_transaction() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
