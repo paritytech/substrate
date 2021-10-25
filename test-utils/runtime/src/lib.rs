@@ -67,6 +67,10 @@ pub const ALICE_COLLATOR_ID: u32 = 1;
 pub const ALICE_ACCOUNT_ID: [u8;32]  = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217];
 pub const ALICE_PUB_KEY: [u8;33] = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161];
 
+pub const BOB_COLLATOR_ID: u32 = 4;
+pub const BOB_ACCOUNT_ID: [u8;32]  = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217];
+pub const BOB_PUB_KEY: [u8;33] = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161];
+
 pub const DUMMY_COLLATOR_ID: u32 = 2;
 pub const DUMMY_ACCOUNT_ID: [u8;32]  = [0u8;32];
 
@@ -654,20 +658,19 @@ cfg_if! {
 				}
 
 				fn get_account_id(block_builder_id: u32) -> Option<AccountId32>{
-                    if block_builder_id == ALICE_COLLATOR_ID {
-                        Some(ALICE_ACCOUNT_ID.into())
-                    }else if block_builder_id == DUMMY_COLLATOR_ID {
-                        Some(DUMMY_ACCOUNT_ID.into())
-                    }else if block_builder_id == UNKNOWN_COLLATOR_ID {
-                        None
-                    } else {
-                        None
+                    match block_builder_id{
+                        ALICE_COLLATOR_ID => Some(ALICE_ACCOUNT_ID.into()),
+                        BOB_COLLATOR_ID => Some(BOB_ACCOUNT_ID.into()),
+                        DUMMY_COLLATOR_ID => Some(DUMMY_ACCOUNT_ID.into()),
+                        _ => None
                     }
 				}
 
 				fn get_authority_public_key(authority_id: &AccountId32) -> Option<sp_core::ecdsa::Public>{
                     if authority_id == &ALICE_ACCOUNT_ID.into() {
                         Some(sp_core::ecdsa::Public::from_raw(ALICE_PUB_KEY))
+                    }else if authority_id == &BOB_ACCOUNT_ID.into() {
+                        Some(sp_core::ecdsa::Public::from_raw(BOB_PUB_KEY))
                     }else{
                         None
                     }

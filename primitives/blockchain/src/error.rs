@@ -149,6 +149,8 @@ pub enum Error {
 	#[display(fmt = "{} didnt decrypt singly encrypted transaction", _0)]
 	#[from(ignore)]
 	MissingDecryptedTransaction(sp_runtime::AccountId32),
+	#[display(fmt = "Unexpected decrypting transaction")]
+	UnexpectedDecryptionTransaction,
 	#[display(fmt = "Decrypted payload mismatch")]
     DecryptedPayloadMismatch,
 	// A convenience variant for String

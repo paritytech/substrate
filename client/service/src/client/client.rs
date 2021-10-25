@@ -929,7 +929,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 		let api = self.runtime_api();
 
-
 		match (enact_state, &mut import_block.storage_changes, &mut import_block.body) {
 			// We have storage changes and should enact the state, so we don't need to do anything
 			// here
@@ -946,8 +945,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				match self.backend.blockchain().body(BlockId::Hash(*parent_hash)).unwrap() {
 					Some(previous_block_extrinsics) => {
-						//TODO include serialize/deserialize seed field in header
-						//and use received seed instead
 						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
 						let mut header = import_block.header.clone();
 						header.set_extrinsics_root(*prev_header.extrinsics_root());
@@ -966,20 +963,33 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							.get_authority_public_key(&at, &block_builder_id)?
 							.ok_or(sp_blockchain::Error::MissingPublicKey(block_builder_id.clone()))?;
 
+						let mut extrinsics = this_block_extrinsics.clone();
+						if parent_hash != &self.backend.blockchain().info().genesis_hash {
+							let prev_prev_header = self.backend.blockchain().header(BlockId::Hash(*prev_header.parent_hash())).unwrap().unwrap();
+							if ! prev_prev_header.number().is_zero(){
+								let prev_collator_id = get_block_author::<Block, Self>(&self.runtime_api(), &at, &prev_prev_header)?;
+								if prev_collator_id == block_builder_id{
+									// with single collator only encrypted transaction
+									// are stored in FIFO for some time because of block execution
+									// delay thats why when valiating collator behaviour
+									// transactions from previous block needs to be taken into account
+									extrinsics.extend(previous_block_extrinsics);
+								}
+							}
+						}
+
 						self.assert_doubly_encrypted_transactions_are_decrypted(
 							*parent_hash,
 							block_builder_id.clone(),
 							&block_builder_public_key,
-							&previous_block_extrinsics,
-							&this_block_extrinsics,
+                            &extrinsics,
 						)?;
 
 						self.assert_singly_encrypted_transactions_are_decrypted(
 							*parent_hash,
 							block_builder_id.clone(),
 							&block_builder_public_key,
-							&previous_block_extrinsics,
-							&this_block_extrinsics,
+                            &extrinsics,
 						)?;
 
 					}
@@ -1020,8 +1030,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		hash: <Block as BlockT>::Hash,
 		block_builder_id: AccountId32,
 		block_builder_public_key: &sp_core::ecdsa::Public,
-		previous_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
-		this_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
+		extrinsics: &Vec<<Block as BlockT>::Extrinsic>,
 	) -> sp_blockchain::Result<()> 
 	where
 		Self: ProvideRuntimeApi<Block>,
@@ -1039,15 +1048,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?
 			.into_iter().collect();
 
-		let mut singly_encrypted_transaction = filter_singly_encrypted_transactions::<_, Block>(
+		let singly_encrypted_transaction = filter_singly_encrypted_transactions::<_, Block>(
 			self.runtime_api(),
 			at,
-			previous_block_txs);
+			extrinsics);
 
-		singly_encrypted_transaction.extend(filter_singly_encrypted_transactions::<_, Block>(
-				self.runtime_api(),
-				at,
-				this_block_txs));
+		if singly_encrypted_transaction.len() > doubly_encrypted_txs.len() {
+			return Err(sp_blockchain::Error::UnexpectedDecryptionTransaction);
+		}
 
 		self.validate_singly_encrypted_transaction(
 			block_builder_id.clone(),
@@ -1062,7 +1070,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		block_builder_id: AccountId32,
 		block_builder_public_key: &sp_core::ecdsa::Public,
 		previous_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
-		this_block_txs: &Vec<<Block as BlockT>::Extrinsic>,
 	) -> sp_blockchain::Result<()> 
 	where
 		Self: ProvideRuntimeApi<Block>,
@@ -1080,15 +1087,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))?
 			.into_iter().collect();
 
-		let mut decrypted_txs = filter_decrypted_transactions::<_, Block>(
+		let decrypted_txs = filter_decrypted_transactions::<_, Block>(
 			self.runtime_api(),
 			at,
 			previous_block_txs);
 
-		decrypted_txs.extend(filter_decrypted_transactions::<_, Block>(
-				self.runtime_api(),
-				at,
-				this_block_txs));
+		if decrypted_txs.len() > singly_encrypted_txs.len() {
+			return Err(sp_blockchain::Error::UnexpectedDecryptionTransaction);
+		}
+
 
 		self.validate_decrypted_transaction(
 			block_builder_id.clone(),

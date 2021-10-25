@@ -51,9 +51,7 @@ use sp_storage::StorageKey;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_runtime::{generic::BlockId, DigestItem};
 use hex_literal::hex;
-use sc_consensus_babe::{PreDigest, CompatibleDigestItem, SecondaryPlainPreDigest};
-use substrate_test_runtime::{ALICE_ACCOUNT_ID, UNKNOWN_COLLATOR_ID};
-use substrate_test_encrypted_tx::create_digest;
+use substrate_test_encrypted_tx::{create_digest, inject_collator_id, ALICE_ACCOUNT_ID, UNKNOWN_COLLATOR_ID};
 
 mod light;
 mod db;
@@ -1925,20 +1923,12 @@ fn mat_block_import_failure_missing_block_builder_information() {
     )
 }
 
-fn inject_collator_id(block: & mut Block, authority_index: u32) {
-    block.header.digest.push(DigestItem::babe_pre_digest(
-            PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-                authority_index,
-                slot_number: Default::default(),
-            })));
-}
-
 #[test]
 fn mat_block_import_failure_unknown_collator_id() {
     let _ = env_logger::try_init();
 	let mut client = substrate_test_runtime_client::new();
 
-	let mut builder = client.new_block(Default::default()).unwrap();
+	let mut builder = client.new_block(inject_collator_id(UNKNOWN_COLLATOR_ID)).unwrap();
 
 	builder.push(
         Extrinsic::SubmitEncryptedTransaction{
@@ -1947,7 +1937,6 @@ fn mat_block_import_failure_unknown_collator_id() {
         }
 	).unwrap();
 	let mut block = builder.build(Default::default()).unwrap().block;
-    inject_collator_id(& mut block, UNKNOWN_COLLATOR_ID);
 	assert!(
         matches!(
             client.import(BlockOrigin::Own, block.clone()),
@@ -2105,4 +2094,27 @@ fn mat_block_import_success_on_correctly_decrypted_transaction() {
 	).unwrap();
 	let block = builder.build(Default::default()).unwrap().block;
     assert!(client.import(BlockOrigin::Own, block.clone()).is_ok());
+}
+
+#[test]
+fn mat_block_import_failure_on_unexpected_decryption_transaction() {
+    let _ = env_logger::try_init();
+	let mut client = substrate_test_runtime_client::new();
+
+	let mut builder = client.new_block(create_digest()).unwrap();
+	builder.push(
+        Extrinsic::EncryptedTX(
+            sp_encrypted_tx::ExtrinsicType::<sp_core::H256>::DecryptedTx{
+                identifier: Default::default(),
+                decrypted_call: vec![],
+            }
+        )
+	).unwrap();
+	let block = builder.build(Default::default()).unwrap().block;
+	assert!(
+        matches!(
+            client.import(BlockOrigin::Own, block.clone()),
+            Err(sp_consensus::Error::ClientImport(err)) if err == sp_blockchain::Error::UnexpectedDecryptionTransaction.to_string()
+        )
+    )
 }
