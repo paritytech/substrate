@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Proc macro of Support code for the runtime."
 
@@ -16,10 +16,10 @@ proc-macro = true
 
 [dependencies]
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
-proc-macro2 = "1.0.28"
-quote = "1.0.3"
+proc-macro2 = "1.0.29"
+quote = "1.0.10"
 Inflector = "0.11.4"
-syn = { version = "1.0.58", features = ["full"] }
+syn = { version = "1.0.80", features = ["full"] }
 
 [features]
 default = ["std"]

@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Keystore (and session key management) for ed25519 based chains like Polkadot."
 documentation = "https://docs.rs/sc-keystore"
@@ -22,7 +22,7 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 hex = "0.4.0"
 parking_lot = "0.11.1"
-serde_json = "1.0.41"
+serde_json = "1.0.68"
 
 [dev-dependencies]
 tempfile = "3.1.0"

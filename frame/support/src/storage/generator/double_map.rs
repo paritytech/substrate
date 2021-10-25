@@ -219,6 +219,7 @@ where
 			previous_key: prefix,
 			drain: false,
 			closure: |_raw_key, mut raw_value| V::decode(&mut raw_value),
+			phantom: Default::default(),
 		}
 	}
 
@@ -345,6 +346,7 @@ where
 				let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
 				Ok((K2::decode(&mut key_material)?, V::decode(&mut raw_value)?))
 			},
+			phantom: Default::default(),
 		}
 	}
 
@@ -398,6 +400,7 @@ where
 				let k2 = K2::decode(&mut k2_material)?;
 				Ok((k1, k2, V::decode(&mut raw_value)?))
 			},
+			phantom: Default::default(),
 		}
 	}
 

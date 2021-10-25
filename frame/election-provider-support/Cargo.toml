@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "election provider supporting traits"
 readme = "README.md"
@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
@@ -23,6 +24,8 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 [dev-dependencies]
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

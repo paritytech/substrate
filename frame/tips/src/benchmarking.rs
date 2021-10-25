@@ -19,13 +19,13 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::*;
-
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_support::ensure;
 use frame_system::RawOrigin;
 use sp_runtime::traits::Saturating;
 
-use crate::Module as TipsMod;
+use super::*;
+use crate::Pallet as TipsMod;
 
 const SEED: u32 = 0;
 
@@ -190,6 +190,6 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 	}: _(RawOrigin::Root, hash)
-}
 
-impl_benchmark_test_suite!(TipsMod, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(TipsMod, crate::tests::new_test_ext(), crate::tests::Test);
+}

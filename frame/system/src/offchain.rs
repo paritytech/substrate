@@ -453,10 +453,11 @@ pub trait SigningTypes: crate::Config {
 		+ IdentifyAccount<AccountId = Self::AccountId>
 		+ core::fmt::Debug
 		+ codec::Codec
-		+ Ord;
+		+ Ord
+		+ scale_info::TypeInfo;
 
 	/// A matching `Signature` type.
-	type Signature: Clone + PartialEq + core::fmt::Debug + codec::Codec;
+	type Signature: Clone + PartialEq + core::fmt::Debug + codec::Codec + scale_info::TypeInfo;
 }
 
 /// A definition of types required to submit transactions from within the runtime.

@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "A RPC handler to create sync states for light clients."
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -23,7 +23,7 @@ sc-consensus-babe = { version = "0.10.0-dev", path = "../consensus/babe" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../consensus/epochs" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../finality-grandpa" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../rpc-api" }
-serde_json = "1.0.58"
+serde_json = "1.0.68"
 serde = { version = "1.0.126", features = ["derive"] }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }

@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	traits::{Currency, EnsureOrigin, Get},
@@ -50,17 +50,12 @@ benchmarks! {
 
 	place_bid_max {
 		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..T::MaxQueueLen::get() {
-			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Gilt::<T>::place_bid(origin.clone().into(), T::MinFreeze::get(), 1)?;
 		}
-	}: {
-		Gilt::<T>::place_bid(
-			RawOrigin::Signed(caller.clone()).into(),
-			T::MinFreeze::get() * BalanceOf::<T>::from(2u32),
-			1,
-		)?
-	}
+	}: place_bid(origin, T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
 	verify {
 		assert_eq!(QueueTotals::<T>::get()[0], (
 			T::MaxQueueLen::get(),
@@ -81,9 +76,9 @@ benchmarks! {
 	}
 
 	set_target {
-		let call = Call::<T>::set_target(Default::default());
 		let origin = T::AdminOrigin::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, Default::default())
+	verify {}
 
 	thaw {
 		let caller: T::AccountId = whitelisted_caller();
@@ -111,7 +106,7 @@ benchmarks! {
 			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
 		}
 
-		Call::<T>::set_target(Perquintill::from_percent(100))
+		Call::<T>::set_target { target: Perquintill::from_percent(100) }
 			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
 
 	}: { Gilt::<T>::pursue_target(b) }
@@ -127,10 +122,10 @@ benchmarks! {
 			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), i + 1)?;
 		}
 
-		Call::<T>::set_target(Perquintill::from_percent(100))
+		Call::<T>::set_target { target: Perquintill::from_percent(100) }
 			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
 
 	}: { Gilt::<T>::pursue_target(q) }
-}
 
-impl_benchmark_test_suite!(Gilt, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Gilt, crate::mock::new_test_ext(), crate::mock::Test);
+}

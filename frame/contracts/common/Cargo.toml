@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "A crate that hosts a common definitions that are relevant for the pallet-contracts."
 readme = "README.md"
@@ -15,6 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 bitflags = "1.0"
 codec = { package = "parity-scale-codec", version = "2", default-features = false, features = ["derive"] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 serde = { version = "1", features = ["derive"], optional = true }
 
 # Substrate Dependencies (This crate should not rely on frame)
@@ -26,6 +27,7 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../..
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",

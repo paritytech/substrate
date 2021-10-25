@@ -89,7 +89,7 @@
 //!
 //! * [Democracy](../pallet_democracy/index.html)
 //!
-//! [`Origin`]: https://docs.substrate.dev/docs/substrate-types
+//! [`Origin`]: https://docs.substrate.io/v3/runtime/origins
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -249,7 +249,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// A sudo just took place. \[result\]
 		Sudid(DispatchResult),

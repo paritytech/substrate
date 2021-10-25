@@ -18,7 +18,11 @@
 
 //! State API backend for full nodes.
 
-use futures::{future, stream, FutureExt, SinkExt, StreamExt};
+use futures::{
+	future,
+	future::{err, try_join_all},
+	stream, FutureExt, SinkExt, StreamExt,
+};
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
 use rpc::Result as RpcResult;
@@ -713,6 +717,33 @@ where
 			.map_err(client_err);
 
 		async move { r }.boxed()
+	}
+
+	fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		let child_info = match ChildType::from_prefixed_key(&storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) =>
+				Arc::new(ChildInfo::new_default(storage_key)),
+			None => return err(client_err(sp_blockchain::Error::InvalidChildStorageKey)).boxed(),
+		};
+		let block = match self.block_or_best(block) {
+			Ok(b) => b,
+			Err(e) => return err(client_err(e)).boxed(),
+		};
+		let client = self.client.clone();
+		try_join_all(keys.into_iter().map(move |key| {
+			let res = client
+				.clone()
+				.child_storage(&BlockId::Hash(block), &child_info, &key)
+				.map_err(client_err);
+
+			async move { res }
+		}))
+		.boxed()
 	}
 
 	fn storage_hash(

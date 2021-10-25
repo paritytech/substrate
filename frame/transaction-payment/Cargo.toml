@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet to manage transaction payments"
 readme = "README.md"
@@ -16,8 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
 	"derive",
 ] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.126", optional = true }
-smallvec = "1.4.1"
+smallvec = "1.7.0"
 
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
@@ -28,7 +29,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-serde_json = "1.0.41"
+serde_json = "1.0.68"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
@@ -36,6 +37,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",

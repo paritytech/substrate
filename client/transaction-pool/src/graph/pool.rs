@@ -133,7 +133,6 @@ pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for Pool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,

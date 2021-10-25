@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::FutureExt;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_executor::WasmExecutionMethod;
 use sc_informant::OutputFormat;
@@ -26,7 +25,7 @@ use sc_network::{
 };
 use sc_service::{
 	config::KeystoreConfig, BasePath, ChainSpec, Configuration, DatabaseSource, KeepBlocks,
-	TaskExecutor, TaskType, TransactionStorageMode,
+	TransactionStorageMode,
 };
 use sp_keyring::sr25519::Keyring::Alice;
 use tokio::runtime::Handle;
@@ -43,10 +42,7 @@ pub fn base_path() -> BasePath {
 }
 
 /// Produces a default configuration object, suitable for use with most set ups.
-pub fn default_config(
-	task_executor: TaskExecutor,
-	mut chain_spec: Box<dyn ChainSpec>,
-) -> Configuration {
+pub fn default_config(tokio_handle: Handle, mut chain_spec: Box<dyn ChainSpec>) -> Configuration {
 	let base_path = base_path();
 	let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
 
@@ -75,7 +71,7 @@ pub fn default_config(
 		impl_name: "test-node".to_string(),
 		impl_version: "0.1".to_string(),
 		role: Role::Authority,
-		task_executor: task_executor.into(),
+		tokio_handle,
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path { path: root_path.join("key"), password: None },
@@ -95,10 +91,10 @@ pub fn default_config(
 		rpc_ws: None,
 		rpc_ipc: None,
 		rpc_ws_max_connections: None,
-		rpc_http_threads: None,
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
@@ -113,21 +109,9 @@ pub fn default_config(
 		base_path: Some(base_path),
 		wasm_runtime_overrides: None,
 		informant_output_format,
-		disable_log_reloading: false,
 		keystore_remote: None,
 		keep_blocks: KeepBlocks::All,
 		state_pruning: Default::default(),
 		transaction_storage: TransactionStorageMode::BlockBody,
 	}
-}
-
-/// Produce a task executor given a handle to a tokio runtime
-pub fn task_executor(handle: Handle) -> TaskExecutor {
-	let task_executor = move |fut, task_type| match task_type {
-		TaskType::Async => handle.spawn(fut).map(drop),
-		TaskType::Blocking =>
-			handle.spawn_blocking(move || futures::executor::block_on(fut)).map(drop),
-	};
-
-	task_executor.into()
 }

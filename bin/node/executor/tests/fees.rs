@@ -56,11 +56,13 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time1)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time1 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(60))),
+				function: Call::System(frame_system::Call::fill_block {
+					ratio: Perbill::from_percent(60),
+				}),
 			},
 		],
 		(time1 / SLOT_DURATION).into(),
@@ -75,11 +77,11 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time2)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time2 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::System(frame_system::Call::remark(vec![0; 1])),
+				function: Call::System(frame_system::Call::remark { remark: vec![0; 1] }),
 			},
 		],
 		(time2 / SLOT_DURATION).into(),
@@ -321,11 +323,9 @@ fn block_length_capacity_report() {
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),
-					function: Call::System(frame_system::Call::remark(vec![
-						0u8;
-						(block_number * factor)
-							as usize
-					])),
+					function: Call::System(frame_system::Call::remark {
+						remark: vec![0u8; (block_number * factor) as usize],
+					}),
 				},
 			],
 			(time * 1000 / SLOT_DURATION).into(),

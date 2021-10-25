@@ -18,7 +18,10 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
+use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen};
+use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
+use sp_std::prelude::*;
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -375,5 +378,114 @@ pub trait EstimateCallFee<Call, Balance> {
 impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for ConstU32<T> {
 	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
 		T.into()
+	}
+}
+
+/// A wrapper for any type `T` which implement encode/decode in a way compatible with `Vec<u8>`.
+///
+/// The encoding is the encoding of `T` prepended with the compact encoding of its size in bytes.
+/// Thus the encoded value can be decoded as a `Vec<u8>`.
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct WrapperOpaque<T>(pub T);
+
+impl<T: Encode> EncodeLike for WrapperOpaque<T> {}
+
+impl<T: Encode> Encode for WrapperOpaque<T> {
+	fn size_hint(&self) -> usize {
+		self.0.size_hint().saturating_add(<codec::Compact<u32>>::max_encoded_len())
+	}
+
+	fn encode_to<O: codec::Output + ?Sized>(&self, dest: &mut O) {
+		self.0.encode().encode_to(dest);
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		self.0.encode().encode()
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.encode().using_encoded(f)
+	}
+}
+
+impl<T: Decode> Decode for WrapperOpaque<T> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Ok(Self(T::decode(&mut &<Vec<u8>>::decode(input)?[..])?))
+	}
+
+	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
+		<Vec<u8>>::skip(input)
+	}
+}
+
+impl<T> From<T> for WrapperOpaque<T> {
+	fn from(t: T) -> Self {
+		Self(t)
+	}
+}
+
+impl<T: MaxEncodedLen> MaxEncodedLen for WrapperOpaque<T> {
+	fn max_encoded_len() -> usize {
+		let t_max_len = T::max_encoded_len();
+
+		// See scale encoding https://docs.substrate.io/v3/advanced/scale-codec
+		if t_max_len < 64 {
+			t_max_len + 1
+		} else if t_max_len < 2usize.pow(14) {
+			t_max_len + 2
+		} else if t_max_len < 2usize.pow(30) {
+			t_max_len + 4
+		} else {
+			<codec::Compact<u32>>::max_encoded_len().saturating_add(T::max_encoded_len())
+		}
+	}
+}
+
+impl<T: TypeInfo + 'static> TypeInfo for WrapperOpaque<T> {
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("WrapperOpaque", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<T>()))])
+			.composite(
+				Fields::unnamed()
+					.field(|f| f.compact::<u32>())
+					.field(|f| f.ty::<T>().type_name("T")),
+			)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn test_opaque_wrapper() {
+		let encoded = WrapperOpaque(3u32).encode();
+		assert_eq!(encoded, [codec::Compact(4u32).encode(), 3u32.to_le_bytes().to_vec()].concat());
+		let vec_u8 = <Vec<u8>>::decode(&mut &encoded[..]).unwrap();
+		let decoded_from_vec_u8 = u32::decode(&mut &vec_u8[..]).unwrap();
+		assert_eq!(decoded_from_vec_u8, 3u32);
+		let decoded = <WrapperOpaque<u32>>::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(decoded.0, 3u32);
+
+		assert_eq!(<WrapperOpaque<[u8; 63]>>::max_encoded_len(), 63 + 1);
+		assert_eq!(
+			<WrapperOpaque<[u8; 63]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 63]).encode().len()
+		);
+
+		assert_eq!(<WrapperOpaque<[u8; 64]>>::max_encoded_len(), 64 + 2);
+		assert_eq!(
+			<WrapperOpaque<[u8; 64]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 64]).encode().len()
+		);
+
+		assert_eq!(
+			<WrapperOpaque<[u8; 2usize.pow(14) - 1]>>::max_encoded_len(),
+			2usize.pow(14) - 1 + 2
+		);
+		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
 	}
 }

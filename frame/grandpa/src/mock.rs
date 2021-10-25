@@ -111,7 +111,6 @@ where
 parameter_types! {
 	pub const Period: u64 = 1;
 	pub const Offset: u64 = 0;
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
 /// Custom `SessionHandler` since we use `TestSessionKeys` as `Keys`.
@@ -124,7 +123,6 @@ impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <TestSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = TestSessionKeys;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type WeightInfo = ();
 }
 
@@ -191,11 +189,10 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const ElectionLookahead: u64 = 0;
 	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
 impl onchain::Config for Test {
-	type AccountId = <Self as frame_system::Config>::AccountId;
-	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -216,9 +213,11 @@ impl pallet_staking::Config for Test {
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type WeightInfo = ();
 }
 
@@ -231,6 +230,7 @@ impl pallet_offences::Config for Test {
 parameter_types! {
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+	pub const MaxAuthorities: u32 = 100;
 }
 
 impl Config for Test {
@@ -251,6 +251,7 @@ impl Config for Test {
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
+	type MaxAuthorities = MaxAuthorities;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {

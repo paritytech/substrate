@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Helper macros for Substrate's client CLI"
 
@@ -16,6 +16,6 @@ proc-macro = true
 
 [dependencies]
 proc-macro-crate = "1.0.0"
-proc-macro2 = "1.0.28"
-quote = { version = "1.0.3", features = ["proc-macro"] }
-syn = { version = "1.0.58", features = ["proc-macro", "full", "extra-traits", "parsing"] }
+proc-macro2 = "1.0.29"
+quote = { version = "1.0.10", features = ["proc-macro"] }
+syn = { version = "1.0.80", features = ["proc-macro", "full", "extra-traits", "parsing"] }

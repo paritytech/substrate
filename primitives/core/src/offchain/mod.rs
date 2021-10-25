@@ -19,6 +19,7 @@
 
 use crate::{OpaquePeerId, RuntimeDebug};
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByEnum, PassByInner};
 use sp_std::{
 	convert::TryFrom,
@@ -186,7 +187,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node in SCALE encoded.
@@ -196,7 +197,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner, TypeInfo)]
 pub struct OpaqueMultiaddr(pub Vec<u8>);
 
 impl OpaqueMultiaddr {

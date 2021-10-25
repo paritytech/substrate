@@ -52,7 +52,7 @@ mod misc;
 pub use misc::{
 	Backing, ConstU32, EnsureInherentsAreFirst, EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get,
 	GetBacking, GetDefault, HandleLifetime, IsSubType, IsType, Len, OffchainWorker,
-	OnKilledAccount, OnNewAccount, SameOrOther, Time, TryDrop, UnixTime,
+	OnKilledAccount, OnNewAccount, SameOrOther, Time, TryDrop, UnixTime, WrapperOpaque,
 };
 
 mod stored_map;
@@ -62,8 +62,9 @@ pub use randomness::Randomness;
 
 mod metadata;
 pub use metadata::{
-	CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, PalletInfo, PalletInfoAccess,
-	StorageVersion, STORAGE_VERSION_STORAGE_KEY_POSTFIX,
+	CallMetadata, CrateVersion, GetCallMetadata, GetCallName, GetStorageVersion, PalletInfo,
+	PalletInfoAccess, PalletInfoData, PalletsInfoAccess, StorageVersion,
+	STORAGE_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;

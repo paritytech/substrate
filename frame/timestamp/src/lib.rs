@@ -120,7 +120,8 @@ pub mod pallet {
 			+ AtLeast32Bit
 			+ Scale<Self::BlockNumber, Output = Self::Moment>
 			+ Copy
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ scale_info::StaticTypeInfo;
 
 		/// Something which can be notified when the timestamp is set. Set this to `()` if not
 		/// needed.
@@ -221,7 +222,7 @@ pub mod pallet {
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-			Some(Call::set(next_time.into()))
+			Some(Call::set { now: next_time.into() })
 		}
 
 		fn check_inherent(
@@ -232,7 +233,7 @@ pub mod pallet {
 				sp_timestamp::Timestamp::new(30 * 1000);
 
 			let t: u64 = match call {
-				Call::set(ref t) => t.clone().saturated_into::<u64>(),
+				Call::set { ref now } => now.clone().saturated_into::<u64>(),
 				_ => return Ok(()),
 			};
 
@@ -252,7 +253,7 @@ pub mod pallet {
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::set(_))
+			matches!(call, Call::set { .. })
 		}
 	}
 }

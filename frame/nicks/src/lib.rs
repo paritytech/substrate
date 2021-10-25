@@ -35,9 +35,6 @@
 //!   taken.
 //! * `clear_name` - Remove an account's associated name; the deposit is returned.
 //! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
-//!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -91,7 +88,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// A name was set. \[who\]
 		NameSet(T::AccountId),

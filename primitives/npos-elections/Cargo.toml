@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "NPoS election algorithm primitives"
 readme = "README.md"
@@ -14,24 +14,27 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.126", optional = true, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-npos-elections-solution-type = { version = "4.0.0-dev", path = "./solution-type" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../arithmetic" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
+sp-runtime = { version = "4.0.0-dev", path = "../runtime", default-features = false }
 
 [dev-dependencies]
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 rand = "0.7.3"
-sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
 
 [features]
 default = ["std"]
 bench = []
 std = [
 	"codec/std",
+	"scale-info/std",
 	"serde",
 	"sp-std/std",
 	"sp-arithmetic/std",
 	"sp-core/std",
+	"sp-runtime/std",
 ]

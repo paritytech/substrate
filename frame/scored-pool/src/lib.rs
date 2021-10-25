@@ -136,7 +136,8 @@ pub mod pallet {
 			+ Default
 			+ FullCodec
 			+ MaybeSerializeDeserialize
-			+ Debug;
+			+ Debug
+			+ scale_info::TypeInfo;
 
 		/// The overarching event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;

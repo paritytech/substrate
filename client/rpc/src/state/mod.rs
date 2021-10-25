@@ -465,6 +465,14 @@ where
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
 
+	/// Returns child storage entries at a specific block's state.
+	fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>>;
+
 	/// Returns the hash of a child storage entry at a block's state.
 	fn storage_hash(
 		&self,
@@ -514,6 +522,15 @@ where
 		block: Option<Block::Hash>,
 	) -> FutureResult<Option<StorageData>> {
 		self.backend.storage(block, storage_key, key)
+	}
+
+	fn storage_entries(
+		&self,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		self.backend.storage_entries(block, storage_key, keys)
 	}
 
 	fn storage_keys(

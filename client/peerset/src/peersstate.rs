@@ -105,8 +105,8 @@ struct Node {
 }
 
 impl Node {
-	fn new(num_sets: usize) -> Node {
-		Node { sets: (0..num_sets).map(|_| MembershipState::NotMember).collect(), reputation: 0 }
+	fn new(num_sets: usize) -> Self {
+		Self { sets: (0..num_sets).map(|_| MembershipState::NotMember).collect(), reputation: 0 }
 	}
 }
 
@@ -128,21 +128,24 @@ enum MembershipState {
 }
 
 impl MembershipState {
-	/// Returns `true` for `In` and `Out`.
+	/// Returns `true` for [`MembershipState::In`] and [`MembershipState::Out`].
 	fn is_connected(self) -> bool {
 		match self {
-			MembershipState::NotMember => false,
-			MembershipState::In => true,
-			MembershipState::Out => true,
-			MembershipState::NotConnected { .. } => false,
+			Self::In | Self::Out => true,
+			Self::NotMember | Self::NotConnected { .. } => false,
 		}
+	}
+
+	/// Returns `true` for [`MembershipState::NotConnected`].
+	fn is_not_connected(self) -> bool {
+		matches!(self, Self::NotConnected { .. })
 	}
 }
 
 impl PeersState {
-	/// Builds a new empty `PeersState`.
+	/// Builds a new empty [`PeersState`].
 	pub fn new(sets: impl IntoIterator<Item = SetConfig>) -> Self {
-		PeersState {
+		Self {
 			nodes: HashMap::new(),
 			sets: sets
 				.into_iter()
@@ -167,7 +170,7 @@ impl PeersState {
 	/// Returns an object that grants access to the reputation value of a peer.
 	pub fn peer_reputation(&mut self, peer_id: PeerId) -> Reputation {
 		if !self.nodes.contains_key(&peer_id) {
-			self.nodes.insert(peer_id.clone(), Node::new(self.sets.len()));
+			self.nodes.insert(peer_id, Node::new(self.sets.len()));
 		}
 
 		let entry = match self.nodes.entry(peer_id) {
@@ -242,12 +245,7 @@ impl PeersState {
 		let outcome = self
 			.nodes
 			.iter_mut()
-			.filter(|(_, Node { sets, .. })| match sets[set] {
-				MembershipState::NotMember => false,
-				MembershipState::In => false,
-				MembershipState::Out => false,
-				MembershipState::NotConnected { .. } => true,
-			})
+			.filter(|(_, Node { sets, .. })| sets[set].is_not_connected())
 			.fold(None::<(&PeerId, &mut Node)>, |mut cur_node, to_try| {
 				if let Some(cur_node) = cur_node.take() {
 					if cur_node.1.reputation >= to_try.1.reputation {
@@ -256,7 +254,7 @@ impl PeersState {
 				}
 				Some(to_try)
 			})
-			.map(|(peer_id, _)| peer_id.clone());
+			.map(|(peer_id, _)| *peer_id);
 
 		outcome.map(move |peer_id| NotConnectedPeer {
 			state: self,
@@ -275,7 +273,7 @@ impl PeersState {
 	/// Has no effect if the node was already in the group.
 	pub fn add_no_slot_node(&mut self, set: usize, peer_id: PeerId) {
 		// Reminder: `HashSet::insert` returns false if the node was already in the set
-		if !self.sets[set].no_slot_nodes.insert(peer_id.clone()) {
+		if !self.sets[set].no_slot_nodes.insert(peer_id) {
 			return
 		}
 
@@ -318,35 +316,32 @@ pub enum Peer<'a> {
 }
 
 impl<'a> Peer<'a> {
-	/// If we are the `Connected` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// If we are the `Connected` variant, returns the inner [`ConnectedPeer`]. Returns `None`
 	/// otherwise.
 	pub fn into_connected(self) -> Option<ConnectedPeer<'a>> {
 		match self {
-			Peer::Connected(peer) => Some(peer),
-			Peer::NotConnected(_) => None,
-			Peer::Unknown(_) => None,
+			Self::Connected(peer) => Some(peer),
+			Self::NotConnected(..) | Self::Unknown(..) => None,
 		}
 	}
 
-	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// If we are the `NotConnected` variant, returns the inner [`NotConnectedPeer`]. Returns `None`
 	/// otherwise.
 	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn into_not_connected(self) -> Option<NotConnectedPeer<'a>> {
 		match self {
-			Peer::Connected(_) => None,
-			Peer::NotConnected(peer) => Some(peer),
-			Peer::Unknown(_) => None,
+			Self::NotConnected(peer) => Some(peer),
+			Self::Connected(..) | Self::Unknown(..) => None,
 		}
 	}
 
-	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
+	/// If we are the `Unknown` variant, returns the inner [`UnknownPeer`]. Returns `None`
 	/// otherwise.
 	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn into_unknown(self) -> Option<UnknownPeer<'a>> {
 		match self {
-			Peer::Connected(_) => None,
-			Peer::NotConnected(_) => None,
-			Peer::Unknown(peer) => Some(peer),
+			Self::Unknown(peer) => Some(peer),
+			Self::Connected(..) | Self::NotConnected(..) => None,
 		}
 	}
 }
@@ -473,7 +468,7 @@ impl<'a> NotConnectedPeer<'a> {
 	/// the slots are full, the node stays "not connected" and we return `Err`.
 	///
 	/// Non-slot-occupying nodes don't count towards the number of slots.
-	pub fn try_outgoing(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
+	pub fn try_outgoing(self) -> Result<ConnectedPeer<'a>, Self> {
 		let is_no_slot_occupy = self.state.sets[self.set].no_slot_nodes.contains(&*self.peer_id);
 
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
@@ -500,7 +495,7 @@ impl<'a> NotConnectedPeer<'a> {
 	/// the slots are full, the node stays "not connected" and we return `Err`.
 	///
 	/// Non-slot-occupying nodes don't count towards the number of slots.
-	pub fn try_accept_incoming(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
+	pub fn try_accept_incoming(self) -> Result<ConnectedPeer<'a>, Self> {
 		let is_no_slot_occupy = self.state.sets[self.set].no_slot_nodes.contains(&*self.peer_id);
 
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were

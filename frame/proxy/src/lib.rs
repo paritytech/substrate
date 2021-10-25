@@ -42,6 +42,7 @@ use frame_support::{
 	RuntimeDebug,
 };
 use frame_system::{self as system};
+use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{Dispatchable, Hash, Saturating, Zero},
@@ -60,7 +61,17 @@ type BalanceOf<T> =
 /// The parameters under which a particular account has a proxy relationship with some other
 /// account.
 #[derive(
-	Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, MaxEncodedLen,
+	Encode,
+	Decode,
+	Clone,
+	Copy,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	RuntimeDebug,
+	MaxEncodedLen,
+	TypeInfo,
 )]
 pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 	/// The account which may act on behalf of another.
@@ -73,7 +84,7 @@ pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 }
 
 /// Details surrounding a specific instance of an announcement to make a call.
-#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct Announcement<AccountId, Hash, BlockNumber> {
 	/// The account which made the announcement.
 	real: AccountId,
@@ -534,12 +545,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(
-		T::AccountId = "AccountId",
-		T::ProxyType = "ProxyType",
-		CallHashOf<T> = "Hash",
-		T::BlockNumber = "BlockNumber",
-	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A proxy was executed correctly, with the given \[result\].
@@ -782,12 +787,13 @@ impl<T: Config> Pallet<T> {
 			match c.is_sub_type() {
 				// Proxy call cannot add or remove a proxy with more permissions than it already
 				// has.
-				Some(Call::add_proxy(_, ref pt, _)) | Some(Call::remove_proxy(_, ref pt, _))
-					if !def.proxy_type.is_superset(&pt) =>
+				Some(Call::add_proxy { ref proxy_type, .. }) |
+				Some(Call::remove_proxy { ref proxy_type, .. })
+					if !def.proxy_type.is_superset(&proxy_type) =>
 					false,
 				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full
 				// permissions.
-				Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
+				Some(Call::remove_proxies { .. }) | Some(Call::kill_anonymous { .. })
 					if def.proxy_type != T::ProxyType::default() =>
 					false,
 				_ => def.proxy_type.filter(c),

@@ -22,13 +22,15 @@ use crate::{
 	host::HostState,
 	imports::{resolve_imports, Imports},
 	instance_wrapper::{EntryPoint, InstanceWrapper},
-	state_holder,
+	util,
 };
 
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::{Result, WasmError},
-	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
+	runtime_blob::{
+		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
+	},
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -36,9 +38,29 @@ use sp_wasm_interface::{Function, Pointer, Value, WordSize};
 use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
-	sync::Arc,
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc,
+	},
 };
-use wasmtime::{Engine, Store};
+use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
+
+pub(crate) struct StoreData {
+	/// The limits we aply to the store. We need to store it here to return a reference to this
+	/// object when we have the limits enabled.
+	limits: StoreLimits,
+	/// This will only be set when we call into the runtime.
+	host_state: Option<Rc<HostState>>,
+}
+
+impl StoreData {
+	/// Returns a reference to the host state.
+	pub fn host_state(&self) -> Option<&Rc<HostState>> {
+		self.host_state.as_ref()
+	}
+}
+
+pub(crate) type Store = wasmtime::Store<StoreData>;
 
 enum Strategy {
 	FastInstanceReuse {
@@ -46,6 +68,7 @@ enum Strategy {
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
 		heap_base: u32,
+		store: Store,
 	},
 	RecreateInstance(InstanceCreator),
 }
@@ -54,12 +77,37 @@ struct InstanceCreator {
 	store: Store,
 	module: Arc<wasmtime::Module>,
 	imports: Arc<Imports>,
-	heap_pages: u32,
+	heap_pages: u64,
 }
 
 impl InstanceCreator {
-	fn instantiate(&self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&self.store, &*self.module, &*self.imports, self.heap_pages)
+	fn instantiate(&mut self) -> Result<InstanceWrapper> {
+		InstanceWrapper::new(&*self.module, &*self.imports, self.heap_pages, &mut self.store)
+	}
+}
+
+struct InstanceGlobals<'a, C> {
+	ctx: &'a mut C,
+	instance: &'a InstanceWrapper,
+}
+
+impl<'a, C: AsContextMut> runtime_blob::InstanceGlobals for InstanceGlobals<'a, C> {
+	type Global = wasmtime::Global;
+
+	fn get_global(&mut self, export_name: &str) -> Self::Global {
+		self.instance
+			.get_global(&mut self.ctx, export_name)
+			.expect("get_global is guaranteed to be called with an export name of a global; qed")
+	}
+
+	fn get_global_value(&mut self, global: &Self::Global) -> Value {
+		util::from_wasmtime_val(global.get(&mut self.ctx))
+	}
+
+	fn set_global_value(&mut self, global: &Self::Global, value: Value) {
+		global.set(&mut self.ctx, util::into_wasmtime_val(value)).expect(
+			"the value is guaranteed to be of the same value; the global is guaranteed to be mutable; qed",
+		);
 	}
 }
 
@@ -82,19 +130,25 @@ pub struct WasmtimeRuntime {
 impl WasmtimeRuntime {
 	/// Creates the store respecting the set limits.
 	fn new_store(&self) -> Store {
-		match self.config.max_memory_pages {
-			Some(max_memory_pages) => Store::new_with_limits(
-				&self.engine,
-				wasmtime::StoreLimitsBuilder::new().memory_pages(max_memory_pages).build(),
-			),
-			None => Store::new(&self.engine),
+		let limits = if let Some(max_memory_size) = self.config.max_memory_size {
+			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
+		} else {
+			Default::default()
+		};
+
+		let mut store = Store::new(&self.engine, StoreData { limits, host_state: None });
+
+		if self.config.max_memory_size.is_some() {
+			store.limiter(|s| &mut s.limits);
 		}
+
+		store
 	}
 }
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
-		let store = self.new_store();
+		let mut store = self.new_store();
 
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
@@ -103,7 +157,7 @@ impl WasmModule for WasmtimeRuntime {
 		//       However, I am not sure if that's a good idea since it would be pushing our luck
 		// further       by assuming that `Store` not only `Send` but also `Sync`.
 		let imports = resolve_imports(
-			&store,
+			&mut store,
 			&self.module,
 			&self.host_functions,
 			self.config.heap_pages,
@@ -112,21 +166,24 @@ impl WasmModule for WasmtimeRuntime {
 
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
 			let instance_wrapper =
-				InstanceWrapper::new(&store, &self.module, &imports, self.config.heap_pages)?;
-			let heap_base = instance_wrapper.extract_heap_base()?;
+				InstanceWrapper::new(&self.module, &imports, self.config.heap_pages, &mut store)?;
+			let heap_base = instance_wrapper.extract_heap_base(&mut store)?;
 
 			// This function panics if the instance was created from a runtime blob different from
 			// which the mutable globals were collected. Here, it is easy to see that there is only
 			// a single runtime blob and thus it's the same that was used for both creating the
 			// instance and collecting the mutable globals.
-			let globals_snapshot =
-				GlobalsSnapshot::take(&snapshot_data.mutable_globals, &instance_wrapper);
+			let globals_snapshot = GlobalsSnapshot::take(
+				&snapshot_data.mutable_globals,
+				&mut InstanceGlobals { ctx: &mut store, instance: &instance_wrapper },
+			);
 
 			Strategy::FastInstanceReuse {
 				instance_wrapper: Rc::new(instance_wrapper),
 				globals_snapshot,
 				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
 				heap_base,
+				store,
 			}
 		} else {
 			Strategy::RecreateInstance(InstanceCreator {
@@ -152,48 +209,63 @@ pub struct WasmtimeInstance {
 unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
-	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
-		match &self.strategy {
+	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
+		match &mut self.strategy {
 			Strategy::FastInstanceReuse {
 				instance_wrapper,
 				globals_snapshot,
 				data_segments_snapshot,
 				heap_base,
+				ref mut store,
 			} => {
-				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
+				let entrypoint = instance_wrapper.resolve_entrypoint(method, &mut *store)?;
 
 				data_segments_snapshot.apply(|offset, contents| {
-					instance_wrapper.write_memory_from(Pointer::new(offset), contents)
+					instance_wrapper.write_memory_from(&mut *store, Pointer::new(offset), contents)
 				})?;
-				globals_snapshot.apply(&**instance_wrapper);
+				globals_snapshot
+					.apply(&mut InstanceGlobals { ctx: &mut *store, instance: &*instance_wrapper });
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result =
-					perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
+				let result = perform_call(
+					&mut *store,
+					data,
+					instance_wrapper.clone(),
+					entrypoint,
+					allocator,
+				);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
-				instance_wrapper.decommit();
+				instance_wrapper.decommit(&store);
 
 				result
 			},
-			Strategy::RecreateInstance(instance_creator) => {
+			Strategy::RecreateInstance(ref mut instance_creator) => {
 				let instance_wrapper = instance_creator.instantiate()?;
-				let heap_base = instance_wrapper.extract_heap_base()?;
-				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
+				let heap_base = instance_wrapper.extract_heap_base(&mut instance_creator.store)?;
+				let entrypoint =
+					instance_wrapper.resolve_entrypoint(method, &mut instance_creator.store)?;
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
-				perform_call(data, Rc::new(instance_wrapper), entrypoint, allocator)
+				perform_call(
+					&mut instance_creator.store,
+					data,
+					Rc::new(instance_wrapper),
+					entrypoint,
+					allocator,
+				)
 			},
 		}
 	}
 
-	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
-		match &self.strategy {
-			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
-				instance_wrapper.get_global_val(name),
-			Strategy::RecreateInstance(instance_creator) =>
-				instance_creator.instantiate()?.get_global_val(name),
+	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>> {
+		match &mut self.strategy {
+			Strategy::FastInstanceReuse { instance_wrapper, ref mut store, .. } =>
+				instance_wrapper.get_global_val(&mut *store, name),
+			Strategy::RecreateInstance(ref mut instance_creator) => instance_creator
+				.instantiate()?
+				.get_global_val(&mut instance_creator.store, name),
 		}
 	}
 
@@ -204,8 +276,8 @@ impl WasmInstance for WasmtimeInstance {
 				// associated with it.
 				None
 			},
-			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
-				Some(instance_wrapper.base_ptr()),
+			Strategy::FastInstanceReuse { instance_wrapper, store, .. } =>
+				Some(instance_wrapper.base_ptr(&store)),
 		}
 	}
 }
@@ -253,6 +325,23 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 
+	let profiler = match std::env::var_os("WASMTIME_PROFILING_STRATEGY") {
+		Some(os_string) if os_string == "jitdump" => wasmtime::ProfilingStrategy::JitDump,
+		None => wasmtime::ProfilingStrategy::None,
+		Some(_) => {
+			// Remember if we have already logged a warning due to an unknown profiling strategy.
+			static UNKNOWN_PROFILING_STRATEGY: AtomicBool = AtomicBool::new(false);
+			// Make sure that the warning will not be relogged regularly.
+			if !UNKNOWN_PROFILING_STRATEGY.swap(true, Ordering::Relaxed) {
+				log::warn!("WASMTIME_PROFILING_STRATEGY is set to unknown value, ignored.");
+			}
+			wasmtime::ProfilingStrategy::None
+		},
+	};
+	config
+		.profiler(profiler)
+		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {}", e)))?;
+
 	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
 		semantics.deterministic_stack_limit
 	{
@@ -260,6 +349,8 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 			.max_wasm_stack(native_stack_max as usize)
 			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {}", e)))?;
 	}
+
+	config.parallel_compilation(semantics.parallel_compilation);
 
 	// Be clear and specific about the extensions we support. If an update brings new features
 	// they should be introduced here as well.
@@ -292,7 +383,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// usage in bytes.
 ///
 /// The actual number of bytes consumed by a function is not trivial to compute  without going
-/// through full compilation. Therefore, it's expected that `native_stack_max` is grealy
+/// through full compilation. Therefore, it's expected that `native_stack_max` is greatly
 /// overestimated and thus never reached in practice. The stack overflow check introduced by the
 /// instrumentation and that relies on the logical item count should be reached first.
 ///
@@ -310,7 +401,7 @@ pub struct DeterministicStackLimit {
 	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm
 	/// function after translation into machine code. It is also not quite trivial.
 	///
-	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
+	/// Therefore, this number should be chosen conservatively. It must be so large so that it can
 	/// fit the [`logical_max`](Self::logical_max) logical values on the stack, according to the
 	/// current instrumentation algorithm.
 	///
@@ -320,7 +411,7 @@ pub struct DeterministicStackLimit {
 
 pub struct Semantics {
 	/// Enabling this will lead to some optimization shenanigans that make calling [`WasmInstance`]
-	/// extermely fast.
+	/// extremely fast.
 	///
 	/// Primarily this is achieved by not recreating the instance for each call and performing a
 	/// bare minimum clean up: reapplying the data segments and restoring the values for global
@@ -360,28 +451,32 @@ pub struct Semantics {
 	/// developers. For PVFs, we want to ensure that execution is deterministic though. Therefore,
 	/// for PVF execution this flag is meant to be turned on.
 	pub canonicalize_nans: bool,
+
+	/// Configures wasmtime to use multiple threads for compiling.
+	pub parallel_compilation: bool,
 }
 
 pub struct Config {
 	/// The number of wasm pages to be mounted after instantiation.
-	pub heap_pages: u32,
+	pub heap_pages: u64,
 
-	/// The total number of wasm pages an instance can request.
+	/// The total amount of memory in bytes an instance can request.
 	///
-	/// If specified, the runtime will be able to allocate only that much of wasm memory pages.
+	/// If specified, the runtime will be able to allocate only that much of wasm memory.
 	/// This is the total number and therefore the [`heap_pages`] is accounted for.
 	///
 	/// That means that the initial number of pages of a linear memory plus the [`heap_pages`]
-	/// should be less or equal to `max_memory_pages`, otherwise the instance won't be created.
+	/// multiplied by the wasm page size (64KiB) should be less than or equal to `max_memory_size`,
+	/// otherwise the instance won't be created.
 	///
-	/// Moreover, `memory.grow` will fail (return -1) if the sum of the number of currently mounted
-	/// pages and the number of additional pages exceeds `max_memory_pages`.
+	/// Moreover, `memory.grow` will fail (return -1) if the sum of sizes of currently mounted
+	/// and additional pages exceeds `max_memory_size`.
 	///
 	/// The default is `None`.
-	pub max_memory_pages: Option<u32>,
+	pub max_memory_size: Option<usize>,
 
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
-	/// othewise, the instantiation fails. If this option is set to `true`, then this behavior is
+	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is
 	/// overriden and imports that are requested by the module and not provided by the host
 	/// functions will be resolved using stubs. These stubs will trap upon a call.
 	pub allow_missing_func_imports: bool,
@@ -536,40 +631,50 @@ pub fn prepare_runtime_artifact(
 }
 
 fn perform_call(
+	mut ctx: impl AsContextMut<Data = StoreData>,
 	data: &[u8],
 	instance_wrapper: Rc<InstanceWrapper>,
 	entrypoint: EntryPoint,
 	mut allocator: FreeingBumpHeapAllocator,
 ) -> Result<Vec<u8>> {
-	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
+	let (data_ptr, data_len) =
+		inject_input_data(&mut ctx, &instance_wrapper, &mut allocator, data)?;
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
-	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
-		Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
-	});
+
+	// Set the host state before calling into wasm.
+	ctx.as_context_mut().data_mut().host_state = Some(Rc::new(host_state));
+
+	let ret = entrypoint.call(&mut ctx, data_ptr, data_len).map(unpack_ptr_and_len);
+
+	// Reset the host state
+	ctx.as_context_mut().data_mut().host_state = None;
+
 	let (output_ptr, output_len) = ret?;
-	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
+	let output = extract_output_data(ctx, &instance_wrapper, output_ptr, output_len)?;
 
 	Ok(output)
 }
 
 fn inject_input_data(
+	mut ctx: impl AsContextMut,
 	instance: &InstanceWrapper,
 	allocator: &mut FreeingBumpHeapAllocator,
 	data: &[u8],
 ) -> Result<(Pointer<u8>, WordSize)> {
 	let data_len = data.len() as WordSize;
-	let data_ptr = instance.allocate(allocator, data_len)?;
-	instance.write_memory_from(data_ptr, data)?;
+	let data_ptr = instance.allocate(&mut ctx, allocator, data_len)?;
+	instance.write_memory_from(ctx, data_ptr, data)?;
 	Ok((data_ptr, data_len))
 }
 
 fn extract_output_data(
+	ctx: impl AsContext,
 	instance: &InstanceWrapper,
 	output_ptr: u32,
 	output_len: u32,
 ) -> Result<Vec<u8>> {
 	let mut output = vec![0; output_len as usize];
-	instance.read_memory_into(Pointer::new(output_ptr), &mut output)?;
+	instance.read_memory_into(ctx, Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }

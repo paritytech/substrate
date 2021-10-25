@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Macro for benchmarking a FRAME runtime."
 readme = "README.md"
@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 linregress = { version = "0.4.3", optional = true }
 paste = "1.0"
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api", default-features = false }
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../primitives/runtime-interface", default-features = false }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime", default-features = false }
@@ -27,12 +28,13 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-hex-literal = "0.3.1"
+hex-literal = "0.3.3"
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime-interface/std",
 	"sp-runtime/std",
 	"sp-api/std",

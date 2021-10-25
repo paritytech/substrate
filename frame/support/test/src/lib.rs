@@ -25,9 +25,9 @@
 /// The configuration trait
 pub trait Config: 'static {
 	/// The runtime origin type.
-	type Origin: codec::Codec + codec::EncodeLike + Default;
+	type Origin: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
 	/// The block number type.
-	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default + scale_info::TypeInfo;
 	/// The information about the pallet setup in the runtime.
 	type PalletInfo: frame_support::traits::PalletInfo;
 	/// The db weights.
@@ -47,6 +47,12 @@ impl frame_support::traits::PalletInfo for PanicPalletInfo {
 		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 	}
 	fn name<P: 'static>() -> Option<&'static str> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
+	fn module_name<P: 'static>() -> Option<&'static str> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
+	fn crate_version<P: 'static>() -> Option<frame_support::traits::CrateVersion> {
 		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 	}
 }

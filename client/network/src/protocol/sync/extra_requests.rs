@@ -67,7 +67,7 @@ pub(crate) struct Metrics {
 
 impl<B: BlockT> ExtraRequests<B> {
 	pub(crate) fn new(request_type_name: &'static str) -> Self {
-		ExtraRequests {
+		Self {
 			tree: ForkTree::new(),
 			best_seen_finalized_number: Zero::zero(),
 			pending_requests: VecDeque::new(),
@@ -132,27 +132,25 @@ impl<B: BlockT> ExtraRequests<B> {
 		// messages to chain sync.
 		if let Some(request) = self.active_requests.remove(&who) {
 			if let Some(r) = resp {
-				trace!(target: "sync", "Queuing import of {} from {:?} for {:?}",
-					self.request_type_name,
-					who,
-					request,
+				trace!(target: "sync",
+					"Queuing import of {} from {:?} for {:?}",
+					self.request_type_name, who, request,
 				);
 
 				self.importing_requests.insert(request);
 				return Some((who, request.0, request.1, r))
 			} else {
-				trace!(target: "sync", "Empty {} response from {:?} for {:?}",
-					self.request_type_name,
-					who,
-					request,
+				trace!(target: "sync",
+					"Empty {} response from {:?} for {:?}",
+					self.request_type_name, who, request,
 				);
 			}
 			self.failed_requests.entry(request).or_default().push((who, Instant::now()));
 			self.pending_requests.push_front(request);
 		} else {
-			trace!(target: "sync", "No active {} request to {:?}",
-				self.request_type_name,
-				who,
+			trace!(target: "sync",
+				"No active {} request to {:?}",
+				self.request_type_name, who,
 			);
 		}
 		None
@@ -227,10 +225,9 @@ impl<B: BlockT> ExtraRequests<B> {
 		};
 
 		if self.tree.finalize_root(&finalized_hash).is_none() {
-			warn!(target: "sync", "‼️ Imported {:?} {:?} which isn't a root in the tree: {:?}",
-				finalized_hash,
-				finalized_number,
-				self.tree.roots().collect::<Vec<_>>()
+			warn!(target: "sync",
+				"‼️ Imported {:?} {:?} which isn't a root in the tree: {:?}",
+				finalized_hash, finalized_number, self.tree.roots().collect::<Vec<_>>()
 			);
 			return true
 		}
@@ -280,7 +277,7 @@ pub(crate) struct Matcher<'a, B: BlockT> {
 
 impl<'a, B: BlockT> Matcher<'a, B> {
 	fn new(extras: &'a mut ExtraRequests<B>) -> Self {
-		Matcher { remaining: extras.pending_requests.len(), extras }
+		Self { remaining: extras.pending_requests.len(), extras }
 	}
 
 	/// Finds a peer to which a pending request can be sent.
@@ -335,13 +332,12 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 				}
 				self.extras.active_requests.insert(peer.clone(), request);
 
-				trace!(target: "sync", "Sending {} request to {:?} for {:?}",
-					self.extras.request_type_name,
-					peer,
-					request,
+				trace!(target: "sync",
+					"Sending {} request to {:?} for {:?}",
+					self.extras.request_type_name, peer, request,
 				);
 
-				return Some((peer.clone(), request))
+				return Some((*peer, request))
 			}
 
 			self.extras.pending_requests.push_back(request);
@@ -594,7 +590,7 @@ mod tests {
 			let mut peers = HashMap::with_capacity(g.size());
 			for _ in 0..g.size() {
 				let ps = ArbitraryPeerSync::arbitrary(g).0;
-				peers.insert(ps.peer_id.clone(), ps);
+				peers.insert(ps.peer_id, ps);
 			}
 			ArbitraryPeers(peers)
 		}

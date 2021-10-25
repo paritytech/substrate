@@ -15,13 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{expand::merge_where_clauses, parse::helper::get_doc_literals, Def};
+use crate::pallet::{expand::merge_where_clauses, Def};
+use frame_support_procedural_tools::get_doc_literals;
 
 ///
 /// * Add derive trait on Pallet
 /// * Implement GetStorageVersion on Pallet
 /// * Implement OnGenesis on Pallet
-/// * Implement ModuleErrorMetadata on Pallet
+/// * Implement `fn error_metadata` on Pallet
 /// * declare Module type alias for construct_runtime
 /// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
 /// * implementation of `PalletInfoAccess` information
@@ -61,7 +62,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	if get_doc_literals(&pallet_item.attrs).is_empty() {
 		pallet_item.attrs.push(syn::parse_quote!(
 			#[doc = r"
-			The [pallet](https://substrate.dev/docs/en/knowledgebase/runtime/pallets) implementing
+			The [pallet](https://docs.substrate.io/v3/runtime/frame#pallets) implementing
 			the on-chain logic.
 			"]
 		));
@@ -76,54 +77,59 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 	));
 
-	let module_error_metadata = if let Some(error_def) = &def.error {
+	let pallet_error_metadata = if let Some(error_def) = &def.error {
 		let error_ident = &error_def.error;
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
-			impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
-				for #pallet_ident<#type_use_gen>
-				#config_where_clause
-			{
-				fn metadata() -> &'static [#frame_support::error::ErrorMetadata] {
-					<
-						#error_ident<#type_use_gen> as #frame_support::error::ModuleErrorMetadata
-					>::metadata()
+			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
+				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
+					Some(#frame_support::metadata::PalletErrorMetadata {
+						ty: #frame_support::scale_info::meta_type::<#error_ident<#type_use_gen>>()
+					})
 				}
 			}
 		)
 	} else {
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
-			impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
-				for #pallet_ident<#type_use_gen>
-				#config_where_clause
-			{
-				fn metadata() -> &'static [#frame_support::error::ErrorMetadata] {
-					&[]
+			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
+				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
+					None
 				}
 			}
 		)
 	};
 
-	// Depending on the flag `generate_storage_info` we use partial or full storage info from
-	// storage.
-	let (storage_info_span, storage_info_trait, storage_info_method) =
-		if let Some(span) = def.pallet_struct.generate_storage_info {
-			(
-				span,
-				quote::quote_spanned!(span => StorageInfoTrait),
-				quote::quote_spanned!(span => storage_info),
-			)
-		} else {
-			let span = def.pallet_struct.attr_span;
-			(
-				span,
-				quote::quote_spanned!(span => PartialStorageInfoTrait),
-				quote::quote_spanned!(span => partial_storage_info),
-			)
-		};
+	let storage_info_span =
+		def.pallet_struct.generate_storage_info.unwrap_or(def.pallet_struct.attr_span);
 
 	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
 	let storage_cfg_attrs =
 		&def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
+
+	// Depending on the flag `generate_storage_info` and the storage attribute `unbounded`, we use
+	// partial or full storage info from storage.
+	let storage_info_traits = &def
+		.storages
+		.iter()
+		.map(|storage| {
+			if storage.unbounded || def.pallet_struct.generate_storage_info.is_none() {
+				quote::quote_spanned!(storage_info_span => PartialStorageInfoTrait)
+			} else {
+				quote::quote_spanned!(storage_info_span => StorageInfoTrait)
+			}
+		})
+		.collect::<Vec<_>>();
+
+	let storage_info_methods = &def
+		.storages
+		.iter()
+		.map(|storage| {
+			if storage.unbounded || def.pallet_struct.generate_storage_info.is_none() {
+				quote::quote_spanned!(storage_info_span => partial_storage_info)
+			} else {
+				quote::quote_spanned!(storage_info_span => storage_info)
+			}
+		})
+		.collect::<Vec<_>>();
 
 	let storage_info = quote::quote_spanned!(storage_info_span =>
 		impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
@@ -141,8 +147,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 					{
 						let mut storage_info = <
 							#storage_names<#type_use_gen>
-							as #frame_support::traits::#storage_info_trait
-						>::#storage_info_method();
+							as #frame_support::traits::#storage_info_traits
+						>::#storage_info_methods();
 						res.append(&mut storage_info);
 					}
 				)*
@@ -159,7 +165,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
-		#module_error_metadata
+		#pallet_error_metadata
 
 		/// Type alias to `Pallet`, to be used by `construct_runtime`.
 		///
@@ -212,6 +218,37 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 				>::name::<Self>()
 					.expect("Pallet is part of the runtime because pallet `Config` trait is \
 						implemented by the runtime")
+			}
+
+			fn module_name() -> &'static str {
+				<
+					<T as #frame_system::Config>::PalletInfo as #frame_support::traits::PalletInfo
+				>::module_name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
+			}
+
+			fn crate_version() -> #frame_support::traits::CrateVersion {
+				#frame_support::crate_to_crate_version!()
+			}
+		}
+
+		impl<#type_impl_gen> #frame_support::traits::PalletsInfoAccess
+			for #pallet_ident<#type_use_gen>
+			#config_where_clause
+		{
+			fn count() -> usize { 1 }
+			fn accumulate(
+				acc: &mut #frame_support::sp_std::vec::Vec<#frame_support::traits::PalletInfoData>
+			) {
+				use #frame_support::traits::PalletInfoAccess;
+				let item = #frame_support::traits::PalletInfoData {
+					index: Self::index(),
+					name: Self::name(),
+					module_name: Self::module_name(),
+					crate_version: Self::crate_version(),
+				};
+				acc.push(item);
 			}
 		}
 

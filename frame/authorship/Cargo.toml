@@ -5,7 +5,7 @@ description = "Block and Uncle Author tracking for the FRAME"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
 	"derive",
 ] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-authorship = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authorship" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
@@ -31,6 +32,7 @@ sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"frame-support/std",

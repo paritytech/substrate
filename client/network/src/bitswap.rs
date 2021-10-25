@@ -190,7 +190,7 @@ pub struct Bitswap<B> {
 impl<B: BlockT> Bitswap<B> {
 	/// Create a new instance of the bitswap protocol handler.
 	pub fn new(client: Arc<dyn Client<B>>) -> Self {
-		Bitswap { client, ready_blocks: Default::default() }
+		Self { client, ready_blocks: Default::default() }
 	}
 }
 
@@ -305,7 +305,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 	>{
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-				peer_id: peer_id.clone(),
+				peer_id,
 				handler: NotifyHandler::Any,
 				event: message,
 			})

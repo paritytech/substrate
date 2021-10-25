@@ -6,7 +6,7 @@ description = "Patricia trie stuff using a parity-scale-codec node format"
 repository = "https://github.com/paritytech/substrate/"
 license = "Apache-2.0"
 edition = "2018"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 documentation = "https://docs.rs/sp-trie"
 readme = "README.md"
 
@@ -19,6 +19,7 @@ harness = false
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.22.6", default-features = false }
@@ -30,7 +31,7 @@ sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
 trie-bench = "0.28.0"
 trie-standardmap = "0.15.2"
 criterion = "0.3.3"
-hex-literal = "0.3.1"
+hex-literal = "0.3.3"
 sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
 
 [features]
@@ -38,6 +39,7 @@ default = ["std"]
 std = [
 	"sp-std/std",
 	"codec/std",
+	"scale-info/std",
 	"hash-db/std",
 	"memory-db/std",
 	"trie-db/std",

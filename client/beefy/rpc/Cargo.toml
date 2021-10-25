@@ -1,0 +1,26 @@
+[package]
+name = "beefy-gadget-rpc"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+
+[dependencies]
+futures = "0.3.16"
+log = "0.4"
+serde = { version = "1.0.130", features = ["derive"] }
+
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-derive = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
+
+codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
+
+sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
+
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+
+beefy-gadget = { version = "4.0.0-dev", path = "../." }
+beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }

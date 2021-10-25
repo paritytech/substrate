@@ -72,7 +72,7 @@ struct Config {
 impl Config {
 	/// Create a new [`LightClientRequestSender`] configuration.
 	pub fn new(id: &ProtocolId) -> Self {
-		Config {
+		Self {
 			max_pending_requests: 128,
 			light_protocol: super::generate_protocol_name(id),
 			block_protocol: crate::block_request_handler::generate_protocol_name(id),
@@ -112,7 +112,7 @@ struct PendingRequest<B: Block> {
 
 impl<B: Block> PendingRequest<B> {
 	fn new(req: Request<B>) -> Self {
-		PendingRequest {
+		Self {
 			// Number of retries + one for the initial attempt.
 			attempts_left: req.retries() + 1,
 			request: req,
@@ -153,7 +153,7 @@ where
 		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
-		LightClientRequestSender {
+		Self {
 			config: Config::new(id),
 			checker,
 			peers: Default::default(),

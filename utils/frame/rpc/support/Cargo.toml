@@ -7,7 +7,7 @@ authors = [
 ]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate RPC for FRAME's support"
 
@@ -25,4 +25,5 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
+scale-info = "1.0"
 tokio = "1.10"

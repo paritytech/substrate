@@ -84,14 +84,14 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					bob().into(),
-					69 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 69 * DOLLARS,
+				}),
 			},
 		],
 		(time / SLOT_DURATION).into(),
@@ -111,14 +111,14 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time1)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time1 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					bob().into(),
-					69 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 69 * DOLLARS,
+				}),
 			},
 		],
 		(time1 / SLOT_DURATION).into(),
@@ -131,21 +131,21 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time2)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time2 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((bob(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					alice().into(),
-					5 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: alice().into(),
+					value: 5 * DOLLARS,
+				}),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(1, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(
-					bob().into(),
-					15 * DOLLARS,
-				)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 15 * DOLLARS,
+				}),
 			},
 		],
 		(time2 / SLOT_DURATION).into(),
@@ -166,11 +166,11 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(nonce, 0))),
-				function: Call::System(frame_system::Call::remark(vec![0; size])),
+				function: Call::System(frame_system::Call::remark { remark: vec![0; size] }),
 			},
 		],
 		(time * 1000 / SLOT_DURATION).into(),
@@ -357,7 +357,7 @@ fn full_native_block_import_works() {
 	let mut fees = t.execute_with(|| transfer_fee(&xt()));
 
 	let transfer_weight = default_transfer_call().get_dispatch_info().weight;
-	let timestamp_weight = pallet_timestamp::Call::set::<Runtime>(Default::default())
+	let timestamp_weight = pallet_timestamp::Call::set::<Runtime> { now: Default::default() }
 		.get_dispatch_info()
 		.weight;
 
@@ -387,10 +387,23 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Withdraw(alice().into(), fees)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Transfer(
 					alice().into(),
 					bob().into(),
 					69 * DOLLARS,
+				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Deposit(
+					pallet_treasury::Pallet::<Runtime>::account_id(),
+					fees * 8 / 10,
 				)),
 				topics: vec![],
 			},
@@ -441,10 +454,23 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Withdraw(bob().into(), fees)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Transfer(
 					bob().into(),
 					alice().into(),
 					5 * DOLLARS,
+				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::Balances(pallet_balances::Event::Deposit(
+					pallet_treasury::Pallet::<Runtime>::account_id(),
+					fees * 8 / 10,
 				)),
 				topics: vec![],
 			},
@@ -463,10 +489,23 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
+				event: Event::Balances(pallet_balances::Event::Withdraw(alice().into(), fees)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
 				event: Event::Balances(pallet_balances::Event::Transfer(
 					alice().into(),
 					bob().into(),
 					15 * DOLLARS,
+				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
+				event: Event::Balances(pallet_balances::Event::Deposit(
+					pallet_treasury::Pallet::<Runtime>::account_id(),
+					fees * 8 / 10,
 				)),
 				topics: vec![],
 			},
@@ -646,28 +685,28 @@ fn deploying_wasm_contract_should_work() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::instantiate_with_code::<Runtime>(
-						1000 * DOLLARS + subsistence,
-						500_000_000,
-						transfer_code,
-						Vec::new(),
-						Vec::new(),
-					),
+					pallet_contracts::Call::instantiate_with_code::<Runtime> {
+						endowment: 1000 * DOLLARS + subsistence,
+						gas_limit: 500_000_000,
+						code: transfer_code,
+						data: Vec::new(),
+						salt: Vec::new(),
+					},
 				),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::Contracts(pallet_contracts::Call::call::<Runtime>(
-					sp_runtime::MultiAddress::Id(addr.clone()),
-					10,
-					500_000_000,
-					vec![0x00, 0x01, 0x02, 0x03],
-				)),
+				function: Call::Contracts(pallet_contracts::Call::call::<Runtime> {
+					dest: sp_runtime::MultiAddress::Id(addr.clone()),
+					value: 10,
+					gas_limit: 500_000_000,
+					data: vec![0x00, 0x01, 0x02, 0x03],
+				}),
 			},
 		],
 		(time / SLOT_DURATION).into(),

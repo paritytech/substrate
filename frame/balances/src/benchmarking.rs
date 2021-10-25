@@ -21,9 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -195,10 +193,30 @@ benchmarks_instance_pallet! {
 		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
 	}
-}
 
-impl_benchmark_test_suite!(
-	Balances,
-	crate::tests_composite::ExtBuilder::default().build(),
-	crate::tests_composite::Test,
-);
+	force_unreserve {
+		let user: T::AccountId = account("user", 0, SEED);
+		let user_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(user.clone());
+
+		// Give some multiple of the existential deposit
+		let existential_deposit = T::ExistentialDeposit::get();
+		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&user, balance);
+
+		// Reserve the balance
+		<Balances<T, I> as ReservableCurrency<_>>::reserve(&user, balance)?;
+		assert_eq!(Balances::<T, I>::reserved_balance(&user), balance);
+		assert!(Balances::<T, I>::free_balance(&user).is_zero());
+
+	}: _(RawOrigin::Root, user_lookup, balance)
+	verify {
+		assert!(Balances::<T, I>::reserved_balance(&user).is_zero());
+		assert_eq!(Balances::<T, I>::free_balance(&user), balance);
+	}
+
+	impl_benchmark_test_suite!(
+		Balances,
+		crate::tests_composite::ExtBuilder::default().build(),
+		crate::tests_composite::Test,
+	)
+}

@@ -1,0 +1,23 @@
+[package]
+name = "beefy-merkle-tree"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "A no-std/Substrate compatible library to construct binary merkle tree."
+
+[dependencies]
+hex = { version = "0.4", optional = true, default-features = false }
+log = { version = "0.4", optional = true, default-features = false }
+tiny-keccak = { version = "2.0.2", features = ["keccak"], optional = true }
+
+[dev-dependencies]
+env_logger = "0.9"
+hex = "0.4"
+hex-literal = "0.3"
+
+[features]
+debug = ["hex", "log"]
+default = ["std", "debug", "keccak"]
+keccak = ["tiny-keccak"]
+std = []

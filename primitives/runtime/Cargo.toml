@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Runtime Modules shared primitive types."
 documentation = "https://docs.rs/sp-runtime"
@@ -17,6 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.126", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../application-crypto" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../arithmetic" }
@@ -31,7 +32,7 @@ hash256-std-hasher = { version = "0.15.2", default-features = false }
 either = { version = "1.5", default-features = false }
 
 [dev-dependencies]
-serde_json = "1.0.41"
+serde_json = "1.0.68"
 rand = "0.7.2"
 sp-state-machine = { version = "0.10.0-dev", path = "../state-machine" }
 sp-api = { version = "4.0.0-dev", path = "../api" }
@@ -46,6 +47,7 @@ std = [
 	"sp-application-crypto/std",
 	"sp-arithmetic/std",
 	"codec/std",
+	"scale-info/std",
 	"log/std",
 	"sp-core/std",
 	"rand",

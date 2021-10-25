@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Support code for the runtime."
 readme = "README.md"
@@ -15,7 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.126", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
-frame-metadata = { version = "14.0.0-dev", default-features = false, path = "../metadata" }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+frame-metadata = { version = "14.0.0", default-features = false, features = ["v14"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
@@ -30,11 +31,12 @@ once_cell = { version = "1", default-features = false, optional = true }
 sp-state-machine = { version = "0.10.0-dev", optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.3"
 impl-trait-for-tuples = "0.2.1"
-smallvec = "1.4.1"
+smallvec = "1.7.0"
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-pretty_assertions = "0.6.1"
+assert_matches = "1.3.0"
+pretty_assertions = "1.0.0"
 frame-system = { version = "4.0.0-dev", path = "../system" }
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 
@@ -45,6 +47,7 @@ std = [
 	"serde",
 	"sp-io/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"sp-tracing/std",

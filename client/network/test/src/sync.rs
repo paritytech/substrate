@@ -616,9 +616,10 @@ fn syncs_header_only_forks() {
 	let small_hash = net.peer(0).client().info().best_hash;
 	net.peer(1).push_blocks(4, false);
 
-	net.block_until_sync();
 	// Peer 1 will sync the small fork even though common block state is missing
-	assert!(net.peer(1).has_block(&small_hash));
+	while !net.peer(1).has_block(&small_hash) {
+		net.block_until_idle();
+	}
 }
 
 #[test]
@@ -855,12 +856,19 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	net.block_until_idle();
 
 	// Connect another node that should now sync to the tip
-	net.add_full_peer_with_config(Default::default());
-	net.block_until_connected();
+	net.add_full_peer_with_config(FullPeerConfig {
+		connect_to_peers: Some(vec![0]),
+		..Default::default()
+	});
 
-	while !net.peer(2).has_block(&block_hash) {
-		net.block_until_idle();
-	}
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(2).has_block(&block_hash) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}));
 
 	// However peer 1 should still not have the block.
 	assert!(!net.peer(1).has_block(&block_hash));
@@ -1192,4 +1200,65 @@ fn syncs_indexed_blocks() {
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_some());
+}
+
+#[test]
+fn warp_sync() {
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(0);
+	// Create 3 synced peers and 1 peer trying to warp sync.
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig {
+		sync_mode: SyncMode::Warp,
+		..Default::default()
+	});
+	let gap_end = net.peer(0).push_blocks(63, false);
+	net.peer(0).push_blocks(1, false);
+	net.peer(1).push_blocks(64, false);
+	net.peer(2).push_blocks(64, false);
+	// Wait for peer 1 to sync state.
+	net.block_until_sync();
+	assert!(!net.peer(3).client().has_state_at(&BlockId::Number(1)));
+	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
+
+	// Wait for peer 1 download block history
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(3).has_block(&gap_end) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}));
+}
+
+#[test]
+fn syncs_huge_blocks() {
+	use sp_core::storage::well_known_keys::HEAP_PAGES;
+	use sp_runtime::codec::Encode;
+	use substrate_test_runtime_client::BlockBuilderExt;
+
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(2);
+
+	// Increase heap space for bigger blocks.
+	net.peer(0).generate_blocks(1, BlockOrigin::Own, |mut builder| {
+		builder.push_storage_change(HEAP_PAGES.to_vec(), Some(256u64.encode())).unwrap();
+		builder.build().unwrap().block
+	});
+
+	net.peer(0).generate_blocks(32, BlockOrigin::Own, |mut builder| {
+		// Add 32 extrinsics 32k each = 1MiB total
+		for _ in 0..32 {
+			let ex = Extrinsic::IncludeData([42u8; 32 * 1024].to_vec());
+			builder.push(ex).unwrap();
+		}
+		builder.build().unwrap().block
+	});
+
+	net.block_until_sync();
+	assert_eq!(net.peer(0).client.info().best_number, 33);
+	assert_eq!(net.peer(1).client.info().best_number, 33);
 }

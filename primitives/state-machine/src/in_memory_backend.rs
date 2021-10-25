@@ -74,8 +74,9 @@ where
 
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
-		self.backend_storage_mut().consolidate(transaction);
-		self.essence.set_root(root);
+		let mut storage = sp_std::mem::take(self).into_storage();
+		storage.consolidate(transaction);
+		*self = TrieBackend::new(storage, root);
 	}
 
 	/// Compare with another in-memory backend.

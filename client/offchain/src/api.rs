@@ -32,13 +32,7 @@ use sp_core::{
 };
 pub use sp_offchain::STORAGE_PREFIX;
 
-#[cfg(not(target_os = "unknown"))]
 mod http;
-
-#[cfg(target_os = "unknown")]
-use http_dummy as http;
-#[cfg(target_os = "unknown")]
-mod http_dummy;
 
 mod timestamp;
 
