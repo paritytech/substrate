@@ -19,7 +19,7 @@
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	storage::generator::StorageMap,
-	traits::{Get, PalletInfo},
+	traits::{Get, PalletInfoAccess},
 };
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::traits::Block as BlockT;
@@ -34,11 +34,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
-			pallets: vec![<Runtime as frame_system::Config>::PalletInfo::name::<
-				pallet_bags_list::Pallet<Runtime>,
-			>()
-			.expect("Pallet always has name; qed.")
-			.to_string()],
+			pallets: vec![pallet_bags_list::Pallet<Runtime>::name().to_string()],
 			at: None,
 			state_snapshot: None,
 		}))

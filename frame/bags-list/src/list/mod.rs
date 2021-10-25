@@ -745,7 +745,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// Get the underlying voter.
-	pub fn id(&self) -> &T::AccountId {
+	pub(crate) fn id(&self) -> &T::AccountId {
 		&self.id
 	}
 

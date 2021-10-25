@@ -16,7 +16,7 @@
 
 //! Test to execute the snapshot using the voter bag.
 
-use frame_support::traits::PalletInfo;
+use frame_support::traits::PalletInfoAccess;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::traits::Block as BlockT;
 
@@ -32,11 +32,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
 			transport: ws_url.to_string().into(),
 			// NOTE: we don't scrape pallet-staking, this kinda ensures that the source of the data
 			// is bags-list.
-			pallets: vec![<Runtime as frame_system::Config>::PalletInfo::name::<
-				pallet_bags_list::Pallet<Runtime>,
-			>()
-			.expect("Pallet always has name; qed.")
-			.to_string()],
+			pallets: vec![pallet_bags_list::Pallet<Runtime>::name().to_string()],
 			at: None,
 			state_snapshot: None,
 		}))

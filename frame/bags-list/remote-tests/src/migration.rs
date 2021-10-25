@@ -18,7 +18,7 @@
 
 use crate::{RuntimeT, LOG_TARGET};
 use frame_election_provider_support::SortedListProvider;
-use frame_support::{storage::generator::StorageMap, traits::PalletInfo};
+use frame_support::{storage::generator::StorageMap, traits::PalletInfoAccess};
 use pallet_staking::Nominators;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::traits::Block as BlockT;
@@ -33,11 +33,7 @@ pub async fn execute<Runtime: RuntimeT, Block: BlockT>(
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
-			pallets: vec![<Runtime as frame_system::Config>::PalletInfo::name::<
-				pallet_staking::Pallet<Runtime>,
-			>()
-			.expect("Pallet always has name; qed.")
-			.to_string()],
+			pallets: vec![pallet_staking::Pallet<Runtime>::name().to_string()],
 			at: None,
 			state_snapshot: None,
 		}))
