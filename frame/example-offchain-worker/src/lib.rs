@@ -86,8 +86,7 @@ pub mod crypto {
 	use sp_runtime::{
 		app_crypto::{app_crypto, sr25519},
 		traits::Verify,
-		MultiSigner,
-		MultiSignature,
+		MultiSigner, MultiSignature,
 	};
 	app_crypto!(sr25519, KEY_TYPE);
 
@@ -98,7 +97,7 @@ pub mod crypto {
 		type GenericSignature = sp_core::sr25519::Signature;
 		type GenericPublic = sp_core::sr25519::Public;
 	}
-	
+
 	// implemented for mock runtime in test
 	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
 		for TestAuthId
