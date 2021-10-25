@@ -202,7 +202,7 @@
 		{
 			"prefix": 21,
 			"network": "dock-testnet",
-			"displayName": "Dock Testnet",
+			"displayName": "Dock POA Testnet",
 			"symbols": ["DCK"],
 			"decimals": [6],
 			"standardAccount": "*25519",
@@ -211,6 +211,24 @@
 		{
 			"prefix": 22,
 			"network": "dock-mainnet",
+			"displayName": "Dock POA Mainnet",
+			"symbols": ["DCK"],
+			"decimals": [6],
+			"standardAccount": "*25519",
+			"website": "https://dock.io"
+		},
+		{
+			"prefix": 21,
+			"network": "dock-pos-testnet",
+			"displayName": "Dock Testnet",
+			"symbols": ["DCK"],
+			"decimals": [6],
+			"standardAccount": "*25519",
+			"website": "https://dock.io"
+		},
+		{
+			"prefix": 22,
+			"network": "dock-pos-mainnet",
 			"displayName": "Dock Mainnet",
 			"symbols": ["DCK"],
 			"decimals": [6],
