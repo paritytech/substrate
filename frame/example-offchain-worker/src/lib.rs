@@ -86,7 +86,7 @@ pub mod crypto {
 	use sp_runtime::{
 		app_crypto::{app_crypto, sr25519},
 		traits::Verify,
-		MultiSigner, MultiSignature,
+		MultiSignature, MultiSigner,
 	};
 	app_crypto!(sr25519, KEY_TYPE);
 
