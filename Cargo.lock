@@ -4104,6 +4104,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "memory-db"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d505169b746dacf02f7d14d8c80b34edfd8212159c63d23c977739a0d960c626"
+dependencies = [
+ "hash-db",
+ "hashbrown 0.11.2",
+ "parity-util-mem",
+]
+
+[[package]]
 name = "memory_units"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9714,7 +9725,7 @@ dependencies = [
  "criterion",
  "hash-db",
  "hex-literal",
- "memory-db",
+ "memory-db 0.28.0",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -10014,7 +10025,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "futures 0.3.16",
  "log 0.4.14",
- "memory-db",
+ "memory-db 0.28.0",
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
@@ -10678,7 +10689,7 @@ dependencies = [
  "criterion",
  "hash-db",
  "keccak-hasher",
- "memory-db",
+ "memory-db 0.27.0",
  "parity-scale-codec",
  "trie-db",
  "trie-root",
