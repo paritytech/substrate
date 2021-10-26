@@ -314,7 +314,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().monied(true).build().execute_with(|| {
 				assert_eq!(Balances::total_balance(&1), 10);
 				assert_ok!(Balances::deposit_into_existing(&1, 10).map(drop));
-				System::assert_last_event(Event::Balances(crate::Event::Deposit(1, 10)));
+				System::assert_last_event(Event::Balances(crate::Event::Deposit{who: 1, deposit: 10}));
 				assert_eq!(Balances::total_balance(&1), 20);
 				assert_eq!(<TotalIssuance<$test>>::get(), 120);
 			});
@@ -342,7 +342,7 @@ macro_rules! decl_tests {
 		fn balance_works() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 42);
-				System::assert_has_event(Event::Balances(crate::Event::Deposit(1, 42)));
+				System::assert_has_event(Event::Balances(crate::Event::Deposit{who: 1, deposit: 42}));
 				assert_eq!(Balances::free_balance(1), 42);
 				assert_eq!(Balances::reserved_balance(1), 0);
 				assert_eq!(Balances::total_balance(&1), 42);

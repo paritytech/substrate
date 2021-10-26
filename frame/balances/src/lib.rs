@@ -1109,7 +1109,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			Ok(())
 		})?;
 		TotalIssuance::<T, I>::mutate(|t| *t += amount);
-		Self::deposit_event(Event::Deposit(who.clone(), amount));
+		Self::deposit_event(Event::Deposit{who: who.clone(), deposit: amount});
 		Ok(())
 	}
 
@@ -1130,7 +1130,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			},
 		)?;
 		TotalIssuance::<T, I>::mutate(|t| *t -= actual);
-		Self::deposit_event(Event::Withdraw(who.clone(), amount));
+		Self::deposit_event(Event::Withdraw{who: who.clone(), amount});
 		Ok(actual)
 	}
 }
@@ -1151,7 +1151,7 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		Self::mutate_account(who, |account| {
 			account.free = amount;
-			Self::deposit_event(Event::BalanceSet(who.clone(), account.free, account.reserved));
+			Self::deposit_event(Event::BalanceSet{who: who.clone(), free: account.free, reserved: account.reserved});
 		})?;
 		Ok(())
 	}
@@ -1625,7 +1625,7 @@ where
 			|account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
 				ensure!(!is_new, Error::<T, I>::DeadAccount);
 				account.free = account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
-				Self::deposit_event(Event::Deposit(who.clone(), value));
+				Self::deposit_event(Event::Deposit{who: who.clone(), deposit: value});
 				Ok(PositiveImbalance::new(value))
 			},
 		)
@@ -1658,7 +1658,7 @@ where
 					None => return Ok(Self::PositiveImbalance::zero()),
 				};
 
-				Self::deposit_event(Event::Deposit(who.clone(), value));
+				Self::deposit_event(Event::Deposit{who: who.clone(), deposit: value});
 				Ok(PositiveImbalance::new(value))
 			},
 		)
@@ -1696,7 +1696,7 @@ where
 
 				account.free = new_free_account;
 
-				Self::deposit_event(Event::Withdraw(who.clone(), value));
+				Self::deposit_event(Event::Withdraw{who: who.clone(), amount: value});
 				Ok(NegativeImbalance::new(value))
 			},
 		)
@@ -1729,7 +1729,7 @@ where
 					SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
 				};
 				account.free = value;
-				Self::deposit_event(Event::BalanceSet(who.clone(), account.free, account.reserved));
+				Self::deposit_event(Event::BalanceSet{who: who.clone(), free: account.free, reserved: account.reserved});
 				Ok(imbalance)
 			},
 		)

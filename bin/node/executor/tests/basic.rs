@@ -387,24 +387,24 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Withdraw(alice().into(), fees)),
+				event: Event::Balances(pallet_balances::Event::Withdraw{who: alice().into(), amount: fees}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Transfer(
-					alice().into(),
-					bob().into(),
-					69 * DOLLARS,
-				)),
+				event: Event::Balances(pallet_balances::Event::Transfer{
+					from: alice().into(),
+					to: bob().into(),
+					value: 69 * DOLLARS,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Deposit(
-					pallet_treasury::Pallet::<Runtime>::account_id(),
-					fees * 8 / 10,
-				)),
+				event: Event::Balances(pallet_balances::Event::Deposit{
+					who: pallet_treasury::Pallet::<Runtime>::account_id(),
+					deposit: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
@@ -454,24 +454,24 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Withdraw(bob().into(), fees)),
+				event: Event::Balances(pallet_balances::Event::Withdraw{who: bob().into(), amount: fees}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Transfer(
-					bob().into(),
-					alice().into(),
-					5 * DOLLARS,
-				)),
+				event: Event::Balances(pallet_balances::Event::Transfer{
+					from: bob().into(),
+					to: alice().into(),
+					value: 5 * DOLLARS,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Deposit(
-					pallet_treasury::Pallet::<Runtime>::account_id(),
-					fees * 8 / 10,
-				)),
+				event: Event::Balances(pallet_balances::Event::Deposit{
+					who: pallet_treasury::Pallet::<Runtime>::account_id(),
+					deposit: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
@@ -489,24 +489,24 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(pallet_balances::Event::Withdraw(alice().into(), fees)),
+				event: Event::Balances(pallet_balances::Event::Withdraw{who: alice().into(), amount: fees}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(pallet_balances::Event::Transfer(
-					alice().into(),
-					bob().into(),
-					15 * DOLLARS,
-				)),
+				event: Event::Balances(pallet_balances::Event::Transfer{
+					from: alice().into(),
+					to: bob().into(),
+					value: 15 * DOLLARS,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(pallet_balances::Event::Deposit(
-					pallet_treasury::Pallet::<Runtime>::account_id(),
-					fees * 8 / 10,
-				)),
+				event: Event::Balances(pallet_balances::Event::Deposit{
+					who: pallet_treasury::Pallet::<Runtime>::account_id(),
+					deposit: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {

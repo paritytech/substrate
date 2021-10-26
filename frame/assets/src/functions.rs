@@ -599,7 +599,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		)?;
 		Asset::<T, I>::insert(id, d);
-		Self::deposit_event(Event::ApprovedTransfer(id, owner.clone(), delegate.clone(), amount));
+		Self::deposit_event(Event::ApprovedTransfer{asset_id: id, source: owner.clone(), delegate: delegate.clone(), amount});
 
 		Ok(())
 	}
@@ -683,7 +683,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				is_frozen: false,
 			});
 
-			Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, false));
+			Self::deposit_event(Event::MetadataSet{asset_id: id, name, symbol, decimals, is_frozen: false});
 			Ok(())
 		})
 	}
