@@ -18,7 +18,7 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
-use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen};
+use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::prelude::*;
@@ -390,6 +390,7 @@ impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for 
 pub struct WrapperOpaque<T>(pub T);
 
 impl<T: Encode> EncodeLike for WrapperOpaque<T> {}
+impl<T: Encode> EncodeLike<WrapperKeepOpaque<T>> for WrapperOpaque<T> {}
 
 impl<T: Encode> Encode for WrapperOpaque<T> {
 	fn size_hint(&self) -> usize {
@@ -456,6 +457,93 @@ impl<T: TypeInfo + 'static> TypeInfo for WrapperOpaque<T> {
 	}
 }
 
+/// A wrapper for any type `T` which implement encode/decode in a way compatible with `Vec<u8>`.
+///
+/// This type is similar to [`WrapperOpaque`], but it differs in the way it stores the type `T`.
+/// While [`WrapperOpaque`] stores the decoded type, the [`WrapperKeepOpaque`] stores the type only
+/// in its opaque format, aka as a `Vec<u8>`. To access the real type `T` [`Self::try_decode`] needs
+/// to be used.
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
+pub struct WrapperKeepOpaque<T> {
+	data: Vec<u8>,
+	_phantom: sp_std::marker::PhantomData<T>,
+}
+
+impl<T: Decode> WrapperKeepOpaque<T> {
+	/// Try to decode the wrapped type from the inner `data`.
+	///
+	/// Returns `None` if the decoding failed.
+	pub fn try_decode(&self) -> Option<T> {
+		T::decode_all(&mut &self.data[..]).ok()
+	}
+
+	/// Returns the length of the encoded `T`.
+	pub fn encoded_len(&self) -> usize {
+		self.data.len()
+	}
+
+	/// Returns the encoded data.
+	pub fn encoded(&self) -> &[u8] {
+		&self.data
+	}
+
+	/// Create from the given encoded `data`.
+	pub fn from_encoded(data: Vec<u8>) -> Self {
+		Self { data, _phantom: sp_std::marker::PhantomData }
+	}
+}
+
+impl<T: Encode> EncodeLike for WrapperKeepOpaque<T> {}
+impl<T: Encode> EncodeLike<WrapperOpaque<T>> for WrapperKeepOpaque<T> {}
+
+impl<T: Encode> Encode for WrapperKeepOpaque<T> {
+	fn size_hint(&self) -> usize {
+		self.data.len() + codec::Compact::<u32>::compact_len(&(self.data.len() as u32))
+	}
+
+	fn encode_to<O: codec::Output + ?Sized>(&self, dest: &mut O) {
+		self.data.encode_to(dest);
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		self.data.encode()
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.data.using_encoded(f)
+	}
+}
+
+impl<T: Decode> Decode for WrapperKeepOpaque<T> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Ok(Self { data: Vec::<u8>::decode(input)?, _phantom: sp_std::marker::PhantomData })
+	}
+
+	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
+		<Vec<u8>>::skip(input)
+	}
+}
+
+impl<T: MaxEncodedLen> MaxEncodedLen for WrapperKeepOpaque<T> {
+	fn max_encoded_len() -> usize {
+		WrapperOpaque::<T>::max_encoded_len()
+	}
+}
+
+impl<T: TypeInfo + 'static> TypeInfo for WrapperKeepOpaque<T> {
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("WrapperKeepOpaque", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<T>()))])
+			.composite(
+				Fields::unnamed()
+					.field(|f| f.compact::<u32>())
+					.field(|f| f.ty::<T>().type_name("T")),
+			)
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -487,5 +575,18 @@ mod test {
 			2usize.pow(14) - 1 + 2
 		);
 		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
+	}
+
+	#[test]
+	fn test_keep_opaque_wrapper() {
+		let data = 3u32.encode().encode();
+
+		let keep_opaque = WrapperKeepOpaque::<u32>::decode(&mut &data[..]).unwrap();
+		keep_opaque.try_decode().unwrap();
+
+		let data = WrapperOpaque(50u32).encode();
+		let decoded = WrapperKeepOpaque::<u32>::decode(&mut &data[..]).unwrap();
+		let data = decoded.encode();
+		WrapperOpaque::<u32>::decode(&mut &data[..]).unwrap();
 	}
 }
