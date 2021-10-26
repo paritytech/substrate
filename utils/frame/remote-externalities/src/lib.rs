@@ -46,7 +46,8 @@ type ChildKeyPairs = Vec<(ChildInfo, Vec<KeyPair>)>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
-const BATCH_SIZE: usize = 1000;
+const BATCH_SIZE: usize = 512;
+const PAGE: u32 = BATCH_SIZE as u32;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
@@ -266,7 +267,6 @@ impl<B: BlockT> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
-		const PAGE: u32 = 512;
 		let mut last_key: Option<StorageKey> = None;
 		let mut all_keys: Vec<StorageKey> = vec![];
 		let keys = loop {
@@ -318,7 +318,7 @@ impl<B: BlockT> Builder<B> {
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
-		debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
+		debug!(target: LOG_TARGET, "Querying a total of {} top keys", keys.len());
 
 		let mut key_values: Vec<KeyPair> = vec![];
 		let client = self.as_online().rpc_client();
@@ -336,16 +336,40 @@ impl<B: BlockT> Builder<B> {
 					)
 				})
 				.collect::<Vec<_>>();
-			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
-				log::error!(
-					target: LOG_TARGET,
-					"failed to execute batch: {:?}. Error: {:?}",
-					chunk_keys.iter().map(|k| HexDisplay::from(k)),
-					e
-				);
-				"batch failed."
-			})?;
+
+			// TODO: Niklas: this code works, but the below batch does not work ONLY on kusama..
+			// weird stuff.
+			// try it out with:  test -- --release -p remote-externalities --features remote-test
+			// can_build_one_small_pallet, it should work without any requirements.
+			let mut values = vec![];
+			for (method, params) in batch {
+				let value = client
+					.request::<Option<StorageData>>(method, params.clone())
+					.await
+					.map_err(|e| {
+						log::error!(
+							target: LOG_TARGET,
+							"failed to decode key: {:?}. Error: {:?}",
+							params,
+							e
+						);
+					})
+					.unwrap_or_default();
+				values.push(value);
+			}
+
+			// let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
+			// 	log::error!(
+			// 		target: LOG_TARGET,
+			// 		"failed to execute batch: {:?}. Error: {:?}",
+			// 		chunk_keys.iter().map(|k| HexDisplay::from(k)).collect::<Vec<_>>(),
+			// 		e
+			// 	);
+			// 	"batch failed."
+			// })?;
+
 			assert_eq!(chunk_keys.len(), values.len());
+
 			for (idx, key) in chunk_keys.into_iter().enumerate() {
 				let maybe_value = values[idx].clone();
 				let value = maybe_value.unwrap_or_else(|| {
@@ -777,7 +801,7 @@ mod remote_tests {
 	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
-	async fn can_build_one_pallet() {
+	async fn can_build_one_big_pallet() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
@@ -791,10 +815,48 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
+	async fn can_build_one_small_pallet() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
+				pallets: vec!["Council".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://rpc.polkadot.io".to_owned().into(),
+				pallets: vec!["Council".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+	}
+
+	#[tokio::test]
 	async fn can_build_few_pallet() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
+				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://rpc.polkadot.io".to_owned().into(),
 				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
 				..Default::default()
 			}))
@@ -851,8 +913,6 @@ mod remote_tests {
 				pallets: vec!["Crowdloan".to_owned()],
 				..Default::default()
 			}))
-			// get all the child tries.
-			.inject_hashed_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
 			.build()
 			.await
 			.expect(REMOTE_INACCESSIBLE)
