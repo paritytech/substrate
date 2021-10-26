@@ -31,10 +31,10 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           toolchain: nightly
-          command: build
-          args: --release --tests -j1
+          command: test
+          args: -j1 --no-run
       - name: Run UT
         uses: actions-rs/cargo@v1
         with:
           toolchain: nightly
-          command: --release test
+          command: test

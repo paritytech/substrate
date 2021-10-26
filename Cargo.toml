@@ -1,3 +1,6 @@
+[profile.dev]
+debug = 0
+
 [workspace]
 members = [
 	# "bin/node-template/node",
