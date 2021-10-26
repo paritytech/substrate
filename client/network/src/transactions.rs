@@ -317,10 +317,15 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				}
 			},
 			Event::SyncDisconnected { remote } => {
-				self.service.remove_peers_from_reserved_set(
+				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
+					.collect::<multiaddr::Multiaddr>();
+				let result = self.service.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
-					iter::once(remote).collect(),
+					iter::once(addr).collect(),
 				);
+				if let Err(err) = result {
+					log::error!(target: "sync", "Removing reserved peer failed: {}", err);
+				}
 			},
 
 			Event::NotificationStreamOpened { remote, protocol, role, .. }
