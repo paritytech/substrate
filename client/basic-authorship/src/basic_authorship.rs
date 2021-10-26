@@ -265,6 +265,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			debug!(target:"basic_authorship", "aes_key {:?}", aes_key); 
 			let decrypted_inherents = singly_encrypted_txs.into_iter().map(|tx| {
 				log::trace!(target:"basic_authorship", "decrypting singly encrypted call INPUT : {:?}", tx.data);
+                println!("DECRYPTION KEY {:?}", aes_key);
 				let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
 				log::trace!(target:"basic_authorship", "decrypting singly encrypted call OUTPUT: {:?}", decrypted_msg);
 				api.create_submit_decrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg, 500000000).unwrap()
@@ -917,7 +918,7 @@ mod tests {
 				_ => { panic!("wrong extrinsic type") }
 			}).collect();
 
-		assert_eq!(HashSet::from([payload1, payload2].iter().collect()), decrypted_payloads);
+		assert_eq!([payload1, payload2].iter().collect::<HashSet<_>>(), decrypted_payloads);
 	}
 
 	#[test]
