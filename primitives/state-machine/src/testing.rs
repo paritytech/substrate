@@ -160,9 +160,18 @@ where
 		self.offchain_db.clone()
 	}
 
-	/// Insert key/value into backend
+	/// Insert key/value into backend.
+	///
+	/// This only supports inserting `top` keys.
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
 		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
+	}
+
+	/// Insert key/value into backend.
+	///
+	/// This only supports inserting `top` keys.
+	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
+		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])], self.state_version);
 	}
 
 	/// Registers the given extension for this instance.

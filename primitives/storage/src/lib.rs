@@ -168,10 +168,8 @@ pub struct StorageChild {
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
-	/// Children trie storage data.
-	/// The key does not including prefix, for the `default`
-	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
-	/// tries.
+	/// Children trie storage data. The key does not including prefix, for the `default` trie kind,
+	/// so this is exclusively for the `ChildType::ParentKeyId` tries.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
@@ -219,6 +217,10 @@ pub mod well_known_keys {
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
 
+	pub fn is_default_child_storage_key(key: &[u8]) -> bool {
+		key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+	}
+
 	/// Returns if the given `key` starts with [`CHILD_STORAGE_KEY_PREFIX`] or collides with it.
 	pub fn starts_with_child_storage_key(key: &[u8]) -> bool {
 		if key.len() > CHILD_STORAGE_KEY_PREFIX.len() {
@@ -234,7 +236,7 @@ pub const DEFAULT_MAX_INLINE_VALUE: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub enum ChildInfo {
 	/// This is the one used by default.
 	ParentKeyId(ChildTrieParentKeyId),
@@ -382,7 +384,7 @@ impl ChildType {
 /// Those unique id also required to be long enough to avoid any
 /// unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub struct ChildTrieParentKeyId {
 	/// Data is the storage key without prefix.
 	data: Vec<u8>,

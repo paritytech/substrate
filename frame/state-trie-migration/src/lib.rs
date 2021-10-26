@@ -96,9 +96,7 @@ pub mod pallet {
 		offchain::{SendTransactionTypes, SubmitTransaction},
 		pallet_prelude::*,
 	};
-	use sp_core::storage::well_known_keys::{
-		CHILD_STORAGE_KEY_PREFIX, DEFAULT_CHILD_STORAGE_KEY_PREFIX,
-	};
+	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
 	use sp_runtime::{
 		offchain::storage::{MutateStorageError, StorageValueRef},
 		traits::{Bounded, Saturating},
@@ -159,13 +157,13 @@ pub mod pallet {
 		#[codec(skip)]
 		pub(crate) dyn_size: u32,
 
-		#[codec(skip)]
-		pub(crate) _ph: sp_std::marker::PhantomData<T>,
-
 		// TODO: I might remove these if they end up not being used.
 		pub(crate) size: u32,
 		pub(crate) top_items: u32,
 		pub(crate) child_items: u32,
+
+		#[codec(skip)]
+		pub(crate) _ph: sp_std::marker::PhantomData<T>,
 	}
 
 	#[cfg(feature = "std")]
@@ -854,7 +852,6 @@ mod mock {
 			testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
 			OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 		},
-		testing::Header,
 		traits::{BlakeTwo256, Dispatchable, Header as _, IdentityLookup},
 		StateVersion,
 	};
@@ -1154,8 +1151,7 @@ mod test {
 #[cfg(all(test, feature = "remote-tests"))]
 mod remote_tests {
 	use super::{mock::*, *};
-	use remote_externalities::Mode;
-	use sp_runtime::StateVersion;
+	use remote_externalities::{Mode, OnlineConfig};
 
 	// we only use the hash type from this (I hope).
 	type Block = sp_runtime::testing::Block<Extrinsic>;
@@ -1164,7 +1160,12 @@ mod remote_tests {
 	async fn on_initialize_migration() {
 		sp_tracing::try_init_simple();
 		let mut ext = remote_externalities::Builder::<Block>::new()
-			.mode(Mode::Online(std::env!("WS_API").to_owned().into()))
+			.mode(Mode::Online(OnlineConfig {
+				transport: std::env!("WS_API").to_owned().into(),
+				scrape_children: true,
+				..Default::default()
+			}))
+			.state_version(sp_core::StateVersion::V0)
 			.build()
 			.await
 			.unwrap();
@@ -1172,14 +1173,23 @@ mod remote_tests {
 		ext.execute_with(|| {
 			// requires the block number type in our tests to be same as with mainnet, u32.
 			let mut now = frame_system::Pallet::<Test>::block_number();
+			let mut duration = 0;
 			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }));
 			loop {
 				run_to_block(now + 1);
 				if StateTrieMigration::migration_process().finished() {
 					break
 				}
+				duration += 1;
 				now += 1;
 			}
+
+			log::info!(
+				target: LOG_TARGET,
+				"finished migration in {} block, final state of the task: {:?}",
+				duration,
+				StateTrieMigration::migration_process()
+			);
 		})
 	}
 }
