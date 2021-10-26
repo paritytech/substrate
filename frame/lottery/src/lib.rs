@@ -259,18 +259,18 @@ pub mod pallet {
 							LotteryIndex::<T>::mutate(|index| *index = index.saturating_add(1));
 							// Set a new start with the current block.
 							config.start = n;
-							return T::WeightInfo::on_initialize_repeat();
+							return T::WeightInfo::on_initialize_repeat()
 						} else {
 							// Else, kill the lottery storage.
 							*lottery = None;
-							return T::WeightInfo::on_initialize_end();
+							return T::WeightInfo::on_initialize_end()
 						}
 						// We choose not need to kill Participants and Tickets to avoid a large
 						// number of writes at one time. Instead, data persists between lotteries,
 						// but is not used if it is not relevant.
 					}
 				}
-				return T::DbWeight::get().reads(1);
+				return T::DbWeight::get().reads(1)
 			})
 		}
 	}
@@ -410,7 +410,7 @@ impl<T: Config> Pallet<T> {
 		if encoded_call.len() < 2 {
 			Err(Error::<T>::EncodingFailed)?
 		}
-		return Ok((encoded_call[0], encoded_call[1]));
+		return Ok((encoded_call[0], encoded_call[1]))
 	}
 
 	// Logic for buying a ticket.
@@ -464,7 +464,7 @@ impl<T: Config> Pallet<T> {
 		// Best effort attempt to remove bias from modulus operator.
 		for i in 1..T::MaxGenerateRandom::get() {
 			if random_number < u32::MAX - u32::MAX % total {
-				break;
+				break
 			}
 
 			random_number = Self::generate_random_number(i);

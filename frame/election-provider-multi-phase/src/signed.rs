@@ -275,12 +275,12 @@ impl<T: Config> SignedSubmissions<T> {
 				self.indices
 					.try_insert(submission.raw_solution.score, prev_idx)
 					.expect("didn't change the map size; qed");
-				return InsertResult::NotInserted;
-			}
+				return InsertResult::NotInserted
+			},
 			Ok(None) => {
 				// successfully inserted into the set; no need to take out weakest member
 				None
-			}
+			},
 			Err((insert_score, insert_idx)) => {
 				// could not insert into the set because it is full.
 				// note that we short-circuit return here in case the iteration produces `None`.
@@ -294,11 +294,11 @@ impl<T: Config> SignedSubmissions<T> {
 
 				// if we haven't improved on the weakest score, don't change anything.
 				if !is_score_better(insert_score, weakest_score, threshold) {
-					return InsertResult::NotInserted;
+					return InsertResult::NotInserted
 				}
 
 				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
-			}
+			},
 		};
 
 		// we've taken out the weakest, so update the storage map and the next index
@@ -382,13 +382,13 @@ impl<T: Config> Pallet<T> {
 
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
-					break;
-				}
+					break
+				},
 				Err(_) => {
 					Self::finalize_signed_phase_reject_solution(&who, deposit);
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_reject_solution());
-				}
+				},
 			}
 		}
 
@@ -429,7 +429,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::put(ready_solution);
 
 		// emit reward event
-		Self::deposit_event(crate::Event::Rewarded{account: who.clone(), value: reward});
+		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 
 		// unreserve deposit.
 		let _remaining = T::Currency::unreserve(who, deposit);
@@ -446,7 +446,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_reject_solution(who: &T::AccountId, deposit: BalanceOf<T>) {
-		Self::deposit_event(crate::Event::Slashed{account: who.clone(), value: deposit});
+		Self::deposit_event(crate::Event::Slashed { account: who.clone(), value: deposit });
 		let (negative_imbalance, _remaining) = T::Currency::slash_reserved(who, deposit);
 		debug_assert!(_remaining.is_zero());
 		T::SlashHandler::on_unbalanced(negative_imbalance);

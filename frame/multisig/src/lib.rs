@@ -297,7 +297,7 @@ pub mod pallet {
 						let post_info = Some(weight_used).into();
 						let error = err.error.into();
 						DispatchErrorWithPostInfo { post_info, error }
-					}
+					},
 					None => err,
 				})
 		}
@@ -535,7 +535,7 @@ impl<T: Config> Pallet<T> {
 				let call_hash = blake2_256(call.encoded());
 				let call_len = call.encoded_len();
 				(call_hash, call_len, Some(call), should_store)
-			}
+			},
 			CallOrHash::Hash(h) => (h, 0, None, false),
 		};
 

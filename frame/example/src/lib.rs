@@ -738,7 +738,7 @@ where
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
 		if len > 200 {
-			return InvalidTransaction::ExhaustsResources.into();
+			return InvalidTransaction::ExhaustsResources.into()
 		}
 
 		// check for `set_dummy`
@@ -749,7 +749,7 @@ where
 				let mut valid_tx = ValidTransaction::default();
 				valid_tx.priority = Bounded::max_value();
 				Ok(valid_tx)
-			}
+			},
 			_ => Ok(Default::default()),
 		}
 	}

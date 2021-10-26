@@ -107,7 +107,7 @@ where
 
 		if let Some(ref author) = author {
 			if !acc.insert((number.clone(), author.clone())) {
-				return Err("more than one uncle per number per author included");
+				return Err("more than one uncle per number per author included")
 			}
 		}
 
@@ -261,12 +261,12 @@ pub mod pallet {
 							existing_hashes.push(hash);
 
 							if new_uncles.len() == MAX_UNCLES {
-								break;
+								break
 							}
-						}
+						},
 						Err(_) => {
 							// skip this uncle
-						}
+						},
 					}
 				}
 			}
@@ -283,9 +283,8 @@ pub mod pallet {
 			_data: &InherentData,
 		) -> result::Result<(), Self::Error> {
 			match call {
-				Call::set_uncles { ref new_uncles } if new_uncles.len() > MAX_UNCLES => {
-					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
-				}
+				Call::set_uncles { ref new_uncles } if new_uncles.len() > MAX_UNCLES =>
+					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into())),
 				_ => Ok(()),
 			}
 		}
@@ -304,7 +303,7 @@ impl<T: Config> Pallet<T> {
 	pub fn author() -> T::AccountId {
 		// Check the memoized storage value.
 		if let Some(author) = <Author<T>>::get() {
-			return author;
+			return author
 		}
 
 		let digest = <frame_system::Pallet<T>>::digest();
@@ -361,30 +360,30 @@ impl<T: Config> Pallet<T> {
 		let hash = uncle.hash();
 
 		if uncle.number() < &One::one() {
-			return Err(Error::<T>::GenesisUncle.into());
+			return Err(Error::<T>::GenesisUncle.into())
 		}
 
 		if uncle.number() > &maximum_height {
-			return Err(Error::<T>::TooHighUncle.into());
+			return Err(Error::<T>::TooHighUncle.into())
 		}
 
 		{
 			let parent_number = uncle.number().clone() - One::one();
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
-				return Err(Error::<T>::InvalidUncleParent.into());
+				return Err(Error::<T>::InvalidUncleParent.into())
 			}
 		}
 
 		if uncle.number() < &minimum_height {
-			return Err(Error::<T>::OldUncle.into());
+			return Err(Error::<T>::OldUncle.into())
 		}
 
 		let duplicate = existing_uncles.into_iter().any(|h| *h == hash);
 		let in_chain = <frame_system::Pallet<T>>::block_hash(uncle.number()) == hash;
 
 		if duplicate || in_chain {
-			return Err(Error::<T>::UncleAlreadyIncluded.into());
+			return Err(Error::<T>::UncleAlreadyIncluded.into())
 		}
 
 		// check uncle validity.
@@ -483,7 +482,7 @@ mod tests {
 		{
 			for (id, data) in digests {
 				if id == TEST_ID {
-					return u64::decode(&mut &data[..]).ok();
+					return u64::decode(&mut &data[..]).ok()
 				}
 			}
 
@@ -507,10 +506,10 @@ mod tests {
 						Err(_) => return Err("wrong seal"),
 						Ok(a) => {
 							if a != author {
-								return Err("wrong author in seal");
+								return Err("wrong author in seal")
 							}
-							break;
-						}
+							break
+						},
 					}
 				}
 			}

@@ -2648,7 +2648,7 @@ mod tests {
 		fn index<P: 'static>() -> Option<usize> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some(0);
+				return Some(0)
 			}
 
 			None
@@ -2656,7 +2656,7 @@ mod tests {
 		fn name<P: 'static>() -> Option<&'static str> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some("Test");
+				return Some("Test")
 			}
 
 			None
@@ -2664,7 +2664,7 @@ mod tests {
 		fn module_name<P: 'static>() -> Option<&'static str> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some("tests");
+				return Some("tests")
 			}
 
 			None
@@ -2672,7 +2672,7 @@ mod tests {
 		fn crate_version<P: 'static>() -> Option<CrateVersion> {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some(frame_support::crate_to_crate_version!());
+				return Some(frame_support::crate_to_crate_version!())
 			}
 
 			None

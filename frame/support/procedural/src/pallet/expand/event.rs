@@ -55,7 +55,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 				#[doc(hidden)]
 				pub use #macro_ident as is_event_part_defined;
 			}
-		};
+		}
 	};
 
 	let event_where_clause = &event.where_clause;

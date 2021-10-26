@@ -87,7 +87,7 @@ impl PalletEventAttrInfo {
 			if deposit_event.is_none() {
 				deposit_event = Some(attr)
 			} else {
-				return Err(syn::Error::new(attr.span, "Duplicate attribute"));
+				return Err(syn::Error::new(attr.span, "Duplicate attribute"))
 			}
 		}
 
@@ -104,7 +104,7 @@ impl EventDef {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected item enum"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected item enum"))
 		};
 
 		let event_attrs: Vec<PalletEventDepositAttr> =
@@ -114,7 +114,7 @@ impl EventDef {
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::event, `Event` must be public";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		let where_clause = item.generics.where_clause.clone();

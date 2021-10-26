@@ -173,7 +173,10 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(res, (NegativeImbalance::new(98), 0));
 
 		// no events
-		assert_eq!(events(), [Event::Balances(crate::Event::Slashed{who :1, amount_slashed: 98})]);
+		assert_eq!(
+			events(),
+			[Event::Balances(crate::Event::Slashed { who: 1, amount_slashed: 98 })]
+		);
 
 		let res = Balances::slash(&1, 1);
 		assert_eq!(res, (NegativeImbalance::new(1), 0));
@@ -183,7 +186,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			[
 				Event::System(system::Event::KilledAccount(1)),
 				Event::Balances(crate::Event::DustLost { account: 1, balance: 1 }),
-				Event::Balances(crate::Event::Slashed{who: 1, amount_slashed: 1})
+				Event::Balances(crate::Event::Slashed { who: 1, amount_slashed: 1 })
 			]
 		);
 	});

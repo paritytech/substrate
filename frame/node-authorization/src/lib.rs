@@ -193,7 +193,7 @@ pub mod pallet {
 							true,
 						),
 					}
-				}
+				},
 			}
 		}
 	}
@@ -270,7 +270,7 @@ pub mod pallet {
 			ensure!(add.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			if remove == add {
-				return Ok(());
+				return Ok(())
 			}
 
 			let mut nodes = WellKnownNodes::<T>::get();
@@ -388,7 +388,7 @@ pub mod pallet {
 
 			for add_node in connections.iter() {
 				if *add_node == node {
-					continue;
+					continue
 				}
 				nodes.insert(add_node.clone());
 			}

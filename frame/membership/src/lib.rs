@@ -215,7 +215,7 @@ pub mod pallet {
 			T::SwapOrigin::ensure_origin(origin)?;
 
 			if remove == add {
-				return Ok(());
+				return Ok(())
 			}
 
 			let mut members = <Members<T, I>>::get();

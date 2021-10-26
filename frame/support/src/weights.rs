@@ -433,7 +433,7 @@ where
 
 impl<T> WeighData<T> for Weight {
 	fn weigh_data(&self, _: T) -> Weight {
-		return *self;
+		return *self
 	}
 }
 
@@ -451,7 +451,7 @@ impl<T> PaysFee<T> for Weight {
 
 impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0;
+		return self.0
 	}
 }
 
@@ -469,7 +469,7 @@ impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
 
 impl<T> WeighData<T> for (Weight, DispatchClass) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0;
+		return self.0
 	}
 }
 
@@ -487,7 +487,7 @@ impl<T> PaysFee<T> for (Weight, DispatchClass) {
 
 impl<T> WeighData<T> for (Weight, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
-		return self.0;
+		return self.0
 	}
 }
 

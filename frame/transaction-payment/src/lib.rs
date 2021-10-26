@@ -349,15 +349,15 @@ pub mod pallet {
 			// loss.
 			use sp_std::convert::TryInto;
 			assert!(
-				<Multiplier as sp_runtime::traits::Bounded>::max_value()
-					>= Multiplier::checked_from_integer(
+				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
+					Multiplier::checked_from_integer(
 						T::BlockWeights::get().max_block.try_into().unwrap()
 					)
 					.unwrap(),
 			);
 
-			let target = T::FeeMultiplierUpdate::target()
-				* T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
+			let target = T::FeeMultiplierUpdate::target() *
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
 					"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
 				);
@@ -365,7 +365,7 @@ pub mod pallet {
 			let addition = target / 100;
 			if addition == 0 {
 				// this is most likely because in a test setup we set everything to ().
-				return;
+				return
 			}
 
 			#[cfg(any(feature = "std", test))]
@@ -645,12 +645,12 @@ where
 			DispatchClass::Normal => {
 				// For normal class we simply take the `tip_per_weight`.
 				scaled_tip
-			}
+			},
 			DispatchClass::Mandatory => {
 				// Mandatory extrinsics should be prohibited (e.g. by the [`CheckWeight`]
 				// extensions), but just to be safe let's return the same priority as `Normal` here.
 				scaled_tip
-			}
+			},
 			DispatchClass::Operational => {
 				// A "virtual tip" value added to an `Operational` extrinsic.
 				// This value should be kept high enough to allow `Operational` extrinsics
@@ -662,7 +662,7 @@ where
 				let scaled_virtual_tip = max_reward(virtual_tip);
 
 				scaled_tip.saturating_add(scaled_virtual_tip)
-			}
+			},
 		}
 		.saturated_into::<TransactionPriority>()
 	}
@@ -1319,8 +1319,10 @@ mod tests {
 				));
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
-				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer{
-					from: 2, to: 3, value: 80,
+				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer {
+					from: 2,
+					to: 3,
+					value: 80,
 				}));
 				// Killed Event
 				System::assert_has_event(Event::System(system::Event::KilledAccount(2)));

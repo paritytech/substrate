@@ -135,7 +135,7 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::Any => true,
 			ProxyType::JustTransfer => {
 				matches!(c, Call::Balances(pallet_balances::Call::transfer { .. }))
-			}
+			},
 			ProxyType::JustUtility => matches!(c, Call::Utility { .. }),
 		}
 	}
@@ -407,7 +407,7 @@ fn filtering_works() {
 		);
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_events(vec![
-			BalancesEvent::<Test>::Unreserved{who: 1, value: 5}.into(),
+			BalancesEvent::<Test>::Unreserved { who: 1, value: 5 }.into(),
 			ProxyEvent::ProxyExecuted { result: Ok(()) }.into(),
 		]);
 	});

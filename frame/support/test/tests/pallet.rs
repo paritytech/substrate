@@ -372,7 +372,7 @@ pub mod pallet {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_transactional { .. }) {
-				return Ok(ValidTransaction::default());
+				return Ok(ValidTransaction::default())
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}

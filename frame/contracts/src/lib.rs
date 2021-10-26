@@ -729,10 +729,9 @@ where
 						<Error<T>>::CodeTooLarge
 					);
 					executable
-				}
-				Code::Existing(hash) => {
-					PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?
-				}
+				},
+				Code::Existing(hash) =>
+					PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?,
 			};
 			ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin,

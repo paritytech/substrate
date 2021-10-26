@@ -162,7 +162,7 @@ impl ChainExtension<Test> for TestExtension {
 				env.write(&input, false, None)?;
 				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
 				Ok(RetVal::Converging(func_id))
-			}
+			},
 			1 => {
 				let env = env.only_in();
 				TEST_EXTENSION.with(|e| {
@@ -170,17 +170,17 @@ impl ChainExtension<Test> for TestExtension {
 						(env.val0(), env.val1(), env.val2(), env.val3())
 				});
 				Ok(RetVal::Converging(func_id))
-			}
+			},
 			2 => {
 				let mut env = env.buf_in_buf_out();
 				let weight = env.read(2)?[1].into();
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(func_id))
-			}
+			},
 			3 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
 			_ => {
 				panic!("Passed unknown func_id to test chain extension: {}", func_id);
-			}
+			},
 		}
 	}
 
@@ -446,7 +446,10 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Deposit{who: ALICE, deposit: 1_000_000}),
+					event: Event::Balances(pallet_balances::Event::Deposit {
+						who: ALICE,
+						deposit: 1_000_000
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -456,7 +459,10 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed{account: ALICE, free_balance: 1_000_000}),
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: ALICE,
+						free_balance: 1_000_000
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -466,7 +472,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed{
+					event: Event::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: subsistence * 100
 					}),
@@ -474,7 +480,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer{
+					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						value: subsistence * 100
@@ -765,7 +771,7 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer{
+					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: addr.clone(),
 						to: DJANGO,
 						value: 100_000,

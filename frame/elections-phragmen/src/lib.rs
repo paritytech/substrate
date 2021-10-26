@@ -325,14 +325,14 @@ pub mod pallet {
 					let to_reserve = new_deposit - old_deposit;
 					T::Currency::reserve(&who, to_reserve)
 						.map_err(|_| Error::<T>::UnableToPayBond)?;
-				}
-				Ordering::Equal => {}
+				},
+				Ordering::Equal => {},
 				Ordering::Less => {
 					// Must unreserve a bit.
 					let to_unreserve = old_deposit - new_deposit;
 					let _remainder = T::Currency::unreserve(&who, to_unreserve);
 					debug_assert!(_remainder.is_zero());
-				}
+				},
 			};
 
 			// Amount to be locked up.
@@ -426,7 +426,7 @@ pub mod pallet {
 					let _ = Self::remove_and_replace_member(&who, false)
 						.map_err(|_| Error::<T>::InvalidRenouncing)?;
 					Self::deposit_event(Event::Renounced { candidate: who });
-				}
+				},
 				Renouncing::RunnerUp => {
 					<RunnersUp<T>>::try_mutate::<_, Error<T>, _>(|runners_up| {
 						let index = runners_up
@@ -440,7 +440,7 @@ pub mod pallet {
 						Self::deposit_event(Event::Renounced { candidate: who });
 						Ok(())
 					})?;
-				}
+				},
 				Renouncing::Candidate(count) => {
 					<Candidates<T>>::try_mutate::<_, Error<T>, _>(|candidates| {
 						ensure!(count >= candidates.len() as u32, Error::<T>::InvalidWitnessData);
@@ -453,7 +453,7 @@ pub mod pallet {
 						Self::deposit_event(Event::Renounced { candidate: who });
 						Ok(())
 					})?;
-				}
+				},
 			};
 			Ok(None.into())
 		}
@@ -491,7 +491,7 @@ pub mod pallet {
 				return Err(Error::<T>::InvalidReplacement.with_weight(
 					// refund. The weight value comes from a benchmark which is special to this.
 					T::WeightInfo::remove_member_wrong_refund(),
-				));
+				))
 			}
 
 			let had_replacement = Self::remove_and_replace_member(&who, true)?;
@@ -680,7 +680,7 @@ pub mod pallet {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) => {
 								panic!("Duplicate member in elections-phragmen genesis: {}", member)
-							}
+							},
 							Err(pos) => members.insert(
 								pos,
 								SeatHolder {
@@ -790,7 +790,7 @@ impl<T: Config> Pallet<T> {
 					&remaining_member_ids_sorted[..],
 				);
 				true
-			}
+			},
 			None => {
 				T::ChangeMembers::change_members_sorted(
 					&[],
@@ -798,7 +798,7 @@ impl<T: Config> Pallet<T> {
 					&remaining_member_ids_sorted[..],
 				);
 				false
-			}
+			},
 		};
 
 		// if there was a prime before and they are not the one being removed, then set them
@@ -889,7 +889,7 @@ impl<T: Config> Pallet<T> {
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
-			return T::DbWeight::get().reads(5);
+			return T::DbWeight::get().reads(5)
 		}
 
 		// All of the new winners that come out of phragmen will thus have a deposit recorded.
@@ -1002,8 +1002,8 @@ impl<T: Config> Pallet<T> {
 			// All candidates/members/runners-up who are no longer retaining a position as a
 			// seat holder will lose their bond.
 			candidates_and_deposit.iter().for_each(|(c, d)| {
-				if new_members_ids_sorted.binary_search(c).is_err()
-					&& new_runners_up_ids_sorted.binary_search(c).is_err()
+				if new_members_ids_sorted.binary_search(c).is_err() &&
+					new_runners_up_ids_sorted.binary_search(c).is_err()
 				{
 					let (imbalance, _) = T::Currency::slash_reserved(c, *d);
 					T::LoserCandidate::on_unbalanced(imbalance);
