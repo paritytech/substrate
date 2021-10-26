@@ -51,7 +51,7 @@ use std::{
 /// Auxiliary structure that holds a wasm blob and its hash.
 pub(crate) struct WasmBlob {
 	code: Vec<u8>,
-	pub(crate) hash: Vec<u8>,
+	hash: Vec<u8>,
 }
 
 impl WasmBlob {
@@ -60,7 +60,7 @@ impl WasmBlob {
 		Self { code, hash }
 	}
 
-	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
+	pub(crate) fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
 		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages }
 	}
 }
