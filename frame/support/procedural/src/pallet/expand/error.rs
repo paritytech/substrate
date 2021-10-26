@@ -63,6 +63,9 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		.attrs
 		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
 	error_item.attrs.push(syn::parse_quote!(
+        #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	));
+	error_item.attrs.push(syn::parse_quote!(
 		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
 	));
 

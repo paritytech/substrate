@@ -524,7 +524,6 @@ pub mod pallet {
 
 	/// Event for the System pallet.
 	#[pallet::event]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
@@ -546,7 +545,6 @@ pub mod pallet {
 
 	/// Error for the System pallet
 	#[pallet::error]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Error<T> {
 		/// The name of specification does not match between the current runtime
 		/// and the new runtime.

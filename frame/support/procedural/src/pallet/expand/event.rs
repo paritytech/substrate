@@ -116,6 +116,9 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::scale_info::TypeInfo,
 		)]
 	));
+	event_item.attrs.push(syn::parse_quote!(
+        #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	));
 
 	// skip requirement for type params to implement `TypeInfo`, and require docs capture
 	event_item.attrs.push(syn::parse_quote!(
