@@ -916,16 +916,21 @@ fn bids_ordered_correctly() {
 
 #[test]
 fn bidding_action_works() {
+	// This tests that bid_action() works as expected.
 	EnvBuilder::new().execute(|| {
 		// 10 is the only member, founder, and head
 		assert_eq!(Society::members(), vec![10]);
+
+		// Funding actions account
+		assert_ok!(Balances::transfer(Origin::signed(50), Society::actions(), 25));
+		assert_eq!(Balances::free_balance(Society::actions()), 25);
 
 		// Users make bids
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		assert_ok!(Society::bid(Origin::signed(30), 500));
 
-		// 10 makes an action bid that transfers 500 from Treasury to itself
-		let boxed_call = Box::new(call_transfer(10, 500));
+		// 10 makes an action bid that transfers 15 from actions account to itself
+		let boxed_call = Box::new(call_transfer(10, 15));
 		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
 
 		// 10 tries to bid another action (must fail as 10 has already made a bid)
@@ -945,9 +950,6 @@ fn bidding_action_works() {
 		// Pot is 1000 after "PeriodSpend"
 		assert_eq!(Society::pot(), 1000);
 
-		// Treasury balance
-		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
-
 		// Checking candidates (20 is not a candidate because its bid's value > pot)
 		assert_eq!(
 			Society::candidates(),
@@ -962,19 +964,101 @@ fn bidding_action_works() {
 
 		run_to_block(8);
 
-		// Pot is 1950 after second "PeriodSpend" (2000) minus 50 from the bid action's payout
+		// Pot is 1950 after second "PeriodSpend" (2000) minus 50 from the winning bids' payout
 		assert_eq!(Society::pot(), 1950);
 
-		// The value was transferred (Treasury -> 10)
-		assert_eq!(Balances::free_balance(10), 550);
-		// Treasury balance: 10_000 -       500         -    50
-		//                            (transfer action)   (payout)
-		assert_eq!(Balances::free_balance(Society::account_id()), 9_450);
+		// The value (15) was transferred (Actions -> 10)
+		assert_eq!(Balances::free_balance(10), 65);
+
+		// Actions balance: 25 - 15
+		assert_eq!(Balances::free_balance(Society::actions()), 10);
 
 		// Checking candidates (20 is now a candidate)
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 20, BidKind::Deposit(25))]);
 
-		// 10 is still the only member
+		run_to_block(12);
+
+		// 20 is now suspended
+		assert_eq!(Society::suspended_candidate(20).is_some(), true);
+
+		run_to_block(16);
+
+		// 10 makes same action bid
+		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
+
+		run_to_block(20);
+
+		// Checking candidates
+		assert_eq!(
+			Society::candidates(),
+			vec![create_bid(50, 10, BidKind::Action(50, boxed_call.clone()))]
+		);
+
+		run_to_block(24);
+
+		// 10 was not suspended even with a rejected action bid
+		assert_noop!(
+			Society::judge_suspended_candidate(Origin::signed(2), 10, Judgement::Approve),
+			Error::<Test, _>::NotSuspended
+		);
+	});
+}
+
+#[test]
+fn change_founder_works() {
+	// This tests that change_founder() works as expected.
+	EnvBuilder::new().execute(|| {
+		// 10 is the only members
 		assert_eq!(Society::members(), vec![10]);
+		// and the Founder
+		assert_eq!(Society::founder(), Some(10));
+
+		// 20 makes a bid
+		assert_ok!(Society::bid(Origin::signed(20), 100));
+
+		run_to_block(4);
+
+		// Checking candidates
+		assert_eq!(Society::candidates(), vec![create_bid(100, 20, BidKind::Deposit(25))]);
+
+		// 10 votes for 20 to become a member
+		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+
+		run_to_block(8);
+
+		// 10 and 20 are now members
+		assert_eq!(Society::members(), vec![10, 20]);
+
+		// 10 is still the Founder
+		assert_eq!(Society::founder(), Some(10));
+
+		// 20 makes an action bid that calls change_founder, setting itself as the Founder
+		let boxed_change_founder_call = Box::new(call_change_founder(20));
+		assert_ok!(Society::bid_action(Origin::signed(20), 50, boxed_change_founder_call.clone()));
+
+		run_to_block(12);
+
+		// Checking candidates
+		assert_eq!(
+			Society::candidates(),
+			vec![create_bid(50, 20, BidKind::Action(50, boxed_change_founder_call.clone()))]
+		);
+
+		// 20 votes for its action bid
+		assert_ok!(Society::vote(Origin::signed(20), 20, true));
+
+		run_to_block(16);
+
+		// 10 is not the Founder anymore, 20 is the new one
+		assert_eq!(Society::founder(), Some(20));
+
+		// 10 tries to call change_founder directly (fails with NotFromActions)
+		assert_noop!(
+			Society::change_founder(Origin::signed(10), 10),
+			Error::<Test, _>::NotFromActions
+		);
+
+		// 20 is still the Founder
+		assert_eq!(Society::founder(), Some(20));
 	});
 }

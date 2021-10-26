@@ -495,6 +495,8 @@ pub mod pallet {
 		NotHead,
 		/// The action bid has too little value for it's call.
 		InsufficientActionDeposit,
+		/// The caller is not the actions account.
+		NotFromActions,
 	}
 
 	#[pallet::event]
@@ -534,6 +536,8 @@ pub mod pallet {
 		NewMaxMembers(u32),
 		/// Society is unfounded. \[founder\]
 		Unfounded(T::AccountId),
+		/// The Founder was changed. \[founder\]
+		FounderChanged(T::AccountId),
 		/// Some funds were deposited into the society account. \[value\]
 		Deposit(BalanceOf<T, I>),
 		/// A member just bid to enact an action. The given account is the member's ID and their
@@ -1106,6 +1110,28 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Change the Founder of the society.
+		///
+		/// The dispatch origin for this call must be the actions account and must be _Signed_.
+		///
+		/// # <weight>
+		/// - One storage reads O(1).
+		/// - One storage removal O(1).
+		/// - One storage write to add the new Founder to society. O(1)
+		/// - One event.
+		///
+		/// Total Complexity: O(1)
+		/// # </weight>
+		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
+		pub fn change_founder(origin: OriginFor<T>, new_founder: T::AccountId) -> DispatchResult {
+			let society_account = ensure_signed(origin)?;
+			ensure!(society_account == Self::actions(), Error::<T, I>::NotFromActions);
+			Founder::<T, I>::kill();
+			<Founder<T, I>>::put(&new_founder);
+			Self::deposit_event(Event::<T, I>::FounderChanged(new_founder));
+			Ok(())
+		}
+
 		/// Allow suspension judgement origin to make judgement on a suspended member.
 		///
 		/// If a suspended member is forgiven, we simply add them back as a member, not affecting
@@ -1251,10 +1277,12 @@ pub mod pallet {
 								<Vouching<T, I>>::insert(&voucher, VouchingStatus::Banned);
 							},
 							BidKind::Action(deposit, _) => {
-								// Slash deposit and move it to the society treasury account
+								// Punish the member for the bad proposal, but do not do anything
+								// outside of that repatriate to the action account of the society
+								// instead of the "treasury"
 								let _ = T::Currency::repatriate_reserved(
 									&who,
-									&Self::account_id(),
+									&Self::actions(),
 									deposit,
 									BalanceStatus::Free,
 								);
@@ -1801,14 +1829,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			BidKind::Action(deposit, call) => {
 				let _ = T::Currency::unreserve(candidate, deposit);
 				// build society call origin
-				let treasury_account = Self::account_id();
-				let treasury_origin: T::Origin =
-					frame_system::RawOrigin::Signed(treasury_account).into();
+				let society_account = Self::actions();
+				let society_origin: T::Origin =
+					frame_system::RawOrigin::Signed(society_account).into();
 				let call_option: Option<<T as Config<I>>::Call> =
 					Decode::decode(&mut &call.encode()[..]).ok();
 				call_option.map(|decoded_call| {
 					// execute call
-					let _ = decoded_call.dispatch(treasury_origin);
+					let _ = decoded_call.dispatch(society_origin);
 				});
 				value
 			},
@@ -1880,6 +1908,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
 		T::PalletId::get().into_sub_account(b"payouts")
+	}
+
+	/// The actions account ID. This is used to perform all bid_actions calls.
+	///
+	/// This actually does computation. If you need to keep using it, then make sure you cache the
+	/// value and only call this once.
+	pub fn actions() -> T::AccountId {
+		T::PalletId::get().into_sub_account(b"actions")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.

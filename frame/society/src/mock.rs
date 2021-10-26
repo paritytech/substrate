@@ -218,9 +218,15 @@ pub fn create_bid<AccountId, Balance, Call>(
 	Bid { who, kind, value }
 }
 
-pub type BalancesCall = pallet_balances::Call<Test>;
+type BalancesCall = pallet_balances::Call<Test>;
+type SocietyCall = pallet_society::Call<Test>;
 
 /// Creates a transfer Call to be used by bid_action().
 pub fn call_transfer(dest: u128, value: u64) -> Call {
 	Call::Balances(BalancesCall::transfer { dest, value })
+}
+
+/// Creates a change_founder Call to be used by bid_action().
+pub fn call_change_founder(new_founder: u128) -> Call {
+	Call::Society(SocietyCall::change_founder { new_founder })
 }
