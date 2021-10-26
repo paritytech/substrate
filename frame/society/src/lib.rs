@@ -247,6 +247,8 @@
 //! make judgement on a suspended candidate.
 //! * `set_max_membership` - The ROOT origin can update the maximum member count for the society.
 //! The max membership count must be greater than 1.
+//! * `change_founder` - As a society, allows to change the founder.
+//! Must be called throught bid_action().
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
