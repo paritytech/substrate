@@ -337,36 +337,15 @@ impl<B: BlockT> Builder<B> {
 				})
 				.collect::<Vec<_>>();
 
-			// TODO: Niklas: this code works, but the below batch does not work ONLY on kusama..
-			// weird stuff.
-			// try it out with:  test -- --release -p remote-externalities --features remote-test
-			// can_build_one_small_pallet, it should work without any requirements.
-			let mut values = vec![];
-			for (method, params) in batch {
-				let value = client
-					.request::<Option<StorageData>>(method, params.clone())
-					.await
-					.map_err(|e| {
-						log::error!(
-							target: LOG_TARGET,
-							"failed to decode key: {:?}. Error: {:?}",
-							params,
-							e
-						);
-					})
-					.unwrap_or_default();
-				values.push(value);
-			}
-
-			// let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
-			// 	log::error!(
-			// 		target: LOG_TARGET,
-			// 		"failed to execute batch: {:?}. Error: {:?}",
-			// 		chunk_keys.iter().map(|k| HexDisplay::from(k)).collect::<Vec<_>>(),
-			// 		e
-			// 	);
-			// 	"batch failed."
-			// })?;
+			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
+				log::error!(
+					target: LOG_TARGET,
+					"failed to execute batch: {:?}. Error: {:?}",
+					chunk_keys.iter().map(|k| HexDisplay::from(k)).collect::<Vec<_>>(),
+					e
+				);
+				"batch failed."
+			})?;
 
 			assert_eq!(chunk_keys.len(), values.len());
 
@@ -700,7 +679,7 @@ impl<B: BlockT> Builder<B> {
 
 		info!(target: LOG_TARGET, "injecting a total of {} top keys", top_kv.len());
 		for (k, v) in top_kv {
-			// skip writing the child root data if
+			// skip writing the child root data.
 			if is_default_child_storage_key(k.as_ref()) {
 				continue
 			}
@@ -909,7 +888,9 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
+				// transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
+				transport: "ws://kianenigma-archive:9924".to_owned().into(),
+				// transport: "ws://localhost:9999".to_owned().into(),
 				pallets: vec!["Crowdloan".to_owned()],
 				..Default::default()
 			}))

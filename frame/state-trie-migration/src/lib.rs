@@ -96,7 +96,9 @@ pub mod pallet {
 		offchain::{SendTransactionTypes, SubmitTransaction},
 		pallet_prelude::*,
 	};
-	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
+	use sp_core::{
+		hexdisplay::HexDisplay, storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
+	};
 	use sp_runtime::{
 		offchain::storage::{MutateStorageError, StorageValueRef},
 		traits::{Bounded, Saturating},
@@ -109,8 +111,9 @@ pub mod pallet {
 	pub trait WeightInfo {
 		fn process_top_key(x: u32) -> Weight;
 	}
+
 	impl WeightInfo for () {
-		fn process_top_key(x: u32) -> Weight {
+		fn process_top_key(_: u32) -> Weight {
 			1000000
 		}
 	}
@@ -157,16 +160,24 @@ pub mod pallet {
 		#[codec(skip)]
 		pub(crate) dyn_size: u32,
 
-		// TODO: I might remove these if they end up not being used.
+		/// The total size of the migration, over all executions.
+		///
+		/// This only kept around for bookkeeping and debugging.
 		pub(crate) size: u32,
+		/// The total count of top keys in the migration, over all executions.
+		///
+		/// This only kept around for bookkeeping and debugging.
 		pub(crate) top_items: u32,
+		/// The total count of child keys in the migration, over all executions.
+		///
+		/// This only kept around for bookkeeping and debugging.
 		pub(crate) child_items: u32,
 
 		#[codec(skip)]
 		pub(crate) _ph: sp_std::marker::PhantomData<T>,
 	}
 
-	#[cfg(feature = "std")]
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks"))]
 	impl<T: Config> sp_std::fmt::Debug for MigrationTask<T> {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 			f.debug_struct("MigrationTask")
@@ -748,6 +759,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// The path used to identify the offchain worker persistent storage.
 		const OFFCHAIN_LAST_BLOCK: &'static [u8] = b"parity/state-migration/last-block";
 
 		/// The real weight of a migration of the given number of `items` with total `size`.
@@ -765,11 +777,20 @@ pub mod pallet {
 			AutoLimits::<T>::kill();
 		}
 
-		fn child_io_key(storage_key: &Vec<u8>) -> &[u8] {
+		/// Convert a child root key, aka. "Child-bearing top key" into the proper format.
+		fn child_io_key(root: &Vec<u8>) -> &[u8] {
 			use sp_core::storage::{ChildType, PrefixedStorageKey};
-			match ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(storage_key)) {
-				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
-				None => unreachable!(),
+			match ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(root)) {
+				Some((ChildType::ParentKeyId, root)) => root,
+				None => {
+					log!(
+						warn,
+						"some data seems to be stored under key {:?}, which is a non-default \
+						child-trie. This is a logical error and shall not happen.",
+						HexDisplay::from(root),
+					);
+					Default::default()
+				},
 			}
 		}
 
@@ -820,19 +841,22 @@ pub mod pallet {
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarks {
 	use super::*;
-	use sp_std::prelude::*;
 
+	// The size of the key seemingly makes no difference in the read/write time, so we make it
+	// constant.
 	const KEY: &'static [u8] = b"key";
 
 	frame_benchmarking::benchmarks! {
 		process_top_key {
-			let x in 1 .. (4 * 1024 * 1024);
-			sp_io::storage::set(KEY, &vec![1u8; x as usize]);
+			let v in 1 .. (4 * 1024 * 1024);
+
+			let value = sp_std::vec![1u8; v as usize];
+			sp_io::storage::set(KEY, &value);
 		}: {
 			let data = sp_io::storage::get(KEY).unwrap();
-			sp_io::storage::set(KEY, &vec![1u8; x as usize]);
+			sp_io::storage::set(KEY, &data);
 			let _next = sp_io::storage::next_key(KEY);
-			assert_eq!(data.len(), x as usize);
+			assert_eq!(data, value);
 		}
 	}
 }
@@ -842,7 +866,6 @@ mod mock {
 	use parking_lot::RwLock;
 	use std::sync::Arc;
 
-	use super::*;
 	use crate as pallet_state_trie_migration;
 	use frame_support::{parameter_types, traits::Hooks};
 	use frame_system::EnsureRoot;

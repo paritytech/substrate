@@ -1241,11 +1241,15 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl pallet_state_trie_migration::Config for Runtime {
 	type Event = Event;
 	type ControlOrigin = EnsureRoot<AccountId>;
 	type Currency = Balances;
 	type SignedDepositPerItem = ();
+	type Priority = ();
+	type OffchainRepeat = ();
+	type WeightInfo = ();
 }
 
 construct_runtime!(
