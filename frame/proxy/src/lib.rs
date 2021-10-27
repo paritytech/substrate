@@ -132,6 +132,7 @@ pub mod pallet {
 			+ PartialOrd
 			+ InstanceFilter<<Self as Config>::Call>
 			+ Default
+			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
 
 		/// The base amount of currency needed to reserve for creating a proxy.
@@ -611,6 +612,33 @@ pub mod pallet {
 		),
 		ValueQuery,
 	>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub proxies: Vec<(T::AccountId, T::AccountId, T::ProxyType, T::BlockNumber)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { proxies: Vec::new() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			for (delegator, delegatee, proxy_type, delay) in &self.proxies {
+				Pallet::<T>::add_proxy_delegate(
+					delegator,
+					delegatee.clone(),
+					proxy_type.clone(),
+					*delay,
+				)
+				.expect("Genesis proxy could not be added");
+			}
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
