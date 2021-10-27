@@ -2165,4 +2165,90 @@ mod tests {
 			);
 		});
 	}
+
+	#[test]
+	fn account_counter() {
+		let fail_code = MockLoader::insert(Constructor, |_, _| exec_trapped());
+		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
+		let succ_fail_code = MockLoader::insert(Constructor, move |ctx, _| {
+			ctx.ext
+				.instantiate(0, fail_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.unwrap();
+			exec_success()
+		});
+		let succ_succ_code = MockLoader::insert(Constructor, move |ctx, _| {
+			let (account_id, _) = ctx
+				.ext
+				.instantiate(0, success_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.unwrap();
+
+			// a plain call should not influence the account counter
+			ctx.ext.call(0, account_id, 0, vec![], false).unwrap();
+
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let fail_executable =
+				MockExecutable::from_storage(fail_code, &schedule, &mut gas_meter).unwrap();
+			let success_executable =
+				MockExecutable::from_storage(success_code, &schedule, &mut gas_meter).unwrap();
+			let succ_fail_executable =
+				MockExecutable::from_storage(succ_fail_code, &schedule, &mut gas_meter).unwrap();
+			let succ_succ_executable =
+				MockExecutable::from_storage(succ_succ_code, &schedule, &mut gas_meter).unwrap();
+			set_balance(&ALICE, min_balance * 1000);
+
+			MockStack::run_instantiate(
+				ALICE,
+				fail_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 100,
+				vec![],
+				&[],
+				None,
+			);
+			assert_eq!(<AccountCounter<Test>>::get(), 0);
+
+			assert_ok!(MockStack::run_instantiate(
+				ALICE,
+				success_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 100,
+				vec![],
+				&[],
+				None,
+			));
+			assert_eq!(<AccountCounter<Test>>::get(), 1);
+
+			assert_ok!(MockStack::run_instantiate(
+				ALICE,
+				succ_fail_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 200,
+				vec![],
+				&[],
+				None,
+			));
+			assert_eq!(<AccountCounter<Test>>::get(), 2);
+
+			assert_ok!(MockStack::run_instantiate(
+				ALICE,
+				succ_succ_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 200,
+				vec![],
+				&[],
+				None,
+			));
+			assert_eq!(<AccountCounter<Test>>::get(), 4);
+		});
+	}
 }
