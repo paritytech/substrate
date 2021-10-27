@@ -50,8 +50,8 @@ thread_local! {
 }
 
 impl<
-		Reporter: MaxEncodedLen + Eq + sp_std::fmt::Debug,
-		Offender: MaxEncodedLen + Eq + sp_std::fmt::Debug,
+		Reporter: MaxEncodedLen + Clone + Eq + sp_std::fmt::Debug,
+		Offender: MaxEncodedLen + Clone + Eq + sp_std::fmt::Debug,
 	> frame_support::traits::OnOffenceHandler<Reporter, Offender, Weight, MaxReportersCount>
 	for OnOffenceHandler
 {
