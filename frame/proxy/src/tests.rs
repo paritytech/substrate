@@ -24,13 +24,14 @@ use super::*;
 use crate as proxy;
 use codec::{Decode, Encode};
 use frame_support::{
-	assert_noop, assert_ok, dispatch::DispatchError, parameter_types, traits::Contains,
+	assert_noop, assert_ok, dispatch::DispatchError, parameter_types, traits::{Contains, GenesisBuild},
 	RuntimeDebug,
 };
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	serde::{Serialize, Deserialize}
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -44,7 +45,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Proxy: proxy::{Pallet, Call, Storage, Event<T>},
+		Proxy: proxy::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Utility: pallet_utility::{Pallet, Call, Event},
 	}
 );
@@ -117,6 +118,8 @@ parameter_types! {
 	Decode,
 	RuntimeDebug,
 	MaxEncodedLen,
+	Serialize,
+	Deserialize,
 	scale_info::TypeInfo,
 )]
 pub enum ProxyType {
@@ -135,7 +138,7 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::Any => true,
 			ProxyType::JustTransfer => {
 				matches!(c, Call::Balances(pallet_balances::Call::transfer { .. }))
-			},
+			}
 			ProxyType::JustUtility => matches!(c, Call::Utility { .. }),
 		}
 	}
@@ -177,10 +180,18 @@ use pallet_utility::{Call as UtilityCall, Event as UtilityEvent};
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2), (100, 100), (101, 100)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
+
+	// At genesis, Account 100 delegates JustTransfer privlidges to Account 101.
+	proxy::GenesisConfig::<Test> {
+		proxies: vec![(100, 101, ProxyType::JustTransfer, 100)],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -526,5 +537,25 @@ fn anonymous_works() {
 			Proxy::proxy(Origin::signed(1), anon, None, call.clone()),
 			Error::<Test>::NotProxy
 		);
+	});
+}
+
+#[test]
+fn genesis_config_works() {
+	new_test_ext().execute_with(|| {
+
+		// Lookup info that we expect to be stored from genesis
+		let (proxy_defs, deposit) = Proxy::proxies(100);
+
+		// Make sure that Account 100 delegates to Account 101 and nobody else
+		assert_eq!(proxy_defs.len(), 1);
+		assert_eq!(proxy_defs[0], ProxyDefinition {
+			delegate: 101,
+			proxy_type: ProxyType::JustTransfer,
+			delay: 100
+		});
+
+		// Make sure that Account 100 has the proper deposit amount reserved
+		assert_eq!(deposit, 2);
 	});
 }
