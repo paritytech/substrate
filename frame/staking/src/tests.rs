@@ -23,7 +23,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
-	traits::{Currency, Get, ReservableCurrency},
+	traits::{Currency, Get, OffenceDetails, OnOffenceHandler, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use mock::*;
@@ -33,10 +33,7 @@ use sp_runtime::{
 	traits::{BadOrigin, Dispatchable},
 	Perbill, Percent,
 };
-use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
-	SessionIndex,
-};
+use sp_staking::SessionIndex;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use substrate_test_utils::assert_eq_uvec;
 
@@ -631,7 +628,10 @@ fn nominators_also_get_slashed_pro_rata() {
 
 		// 11 goes offline
 		on_offence_now(
-			&[OffenceDetails { offender: (11, initial_exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails {
+				offender: (11, initial_exposure.clone()),
+				reporters: Default::default(),
+			}],
 			&[slash_percent],
 		);
 
@@ -2175,7 +2175,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(100)],
 		);
@@ -2290,7 +2290,7 @@ fn offence_forces_new_era() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(5)],
 		);
@@ -2308,7 +2308,7 @@ fn offence_ensures_new_era_without_clobbering() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(5)],
 		);
@@ -2326,7 +2326,7 @@ fn offence_deselects_validator_even_when_slash_is_zero() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(0)],
 		);
@@ -2352,7 +2352,7 @@ fn slashing_performed_according_exposure() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Exposure { total: 500, own: 500, others: Default::default() }),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(50)],
 		);
@@ -2373,7 +2373,7 @@ fn slash_in_old_span_does_not_deselect() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(0)],
 		);
@@ -2396,7 +2396,7 @@ fn slash_in_old_span_does_not_deselect() {
 		on_offence_in_era(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(0)],
 			1,
@@ -2411,7 +2411,7 @@ fn slash_in_old_span_does_not_deselect() {
 		on_offence_in_era(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			// NOTE: A 100% slash here would clean up the account, causing de-registration.
 			&[Perbill::from_percent(95)],
@@ -2441,7 +2441,8 @@ fn reporters_receive_their_slice() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1, 2],
+				reporters: WeakBoundedVec::<_, _>::try_from(vec![1, 2])
+					.expect("MaxReportersCount >= 2"),
 			}],
 			&[Perbill::from_percent(50)],
 		);
@@ -2468,7 +2469,8 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1],
+				reporters: WeakBoundedVec::<_, _>::try_from(vec![1])
+					.expect("MaxReportersCount >= 1"),
 			}],
 			&[Perbill::from_percent(20)],
 		);
@@ -2481,7 +2483,8 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1],
+				reporters: WeakBoundedVec::<_, _>::try_from(vec![1])
+					.expect("MaxReportersCount >= 1"),
 			}],
 			&[Perbill::from_percent(50)],
 		);
@@ -2512,11 +2515,11 @@ fn invulnerables_are_not_slashed() {
 			&[
 				OffenceDetails {
 					offender: (11, Staking::eras_stakers(active_era(), 11)),
-					reporters: vec![],
+					reporters: Default::default(),
 				},
 				OffenceDetails {
 					offender: (21, Staking::eras_stakers(active_era(), 21)),
-					reporters: vec![],
+					reporters: Default::default(),
 				},
 			],
 			&[Perbill::from_percent(50), Perbill::from_percent(20)],
@@ -2546,7 +2549,7 @@ fn dont_slash_if_fraction_is_zero() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(0)],
 		);
@@ -2567,7 +2570,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(50)],
 		);
@@ -2579,7 +2582,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(25)],
 		);
@@ -2590,7 +2593,7 @@ fn only_slash_for_max_in_era() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(60)],
 		);
@@ -2612,7 +2615,7 @@ fn garbage_collection_after_slashing() {
 			on_offence_now(
 				&[OffenceDetails {
 					offender: (11, Staking::eras_stakers(active_era(), 11)),
-					reporters: vec![],
+					reporters: Default::default(),
 				}],
 				&[Perbill::from_percent(10)],
 			);
@@ -2624,7 +2627,7 @@ fn garbage_collection_after_slashing() {
 			on_offence_now(
 				&[OffenceDetails {
 					offender: (11, Staking::eras_stakers(active_era(), 11)),
-					reporters: vec![],
+					reporters: Default::default(),
 				}],
 				&[Perbill::from_percent(100)],
 			);
@@ -2665,7 +2668,10 @@ fn garbage_collection_on_window_pruning() {
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, Staking::eras_stakers(now, 11)), reporters: vec![] }],
+			&[OffenceDetails {
+				offender: (11, Staking::eras_stakers(now, 11)),
+				reporters: Default::default(),
+			}],
 			&[Perbill::from_percent(10)],
 		);
 
@@ -2708,7 +2714,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(10)],
 			2,
@@ -2734,7 +2740,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[OffenceDetails {
 				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(30)],
 			3,
@@ -2755,7 +2761,7 @@ fn slashing_nominators_by_span_max() {
 		on_offence_in_era(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(20)],
 			2,
@@ -2789,7 +2795,7 @@ fn slashes_are_summed_across_spans() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(10)],
 		);
@@ -2812,7 +2818,7 @@ fn slashes_are_summed_across_spans() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(10)],
 		);
@@ -2842,7 +2848,7 @@ fn deferred_slashes_are_deferred() {
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(10)],
 		);
@@ -2881,7 +2887,7 @@ fn remove_deferred() {
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails { offender: (11, exposure.clone()), reporters: Default::default() }],
 			&[Perbill::from_percent(10)],
 		);
 
@@ -2891,7 +2897,7 @@ fn remove_deferred() {
 		mock::start_active_era(2);
 
 		on_offence_in_era(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails { offender: (11, exposure.clone()), reporters: Default::default() }],
 			&[Perbill::from_percent(15)],
 			1,
 		);
@@ -2946,30 +2952,30 @@ fn remove_multi_deferred() {
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails { offender: (11, exposure.clone()), reporters: Default::default() }],
 			&[Perbill::from_percent(10)],
 		);
 
 		on_offence_now(
 			&[OffenceDetails {
 				offender: (21, Staking::eras_stakers(active_era(), 21)),
-				reporters: vec![],
+				reporters: Default::default(),
 			}],
 			&[Perbill::from_percent(10)],
 		);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails { offender: (11, exposure.clone()), reporters: Default::default() }],
 			&[Perbill::from_percent(25)],
 		);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (42, exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails { offender: (42, exposure.clone()), reporters: Default::default() }],
 			&[Perbill::from_percent(25)],
 		);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (69, exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails { offender: (69, exposure.clone()), reporters: Default::default() }],
 			&[Perbill::from_percent(25)],
 		);
 
@@ -3018,7 +3024,10 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(exposure_21.total, 1000 + 375);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+			&[OffenceDetails {
+				offender: (11, exposure_11.clone()),
+				reporters: Default::default(),
+			}],
 			&[Perbill::from_percent(10)],
 		);
 
@@ -3066,13 +3075,19 @@ fn non_slashable_offence_doesnt_disable_validator() {
 
 		// offence with no slash associated
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+			&[OffenceDetails {
+				offender: (11, exposure_11.clone()),
+				reporters: Default::default(),
+			}],
 			&[Perbill::zero()],
 		);
 
 		// offence that slashes 25% of the bond
 		on_offence_now(
-			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+			&[OffenceDetails {
+				offender: (21, exposure_21.clone()),
+				reporters: Default::default(),
+			}],
 			&[Perbill::from_percent(25)],
 		);
 
@@ -3105,21 +3120,30 @@ fn offence_threshold_triggers_new_era() {
 			let exposure_31 = Staking::eras_stakers(Staking::active_era().unwrap().index, &31);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+				&[OffenceDetails {
+					offender: (11, exposure_11.clone()),
+					reporters: Default::default(),
+				}],
 				&[Perbill::zero()],
 			);
 
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+				&[OffenceDetails {
+					offender: (21, exposure_21.clone()),
+					reporters: Default::default(),
+				}],
 				&[Perbill::zero()],
 			);
 
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (31, exposure_31.clone()), reporters: vec![] }],
+				&[OffenceDetails {
+					offender: (31, exposure_31.clone()),
+					reporters: Default::default(),
+				}],
 				&[Perbill::zero()],
 			);
 
@@ -3141,12 +3165,18 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 			let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+				&[OffenceDetails {
+					offender: (11, exposure_11.clone()),
+					reporters: Default::default(),
+				}],
 				&[Perbill::zero()],
 			);
 
 			on_offence_now(
-				&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+				&[OffenceDetails {
+					offender: (21, exposure_21.clone()),
+					reporters: Default::default(),
+				}],
 				&[Perbill::from_percent(25)],
 			);
 
@@ -3163,7 +3193,10 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
 
 			// validator 10 should now get disabled
 			on_offence_now(
-				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+				&[OffenceDetails {
+					offender: (11, exposure_11.clone()),
+					reporters: Default::default(),
+				}],
 				&[Perbill::from_percent(25)],
 			);
 
@@ -3276,7 +3309,7 @@ fn zero_slash_keeps_nominators() {
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
-			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
+			&[OffenceDetails { offender: (11, exposure.clone()), reporters: Default::default() }],
 			&[Perbill::from_percent(0)],
 		);
 
@@ -3769,11 +3802,11 @@ fn offences_weight_calculated_correctly() {
 		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5);
 
-		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
+		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>, _>>
 			= (1..10).map(|i|
 				OffenceDetails {
 					offender: (i, Staking::eras_stakers(active_era(), i)),
-					reporters: vec![],
+					reporters: Default::default(),
 				}
 			).collect();
 		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), n_offence_unapplied_weight);
@@ -3782,7 +3815,7 @@ fn offences_weight_calculated_correctly() {
 		let one_offender = [
 			OffenceDetails {
 				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1],
+				reporters: WeakBoundedVec::<_, _>::try_from(vec![1]).expect("MaxReportersCount > 0"),
 			},
 		];
 

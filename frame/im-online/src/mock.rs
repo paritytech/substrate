@@ -21,7 +21,7 @@
 
 use std::cell::RefCell;
 
-use frame_support::{parameter_types, weights::Weight, BoundedVec};
+use frame_support::{parameter_types, traits::ReportOffence, weights::Weight, BoundedVec};
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
 use sp_runtime::{
@@ -29,10 +29,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
 	Permill,
 };
-use sp_staking::{
-	offence::{OffenceError, ReportOffence},
-	SessionIndex,
-};
+use sp_staking::{offence::OffenceError, SessionIndex};
 
 use crate as imonline;
 use crate::{Config, TryFrom};
@@ -87,9 +84,12 @@ thread_local! {
 
 /// A mock offence report handler.
 pub struct OffenceHandler;
-impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
-	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
-		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
+impl ReportOffence<u64, IdentificationTuple, Offence, MaxReportersCount> for OffenceHandler {
+	fn report_offence(
+		reporters: frame_support::WeakBoundedVec<u64, MaxReportersCount>,
+		offence: Offence,
+	) -> Result<(), OffenceError> {
+		OFFENCES.with(|l| l.borrow_mut().push((reporters.to_vec(), offence)));
 		Ok(())
 	}
 
@@ -212,6 +212,7 @@ parameter_types! {
 	pub const MaxKeysEncodingSize: u32 = 1_000;
 	pub const MaxPeerInHeartbeats: u32 = 10_000;
 	pub const MaxPeerDataEncodingSize: u32 = 1_000;
+	pub const MaxReportersCount: u32 = 100;
 }
 
 impl Config for Runtime {
@@ -225,6 +226,7 @@ impl Config for Runtime {
 	type MaxKeys = MaxKeys;
 	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
 	type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
+	type MaxReportersCount = MaxReportersCount;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

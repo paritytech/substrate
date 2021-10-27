@@ -60,9 +60,8 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 mod test {
 	use super::*;
 	use crate::mock::{new_test_ext, with_on_offence_fractions, Offences, Runtime as T};
-	use frame_support::traits::OnRuntimeUpgrade;
+	use frame_support::traits::{OffenceDetails, OnRuntimeUpgrade};
 	use sp_runtime::Perbill;
-	use sp_staking::offence::OffenceDetails;
 
 	#[test]
 	fn should_resubmit_deferred_offences() {
@@ -76,9 +75,10 @@ mod test {
 			let offence_details = OffenceDetails::<
 				<T as frame_system::Config>::AccountId,
 				<T as Config>::IdentificationTuple,
+				<T as Config>::MaxReportersCount,
 			> {
 				offender: 5,
-				reporters: vec![],
+				reporters: Default::default(),
 			};
 
 			// push deferred offence

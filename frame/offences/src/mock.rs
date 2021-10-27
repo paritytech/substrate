@@ -21,9 +21,10 @@
 
 use crate as offences;
 use crate::Config;
-use codec::Encode;
+use codec::{Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types,
+	traits::OffenceDetails,
 	weights::{
 		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
 		Weight,
@@ -36,7 +37,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{self, Kind, OffenceDetails},
+	offence::{self, Kind},
 	SessionIndex,
 };
 use std::cell::RefCell;
@@ -48,11 +49,14 @@ thread_local! {
 	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
 }
 
-impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
+impl<
+		Reporter: MaxEncodedLen + Eq + sp_std::fmt::Debug,
+		Offender: MaxEncodedLen + Eq + sp_std::fmt::Debug,
+	> frame_support::traits::OnOffenceHandler<Reporter, Offender, Weight, MaxReportersCount>
 	for OnOffenceHandler
 {
 	fn on_offence(
-		_offenders: &[OffenceDetails<Reporter, Offender>],
+		_offenders: &[OffenceDetails<Reporter, Offender, MaxReportersCount>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
 	) -> Weight {
@@ -84,6 +88,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaxReportersCount: u32 = 100;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
@@ -117,6 +122,7 @@ impl Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
+	type MaxReportersCount = MaxReportersCount;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -129,7 +135,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub const KIND: [u8; 16] = *b"test_report_1234";
 
 /// Returns all offence details for the specific `kind` happened at the specific time slot.
-pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u64>> {
+pub fn offence_reports(
+	kind: Kind,
+	time_slot: u128,
+) -> Vec<OffenceDetails<u64, u64, MaxReportersCount>> {
 	<crate::ConcurrentReportsIndex<Runtime>>::get(&kind, &time_slot.encode())
 		.into_iter()
 		.map(|report_id| {

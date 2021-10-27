@@ -22,7 +22,8 @@ use frame_election_provider_support::{onchain, SortedListProvider};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
-		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
+		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OffenceDetails,
+		OnOffenceHandler, OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
@@ -33,7 +34,6 @@ use sp_runtime::{
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
-use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use sp_std::collections::btree_map::BTreeMap;
 use std::cell::RefCell;
 
@@ -784,6 +784,7 @@ pub(crate) fn on_offence_in_era(
 	offenders: &[OffenceDetails<
 		AccountId,
 		pallet_session::historical::IdentificationTuple<Test>,
+		MaxReportersCount,
 	>],
 	slash_fraction: &[Perbill],
 	era: EraIndex,
@@ -813,6 +814,7 @@ pub(crate) fn on_offence_now(
 	offenders: &[OffenceDetails<
 		AccountId,
 		pallet_session::historical::IdentificationTuple<Test>,
+		MaxReportersCount,
 	>],
 	slash_fraction: &[Perbill],
 ) {
@@ -824,7 +826,7 @@ pub(crate) fn add_slash(who: &AccountId) {
 	on_offence_now(
 		&[OffenceDetails {
 			offender: (who.clone(), Staking::eras_stakers(active_era(), who.clone())),
-			reporters: vec![],
+			reporters: Default::default(),
 		}],
 		&[Perbill::from_percent(10)],
 	);

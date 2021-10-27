@@ -19,6 +19,8 @@
 
 #![cfg(test)]
 
+use std::rc::Weak;
+
 use super::*;
 use crate::mock::{
 	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Event, Offence, Offences,
@@ -37,7 +39,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
 
 		// when
-		Offences::report_offence(vec![], offence).unwrap();
+		Offences::report_offence(Default::default(), offence).unwrap();
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -54,7 +56,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		Offences::report_offence(vec![], offence.clone()).unwrap();
+		Offences::report_offence(Default::default(), offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -62,7 +64,10 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 
 		// when
 		// report for the second time
-		assert_eq!(Offences::report_offence(vec![], offence), Err(OffenceError::DuplicateReport));
+		assert_eq!(
+			Offences::report_offence(Default::default(), offence),
+			Err(OffenceError::DuplicateReport)
+		);
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -79,7 +84,7 @@ fn should_report_in_different_time_slot() {
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let mut offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		Offences::report_offence(vec![], offence.clone()).unwrap();
+		Offences::report_offence(Default::default(), offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -88,7 +93,7 @@ fn should_report_in_different_time_slot() {
 		// when
 		// report for the second time
 		offence.time_slot += 1;
-		Offences::report_offence(vec![], offence).unwrap();
+		Offences::report_offence(Default::default(), offence).unwrap();
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -107,7 +112,7 @@ fn should_deposit_event() {
 		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
 
 		// when
-		Offences::report_offence(vec![], offence).unwrap();
+		Offences::report_offence(Default::default(), offence).unwrap();
 
 		// then
 		assert_eq!(
@@ -129,7 +134,7 @@ fn doesnt_deposit_event_for_dups() {
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		Offences::report_offence(vec![], offence.clone()).unwrap();
+		Offences::report_offence(Default::default(), offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -137,7 +142,10 @@ fn doesnt_deposit_event_for_dups() {
 
 		// when
 		// report for the second time
-		assert_eq!(Offences::report_offence(vec![], offence), Err(OffenceError::DuplicateReport));
+		assert_eq!(
+			Offences::report_offence(Default::default(), offence),
+			Err(OffenceError::DuplicateReport)
+		);
 
 		// then
 		// there is only one event.
@@ -167,23 +175,23 @@ fn reports_if_an_offence_is_dup() {
 
 		// the report for authority 0 at time slot 42 should not be a known
 		// offence
-		assert!(!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+		assert!(!<Offences as ReportOffence<_, _, TestOffence, _>>::is_known_offence(
 			&test_offence.offenders,
 			&test_offence.time_slot
 		));
 
 		// we report an offence for authority 0 at time slot 42
-		Offences::report_offence(vec![], test_offence.clone()).unwrap();
+		Offences::report_offence(Default::default(), test_offence.clone()).unwrap();
 
 		// the same report should be a known offence now
-		assert!(<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+		assert!(<Offences as ReportOffence<_, _, TestOffence, _>>::is_known_offence(
 			&test_offence.offenders,
 			&test_offence.time_slot
 		));
 
 		// and reporting it again should yield a duplicate report error
 		assert_eq!(
-			Offences::report_offence(vec![], test_offence.clone()),
+			Offences::report_offence(Default::default(), test_offence.clone()),
 			Err(OffenceError::DuplicateReport)
 		);
 
@@ -191,18 +199,18 @@ fn reports_if_an_offence_is_dup() {
 		test_offence.offenders.push(1);
 
 		// it should not be a known offence anymore
-		assert!(!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+		assert!(!<Offences as ReportOffence<_, _, TestOffence, _>>::is_known_offence(
 			&test_offence.offenders,
 			&test_offence.time_slot
 		));
 
 		// and reporting it again should work without any error
-		assert_eq!(Offences::report_offence(vec![], test_offence.clone()), Ok(()));
+		assert_eq!(Offences::report_offence(Default::default(), test_offence.clone()), Ok(()));
 
 		// creating a new offence for the same authorities on the next slot
 		// should be considered a new offence and thefore not known
 		let test_offence_next_slot = offence(time_slot + 1, vec![0, 1]);
-		assert!(!<Offences as ReportOffence<_, _, TestOffence>>::is_known_offence(
+		assert!(!<Offences as ReportOffence<_, _, TestOffence, _>>::is_known_offence(
 			&test_offence_next_slot.offenders,
 			&test_offence_next_slot.time_slot
 		));
@@ -220,7 +228,7 @@ fn should_properly_count_offences() {
 
 		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
 		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: vec![4] };
-		Offences::report_offence(vec![], offence1).unwrap();
+		Offences::report_offence(Default::default(), offence1).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -228,15 +236,15 @@ fn should_properly_count_offences() {
 
 		// when
 		// report for the second time
-		Offences::report_offence(vec![], offence2).unwrap();
+		Offences::report_offence(Default::default(), offence2).unwrap();
 
 		// then
 		// the 1st authority should have count 2 and the 2nd one should be reported only once.
 		assert_eq!(
 			offence_reports(KIND, time_slot),
 			vec![
-				OffenceDetails { offender: 5, reporters: vec![] },
-				OffenceDetails { offender: 4, reporters: vec![] },
+				OffenceDetails { offender: 5, reporters: Default::default() },
+				OffenceDetails { offender: 4, reporters: Default::default() },
 			]
 		);
 	});
@@ -257,7 +265,7 @@ fn should_properly_sort_offences() {
 			Offence { validator_set_count: 5, time_slot: time_slot + 1, offenders: vec![6, 7] };
 		let offence4 =
 			Offence { validator_set_count: 5, time_slot: time_slot - 1, offenders: vec![3] };
-		Offences::report_offence(vec![], offence1).unwrap();
+		Offences::report_offence(Default::default(), offence1).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -265,9 +273,9 @@ fn should_properly_sort_offences() {
 
 		// when
 		// report for the second time
-		Offences::report_offence(vec![], offence2).unwrap();
-		Offences::report_offence(vec![], offence3).unwrap();
-		Offences::report_offence(vec![], offence4).unwrap();
+		Offences::report_offence(Default::default(), offence2).unwrap();
+		Offences::report_offence(Default::default(), offence3).unwrap();
+		Offences::report_offence(Default::default(), offence4).unwrap();
 
 		// then
 		let same_kind_reports = Vec::<(u128, sp_core::H256)>::decode(

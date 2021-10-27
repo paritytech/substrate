@@ -17,7 +17,7 @@
 
 //! Common traits and types that are useful for describing staking
 
-use crate::{traits::Get, WeakBoundedVec};
+use crate::{traits::Get, EqNoBound, PartialEqNoBound, WeakBoundedVec};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::Perbill;
 use sp_staking::{
@@ -59,8 +59,8 @@ impl<Reporter, Offender, O: Offence<Offender>, MaxReportersCount: Get<u32>>
 /// Used to decouple the module that handles offences and
 /// the one that should punish for those offences.
 pub trait OnOffenceHandler<
-	Reporter: MaxEncodedLen,
-	Offender: MaxEncodedLen,
+	Reporter: MaxEncodedLen + Eq + sp_std::fmt::Debug,
+	Offender: MaxEncodedLen + Eq + sp_std::fmt::Debug,
 	Res,
 	MaxReportersCount: Get<u32>,
 >
@@ -89,8 +89,8 @@ pub trait OnOffenceHandler<
 }
 
 impl<
-		Reporter: MaxEncodedLen,
-		Offender: MaxEncodedLen,
+		Reporter: MaxEncodedLen + Eq + sp_std::fmt::Debug,
+		Offender: MaxEncodedLen + Eq + sp_std::fmt::Debug,
 		Res: Default,
 		MaxReportersCount: Get<u32>,
 	> OnOffenceHandler<Reporter, Offender, Res, MaxReportersCount> for ()
@@ -108,19 +108,19 @@ impl<
 /// `MaxReportersCount` bounds weakly the number of reporters
 #[derive(
 	Clone,
-	PartialEq,
-	Eq,
+	PartialEqNoBound,
+	EqNoBound,
 	Encode,
 	Decode,
 	MaxEncodedLen,
-	sp_runtime::RuntimeDebug,
+	frame_support::RuntimeDebugNoBound,
 	scale_info::TypeInfo,
 )]
 #[codec(mel_bound(MaxReportersCount: Get<u32>))]
 #[scale_info(skip_type_params(MaxReportersCount))]
 pub struct OffenceDetails<
-	Reporter: MaxEncodedLen,
-	Offender: MaxEncodedLen,
+	Reporter: MaxEncodedLen + Eq + sp_std::fmt::Debug,
+	Offender: MaxEncodedLen + Eq + sp_std::fmt::Debug,
 	MaxReportersCount: Get<u32>,
 > {
 	/// The offending authority id

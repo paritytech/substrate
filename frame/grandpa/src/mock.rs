@@ -247,6 +247,7 @@ impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type MaxReportersCount = MaxReportersCount;
 }
 
 parameter_types! {
@@ -274,6 +275,7 @@ impl Config for Test {
 
 	type WeightInfo = ();
 	type MaxAuthorities = MaxAuthorities;
+	type MaxReportersCount = MaxReportersCount;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
