@@ -52,7 +52,8 @@ mod misc;
 pub use misc::{
 	Backing, ConstU32, EnsureInherentsAreFirst, EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get,
 	GetBacking, GetDefault, HandleLifetime, IsSubType, IsType, Len, OffchainWorker,
-	OnKilledAccount, OnNewAccount, SameOrOther, Time, TryDrop, UnixTime, WrapperOpaque,
+	OnKilledAccount, OnNewAccount, SameOrOther, Time, TryDrop, UnixTime, WrapperKeepOpaque,
+	WrapperOpaque,
 };
 
 mod stored_map;
