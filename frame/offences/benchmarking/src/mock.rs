@@ -213,12 +213,14 @@ impl pallet_im_online::Config for Test {
 	type MaxKeys = MaxValidatorsCount;
 	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
 	type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
+	type MaxReportersCount = MaxReportersCount;
 }
 
 impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type MaxReportersCount = MaxReportersCount;
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test
