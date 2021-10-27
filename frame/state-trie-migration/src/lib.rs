@@ -18,7 +18,7 @@
 //! # Pallet State Trie Migration
 //!
 //! Reads and writes all keys and values in the entire state in a systematic way. This is useful for
-//! upgrading a chain to `StorageVersion::V2`, where all keys need to be touched.
+//! upgrading a chain to [`sp-core::StateVersion::V1`], where all keys need to be touched.
 //!
 //! ## Migration Types
 //!
@@ -108,6 +108,7 @@ pub mod pallet {
 	pub(crate) type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+	/// The weight information of this pallet.
 	pub trait WeightInfo {
 		fn process_top_key(x: u32) -> Weight;
 	}
@@ -244,6 +245,8 @@ pub mod pallet {
 					break
 				}
 			}
+
+			// accumulate dynamic data into the storage items. 
 			self.size = self.size.saturating_add(self.dyn_size);
 			self.child_items = self.child_items.saturating_add(self.dyn_child_items);
 			self.top_items = self.top_items.saturating_add(self.dyn_top_items);
@@ -259,9 +262,6 @@ pub mod pallet {
 
 		/// Migrate AT MOST ONE KEY. This can be either a top or a child key.
 		///
-		/// The only exception to this is that when the last key of the child tree is migrated, then
-		/// the top tree under which the child tree lives is also migrated.
-		///
 		/// This function is the core of this entire pallet.
 		fn migrate_tick(&mut self) {
 			match (self.current_top.as_ref(), self.current_child.as_ref()) {
@@ -275,14 +275,15 @@ pub mod pallet {
 					{
 						// no child migration at hand, but one will begin here.
 						let maybe_first_child_key = {
-							let child_top_key = Pallet::<T>::child_io_key(top_key);
-							sp_io::default_child_storage::next_key(child_top_key, &vec![])
+							let child_root = Pallet::<T>::child_io_key(top_key);
+							sp_io::default_child_storage::next_key(child_root, &vec![])
 						};
 						if let Some(first_child_key) = maybe_first_child_key {
 							self.current_child = Some(first_child_key);
 							self.prev_tick_child = true;
 							self.migrate_child();
 						} else {
+							log!(warn, "{:?} is a child root but it seems to have no inner keys", top_key);
 							self.migrate_top();
 						}
 					} else {
@@ -309,13 +310,13 @@ pub mod pallet {
 				self.current_child.clone().expect("value checked to be `Some`; qed");
 			let current_top = self.current_top.clone().expect("value checked to be `Some`; qed");
 
-			let child_top_key = Pallet::<T>::child_io_key(&current_top);
-			if let Some(data) = sp_io::default_child_storage::get(child_top_key, &current_child) {
+			let child_root = Pallet::<T>::child_io_key(&current_top);
+			if let Some(data) = sp_io::default_child_storage::get(child_root, &current_child) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::default_child_storage::set(child_top_key, &current_child, &data)
+				sp_io::default_child_storage::set(child_root, &current_child, &data)
 			}
 			self.dyn_child_items.saturating_inc();
-			let next_key = sp_io::default_child_storage::next_key(child_top_key, &current_child);
+			let next_key = sp_io::default_child_storage::next_key(child_root, &current_child);
 			self.current_child = next_key;
 			log!(
 				trace,
