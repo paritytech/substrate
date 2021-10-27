@@ -47,7 +47,7 @@ sp-panic-handler = { version = "2.0.0", path = "../../../primitives/panic-handle
 parity-scale-codec = "1.3.4"
 sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
 sc-keystore = { version = "2.0.0", path = "../../keystore" }
-ecies = { version = "0.2", default-features = false, features = ["openssl"]}
+ecies = { git="https://github.com/mangata-finance/ecies-rs", branch="mangata-dev", version = "0.2", default-features = false, features = ["openssl"]}
 
 [dev-dependencies]
 sc-client-db = { version = "0.8.0", default-features = false, path = "../../db", features=["with-kvdb-rocksdb"] }
