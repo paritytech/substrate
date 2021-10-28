@@ -29,6 +29,8 @@ use frame_support::{
 
 use crate::historical as pallet_session_historical;
 
+const OLD_PREFIX: &str = "Session";
+
 /// Migrate the entire storage of this pallet to a new prefix.
 ///
 /// This new prefix must be the same as the one set in construct_runtime.
@@ -36,17 +38,11 @@ use crate::historical as pallet_session_historical;
 /// The migration will look into the storage version in order not to trigger a migration on an up
 /// to date storage. Thus the on chain storage version must be less than 1 in order to trigger the
 /// migration.
-pub fn migrate<
-	T: pallet_session_historical::Config,
-	P: GetStorageVersion + PalletInfoAccess,
-	N: AsRef<str>,
->(
-	old_pallet_name: N,
+pub fn migrate<T: pallet_session_historical::Config, P: GetStorageVersion + PalletInfoAccess>(
 ) -> Weight {
-	let old_pallet_name = old_pallet_name.as_ref();
 	let new_pallet_name = <P as PalletInfoAccess>::name();
 
-	if new_pallet_name == old_pallet_name {
+	if new_pallet_name == OLD_PREFIX {
 		log::info!(
 			target: "runtime::session_historical",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
@@ -65,18 +61,18 @@ pub fn migrate<
 		let storage_prefix = pallet_session_historical::HistoricalSessions::<T>::storage_prefix();
 		frame_support::storage::migration::move_storage_from_pallet(
 			storage_prefix,
-			old_pallet_name.as_bytes(),
+			OLD_PREFIX.as_bytes(),
 			new_pallet_name.as_bytes(),
 		);
-		log_migration("migration", storage_prefix, old_pallet_name, new_pallet_name);
+		log_migration("migration", storage_prefix, OLD_PREFIX, new_pallet_name);
 
 		let storage_prefix = pallet_session_historical::StoredRange::<T>::storage_prefix();
 		frame_support::storage::migration::move_storage_from_pallet(
 			storage_prefix,
-			old_pallet_name.as_bytes(),
+			OLD_PREFIX.as_bytes(),
 			new_pallet_name.as_bytes(),
 		);
-		log_migration("migration", storage_prefix, old_pallet_name, new_pallet_name);
+		log_migration("migration", storage_prefix, OLD_PREFIX, new_pallet_name);
 
 		StorageVersion::new(1).put::<P>();
 		<T as frame_system::Config>::BlockWeights::get().max_block
@@ -97,26 +93,17 @@ pub fn migrate<
 pub fn pre_migrate<
 	T: pallet_session_historical::Config,
 	P: GetStorageVersion + PalletInfoAccess,
-	N: AsRef<str>,
->(
-	old_pallet_name: N,
-) {
-	let old_pallet_name = old_pallet_name.as_ref();
+>() {
 	let new_pallet_name = <P as PalletInfoAccess>::name();
 
 	let storage_prefix_historical_sessions =
 		pallet_session_historical::HistoricalSessions::<T>::storage_prefix();
 	let storage_prefix_stored_range = pallet_session_historical::StoredRange::<T>::storage_prefix();
 
-	log_migration(
-		"pre-migration",
-		storage_prefix_historical_sessions,
-		old_pallet_name,
-		new_pallet_name,
-	);
-	log_migration("pre-migration", storage_prefix_stored_range, old_pallet_name, new_pallet_name);
+	log_migration("pre-migration", storage_prefix_historical_sessions, OLD_PREFIX, new_pallet_name);
+	log_migration("pre-migration", storage_prefix_stored_range, OLD_PREFIX, new_pallet_name);
 
-	if new_pallet_name == old_pallet_name {
+	if new_pallet_name == OLD_PREFIX {
 		return
 	}
 
@@ -142,11 +129,7 @@ pub fn pre_migrate<
 pub fn post_migrate<
 	T: pallet_session_historical::Config,
 	P: GetStorageVersion + PalletInfoAccess,
-	N: AsRef<str>,
->(
-	old_pallet_name: N,
-) {
-	let old_pallet_name = old_pallet_name.as_ref();
+>() {
 	let new_pallet_name = <P as PalletInfoAccess>::name();
 
 	let storage_prefix_historical_sessions =
@@ -156,17 +139,17 @@ pub fn post_migrate<
 	log_migration(
 		"post-migration",
 		storage_prefix_historical_sessions,
-		old_pallet_name,
+		OLD_PREFIX,
 		new_pallet_name,
 	);
-	log_migration("post-migration", storage_prefix_stored_range, old_pallet_name, new_pallet_name);
+	log_migration("post-migration", storage_prefix_stored_range, OLD_PREFIX, new_pallet_name);
 
-	if new_pallet_name == old_pallet_name {
+	if new_pallet_name == OLD_PREFIX {
 		return
 	}
 
 	// Assert that no `HistoricalSessions` and `StoredRange` storages remains at the old prefix.
-	let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
+	let old_pallet_prefix = twox_128(OLD_PREFIX.as_bytes());
 	let old_historical_sessions_key =
 		[&old_pallet_prefix, &twox_128(storage_prefix_historical_sessions)[..]].concat();
 	let old_historical_sessions_key_iter = frame_support::storage::KeyPrefixIterator::new(
