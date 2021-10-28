@@ -305,11 +305,7 @@ pub trait PrivilegeCmp<Origin> {
 pub struct EqualPrivilegeOnly;
 impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
 	fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering> {
-		if left == right {
-			Some(Ordering::Equal)
-		} else {
-			None
-		}
+		(left == right).then(|| Ordering::Equal)
 	}
 }
 
