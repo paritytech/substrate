@@ -49,7 +49,7 @@ extrinsic-info-runtime-api = { path = '../../primitives/extrinsic-info-runtime-a
 
 # 3rd party
 cfg-if = "0.1.10"
-log = { version = "0.4.8", optional = true }
+log = { version = "0.4.8" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 
 [dev-dependencies]
@@ -73,10 +73,9 @@ std = [
 	"frame-executive/std",
 	"sp-inherents/std",
 	"sp-keyring",
-	"log",
+	"log/std",
 	"memory-db/std",
 	"sp-offchain/std",
-	"sp-core/std",
 	"sp-core/std",
 	"sp-std/std",
 	"sp-runtime-interface/std",

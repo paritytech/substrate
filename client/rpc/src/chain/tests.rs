@@ -27,6 +27,7 @@ use sp_rpc::list::ListOrValue;
 use sc_block_builder::BlockBuilderProvider;
 use futures::{executor, compat::{Future01CompatExt, Stream01CompatExt}};
 use crate::testing::TaskExecutor;
+use substrate_test_encrypted_tx::create_digest;
 
 #[test]
 fn should_return_header() {
@@ -67,7 +68,7 @@ fn should_return_a_block() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
-	let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+	let block = client.new_block(create_digest()).unwrap().build(Default::default()).unwrap().block;
 	let block_hash = block.hash();
 	client.import(BlockOrigin::Own, block).unwrap();
 
@@ -76,6 +77,8 @@ fn should_return_a_block() {
 		api.block(Some(client.genesis_hash()).into()).wait(),
 		Ok(Some(SignedBlock { justification: None, .. }))
 	);
+
+    println!("{:?}", api.block(Some(block_hash).into()).wait());
 
 	assert_matches!(
 		api.block(Some(block_hash).into()).wait(),
@@ -86,7 +89,7 @@ fn should_return_a_block() {
 				state_root: x.block.header.state_root.clone(),
 				extrinsics_root:
 					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
-				digest: Default::default(),
+				digest: create_digest(),
 				seed: Default::default(),
 			},
 			extrinsics: vec![],
@@ -102,7 +105,7 @@ fn should_return_a_block() {
 				state_root: x.block.header.state_root.clone(),
 				extrinsics_root:
 					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
-				digest: Default::default(),
+				digest: create_digest(),
 				seed: Default::default(),
 			},
 			extrinsics: vec![],
@@ -136,7 +139,7 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(None))
 	);
 
-	let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+	let block = client.new_block(create_digest()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
@@ -170,7 +173,7 @@ fn should_return_finalized_hash() {
 	);
 
 	// import new block
-	let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+	let block = client.new_block(create_digest()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::Own, block).unwrap();
 	// no finalization yet
 	assert_matches!(
@@ -202,7 +205,7 @@ fn should_notify_about_latest_block() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+		let block = client.new_block(create_digest()).unwrap().build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
@@ -232,7 +235,7 @@ fn should_notify_about_best_block() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+		let block = client.new_block(create_digest()).unwrap().build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
@@ -262,7 +265,7 @@ fn should_notify_about_finalized_block() {
 			Ok(Ok(SubscriptionId::String(_)))
 		));
 
-		let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+		let block = client.new_block(create_digest()).unwrap().build(Default::default()).unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}

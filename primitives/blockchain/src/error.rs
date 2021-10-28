@@ -132,7 +132,28 @@ pub enum Error {
 	TransactionPoolNotReady,
 	#[display(fmt = "Database: {}", _0)]
 	DatabaseError(sp_database::error::DatabaseError),
-	/// A convenience variant for String
+	#[display(fmt = "Missing public key for account {:?}", _0)]
+	#[from(ignore)]
+	MissingPublicKey(sp_runtime::AccountId32),
+	#[from(ignore)]
+	#[display(fmt = "Cannot find account id of collator: {}", _0)]
+	UnknownCollatorId(u32),
+	#[display(fmt = "Block builder is unknown")]
+	UnknownBlockBuilder,
+	#[display(fmt = "Cannot find decryption key for public key {}", _0)]
+	#[from(ignore)]
+	CannotFindDecryptionKey(sp_core::ecdsa::Public),
+	#[display(fmt = "{} didnt decrypt doubly encrypted transaction", _0)]
+	#[from(ignore)]
+	MissingSinglyEncryptedTransaction(sp_runtime::AccountId32),
+	#[display(fmt = "{} didnt decrypt singly encrypted transaction", _0)]
+	#[from(ignore)]
+	MissingDecryptedTransaction(sp_runtime::AccountId32),
+	#[display(fmt = "Unexpected decrypting transaction")]
+	UnexpectedDecryptionTransaction,
+	#[display(fmt = "Decrypted payload mismatch")]
+    DecryptedPayloadMismatch,
+	// A convenience variant for String
 	#[display(fmt = "{}", _0)]
 	Msg(String),
 }

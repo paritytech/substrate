@@ -24,13 +24,14 @@ use sp_consensus::import_queue::{
 };
 use substrate_test_runtime_client::{self, prelude::*};
 use substrate_test_runtime_client::runtime::{Block, Hash};
+use substrate_test_encrypted_tx::create_digest;
 use sp_runtime::generic::BlockId;
 use sc_block_builder::BlockBuilderProvider;
 use super::*;
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
 	let mut client = substrate_test_runtime_client::new();
-	let block = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
+	let block = client.new_block(create_digest()).unwrap().build(Default::default()).unwrap().block;
 	client.import(BlockOrigin::File, block).unwrap();
 
 	let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);

@@ -1,0 +1,23 @@
+[package]
+name = "substrate-test-encrypted-tx"
+version = "2.0.1"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+sc-consensus-babe = { version = "0.8.0", path = "../../client/consensus/babe" }
+sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+substrate-test-runtime = { version = "2.0.0", path = "../runtime" }
+
+[features]
+default = [ "std" ]
+std = [
+	"sp-runtime/std",
+]

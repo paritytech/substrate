@@ -64,6 +64,7 @@ use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
+use substrate_test_encrypted_tx::create_digest;
 
 type AuthorityId = sp_consensus_babe::AuthorityId;
 
@@ -299,7 +300,7 @@ impl<D> Peer<D> {
 		for _  in 0..count {
 			let builder = full_client.new_block_at(
 				&BlockId::Hash(at),
-				Default::default(),
+				create_digest(),
 				false,
 			).unwrap();
 			let block = edit_block(builder);

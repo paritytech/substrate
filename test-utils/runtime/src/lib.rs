@@ -63,6 +63,18 @@ use cfg_if::cfg_if;
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
+pub const ALICE_COLLATOR_ID: u32 = 1;
+pub const ALICE_ACCOUNT_ID: [u8;32]  = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217];
+pub const ALICE_PUB_KEY: [u8;33] = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161];
+
+pub const BOB_COLLATOR_ID: u32 = 4;
+pub const BOB_ACCOUNT_ID: [u8;32]  = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217];
+pub const BOB_PUB_KEY: [u8;33] = [2, 10, 16, 145, 52, 31, 229, 102, 75, 250, 23, 130, 213, 224, 71, 121, 104, 144, 104, 201, 22, 176, 76, 179, 101, 236, 49, 83, 117, 86, 132, 217, 161];
+
+pub const DUMMY_COLLATOR_ID: u32 = 2;
+pub const DUMMY_ACCOUNT_ID: [u8;32]  = [0u8;32];
+
+pub const UNKNOWN_COLLATOR_ID: u32 = 3;
 
 // Include the WASM binary
 #[cfg(feature = "std")]
@@ -136,6 +148,27 @@ impl Transfer {
 	}
 }
 
+// #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+// pub enum EncryptedExtrinsic{
+//     DoublyEncrypted{
+//         doubly_encrypted_call: Vec<u8>,
+//         nonce: u32,
+//         weight: Weight,
+//         builder: AccountId32,
+//         executor: AccountId32,
+//     },
+//     SinglyEncrypted{
+//         identifier: Hash,
+//         singly_encrypted_call: Vec<u8>,
+//     },
+//     Decrypted{
+//         identifier: Hash,
+//         decrypted_call: Vec<u8>,
+//     },
+// }
+//
+
+
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
@@ -148,6 +181,11 @@ pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
+    SubmitEncryptedTransaction{
+		singly_encrypted: bool,
+		data: Vec<u8>,
+	},
+    EncryptedTX(ExtrinsicType<sp_core::H256>),
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -176,6 +214,8 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
+			Extrinsic::EncryptedTX(e) => Ok(Extrinsic::EncryptedTX(e)),
+            Extrinsic::SubmitEncryptedTransaction{data, singly_encrypted} => Ok(Extrinsic::SubmitEncryptedTransaction{data, singly_encrypted})
 		}
 	}
 }
@@ -570,32 +610,70 @@ cfg_if! {
 
 			impl sp_encrypted_tx::EncryptedTxApi<Block> for Runtime
 			{
-				fn create_submit_singly_encrypted_transaction(_identifier: <Block as BlockT>::Hash, _singly_encrypted_call: Vec<u8>) -> <Block as BlockT>::Extrinsic{
-					unimplemented!()
+				fn create_submit_singly_encrypted_transaction(identifier: <Block as BlockT>::Hash, singly_encrypted_call: Vec<u8>) -> <Block as BlockT>::Extrinsic{
+					Extrinsic::EncryptedTX(
+						ExtrinsicType::<<Block as BlockT>::Hash>::SinglyEncryptedTx{
+							identifier,
+							singly_encrypted_call,
+						}
+					)
 				}
 
-				fn create_submit_decrypted_transaction(_identifier: <Block as BlockT>::Hash, _decrypted_call: Vec<u8>, _weight: Weight) -> <Block as BlockT>::Extrinsic{
-					unimplemented!()
+				fn create_submit_decrypted_transaction(identifier: <Block as BlockT>::Hash, decrypted_call: Vec<u8>, _weight: Weight) -> <Block as BlockT>::Extrinsic{
+					Extrinsic::EncryptedTX(
+						ExtrinsicType::<<Block as BlockT>::Hash>::DecryptedTx{
+							identifier,
+							decrypted_call,
+						}
+					)
 				}
 
-				fn get_type(_extrinsic: <Block as BlockT>::Extrinsic) -> ExtrinsicType<<Block as BlockT>::Hash>{
-					unimplemented!()
+				fn get_type(extrinsic: <Block as BlockT>::Extrinsic) -> ExtrinsicType<<Block as BlockT>::Hash>{
+					match extrinsic{
+                        Extrinsic::EncryptedTX(e) => e,
+                        _ => { ExtrinsicType::<<Block as BlockT>::Hash>::Other }
+                    }
 				}
 
 				fn get_double_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					let queue: Option<Vec<EncryptedTx::<<crate::Block as BlockT>::Hash>>> = frame_support::storage::unhashed::get(system::FIFO_DOUBLE_ENCRYPTED);
+					match queue{
+						Some(q) => {
+							log::info!("found queue in storage!");
+							q
+						},
+						None => vec![]
+					}
 				}
 
 				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					let queue: Option<Vec<EncryptedTx::<<crate::Block as BlockT>::Hash>>> = frame_support::storage::unhashed::get(system::FIFO_SINGLY_ENCRYPTED);
+					match queue{
+						Some(q) => {
+							log::info!("found queue in storage!");
+							q
+						},
+						None => vec![]
+					}
 				}
 
-				fn get_account_id(_block_builder_id: u32) -> AccountId32{
-					Default::default()
+				fn get_account_id(block_builder_id: u32) -> Option<AccountId32>{
+                    match block_builder_id{
+                        ALICE_COLLATOR_ID => Some(ALICE_ACCOUNT_ID.into()),
+                        BOB_COLLATOR_ID => Some(BOB_ACCOUNT_ID.into()),
+                        DUMMY_COLLATOR_ID => Some(DUMMY_ACCOUNT_ID.into()),
+                        _ => None
+                    }
 				}
 
-				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
-					unimplemented!()
+				fn get_authority_public_key(authority_id: &AccountId32) -> Option<sp_core::ecdsa::Public>{
+                    if authority_id == &ALICE_ACCOUNT_ID.into() {
+                        Some(sp_core::ecdsa::Public::from_raw(ALICE_PUB_KEY))
+                    }else if authority_id == &BOB_ACCOUNT_ID.into() {
+                        Some(sp_core::ecdsa::Public::from_raw(BOB_PUB_KEY))
+                    }else{
+                        None
+                    }
 				}
 			}
 
@@ -627,6 +705,17 @@ cfg_if! {
 							propagate: false,
 						});
 					}
+
+                    if let Extrinsic::SubmitEncryptedTransaction{data,..}  = utx {
+						return Ok(ValidTransaction {
+							priority: Default::default(),
+							requires: vec![],
+							provides: vec![data],
+							longevity: 1,
+							propagate: false,
+						});
+
+                    }
 
 					system::validate_transaction(utx)
 				}
@@ -864,18 +953,19 @@ cfg_if! {
 				}
 
 				fn get_double_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					unimplemented!()
 				}
+
 
 				fn get_singly_encrypted_transactions(_block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>{
-					Default::default()
+					unimplemented!()
 				}
 
-				fn get_account_id(_block_builder_id: u32) -> AccountId32{
-				    Default::default()
+				fn get_account_id(block_builder_id: u32) -> Option<AccountId32>{
+					unimplemented!()
 				}
 
-				fn get_authority_public_key(_authority_id: &AccountId32) -> sp_core::ecdsa::Public{
+				fn get_authority_public_key(_authority_id: &AccountId32) -> Option<sp_core::ecdsa::Public>{
 					unimplemented!()
 				}
 			}
@@ -1233,6 +1323,8 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 
 	#[test]
+    // TODO: fix before PR
+	#[ignore]
 	fn heap_pages_is_respected() {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 

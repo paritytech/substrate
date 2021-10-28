@@ -16,6 +16,7 @@ sc-light = { version = "2.0.0", path = "../../../client/light" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
 sc-block-builder = { version = "0.8.0", path = "../../../client/block-builder" }
 substrate-test-client = { version = "2.0.0", path = "../../client" }
+substrate-test-encrypted-tx = { version = "2.0.0", path = "../../encrypted-tx" , features=["std"]}
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }

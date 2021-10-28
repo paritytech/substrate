@@ -107,7 +107,7 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeString,
 	traits::{
-		AtLeast32Bit, Zero, SaturatedConversion, Scale
+		AtLeast32Bit, Zero, One, SaturatedConversion, Scale
 	}
 };
 use frame_system::ensure_none;
@@ -192,7 +192,8 @@ decl_module! {
 		/// - 1 storage deletion (codec `O(1)`).
 		/// # </weight>
 		fn on_finalize() {
-			if <frame_system::Module<T>>::block_number() > 1.into(){
+            let block_number = <frame_system::Module<T>>::block_number();
+			if !block_number.is_zero() && !block_number.is_one(){
 				assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 			}
 		}
@@ -284,7 +285,8 @@ impl<T: Trait> UnixTime for Module<T> {
 		// `sp_timestamp::InherentDataProvider`.
 		let now = Self::now();
 		sp_std::if_std! {
-			if now == T::Moment::zero() && <frame_system::Module<T>>::block_number() > 1.into() {
+            let block_number = <frame_system::Module<T>>::block_number();
+			if now == T::Moment::zero() && !block_number.is_zero() && !block_number.is_one(){
 				debug::error!(
 					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
 				);

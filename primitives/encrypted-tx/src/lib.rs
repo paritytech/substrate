@@ -6,10 +6,11 @@ use sp_runtime::AccountId32;
 use sp_std::vec::Vec;
 
 
+use sp_core::RuntimeDebug;
 use frame_support::weights::Weight;
 
 
-#[derive(Encode, Decode, PartialEq)]
+#[derive(Encode, Decode, PartialEq, Clone, Eq, RuntimeDebug)]
 pub enum ExtrinsicType<Hash>{
 	DoublyEncryptedTx{
         doubly_encrypted_call: Vec<u8>,
@@ -30,7 +31,7 @@ pub enum ExtrinsicType<Hash>{
 }
 
 
-#[derive(Encode, Decode, PartialEq)]
+#[derive(Encode, Decode, PartialEq, Debug)]
 pub struct EncryptedTx<Hash>{
     pub tx_id: Hash,
     pub data: Vec<u8>,
@@ -55,9 +56,9 @@ sp_api::decl_runtime_apis! {
 		fn get_singly_encrypted_transactions(block_builder_id: &AccountId32) -> Vec<EncryptedTx<<Block as BlockT>::Hash>>;
 
         // fetches address assigned to authority id
-		fn get_account_id(block_builder_id: u32) -> AccountId32;
+		fn get_account_id(block_builder_id: u32) -> Option<AccountId32>;
 
         // use autority id to identify public key (from encrypted transactions apllet)
-		fn get_authority_public_key(authority_id: &AccountId32) -> sp_core::ecdsa::Public;
+		fn get_authority_public_key(authority_id: &AccountId32) -> Option<sp_core::ecdsa::Public>;
 	}
 }

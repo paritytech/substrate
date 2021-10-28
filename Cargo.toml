@@ -1,3 +1,6 @@
+[profile.dev]
+debug = 0
+
 [workspace]
 members = [
 	# "bin/node-template/node",
@@ -174,6 +177,7 @@ members = [
 	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
+	"test-utils/encrypted-tx",
 	"test-utils/derive",
 	"test-utils/runtime",
 	"test-utils/runtime/client",

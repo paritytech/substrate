@@ -40,4 +40,5 @@ sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
 substrate-test-runtime-transaction-pool = { version = "2.0.0", path = "../../test-utils/runtime/transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+substrate-test-encrypted-tx = { version = "2.0.0", path = "../../test-utils/encrypted-tx" }
 sc-block-builder = { version = "0.8.0", path = "../block-builder" }

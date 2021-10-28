@@ -359,7 +359,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "clang-sys",
  "clap",
- "env_logger",
+ "env_logger 0.7.1",
  "lazy_static",
  "lazycell",
  "log",
@@ -1208,6 +1208,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ecies"
+version = "0.2.1"
+source = "git+https://github.com/mangata-finance/ecies-rs?branch=mangata-dev#50e01c7c1de2cad14809f0791548c73a8a0396a0"
+dependencies = [
+ "hkdf",
+ "libsecp256k1 0.3.5",
+ "openssl",
+ "rand 0.7.3",
+ "sha2 0.9.8",
+]
+
+[[package]]
 name = "ed25519"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1263,7 +1275,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
 dependencies = [
  "atty",
- "humantime",
+ "humantime 1.3.0",
+ "log",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
+dependencies = [
+ "atty",
+ "humantime 2.1.0",
  "log",
  "regex",
  "termcolor",
@@ -1271,9 +1296,9 @@ dependencies = [
 
 [[package]]
 name = "environmental"
-version = "1.1.2"
+version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6576a1755ddffd988788025e75bce9e74b018f7cc226198fe931d077911c6d7e"
+checksum = "68b91989ae21441195d7d9b9993a2f9295c7e1a8c96255d8b729accddc124797"
 
 [[package]]
 name = "erased-serde"
@@ -1477,7 +1502,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b3937f028664bd0e13df401ba49a4567ccda587420365823242977f06609ed1"
 dependencies = [
- "env_logger",
+ "env_logger 0.7.1",
  "log",
 ]
 
@@ -2356,6 +2381,12 @@ checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
 dependencies = [
  "quick-error",
 ]
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
@@ -5371,7 +5402,7 @@ version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a44883e74aa97ad63db83c4bf8ca490f02b2fc02f92575e720c8551e843c945f"
 dependencies = [
- "env_logger",
+ "env_logger 0.7.1",
  "log",
  "rand 0.7.3",
  "rand_core 0.5.1",
@@ -5971,8 +6002,10 @@ dependencies = [
 name = "sc-basic-authorship"
 version = "0.8.0"
 dependencies = [
- "ecies",
+ "ecies 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.9.0",
  "extrinsic-info-runtime-api",
+ "frame-support",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "hex-literal",
@@ -5989,6 +6022,7 @@ dependencies = [
  "sc-telemetry",
  "sc-transaction-pool",
  "sp-api",
+ "sp-application-crypto",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -5998,6 +6032,7 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tokio-executor 0.2.0-alpha.6",
 ]
@@ -6278,6 +6313,7 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "tempfile",
 ]
@@ -6353,6 +6389,7 @@ dependencies = [
  "sp-timestamp",
  "sp-transaction-pool",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "tempfile",
@@ -6545,6 +6582,7 @@ dependencies = [
  "sp-tracing",
  "sp-utils",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.22",
@@ -6701,6 +6739,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-tracing",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -6795,6 +6834,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "sp-version",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "tokio 0.1.22",
 ]
@@ -6859,6 +6899,8 @@ dependencies = [
  "async-std",
  "derive_more",
  "directories",
+ "ecies 0.2.1 (git+https://github.com/mangata-finance/ecies-rs?branch=mangata-dev)",
+ "env_logger 0.9.0",
  "exit-future",
  "extrinsic-info-runtime-api",
  "extrinsic-shuffler",
@@ -6917,6 +6959,7 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.22",
@@ -6928,6 +6971,8 @@ dependencies = [
 name = "sc-service-test"
 version = "2.0.0"
 dependencies = [
+ "ecies 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.9.0",
  "fdlimit",
  "futures 0.1.29",
  "futures 0.3.5",
@@ -6938,7 +6983,9 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus-babe",
  "sc-executor",
+ "sc-keystore",
  "sc-light",
  "sc-network",
  "sc-service",
@@ -6946,6 +6993,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-encrypted-tx",
  "sp-externalities",
  "sp-panic-handler",
  "sp-runtime",
@@ -6954,6 +7002,7 @@ dependencies = [
  "sp-tracing",
  "sp-transaction-pool",
  "sp-trie",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
@@ -7062,6 +7111,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "substrate-prometheus-endpoint",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "wasm-timer",
@@ -7629,6 +7679,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "sp-block-builder",
  "sp-consensus",
+ "sp-core",
  "sp-database",
  "sp-runtime",
  "sp-state-machine",
@@ -8466,6 +8517,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-consensus",
+ "sc-consensus-babe",
  "sc-executor",
  "sc-light",
  "sc-service",
@@ -8477,6 +8529,15 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
+]
+
+[[package]]
+name = "substrate-test-encrypted-tx"
+version = "2.0.1"
+dependencies = [
+ "sc-consensus-babe",
+ "sp-runtime",
+ "substrate-test-runtime",
 ]
 
 [[package]]
@@ -8544,6 +8605,7 @@ dependencies = [
  "sp-encrypted-tx",
  "sp-runtime",
  "substrate-test-client",
+ "substrate-test-encrypted-tx",
  "substrate-test-runtime",
 ]
 

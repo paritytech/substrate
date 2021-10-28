@@ -25,6 +25,7 @@ use sp_io::{
 };
 use frame_support::storage;
 use frame_support::{decl_storage, decl_module};
+use sp_runtime::traits::Block as BlockT;
 use sp_runtime::{
 	traits::Header as _, generic, ApplyExtrinsicResult,
 	transaction_validity::{
@@ -37,8 +38,11 @@ use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
 use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
+use sp_encrypted_tx::EncryptedTx;
 
 const NONCE_OF: &[u8] = b"nonce:";
+pub const FIFO_DOUBLE_ENCRYPTED: &[u8] = b"FIFO2:";
+pub const FIFO_SINGLY_ENCRYPTED: &[u8] = b"FIFO1:";
 const BALANCE_OF: &[u8] = b"balance:";
 
 decl_module! {
@@ -249,6 +253,8 @@ fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
 }
 
 fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyExtrinsicResult {
+
+    log::info!("execute_transaction_backend");
 	check_signature(utx)?;
 	match utx {
 		Extrinsic::Transfer { exhaust_resources_when_not_first: true, .. } if extrinsic_index != 0 =>
@@ -262,10 +268,28 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
 			execute_changes_trie_config_update(new_config.clone()),
+        Extrinsic::EncryptedTX(_) => {Ok(Ok(()))},
+        Extrinsic::SubmitEncryptedTransaction{data, singly_encrypted} => execute_submit_encrypted_tx_backend(data, *singly_encrypted),
 	}
 }
 
+fn execute_submit_encrypted_tx_backend(payload: &Vec<u8>, is_singly_encrypted: bool) -> ApplyExtrinsicResult {
+	log::info!("execute_submit_encrypted_tx_backend");
+    let label = if is_singly_encrypted {FIFO_SINGLY_ENCRYPTED} else {FIFO_DOUBLE_ENCRYPTED};
+	let mut fifo: Vec<_> = storage::unhashed::get_or_default(label);
+	fifo.push(
+		EncryptedTx::<<crate::Block as BlockT>::Hash>{
+			tx_id: Default::default(),
+			data: payload.clone(),
+		}
+	);
+	storage::unhashed::put(label, &fifo);
+	log::info!("{} QUEUE {:?}", sp_std::str::from_utf8(label).unwrap(), fifo);
+	Ok(Ok(()))
+}
+
 fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
+    log::info!("execute_transfer_backend");
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
@@ -297,6 +321,7 @@ fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyExtr
 }
 
 fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicResult {
+    log::info!("execute_storage_change");
 	match value {
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),
