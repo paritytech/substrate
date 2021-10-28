@@ -788,6 +788,7 @@ pub mod pallet {
 						warn,
 						"some data seems to be stored under key {:?}, which is a non-default \
 						child-trie. This is a logical error and shall not happen.",
+						Self::halt(); 
 						HexDisplay::from(root),
 					);
 					Default::default()
