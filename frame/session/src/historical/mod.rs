@@ -91,7 +91,6 @@ pub mod pallet {
 	/// The range of historical sessions we store. [first, last)
 	#[pallet::storage]
 	pub type StoredRange<T> = StorageValue<_, (SessionIndex, SessionIndex), OptionQuery>;
-
 }
 
 impl<T: Config> Pallet<T> {
