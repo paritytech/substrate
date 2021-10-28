@@ -55,7 +55,7 @@
 //!
 //! The (minor) caveat of this approach is that we cannot know in advance how many bytes reading a
 //! certain number of keys will incur. To overcome this, the runtime needs to configure this pallet
-//! with a `SignedDepositPerItem`. This is be per-item deposit that the origin of the signed
+//! with a `SignedDepositPerItem`. This is the per-item deposit that the origin of the signed
 //! migration transactions need to have in their account (on top of the normal fee) and if the size
 //! witness data that they claim is incorrect, this deposit is slashed.
 //!
