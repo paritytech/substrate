@@ -92,15 +92,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type StoredRange<T> = StorageValue<_, (SessionIndex, SessionIndex), OptionQuery>;
 
-	/// Deprecated.
-	#[pallet::storage]
-	pub type CachedObsolete<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		SessionIndex,
-		Vec<(T::ValidatorId, T::FullIdentification)>,
-		OptionQuery,
-	>;
 }
 
 impl<T: Config> Pallet<T> {
