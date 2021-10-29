@@ -117,7 +117,13 @@ pub mod pallet {
 		/// The limit on the number of batched calls.
 		fn batched_calls_limit() -> u32 {
 			let allocator_limit = sp_core::MAX_POSSIBLE_ALLOCATION;
-			let call_size = core::mem::size_of::<<T as Config>::Call>() as u32;
+			// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
+			// the `size_of` of the `Call` can be different. To ensure that this don't leads to
+			// mismatches between native/wasm or to different metadata for the same runtime, we
+			// algin the call size. The value is choosen big enough to hopefully never reach it.
+			let call_align = 1024;
+			let call_size = ((core::mem::size_of::<<T as Config>::Call>() as u32 + call_align - 1) /
+				call_align) * call_align;
 			// The margin to take into account vec doubling capacity.
 			let margin_factor = 3;
 
