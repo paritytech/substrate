@@ -70,35 +70,17 @@ pub struct ContractResult<T> {
 pub type ContractExecResult = ContractResult<Result<ExecReturnValue, DispatchError>>;
 
 /// Result type of a `bare_instantiate` call.
-pub type ContractInstantiateResult<AccountId, BlockNumber> =
-	ContractResult<Result<InstantiateReturnValue<AccountId, BlockNumber>, DispatchError>>;
+pub type ContractInstantiateResult<AccountId> =
+	ContractResult<Result<InstantiateReturnValue<AccountId>, DispatchError>>;
 
 /// Result type of a `get_storage` call.
 pub type GetStorageResult = Result<Option<Vec<u8>>, ContractAccessError>;
-
-/// Result type of a `rent_projection` call.
-pub type RentProjectionResult<BlockNumber> =
-	Result<RentProjection<BlockNumber>, ContractAccessError>;
 
 /// The possible errors that can happen querying the storage of a contract.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub enum ContractAccessError {
 	/// The given address doesn't point to a contract.
 	DoesntExist,
-	/// The specified contract is a tombstone and thus cannot have any storage.
-	IsTombstone,
-}
-
-#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub enum RentProjection<BlockNumber> {
-	/// Eviction is projected to happen at the specified block number.
-	EvictionAt(BlockNumber),
-	/// No eviction is scheduled.
-	///
-	/// E.g. Contract accumulated enough funds to offset the rent storage costs.
-	NoEviction,
 }
 
 bitflags! {
@@ -134,19 +116,11 @@ impl ExecReturnValue {
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub struct InstantiateReturnValue<AccountId, BlockNumber> {
+pub struct InstantiateReturnValue<AccountId> {
 	/// The output of the called constructor.
 	pub result: ExecReturnValue,
 	/// The account id of the new contract.
 	pub account_id: AccountId,
-	/// Information about when and if the new project will be evicted.
-	///
-	/// # Note
-	///
-	/// `None` if `bare_instantiate` was called with
-	/// `compute_projection` set to false. From the perspective of an RPC this means that
-	/// the runtime API did not request this value and this feature is therefore unsupported.
-	pub rent_projection: Option<RentProjection<BlockNumber>>,
 }
 
 /// Reference to an existing code hash or a new wasm module.

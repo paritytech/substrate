@@ -41,13 +41,12 @@
 
 mod worker;
 
-pub use crate::worker::{MiningBuild, MiningMetadata, MiningWorker};
+pub use crate::worker::{MiningBuild, MiningHandle, MiningMetadata};
 
 use crate::worker::UntilImportedOrTimeout;
 use codec::{Decode, Encode};
 use futures::{Future, StreamExt};
 use log::*;
-use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use sc_client_api::{self, backend::AuxStore, BlockOf, BlockchainEvents};
 use sc_consensus::{
@@ -525,7 +524,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 	build_time: Duration,
 	can_author_with: CAW,
 ) -> (
-	Arc<Mutex<MiningWorker<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>>>,
+	MiningHandle<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>,
 	impl Future<Output = ()>,
 )
 where
@@ -543,12 +542,7 @@ where
 	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 {
 	let mut timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
-	let worker = Arc::new(Mutex::new(MiningWorker {
-		build: None,
-		algorithm: algorithm.clone(),
-		block_import,
-		justification_sync_link,
-	}));
+	let worker = MiningHandle::new(algorithm.clone(), block_import, justification_sync_link);
 	let worker_ret = worker.clone();
 
 	let task = async move {
@@ -559,7 +553,7 @@ where
 
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
-				worker.lock().on_major_syncing();
+				worker.on_major_syncing();
 				continue
 			}
 
@@ -587,7 +581,7 @@ where
 				continue
 			}
 
-			if worker.lock().best_hash() == Some(best_hash) {
+			if worker.best_hash() == Some(best_hash) {
 				continue
 			}
 
@@ -682,7 +676,7 @@ where
 				proposal,
 			};
 
-			worker.lock().on_build(build);
+			worker.on_build(build);
 		}
 	};
 

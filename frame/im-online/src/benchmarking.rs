@@ -21,8 +21,8 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-use frame_support::traits::UnfilteredDispatchable;
+use frame_benchmarking::benchmarks;
+use frame_support::{traits::UnfilteredDispatchable, WeakBoundedVec};
 use frame_system::RawOrigin;
 use sp_core::{offchain::OpaqueMultiaddr, OpaquePeerId};
 use sp_runtime::{
@@ -46,7 +46,9 @@ pub fn create_heartbeat<T: Config>(
 	for _ in 0..k {
 		keys.push(T::AuthorityId::generate_pair(None));
 	}
-	Keys::<T>::put(keys.clone());
+	let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::try_from(keys.clone())
+		.map_err(|()| "More than the maximum number of keys provided")?;
+	Keys::<T>::put(bounded_keys);
 
 	let network_state = OpaqueNetworkState {
 		peer_id: OpaquePeerId::default(),
@@ -80,22 +82,24 @@ benchmarks! {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
-		let call = Call::heartbeat(input_heartbeat, signature);
+		let call = Call::heartbeat { heartbeat: input_heartbeat, signature };
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
-			.map_err(|e| -> &'static str { e.into() })?;
+			.map_err(<&str>::from)?;
 	}
 
 	validate_unsigned_and_then_heartbeat {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
-		let call = Call::heartbeat(input_heartbeat, signature);
+		let call = Call::heartbeat { heartbeat: input_heartbeat, signature };
+		let call_enc = call.encode();
 	}: {
-		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
-			.map_err(|e| -> &'static str { e.into() })?;
-		call.dispatch_bypass_filter(RawOrigin::None.into())?;
+		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call).map_err(<&str>::from)?;
+		<Call<T> as Decode>::decode(&mut &*call_enc)
+			.expect("call is encoded above, encoding must be correct")
+			.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
-}
 
-impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime);
+	impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime);
+}

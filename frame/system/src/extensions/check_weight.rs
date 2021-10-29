@@ -19,19 +19,23 @@ use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::Get,
-	weights::{priority::FrameTransactionPriority, DispatchClass, DispatchInfo, PostDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, PostDispatchInfo},
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
-	transaction_validity::{
-		InvalidTransaction, TransactionPriority, TransactionValidity, TransactionValidityError,
-		ValidTransaction,
-	},
+	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
 
 /// Block resource (weight) limit check.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
+///
+/// # Transaction Validity
+///
+/// This extension does not influence any fields of `TransactionValidity` in case the
+/// transaction is valid.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct CheckWeight<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckWeight<T>
@@ -79,23 +83,6 @@ where
 		}
 	}
 
-	/// Get the priority of an extrinsic denoted by `info`.
-	///
-	/// Operational transaction will be given a fixed initial amount to be fairly distinguished from
-	/// the normal ones.
-	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
-		match info.class {
-			// Normal transaction.
-			DispatchClass::Normal => FrameTransactionPriority::Normal(info.weight.into()).into(),
-			// Don't use up the whole priority space, to allow things like `tip` to be taken into
-			// account as well.
-			DispatchClass::Operational =>
-				FrameTransactionPriority::Operational(info.weight.into()).into(),
-			// Mandatory extrinsics are only for inherents; never transactions.
-			DispatchClass::Mandatory => TransactionPriority::min_value(),
-		}
-	}
-
 	/// Creates new `SignedExtension` to check weight of the extrinsic.
 	pub fn new() -> Self {
 		Self(Default::default())
@@ -128,7 +115,7 @@ where
 		// consumption from causing false negatives.
 		Self::check_extrinsic_weight(info)?;
 
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+		Ok(Default::default())
 	}
 }
 
@@ -366,13 +353,7 @@ mod tests {
 			};
 			let len = 0_usize;
 
-			assert_eq!(
-				CheckWeight::<Test>::do_validate(&okay, len),
-				Ok(ValidTransaction {
-					priority: CheckWeight::<Test>::get_priority(&okay),
-					..Default::default()
-				})
-			);
+			assert_eq!(CheckWeight::<Test>::do_validate(&okay, len), Ok(Default::default()));
 			assert_err!(
 				CheckWeight::<Test>::do_validate(&max, len),
 				InvalidTransaction::ExhaustsResources
@@ -501,30 +482,6 @@ mod tests {
 				InvalidTransaction::ExhaustsResources
 			);
 			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len));
-		})
-	}
-
-	#[test]
-	fn signed_ext_check_weight_works() {
-		new_test_ext().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-			let op = DispatchInfo {
-				weight: 100,
-				class: DispatchClass::Operational,
-				pays_fee: Pays::Yes,
-			};
-			let len = 0_usize;
-
-			let priority = CheckWeight::<Test>(PhantomData)
-				.validate(&1, CALL, &normal, len)
-				.unwrap()
-				.priority;
-			assert_eq!(priority, 100);
-
-			let priority =
-				CheckWeight::<Test>(PhantomData).validate(&1, CALL, &op, len).unwrap().priority;
-			assert_eq!(priority, frame_support::weights::priority::LIMIT + 100);
 		})
 	}
 

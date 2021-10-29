@@ -5,7 +5,7 @@ version = "0.9.0"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -14,12 +14,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = "0.4.8"
-prometheus = { version = "0.11.0", default-features = false }
-futures-util = { version = "0.3.1", default-features = false, features = ["io"] }
+prometheus = { version = "0.12.0", default-features = false }
+futures-util = { version = "0.3.17", default-features = false, features = ["io"] }
 derive_more = "0.99"
-
-[target.'cfg(not(target_os = "unknown"))'.dependencies]
-async-std = { version = "1.6.5", features = ["unstable"] }
+async-std = { version = "1.10.0", features = ["unstable"] }
 tokio = "1.10"
 hyper = { version = "0.14.11", default-features = false, features = ["http1", "server", "tcp"] }
 

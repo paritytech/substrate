@@ -4,7 +4,7 @@ version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "A set of common definitions that are needed for defining execution engines."
 documentation = "https://docs.rs/sc-executor-common/"
@@ -24,6 +24,7 @@ sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-in
 sp-maybe-compressed-blob = { version = "4.0.0-dev", path = "../../../primitives/maybe-compressed-blob" }
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
 thiserror = "1.0.21"
+environmental = "1.1.3"
 
 wasmer = { version = "1.0", optional = true }
 wasmer-compiler-singlepass = { version = "1.0", optional = true }

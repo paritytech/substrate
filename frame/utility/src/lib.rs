@@ -304,7 +304,7 @@ pub mod pallet {
 					// Don't allow users to nest `batch_all` calls.
 					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
 						let c = <T as Config>::Call::from_ref(c);
-						!matches!(c.is_sub_type(), Some(Call::batch_all(_)))
+						!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
 					});
 					call.dispatch(filtered_origin)
 				};

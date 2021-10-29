@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the BABE consensus algorithm"
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -33,7 +33,7 @@ sp-keystore = { version = "0.10.0-dev", path = "../../../../primitives/keystore"
 
 [dev-dependencies]
 sc-consensus = { version = "0.10.0-dev", path = "../../../consensus/common" }
-serde_json = "1.0.50"
+serde_json = "1.0.68"
 sp-keyring = { version = "4.0.0-dev", path = "../../../../primitives/keyring" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../keystore" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }

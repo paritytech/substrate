@@ -135,7 +135,7 @@ where
 		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemand");
 		let requests_queue = Mutex::new(Some(requests_queue));
 
-		OnDemand { checker, requests_queue, requests_send }
+		Self { checker, requests_queue, requests_send }
 	}
 
 	/// Get checker reference.

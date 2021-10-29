@@ -186,7 +186,7 @@ mod tests {
 		}
 	}
 
-	fn open_database(db_path: &Path) -> sp_blockchain::Result<()> {
+	fn open_database(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
 		crate::utils::open_database::<Block>(
 			&DatabaseSettings {
 				state_cache_size: 0,
@@ -196,7 +196,7 @@ mod tests {
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
 			},
-			DatabaseType::Full,
+			db_type,
 		)
 		.map(|_| ())
 	}
@@ -205,25 +205,28 @@ mod tests {
 	fn downgrade_never_happens() {
 		let db_dir = tempfile::TempDir::new().unwrap();
 		create_db(db_dir.path(), Some(CURRENT_VERSION + 1));
-		assert!(open_database(db_dir.path()).is_err());
+		assert!(open_database(db_dir.path(), DatabaseType::Full).is_err());
 	}
 
 	#[test]
 	fn open_empty_database_works() {
+		let db_type = DatabaseType::Full;
 		let db_dir = tempfile::TempDir::new().unwrap();
-		open_database(db_dir.path()).unwrap();
-		open_database(db_dir.path()).unwrap();
-		assert_eq!(current_version(db_dir.path()).unwrap(), CURRENT_VERSION);
+		let db_dir = db_dir.path().join(db_type.as_str());
+		open_database(&db_dir, db_type).unwrap();
+		open_database(&db_dir, db_type).unwrap();
+		assert_eq!(current_version(&db_dir).unwrap(), CURRENT_VERSION);
 	}
 
 	#[test]
 	fn upgrade_to_3_works() {
+		let db_type = DatabaseType::Full;
 		for version_from_file in &[None, Some(1), Some(2)] {
 			let db_dir = tempfile::TempDir::new().unwrap();
-			let db_path = db_dir.path();
-			create_db(db_path, *version_from_file);
-			open_database(db_path).unwrap();
-			assert_eq!(current_version(db_path).unwrap(), CURRENT_VERSION);
+			let db_path = db_dir.path().join(db_type.as_str());
+			create_db(&db_path, *version_from_file);
+			open_database(&db_path, db_type).unwrap();
+			assert_eq!(current_version(&db_path).unwrap(), CURRENT_VERSION);
 		}
 	}
 }

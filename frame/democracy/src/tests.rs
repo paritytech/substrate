@@ -72,7 +72,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<Call> for BaseFilter {
 	fn contains(call: &Call) -> bool {
-		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
+		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
@@ -226,7 +226,8 @@ fn params_should_work() {
 }
 
 fn set_balance_proposal(value: u64) -> Vec<u8> {
-	Call::Balances(pallet_balances::Call::set_balance(42, value, 0)).encode()
+	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
+		.encode()
 }
 
 #[test]
@@ -263,7 +264,7 @@ fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchRes
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 	Scheduler::on_initialize(System::block_number());
-	assert!(Democracy::begin_block(System::block_number()).is_ok());
+	Democracy::begin_block(System::block_number());
 }
 
 fn fast_forward_to(n: u64) {

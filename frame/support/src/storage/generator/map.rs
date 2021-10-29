@@ -138,6 +138,7 @@ where
 				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
 				Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
 			},
+			phantom: Default::default(),
 		}
 	}
 

@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "This crate provides procedural macros for usage within the context of the Substrate runtime interface."
 documentation = "https://docs.rs/sp-runtime-interface-proc-macro"
@@ -16,8 +16,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.58", features = ["full", "visit", "fold", "extra-traits"] }
-quote = "1.0.3"
-proc-macro2 = "1.0.28"
+syn = { version = "1.0.80", features = ["full", "visit", "fold", "extra-traits"] }
+quote = "1.0.10"
+proc-macro2 = "1.0.29"
 Inflector = "0.11.4"
 proc-macro-crate = "1.0.0"

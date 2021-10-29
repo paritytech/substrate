@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::{pallet::Def, COUNTER};
-use frame_support_procedural_tools::clean_type_string;
 use syn::spanned::Spanned;
 
 ///
@@ -43,6 +42,15 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let new_call_variant_fn_name = fn_name
+		.iter()
+		.map(|fn_name| quote::format_ident!("new_call_variant_{}", fn_name))
+		.collect::<Vec<_>>();
+
+	let new_call_variant_doc = fn_name
+		.iter()
+		.map(|fn_name| format!("Create a call with the variant `{}`.", fn_name))
+		.collect::<Vec<_>>();
 
 	let fn_weight = methods.iter().map(|method| &method.weight);
 
@@ -52,6 +60,42 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		.iter()
 		.map(|method| method.args.iter().map(|(_, name, _)| name.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
+
+	let args_name_stripped = methods
+		.iter()
+		.map(|method| {
+			method
+				.args
+				.iter()
+				.map(|(_, name, _)| {
+					syn::Ident::new(&name.to_string().trim_start_matches('_'), name.span())
+				})
+				.collect::<Vec<_>>()
+		})
+		.collect::<Vec<_>>();
+
+	let make_args_name_pattern = |ref_tok| {
+		args_name
+			.iter()
+			.zip(args_name_stripped.iter())
+			.map(|(args_name, args_name_stripped)| {
+				args_name
+					.iter()
+					.zip(args_name_stripped)
+					.map(|(args_name, args_name_stripped)| {
+						if args_name == args_name_stripped {
+							quote::quote!( #ref_tok #args_name )
+						} else {
+							quote::quote!( #args_name_stripped: #ref_tok #args_name )
+						}
+					})
+					.collect::<Vec<_>>()
+			})
+			.collect::<Vec<_>>()
+	};
+
+	let args_name_pattern = make_args_name_pattern(None);
+	let args_name_pattern_ref = make_args_name_pattern(Some(quote::quote!(ref)));
 
 	let args_type = methods
 		.iter()
@@ -68,21 +112,6 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				} else {
 					quote::quote!()
 				}
-			})
-			.collect::<Vec<_>>()
-	});
-
-	let args_metadata_type = methods.iter().map(|method| {
-		method
-			.args
-			.iter()
-			.map(|(is_compact, _, type_)| {
-				let final_type = if *is_compact {
-					quote::quote_spanned!(type_.span() => Compact<#type_>)
-				} else {
-					quote::quote!(#type_)
-				};
-				clean_type_string(&final_type.to_string())
 			})
 			.collect::<Vec<_>>()
 	});
@@ -131,9 +160,11 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::PartialEqNoBound,
 			#frame_support::codec::Encode,
 			#frame_support::codec::Decode,
+			#frame_support::scale_info::TypeInfo,
 		)]
 		#[codec(encode_bound())]
 		#[codec(decode_bound())]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {
 			#[doc(hidden)]
@@ -142,7 +173,25 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::sp_std::marker::PhantomData<(#type_use_gen,)>,
 				#frame_support::Never,
 			),
-			#( #( #[doc = #fn_doc] )* #fn_name( #( #args_compact_attr #args_type ),* ), )*
+			#(
+				#( #[doc = #fn_doc] )*
+				#fn_name {
+					#( #args_compact_attr #args_name_stripped: #args_type ),*
+				},
+			)*
+		}
+
+		impl<#type_impl_gen> #call_ident<#type_use_gen> #where_clause {
+			#(
+				#[doc = #new_call_variant_doc]
+				pub fn #new_call_variant_fn_name(
+					#( #args_name_stripped: #args_type ),*
+				) -> Self {
+					Self::#fn_name {
+						#( #args_name_stripped ),*
+					}
+				}
+			)*
 		}
 
 		impl<#type_impl_gen> #frame_support::dispatch::GetDispatchInfo
@@ -152,7 +201,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			fn get_dispatch_info(&self) -> #frame_support::dispatch::DispatchInfo {
 				match *self {
 					#(
-						Self::#fn_name ( #( ref #args_name, )* ) => {
+						Self::#fn_name { #( #args_name_pattern_ref, )* } => {
 							let __pallet_base_weight = #fn_weight;
 
 							let __pallet_weight = <
@@ -186,7 +235,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		{
 			fn get_call_name(&self) -> &'static str {
 				match *self {
-					#( Self::#fn_name(..) => stringify!(#fn_name), )*
+					#( Self::#fn_name { .. } => stringify!(#fn_name), )*
 					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
 				}
 			}
@@ -207,7 +256,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
-						Self::#fn_name( #( #args_name, )* ) => {
+						Self::#fn_name { #( #args_name_pattern, )* } => {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);
@@ -231,30 +280,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			#[allow(dead_code)]
-			pub fn call_functions() -> &'static [#frame_support::dispatch::FunctionMetadata] {
-				&[ #(
-					#frame_support::dispatch::FunctionMetadata {
-						name: #frame_support::dispatch::DecodeDifferent::Encode(
-							stringify!(#fn_name)
-						),
-						arguments: #frame_support::dispatch::DecodeDifferent::Encode(
-							&[ #(
-								#frame_support::dispatch::FunctionArgumentMetadata {
-									name: #frame_support::dispatch::DecodeDifferent::Encode(
-										stringify!(#args_name)
-									),
-									ty: #frame_support::dispatch::DecodeDifferent::Encode(
-										#args_metadata_type
-									),
-								},
-							)* ]
-						),
-						documentation: #frame_support::dispatch::DecodeDifferent::Encode(
-							&[ #( #fn_doc ),* ]
-						),
-					},
-				)* ]
+			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
+				#frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
 			}
 		}
 	)

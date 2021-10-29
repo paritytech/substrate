@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Proc macro helpers for procedural macros"
 
@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 frame-support-procedural-tools-derive = { version = "3.0.0", path = "./derive" }
-proc-macro2 = "1.0.28"
-quote = "1.0.3"
-syn = { version = "1.0.58", features = ["full", "visit", "extra-traits"] }
+proc-macro2 = "1.0.29"
+quote = "1.0.10"
+syn = { version = "1.0.80", features = ["full", "visit", "extra-traits"] }
 proc-macro-crate = "1.0.0"

@@ -159,7 +159,7 @@ where
 	///
 	/// In contrast to [`commit_all`](Self::commit_all) this will not panic if there are open
 	/// transactions.
-	fn as_backend(&self) -> InMemoryBackend<H> {
+	pub fn as_backend(&self) -> InMemoryBackend<H> {
 		let top: Vec<_> =
 			self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())).collect();
 		let mut transaction = vec![(None, top)];

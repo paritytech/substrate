@@ -299,19 +299,19 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 				)),
 				function: match self.content.block_type {
 					BlockType::RandomTransfersKeepAlive =>
-						Call::Balances(BalancesCall::transfer_keep_alive(
-							sp_runtime::MultiAddress::Id(receiver),
-							node_runtime::ExistentialDeposit::get() + 1,
-						)),
+						Call::Balances(BalancesCall::transfer_keep_alive {
+							dest: sp_runtime::MultiAddress::Id(receiver),
+							value: node_runtime::ExistentialDeposit::get() + 1,
+						}),
 					BlockType::RandomTransfersReaping => {
-						Call::Balances(BalancesCall::transfer(
-							sp_runtime::MultiAddress::Id(receiver),
+						Call::Balances(BalancesCall::transfer {
+							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
-							100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
-						))
+							value: 100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+						})
 					},
-					BlockType::Noop => Call::System(SystemCall::remark(Vec::new())),
+					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,

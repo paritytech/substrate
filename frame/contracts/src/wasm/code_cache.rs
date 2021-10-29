@@ -59,25 +59,9 @@ where
 		Some(module) => increment_64(&mut module.refcount),
 		None => {
 			*existing = Some(prefab_module);
-			Contracts::<T>::deposit_event(Event::CodeStored(code_hash))
+			Contracts::<T>::deposit_event(Event::CodeStored { code_hash })
 		},
 	});
-}
-
-/// Decrement the refcount and store.
-///
-/// Removes the code instead of storing it when the refcount drops to zero.
-pub fn store_decremented<T: Config>(mut prefab_module: PrefabWasmModule<T>)
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	prefab_module.refcount = prefab_module.refcount.saturating_sub(1);
-	if prefab_module.refcount > 0 {
-		<CodeStorage<T>>::insert(prefab_module.code_hash, prefab_module);
-	} else {
-		<CodeStorage<T>>::remove(prefab_module.code_hash);
-		finish_removal::<T>(prefab_module.code_hash);
-	}
 }
 
 /// Increment the refcount of a code in-storage by one.
@@ -186,7 +170,7 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	<PristineCode<T>>::remove(code_hash);
-	Contracts::<T>::deposit_event(Event::CodeRemoved(code_hash))
+	Contracts::<T>::deposit_event(Event::CodeRemoved { code_hash })
 }
 
 /// Increment the refcount panicking if it should ever overflow (which will not happen).
