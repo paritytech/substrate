@@ -65,12 +65,12 @@ benchmarks! {
 	}
 
 	hashing {
-		let i in 0 .. 100_000;
+		let i in 0 .. 100;
 		let mut hash = T::Hash::default();
 	}: {
-		(0..=i).for_each(|j| hash = T::Hashing::hash(&j.to_be_bytes()));
+		(0..=100_000u32).for_each(|j| hash = T::Hashing::hash(&j.to_be_bytes()));
 	} verify {
-		if i > 0 { assert!(hash != T::Hash::default()); }
+		assert!(hash != T::Hash::default());
 	}
 
 	#[skip_meta]
