@@ -18,12 +18,11 @@
 //! A set of benchmarks which can establish a global baseline for all other
 //! benchmarking.
 
-use crate::{account, benchmarks, impl_benchmark_test_suite};
+use crate::benchmarks;
 use frame_system::Pallet as System;
 use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
-
-const SEED: u32 = 1337;
+use codec::Encode;
 
 pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
@@ -51,18 +50,18 @@ benchmarks! {
 		let i in 0 .. 1_000_000;
 		let mut out = 0;
 	}:  {
-		(1..=i).for_each(|j| out = i * j);
+		(1..=i).for_each(|j| out = 2 * j);
 	} verify {
-		assert_eq!(out, i * i);
+		assert_eq!(out, 2 * i);
 	}
 
 	division {
 		let i in 0 .. 1_000_000;
 		let mut out = 0;
 	}: {
-		(1..=i).for_each(|j| out = i / j);
+		(0..=i).for_each(|j| out = j / 2);
 	} verify {
-		assert_eq!(out, i.min(1));
+		assert_eq!(out, i / 2);
 	}
 
 	hashing {
@@ -74,45 +73,49 @@ benchmarks! {
 		if i > 0 { assert!(hash != T::Hash::default()); }
 	}
 
+	#[skip_meta]
 	storage_read {
 		let i in 0 .. 1_000;
 		let mut people = Vec::new();
 		(0..i).for_each(|j| {
-			let who: T::AccountId = account("user", j, SEED);
-			System::<T>::inc_providers(&who);
-			people.push(who);
+			let hash = T::Hashing::hash(&j.to_be_bytes()).encode();
+			frame_support::storage::unhashed::put(&hash, &hash);
+			people.push(hash);
 		});
 	}: {
-		people.iter().for_each(|who| {
+		people.iter().for_each(|hash| {
 			// This does a storage read
-			assert!(System::<T>::can_dec_provider(&who));
+			let value = frame_support::storage::unhashed::get(hash);
+			assert_eq!(value, Some(hash.to_vec()));
 		});
 	}
 
+	#[skip_meta]
 	storage_write {
 		let i in 0 .. 1_000;
-		let mut people = Vec::new();
+		let mut hashes = Vec::new();
 		(0..i).for_each(|j| {
-			let who: T::AccountId = account("user", j, SEED);
-			people.push(who);
+			let hash = T::Hashing::hash(&j.to_be_bytes());
+			hashes.push(hash.encode());
 		});
 	}: {
-		people.iter().for_each(|who| {
+		hashes.iter().for_each(|hash| {
 			// This does a storage write
-			System::<T>::inc_providers(&who);
+			frame_support::storage::unhashed::put(hash, hash);
 		});
 	} verify {
-		people.iter().for_each(|who| {
-			assert!(System::<T>::can_dec_provider(&who));
+		hashes.iter().for_each(|hash| {
+			let value = frame_support::storage::unhashed::get(hash);
+			assert_eq!(value, Some(hash.to_vec()));
 		});
 	}
-}
 
-impl_benchmark_test_suite!(
-	Pallet,
-	crate::baseline::mock::new_test_ext(),
-	crate::baseline::mock::Test,
-);
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::baseline::mock::new_test_ext(),
+		crate::baseline::mock::Test,
+	);
+}
 
 #[cfg(test)]
 pub mod mock {
