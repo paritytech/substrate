@@ -19,10 +19,10 @@
 //! benchmarking.
 
 use crate::benchmarks;
+use codec::Encode;
 use frame_system::Pallet as System;
 use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
-use codec::Encode;
 
 pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
