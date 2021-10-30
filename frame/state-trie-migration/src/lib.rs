@@ -870,9 +870,9 @@ pub mod pallet {
 						warn,
 						"some data seems to be stored under key {:?}, which is a non-default \
 						child-trie. This is a logical error and shall not happen.",
-						Self::halt();
 						HexDisplay::from(root),
 					);
+					Self::halt();
 					Default::default()
 				},
 			}
@@ -1358,14 +1358,11 @@ mod remote_tests {
 		sp_tracing::try_init_simple();
 		let run_with_limits = |limits| async move {
 			let mut ext = remote_externalities::Builder::<Block>::new()
-				.mode(Mode::Offline(remote_externalities::OfflineConfig {
-					state_snapshot: "/home/kianenigma/remote-builds/polka-state".to_owned().into(),
+				.mode(Mode::Online(OnlineConfig {
+					transport: std::env!("WS_API").to_owned().into(),
+					scrape_children: true,
+					..Default::default()
 				}))
-				// .mode(Mode::Online(OnlineConfig {
-				// 	transport: std::env!("WS_API").to_owned().into(),
-				// 	scrape_children: true,
-				// 	..Default::default()
-				// }))
 				.state_version(sp_core::StateVersion::V0)
 				.build()
 				.await
@@ -1404,16 +1401,13 @@ mod remote_tests {
 		sp_tracing::try_init_simple();
 		let run_with_limits = |limits| async move {
 			let mut ext = remote_externalities::Builder::<Block>::new()
-				// .mode(Mode::Online(OnlineConfig {
-				// 	transport: std::env!("WS_API").to_owned().into(),
-				// 	scrape_children: true,
-				// 	state_snapshot: Some(
-				// 		"/home/kianenigma/remote-builds/ksm-state".to_owned().into(),
-				// 	),
-				// 	..Default::default()
-				// }))
-				.mode(Mode::Offline(remote_externalities::OfflineConfig {
-					state_snapshot: "/home/kianenigma/remote-builds/ksm-state".to_owned().into(),
+				.mode(Mode::Online(OnlineConfig {
+					transport: std::env!("WS_API").to_owned().into(),
+					scrape_children: true,
+					state_snapshot: Some(
+						"/home/kianenigma/remote-builds/ksm-state".to_owned().into(),
+					),
+					..Default::default()
 				}))
 				.state_version(sp_core::StateVersion::V0)
 				.build()
