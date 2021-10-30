@@ -538,14 +538,15 @@ where
 		value: BalanceOf<T>,
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), ExecError> {
-		let (first_frame, executable) = Self::new_frame(args, value, gas_meter, 0, &schedule)?;
+		let (first_frame, executable, account_counter) =
+			Self::new_frame(args, value, gas_meter, 0, &schedule)?;
 		let stack = Self {
 			origin,
 			schedule,
 			gas_meter,
 			timestamp: T::Time::now(),
 			block_number: <frame_system::Pallet<T>>::block_number(),
-			account_counter: None,
+			account_counter,
 			first_frame,
 			frames: Default::default(),
 			debug_message,
@@ -565,8 +566,9 @@ where
 		gas_meter: &mut GasMeter<T>,
 		gas_limit: Weight,
 		schedule: &Schedule<T>,
-	) -> Result<(Frame<T>, E), ExecError> {
-		let (account_id, contract_info, executable, entry_point) = match frame_args {
+	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
+		let (account_id, contract_info, executable, entry_point, account_counter) = match frame_args
+		{
 			FrameArgs::Call { dest, cached_info } => {
 				let contract = if let Some(contract) = cached_info {
 					contract
@@ -576,7 +578,7 @@ where
 
 				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)?;
 
-				(dest, contract, executable, ExportedFunction::Call)
+				(dest, contract, executable, ExportedFunction::Call, None)
 			},
 			FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
 				let account_id =
@@ -587,7 +589,7 @@ where
 					trie_id,
 					executable.code_hash().clone(),
 				)?;
-				(account_id, contract, executable, ExportedFunction::Constructor)
+				(account_id, contract, executable, ExportedFunction::Constructor, Some(trie_seed))
 			},
 		};
 
@@ -600,7 +602,7 @@ where
 			allows_reentry: true,
 		};
 
-		Ok((frame, executable))
+		Ok((frame, executable, account_counter))
 	}
 
 	/// Create a subsequent nested frame.
@@ -629,7 +631,7 @@ where
 
 		let nested_meter =
 			&mut self.frames.last_mut().unwrap_or(&mut self.first_frame).nested_meter;
-		let (frame, executable) =
+		let (frame, executable, _) =
 			Self::new_frame(frame_args, value_transferred, nested_meter, gas_limit, self.schedule)?;
 		self.frames.push(frame);
 		Ok(executable)
@@ -842,7 +844,7 @@ where
 	/// Increments the cached account id and returns the value to be used for the trie_id.
 	fn next_trie_seed(&mut self) -> u64 {
 		let next = if let Some(current) = self.account_counter {
-			current + 1
+			current.wrapping_add(1)
 		} else {
 			Self::initial_trie_seed()
 		};
@@ -2163,6 +2165,93 @@ mod tests {
 					},
 				]
 			);
+		});
+	}
+
+	#[test]
+	fn account_counter() {
+		let fail_code = MockLoader::insert(Constructor, |_, _| exec_trapped());
+		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
+		let succ_fail_code = MockLoader::insert(Constructor, move |ctx, _| {
+			ctx.ext
+				.instantiate(0, fail_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.ok();
+			exec_success()
+		});
+		let succ_succ_code = MockLoader::insert(Constructor, move |ctx, _| {
+			let (account_id, _) = ctx
+				.ext
+				.instantiate(0, success_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.unwrap();
+
+			// a plain call should not influence the account counter
+			ctx.ext.call(0, account_id, 0, vec![], false).unwrap();
+
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let fail_executable =
+				MockExecutable::from_storage(fail_code, &schedule, &mut gas_meter).unwrap();
+			let success_executable =
+				MockExecutable::from_storage(success_code, &schedule, &mut gas_meter).unwrap();
+			let succ_fail_executable =
+				MockExecutable::from_storage(succ_fail_code, &schedule, &mut gas_meter).unwrap();
+			let succ_succ_executable =
+				MockExecutable::from_storage(succ_succ_code, &schedule, &mut gas_meter).unwrap();
+			set_balance(&ALICE, min_balance * 1000);
+
+			MockStack::run_instantiate(
+				ALICE,
+				fail_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 100,
+				vec![],
+				&[],
+				None,
+			)
+			.ok();
+			assert_eq!(<AccountCounter<Test>>::get(), 0);
+
+			assert_ok!(MockStack::run_instantiate(
+				ALICE,
+				success_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 100,
+				vec![],
+				&[],
+				None,
+			));
+			assert_eq!(<AccountCounter<Test>>::get(), 1);
+
+			assert_ok!(MockStack::run_instantiate(
+				ALICE,
+				succ_fail_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 200,
+				vec![],
+				&[],
+				None,
+			));
+			assert_eq!(<AccountCounter<Test>>::get(), 2);
+
+			assert_ok!(MockStack::run_instantiate(
+				ALICE,
+				succ_succ_executable,
+				&mut gas_meter,
+				&schedule,
+				min_balance * 200,
+				vec![],
+				&[],
+				None,
+			));
+			assert_eq!(<AccountCounter<Test>>::get(), 4);
 		});
 	}
 }

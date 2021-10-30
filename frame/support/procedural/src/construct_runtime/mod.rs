@@ -237,6 +237,7 @@ fn decl_all_pallets<'a>(
 
 	quote!(
 		#types
+
 		/// All pallets included in the runtime as a nested tuple of types.
 		#[deprecated(note = "The type definition has changed from representing all pallets \
 			excluding system, in reversed order to become the representation of all pallets \
