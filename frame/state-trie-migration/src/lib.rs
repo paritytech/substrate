@@ -135,7 +135,7 @@ pub mod pallet {
 		pub(crate) current_top: Option<Vec<u8>>,
 		/// The last child key that we have processed.
 		///
-		/// This is a child key under the current `self.last_top`.
+		/// This is a child key under the current `self.current_top`.
 		///
 		/// If this is set, no further top keys are processed until the child key migration is
 		/// complete.
