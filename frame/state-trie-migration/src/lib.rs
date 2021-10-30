@@ -45,7 +45,7 @@
 //! be included by validators.
 //!
 //! This approach is safer, and ensures that the migration reads do not take more than a certain
-//! amount, yet the do impose some work on the validators/collators.
+//! amount, yet it does impose some work on the validators/collators.
 //!
 //! ### Signed migration
 //!
