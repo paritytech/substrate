@@ -40,10 +40,16 @@ sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 quickcheck = "1.0.3"
 kvdb-rocksdb = "0.14.0"
-tempfile = "3"
+tempfile = "3.1.0"
+criterion = "0.3.3"
+rand = "0.8.4"
 
 [features]
-default = []
+default = ["with-parity-db"]
 test-helpers = []
 with-kvdb-rocksdb = ["kvdb-rocksdb"]
 with-parity-db = ["parity-db"]
+
+[[bench]]
+name = "state_access"
+harness = false

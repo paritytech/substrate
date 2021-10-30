@@ -509,11 +509,17 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 				}
 			}
 		}
-		trace!(
-			"Cache lookup skipped for {:?}: parent hash is unknown",
-			key.as_ref().map(HexDisplay::from),
-		);
-		false
+
+		if modifications.is_empty() {
+			// If there are no modifications, it is fine to use the cache.
+			true
+		} else {
+			trace!(
+				"Cache lookup skipped for {:?}: parent hash is unknown",
+				key.as_ref().map(HexDisplay::from),
+			);
+			false
+		}
 	}
 }
 
