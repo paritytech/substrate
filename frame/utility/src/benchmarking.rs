@@ -67,7 +67,7 @@ benchmarks! {
 	dispatch_as {
 		let caller = account("caller", SEED, SEED);
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
-		let origin : T::Origin = RawOrigin::Signed(caller).into();
+		let origin: T::Origin = RawOrigin::Signed(caller).into();
 		let pallets_origin: <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();
 		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin.clone());
 	}: _(RawOrigin::Root, Box::new(pallets_origin), call)
