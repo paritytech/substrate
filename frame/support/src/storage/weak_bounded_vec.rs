@@ -114,6 +114,24 @@ impl<T, S> WeakBoundedVec<T, S> {
 	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
 		self.0.get_mut(index)
 	}
+
+	/// Utility to avoid having to transform `WeakBoundedVec` into an
+	/// `Iterator` then use `map` and then `collect` to then `try_from`
+	/// back into a `WeakBoundedVec`
+	pub fn map_collect<B, F>(self, f: F) -> WeakBoundedVec<B, S>
+	where
+		F: FnMut(T) -> B,
+	{
+		WeakBoundedVec::<B, S>(self.into_iter().map(f).collect::<Vec<B>>(), Default::default())
+	}
+
+	/// Same as `map_collect` but taking a reference to `self`
+	pub fn map_collect_ref<B, F>(&self, f: F) -> WeakBoundedVec<B, S>
+	where
+		F: FnMut(&T) -> B,
+	{
+		WeakBoundedVec::<B, S>(self.0.iter().map(f).collect::<Vec<B>>(), Default::default())
+	}
 }
 
 impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
@@ -425,6 +443,22 @@ pub mod test {
 
 		assert!(bounded.try_insert(0, 9).is_err());
 		assert_eq!(*bounded, vec![1, 0, 2, 3]);
+	}
+
+	#[test]
+	fn map_collect_works() {
+		let first: WeakBoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let second = first.map_collect(|x| x * 2);
+		assert_eq!(*second, vec![2, 4, 6]);
+	}
+
+	#[test]
+	fn map_collect_ref_works() {
+		let first: WeakBoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let second = first.map_collect_ref(|x| x * 2);
+		assert_eq!(*second, vec![2, 4, 6]);
+		// we borrowed `first` so this compiles and works
+		assert_eq!(*first, vec![1, 2, 3]);
 	}
 
 	#[test]

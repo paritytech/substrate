@@ -252,7 +252,7 @@ impl<T: Config> Pallet<T> {
 	fn new_session(
 		session_index: SessionIndex,
 		is_genesis: bool,
-	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -407,11 +407,11 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: BoundedVec<
+		exposures: WeakBoundedVec<
 			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
 			T::MaxValidatorsCount,
 		>,
-	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
+	) -> WeakBoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
@@ -437,7 +437,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn try_trigger_new_era(
 		start_session_index: SessionIndex,
 		is_genesis: bool,
-	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		let election_result = if is_genesis {
 			T::GenesisElectionProvider::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
@@ -486,12 +486,12 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: BoundedVec<
+		exposures: WeakBoundedVec<
 			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
 			T::MaxValidatorsCount,
 		>,
 		new_planned_era: EraIndex,
-	) -> BoundedVec<T::AccountId, T::MaxValidatorsCount> {
+	) -> WeakBoundedVec<T::AccountId, T::MaxValidatorsCount> {
 		let elected_stashes = exposures.clone().map_collect(|(x, _)| x);
 
 		// Populate stakers, exposures, and the snapshot of validator prefs.
@@ -543,7 +543,7 @@ impl<T: Config> Pallet<T> {
 	/// [`Exposure`].
 	fn collect_exposures(
 		supports: Supports<T::AccountId>,
-	) -> BoundedVec<
+	) -> WeakBoundedVec<
 		(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
 		T::MaxValidatorsCount,
 	> {
@@ -552,7 +552,7 @@ impl<T: Config> Pallet<T> {
 			T::CurrencyToVote::to_currency(e, total_issuance)
 		};
 
-		let exposures = BoundedVec::<_, T::MaxValidatorsCount>::try_from(
+		WeakBoundedVec::<_, T::MaxValidatorsCount>::force_from(
 			supports
 				.into_iter()
 				.map(|(validator, support)| {
@@ -582,14 +582,8 @@ impl<T: Config> Pallet<T> {
 					(validator, exposure)
 				})
 				.collect::<Vec<(T::AccountId, Exposure<_, _, T::MaxIndividualExposures>)>>(),
-		);
-
-		// This should never happen
-		if exposures.is_err() {
-			log!(error, "Too many validators in frame_staking.collect_exposures")
-		}
-
-		exposures.unwrap_or_default()
+			Some("Too many validators in frame_staking.collect_exposures"),
+		)
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -1096,14 +1090,14 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>, T::MaxVali
 impl<T: Config> pallet_session::SessionManager<T::AccountId, T::MaxValidatorsCount> for Pallet<T> {
 	fn new_session(
 		new_index: SessionIndex,
-	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		log!(trace, "planning new session {}", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
 		Self::new_session(new_index, false)
 	}
 	fn new_session_genesis(
 		new_index: SessionIndex,
-	) -> Option<BoundedVec<T::AccountId, T::MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<T::AccountId, T::MaxValidatorsCount>> {
 		log!(trace, "planning new session {} at genesis", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
 		Self::new_session(new_index, true)
@@ -1128,7 +1122,7 @@ impl<T: Config>
 	fn new_session(
 		new_index: SessionIndex,
 	) -> Option<
-		BoundedVec<
+		WeakBoundedVec<
 			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
 			T::MaxValidatorsCount,
 		>,
@@ -1148,7 +1142,7 @@ impl<T: Config>
 	fn new_session_genesis(
 		new_index: SessionIndex,
 	) -> Option<
-		BoundedVec<
+		WeakBoundedVec<
 			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures>),
 			T::MaxValidatorsCount,
 		>,

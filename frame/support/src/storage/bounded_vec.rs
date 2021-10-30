@@ -160,24 +160,6 @@ impl<T, S> BoundedVec<T, S> {
 	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
 		self.0.get_mut(index)
 	}
-
-	/// Utility to avoid having to transform `BoundedVec` into an
-	/// `Iterator` then use `map` and then `collect` to then `try_from`
-	/// back into a `BoundedVec`
-	pub fn map_collect<B, F>(self, f: F) -> BoundedVec<B, S>
-	where
-		F: FnMut(T) -> B,
-	{
-		BoundedVec::<B, S>(self.into_iter().map(f).collect::<Vec<B>>(), Default::default())
-	}
-
-	/// Same as `map_collect` but taking a reference to `self`
-	pub fn map_collect_ref<B, F>(&self, f: F) -> BoundedVec<B, S>
-	where
-		F: FnMut(&T) -> B,
-	{
-		BoundedVec::<B, S>(self.0.iter().map(f).collect::<Vec<B>>(), Default::default())
-	}
 }
 
 impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {

@@ -31,7 +31,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	decl_module, decl_storage, print,
 	traits::{ValidatorSet, ValidatorSetWithIdentification},
-	BoundedVec, Parameter,
+	Parameter, WeakBoundedVec,
 };
 use sp_runtime::{
 	traits::{Convert, OpaqueKeys},
@@ -136,10 +136,10 @@ pub trait SessionManager<ValidatorId, FullIdentification, MaxValidatorsCount>:
 	/// full identifications.
 	fn new_session(
 		new_index: SessionIndex,
-	) -> Option<BoundedVec<(ValidatorId, FullIdentification), MaxValidatorsCount>>;
+	) -> Option<WeakBoundedVec<(ValidatorId, FullIdentification), MaxValidatorsCount>>;
 	fn new_session_genesis(
 		new_index: SessionIndex,
-	) -> Option<BoundedVec<(ValidatorId, FullIdentification), MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<(ValidatorId, FullIdentification), MaxValidatorsCount>> {
 		<Self as SessionManager<_, _, _>>::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex);
@@ -158,7 +158,7 @@ impl<
 	fn do_new_session(
 		new_index: SessionIndex,
 		is_genesis: bool,
-	) -> Option<BoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (new_index, new_index)).1 = new_index + 1;
 		});
@@ -199,13 +199,13 @@ where
 {
 	fn new_session(
 		new_index: SessionIndex,
-	) -> Option<BoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
 		Self::do_new_session(new_index, false)
 	}
 
 	fn new_session_genesis(
 		new_index: SessionIndex,
-	) -> Option<BoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
+	) -> Option<WeakBoundedVec<T::ValidatorId, T::MaxValidatorsCount>> {
 		Self::do_new_session(new_index, true)
 	}
 

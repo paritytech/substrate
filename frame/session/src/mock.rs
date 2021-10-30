@@ -100,10 +100,10 @@ frame_support::construct_runtime!(
 );
 
 thread_local! {
-	pub static VALIDATORS: RefCell<BoundedVec<u64, MaxValidatorsCount>> =
-		RefCell::new(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxValidatorsCount > 3"));
-	pub static NEXT_VALIDATORS: RefCell<BoundedVec<u64, MaxValidatorsCount>> =
-		RefCell::new(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxValidatorsCount > 3"));
+	pub static VALIDATORS: RefCell<WeakBoundedVec<u64, MaxValidatorsCount>> =
+		RefCell::new(WeakBoundedVec::try_from(vec![1, 2, 3]).expect("MaxValidatorsCount > 3"));
+	pub static NEXT_VALIDATORS: RefCell<WeakBoundedVec<u64, MaxValidatorsCount>> =
+		RefCell::new(WeakBoundedVec::try_from(vec![1, 2, 3]).expect("MaxValidatorsCount > 3"));
 	pub static AUTHORITIES: RefCell<Vec<UintAuthorityId>> =
 		RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 	pub static FORCE_SESSION_END: RefCell<bool> = RefCell::new(false);
@@ -158,7 +158,7 @@ pub struct TestSessionManager;
 impl SessionManager<u64, MaxValidatorsCount> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
-	fn new_session(_: SessionIndex) -> Option<BoundedVec<u64, MaxValidatorsCount>> {
+	fn new_session(_: SessionIndex) -> Option<WeakBoundedVec<u64, MaxValidatorsCount>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
 			VALIDATORS.with(|v| {
 				let mut v = v.borrow_mut();
@@ -179,7 +179,9 @@ impl SessionManager<u64, MaxValidatorsCount> for TestSessionManager {
 impl crate::historical::SessionManager<u64, u64, MaxValidatorsCount> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
-	fn new_session(new_index: SessionIndex) -> Option<BoundedVec<(u64, u64), MaxValidatorsCount>> {
+	fn new_session(
+		new_index: SessionIndex,
+	) -> Option<WeakBoundedVec<(u64, u64), MaxValidatorsCount>> {
 		<Self as SessionManager<_, _>>::new_session(new_index)
 			.map(|vals| vals.map_collect(|val| (val, val)))
 	}
@@ -202,7 +204,7 @@ pub fn session_changed() -> bool {
 }
 
 pub fn set_next_validators(next: Vec<u64>) {
-	let next = BoundedVec::<_, MaxValidatorsCount>::try_from(next)
+	let next = WeakBoundedVec::<_, MaxValidatorsCount>::try_from(next)
 		.expect("frame_session.set_next_validators: some test parameters need changing");
 	NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next);
 }
