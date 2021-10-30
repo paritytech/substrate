@@ -39,7 +39,11 @@ use sp_consensus::{
 };
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
-use sp_runtime::{Percent, SaturatedConversion, generic::BlockId, traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT}};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
+	Percent, SaturatedConversion,
+};
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
@@ -367,8 +371,8 @@ where
 		let now = (self.now)();
 		let left = deadline.saturating_duration_since(now);
 		let left_micros: u64 = left.as_micros().saturated_into();
-		let soft_deadline = now
-			+ time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
+		let soft_deadline =
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
