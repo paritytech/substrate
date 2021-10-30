@@ -754,7 +754,7 @@ cfg_if! {
 				}
 
 				fn on_post_inherent() {
-					let n = frame_system::Pallet::<Self>::block_number();
+					// TODO: Code Reviewer Please Check This Is Empty
 				}
 			}
 

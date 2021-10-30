@@ -335,7 +335,8 @@ where
 			}
 		}
 
-		//TODO SHAWN: call on post inherent
+		// Inherents have been processed, so run any on post inherent logic from the runtime.
+		block_builder.on_post_inherent()?;
 
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.
