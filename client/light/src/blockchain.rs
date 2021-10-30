@@ -27,7 +27,7 @@ use sp_runtime::{
 	Justifications,
 };
 
-use crate::fetcher::RemoteHeaderRequest;
+use sc_client_api::light::RemoteHeaderRequest;
 pub use sc_client_api::{
 	backend::{AuxStore, NewBlockState, ProvideChtRoots},
 	blockchain::{
