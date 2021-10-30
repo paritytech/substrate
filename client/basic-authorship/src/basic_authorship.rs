@@ -335,6 +335,8 @@ where
 			}
 		}
 
+		//TODO SHAWN: call on post inherent
+
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.
 		let now = (self.now)();

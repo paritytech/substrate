@@ -33,7 +33,6 @@ sp_api::decl_runtime_apis! {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
 
 		/// Finish the current block.
-		#[renamed("finalise_block", 3)]
 		fn finalize_block() -> <Block as BlockT>::Header;
 
 		/// Generate inherent extrinsics. The inherent data will vary from chain to chain.
@@ -43,5 +42,8 @@ sp_api::decl_runtime_apis! {
 
 		/// Check that the inherents are valid. The inherent data will vary from chain to chain.
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult;
+
+		/// Execute some logic after processing the inherents in the block.
+		fn on_post_inherent();
 	}
 }

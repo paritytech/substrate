@@ -752,6 +752,10 @@ cfg_if! {
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
 					CheckInherentsResult::new()
 				}
+
+				fn on_post_inherent() {
+					let n = frame_system::Pallet::<Self>::block_number();
+				}
 			}
 
 			impl self::TestAPI<Block> for Runtime {
@@ -1005,6 +1009,11 @@ cfg_if! {
 
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
 					CheckInherentsResult::new()
+				}
+
+				fn on_post_inherent() {
+					let n = frame_system::Pallet::<Self>::block_number();
+					// SHAWN TODO
 				}
 			}
 

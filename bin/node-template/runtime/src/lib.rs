@@ -366,6 +366,11 @@ impl_runtime_apis! {
 		) -> sp_inherents::CheckInherentsResult {
 			data.check_extrinsics(&block)
 		}
+
+		fn on_post_inherent() {
+			let n = frame_system::Pallet::<Self>::block_number();
+			// SHAWN TODO
+		}
 	}
 
 	impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
