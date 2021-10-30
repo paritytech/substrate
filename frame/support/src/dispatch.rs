@@ -2679,7 +2679,6 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone)]
 	pub struct OuterOrigin;
 
 	impl crate::traits::OriginTrait for OuterOrigin {

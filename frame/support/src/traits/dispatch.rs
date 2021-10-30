@@ -56,7 +56,7 @@ pub trait OriginTrait: Sized {
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: Clone;
+	type PalletsOrigin;
 
 	/// The AccountId used across the system.
 	type AccountId;

@@ -30,6 +30,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 benchmarks! {
+	where_clause { where <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin: Clone }
 	batch {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
