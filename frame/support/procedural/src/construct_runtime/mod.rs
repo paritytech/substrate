@@ -208,7 +208,7 @@ fn decl_all_pallets<'a>(
 	// Make nested tuple structure like:
 	// `((FirstPallet, (SecondPallet, ( ... , LastPallet) ... ))))`
 	// But ignore the system pallet.
-	let all_pallets = names
+	let all_pallets_without_system = names
 		.iter()
 		.filter(|n| **n != SYSTEM_PALLET_NAME)
 		.rev()
@@ -224,7 +224,7 @@ fn decl_all_pallets<'a>(
 	// Make nested tuple structure like:
 	// `((LastPallet, (SecondLastPallet, ( ... , FirstPallet) ... ))))`
 	// But ignore the system pallet.
-	let all_pallets_reversed = names
+	let all_pallets_without_system_reversed = names
 		.iter()
 		.filter(|n| **n != SYSTEM_PALLET_NAME)
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
@@ -238,32 +238,29 @@ fn decl_all_pallets<'a>(
 	quote!(
 		#types
 		/// All pallets included in the runtime as a nested tuple of types.
-		/// Excludes the System pallet.
-		pub type AllPallets = ( #all_pallets );
+		#[deprecated(note = "The type definition has changed from representing all pallets \
+			excluding system, in reversed order to become the representation of all pallets \
+			including system pallet in regular order. For this reason it is encouraged to use \
+			explicitly one of `AllPalletsWithSystem`, `AllPalletsWithoutSystem`, \
+			`AllPalletsWithSystemReversed`, `AllPalletsWithoutSystemReversed`. \
+			Note that the type `frame_executive::Executive` expects one of `AllPalletsWithSystem` \
+			and `AllPalletsWithSystemReversed. More details in \
+			https://github.com/paritytech/substrate/pull/10043")]
+		pub type AllPallets = AllPalletsWithSystem;
 
 		/// All pallets included in the runtime as a nested tuple of types.
 		pub type AllPalletsWithSystem = ( #all_pallets_with_system );
 
-		/// All pallets included in the runtime as a nested tuple of types in reversed order.
+		/// All pallets included in the runtime as a nested tuple of types.
 		/// Excludes the System pallet.
-		#[deprecated(note = "use `AllPallets` instead")]
-		#[allow(dead_code)]
-		pub type AllPalletsReversed = ( #all_pallets_reversed );
+		pub type AllPalletsWithoutSystem = ( #all_pallets_without_system );
 
 		/// All pallets included in the runtime as a nested tuple of types in reversed order.
-		#[deprecated(note = "use `AllPalletsWithSystem` instead")]
-		#[allow(dead_code)]
+		/// Excludes the System pallet.
+		pub type AllPalletsWithoutSystemReversed = ( #all_pallets_without_system_reversed );
+
+		/// All pallets included in the runtime as a nested tuple of types in reversed order.
 		pub type AllPalletsWithSystemReversed = ( #all_pallets_with_system_reversed );
-
-		/// All modules included in the runtime as a nested tuple of types.
-		/// Excludes the System pallet.
-		#[deprecated(note = "use `AllPallets` instead")]
-		#[allow(dead_code)]
-		pub type AllModules = ( #all_pallets );
-		/// All modules included in the runtime as a nested tuple of types.
-		#[deprecated(note = "use `AllPalletsWithSystem` instead")]
-		#[allow(dead_code)]
-		pub type AllModulesWithSystem = ( #all_pallets_with_system );
 	)
 }
 

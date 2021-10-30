@@ -510,10 +510,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 21);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithSystem::on_initialize(1), 21);
+		AllPalletsWithSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithSystem::on_runtime_upgrade(), 61);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
