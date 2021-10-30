@@ -295,10 +295,8 @@ where
 	pub fn on_post_inherent(&self) -> Result<(), sp_api::ApiError> {
 		let block_id = &self.block_id;
 
-		self.api.on_post_inherent_with_context(
-			&block_id,
-			ExecutionContext::BlockConstruction,
-		)
+		self.api
+			.on_post_inherent_with_context(&block_id, ExecutionContext::BlockConstruction)
 	}
 }
 
