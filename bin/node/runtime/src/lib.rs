@@ -1381,8 +1381,9 @@ impl_runtime_apis! {
 		}
 
 		fn on_post_inherent() {
+			use frame_support::traits::OnPostInherent;
 			let n = frame_system::Pallet::<Self>::block_number();
-			//AllPalletsWithSystem::<T>::on_post_inherent(n);
+			AllPalletsWithSystem::on_post_inherent(n);
 		}
 	}
 

@@ -1012,8 +1012,7 @@ cfg_if! {
 				}
 
 				fn on_post_inherent() {
-					let n = frame_system::Pallet::<Self>::block_number();
-					// SHAWN TODO
+					// TODO: Code Reviewers Please Check This
 				}
 			}
 
