@@ -952,10 +952,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithSystem::on_initialize(1), 10);
-		AllPalletsWithSystem::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithSystem::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -991,10 +991,10 @@ fn all_pallets_type_reversed_order_is_correct() {
 
 		#[allow(deprecated)]
 		{
-			assert_eq!(AllPalletsReversed::on_initialize(1), 10);
-			AllPalletsReversed::on_finalize(1);
+			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
+			AllPalletsWithoutSystemReversed::on_finalize(1);
 
-			assert_eq!(AllPalletsReversed::on_runtime_upgrade(), 30);
+			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
 		}
 
 		assert_eq!(
