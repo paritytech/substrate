@@ -175,6 +175,12 @@ pub struct SnapshotConfig {
 	pub path: PathBuf,
 }
 
+impl<P: Into<PathBuf>> From<P> for SnapshotConfig {
+	fn from(p: P) -> Self {
+		Self { path: p.into() }
+	}
+}
+
 impl SnapshotConfig {
 	pub fn new<P: Into<PathBuf>>(path: P) -> Self {
 		Self { path: path.into() }
@@ -599,7 +605,9 @@ impl<B: BlockT> Builder<B> {
 				}
 				child_kp
 			},
-			Mode::Offline(ref config) => self.load_child_snapshot(&config.state_snapshot.path)?,
+			Mode::Offline(ref config) => self.load_child_snapshot(&config.state_snapshot.path).map_err(|why|
+				log::warn!(target: LOG_TARGET, "failed to load child-key file due to {:?}", why)
+			).unwrap_or_default(),
 			_ => Default::default(),
 		};
 

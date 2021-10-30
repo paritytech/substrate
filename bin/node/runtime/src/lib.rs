@@ -1241,14 +1241,20 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
-#[cfg(feature = "runtime-benchmarks")]
+parameter_types! {
+	pub const SignedMigrationMaxLimits: pallet_state_trie_migration::MigrationLimits =
+		pallet_state_trie_migration::MigrationLimits { size: 1024 * 512, item: 512 };
+	pub const SignedDepositPerItem: Balance = 1 * DOLLARS;
+}
 impl pallet_state_trie_migration::Config for Runtime {
 	type Event = Event;
 	type ControlOrigin = EnsureRoot<AccountId>;
 	type Currency = Balances;
-	type SignedDepositPerItem = ();
-	type Priority = ();
-	type OffchainRepeat = ();
+	type SignedDepositPerItem = SignedDepositPerItem;
+	type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
+	type UnsignedPriority = ImOnlineUnsignedPriority;
+	type UnsignedBackOff = frame_support::traits::ConstU32<5>;
+	type OffchainRepeat = frame_support::traits::ConstU32<3>;
 	type WeightInfo = ();
 }
 

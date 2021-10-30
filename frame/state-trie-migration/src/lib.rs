@@ -83,7 +83,6 @@ macro_rules! log {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_benchmarking::Zero;
 	use frame_support::{
 		dispatch::TransactionPriority,
 		ensure,
@@ -101,7 +100,7 @@ pub mod pallet {
 	};
 	use sp_runtime::{
 		offchain::storage::{MutateStorageError, StorageValueRef},
-		traits::{Bounded, Saturating},
+		traits::{Saturating, Zero},
 	};
 	use sp_std::prelude::*;
 
@@ -110,10 +109,14 @@ pub mod pallet {
 
 	pub trait WeightInfo {
 		fn process_top_key(x: u32) -> Weight;
+		fn continue_migrate() -> Weight;
 	}
 
 	impl WeightInfo for () {
 		fn process_top_key(_: u32) -> Weight {
+			1000000
+		}
+		fn continue_migrate() -> Weight {
 			1000000
 		}
 	}
@@ -177,7 +180,7 @@ pub mod pallet {
 		pub(crate) _ph: sp_std::marker::PhantomData<T>,
 	}
 
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks"))]
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", feature = "try-runtime"))]
 	impl<T: Config> sp_std::fmt::Debug for MigrationTask<T> {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 			f.debug_struct("MigrationTask")
@@ -219,9 +222,20 @@ pub mod pallet {
 
 	impl<T: Config> MigrationTask<T> {
 		/// Return true if the task is finished.
-		#[cfg(test)]
 		pub(crate) fn finished(&self) -> bool {
 			self.current_top.is_none() && self.current_child.is_none()
+		}
+
+		/// Returns `true` if the task fully complies with the given limits.
+		pub(crate) fn fully_complies_with(&self, limits: MigrationLimits) -> bool {
+			self.dyn_total_items() <= limits.item && self.dyn_size <= limits.size
+		}
+
+		/// Check if there's any work left, or if we have exhausted the limits already.
+		fn exhausted(&self, limits: MigrationLimits) -> bool {
+			self.current_top.is_none() ||
+				self.dyn_total_items() >= limits.item ||
+				self.dyn_size >= limits.size
 		}
 
 		/// get the total number of keys affected by the current task.
@@ -237,7 +251,14 @@ pub mod pallet {
 		/// bounded (e.g. a parachain), but it is acceptable otherwise (relay chain, offchain
 		/// workers).
 		pub(crate) fn migrate_until_exhaustion(&mut self, limits: MigrationLimits) {
-			log!(debug, "running migrations until {:?}", limits);
+			log!(debug, "running migrations on top of {:?} until {:?}", self, limits);
+
+			if limits.item.is_zero() || limits.size.is_zero() {
+				// handle this minor edge case, else we would call `migrate_tick` at least once.
+				log!(warn, "limits are zero. stopping");
+				return
+			}
+
 			loop {
 				self.migrate_tick();
 				if self.exhausted(limits) {
@@ -250,17 +271,7 @@ pub mod pallet {
 			log!(debug, "finished with {:?}", self);
 		}
 
-		/// Check if there's any work left, or if we have exhausted the limits already.
-		fn exhausted(&self, limits: MigrationLimits) -> bool {
-			self.current_top.is_none() ||
-				self.dyn_total_items() >= limits.item ||
-				self.dyn_size >= limits.size
-		}
-
 		/// Migrate AT MOST ONE KEY. This can be either a top or a child key.
-		///
-		/// The only exception to this is that when the last key of the child tree is migrated, then
-		/// the top tree under which the child tree lives is also migrated.
 		///
 		/// This function is the core of this entire pallet.
 		fn migrate_tick(&mut self) {
@@ -270,29 +281,51 @@ pub mod pallet {
 					self.migrate_child();
 				},
 				(Some(ref top_key), None) => {
-					if top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX) &&
-						!self.prev_tick_child
-					{
-						// no child migration at hand, but one will begin here.
-						let maybe_first_child_key = {
-							let child_top_key = Pallet::<T>::child_io_key(top_key);
-							sp_io::default_child_storage::next_key(child_top_key, &vec![])
-						};
-						if let Some(first_child_key) = maybe_first_child_key {
-							self.current_child = Some(first_child_key);
-							self.prev_tick_child = true;
-							self.migrate_child();
-						} else {
+					// we have a top key and no child key. 3 possibilities exist:
+					// 1. we continue the top key migrations.
+					// 2. this is the root of a child key, and we start processing child keys (and
+					// should call `migrate_child`).
+					// 3. this is the root of a child key, and we are finishing all child-keys (and
+					// should call `migrate_top`).
+
+					// NOTE: this block is written intentionally to verbosely for easy of
+					// verification.
+					match (
+						top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX),
+						self.prev_tick_child,
+					) {
+						(true, true) => {
+							// we're done with migrating a child-root.
+							self.prev_tick_child = false;
 							self.migrate_top();
-						}
-					} else {
-						self.prev_tick_child = false;
-						self.migrate_top();
-					}
+						},
+						(true, false) => {
+							// start going into a child key.
+							let maybe_first_child_key = {
+								let child_top_key = Pallet::<T>::child_io_key(top_key);
+								sp_io::default_child_storage::next_key(child_top_key, &vec![])
+							};
+							if let Some(first_child_key) = maybe_first_child_key {
+								self.current_child = Some(first_child_key);
+								self.prev_tick_child = true;
+								self.migrate_child();
+							} else {
+								self.migrate_top();
+							}
+						},
+						(false, true) => {
+							// should never happen.
+							log!(error, "LOGIC ERROR: unreachable code [0].");
+							Pallet::<T>::halt();
+						},
+						(false, false) => {
+							// continue the top key migration
+							self.migrate_top();
+						},
+					};
 				},
 				(None, Some(_)) => {
-					// TODO: test edge case: last top key has child
-					log!(error, "LOGIC ERROR: unreachable code.");
+					log!(error, "LOGIC ERROR: unreachable code [1].");
 					Pallet::<T>::halt()
 				},
 				(None, None) => {
@@ -330,17 +363,22 @@ pub mod pallet {
 		/// It updates the dynamic counters.
 		fn migrate_top(&mut self) {
 			let current_top = self.current_top.clone().expect("value checked to be `Some`; qed");
-			if let Some(data) = sp_io::storage::get(&current_top) {
+			let added_size = if let Some(data) = sp_io::storage::get(&current_top) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
 				sp_io::storage::set(&current_top, &data);
-			}
+				data.len() as u32
+			} else {
+				Zero::zero()
+			};
+
 			self.dyn_top_items.saturating_inc();
 			let next_key = sp_io::storage::next_key(&current_top);
 			self.current_top = next_key;
 			log!(
 				trace,
-				"migrated top key {:?}, next task: {:?}",
+				"migrated top key {:?} with size {}, next_task = {:?}",
 				sp_core::hexdisplay::HexDisplay::from(&current_top),
+				added_size,
 				self
 			);
 		}
@@ -350,9 +388,9 @@ pub mod pallet {
 	#[derive(Clone, Copy, Encode, Decode, scale_info::TypeInfo, Default, Debug, PartialEq, Eq)]
 	pub struct MigrationLimits {
 		/// The byte size limit.
-		pub(crate) size: u32,
+		pub size: u32,
 		/// The number of keys limit.
-		pub(crate) item: u32,
+		pub item: u32,
 	}
 
 	/// How a migration was computed.
@@ -397,11 +435,20 @@ pub mod pallet {
 		/// This should reflect the average storage value size in the worse case.
 		type SignedDepositPerItem: Get<BalanceOf<Self>>;
 
+		/// The maximum limits that the signed migration could use.
+		type SignedMigrationMaxLimits: Get<MigrationLimits>;
+
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
 
 		/// The priority used for unsigned transactions.
-		type Priority: Get<TransactionPriority>;
+		type UnsignedPriority: Get<TransactionPriority>;
+
+		/// The number of items that offchain worker will subtract from the first item count that
+		/// causes an over-consumption.
+		///
+		/// A value around 5-10 is reasonable.
+		type UnsignedBackOff: Get<u32>;
 
 		/// The repeat frequency of offchain workers.
 		type OffchainRepeat: Get<Self::BlockNumber>;
@@ -430,8 +477,8 @@ pub mod pallet {
 	///
 	/// if set to `None`, then no unsigned migration happens.
 	#[pallet::storage]
-	#[pallet::getter(fn unsigned_size_limit)]
-	pub type UnsignedSizeLimit<T> = StorageValue<_, Option<u32>, ValueQuery>;
+	#[pallet::getter(fn unsigned_limits)]
+	pub type UnsignedLimits<T> = StorageValue<_, Option<MigrationLimits>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -445,7 +492,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::ControlOrigin::ensure_origin(origin)?;
 			ensure!(
-				maybe_config.is_some() ^ Self::unsigned_size_limit().is_some(),
+				maybe_config.is_some() ^ Self::unsigned_limits().is_some(),
 				"unsigned and auto migration cannot co-exist"
 			);
 			AutoLimits::<T>::put(maybe_config);
@@ -458,14 +505,14 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn control_unsigned_migration(
 			origin: OriginFor<T>,
-			maybe_size_limit: Option<u32>,
+			maybe_limit: Option<MigrationLimits>,
 		) -> DispatchResultWithPostInfo {
 			T::ControlOrigin::ensure_origin(origin)?;
 			ensure!(
-				maybe_size_limit.is_some() ^ Self::auto_limits().is_some(),
+				maybe_limit.is_some() ^ Self::auto_limits().is_some(),
 				"unsigned and auto migration cannot co-exist"
 			);
-			UnsignedSizeLimit::<T>::put(maybe_size_limit);
+			UnsignedLimits::<T>::put(maybe_limit);
 			Ok(().into())
 		}
 
@@ -474,35 +521,36 @@ pub mod pallet {
 		/// This can only be valid if it is generated from the local node, which means only
 		/// validators can generate this call.
 		///
-		/// It is guaranteed that migrating `item_limit` will not cause the total read bytes to
-		/// exceed [`UnsignedSizeLimit`].
+		/// The `item_limit` is the maximum number of items that can be read whilst ensuring that
+		/// the migration does not go over `Self::unsigned_limits().size`.
 		///
-		/// The `size_limit` in the call arguments is for weighing. THe `_task` argument in the call
-		/// is for validation and ensuring that the migration process has not ticked forward since
-		/// the call was generated.
-		#[pallet::weight(Pallet::<T>::dynamic_weight(*item_limit, *witness_size_limit))]
+		/// The `witness_size` should always be equal to `Self::unsigned_limits().size` and is only
+		/// used for weighing.
+		#[pallet::weight(Pallet::<T>::dynamic_weight(*item_limit, *witness_size))]
 		pub fn continue_migrate_unsigned(
 			origin: OriginFor<T>,
 			item_limit: u32,
-			witness_size_limit: u32,
+			witness_size: u32,
 			_witness_task: MigrationTask<T>,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			let unsigned_size_limit =
-				Self::unsigned_size_limit().ok_or("unsigned limit not set, tx not allowed.")?;
-			ensure!(witness_size_limit == unsigned_size_limit, "wrong size limit witness data");
+			let chain_limits =
+				Self::unsigned_limits().ok_or("unsigned limit not set, tx not allowed.")?;
+			ensure!(witness_size == chain_limits.size, "wrong witness data");
 
 			let mut task = Self::migration_process();
 			// pre-dispatch and validate-unsigned already assure this.
 			debug_assert_eq!(task, _witness_task);
 
-			let limits = MigrationLimits { size: unsigned_size_limit, item: item_limit };
-			task.migrate_until_exhaustion(limits);
+			// we run the task with the given item limit, and the chain size limit..
+			task.migrate_until_exhaustion(MigrationLimits {
+				size: chain_limits.size,
+				item: item_limit,
+			});
 
-			// we panic if the validator submitted a bad transaction, making it financially bad for
-			// them to cheat. We could relax this. Also, if a bug causes validators to mistakenly
-			// produce bad transactions, they can avoid it by disabling offchain workers.
-			assert!(task.dyn_size < unsigned_size_limit);
+			// .. and we assert that the size limit must have been fully met with the given item
+			// limit.
+			assert!(task.fully_complies_with(chain_limits));
 
 			Self::deposit_event(Event::<T>::Migrated(
 				task.dyn_top_items,
@@ -514,7 +562,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Migrate AT MOST `item_limit` keys by reading and writing them.
+		/// Continue the migration for the given `limits`.
 		///
 		/// The dispatch origin of this call can be any signed account.
 		///
@@ -523,26 +571,36 @@ pub mod pallet {
 		///
 		/// The sum of the byte length of all the data read must be provided for up-front
 		/// fee-payment and weighing.
-		#[pallet::weight(Pallet::<T>::dynamic_weight(*item_limit, *size_limit))]
+		#[pallet::weight(
+			// the migration process
+			Pallet::<T>::dynamic_weight(limits.item, * real_size)
+			// rest of the operations, like deposit etc.
+			+ T::WeightInfo::continue_migrate()
+		)]
 		pub fn continue_migrate(
 			origin: OriginFor<T>,
-			item_limit: u32,
-			size_limit: u32,
+			limits: MigrationLimits,
+			real_size: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
+			let max_limits = T::SignedMigrationMaxLimits::get();
+			ensure!(
+				limits.size <= max_limits.size && limits.item <= max_limits.item,
+				"max signed limits not respected"
+			);
+
 			// ensure they can pay more than the fee.
-			let deposit = T::SignedDepositPerItem::get().saturating_mul(item_limit.into());
+			let deposit = T::SignedDepositPerItem::get().saturating_mul(limits.item.into());
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut task = Self::migration_process();
-			task.migrate_until_exhaustion(MigrationLimits { size: size_limit, item: item_limit });
+			task.migrate_until_exhaustion(limits);
 
 			// ensure that the migration witness data was correct.
-			if item_limit != task.dyn_total_items() || size_limit != task.dyn_size {
+			if real_size != task.dyn_size {
 				// let the imbalance burn.
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
-				// defensive.
 				debug_assert!(_remainder.is_zero());
 				return Err("Wrong witness data".into())
 			}
@@ -552,6 +610,7 @@ pub mod pallet {
 				task.dyn_child_items,
 				MigrationCompute::Signed,
 			));
+
 			MigrationProcess::<T>::put(task);
 			Ok(().into())
 		}
@@ -677,38 +736,59 @@ pub mod pallet {
 			}
 
 			log!(debug, "started offchain worker thread.");
-			if let Some(unsigned_size_limit) = Self::unsigned_size_limit() {
+			if let Some(chain_limits) = Self::unsigned_limits() {
 				let mut task = Self::migration_process();
-				let limits =
-					MigrationLimits { size: unsigned_size_limit, item: Bounded::max_value() };
-				task.migrate_until_exhaustion(limits);
+				if task.finished() {
+					log!(warn, "task is finished, remove `unsigned_limits`.");
+					return
+				}
 
-				// the last item cause us to go beyond the size limit, so we subtract one. we are
-				// making this assumption based on the impl of `migrate_until_exhaustion`.
-				let safe_items_to_read = task.dyn_total_items().saturating_sub(1);
+				task.migrate_until_exhaustion(chain_limits);
+
+				if task.dyn_size > chain_limits.size {
+					// previous `migrate_until_exhaustion` finished with too much size consumption.
+					// This most likely means that if it migrated `x` items, now we need to migrate
+					// `x - 1` items. But, we migrate less by 5 by default, since the state may have
+					// changed between the execution of this offchain worker and time that the
+					// transaction reaches the chain.
+					log!(
+						debug,
+						"reducing item count of {} by {}.",
+						task.dyn_total_items(),
+						T::UnsignedBackOff::get(),
+					);
+					let mut new_task = Self::migration_process();
+					new_task.migrate_until_exhaustion(MigrationLimits {
+						size: chain_limits.size,
+						item: task.dyn_total_items().saturating_sub(T::UnsignedBackOff::get()),
+					});
+					task = new_task;
+				}
+
+				let item_limit = task.dyn_total_items();
+				if item_limit.is_zero() {
+					log!(warn, "can't fit anything in a migration.");
+					return
+				}
+
+				// with the above if-statement, the limits must now be STRICTLY respected, so we
+				// panic and crash the OCW otherwise.
+				assert!(
+					task.fully_complies_with(chain_limits),
+					"runtime::state-trie-migration: The offchain worker failed to create transaction."
+				);
 
 				let original_task = Self::migration_process();
+
 				let call = Call::continue_migrate_unsigned {
-					item_limit: safe_items_to_read,
-					// note that this must be simply the limit, not the actual bytes read.
-					witness_size_limit: unsigned_size_limit,
+					item_limit,
+					witness_size: chain_limits.size,
 					witness_task: original_task,
 				};
+
 				match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 					Ok(_) => {
-						log!(
-							info,
-							"submitted a call to migrate {} items of {} bytes.",
-							safe_items_to_read,
-							{
-								let mut t = Self::migration_process();
-								t.migrate_until_exhaustion(MigrationLimits {
-									item: safe_items_to_read,
-									size: Bounded::max_value(),
-								});
-								t.dyn_size
-							}
-						)
+						log!(info, "submitted a call to migrate {} items.", item_limit)
 					},
 					Err(why) => {
 						log!(warn, "failed to submit a call to the pool {:?}", why)
@@ -734,7 +814,7 @@ pub mod pallet {
 				}
 
 				ValidTransaction::with_tag_prefix("StorageVersionMigration")
-					.priority(T::Priority::get())
+					.priority(T::UnsignedPriority::get())
 					// deduplicate based on task data.
 					.and_provides(witness_task)
 					.longevity(5)
@@ -773,7 +853,7 @@ pub mod pallet {
 
 		/// Put a stop to all ongoing migrations.
 		fn halt() {
-			UnsignedSizeLimit::<T>::kill();
+			UnsignedLimits::<T>::kill();
 			AutoLimits::<T>::kill();
 		}
 
@@ -847,6 +927,10 @@ mod benchmarks {
 	const KEY: &'static [u8] = b"key";
 
 	frame_benchmarking::benchmarks! {
+		continue_migrate {
+			let null = MigrationLimits::default();
+			let caller = frame_benchmarking::whitelisted_caller();
+		}: _(frame_system::RawOrigin::Signed(caller), null, 0)
 		process_top_key {
 			let v in 1 .. (4 * 1024 * 1024);
 
@@ -866,6 +950,7 @@ mod mock {
 	use parking_lot::RwLock;
 	use std::sync::Arc;
 
+	use super::*;
 	use crate as pallet_state_trie_migration;
 	use frame_support::{parameter_types, traits::Hooks};
 	use frame_system::EnsureRoot;
@@ -928,7 +1013,9 @@ mod mock {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-		pub const OffchainRepeat: u32 = 4;
+		pub const OffchainRepeat: u32 = 1;
+		pub const SignedDepositPerItem: u64 = 1;
+		pub const SignedMigrationMaxLimits: MigrationLimits = MigrationLimits { size: 1024, item: 5 };
 	}
 
 	impl pallet_balances::Config for Test {
@@ -947,9 +1034,11 @@ mod mock {
 		type Event = Event;
 		type ControlOrigin = EnsureRoot<u64>;
 		type Currency = Balances;
-		type SignedDepositPerItem = ();
+		type SignedDepositPerItem = SignedDepositPerItem;
+		type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
 		type WeightInfo = ();
-		type Priority = ();
+		type UnsignedPriority = ();
+		type UnsignedBackOff = frame_support::traits::ConstU32<2>;
 		type OffchainRepeat = OffchainRepeat;
 	}
 
@@ -963,22 +1052,27 @@ mod mock {
 
 	pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-	pub fn new_test_ext(version: StateVersion) -> sp_io::TestExternalities {
+	pub fn new_test_ext(version: StateVersion, with_pallets: bool) -> sp_io::TestExternalities {
 		use sp_core::storage::ChildInfo;
 
-		let storage = sp_core::storage::Storage {
+		let mut custom_storage = sp_core::storage::Storage {
 			top: vec![
-				(b"key1".to_vec(), vec![1u8; 10]), // 6b657931
-				(b"key2".to_vec(), vec![2u8; 20]), // 6b657932
-				(b"key3".to_vec(), vec![3u8; 30]), // 6b657934
-				(b"key4".to_vec(), vec![4u8; 40]), // 6b657934
-				(sp_core::storage::well_known_keys::CODE.to_vec(), vec![1u8; 100]),
+				(b"key1".to_vec(), vec![1u8; 10]),  // 6b657931
+				(b"key2".to_vec(), vec![1u8; 20]),  // 6b657931
+				(b"key3".to_vec(), vec![1u8; 30]),  // 6b657931
+				(b"key4".to_vec(), vec![1u8; 40]),  // 6b657931
+				(b"key5".to_vec(), vec![2u8; 50]),  // 6b657932
+				(b"key6".to_vec(), vec![3u8; 50]),  // 6b657934
+				(b"key7".to_vec(), vec![4u8; 50]),  // 6b657934
+				(b"key8".to_vec(), vec![4u8; 50]),  // 6b657934
+				(b"key9".to_vec(), vec![4u8; 50]),  // 6b657934
+				(b"CODE".to_vec(), vec![1u8; 100]), // 434f4445
 			]
 			.into_iter()
 			.collect(),
 			children_default: vec![
 				(
-					b"chk1".to_vec(),
+					b"chk1".to_vec(), // 63686b31
 					sp_core::storage::StorageChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 10]),
@@ -1006,14 +1100,29 @@ mod mock {
 			.collect(),
 		};
 
+		if with_pallets {
+			frame_system::GenesisConfig::default()
+				.assimilate_storage::<Test>(&mut custom_storage)
+				.unwrap();
+			pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 1000)] }
+				.assimilate_storage(&mut custom_storage)
+				.unwrap();
+		}
+
 		sp_tracing::try_init_simple();
-		(storage, version).into()
+		(custom_storage, version).into()
 	}
 
 	pub fn new_offchain_ext(
 		version: StateVersion,
+		with_pallets: bool,
 	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
-		let mut ext = new_test_ext(version);
+		let mut ext = new_test_ext(version, with_pallets);
+		let pool_state = offchainify(&mut ext);
+		(ext, pool_state)
+	}
+
+	pub fn offchainify(ext: &mut sp_io::TestExternalities) -> Arc<RwLock<PoolState>> {
 		let (offchain, _offchain_state) = TestOffchainExt::new();
 		let (pool, pool_state) = TestTransactionPoolExt::new();
 
@@ -1021,7 +1130,7 @@ mod mock {
 		ext.register_extension(OffchainWorkerExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 
-		(ext, pool_state)
+		pool_state
 	}
 
 	pub fn run_to_block(n: u32) -> H256 {
@@ -1070,111 +1179,172 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
-	use sp_runtime::StateVersion;
+	use sp_runtime::{traits::Bounded, StateVersion};
 	use std::sync::Arc;
 
 	#[test]
-	fn auto_migrate_works_single_item_per_block() {
-		let mut ext = new_test_ext(StateVersion::V0);
-		let root_upgraded = ext.execute_with(|| {
-			assert_eq!(AutoLimits::<Test>::get(), None);
-			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+	fn auto_migrate_works() {
+		let run_with_limits = |limit, from, until| {
+			let mut ext = new_test_ext(StateVersion::V0, false);
+			let root_upgraded = ext.execute_with(|| {
+				assert_eq!(AutoLimits::<Test>::get(), None);
+				assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
-			// nothing happens if we don't set the limits.
-			let _ = run_to_block(50);
-			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+				// nothing happens if we don't set the limits.
+				let _ = run_to_block(from);
+				assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
-			// this should allow 1 item per block to be migrated.
-			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1, size: 150 }));
+				// this should allow 1 item per block to be migrated.
+				AutoLimits::<Test>::put(Some(limit));
 
-			let root = run_to_block(70);
+				let root = run_to_block(until);
 
-			// eventually everything is over.
-			assert!(matches!(
-				StateTrieMigration::migration_process(),
-				MigrationTask { current_child: None, current_top: None, .. }
-			));
-			root
-		});
+				// eventually everything is over.
+				assert!(matches!(
+					StateTrieMigration::migration_process(),
+					MigrationTask { current_child: None, current_top: None, .. }
+				));
+				root
+			});
 
-		let mut ext2 = new_test_ext(StateVersion::V1);
-		let root = ext2.execute_with(|| {
-			// update ex2 to contain the new items
-			let _ = run_to_block(50);
-			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1, size: 150 }));
-			run_to_block(70)
-		});
-		assert_eq!(root, root_upgraded);
+			let mut ext2 = new_test_ext(StateVersion::V1, false);
+			let root = ext2.execute_with(|| {
+				// update ex2 to contain the new items
+				let _ = run_to_block(from);
+				AutoLimits::<Test>::put(Some(limit));
+				run_to_block(until)
+			});
+			assert_eq!(root, root_upgraded);
+		};
+
+		// single item
+		run_with_limits(MigrationLimits { item: 1, size: 1000 }, 10, 100);
+		// multi-item
+		run_with_limits(MigrationLimits { item: 5, size: 1000 }, 10, 100);
+		// multi-item, based on size. Note that largest value is 100 bytes.
+		run_with_limits(MigrationLimits { item: 1000, size: 128 }, 10, 100);
+		// unbounded
+		run_with_limits(
+			MigrationLimits { item: Bounded::max_value(), size: Bounded::max_value() },
+			10,
+			100,
+		);
 	}
 
 	#[test]
-	fn auto_migrate_works_multi_item_per_block() {
-		let mut ext = new_test_ext(StateVersion::V0);
-		let root_upgraded = ext.execute_with(|| {
-			assert_eq!(AutoLimits::<Test>::get(), None);
-			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+	fn ocw_migration_works() {
+		let run_with_limits = |limits, from, until| {
+			let (mut ext, pool) = new_offchain_ext(StateVersion::V0, false);
+			let root_upgraded = ext.execute_with(|| {
+				assert_eq!(UnsignedLimits::<Test>::get(), None);
+				assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
-			// nothing happens if we don't set the limits.
-			run_to_block(50);
-			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+				// nothing happens if we don't set the limits.
+				run_to_block_and_drain_pool(from, Arc::clone(&pool));
+				assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
-			// this should allow 1 item per block to be migrated.
-			AutoLimits::<Test>::put(Some(MigrationLimits { item: 5, size: 150 }));
+				// allow 2 items per run
+				UnsignedLimits::<Test>::put(Some(limits));
 
-			let root = run_to_block(70);
+				run_to_block_and_drain_pool(until, Arc::clone(&pool))
+			});
 
-			// eventually everything is over.
-			assert!(matches!(
-				StateTrieMigration::migration_process(),
-				MigrationTask { current_child: None, current_top: None, .. }
-			));
+			let (mut ext2, pool2) = new_offchain_ext(StateVersion::V1, false);
+			let root = ext2.execute_with(|| {
+				// update ex2 to contain the new items
+				run_to_block_and_drain_pool(from, Arc::clone(&pool2));
+				UnsignedLimits::<Test>::put(Some(limits));
+				run_to_block_and_drain_pool(until, Arc::clone(&pool2))
+			});
+			assert_eq!(root, root_upgraded);
+		};
 
-			root
-		});
-
-		let mut ext2 = new_test_ext(StateVersion::V1);
-		let root = ext2.execute_with(|| {
-			// update ex2 to contain the new items
-			run_to_block(50);
-			AutoLimits::<Test>::put(Some(MigrationLimits { item: 5, size: 150 }));
-			run_to_block(70)
-		});
-		assert_eq!(root, root_upgraded);
+		// single item
+		run_with_limits(MigrationLimits { item: 1, size: 1000 }, 10, 100);
+		// multi-item
+		run_with_limits(MigrationLimits { item: 5, size: 1000 }, 10, 100);
+		// multi-item, based on size
+		run_with_limits(MigrationLimits { item: 1000, size: 128 }, 10, 100);
+		// unbounded
+		run_with_limits(
+			MigrationLimits { item: Bounded::max_value(), size: Bounded::max_value() },
+			10,
+			100,
+		);
 	}
 
 	#[test]
-	fn unsigned_migration_works() {
-		let (mut ext, pool) = new_offchain_ext(StateVersion::V0);
-		ext.execute_with(|| {
-			assert_eq!(UnsignedSizeLimit::<Test>::get(), None);
+	fn signed_migrate_works() {
+		new_test_ext(StateVersion::V0, true).execute_with(|| {
 			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
-			// nothing happens if we don't set the limits.
-			run_to_block_and_drain_pool(50, Arc::clone(&pool));
-			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
+			// can't submit if limit is too high.
+			frame_support::assert_err!(
+				StateTrieMigration::continue_migrate(
+					Origin::signed(1),
+					MigrationLimits { item: 5, size: sp_runtime::traits::Bounded::max_value() },
+					Bounded::max_value(),
+				),
+				"max signed limits not respected"
+			);
 
-			// allow 50 bytes per run.
-			UnsignedSizeLimit::<Test>::put(Some(50));
+			// can't submit if poor.
+			frame_support::assert_err!(
+				StateTrieMigration::continue_migrate(
+					Origin::signed(2),
+					MigrationLimits { item: 5, size: 100 },
+					100,
+				),
+				"not enough funds"
+			);
 
-			run_to_block_and_drain_pool(70, Arc::clone(&pool));
+			// migrate all keys in a series of submissions
+			while !MigrationProcess::<Test>::get().finished() {
+				// first we compute the task to get the accurate consumption.
+				let mut task = StateTrieMigration::migration_process();
+				task.migrate_until_exhaustion(SignedMigrationMaxLimits::get());
+
+				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
+					Origin::signed(1),
+					SignedMigrationMaxLimits::get(),
+					task.dyn_size
+				));
+
+				// no funds should remain reserved.
+				assert_eq!(Balances::reserved_balance(&1), 0);
+
+				// and the task should be updated
+				assert!(matches!(
+					StateTrieMigration::migration_process(),
+					MigrationTask { size: x, .. } if x > 0,
+				));
+			}
 		});
-	}
-
-	#[test]
-	fn manual_migrate_works() {
-		todo!("test manually signed migration");
 	}
 
 	#[test]
 	fn custom_migrate_works() {
-		todo!("test custom keys to be migrated via signed")
+		new_test_ext(StateVersion::V0, true).execute_with(|| {
+			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
+				Origin::signed(1),
+				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
+				10 + 20 + 30,
+			));
+
+			// no funds should remain reserved.
+			assert_eq!(Balances::reserved_balance(&1), 0);
+		});
 	}
 }
 
 #[cfg(all(test, feature = "remote-tests"))]
 mod remote_tests {
+	use std::sync::Arc;
+
 	use super::{mock::*, *};
+	use mock::run_to_block_and_drain_pool;
 	use remote_externalities::{Mode, OnlineConfig};
+	use sp_runtime::traits::Bounded;
 
 	// we only use the hash type from this (I hope).
 	type Block = sp_runtime::testing::Block<Extrinsic>;
@@ -1182,37 +1352,97 @@ mod remote_tests {
 	#[tokio::test]
 	async fn on_initialize_migration() {
 		sp_tracing::try_init_simple();
-		let mut ext = remote_externalities::Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: std::env!("WS_API").to_owned().into(),
-				scrape_children: true,
-				..Default::default()
-			}))
-			.state_version(sp_core::StateVersion::V0)
-			.build()
-			.await
-			.unwrap();
+		let run_with_limits = |limits| async move {
+			let mut ext = remote_externalities::Builder::<Block>::new()
+				.mode(Mode::Offline(remote_externalities::OfflineConfig {
+					state_snapshot: "/home/kianenigma/remote-builds/polka-state".to_owned().into(),
+				}))
+				// .mode(Mode::Online(OnlineConfig {
+				// 	transport: std::env!("WS_API").to_owned().into(),
+				// 	scrape_children: true,
+				// 	..Default::default()
+				// }))
+				.state_version(sp_core::StateVersion::V0)
+				.build()
+				.await
+				.unwrap();
 
-		ext.execute_with(|| {
-			// requires the block number type in our tests to be same as with mainnet, u32.
-			let mut now = frame_system::Pallet::<Test>::block_number();
-			let mut duration = 0;
-			AutoLimits::<Test>::put(Some(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }));
-			loop {
-				run_to_block(now + 1);
-				if StateTrieMigration::migration_process().finished() {
-					break
+			ext.execute_with(|| {
+				// requires the block number type in our tests to be same as with mainnet, u32.
+				let mut now = frame_system::Pallet::<Test>::block_number();
+				let mut duration = 0;
+				AutoLimits::<Test>::put(Some(limits));
+				loop {
+					run_to_block(now + 1);
+					if StateTrieMigration::migration_process().finished() {
+						break
+					}
+					duration += 1;
+					now += 1;
 				}
-				duration += 1;
-				now += 1;
-			}
 
-			log::info!(
-				target: LOG_TARGET,
-				"finished migration in {} block, final state of the task: {:?}",
-				duration,
-				StateTrieMigration::migration_process()
-			);
-		})
+				log::info!(
+					target: LOG_TARGET,
+					"finished on_initialize migration in {} block, final state of the task: {:?}",
+					duration,
+					StateTrieMigration::migration_process()
+				);
+			})
+		};
+		// item being the bottleneck
+		run_with_limits(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }).await;
+		// size being the bottleneck
+		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 4 * 1024 }).await;
+	}
+
+	#[tokio::test]
+	async fn offchain_worker_migration() {
+		sp_tracing::try_init_simple();
+		let run_with_limits = |limits| async move {
+			let mut ext = remote_externalities::Builder::<Block>::new()
+				// .mode(Mode::Online(OnlineConfig {
+				// 	transport: std::env!("WS_API").to_owned().into(),
+				// 	scrape_children: true,
+				// 	state_snapshot: Some(
+				// 		"/home/kianenigma/remote-builds/ksm-state".to_owned().into(),
+				// 	),
+				// 	..Default::default()
+				// }))
+				.mode(Mode::Offline(remote_externalities::OfflineConfig {
+					state_snapshot: "/home/kianenigma/remote-builds/ksm-state".to_owned().into(),
+				}))
+				.state_version(sp_core::StateVersion::V0)
+				.build()
+				.await
+				.unwrap();
+			let pool_state = offchainify(&mut ext);
+
+			ext.execute_with(|| {
+				// requires the block number type in our tests to be same as with mainnet, u32.
+				let mut now = frame_system::Pallet::<Test>::block_number();
+				let mut duration = 0;
+				UnsignedLimits::<Test>::put(Some(limits));
+				loop {
+					run_to_block_and_drain_pool(now + 1, Arc::clone(&pool_state));
+					if StateTrieMigration::migration_process().finished() {
+						break
+					}
+					duration += 1;
+					now += 1;
+				}
+
+				log::info!(
+					target: LOG_TARGET,
+					"finished offchain-worker migration in {} block, final state of the task: {:?}",
+					duration,
+					StateTrieMigration::migration_process()
+				);
+			})
+		};
+		// item being the bottleneck
+		// run_with_limits(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }).await;
+		// size being the bottleneck
+		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 2 * 1024 * 1024 })
+			.await;
 	}
 }
