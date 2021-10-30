@@ -57,7 +57,7 @@ ed25519-dalek = { version = "1.0.1", default-features = false, features = [
 ], optional = true }
 blake2-rfc = { version = "0.2.18", default-features = false, optional = true }
 tiny-keccak = { version = "2.0.1", features = ["keccak"], optional = true }
-schnorrkel = { version = "0.9.1", features = [
+schnorrkel = { version = "0.10.2", features = [
 	"preaudit_deprecated",
 	"u64_backend",
 ], default-features = false, optional = true }
