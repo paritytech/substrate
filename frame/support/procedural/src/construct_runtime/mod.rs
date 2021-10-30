@@ -235,6 +235,17 @@ fn decl_all_pallets<'a>(
 		.iter()
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
+	let system_pallet = match names.iter().find(|n| **n == SYSTEM_PALLET_NAME) {
+		Some(name) => name,
+		None =>
+			return syn::Error::new(
+				proc_macro2::Span::call_site(),
+				"`System` pallet declaration is missing. \
+				 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
+			)
+			.into_compile_error(),
+	};
+
 	quote!(
 		#types
 
@@ -245,7 +256,7 @@ fn decl_all_pallets<'a>(
 			explicitly one of `AllPalletsWithSystem`, `AllPalletsWithoutSystem`, \
 			`AllPalletsWithSystemReversed`, `AllPalletsWithoutSystemReversed`. \
 			Note that the type `frame_executive::Executive` expects one of `AllPalletsWithSystem` \
-			and `AllPalletsWithSystemReversed. More details in \
+			, `AllPalletsWithSystemReversed`, `AllPalletsReversedWithSystemFirst`. More details in \
 			https://github.com/paritytech/substrate/pull/10043")]
 		pub type AllPallets = AllPalletsWithSystem;
 
@@ -262,6 +273,13 @@ fn decl_all_pallets<'a>(
 
 		/// All pallets included in the runtime as a nested tuple of types in reversed order.
 		pub type AllPalletsWithSystemReversed = ( #all_pallets_with_system_reversed );
+
+		/// All pallets included in the runtime as a nested tuple of types in reversed order.
+		/// With the system pallet first.
+		pub type AllPalletsReversedWithSystemFirst = (
+			#system_pallet,
+			AllPalletsWithoutSystemReversed
+		);
 	)
 }
 

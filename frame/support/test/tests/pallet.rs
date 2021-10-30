@@ -1540,3 +1540,12 @@ fn test_storage_info() {
 		],
 	);
 }
+
+#[test]
+fn assert_type_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
+	fn _b(t: (System, (Example2, (Example,)))) {
+		_a(t)
+	}
+}
