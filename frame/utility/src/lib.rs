@@ -97,7 +97,9 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::Call>;
 
 		/// The caller origin, overarching type of all pallets origins.
-		type PalletsOrigin: Parameter + Into<<Self as frame_system::Config>::Origin>;
+		type PalletsOrigin: Parameter +
+			Into<<Self as frame_system::Config>::Origin> +
+			IsType<<<Self as frame_system::Config>::Origin as frame_support::traits::OriginTrait>::PalletsOrigin>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -337,13 +339,13 @@ pub mod pallet {
 		/// - O(1).
 		/// - Limited storage reads.
 		/// - One DB write (event).
-		/// - Weight of derivative `call` execution + 10,000.
+		/// - Weight of derivative `call` execution + T::WeightInfo::dispatch_as().
 		/// # </weight>
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				dispatch_info.weight
-					.saturating_add(10_000)
+				T::WeightInfo::dispatch_as()
+					.saturating_add(dispatch_info.weight)
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
@@ -351,12 +353,12 @@ pub mod pallet {
 		})]
 		pub fn dispatch_as(
 			origin: OriginFor<T>,
-			as_origin: T::PalletsOrigin,
+			as_origin: Box<T::PalletsOrigin>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let res = call.dispatch_bypass_filter(as_origin.into());
+			let res = call.dispatch_bypass_filter((*as_origin).into());
 
 			Self::deposit_event(Event::DispatchedAs(res.map(|_| ()).map_err(|e| e.error)));
 			Ok(())
