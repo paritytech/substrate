@@ -21,7 +21,7 @@
 
 use std::cell::RefCell;
 
-use frame_support::{parameter_types, traits::ReportOffence, weights::Weight, BoundedVec};
+use frame_support::{parameter_types, traits::ReportOffence, weights::Weight, WeakBoundedVec};
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
 use sp_runtime::{
@@ -51,13 +51,13 @@ frame_support::construct_runtime!(
 );
 
 thread_local! {
-	pub static VALIDATORS: RefCell<Option<BoundedVec<u64, MaxKeys>>> =
-		RefCell::new(Some(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxKeys > 3")));
+	pub static VALIDATORS: RefCell<Option<WeakBoundedVec<u64, MaxKeys>>> =
+		RefCell::new(Some(WeakBoundedVec::try_from(vec![1, 2, 3]).expect("MaxKeys > 3")));
 }
 
 pub struct TestSessionManager;
 impl pallet_session::SessionManager<u64, MaxKeys> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<BoundedVec<u64, MaxKeys>> {
+	fn new_session(_new_index: SessionIndex) -> Option<WeakBoundedVec<u64, MaxKeys>> {
 		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 	fn end_session(_: SessionIndex) {}
@@ -65,7 +65,7 @@ impl pallet_session::SessionManager<u64, MaxKeys> for TestSessionManager {
 }
 
 impl pallet_session::historical::SessionManager<u64, u64, MaxKeys> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<BoundedVec<(u64, u64), MaxKeys>> {
+	fn new_session(_new_index: SessionIndex) -> Option<WeakBoundedVec<(u64, u64), MaxKeys>> {
 		VALIDATORS
 			.with(|l| l.borrow_mut().take().map(|validators| validators.map_collect(|v| (v, v))))
 	}

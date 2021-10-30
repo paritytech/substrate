@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::mock::*;
-use frame_support::{assert_noop, dispatch, BoundedVec};
+use frame_support::{assert_noop, dispatch, WeakBoundedVec};
 use sp_core::{
 	offchain::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
@@ -65,7 +65,7 @@ fn should_report_offline_validators() {
 		// buffer new validators
 		advance_session();
 		// enact the change and buffer another one
-		let validators = BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6");
+		let validators = WeakBoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6");
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		advance_session();
 
@@ -151,7 +151,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		// given
 		VALIDATORS.with(|l| {
 			*l.borrow_mut() =
-				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+				Some(WeakBoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
 		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
@@ -189,7 +189,7 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 		// given
 		VALIDATORS.with(|l| {
 			*l.borrow_mut() =
-				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+				Some(WeakBoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
 		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
@@ -234,7 +234,7 @@ fn should_generate_heartbeats() {
 		// enact the change and buffer another one
 		VALIDATORS.with(|l| {
 			*l.borrow_mut() =
-				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+				Some(WeakBoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
 		});
 		Session::rotate_session();
 
@@ -272,7 +272,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		advance_session();
 
 		VALIDATORS.with(|l| {
-			*l.borrow_mut() = Some(BoundedVec::try_from(vec![1, 2, 3]).expect("MaxKeys >= 3"))
+			*l.borrow_mut() = Some(WeakBoundedVec::try_from(vec![1, 2, 3]).expect("MaxKeys >= 3"))
 		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 
@@ -306,7 +306,7 @@ fn should_mark_online_validator_when_block_is_authored() {
 		// given
 		VALIDATORS.with(|l| {
 			*l.borrow_mut() =
-				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+				Some(WeakBoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
 		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
@@ -346,7 +346,7 @@ fn should_not_send_a_report_if_already_online() {
 		// given
 		VALIDATORS.with(|l| {
 			*l.borrow_mut() =
-				Some(BoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
+				Some(WeakBoundedVec::try_from(vec![1, 2, 3, 4, 5, 6]).expect("MaxKeys >= 6"))
 		});
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
@@ -411,7 +411,7 @@ fn should_handle_missing_progress_estimates() {
 
 		// enact the change and buffer another one
 		VALIDATORS.with(|l| {
-			*l.borrow_mut() = Some(BoundedVec::try_from(vec![0, 1, 2]).expect("MaxKeys >= 3"))
+			*l.borrow_mut() = Some(WeakBoundedVec::try_from(vec![0, 1, 2]).expect("MaxKeys >= 3"))
 		});
 		Session::rotate_session();
 
@@ -447,7 +447,7 @@ fn should_handle_non_linear_session_progress() {
 		// mock the session length as being 10 blocks long,
 		// enact the change and buffer another one
 		VALIDATORS.with(|l| {
-			*l.borrow_mut() = Some(BoundedVec::try_from(vec![0, 1, 2]).expect("MaxKeys >= 3"))
+			*l.borrow_mut() = Some(WeakBoundedVec::try_from(vec![0, 1, 2]).expect("MaxKeys >= 3"))
 		});
 
 		// mock the session length has being 10 which should make us assume the fallback for half

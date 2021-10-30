@@ -20,7 +20,7 @@ use std::{convert::TryFrom, vec};
 use beefy_primitives::mmr::MmrLeafVersion;
 use frame_support::{
 	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
-	BasicExternalities, BoundedVec,
+	BasicExternalities, WeakBoundedVec,
 };
 use sp_core::{Hasher, H256};
 use sp_runtime::{
@@ -156,11 +156,13 @@ pub struct MockSessionManager;
 impl pallet_session::SessionManager<u64, MaxValidatorsCount> for MockSessionManager {
 	fn end_session(_: sp_staking::SessionIndex) {}
 	fn start_session(_: sp_staking::SessionIndex) {}
-	fn new_session(idx: sp_staking::SessionIndex) -> Option<BoundedVec<u64, MaxValidatorsCount>> {
+	fn new_session(
+		idx: sp_staking::SessionIndex,
+	) -> Option<WeakBoundedVec<u64, MaxValidatorsCount>> {
 		if idx == 0 || idx == 1 {
-			Some(BoundedVec::try_from(vec![1, 2]).expect("MaxValidatorsCount >= 2"))
+			Some(WeakBoundedVec::try_from(vec![1, 2]).expect("MaxValidatorsCount >= 2"))
 		} else if idx == 2 {
-			Some(BoundedVec::try_from(vec![3, 4]).expect("MaxValidatorsCount >= 2"))
+			Some(WeakBoundedVec::try_from(vec![3, 4]).expect("MaxValidatorsCount >= 2"))
 		} else {
 			None
 		}
