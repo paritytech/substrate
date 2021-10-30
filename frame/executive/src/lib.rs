@@ -228,11 +228,15 @@ where
 	#[cfg(feature = "try-runtime")]
 	pub fn execute_block_no_check(block: Block) -> frame_support::weights::Weight {
 		Self::initialize_block(block.header());
-		Self::initial_checks(&block);
+		let maybe_first_non_inherent_index = Self::initial_checks(&block);
 
 		let (header, extrinsics) = block.deconstruct();
 
-		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+		Self::execute_extrinsics_with_book_keeping(
+			extrinsics,
+			*header.number(),
+			maybe_first_non_inherent_index,
+		);
 
 		// do some of the checks that would normally happen in `final_checks`, but definitely skip
 		// the state root check.
