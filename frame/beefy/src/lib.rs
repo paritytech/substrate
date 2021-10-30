@@ -162,7 +162,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		}
 	}
 
-	fn on_disabled(i: usize) {
+	fn on_disabled(i: u32) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
 			ConsensusLog::<T::BeefyId>::OnDisabled(i as AuthorityIndex).encode(),

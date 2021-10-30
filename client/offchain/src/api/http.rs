@@ -700,7 +700,7 @@ mod tests {
 	use super::{http, SharedClient};
 	use crate::api::timestamp;
 	use core::convert::Infallible;
-	use futures::future;
+	use futures::{future, StreamExt};
 	use lazy_static::lazy_static;
 	use sp_core::offchain::{Duration, HttpError, HttpRequestId, HttpRequestStatus};
 
@@ -725,7 +725,11 @@ mod tests {
 					let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap()).serve(
 						hyper::service::make_service_fn(|_| async move {
 							Ok::<_, Infallible>(hyper::service::service_fn(
-								move |_req| async move {
+								move |req: hyper::Request<hyper::Body>| async move {
+									// Wait until the complete request was received and processed,
+									// otherwise the tests are flaky.
+									let _ = req.into_body().collect::<Vec<_>>().await;
+
 									Ok::<_, Infallible>(hyper::Response::new(hyper::Body::from(
 										"Hello World!",
 									)))

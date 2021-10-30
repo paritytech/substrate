@@ -26,8 +26,6 @@ use crate::{ed25519, sr25519};
 use base58::{FromBase58, ToBase58};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
-use parking_lot::Mutex;
-#[cfg(feature = "std")]
 use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
@@ -38,13 +36,14 @@ pub use secrecy::ExposeSecret;
 #[cfg(feature = "std")]
 pub use secrecy::SecretString;
 use sp_runtime_interface::pass_by::PassByInner;
-#[cfg(feature = "std")]
-use sp_std::convert::TryInto;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
 use sp_std::{convert::TryFrom, hash::Hash, str, vec::Vec};
 /// Trait to zeroize a memory buffer.
 pub use zeroize::Zeroize;
+
+#[cfg(feature = "full_crypto")]
+pub use ss58_registry::{from_known_address_format, Ss58AddressFormat, Ss58AddressFormatRegistry};
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str =
@@ -227,7 +226,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// A format filterer, can be used to ensure that `from_ss58check` family only decode for
 	/// allowed identifiers. By default just refuses the two reserved identifiers.
 	fn format_is_allowed(f: Ss58AddressFormat) -> bool {
-		!matches!(f, Ss58AddressFormat::Reserved46 | Ss58AddressFormat::Reserved47)
+		!f.is_reserved()
 	}
 
 	/// Some if the string is a properly encoded SS58Check address.
@@ -235,7 +234,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
-			v if v == *DEFAULT_VERSION.lock() => Ok(r),
+			v if v == default_ss58_version() => Ok(r),
 			_ => Err(PublicError::UnknownVersion),
 		})
 	}
@@ -270,7 +269,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		if data.len() != prefix_len + body_len + CHECKSUM_LEN {
 			return Err(PublicError::BadLength)
 		}
-		let format = ident.try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
+		let format = ident.into();
 		if !Self::format_is_allowed(format) {
 			return Err(PublicError::FormatNotAllowed)
 		}
@@ -291,7 +290,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		Self::from_string_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
-			v if v == *DEFAULT_VERSION.lock() => Ok(r),
+			v if v == default_ss58_version() => Ok(r),
 			_ => Err(PublicError::UnknownVersion),
 		})
 	}
@@ -322,7 +321,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check(&self) -> String {
-		self.to_ss58check_with_version(*DEFAULT_VERSION.lock())
+		self.to_ss58check_with_version(default_ss58_version())
 	}
 
 	/// Some if the string is a properly encoded SS58Check address, optionally with
@@ -355,286 +354,30 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 	context.finalize()
 }
 
+/// Default prefix number
 #[cfg(feature = "std")]
-lazy_static::lazy_static! {
-	static ref DEFAULT_VERSION: Mutex<Ss58AddressFormat>
-		= Mutex::new(Ss58AddressFormat::SubstrateAccount);
-}
-
-#[cfg(feature = "full_crypto")]
-macro_rules! ss58_address_format {
-	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
-		/// A known address (sub)format/network ID for SS58.
-		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
-		pub enum Ss58AddressFormat {
-			$(#[doc = $desc] $identifier),*,
-			/// Use a manually provided numeric value as a standard identifier
-			Custom(u16),
-		}
-
-		#[cfg(feature = "std")]
-		impl std::fmt::Display for Ss58AddressFormat {
-			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-				match self {
-					$(
-						Ss58AddressFormat::$identifier => write!(f, "{}", $name),
-					)*
-					Ss58AddressFormat::Custom(x) => write!(f, "{}", x),
-				}
-
-			}
-		}
-
-		static ALL_SS58_ADDRESS_FORMATS: [Ss58AddressFormat; 0 $(+ { let _ = $number; 1})*] = [
-			$(Ss58AddressFormat::$identifier),*,
-		];
-
-		impl Ss58AddressFormat {
-			/// names of all address formats
-			pub fn all_names() -> &'static [&'static str] {
-				&[
-					$($name),*,
-				]
-			}
-			/// All known address formats.
-			pub fn all() -> &'static [Ss58AddressFormat] {
-				&ALL_SS58_ADDRESS_FORMATS
-			}
-
-			/// Whether the address is custom.
-			pub fn is_custom(&self) -> bool {
-				matches!(self, Self::Custom(_))
-			}
-		}
-
-		impl TryFrom<u8> for Ss58AddressFormat {
-			type Error = ();
-
-			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
-				Ss58AddressFormat::try_from(x as u16)
-			}
-		}
-
-		impl From<Ss58AddressFormat> for u16 {
-			fn from(x: Ss58AddressFormat) -> u16 {
-				match x {
-					$(Ss58AddressFormat::$identifier => $number),*,
-					Ss58AddressFormat::Custom(n) => n,
-				}
-			}
-		}
-
-		impl TryFrom<u16> for Ss58AddressFormat {
-			type Error = ();
-
-			fn try_from(x: u16) -> Result<Ss58AddressFormat, ()> {
-				match x {
-					$($number => Ok(Ss58AddressFormat::$identifier)),*,
-					_ => Ok(Ss58AddressFormat::Custom(x)),
-				}
-			}
-		}
-
-		/// Error encountered while parsing `Ss58AddressFormat` from &'_ str
-		/// unit struct for now.
-		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
-		pub struct ParseError;
-
-		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-			type Error = ParseError;
-
-			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, Self::Error> {
-				match x {
-					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u16>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
-				}
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl std::str::FromStr for Ss58AddressFormat {
-			type Err = ParseError;
-
-			fn from_str(data: &str) -> Result<Self, Self::Err> {
-				Self::try_from(data)
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl std::fmt::Display for ParseError {
-			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-				write!(f, "failed to parse network value as u8")
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl Default for Ss58AddressFormat {
-			fn default() -> Self {
-				*DEFAULT_VERSION.lock()
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl From<Ss58AddressFormat> for String {
-			fn from(x: Ss58AddressFormat) -> String {
-				x.to_string()
-			}
-		}
-	)
-}
-
-#[cfg(feature = "full_crypto")]
-ss58_address_format!(
-	PolkadotAccount =>
-		(0, "polkadot", "Polkadot Relay-chain, standard account (*25519).")
-	BareSr25519 =>
-		(1, "sr25519", "Bare 32-bit Schnorr/Ristretto 25519 (S/R 25519) key.")
-	KusamaAccount =>
-		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
-	BareEd25519 =>
-		(3, "ed25519", "Bare 32-bit Edwards Ed25519 key.")
-	KatalChainAccount =>
-		(4, "katalchain", "Katal Chain, standard account (*25519).")
-	PlasmAccount =>
-		(5, "plasm", "Plasm Network, standard account (*25519).")
-	BifrostAccount =>
-		(6, "bifrost", "Bifrost mainnet, direct checksum, standard account (*25519).")
-	EdgewareAccount =>
-		(7, "edgeware", "Edgeware mainnet, standard account (*25519).")
-	KaruraAccount =>
-		(8, "karura", "Acala Karura canary network, standard account (*25519).")
-	ReynoldsAccount =>
-		(9, "reynolds", "Laminar Reynolds canary network, standard account (*25519).")
-	AcalaAccount =>
-		(10, "acala", "Acala mainnet, standard account (*25519).")
-	LaminarAccount =>
-		(11, "laminar", "Laminar mainnet, standard account (*25519).")
-	PolymathAccount =>
-		(12, "polymath", "Polymath network, standard account (*25519).")
-	SubstraTeeAccount =>
-		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
-	TotemAccount =>
-		(14, "totem", "Any Totem Live Accounting network standard account (*25519).")
-	SynesthesiaAccount =>
-		(15, "synesthesia", "Synesthesia mainnet, standard account (*25519).")
-	KulupuAccount =>
-		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
-	DarkAccount =>
-		(17, "dark", "Dark mainnet, standard account (*25519).")
-	DarwiniaAccount =>
-		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
-	GeekAccount =>
-		(19, "geek", "GeekCash mainnet, standard account (*25519).")
-	StafiAccount =>
-		(20, "stafi", "Stafi mainnet, standard account (*25519).")
-	DockTestAccount =>
-		(21, "dock-testnet", "Dock testnet, standard account (*25519).")
-	DockMainAccount =>
-		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
-	ShiftNrg =>
-		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
-	ZeroAccount =>
-		(24, "zero", "ZERO mainnet, standard account (*25519).")
-	AlphavilleAccount =>
-		(25, "alphaville", "ZERO testnet, standard account (*25519).")
-	JupiterAccount =>
-		(26, "jupiter", "Jupiter testnet, standard account (*25519).")
-	SubsocialAccount =>
-		(28, "subsocial", "Subsocial network, standard account (*25519).")
-	DhiwayAccount =>
-		(29, "cord", "Dhiway CORD network, standard account (*25519).")
-	PhalaAccount =>
-		(30, "phala", "Phala Network, standard account (*25519).")
-	LitentryAccount =>
-		(31, "litentry", "Litentry Network, standard account (*25519).")
-	RobonomicsAccount =>
-		(32, "robonomics", "Any Robonomics network standard account (*25519).")
-	DataHighwayAccount =>
-		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
-	AresAccount =>
-		(34, "ares", "Ares Protocol, standard account (*25519).")
-	ValiuAccount =>
-		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
-	CentrifugeAccount =>
-		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
-	NodleAccount =>
-		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
-	KiltAccount =>
-		(38, "kilt", "KILT Chain mainnet, standard account (*25519).")
-	PolimecAccount =>
-		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
-	SubstrateAccount =>
-		(42, "substrate", "Any Substrate network, standard account (*25519).")
-	BareSecp256k1 =>
-		(43, "secp256k1", "Bare ECDSA SECP256k1 key.")
-	ChainXAccount =>
-		(44, "chainx", "ChainX mainnet, standard account (*25519).")
-	UniartsAccount =>
-		(45, "uniarts", "UniArts Chain mainnet, standard account (*25519).")
-	Reserved46 =>
-		(46, "reserved46", "Reserved for future use (46).")
-	Reserved47 =>
-		(47, "reserved47", "Reserved for future use (47).")
-	NeatcoinAccount =>
-		(48, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
-	PicassoAccount =>
-		(49, "picasso", "Composable Canary Network, standard account (*25519).")
-	ComposableAccount =>
-		(50, "composable", "Composable mainnet, standard account (*25519).")
-	HydraDXAccount =>
-		(63, "hydradx", "HydraDX standard account (*25519).")
-	AventusAccount =>
-		(65, "aventus", "Aventus Chain mainnet, standard account (*25519).")
-	CrustAccount =>
-		(66, "crust", "Crust Network, standard account (*25519).")
-	EquilibriumAccount =>
-		(67, "equilibrium", "Equilibrium Network, standard account (*25519).")
-	SoraAccount =>
-		(69, "sora", "SORA Network, standard account (*25519).")
-  ZeitgeistAccount =>
-		(73, "zeitgeist", "Zeitgeist network, standard account (*25519).")
-	MantaAccount =>
-		(77, "manta", "Manta Network, standard account (*25519).")
-	CalamariAccount =>
-		(78, "calamari", "Manta Canary Network, standard account (*25519).")
-	Polkadex =>
-		(88, "polkadex", "Polkadex Mainnet, standard account (*25519).")
-	PolkaSmith =>
-		(98, "polkasmith", "PolkaSmith Canary Network, standard account (*25519).")
-	PolkaFoundry =>
-		(99, "polkafoundry", "PolkaFoundry Network, standard account (*25519).")
-  OriginTrailAccount =>
-		(101, "origintrail-parachain", "OriginTrail Parachain, ethereumm account (ECDSA).")
-	HeikoAccount =>
-		(110, "heiko", "Heiko, session key (*25519).")
-	CloverAccount =>
-		(128, "clover", "Clover Finance, standard account (*25519).")
-	ParallelAccount =>
-		(172, "parallel", "Parallel, session key (*25519).")
-	SocialAccount =>
-		(252, "social-network", "Social Network, standard account (*25519).")
-	Moonbeam =>
-		(1284, "moonbeam", "Moonbeam, session key (*25519).")
-	Moonriver =>
-		(1285, "moonriver", "Moonriver, session key (*25519).")
-	Automata =>
-		(2349, "automata", "Automata mainnet standard account (*25519).")
-	BasiliskAccount =>
-		(10041, "basilisk", "Basilisk standard account (*25519).")
-	ContextFree =>
-		(11820, "contextfree", "Automata ContextFree standard account (*25519).")
-
-	// Note: 16384 and above are reserved.
+static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(
+	from_known_address_format(Ss58AddressFormatRegistry::SubstrateAccount),
 );
+
+/// Returns default ss58 format used by the current active process.
+#[cfg(feature = "std")]
+pub fn default_ss58_version() -> Ss58AddressFormat {
+	DEFAULT_VERSION.load(std::sync::atomic::Ordering::Relaxed).into()
+}
+
+/// Returns either the input address format or the default.
+#[cfg(feature = "std")]
+pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss58AddressFormat {
+	network.unwrap_or_else(default_ss58_version)
+}
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
 /// typically used not just to encode format/version but also network identity) that is used for
-/// encoding and decoding SS58 addresses. If an unknown version is provided then it fails.
-///
-/// See `ss58_address_format!` for all current known "versions".
+/// encoding and decoding SS58 addresses.
 #[cfg(feature = "std")]
-pub fn set_default_ss58_version(version: Ss58AddressFormat) {
-	*DEFAULT_VERSION.lock() = version
+pub fn set_default_ss58_version(new_default: Ss58AddressFormat) {
+	DEFAULT_VERSION.store(new_default.into(), std::sync::atomic::Ordering::Relaxed);
 }
 
 #[cfg(feature = "std")]

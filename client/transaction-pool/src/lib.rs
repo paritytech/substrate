@@ -44,7 +44,7 @@ use futures::{
 	future::{self, ready},
 	prelude::*,
 };
-pub use graph::{ChainApi, Options, Pool, Transaction};
+pub use graph::{base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction};
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},

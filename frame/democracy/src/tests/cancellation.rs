@@ -30,10 +30,14 @@ fn cancel_referendum_should_work() {
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		assert_ok!(Democracy::cancel_referendum(Origin::root(), r.into()));
+		assert_eq!(Democracy::lowest_unbaked(), 0);
 
 		next_block();
+
 		next_block();
 
+		assert_eq!(Democracy::lowest_unbaked(), 1);
+		assert_eq!(Democracy::lowest_unbaked(), Democracy::referendum_count());
 		assert_eq!(Balances::free_balance(42), 0);
 	});
 }
