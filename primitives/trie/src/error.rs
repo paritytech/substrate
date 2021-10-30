@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature="std")]
-use std::fmt;
-#[cfg(feature="std")]
+#[cfg(feature = "std")]
 use std::error::Error as StdError;
+#[cfg(feature = "std")]
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 /// Error for trie node decoding.
@@ -35,7 +35,7 @@ impl From<codec::Error> for Error {
 	}
 }
 
-#[cfg(feature="std")]
+#[cfg(feature = "std")]
 impl StdError for Error {
 	fn description(&self) -> &str {
 		match self {
@@ -45,7 +45,7 @@ impl StdError for Error {
 	}
 }
 
-#[cfg(feature="std")]
+#[cfg(feature = "std")]
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {

@@ -66,7 +66,7 @@ fn pre_image() {
 		assert_noop!(Democracy::check_pre_image_is_missing(key), Error::<Test>::NotImminent);
 
 		for l in vec![0, 10, 100, 1000u32] {
-			let available = PreimageStatus::Available{
+			let available = PreimageStatus::Available {
 				data: (0..l).map(|i| i as u8).collect(),
 				provider: 0,
 				deposit: 0,
@@ -76,8 +76,10 @@ fn pre_image() {
 
 			Preimages::<Test>::insert(key, available);
 			assert_eq!(Democracy::pre_image_data_len(key), Ok(l));
-			assert_noop!(Democracy::check_pre_image_is_missing(key),
-				Error::<Test>::DuplicatePreimage);
+			assert_noop!(
+				Democracy::check_pre_image_is_missing(key),
+				Error::<Test>::DuplicatePreimage
+			);
 		}
 	})
 }

@@ -17,15 +17,12 @@
 
 //! Traits, types and structs to support a bounded BTreeMap.
 
+use crate::{storage::StorageDecodeLength, traits::Get};
+use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, fmt, marker::PhantomData,
+	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
 	ops::Deref,
 };
-use crate::{
-	storage::StorageDecodeLength,
-	traits::Get,
-};
-use codec::{Encode, Decode, MaxEncodedLen};
 
 /// A bounded map based on a B-Tree.
 ///
@@ -34,7 +31,8 @@ use codec::{Encode, Decode, MaxEncodedLen};
 ///
 /// Unlike a standard `BTreeMap`, there is an enforced upper limit to the number of items in the
 /// map. All internal operations ensure this bound is respected.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedBTreeMap<K, V, S>(BTreeMap<K, V>, PhantomData<S>);
 
 impl<K, V, S> Decode for BoundedBTreeMap<K, V, S>
@@ -46,7 +44,7 @@ where
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = BTreeMap::<K, V>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedBTreeMap exceeds its limit".into());
+			return Err("BoundedBTreeMap exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData))
 	}
@@ -128,7 +126,8 @@ where
 		}
 	}
 
-	/// Remove a key from the map, returning the value at the key if the key was previously in the map.
+	/// Remove a key from the map, returning the value at the key if the key was previously in the
+	/// map.
 	///
 	/// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
 	/// form _must_ match the ordering on the key type.
@@ -140,7 +139,8 @@ where
 		self.0.remove(key)
 	}
 
-	/// Remove a key from the map, returning the value at the key if the key was previously in the map.
+	/// Remove a key from the map, returning the value at the key if the key was previously in the
+	/// map.
 	///
 	/// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
 	/// form _must_ match the ordering on the key type.
@@ -173,12 +173,12 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<K, V, S> fmt::Debug for BoundedBTreeMap<K, V, S>
+impl<K, V, S> std::fmt::Debug for BoundedBTreeMap<K, V, S>
 where
-	BTreeMap<K, V>: fmt::Debug,
+	BTreeMap<K, V>: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("BoundedBTreeMap").field(&self.0).field(&Self::bound()).finish()
 	}
 }
@@ -280,7 +280,9 @@ where
 	type Error = ();
 
 	fn try_from(value: BTreeMap<K, V>) -> Result<Self, Self::Error> {
-		(value.len() <= Self::bound()).then(move || BoundedBTreeMap(value, PhantomData)).ok_or(())
+		(value.len() <= Self::bound())
+			.then(move || BoundedBTreeMap(value, PhantomData))
+			.ok_or(())
 	}
 }
 
@@ -303,9 +305,9 @@ impl<K, V, S> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> whe
 #[cfg(test)]
 pub mod test {
 	use super::*;
+	use crate::Twox128;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use crate::Twox128;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

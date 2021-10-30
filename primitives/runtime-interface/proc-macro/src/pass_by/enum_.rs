@@ -21,11 +21,11 @@
 
 use crate::utils::{generate_crate_access, generate_runtime_interface_include};
 
-use syn::{DeriveInput, Result, Data, Fields, Error, Ident};
+use syn::{Data, DeriveInput, Error, Fields, Ident, Result};
 
 use quote::quote;
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 
 /// The derive implementation for `PassBy` with `Enum`.
 pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
@@ -81,22 +81,21 @@ pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
 /// enum or a variant is not an unit.
 fn get_enum_field_idents<'a>(data: &'a Data) -> Result<impl Iterator<Item = Result<&'a Ident>>> {
 	match data {
-		Data::Enum(d) => {
+		Data::Enum(d) =>
 			if d.variants.len() <= 256 {
-				Ok(
-					d.variants.iter().map(|v| if let Fields::Unit = v.fields {
+				Ok(d.variants.iter().map(|v| {
+					if let Fields::Unit = v.fields {
 						Ok(&v.ident)
 					} else {
 						Err(Error::new(
 							Span::call_site(),
 							"`PassByEnum` only supports unit variants.",
 						))
-					})
-				)
+					}
+				}))
 			} else {
 				Err(Error::new(Span::call_site(), "`PassByEnum` only supports `256` variants."))
-			}
-		},
-		_ => Err(Error::new(Span::call_site(), "`PassByEnum` only supports enums as input type."))
+			},
+		_ => Err(Error::new(Span::call_site(), "`PassByEnum` only supports enums as input type.")),
 	}
 }

@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::stream::Stream;
-use futures::future::FutureExt;
-use futures::ready;
+use futures::{future::FutureExt, ready, stream::Stream};
 use futures_timer::Delay;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::{
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
+};
 
 /// Exponentially increasing interval
 ///
@@ -37,11 +37,7 @@ impl ExpIncInterval {
 	/// Create a new [`ExpIncInterval`].
 	pub fn new(start: Duration, max: Duration) -> Self {
 		let delay = Delay::new(start);
-		Self {
-			max,
-			next: start * 2,
-			delay,
-		}
+		Self { max, next: start * 2, delay }
 	}
 
 	/// Fast forward the exponentially increasing interval to the configured maximum.

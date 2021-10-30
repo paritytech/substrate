@@ -34,8 +34,10 @@ pub mod logging;
 use rustc_hash::FxHashMap;
 use serde::ser::{Serialize, SerializeMap, Serializer};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
-use std::fmt;
-use std::time::{Duration, Instant};
+use std::{
+	fmt,
+	time::{Duration, Instant},
+};
 use tracing::{
 	event::Event,
 	field::{Field, Visit},
@@ -43,8 +45,10 @@ use tracing::{
 	subscriber::Subscriber,
 	Level,
 };
-use tracing_subscriber::layer::{Context, Layer};
-use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::{
+	layer::{Context, Layer},
+	registry::LookupSpan,
+};
 
 #[doc(hidden)]
 pub use tracing;
@@ -137,10 +141,10 @@ impl Values {
 
 	/// Checks if all individual collections are empty
 	pub fn is_empty(&self) -> bool {
-		self.bool_values.is_empty()
-			&& self.i64_values.is_empty()
-			&& self.u64_values.is_empty()
-			&& self.string_values.is_empty()
+		self.bool_values.is_empty() &&
+			self.i64_values.is_empty() &&
+			self.u64_values.is_empty() &&
+			self.string_values.is_empty()
 	}
 }
 
@@ -162,15 +166,20 @@ impl Visit for Values {
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.string_values.insert(field.name().to_string(), format!("{:?}", value).to_owned());
+		self.string_values
+			.insert(field.name().to_string(), format!("{:?}", value).to_owned());
 	}
 }
 
 impl Serialize for Values {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where S: Serializer,
+	where
+		S: Serializer,
 	{
-		let len = self.bool_values.len() + self.i64_values.len() + self.u64_values.len() + self.string_values.len();
+		let len = self.bool_values.len() +
+			self.i64_values.len() +
+			self.u64_values.len() +
+			self.string_values.len();
 		let mut map = serializer.serialize_map(Some(len))?;
 		for (k, v) in &self.bool_values {
 			map.serialize_entry(k, v)?;
@@ -194,7 +203,12 @@ impl fmt::Display for Values {
 		let i64_iter = self.i64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let u64_iter = self.u64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let string_iter = self.string_values.iter().map(|(k, v)| format!("{}=\"{}\"", k, v));
-		let values = bool_iter.chain(i64_iter).chain(u64_iter).chain(string_iter).collect::<Vec<String>>().join(", ");
+		let values = bool_iter
+			.chain(i64_iter)
+			.chain(u64_iter)
+			.chain(string_iter)
+			.collect::<Vec<String>>()
+			.join(", ");
 		write!(f, "{}", values)
 	}
 }
@@ -217,16 +231,13 @@ impl ProfilingLayer {
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
-		Self {
-			targets,
-			trace_handler,
-		}
+		Self { targets, trace_handler }
 	}
 
 	fn check_target(&self, target: &str, level: &Level) -> bool {
 		for t in &self.targets {
 			if target.starts_with(t.0.as_str()) && level <= &t.1 {
-				return true;
+				return true
 			}
 		}
 		false
@@ -245,8 +256,8 @@ fn parse_target(s: &str) -> (String, Level) {
 			} else {
 				(target, Level::TRACE)
 			}
-		}
-		None => (s.to_string(), Level::TRACE)
+		},
+		None => (s.to_string(), Level::TRACE),
 	}
 }
 
@@ -329,10 +340,7 @@ where
 			if let Some(mut span_datum) = extensions.remove::<SpanDatum>() {
 				span_datum.overall_time += end_time - span_datum.start_time;
 				if span_datum.name == WASM_TRACE_IDENTIFIER {
-					span_datum
-						.values
-						.bool_values
-						.insert("wasm".to_owned(), true);
+					span_datum.values.bool_values.insert("wasm".to_owned(), true);
 					if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
 						span_datum.name = n;
 					}
@@ -404,13 +412,11 @@ impl TraceHandler for LogTraceHandler {
 
 impl From<TraceEvent> for sp_rpc::tracing::Event {
 	fn from(trace_event: TraceEvent) -> Self {
-		let data = sp_rpc::tracing::Data {
-			string_values: trace_event.values.string_values
-		};
+		let data = sp_rpc::tracing::Data { string_values: trace_event.values.string_values };
 		sp_rpc::tracing::Event {
 			target: trace_event.target,
 			data,
-			parent_id: trace_event.parent_id.map(|id| id.into_u64())
+			parent_id: trace_event.parent_id.map(|id| id.into_u64()),
 		}
 	}
 }
@@ -453,18 +459,12 @@ mod tests {
 	fn setup_subscriber() -> (
 		impl tracing::Subscriber + Send + Sync,
 		Arc<Mutex<Vec<SpanDatum>>>,
-		Arc<Mutex<Vec<TraceEvent>>>
+		Arc<Mutex<Vec<TraceEvent>>>,
 	) {
 		let spans = Arc::new(Mutex::new(Vec::new()));
 		let events = Arc::new(Mutex::new(Vec::new()));
-		let handler = TestTraceHandler {
-			spans: spans.clone(),
-			events: events.clone(),
-		};
-		let layer = ProfilingLayer::new_with_handler(
-			Box::new(handler),
-			"test_target",
-		);
+		let handler = TestTraceHandler { spans: spans.clone(), events: events.clone() };
+		let layer = ProfilingLayer::new_with_handler(Box::new(handler), "test_target");
 		let subscriber = tracing_subscriber::fmt().with_writer(std::io::sink).finish().with(layer);
 		(subscriber, spans, events)
 	}
@@ -542,7 +542,10 @@ mod tests {
 		let _sub_guard = tracing::subscriber::set_default(sub);
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
 		let mut te1 = events.lock().remove(0);
-		assert_eq!(te1.values.string_values.remove(&"message".to_owned()).unwrap(), "test_event".to_owned());
+		assert_eq!(
+			te1.values.string_values.remove(&"message".to_owned()).unwrap(),
+			"test_event".to_owned()
+		);
 	}
 
 	#[test]
@@ -557,7 +560,7 @@ mod tests {
 		// emit event
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
 
-		//exit span
+		// exit span
 		drop(_guard1);
 		drop(span1);
 
@@ -596,7 +599,7 @@ mod tests {
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
 				for msg in rx.recv() {
 					if msg == false {
-						break;
+						break
 					}
 				}
 				// guard2 and span2 dropped / exited

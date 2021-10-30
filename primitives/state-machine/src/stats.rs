@@ -17,9 +17,9 @@
 
 //! Usage statistics for state db
 
-#[cfg(feature = "std")]
-use std::time::{Instant, Duration};
 use sp_std::cell::RefCell;
+#[cfg(feature = "std")]
+use std::time::{Duration, Instant};
 
 /// Measured count of operations and total bytes.
 #[derive(Clone, Debug, Default)]

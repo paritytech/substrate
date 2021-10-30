@@ -18,10 +18,12 @@
 //! Implementations for `nonfungibles` traits.
 
 use super::*;
+use frame_support::{
+	traits::{tokens::nonfungibles::*, Get},
+	BoundedSlice,
+};
+use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::convert::TryFrom;
-use frame_support::traits::tokens::nonfungibles::{Inspect, InspectEnumerable, Mutate, Transfer};
-use frame_support::BoundedSlice;
-use sp_runtime::DispatchResult;
 
 impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	type InstanceId = T::InstanceId;
@@ -43,9 +45,11 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	/// When `key` is empty, we return the instance metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn attribute(class: &Self::ClassId, instance: &Self::InstanceId, key: &[u8])
-		-> Option<Vec<u8>>
-	{
+	fn attribute(
+		class: &Self::ClassId,
+		instance: &Self::InstanceId,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the instance metadata value.
 			InstanceMetadataOf::<T, I>::get(class, instance).map(|m| m.data.into())
@@ -60,9 +64,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	/// When `key` is empty, we return the instance metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn class_attribute(class: &Self::ClassId, key: &[u8])
-		-> Option<Vec<u8>>
-	{
+	fn class_attribute(class: &Self::ClassId, key: &[u8]) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the instance metadata value.
 			ClassMetadataOf::<T, I>::get(class).map(|m| m.data.into())
@@ -80,6 +82,40 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 			(Some(cd), Some(id)) if !cd.is_frozen && !id.is_frozen => true,
 			_ => false,
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	/// Create a `class` of nonfungible assets to be owned by `who` and managed by `admin`.
+	fn create_class(
+		class: &Self::ClassId,
+		who: &T::AccountId,
+		admin: &T::AccountId,
+	) -> DispatchResult {
+		Self::do_create_class(
+			class.clone(),
+			who.clone(),
+			admin.clone(),
+			T::ClassDeposit::get(),
+			false,
+			Event::Created(class.clone(), who.clone(), admin.clone()),
+		)
+	}
+}
+
+impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	type DestroyWitness = DestroyWitness;
+
+	fn get_destroy_witness(class: &Self::ClassId) -> Option<DestroyWitness> {
+		Class::<T, I>::get(class).map(|a| a.destroy_witness())
+	}
+
+	fn destroy(
+		class: Self::ClassId,
+		witness: Self::DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> Result<Self::DestroyWitness, DispatchError> {
+		Self::do_destroy_class(class, witness, maybe_check_owner)
 	}
 }
 
@@ -132,7 +168,10 @@ impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> 
 	/// Returns an iterator of the asset instances of `class` owned by `who`.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn owned_in_class(class: &Self::ClassId, who: &T::AccountId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
+	fn owned_in_class(
+		class: &Self::ClassId,
+		who: &T::AccountId,
+	) -> Box<dyn Iterator<Item = Self::InstanceId>> {
 		Box::new(Account::<T, I>::iter_key_prefix((who, class)))
 	}
 }

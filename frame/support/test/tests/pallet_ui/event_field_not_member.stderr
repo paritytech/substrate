@@ -1,10 +1,14 @@
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
-  --> $DIR/event_field_not_member.rs:23:7
-   |
-23 |         B { b: T::Bar },
-   |             ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
-   |
-   = note: required by `clone`
+   --> $DIR/event_field_not_member.rs:23:7
+    |
+23  |         B { b: T::Bar },
+    |             ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
+    |
+note: required by `clone`
+   --> $DIR/clone.rs:121:5
+    |
+121 |     fn clone(&self) -> Self;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
   --> $DIR/event_field_not_member.rs:23:7

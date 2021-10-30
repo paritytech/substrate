@@ -19,17 +19,17 @@
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
 use crate::{
+	metadata::{StorageEntryMetadata, StorageEntryType},
 	storage::{
 		types::{
-			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OnEmptyGetter,
-			OptionQuery, QueryKindTrait, TupleToEncodedIter,
+			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
+			StorageEntryMetadataBuilder, TupleToEncodedIter,
 		},
 		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
 	},
-	traits::{Get, GetDefault, StorageInstance, StorageInfo},
+	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
 
@@ -39,9 +39,9 @@ use sp_std::prelude::*;
 /// Each value is stored at:
 /// ```nocompile
 /// Twox128(Prefix::pallet_prefix())
-///		++ Twox128(Prefix::STORAGE_PREFIX)
-///		++ Hasher1(encode(key1))
-///		++ Hasher2(encode(key2))
+/// 		++ Twox128(Prefix::STORAGE_PREFIX)
+/// 		++ Hasher1(encode(key1))
+/// 		++ Hasher2(encode(key2))
 /// 	++ ...
 /// 	++ HasherN(encode(keyN))
 /// ```
@@ -52,10 +52,13 @@ use sp_std::prelude::*;
 /// such as `blake2_128_concat` must be used for the key hashers. Otherwise, other values
 /// in storage can be compromised.
 pub struct StorageNMap<
-	Prefix, Key, Value, QueryKind = OptionQuery, OnEmpty = GetDefault, MaxValues=GetDefault,
->(
-	core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues)>,
-);
+	Prefix,
+	Key,
+	Value,
+	QueryKind = OptionQuery,
+	OnEmpty = GetDefault,
+	MaxValues = GetDefault,
+>(core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues)>);
 
 impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 	crate::storage::generator::StorageNMap<Key, Value>
@@ -83,8 +86,7 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::storage::StoragePrefixedMap<Value>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::storage::StoragePrefixedMap<Value>
 	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
@@ -113,7 +115,9 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	pub fn hashed_key_for<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+	pub fn hashed_key_for<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> Vec<u8> {
 		<Self as crate::storage::StorageNMap<Key, Value>>::hashed_key_for(key)
 	}
 
@@ -123,7 +127,9 @@ where
 	}
 
 	/// Load the value associated with the given key from the map.
-	pub fn get<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
+	pub fn get<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> QueryKind::Query {
 		<Self as crate::storage::StorageNMap<Key, Value>>::get(key)
 	}
 
@@ -137,7 +143,9 @@ where
 	}
 
 	/// Take a value from storage, removing it afterwards.
-	pub fn take<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
+	pub fn take<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> QueryKind::Query {
 		<Self as crate::storage::StorageNMap<Key, Value>>::take(key)
 	}
 
@@ -248,7 +256,9 @@ where
 	///
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
-	pub fn decode_len<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
+	pub fn decode_len<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> Option<usize>
 	where
 		Value: StorageDecodeLength,
 	{
@@ -260,7 +270,7 @@ where
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
 	pub fn migrate_keys<KArg>(key: KArg, hash_fns: Key::HArg) -> Option<Value>
 	where
-		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter
+		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::migrate_keys::<_>(key, hash_fns)
 	}
@@ -318,6 +328,24 @@ where
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix(kp)
 	}
 
+	/// Enumerate all elements in the map with prefix key `kp` after a specified `starting_raw_key`
+	/// in no particular order.
+	///
+	/// If you add or remove values whose prefix key is `kp` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(<Key as HasKeyPrefix<KP>>::Suffix, Value)>
+	where
+		Key: HasReversibleKeyPrefix<KP>,
+	{
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix_from(
+			kp,
+			starting_raw_key,
+		)
+	}
+
 	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order.
 	///
 	/// If you add or remove values whose prefix key is `kp` to the map while doing this, you'll get
@@ -329,6 +357,24 @@ where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_key_prefix(kp)
+	}
+
+	/// Enumerate all suffix keys in the map with prefix key `kp` after a specified
+	/// `starting_raw_key` in no particular order.
+	///
+	/// If you add or remove values whose prefix key is `kp` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::KeyPrefixIterator<<Key as HasKeyPrefix<KP>>::Suffix>
+	where
+		Key: HasReversibleKeyPrefix<KP>,
+	{
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_key_prefix_from(
+			kp,
+			starting_raw_key,
+		)
 	}
 
 	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
@@ -352,11 +398,29 @@ where
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter()
 	}
 
+	/// Enumerate all elements in the map after a specified `starting_key` in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key::Key, Value)> {
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_from(starting_raw_key)
+	}
+
 	/// Enumerate all keys in the map in no particular order.
 	///
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key::Key> {
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_keys()
+	}
+
+	/// Enumerate all keys in the map after a specified `starting_raw_key` in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::KeyPrefixIterator<Key::Key> {
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_keys_from(starting_raw_key)
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
@@ -376,37 +440,35 @@ where
 	}
 }
 
-/// Part of storage metadata for a storage n map.
-///
-/// NOTE: Generic hashers is supported.
-pub trait StorageNMapMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-	const HASHERS: &'static [frame_metadata::StorageHasher];
-}
-
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageNMapMetadata
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
 	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
-	Value: FullCodec,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter = DefaultByteGetter(
-		&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData),
-	);
-	const HASHERS: &'static [frame_metadata::StorageHasher] = Key::HASHER_METADATA;
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let entry = StorageEntryMetadata {
+			name: Prefix::STORAGE_PREFIX,
+			modifier: QueryKind::METADATA,
+			ty: StorageEntryType::Map {
+				key: scale_info::meta_type::<Key::Key>(),
+				hashers: Key::HASHER_METADATA.iter().cloned().collect(),
+				value: scale_info::meta_type::<Value>(),
+			},
+			default: OnEmpty::get().encode(),
+			docs,
+		};
+
+		entries.push(entry);
+	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::traits::StorageInfoTrait for
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator + super::key::KeyGeneratorMaxEncodedLen,
@@ -416,26 +478,23 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
-		vec![
-			StorageInfo {
-				pallet_name: Self::module_prefix().to_vec(),
-				storage_name: Self::storage_prefix().to_vec(),
-				prefix: Self::final_prefix().to_vec(),
-				max_values: MaxValues::get(),
-				max_size: Some(
-					Key::key_max_encoded_len()
-						.saturating_add(Value::max_encoded_len())
-						.saturated_into(),
-				),
-			}
-		]
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: Some(
+				Key::key_max_encoded_len()
+					.saturating_add(Value::max_encoded_len())
+					.saturated_into(),
+			),
+		}]
 	}
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::traits::PartialStorageInfoTrait for
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::PartialStorageInfoTrait
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
@@ -445,23 +504,23 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
-		vec![
-			StorageInfo {
-				pallet_name: Self::module_prefix().to_vec(),
-				storage_name: Self::storage_prefix().to_vec(),
-				prefix: Self::final_prefix().to_vec(),
-				max_values: MaxValues::get(),
-				max_size: None,
-			}
-		]
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: None,
+		}]
 	}
 }
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::hash::*;
-	use crate::storage::types::{Key, ValueQuery};
-	use frame_metadata::StorageEntryModifier;
+	use crate::{
+		hash::{StorageHasher as _, *},
+		metadata::{StorageEntryModifier, StorageHasher},
+		storage::types::{Key, ValueQuery},
+	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -506,7 +565,7 @@ mod test {
 
 			{
 				crate::generate_storage_alias!(test, Foo => NMap<
-					(u16, Blake2_128Concat),
+					Key<(u16, Blake2_128Concat)>,
 					u32
 				>);
 
@@ -626,17 +685,36 @@ mod test {
 			A::translate::<u8, _>(|k1, v| Some((k1 as u16 * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
 			assert_eq!(
-				AValueQueryWithAnOnEmpty::MODIFIER,
-				StorageEntryModifier::Default
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 98u32.encode(),
+						docs: vec![],
+					}
+				]
 			);
-			assert_eq!(A::NAME, "Foo");
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
-				98u32.encode()
-			);
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3,)), None);
@@ -787,42 +865,55 @@ mod test {
 			C::insert((3, 30), 10);
 			C::insert((4, 40), 10);
 			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40), 20), ((3, 30), 20)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 20), ((3, 30), 20)]);
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40), 10), ((3, 30), 10)]
-			);
-			assert_eq!(
-				A::drain().collect::<Vec<_>>(),
-				vec![((4, 40), 10), ((3, 30), 10)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
+			assert_eq!(A::drain().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
 
 			C::insert((3, 30), 10);
 			C::insert((4, 40), 10);
 			A::translate::<u8, _>(|(k1, k2), v| Some((k1 * k2 as u16 * v as u16).into()));
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40), 1600), ((3, 30), 900)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 1600), ((3, 30), 900)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
 			assert_eq!(
-				AValueQueryWithAnOnEmpty::MODIFIER,
-				StorageEntryModifier::Default
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u8)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 98u32.encode(),
+						docs: vec![],
+					}
+				]
 			);
-			assert_eq!(A::NAME, "Foo");
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
-				98u32.encode()
-			);
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30)), None);
@@ -833,14 +924,8 @@ mod test {
 			A::insert((3, 31), 12);
 			A::insert((4, 40), 13);
 			A::insert((4, 41), 14);
-			assert_eq!(
-				A::iter_prefix_values((3,)).collect::<Vec<_>>(),
-				vec![12, 11]
-			);
-			assert_eq!(
-				A::iter_prefix_values((4,)).collect::<Vec<_>>(),
-				vec![13, 14]
-			);
+			assert_eq!(A::iter_prefix_values((3,)).collect::<Vec<_>>(), vec![12, 11]);
+			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![13, 14]);
 		});
 	}
 
@@ -848,52 +933,32 @@ mod test {
 	fn test_3_keys() {
 		type A = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			u32,
 			OptionQuery,
 		>;
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			u32,
 			ValueQuery,
 			ADefault,
 		>;
 		type B = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_256, u16>,
-				Key<Blake2_256, u16>,
-				Key<Twox128, u16>,
-			),
+			(Key<Blake2_256, u16>, Key<Blake2_256, u16>, Key<Twox128, u16>),
 			u32,
 			ValueQuery,
 		>;
 		type C = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			u8,
 			ValueQuery,
 		>;
 		type WithLen = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			Vec<u32>,
 		>;
 
@@ -916,11 +981,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 30);
 
 			A::swap::<
-				(
-					Key<Blake2_128Concat, u16>,
-					Key<Blake2_128Concat, u16>,
-					Key<Twox64Concat, u16>,
-				),
+				(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 				_,
 				_,
 			>((1, 10, 100), (2, 20, 200));
@@ -1020,17 +1081,11 @@ mod test {
 			C::insert((3, 30, 300), 10);
 			C::insert((4, 40, 400), 10);
 			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40, 400), 20), ((3, 30, 300), 20)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 20), ((3, 30, 300), 20)]);
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40, 400), 10), ((3, 30, 300), 10)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 10), ((3, 30, 300), 10)]);
 			assert_eq!(
 				A::drain().collect::<Vec<_>>(),
 				vec![((4, 40, 400), 10), ((3, 30, 300), 10)]
@@ -1042,22 +1097,46 @@ mod test {
 			A::translate::<u8, _>(|(k1, k2, k3), v| {
 				Some((k1 * k2 as u16 * v as u16 / k3 as u16).into())
 			});
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40, 400), 4), ((3, 30, 300), 3)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 4), ((3, 30, 300), 3)]);
 
-			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
 			assert_eq!(
-				AValueQueryWithAnOnEmpty::MODIFIER,
-				StorageEntryModifier::Default
+				entries,
+				vec![
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u16, u16)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: Option::<u32>::None.encode(),
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Foo",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat
+							],
+							key: scale_info::meta_type::<(u16, u16, u16)>(),
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: 98u32.encode(),
+						docs: vec![],
+					}
+				]
 			);
-			assert_eq!(A::NAME, "Foo");
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
-				98u32.encode()
-			);
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30, 300)), None);
@@ -1068,22 +1147,10 @@ mod test {
 			A::insert((3, 30, 301), 12);
 			A::insert((4, 40, 400), 13);
 			A::insert((4, 40, 401), 14);
-			assert_eq!(
-				A::iter_prefix_values((3,)).collect::<Vec<_>>(),
-				vec![11, 12]
-			);
-			assert_eq!(
-				A::iter_prefix_values((4,)).collect::<Vec<_>>(),
-				vec![14, 13]
-			);
-			assert_eq!(
-				A::iter_prefix_values((3, 30)).collect::<Vec<_>>(),
-				vec![11, 12]
-			);
-			assert_eq!(
-				A::iter_prefix_values((4, 40)).collect::<Vec<_>>(),
-				vec![14, 13]
-			);
+			assert_eq!(A::iter_prefix_values((3,)).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![14, 13]);
+			assert_eq!(A::iter_prefix_values((3, 30)).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values((4, 40)).collect::<Vec<_>>(), vec![14, 13]);
 		});
 	}
 }

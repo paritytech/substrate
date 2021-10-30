@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for slots-based consensus"
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -13,7 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../arithmetic" }
 
@@ -21,6 +22,7 @@ sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../..
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"sp-arithmetic/std",
 ]

@@ -18,7 +18,6 @@
 use crate::error::Error;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-
 /// The SelectChain trait defines the strategy upon which the head is chosen
 /// if multiple forks are present for an opaque definition of "best" in the
 /// specific chain build.
@@ -51,7 +50,7 @@ pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 		&self,
 		target_hash: <Block as BlockT>::Hash,
 		_maybe_max_number: Option<NumberFor<Block>>,
-	) -> Result<Option<<Block as BlockT>::Hash>, Error> {
-		Ok(Some(target_hash))
+	) -> Result<<Block as BlockT>::Hash, Error> {
+		Ok(target_hash)
 	}
 }

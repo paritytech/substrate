@@ -65,7 +65,10 @@ impl StateUsageStats {
 
 	/// Tally one key read.
 	pub fn tally_key_read(&self, key: &[u8], val: Option<&Vec<u8>>, cache: bool) {
-		self.tally_read(key.len() as u64 + val.as_ref().map(|x| x.len() as u64).unwrap_or(0), cache);
+		self.tally_read(
+			key.len() as u64 + val.as_ref().map(|x| x.len() as u64).unwrap_or(0),
+			cache,
+		);
 	}
 
 	/// Tally one child key read.
@@ -103,9 +106,11 @@ impl StateUsageStats {
 		self.reads.fetch_add(info.reads.ops, AtomicOrdering::Relaxed);
 		self.bytes_read.fetch_add(info.reads.bytes, AtomicOrdering::Relaxed);
 		self.writes_nodes.fetch_add(info.nodes_writes.ops, AtomicOrdering::Relaxed);
-		self.bytes_written_nodes.fetch_add(info.nodes_writes.bytes, AtomicOrdering::Relaxed);
+		self.bytes_written_nodes
+			.fetch_add(info.nodes_writes.bytes, AtomicOrdering::Relaxed);
 		self.removed_nodes.fetch_add(info.removed_nodes.ops, AtomicOrdering::Relaxed);
-		self.bytes_removed_nodes.fetch_add(info.removed_nodes.bytes, AtomicOrdering::Relaxed);
+		self.bytes_removed_nodes
+			.fetch_add(info.removed_nodes.bytes, AtomicOrdering::Relaxed);
 		self.reads_cache.fetch_add(info.cache_reads.ops, AtomicOrdering::Relaxed);
 		self.bytes_read_cache.fetch_add(info.cache_reads.bytes, AtomicOrdering::Relaxed);
 	}

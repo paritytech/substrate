@@ -16,12 +16,12 @@
 // limitations under the License.
 
 #[doc(hidden)]
-pub use crate::sp_std::vec::Vec;
-#[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
+#[doc(hidden)]
+pub use crate::sp_std::vec::Vec;
 
 pub use sp_inherents::{
-	InherentData, CheckInherentsResult, IsFatalError, InherentIdentifier, MakeFatalError,
+	CheckInherentsResult, InherentData, InherentIdentifier, IsFatalError, MakeFatalError,
 };
 
 /// A pallet that provides or verifies an inherent extrinsic.
@@ -53,7 +53,9 @@ pub trait ProvideInherent {
 	/// one inherent for which:
 	/// * type is [`Self::Call`],
 	/// * [`Self::is_inherent`] returns true.
-	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
+	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
+		Ok(None)
+	}
 
 	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
 	/// omitted by using the default implementation.

@@ -17,10 +17,14 @@
 
 //! The vote datatype.
 
-use sp_std::{prelude::*, result::Result, convert::TryFrom};
-use codec::{Encode, EncodeLike, Decode, Output, Input};
-use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
-use crate::{Conviction, ReferendumIndex, Delegations};
+use crate::{Conviction, Delegations, ReferendumIndex};
+use codec::{Decode, Encode, EncodeLike, Input, Output};
+use scale_info::TypeInfo;
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	RuntimeDebug,
+};
+use sp_std::{convert::TryFrom, prelude::*, result::Result};
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
@@ -48,8 +52,21 @@ impl Decode for Vote {
 	}
 }
 
+impl TypeInfo for Vote {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("Vote", module_path!()))
+			.composite(
+				scale_info::build::Fields::unnamed()
+					.field(|f| f.ty::<u8>().docs(&["Raw vote byte, encodes aye + conviction"])),
+			)
+	}
+}
+
 /// A vote for a referendum of a particular account.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum AccountVote<Balance> {
 	/// A standard vote, one-way (approve or reject) with a given amount of conviction.
 	Standard { vote: Vote, balance: Balance },
@@ -89,7 +106,9 @@ impl<Balance: Saturating> AccountVote<Balance> {
 }
 
 /// A "prior" lock, i.e. a lock for some now-forgotten reason.
-#[derive(Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+#[derive(
+	Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo,
+)]
 pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
 
 impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<BlockNumber, Balance> {
@@ -112,7 +131,7 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 }
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Voting<Balance, AccountId, BlockNumber> {
 	/// The account is voting directly. `delegations` is the total amount of post-conviction voting
 	/// weight that it controls from those that have delegated to it.
@@ -136,7 +155,9 @@ pub enum Voting<Balance, AccountId, BlockNumber> {
 	},
 }
 
-impl<Balance: Default, AccountId, BlockNumber: Zero> Default for Voting<Balance, AccountId, BlockNumber> {
+impl<Balance: Default, AccountId, BlockNumber: Zero> Default
+	for Voting<Balance, AccountId, BlockNumber>
+{
 	fn default() -> Self {
 		Voting::Direct {
 			votes: Vec::new(),
@@ -146,31 +167,30 @@ impl<Balance: Default, AccountId, BlockNumber: Zero> Default for Voting<Balance,
 	}
 }
 
-impl<
-	Balance: Saturating + Ord + Zero + Copy,
-	BlockNumber: Ord + Copy + Zero,
-	AccountId,
-> Voting<Balance, AccountId, BlockNumber> {
+impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, AccountId>
+	Voting<Balance, AccountId, BlockNumber>
+{
 	pub fn rejig(&mut self, now: BlockNumber) {
 		match self {
 			Voting::Direct { prior, .. } => prior,
 			Voting::Delegating { prior, .. } => prior,
-		}.rejig(now);
+		}
+		.rejig(now);
 	}
 
 	/// The amount of this account's balance that much currently be locked due to voting.
 	pub fn locked_balance(&self) -> Balance {
 		match self {
-			Voting::Direct { votes, prior, .. } => votes.iter()
-				.map(|i| i.1.balance())
-				.fold(prior.locked(), |a, i| a.max(i)),
+			Voting::Direct { votes, prior, .. } =>
+				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
 			Voting::Delegating { balance, .. } => *balance,
 		}
 	}
 
-	pub fn set_common(&mut self,
+	pub fn set_common(
+		&mut self,
 		delegations: Delegations<Balance>,
-		prior: PriorLock<BlockNumber, Balance>
+		prior: PriorLock<BlockNumber, Balance>,
 	) {
 		let (d, p) = match self {
 			Voting::Direct { ref mut delegations, ref mut prior, .. } => (delegations, prior),

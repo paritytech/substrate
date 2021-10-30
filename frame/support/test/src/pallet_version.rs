@@ -25,8 +25,5 @@ fn ensure_that_current_pallet_version_is_correct() {
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
 	};
 
-	assert_eq!(
-		expected,
-		crate_to_pallet_version!(),
-	)
+	assert_eq!(expected, crate_to_pallet_version!())
 }

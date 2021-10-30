@@ -19,23 +19,25 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use sp_std::prelude::*;
 use super::*;
-use sp_runtime::traits::Bounded;
-use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{
-	benchmarks_instance_pallet, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
-use frame_support::traits::Get;
-use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, Get},
+};
+use frame_system::RawOrigin as SystemOrigin;
+use sp_runtime::traits::Bounded;
+use sp_std::prelude::*;
 
 use crate::Pallet as Assets;
 
 const SEED: u32 = 0;
 
-fn create_default_asset<T: Config<I>, I: 'static>(is_sufficient: bool)
-	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
+fn create_default_asset<T: Config<I>, I: 'static>(
+	is_sufficient: bool,
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let root = SystemOrigin::Root.into();
@@ -45,14 +47,16 @@ fn create_default_asset<T: Config<I>, I: 'static>(is_sufficient: bool)
 		caller_lookup.clone(),
 		is_sufficient,
 		1u32.into(),
-	).is_ok());
+	)
+	.is_ok());
 	(caller, caller_lookup)
 }
 
-fn create_default_minted_asset<T: Config<I>, I: 'static>(is_sufficient: bool, amount: T::Balance)
-	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
-	let (caller, caller_lookup)  = create_default_asset::<T, I>(is_sufficient);
+fn create_default_minted_asset<T: Config<I>, I: 'static>(
+	is_sufficient: bool,
+	amount: T::Balance,
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+	let (caller, caller_lookup) = create_default_asset::<T, I>(is_sufficient);
 	if !is_sufficient {
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
 	}
@@ -61,14 +65,17 @@ fn create_default_minted_asset<T: Config<I>, I: 'static>(is_sufficient: bool, am
 		Default::default(),
 		caller_lookup.clone(),
 		amount,
-	).is_ok());
+	)
+	.is_ok());
 	(caller, caller_lookup)
 }
 
 fn swap_is_sufficient<T: Config<I>, I: 'static>(s: &mut bool) {
-	Asset::<T, I>::mutate(&T::AssetId::default(), |maybe_a|
-		if let Some(ref mut a) = maybe_a { sp_std::mem::swap(s, &mut a.is_sufficient) }
-	);
+	Asset::<T, I>::mutate(&T::AssetId::default(), |maybe_a| {
+		if let Some(ref mut a) = maybe_a {
+			sp_std::mem::swap(s, &mut a.is_sufficient)
+		}
+	});
 }
 
 fn add_consumers<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
@@ -79,7 +86,13 @@ fn add_consumers<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 		let target = account("consumer", i, SEED);
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T, I>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
+		assert!(Assets::<T, I>::mint(
+			origin.clone().into(),
+			Default::default(),
+			target_lookup,
+			100u32.into()
+		)
+		.is_ok());
 	}
 	swap_is_sufficient::<T, I>(&mut s);
 }
@@ -91,7 +104,13 @@ fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	for i in 0..n {
 		let target = account("sufficient", i, SEED);
 		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T, I>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
+		assert!(Assets::<T, I>::mint(
+			origin.clone().into(),
+			Default::default(),
+			target_lookup,
+			100u32.into()
+		)
+		.is_ok());
 	}
 	swap_is_sufficient::<T, I>(&mut s);
 }
@@ -105,7 +124,8 @@ fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 		Default::default(),
 		minter_lookup,
 		(100 * (n + 1)).into(),
-	).unwrap();
+	)
+	.unwrap();
 	for i in 0..n {
 		let target = account("approval", i, SEED);
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
@@ -115,7 +135,8 @@ fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 			Default::default(),
 			target_lookup,
 			100u32.into(),
-		).unwrap();
+		)
+		.unwrap();
 	}
 }
 
@@ -308,13 +329,13 @@ benchmarks_instance_pallet! {
 		create_default_asset::<T, I>(true);
 
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_set_metadata(
-			Default::default(),
-			name.clone(),
-			symbol.clone(),
+		let call = Call::<T, I>::force_set_metadata {
+			id: Default::default(),
+			name: name.clone(),
+			symbol: symbol.clone(),
 			decimals,
-			false,
-		);
+			is_frozen: false,
+		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		let id = Default::default();
@@ -329,7 +350,7 @@ benchmarks_instance_pallet! {
 		Assets::<T, I>::set_metadata(origin, Default::default(), dummy.clone(), dummy, 12)?;
 
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_clear_metadata(Default::default());
+		let call = Call::<T, I>::force_clear_metadata { id: Default::default() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::MetadataCleared(Default::default()).into());
@@ -339,16 +360,16 @@ benchmarks_instance_pallet! {
 		let (caller, caller_lookup) = create_default_asset::<T, I>(true);
 
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_asset_status(
-			Default::default(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			100u32.into(),
-			true,
-			false,
-		);
+		let call = Call::<T, I>::force_asset_status {
+			id: Default::default(),
+			owner: caller_lookup.clone(),
+			issuer: caller_lookup.clone(),
+			admin: caller_lookup.clone(),
+			freezer: caller_lookup.clone(),
+			min_balance: 100u32.into(),
+			is_sufficient: true,
+			is_frozen: false,
+		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::AssetStatusChanged(Default::default()).into());
@@ -416,6 +437,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled(id, caller, delegate).into());
 	}
-}
 
-impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)
+}

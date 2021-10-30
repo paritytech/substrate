@@ -17,13 +17,19 @@
 
 //! Schnorrkel-based VRF.
 
-use codec::{Encode, Decode, EncodeLike};
-use sp_std::{convert::TryFrom, prelude::*};
-use sp_core::U512;
-use sp_std::ops::{Deref, DerefMut};
+use codec::{Decode, Encode, EncodeLike};
 use schnorrkel::errors::MultiSignatureStage;
+use sp_core::U512;
+use sp_std::{
+	convert::TryFrom,
+	ops::{Deref, DerefMut},
+	prelude::*,
+};
 
-pub use schnorrkel::{SignatureError, PublicKey, vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH}};
+pub use schnorrkel::{
+	vrf::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
+	PublicKey, SignatureError,
+};
 
 /// The length of the Randomness.
 pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
@@ -34,11 +40,15 @@ pub struct VRFOutput(pub schnorrkel::vrf::VRFOutput);
 
 impl Deref for VRFOutput {
 	type Target = schnorrkel::vrf::VRFOutput;
-	fn deref(&self) -> &Self::Target { &self.0 }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 impl DerefMut for VRFOutput {
-	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
 }
 
 impl Encode for VRFOutput {
@@ -47,7 +57,7 @@ impl Encode for VRFOutput {
 	}
 }
 
-impl EncodeLike for VRFOutput { }
+impl EncodeLike for VRFOutput {}
 
 impl Decode for VRFOutput {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
@@ -82,11 +92,15 @@ impl Ord for VRFProof {
 
 impl Deref for VRFProof {
 	type Target = schnorrkel::vrf::VRFProof;
-	fn deref(&self) -> &Self::Target { &self.0 }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 impl DerefMut for VRFProof {
-	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
 }
 
 impl Encode for VRFProof {
@@ -95,7 +109,7 @@ impl Encode for VRFProof {
 	}
 }
 
-impl EncodeLike for VRFProof { }
+impl EncodeLike for VRFProof {}
 
 impl Decode for VRFProof {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
@@ -113,8 +127,8 @@ impl TryFrom<[u8; VRF_PROOF_LENGTH]> for VRFProof {
 }
 
 fn convert_error(e: SignatureError) -> codec::Error {
-	use SignatureError::*;
 	use MultiSignatureStage::*;
+	use SignatureError::*;
 	match e {
 		EquationFalse => "Signature error: `EquationFalse`".into(),
 		PointDecompressionError => "Signature error: `PointDecompressionError`".into(),

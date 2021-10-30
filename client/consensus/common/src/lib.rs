@@ -18,7 +18,22 @@
 
 //! Collection of common consensus specific implementations
 
+pub mod block_import;
+pub mod import_queue;
+pub mod metrics;
+
+pub use block_import::{
+	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
+	ImportedAux, ImportedState, JustificationImport, JustificationSyncLink, StateAction,
+	StorageChanges,
+};
+pub use import_queue::{
+	import_single_block, BasicQueue, BlockImportError, BlockImportStatus, BoxBlockImport,
+	BoxJustificationImport, DefaultImportQueue, ImportQueue, IncomingBlock, Link, Verifier,
+};
+
 mod longest_chain;
+
 pub mod shared_data;
 
 pub use longest_chain::LongestChain;

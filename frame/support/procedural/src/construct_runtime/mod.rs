@@ -18,14 +18,15 @@
 mod expand;
 mod parse;
 
-use frame_support_procedural_tools::syn_ext as ext;
-use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
+use frame_support_procedural_tools::{
+	generate_crate_access, generate_hidden_includes, syn_ext as ext,
+};
 use parse::{PalletDeclaration, PalletPart, PalletPath, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Ident, Result};
 use std::collections::HashMap;
+use syn::{Ident, Result};
 
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
@@ -65,48 +66,44 @@ fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Resul
 	let mut last_index: Option<u8> = None;
 	let mut names = HashMap::new();
 
-	decl
-		.map(|pallet| {
-			let final_index = match pallet.index {
-				Some(i) => i,
-				None => last_index.map_or(Some(0), |i| i.checked_add(1))
-					.ok_or_else(|| {
-						let msg = "Pallet index doesn't fit into u8, index is 256";
-						syn::Error::new(pallet.name.span(), msg)
-					})?,
-			};
+	decl.map(|pallet| {
+		let final_index = match pallet.index {
+			Some(i) => i,
+			None => last_index.map_or(Some(0), |i| i.checked_add(1)).ok_or_else(|| {
+				let msg = "Pallet index doesn't fit into u8, index is 256";
+				syn::Error::new(pallet.name.span(), msg)
+			})?,
+		};
 
-			last_index = Some(final_index);
+		last_index = Some(final_index);
 
-			if let Some(used_pallet) = indices.insert(final_index, pallet.name.clone()) {
-				let msg = format!(
-					"Pallet indices are conflicting: Both pallets {} and {} are at index {}",
-					used_pallet,
-					pallet.name,
-					final_index,
-				);
-				let mut err = syn::Error::new(used_pallet.span(), &msg);
-				err.combine(syn::Error::new(pallet.name.span(), msg));
-				return Err(err);
-			}
+		if let Some(used_pallet) = indices.insert(final_index, pallet.name.clone()) {
+			let msg = format!(
+				"Pallet indices are conflicting: Both pallets {} and {} are at index {}",
+				used_pallet, pallet.name, final_index,
+			);
+			let mut err = syn::Error::new(used_pallet.span(), &msg);
+			err.combine(syn::Error::new(pallet.name.span(), msg));
+			return Err(err)
+		}
 
-			if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span()) {
-				let msg = "Two pallets with the same name!";
+		if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span()) {
+			let msg = "Two pallets with the same name!";
 
-				let mut err = syn::Error::new(used_pallet, &msg);
-				err.combine(syn::Error::new(pallet.name.span(), &msg));
-				return Err(err);
-			}
+			let mut err = syn::Error::new(used_pallet, &msg);
+			err.combine(syn::Error::new(pallet.name.span(), &msg));
+			return Err(err)
+		}
 
-			Ok(Pallet {
-				name: pallet.name,
-				index: final_index,
-				path: pallet.path,
-				instance: pallet.instance,
-				pallet_parts: pallet.pallet_parts,
-			})
+		Ok(Pallet {
+			name: pallet.name,
+			index: final_index,
+			path: pallet.path,
+			instance: pallet.instance,
+			pallet_parts: pallet.pallet_parts,
 		})
-		.collect()
+	})
+	.collect()
 }
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
@@ -119,17 +116,9 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
-		where_section: WhereSection {
-			block,
-			node_block,
-			unchecked_extrinsic,
-			..
-		},
+		where_section: WhereSection { block, node_block, unchecked_extrinsic, .. },
 		pallets:
-			ext::Braces {
-				content: ext::Punctuated { inner: pallets, .. },
-				token: pallets_token,
-			},
+			ext::Braces { content: ext::Punctuated { inner: pallets, .. }, token: pallets_token },
 		..
 	} = definition;
 
@@ -143,18 +132,13 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let outer_origin = expand::expand_outer_origin(&name, &pallets, pallets_token, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
-	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
+	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
 	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
-	let inherent = expand::expand_outer_inherent(
-		&name,
-		&block,
-		&unchecked_extrinsic,
-		&pallets,
-		&scrate,
-	);
+	let inherent =
+		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 
@@ -167,7 +151,10 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 			type __hidden_use_of_unchecked_extrinsic = #unchecked_extrinsic;
 		};
 
-		#[derive(Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug)]
+		#[derive(
+			Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug,
+			#scrate::scale_info::TypeInfo
+		)]
 		pub struct #name;
 		impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {
 			type NodeBlock = #node_block;
@@ -210,12 +197,7 @@ fn decl_all_pallets<'a>(
 		let type_name = &pallet_declaration.name;
 		let pallet = &pallet_declaration.path;
 		let mut generics = vec![quote!(#runtime)];
-		generics.extend(
-			pallet_declaration
-				.instance
-				.iter()
-				.map(|name| quote!(#pallet::#name)),
-		);
+		generics.extend(pallet_declaration.instance.iter().map(|name| quote!(#pallet::#name)));
 		let type_decl = quote!(
 			pub type #type_name = #pallet::Pallet <#(#generics),*>;
 		);
@@ -224,15 +206,18 @@ fn decl_all_pallets<'a>(
 	}
 	// Make nested tuple structure like (((Babe, Consensus), Grandpa), ...)
 	// But ignore the system pallet.
-	let all_pallets = names.iter()
+	let all_pallets = names
+		.iter()
 		.filter(|n| **n != SYSTEM_PALLET_NAME)
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
-	let all_pallets_with_system = names.iter()
+	let all_pallets_with_system = names
+		.iter()
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
 	quote!(
 		#types
+
 		/// All pallets included in the runtime as a nested tuple of types.
 		/// Excludes the System pallet.
 		pub type AllPallets = ( #all_pallets );
@@ -252,14 +237,24 @@ fn decl_all_pallets<'a>(
 }
 
 fn decl_pallet_runtime_setup(
+	runtime: &Ident,
 	pallet_declarations: &[Pallet],
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
-	let names = pallet_declarations.iter().map(|d| &d.name);
-	let names2 = pallet_declarations.iter().map(|d| &d.name);
+	let names = pallet_declarations.iter().map(|d| &d.name).collect::<Vec<_>>();
 	let name_strings = pallet_declarations.iter().map(|d| d.name.to_string());
-	let indices = pallet_declarations.iter()
-		.map(|pallet| pallet.index as usize);
+	let module_names = pallet_declarations.iter().map(|d| d.path.module_name());
+	let indices = pallet_declarations.iter().map(|pallet| pallet.index as usize);
+	let pallet_structs = pallet_declarations
+		.iter()
+		.map(|pallet| {
+			let path = &pallet.path;
+			match pallet.instance.as_ref() {
+				Some(inst) => quote!(#path::Pallet<#runtime, #path::#inst>),
+				None => quote!(#path::Pallet<#runtime>),
+			}
+		})
+		.collect::<Vec<_>>();
 
 	quote!(
 		/// Provides an implementation of `PalletInfo` to provide information
@@ -281,8 +276,32 @@ fn decl_pallet_runtime_setup(
 			fn name<P: 'static>() -> Option<&'static str> {
 				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
 				#(
-					if type_id == #scrate::sp_std::any::TypeId::of::<#names2>() {
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
 						return Some(#name_strings)
+					}
+				)*
+
+				None
+			}
+
+			fn module_name<P: 'static>() -> Option<&'static str> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
+				#(
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
+						return Some(#module_names)
+					}
+				)*
+
+				None
+			}
+
+			fn crate_version<P: 'static>() -> Option<#scrate::traits::CrateVersion> {
+				let type_id = #scrate::sp_std::any::TypeId::of::<P>();
+				#(
+					if type_id == #scrate::sp_std::any::TypeId::of::<#names>() {
+						return Some(
+							<#pallet_structs as #scrate::traits::PalletInfoAccess>::crate_version()
+						)
 					}
 				)*
 

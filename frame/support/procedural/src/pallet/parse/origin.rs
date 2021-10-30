@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
 use super::helper;
+use syn::spanned::Spanned;
 
 /// Definition of the pallet origin type.
 ///
@@ -42,7 +42,7 @@ impl OriginDef {
 			syn::Item::Type(item) => (&item.vis, &item.ident, &item.generics),
 			_ => {
 				let msg = "Invalid pallet::origin, expected enum or struct or type";
-				return Err(syn::Error::new(item.span(), msg));
+				return Err(syn::Error::new(item.span(), msg))
 			},
 		};
 
@@ -54,27 +54,19 @@ impl OriginDef {
 			instances.push(u);
 		} else {
 			// construct_runtime only allow generic event for instantiable pallet.
-			instances.push(helper::InstanceUsage {
-				has_instance: false,
-				span: ident.span(),
-			})
+			instances.push(helper::InstanceUsage { has_instance: false, span: ident.span() })
 		}
 
 		if !matches!(vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::origin, Origin must be public";
-			return Err(syn::Error::new(item_span, msg));
+			return Err(syn::Error::new(item_span, msg))
 		}
 
 		if ident != "Origin" {
 			let msg = "Invalid pallet::origin, ident must `Origin`";
-			return Err(syn::Error::new(ident.span(), msg));
+			return Err(syn::Error::new(ident.span(), msg))
 		}
 
-		Ok(OriginDef {
-			index,
-			has_instance,
-			is_generic,
-			instances,
-		})
+		Ok(OriginDef { index, has_instance, is_generic, instances })
 	}
 }

@@ -18,17 +18,17 @@
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
 
-use sp_std::prelude::*;
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode, EncodeLike, MaxEncodedLen};
+use crate::{
+	storage::{StorageDecodeLength, StorageTryAppend},
+	traits::Get,
+	WeakBoundedVec,
+};
+use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use crate::{
-	traits::Get,
-	storage::{StorageDecodeLength, StorageTryAppend},
-};
+use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
 
 /// A bounded vector.
 ///
@@ -37,17 +37,24 @@ use crate::{
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
-// `BoundedSlice`s encode to something which will always decode into a `BoundedVec` or a `Vec`.
+// `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
+// `WeakBoundedVec`, or a `Vec`.
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>>
+	for BoundedSlice<'a, T, S>
+{
+}
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
 
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
@@ -71,7 +78,7 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedVec exceeds its limit".into());
+			return Err("BoundedVec exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData))
 	}
@@ -194,13 +201,12 @@ impl<T, S> Default for BoundedVec<T, S> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T, S> fmt::Debug for BoundedVec<T, S>
+impl<T, S> sp_std::fmt::Debug for BoundedVec<T, S>
 where
-	T: fmt::Debug,
+	T: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
@@ -331,7 +337,7 @@ where
 	fn max_encoded_len() -> usize {
 		// BoundedVec<T, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
-		// https://substrate.dev/rustdocs/v3.0.0/src/parity_scale_codec/codec.rs.html#798-808
+		// https://docs.substrate.io/v3/advanced/scale-codec
 		codec::Compact(S::get())
 			.encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
@@ -341,9 +347,9 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
+	use crate::Twox128;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use crate::Twox128;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

@@ -15,9 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::{Decode, Encode};
+use hash_db::{HashDB, Hasher};
+use scale_info::TypeInfo;
 use sp_std::vec::Vec;
-use codec::{Encode, Decode};
-use hash_db::{Hasher, HashDB};
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -26,13 +27,13 @@ use hash_db::{Hasher, HashDB};
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
 /// Storage proof in compact form.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct CompactProof {
 	pub encoded_nodes: Vec<Vec<u8>>,
 }
@@ -48,9 +49,7 @@ impl StorageProof {
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
 	pub fn empty() -> Self {
-		StorageProof {
-			trie_nodes: Vec::new(),
-		}
+		StorageProof { trie_nodes: Vec::new() }
 	}
 
 	/// Returns whether this is an empty proof.
@@ -74,10 +73,14 @@ impl StorageProof {
 	}
 
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
-	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
-	/// proofs due to deduplication of trie nodes.
-	pub fn merge<I>(proofs: I) -> Self where I: IntoIterator<Item=Self> {
-		let trie_nodes = proofs.into_iter()
+	/// covering all keys. The merged proof output may be smaller than the aggregate size of the
+	/// input proofs due to deduplication of trie nodes.
+	pub fn merge<I>(proofs: I) -> Self
+	where
+		I: IntoIterator<Item = Self>,
+	{
+		let trie_nodes = proofs
+			.into_iter()
 			.flat_map(|proof| proof.iter_nodes())
 			.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
 			.into_iter()
@@ -94,7 +97,7 @@ impl StorageProof {
 	) -> Result<CompactProof, crate::CompactProofError<crate::Layout<H>>> {
 		crate::encode_compact::<crate::Layout<H>>(self, root)
 	}
-	
+
 	/// Returns the estimated encoded size of the compact proof.
 	///
 	/// Runing this operation is a slow operation (build the whole compact proof) and should only be
@@ -104,7 +107,6 @@ impl StorageProof {
 		let compact_proof = self.into_compact_proof::<H>(root);
 		compact_proof.ok().map(|p| p.encoded_size())
 	}
-
 }
 
 impl CompactProof {
@@ -127,13 +129,15 @@ impl CompactProof {
 			self.iter_compact_encoded_nodes(),
 			expected_root,
 		)?;
-		Ok((StorageProof::new(db.drain().into_iter().filter_map(|kv|
-			if (kv.1).1 > 0 {
-				Some((kv.1).0)
-			} else {
-				None
-			}
-		).collect()), root))
+		Ok((
+			StorageProof::new(
+				db.drain()
+					.into_iter()
+					.filter_map(|kv| if (kv.1).1 > 0 { Some((kv.1).0) } else { None })
+					.collect(),
+			),
+			root,
+		))
 	}
 }
 
@@ -145,9 +149,7 @@ pub struct StorageProofNodeIterator {
 
 impl StorageProofNodeIterator {
 	fn new(proof: StorageProof) -> Self {
-		StorageProofNodeIterator {
-			inner: proof.trie_nodes.into_iter(),
-		}
+		StorageProofNodeIterator { inner: proof.trie_nodes.into_iter() }
 	}
 }
 

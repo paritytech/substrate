@@ -16,12 +16,12 @@
 // limitations under the License.
 
 use crate::utils::{
-	generate_crate_access, generate_hidden_includes,
-	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
-	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,
-	return_type_extract_type, generate_call_api_at_fn_name, prefix_function_with_trait,
 	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
-	AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	extract_parameter_names_types_and_borrows, generate_call_api_at_fn_name, generate_crate_access,
+	generate_hidden_includes, generate_method_runtime_api_impl_name,
+	generate_native_call_generator_fn_name, generate_runtime_mod_name_for_trait,
+	prefix_function_with_trait, return_type_extract_type, AllowSelfRefInParameters,
+	RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -29,9 +29,12 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature, Attribute,
-	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
-	fold::{self, Fold}, parse_quote,
+	fold::{self, Fold},
+	parse::{Error, Parse, ParseStream, Result},
+	parse_macro_input, parse_quote,
+	spanned::Spanned,
+	Attribute, GenericArgument, Ident, ImplItem, ItemImpl, Path, PathArguments, Signature, Type,
+	TypePath,
 };
 
 use std::collections::HashSet;
@@ -66,9 +69,10 @@ fn generate_impl_call(
 	signature: &Signature,
 	runtime: &Type,
 	input: &Ident,
-	impl_trait: &Path
+	impl_trait: &Path,
 ) -> Result<TokenStream> {
-	let params = extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
+	let params =
+		extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let fn_name = &signature.ident;
@@ -78,27 +82,25 @@ fn generate_impl_call(
 	let ptypes = params.iter().map(|v| &v.1);
 	let pborrow = params.iter().map(|v| &v.2);
 
-	Ok(
-		quote!(
-			let (#( #pnames ),*) : ( #( #ptypes ),* ) =
-				match #c::DecodeLimit::decode_all_with_depth_limit(
-					#c::MAX_EXTRINSIC_DEPTH,
-					&#input,
-				) {
-					Ok(res) => res,
-					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
-				};
+	Ok(quote!(
+		let (#( #pnames ),*) : ( #( #ptypes ),* ) =
+			match #c::DecodeLimit::decode_all_with_depth_limit(
+				#c::MAX_EXTRINSIC_DEPTH,
+				&#input,
+			) {
+				Ok(res) => res,
+				Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
+			};
 
-			#[allow(deprecated)]
-			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
-		)
-	)
+		#[allow(deprecated)]
+		<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
+	))
 }
 
 /// Generate all the implementation calls for the given functions.
 fn generate_impl_calls(
 	impls: &[ItemImpl],
-	input: &Ident
+	input: &Ident,
 ) -> Result<Vec<(Ident, Ident, TokenStream, Vec<Attribute>)>> {
 	let mut impl_calls = Vec::new();
 
@@ -113,12 +115,8 @@ fn generate_impl_calls(
 
 		for item in &impl_.items {
 			if let ImplItem::Method(method) = item {
-				let impl_call = generate_impl_call(
-					&method.sig,
-					&impl_.self_ty,
-					input,
-					&impl_trait
-				)?;
+				let impl_call =
+					generate_impl_call(&method.sig, &impl_.self_ty, input, &impl_trait)?;
 
 				impl_calls.push((
 					impl_trait_ident.clone(),
@@ -137,15 +135,16 @@ fn generate_impl_calls(
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let data = Ident::new("__sp_api__input_data", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let impl_calls = generate_impl_calls(impls, &data)?
-		.into_iter()
-		.map(|(trait_, fn_name, impl_, attrs)| {
-			let name = prefix_function_with_trait(&trait_, &fn_name);
-			quote!(
-				#( #attrs )*
-				#name => Some(#c::Encode::encode(&{ #impl_ })),
-			)
-		});
+	let impl_calls =
+		generate_impl_calls(impls, &data)?
+			.into_iter()
+			.map(|(trait_, fn_name, impl_, attrs)| {
+				let name = prefix_function_with_trait(&trait_, &fn_name);
+				quote!(
+					#( #attrs )*
+					#name => Some(#c::Encode::encode(&{ #impl_ })),
+				)
+			});
 
 	Ok(quote!(
 		#[cfg(feature = "std")]
@@ -163,34 +162,33 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let input = Ident::new("input", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 
-	let impl_calls = generate_impl_calls(impls, &input)?
-		.into_iter()
-		.map(|(trait_, fn_name, impl_, attrs)| {
-			let fn_name = Ident::new(
-				&prefix_function_with_trait(&trait_, &fn_name),
-				Span::call_site()
-			);
+	let impl_calls =
+		generate_impl_calls(impls, &input)?
+			.into_iter()
+			.map(|(trait_, fn_name, impl_, attrs)| {
+				let fn_name =
+					Ident::new(&prefix_function_with_trait(&trait_, &fn_name), Span::call_site());
 
-			quote!(
-				#( #attrs )*
-				#[cfg(not(feature = "std"))]
-				#[no_mangle]
-				pub unsafe fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
-					let mut #input = if input_len == 0 {
-						&[0u8; 0]
-					} else {
-						unsafe {
-							#c::slice::from_raw_parts(input_data, input_len)
-						}
-					};
+				quote!(
+					#( #attrs )*
+					#[cfg(not(feature = "std"))]
+					#[no_mangle]
+					pub unsafe fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
+						let mut #input = if input_len == 0 {
+							&[0u8; 0]
+						} else {
+							unsafe {
+								#c::slice::from_raw_parts(input_data, input_len)
+							}
+						};
 
-					#c::init_runtime_logger();
+						#c::init_runtime_logger();
 
-					let output = (move || { #impl_ })();
-					#c::to_substrate_wasm_fn_return_value(&output)
-				}
-			)
-		});
+						let output = (move || { #impl_ })();
+						#c::to_substrate_wasm_fn_return_value(&output)
+					}
+				)
+			});
 
 	Ok(quote!( #( #impl_calls )* ))
 }
@@ -414,7 +412,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	Ok(quote!( #( #impls_prepared )* ))
 }
 
-
 /// Auxiliary data structure that is used to convert `impl Api for Runtime` to
 /// `impl Api for RuntimeApi`.
 /// This requires us to replace the runtime `Block` with the node `Block`,
@@ -430,11 +427,8 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	fn fold_type_path(&mut self, input: TypePath) -> TypePath {
-		let new_ty_path = if input == *self.runtime_block {
-			parse_quote!( __SR_API_BLOCK__ )
-		} else {
-			input
-		};
+		let new_ty_path =
+			if input == *self.runtime_block { parse_quote!(__SR_API_BLOCK__) } else { input };
 
 		fold::fold_type_path(self, new_ty_path)
 	}
@@ -451,12 +445,18 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 			// Generate the access to the native parameters
 			let param_tuple_access = if input.sig.inputs.len() == 1 {
-				vec![ quote!( p ) ]
+				vec![quote!(p)]
 			} else {
-				input.sig.inputs.iter().enumerate().map(|(i, _)| {
-					let i = syn::Index::from(i);
-					quote!( p.#i )
-				}).collect::<Vec<_>>()
+				input
+					.sig
+					.inputs
+					.iter()
+					.enumerate()
+					.map(|(i, _)| {
+						let i = syn::Index::from(i);
+						quote!( p.#i )
+					})
+					.collect::<Vec<_>>()
 			};
 
 			let (param_types, error) = match extract_parameter_names_types_and_borrows(
@@ -464,12 +464,14 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				AllowSelfRefInParameters::No,
 			) {
 				Ok(res) => (
-					res.into_iter().map(|v| {
-						let ty = v.1;
-						let borrow = v.2;
-						quote!( #borrow #ty )
-					}).collect::<Vec<_>>(),
-					None
+					res.into_iter()
+						.map(|v| {
+							let ty = v.1;
+							let borrow = v.2;
+							quote!( #borrow #ty )
+						})
+						.collect::<Vec<_>>(),
+					None,
 				),
 				Err(e) => (Vec::new(), Some(e.to_compile_error())),
 			};
@@ -483,10 +485,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				params_encoded: Vec<u8>,
 			};
 
-			input.sig.ident = generate_method_runtime_api_impl_name(
-				&self.impl_trait,
-				&input.sig.ident,
-			);
+			input.sig.ident =
+				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.output);
 
 			// Generate the correct return type.
@@ -544,43 +544,34 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 		// Implement the trait for the `RuntimeApiImpl`
-		input.self_ty = Box::new(
-			parse_quote!( RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall> )
-		);
+		input.self_ty =
+			Box::new(parse_quote!( RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall> ));
 
+		input.generics.params.push(parse_quote!(
+			__SR_API_BLOCK__: #crate_::BlockT + std::panic::UnwindSafe +
+				std::panic::RefUnwindSafe
+		));
 		input.generics.params.push(
-			parse_quote!(
-				__SR_API_BLOCK__: #crate_::BlockT + std::panic::UnwindSafe +
-					std::panic::RefUnwindSafe
-			)
-		);
-		input.generics.params.push(
-			parse_quote!( RuntimeApiImplCall: #crate_::CallApiAt<__SR_API_BLOCK__> + 'static )
+			parse_quote!( RuntimeApiImplCall: #crate_::CallApiAt<__SR_API_BLOCK__> + 'static ),
 		);
 
 		let where_clause = input.generics.make_where_clause();
 
-		where_clause.predicates.push(
-			parse_quote! {
-				RuntimeApiImplCall::StateBackend:
-					#crate_::StateBackend<#crate_::HashFor<__SR_API_BLOCK__>>
-			}
-		);
+		where_clause.predicates.push(parse_quote! {
+			RuntimeApiImplCall::StateBackend:
+				#crate_::StateBackend<#crate_::HashFor<__SR_API_BLOCK__>>
+		});
 
 		// Require that all types used in the function signatures are unwind safe.
 		extract_all_signature_types(&input.items).iter().for_each(|i| {
-			where_clause.predicates.push(
-				parse_quote! {
-					#i: std::panic::UnwindSafe + std::panic::RefUnwindSafe
-				}
-			);
+			where_clause.predicates.push(parse_quote! {
+				#i: std::panic::UnwindSafe + std::panic::RefUnwindSafe
+			});
 		});
 
-		where_clause.predicates.push(
-			parse_quote! {
-				__SR_API_BLOCK__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe
-			}
-		);
+		where_clause.predicates.push(parse_quote! {
+			__SR_API_BLOCK__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe
+		});
 
 		input.attrs = filter_cfg_attrs(&input.attrs);
 
@@ -650,14 +641,12 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let span = trait_.span();
 		if !processed_traits.insert(trait_) {
-			return Err(
-				Error::new(
-					span,
-					"Two traits with the same name detected! \
+			return Err(Error::new(
+				span,
+				"Two traits with the same name detected! \
 					The trait name is used to generate its ID. \
-					Please rename one trait at the declaration!"
-				)
-			)
+					Please rename one trait at the declaration!",
+			))
 		}
 
 		let id: Path = parse_quote!( #path ID );
@@ -692,7 +681,9 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
 
-	impl_runtime_apis_impl_inner(&api_impls).unwrap_or_else(|e| e.to_compile_error()).into()
+	impl_runtime_apis_impl_inner(&api_impls)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
 fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
@@ -704,27 +695,25 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
 
-	Ok(
-		quote!(
-			#hidden_includes
+	Ok(quote!(
+		#hidden_includes
 
-			#base_runtime_api
+		#base_runtime_api
 
-			#api_impls_for_runtime
+		#api_impls_for_runtime
 
-			#api_impls_for_runtime_api
+		#api_impls_for_runtime_api
 
-			#runtime_api_versions
+		#runtime_api_versions
 
-			pub mod api {
-				use super::*;
+		pub mod api {
+			use super::*;
 
-				#dispatch_impl
+			#dispatch_impl
 
-				#wasm_interface
-			}
-		)
-	)
+			#wasm_interface
+		}
+	))
 }
 
 // Filters all attributes except the cfg ones.

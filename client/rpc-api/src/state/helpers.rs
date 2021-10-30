@@ -18,8 +18,8 @@
 
 //! Substrate state API helpers.
 
+use serde::{Deserialize, Serialize};
 use sp_core::Bytes;
-use serde::{Serialize, Deserialize};
 
 /// ReadProof struct returned by the RPC
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

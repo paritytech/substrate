@@ -38,8 +38,8 @@
 //! # use codec::{Decode, Encode, Codec};
 //! // in your off-chain worker code
 //! use sp_runtime::offchain::{
-//!		storage::StorageValueRef,
-//!		storage_lock::{StorageLock, Time},
+//! 		storage::StorageValueRef,
+//! 		storage_lock::{StorageLock, Time},
 //! };
 //!
 //! fn append_to_in_storage_vec<'a, T>(key: &'a [u8], _: T) where T: Codec {
@@ -61,8 +61,10 @@
 //! }
 //! ```
 
-use crate::offchain::storage::{StorageRetrievalError, MutateStorageError, StorageValueRef};
-use crate::traits::BlockNumberProvider;
+use crate::{
+	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+	traits::BlockNumberProvider,
+};
 use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
@@ -115,9 +117,7 @@ pub struct Time {
 
 impl Default for Time {
 	fn default() -> Self {
-		Self {
-			expiration_duration: STORAGE_LOCK_DEFAULT_EXPIRY_DURATION,
-		}
+		Self { expiration_duration: STORAGE_LOCK_DEFAULT_EXPIRY_DURATION }
 	}
 }
 
@@ -157,10 +157,7 @@ pub struct BlockAndTimeDeadline<B: BlockNumberProvider> {
 
 impl<B: BlockNumberProvider> Clone for BlockAndTimeDeadline<B> {
 	fn clone(&self) -> Self {
-		Self {
-			block_number: self.block_number.clone(),
-			timestamp: self.timestamp,
-		}
+		Self { block_number: self.block_number.clone(), timestamp: self.timestamp }
 	}
 }
 
@@ -175,7 +172,8 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 }
 
 impl<B: BlockNumberProvider> fmt::Debug for BlockAndTimeDeadline<B>
-	where <B as BlockNumberProvider>::BlockNumber: fmt::Debug
+where
+	<B as BlockNumberProvider>::BlockNumber: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("BlockAndTimeDeadline")
@@ -225,8 +223,8 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	type Deadline = BlockAndTimeDeadline<B>;
 
 	fn deadline(&self) -> Self::Deadline {
-		let block_number = <B as BlockNumberProvider>::current_block_number()
-			+ self.expiration_block_number_offset.into();
+		let block_number = <B as BlockNumberProvider>::current_block_number() +
+			self.expiration_block_number_offset.into();
 		BlockAndTimeDeadline {
 			timestamp: offchain::timestamp().add(self.expiration_duration),
 			block_number,
@@ -234,8 +232,8 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	}
 
 	fn has_expired(deadline: &Self::Deadline) -> bool {
-		offchain::timestamp() > deadline.timestamp
-			&& <B as BlockNumberProvider>::current_block_number() > deadline.block_number
+		offchain::timestamp() > deadline.timestamp &&
+			<B as BlockNumberProvider>::current_block_number() > deadline.block_number
 	}
 
 	fn snooze(deadline: &Self::Deadline) {
@@ -271,10 +269,7 @@ impl<'a, L: Lockable + Default> StorageLock<'a, L> {
 impl<'a, L: Lockable> StorageLock<'a, L> {
 	/// Create a new storage lock with an explicit instance of a lockable `L`.
 	pub fn with_lockable(key: &'a [u8], lockable: L) -> Self {
-		Self {
-			value_ref: StorageValueRef::<'a>::persistent(key),
-			lockable,
-		}
+		Self { value_ref: StorageValueRef::<'a>::persistent(key), lockable }
 	}
 
 	/// Extend active lock's deadline
@@ -398,9 +393,7 @@ impl<'a> StorageLock<'a, Time> {
 	pub fn with_deadline(key: &'a [u8], expiration_duration: Duration) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
-			lockable: Time {
-				expiration_duration,
-			},
+			lockable: Time { expiration_duration },
 		}
 	}
 }
@@ -443,7 +436,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::offchain::{testing, OffchainWorkerExt, OffchainDbExt};
+	use sp_core::offchain::{testing, OffchainDbExt, OffchainWorkerExt};
 	use sp_io::TestExternalities;
 
 	const VAL_1: u32 = 0u32;

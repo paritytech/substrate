@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_arithmetic::{PerThing, Perbill, PerU16, Percent, Perquintill};
+use sp_arithmetic::{PerThing, PerU16, Perbill, Percent, Perquintill};
 
 /// This test the precision and panics if error too big error.
 ///
@@ -32,7 +32,7 @@ fn test_precision<P: PerThing>(stake: P, ideal_stake: P, falloff: P) {
 	if error > 8f64 / accuracy_f64 && error > 8.0 * f64::EPSILON {
 		panic!(
 			"stake: {:?}, ideal_stake: {:?}, falloff: {:?}, res: {}, expect: {}",
-			stake, ideal_stake, falloff, res , expect
+			stake, ideal_stake, falloff, res, expect
 		);
 	}
 }

@@ -6,7 +6,7 @@ description = "Generic slots-based utilities for consensus"
 edition = "2018"
 build = "build.rs"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -17,10 +17,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-trie = { version = "4.0.0-dev", path = "../../../primitives/trie" }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0-dev", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
@@ -33,8 +32,7 @@ futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.11"
 thiserror = "1.0.21"
-impl-trait-for-tuples = "0.2.1"
-async-trait = "0.1.42"
+async-trait = "0.1.50"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

@@ -19,8 +19,7 @@
 //! A tool for extracting information about the memory consumption of the current process from
 //! the procfs.
 
-use std::ops::Range;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 /// An interface to the /proc/self/smaps
 ///
@@ -69,7 +68,8 @@ impl Smaps {
 	}
 
 	fn get_map(&self, addr: usize) -> &BTreeMap<String, usize> {
-		&self.0
+		&self
+			.0
 			.iter()
 			.find(|(range, _)| addr >= range.start && addr < range.end)
 			.unwrap()

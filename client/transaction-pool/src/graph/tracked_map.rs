@@ -16,11 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
 	collections::HashMap,
-	sync::{Arc, atomic::{AtomicIsize, Ordering as AtomicOrdering}},
+	sync::{
+		atomic::{AtomicIsize, Ordering as AtomicOrdering},
+		Arc,
+	},
 };
-use parking_lot::{RwLock, RwLockWriteGuard, RwLockReadGuard};
 
 /// Something that can report its size.
 pub trait Size {
@@ -39,11 +42,7 @@ pub struct TrackedMap<K, V> {
 
 impl<K, V> Default for TrackedMap<K, V> {
 	fn default() -> Self {
-		Self {
-			index: Arc::new(HashMap::default().into()),
-			bytes: 0.into(),
-			length: 0.into(),
-		}
+		Self { index: Arc::new(HashMap::default().into()), bytes: 0.into(), length: 0.into() }
 	}
 }
 
@@ -58,16 +57,9 @@ impl<K, V> TrackedMap<K, V> {
 		std::cmp::max(self.bytes.load(AtomicOrdering::Relaxed), 0) as usize
 	}
 
-	/// Read-only clone of the interior.
-	pub fn clone(&self) -> ReadOnlyTrackedMap<K, V> {
-		ReadOnlyTrackedMap(self.index.clone())
-	}
-
 	/// Lock map for read.
 	pub fn read(&self) -> TrackedMapReadAccess<K, V> {
-		TrackedMapReadAccess {
-			inner_guard: self.index.read(),
-		}
+		TrackedMapReadAccess { inner_guard: self.index.read() }
 	}
 
 	/// Lock map for write.
@@ -80,20 +72,10 @@ impl<K, V> TrackedMap<K, V> {
 	}
 }
 
-/// Read-only access to map.
-///
-/// The only thing can be done is .read().
-pub struct ReadOnlyTrackedMap<K, V>(Arc<RwLock<HashMap<K, V>>>);
-
-impl<K, V> ReadOnlyTrackedMap<K, V>
-where
-	K: Eq + std::hash::Hash
-{
-	/// Lock map for read.
-	pub fn read(&self) -> TrackedMapReadAccess<K, V> {
-		TrackedMapReadAccess {
-			inner_guard: self.0.read(),
-		}
+impl<K: Clone, V: Clone> TrackedMap<K, V> {
+	/// Clone the inner map.
+	pub fn clone_map(&self) -> HashMap<K, V> {
+		self.index.read().clone()
 	}
 }
 
@@ -103,7 +85,7 @@ pub struct TrackedMapReadAccess<'a, K, V> {
 
 impl<'a, K, V> TrackedMapReadAccess<'a, K, V>
 where
-	K: Eq + std::hash::Hash
+	K: Eq + std::hash::Hash,
 {
 	/// Returns true if map contains key.
 	pub fn contains_key(&self, key: &K) -> bool {
@@ -129,7 +111,8 @@ pub struct TrackedMapWriteAccess<'a, K, V> {
 
 impl<'a, K, V> TrackedMapWriteAccess<'a, K, V>
 where
-	K: Eq + std::hash::Hash, V: Size
+	K: Eq + std::hash::Hash,
+	V: Size,
 {
 	/// Insert value and return previous (if any).
 	pub fn insert(&mut self, key: K, val: V) -> Option<V> {
@@ -165,7 +148,9 @@ mod tests {
 	use super::*;
 
 	impl Size for i32 {
-		fn size(&self) -> usize { *self as usize / 10 }
+		fn size(&self) -> usize {
+			*self as usize / 10
+		}
 	}
 
 	#[test]

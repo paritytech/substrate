@@ -23,17 +23,19 @@ use std::fmt;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
-use sp_std::prelude::*;
-use sp_core::RuntimeDebug;
-use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{
-	self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf,
-	NumberFor,
+use crate::{
+	codec::{Codec, Decode, Encode},
+	traits::{
+		self, Block as BlockT, Header as HeaderT, MaybeMallocSizeOf, MaybeSerialize, Member,
+		NumberFor,
+	},
+	Justifications,
 };
-use crate::Justifications;
+use sp_core::RuntimeDebug;
+use sp_std::prelude::*;
 
 /// Something to identify a block.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]

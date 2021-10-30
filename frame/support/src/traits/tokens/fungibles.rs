@@ -17,15 +17,20 @@
 
 //! The traits for sets of fungible tokens and any associated types.
 
-use super::*;
+use super::{
+	misc::{AssetId, Balance},
+	*,
+};
 use crate::dispatch::{DispatchError, DispatchResult};
-use super::misc::{AssetId, Balance};
 use sp_runtime::traits::Saturating;
+use sp_std::vec::Vec;
 
+pub mod approvals;
 mod balanced;
+pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
-pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
+pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
 pub trait Inspect<AccountId> {
@@ -48,8 +53,11 @@ pub trait Inspect<AccountId> {
 	fn reducible_balance(asset: Self::AssetId, who: &AccountId, keep_alive: bool) -> Self::Balance;
 
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
-	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> DepositConsequence;
+	fn can_deposit(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DepositConsequence;
 
 	/// Returns `Failed` if the `asset` balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
@@ -58,6 +66,18 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
+}
+
+/// Trait for reading metadata from a fungible asset.
+pub trait InspectMetadata<AccountId>: Inspect<AccountId> {
+	/// Return the name of an asset.
+	fn name(asset: &Self::AssetId) -> Vec<u8>;
+
+	/// Return the symbol of an asset.
+	fn symbol(asset: &Self::AssetId) -> Vec<u8>;
+
+	/// Return the decimals of an asset.
+	fn decimals(asset: &Self::AssetId) -> u8;
 }
 
 /// Trait for providing a set of named fungible assets which can be created and destroyed.
@@ -87,8 +107,11 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Due to minimum balance requirements, it's possible that the amount withdrawn could be up to
 	/// `Self::minimum_balance() - 1` more than the `amount`. The total amount withdrawn is returned
 	/// in an `Ok` result. This may be safely ignored if you don't mind the overall supply reducing.
-	fn burn_from(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> Result<Self::Balance, DispatchError>;
+	fn burn_from(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError>;
 
 	/// Attempt to reduce the `asset` balance of `who` by as much as possible up to `amount`, and
 	/// possibly slightly more due to minimum_balance requirements. If no decrease is possible then
@@ -97,9 +120,11 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	///
 	/// The default implementation just uses `withdraw` along with `reducible_balance` to ensure
 	/// that is doesn't fail.
-	fn slash(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> Result<Self::Balance, DispatchError>
-	{
+	fn slash(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
 		Self::burn_from(asset, who, Self::reducible_balance(asset, who, false).min(amount))
 	}
 
@@ -114,7 +139,10 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
 		Self::can_deposit(asset, &dest, amount.saturating_add(extra)).into_result()?;
 		let actual = Self::burn_from(asset, source, amount)?;
-		debug_assert!(actual == amount.saturating_add(extra), "can_withdraw must agree with withdraw; qed");
+		debug_assert!(
+			actual == amount.saturating_add(extra),
+			"can_withdraw must agree with withdraw; qed"
+		);
 		match Self::mint_into(asset, dest, actual) {
 			Ok(_) => Ok(actual),
 			Err(err) => {
@@ -123,7 +151,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 				let revert = Self::mint_into(asset, source, actual);
 				debug_assert!(revert.is_ok(), "withdrew funds previously; qed");
 				Err(err)
-			}
+			},
 		}
 	}
 }
@@ -158,8 +186,12 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 	///
 	/// If `best_effort` is `true`, then the amount actually released and returned as the inner
 	/// value of `Ok` may be smaller than the `amount` passed.
-	fn release(asset: Self::AssetId, who: &AccountId, amount: Self::Balance, best_effort: bool)
-		-> Result<Self::Balance, DispatchError>;
+	fn release(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError>;
 
 	/// Transfer held funds into a destination account.
 	///
@@ -190,21 +222,59 @@ pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
 	///
 	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`,
 	/// then a non-zero second item will be returned.
-	fn slash_held(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> (CreditOf<AccountId, Self>, Self::Balance);
+	fn slash_held(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> (CreditOf<AccountId, Self>, Self::Balance);
 }
 
-impl<
-	AccountId,
-	T: Balanced<AccountId> + MutateHold<AccountId>,
-> BalancedHold<AccountId> for T {
-	fn slash_held(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> (CreditOf<AccountId, Self>, Self::Balance)
-	{
+impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<AccountId> for T {
+	fn slash_held(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> (CreditOf<AccountId, Self>, Self::Balance) {
 		let actual = match Self::release(asset, who, amount, true) {
 			Ok(x) => x,
 			Err(_) => return (Imbalance::zero(asset), amount),
 		};
 		<Self as fungibles::Balanced<AccountId>>::slash(asset, who, actual)
 	}
+}
+
+/// Trait for providing the ability to create new fungible assets.
+pub trait Create<AccountId>: Inspect<AccountId> {
+	/// Create a new fungible asset.
+	fn create(
+		id: Self::AssetId,
+		admin: AccountId,
+		is_sufficient: bool,
+		min_balance: Self::Balance,
+	) -> DispatchResult;
+}
+
+/// Trait for providing the ability to destroy existing fungible assets.
+pub trait Destroy<AccountId>: Inspect<AccountId> {
+	/// The witness data needed to destroy an asset.
+	type DestroyWitness;
+
+	/// Provide the appropriate witness data needed to destroy an asset.
+	fn get_destroy_witness(id: &Self::AssetId) -> Option<Self::DestroyWitness>;
+
+	/// Destroy an existing fungible asset.
+	/// * `id`: The `AssetId` to be destroyed.
+	/// * `witness`: Any witness data that needs to be provided to complete the operation
+	///   successfully.
+	/// * `maybe_check_owner`: An optional account id that can be used to authorize the destroy
+	///   command. If not provided, we will not do any authorization checks before destroying the
+	///   asset.
+	///
+	/// If successful, this function will return the actual witness data from the destroyed asset.
+	/// This may be different than the witness data provided, and can be used to refund weight.
+	fn destroy(
+		id: Self::AssetId,
+		witness: Self::DestroyWitness,
+		maybe_check_owner: Option<AccountId>,
+	) -> Result<Self::DestroyWitness, DispatchError>;
 }

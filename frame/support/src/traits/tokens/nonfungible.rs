@@ -24,12 +24,11 @@
 //! For an NFT API which has dual-level namespacing, the traits in `nonfungibles` are better to
 //! use.
 
-use codec::{Encode, Decode};
-use sp_std::prelude::*;
-use sp_runtime::TokenError;
-use crate::dispatch::DispatchResult;
-use crate::traits::Get;
 use super::nonfungibles;
+use crate::{dispatch::DispatchResult, traits::Get};
+use codec::{Decode, Encode};
+use sp_runtime::TokenError;
+use sp_std::prelude::*;
 
 /// Trait for providing an interface to a read-only NFT-like set of asset instances.
 pub trait Inspect<AccountId> {
@@ -43,7 +42,9 @@ pub trait Inspect<AccountId> {
 	/// Returns the attribute value of `instance` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn attribute(_instance: &Self::InstanceId, _key: &[u8]) -> Option<Vec<u8>> { None }
+	fn attribute(_instance: &Self::InstanceId, _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
 
 	/// Returns the strongly-typed attribute value of `instance` corresponding to `key`.
 	///
@@ -56,7 +57,9 @@ pub trait Inspect<AccountId> {
 	/// Returns `true` if the asset `instance` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
-	fn can_transfer(_instance: &Self::InstanceId) -> bool { true }
+	fn can_transfer(_instance: &Self::InstanceId) -> bool {
+		true
+	}
 }
 
 /// Interface for enumerating assets in existence or owned by a given account over a collection
@@ -117,15 +120,14 @@ pub struct ItemOf<
 	F: nonfungibles::Inspect<AccountId>,
 	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
 	AccountId,
->(
-	sp_std::marker::PhantomData<(F, A, AccountId)>
-);
+>(sp_std::marker::PhantomData<(F, A, AccountId)>);
 
 impl<
-	F: nonfungibles::Inspect<AccountId>,
-	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
-	AccountId,
-> Inspect<AccountId> for ItemOf<F, A, AccountId> {
+		F: nonfungibles::Inspect<AccountId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		AccountId,
+	> Inspect<AccountId> for ItemOf<F, A, AccountId>
+{
 	type InstanceId = <F as nonfungibles::Inspect<AccountId>>::InstanceId;
 	fn owner(instance: &Self::InstanceId) -> Option<AccountId> {
 		<F as nonfungibles::Inspect<AccountId>>::owner(&A::get(), instance)
@@ -142,10 +144,11 @@ impl<
 }
 
 impl<
-	F: nonfungibles::InspectEnumerable<AccountId>,
-	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
-	AccountId,
-> InspectEnumerable<AccountId> for ItemOf<F, A, AccountId> {
+		F: nonfungibles::InspectEnumerable<AccountId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		AccountId,
+	> InspectEnumerable<AccountId> for ItemOf<F, A, AccountId>
+{
 	fn instances() -> Box<dyn Iterator<Item = Self::InstanceId>> {
 		<F as nonfungibles::InspectEnumerable<AccountId>>::instances(&A::get())
 	}
@@ -155,10 +158,11 @@ impl<
 }
 
 impl<
-	F: nonfungibles::Mutate<AccountId>,
-	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
-	AccountId,
-> Mutate<AccountId> for ItemOf<F, A, AccountId> {
+		F: nonfungibles::Mutate<AccountId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		AccountId,
+	> Mutate<AccountId> for ItemOf<F, A, AccountId>
+{
 	fn mint_into(instance: &Self::InstanceId, who: &AccountId) -> DispatchResult {
 		<F as nonfungibles::Mutate<AccountId>>::mint_into(&A::get(), instance, who)
 	}
@@ -178,10 +182,11 @@ impl<
 }
 
 impl<
-	F: nonfungibles::Transfer<AccountId>,
-	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
-	AccountId,
-> Transfer<AccountId> for ItemOf<F, A, AccountId> {
+		F: nonfungibles::Transfer<AccountId>,
+		A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+		AccountId,
+	> Transfer<AccountId> for ItemOf<F, A, AccountId>
+{
 	fn transfer(instance: &Self::InstanceId, destination: &AccountId) -> DispatchResult {
 		<F as nonfungibles::Transfer<AccountId>>::transfer(&A::get(), instance, destination)
 	}

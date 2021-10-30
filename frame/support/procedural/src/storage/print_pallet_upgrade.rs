@@ -1,6 +1,6 @@
 use super::StorageLineTypeDef;
-use quote::ToTokens;
 use frame_support_procedural_tools::clean_type_string;
+use quote::ToTokens;
 
 /// Environment variable that tells us to print pallet upgrade helper.
 const PRINT_PALLET_UPGRADE: &str = "PRINT_PALLET_UPGRADE";
@@ -10,7 +10,7 @@ fn check_print_pallet_upgrade() -> bool {
 }
 
 /// Convert visibilty as now objects are defined in a module.
-fn convert_vis(vis: &syn::Visibility) -> &'static str{
+fn convert_vis(vis: &syn::Visibility) -> &'static str {
 	match vis {
 		syn::Visibility::Inherited => "pub(super)",
 		syn::Visibility::Public(_) => "pub",
@@ -31,23 +31,13 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 
 	let scrate = &quote::quote!(frame_support);
 
-	let config_gen = if def.optional_instance.is_some() {
-		"<I: 'static = ()>"
-	} else {
-		Default::default()
-	};
+	let config_gen =
+		if def.optional_instance.is_some() { "<I: 'static = ()>" } else { Default::default() };
 
-	let impl_gen = if def.optional_instance.is_some() {
-		"<T: Config<I>, I: 'static>"
-	} else {
-		"<T: Config>"
-	};
+	let impl_gen =
+		if def.optional_instance.is_some() { "<T: Config<I>, I: 'static>" } else { "<T: Config>" };
 
-	let decl_gen = if def.optional_instance.is_some() {
-		"<T, I=()>"
-	} else {
-		"<T>"
-	};
+	let decl_gen = if def.optional_instance.is_some() { "<T, I=()>" } else { "<T>" };
 
 	let full_decl_gen = if def.optional_instance.is_some() {
 		"<T: Config<I>, I: 'static = ()>"
@@ -55,17 +45,9 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		"<T: Config>"
 	};
 
-	let use_gen = if def.optional_instance.is_some() {
-		"<T, I>"
-	} else {
-		"<T>"
-	};
+	let use_gen = if def.optional_instance.is_some() { "<T, I>" } else { "<T>" };
 
-	let use_gen_tuple = if def.optional_instance.is_some() {
-		"<(T, I)>"
-	} else {
-		"<T>"
-	};
+	let use_gen_tuple = if def.optional_instance.is_some() { "<(T, I)>" } else { "<T>" };
 
 	let mut genesis_config = String::new();
 	let mut genesis_build = String::new();
@@ -80,17 +62,11 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			},
 		};
 
-		let genesis_config_impl_gen = if genesis_config_def.is_generic {
-			impl_gen
-		} else {
-			Default::default()
-		};
+		let genesis_config_impl_gen =
+			if genesis_config_def.is_generic { impl_gen } else { Default::default() };
 
-		let genesis_config_use_gen = if genesis_config_def.is_generic {
-			use_gen
-		} else {
-			Default::default()
-		};
+		let genesis_config_use_gen =
+			if genesis_config_def.is_generic { use_gen } else { Default::default() };
 
 		let genesis_config_decl_gen = if genesis_config_def.is_generic {
 			if def.optional_instance.is_some() {
@@ -105,26 +81,31 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		let mut genesis_config_decl_fields = String::new();
 		let mut genesis_config_default_fields = String::new();
 		for field in &genesis_config_def.fields {
-			genesis_config_decl_fields.push_str(&format!("
+			genesis_config_decl_fields.push_str(&format!(
+				"
 		{attrs}pub {name}: {typ},",
-				attrs = field.attrs.iter()
-					.fold(String::new(), |res, attr| {
-						format!("{}#[{}]
+				attrs = field.attrs.iter().fold(String::new(), |res, attr| {
+					format!(
+						"{}#[{}]
 		",
-						res, attr.to_token_stream())
-					}),
+						res,
+						attr.to_token_stream()
+					)
+				}),
 				name = field.name,
 				typ = to_cleaned_string(&field.typ),
 			));
 
-			genesis_config_default_fields.push_str(&format!("
+			genesis_config_default_fields.push_str(&format!(
+				"
 				{name}: {default},",
 				name = field.name,
 				default = to_cleaned_string(&field.default),
 			));
 		}
 
-		genesis_config = format!("
+		genesis_config = format!(
+			"
 	#[pallet::genesis_config]
 	pub struct GenesisConfig{genesis_config_decl_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
@@ -147,16 +128,18 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			genesis_config_use_gen = genesis_config_use_gen,
 		);
 
-		let genesis_config_build = genesis_config_builder_def.blocks.iter()
-			.fold(String::new(), |res, block| {
-				format!("{}
+		let genesis_config_build =
+			genesis_config_builder_def.blocks.iter().fold(String::new(), |res, block| {
+				format!(
+					"{}
 					{}",
 					res,
 					to_cleaned_string(block),
 				)
 			});
 
-		genesis_build = format!("
+		genesis_build = format!(
+			"
 	#[pallet::genesis_build]
 	impl{impl_gen} GenesisBuild{use_gen} for GenesisConfig{genesis_config_use_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
@@ -176,7 +159,8 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		let storage_vis = convert_vis(&line.visibility);
 
 		let getter = if let Some(getter) = &line.getter {
-			format!("
+			format!(
+				"
 	#[pallet::getter(fn {getter})]",
 				getter = getter
 			)
@@ -186,9 +170,12 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 
 		let value_type = &line.value_type;
 
-		let default_value_type_value = line.default_value.as_ref()
+		let default_value_type_value = line
+			.default_value
+			.as_ref()
 			.map(|default_expr| {
-				format!("
+				format!(
+					"
 	#[pallet::type_value]
 	{storage_vis} fn DefaultFor{name} /* TODO_MAYBE_GENERICS */ () -> {value_type} {{
 		{default_expr}
@@ -212,13 +199,16 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			", ValueQuery"
 		};
 
-		let comma_default_value_getter_name = line.default_value.as_ref()
+		let comma_default_value_getter_name = line
+			.default_value
+			.as_ref()
 			.map(|_| format!(", DefaultFor{}", line.name))
 			.unwrap_or_else(String::new);
 
 		let typ = match &line.storage_type {
 			StorageLineTypeDef::Map(map) => {
-				format!("StorageMap<_, {hasher}, {key}, {value_type}{comma_query_kind}\
+				format!(
+					"StorageMap<_, {hasher}, {key}, {value_type}{comma_query_kind}\
 					{comma_default_value_getter_name}>",
 					hasher = &map.hasher.to_storage_hasher_struct(),
 					key = to_cleaned_string(&map.key),
@@ -228,7 +218,8 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 				)
 			},
 			StorageLineTypeDef::DoubleMap(double_map) => {
-				format!("StorageDoubleMap<_, {hasher1}, {key1}, {hasher2}, {key2}, {value_type}\
+				format!(
+					"StorageDoubleMap<_, {hasher1}, {key1}, {hasher2}, {key2}, {value_type}\
 					{comma_query_kind}{comma_default_value_getter_name}>",
 					hasher1 = double_map.hasher1.to_storage_hasher_struct(),
 					key1 = to_cleaned_string(&double_map.key1),
@@ -240,16 +231,18 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 				)
 			},
 			StorageLineTypeDef::NMap(map) => {
-				format!("StorageNMap<_, {keygen}, {value_type}{comma_query_kind}\
+				format!(
+					"StorageNMap<_, {keygen}, {value_type}{comma_query_kind}\
 					{comma_default_value_getter_name}>",
 					keygen = map.to_keygen_struct(&def.hidden_crate),
 					value_type = to_cleaned_string(&value_type),
 					comma_query_kind = comma_query_kind,
 					comma_default_value_getter_name = comma_default_value_getter_name,
 				)
-			}
+			},
 			StorageLineTypeDef::Simple(_) => {
-				format!("StorageValue<_, {value_type}{comma_query_kind}\
+				format!(
+					"StorageValue<_, {value_type}{comma_query_kind}\
 					{comma_default_value_getter_name}>",
 					value_type = to_cleaned_string(&value_type),
 					comma_query_kind = comma_query_kind,
@@ -265,7 +258,8 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			""
 		};
 
-		storages.push_str(&format!("
+		storages.push_str(&format!(
+			"
 {default_value_type_value}{doc}
 	#[pallet::storage]{getter}
 	{storage_vis} type {name}{full_decl_gen} = {typ};{additional_comment}",
@@ -276,21 +270,21 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 			full_decl_gen = full_decl_gen,
 			typ = typ,
 			additional_comment = additional_comment,
-			doc = line.doc_attrs.iter()
-				.fold(String::new(), |mut res, attr| {
-					if let syn::Meta::NameValue(name_value) = attr {
-						if name_value.path.is_ident("doc") {
-							if let syn::Lit::Str(string) = &name_value.lit {
-								res = format!("{}
+			doc = line.doc_attrs.iter().fold(String::new(), |mut res, attr| {
+				if let syn::Meta::NameValue(name_value) = attr {
+					if name_value.path.is_ident("doc") {
+						if let syn::Lit::Str(string) = &name_value.lit {
+							res = format!(
+								"{}
 	///{}",
-									res,
-									string.value(),
-								);
-							}
+								res,
+								string.value(),
+							);
 						}
 					}
-					res
-				}),
+				}
+				res
+			}),
 		));
 	}
 
@@ -308,7 +302,8 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		""
 	};
 
-	println!("
+	println!(
+		"
 // Template for pallet upgrade for {pallet_name}
 
 pub use pallet::*;

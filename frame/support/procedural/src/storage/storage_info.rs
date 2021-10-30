@@ -17,9 +17,9 @@
 
 //! Implementation of trait `StorageInfoTrait` on module structure.
 
+use super::DeclStorageDefExt;
 use proc_macro2::TokenStream;
 use quote::quote;
-use super::DeclStorageDefExt;
 
 pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
 	let scrate = &def.hidden_crate;

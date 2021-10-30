@@ -17,7 +17,7 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight, WithApprovalOf};
+use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight};
 use sp_arithmetic::PerThing;
 use sp_std::prelude::*;
 
@@ -52,7 +52,8 @@ where
 	staked
 		.iter_mut()
 		.map(|a| {
-			a.try_normalize(stake_of(&a.who).into()).map_err(|err| Error::ArithmeticError(err))
+			a.try_normalize(stake_of(&a.who).into())
+				.map_err(|err| Error::ArithmeticError(err))
 		})
 		.collect::<Result<_, _>>()?;
 	Ok(staked)
@@ -76,11 +77,6 @@ pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 		assignment.try_normalize().map_err(|err| Error::ArithmeticError(err))?;
 	}
 	Ok(ratio)
-}
-
-/// consumes a vector of winners with backing stake to just winners.
-pub fn to_without_backing<A: IdentifierT>(winners: Vec<WithApprovalOf<A>>) -> Vec<A> {
-	winners.into_iter().map(|(who, _)| who).collect::<Vec<A>>()
 }
 
 #[cfg(test)]
@@ -113,14 +109,8 @@ mod tests {
 		assert_eq!(
 			staked,
 			vec![
-				StakedAssignment {
-					who: 1u32,
-					distribution: vec![(10u32, 50), (20, 50),]
-				},
-				StakedAssignment {
-					who: 2u32,
-					distribution: vec![(10u32, 33), (20, 67),]
-				}
+				StakedAssignment { who: 1u32, distribution: vec![(10u32, 50), (20, 50),] },
+				StakedAssignment { who: 2u32, distribution: vec![(10u32, 33), (20, 67),] }
 			]
 		);
 	}

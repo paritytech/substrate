@@ -18,7 +18,7 @@
 use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{token, Ident, Generics};
+use syn::{token, Generics, Ident};
 
 pub fn expand_outer_origin(
 	runtime: &Ident,
@@ -26,13 +26,14 @@ pub fn expand_outer_origin(
 	pallets_token: token::Brace,
 	scrate: &TokenStream,
 ) -> syn::Result<TokenStream> {
-	let system_pallet = pallets.iter()
-		.find(|decl| decl.name == SYSTEM_PALLET_NAME)
-		.ok_or_else(|| syn::Error::new(
-			pallets_token.span,
-			"`System` pallet declaration is missing. \
+	let system_pallet =
+		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
+			syn::Error::new(
+				pallets_token.span,
+				"`System` pallet declaration is missing. \
 			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
-		))?;
+			)
+		})?;
 
 	let mut caller_variants = TokenStream::new();
 	let mut pallet_conversions = TokenStream::new();
@@ -52,15 +53,23 @@ pub fn expand_outer_origin(
 					 be constructed: pallet `{}` must have generic `Origin`",
 					name
 				);
-				return Err(syn::Error::new(name.span(), msg));
+				return Err(syn::Error::new(name.span(), msg))
 			}
 
-			caller_variants.extend(
-				expand_origin_caller_variant(runtime, pallet_decl, index, instance, generics),
-			);
-			pallet_conversions.extend(
-				expand_origin_pallet_conversions(scrate, runtime, pallet_decl, instance, generics),
-			);
+			caller_variants.extend(expand_origin_caller_variant(
+				runtime,
+				pallet_decl,
+				index,
+				instance,
+				generics,
+			));
+			pallet_conversions.extend(expand_origin_pallet_conversions(
+				scrate,
+				runtime,
+				pallet_decl,
+				instance,
+				generics,
+			));
 			query_origin_part_macros.push(quote! {
 				#path::__substrate_origin_check::is_origin_part_defined!(#name);
 			});
@@ -73,8 +82,9 @@ pub fn expand_outer_origin(
 	Ok(quote! {
 		#( #query_origin_part_macros )*
 
-		// WARNING: All instance must hold the filter `frame_system::Config::BaseCallFilter`, except
-		// when caller is system Root. One can use `OriginTrait::reset_filter` to do so.
+		/// The runtime origin type represanting the origin of a call.
+		///
+		/// Origin is always created with the base filter configured in `frame_system::Config::BaseCallFilter`.
 		#[derive(Clone)]
 		pub struct Origin {
 			caller: OriginCaller,
@@ -120,8 +130,8 @@ pub fn expand_outer_origin(
 			fn reset_filter(&mut self) {
 				let filter = <
 					<#runtime as #system_path::Config>::BaseCallFilter
-					as #scrate::traits::Filter<<#runtime as #system_path::Config>::Call>
-				>::filter;
+					as #scrate::traits::Contains<<#runtime as #system_path::Config>::Call>
+				>::contains;
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(filter));
 			}
@@ -131,7 +141,11 @@ pub fn expand_outer_origin(
 			}
 
 			fn filter_call(&self, call: &Self::Call) -> bool {
-				(self.filter)(call)
+				match self.caller {
+					// Root bypasses all filters
+					OriginCaller::system(#system_path::Origin::<#runtime>::Root) => true,
+					_ => (self.filter)(call),
+				}
 			}
 
 			fn caller(&self) -> &Self::PalletsOrigin {
@@ -148,21 +162,23 @@ pub fn expand_outer_origin(
 				}
 			}
 
-			/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 			fn none() -> Self {
 				#system_path::RawOrigin::None.into()
 			}
-			/// Create with system root origin and no filter.
+
 			fn root() -> Self {
 				#system_path::RawOrigin::Root.into()
 			}
-			/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
+
 			fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
 				#system_path::RawOrigin::Signed(by).into()
 			}
 		}
 
-		#[derive(Clone, PartialEq, Eq, #scrate::RuntimeDebug, #scrate::codec::Encode, #scrate::codec::Decode)]
+		#[derive(
+			Clone, PartialEq, Eq, #scrate::RuntimeDebug, #scrate::codec::Encode,
+			#scrate::codec::Decode, #scrate::scale_info::TypeInfo,
+		)]
 		#[allow(non_camel_case_types)]
 		pub enum OriginCaller {
 			#[codec(index = #system_index)]
@@ -179,7 +195,7 @@ pub fn expand_outer_origin(
 			pub fn none() -> Self {
 				<Origin as #scrate::traits::OriginTrait>::none()
 			}
-			/// Create with system root origin and no filter.
+			/// Create with system root origin and `frame-system::Config::BaseCallFilter`.
 			pub fn root() -> Self {
 				<Origin as #scrate::traits::OriginTrait>::root()
 			}
@@ -209,9 +225,7 @@ pub fn expand_outer_origin(
 		}
 
 		impl From<#system_path::Origin<#runtime>> for Origin {
-			/// Convert to runtime origin:
-			/// * root origin is built with no filter
-			/// * others use `frame-system::Config::BaseCallFilter`
+			/// Convert to runtime origin, using as filter: `frame-system::Config::BaseCallFilter`.
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
 				let o: OriginCaller = x.into();
 				o.into()
@@ -225,10 +239,7 @@ pub fn expand_outer_origin(
 					filter: #scrate::sp_std::rc::Rc::new(Box::new(|_| true)),
 				};
 
-				// Root has no filter
-				if !matches!(o.caller, OriginCaller::system(#system_path::Origin::<#runtime>::Root)) {
-					#scrate::traits::OriginTrait::reset_filter(&mut o);
-				}
+				#scrate::traits::OriginTrait::reset_filter(&mut o);
 
 				o
 			}
@@ -270,16 +281,16 @@ fn expand_origin_caller_variant(
 	match instance {
 		Some(inst) if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime, #path::#inst>),)
-		}
+		},
 		Some(inst) => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#path::#inst>),)
-		}
+		},
 		None if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime>),)
-		}
+		},
 		None => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin),)
-		}
+		},
 	}
 }
 
@@ -301,7 +312,7 @@ fn expand_origin_pallet_conversions(
 		None => quote!(#path::Origin),
 	};
 
-	quote!{
+	quote! {
 		impl From<#pallet_origin> for OriginCaller {
 			fn from(x: #pallet_origin) -> Self {
 				OriginCaller::#variant_name(x)

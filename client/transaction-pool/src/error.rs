@@ -40,7 +40,6 @@ pub enum Error {
 	RuntimeApi(String),
 }
 
-
 impl sc_transaction_pool_api::error::IntoPoolError for Error {
 	fn into_pool_error(self) -> std::result::Result<TxPoolError, Self> {
 		match self {

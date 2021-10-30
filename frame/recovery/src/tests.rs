@@ -18,15 +18,11 @@
 //! Tests for the module.
 
 use super::*;
+use frame_support::{assert_noop, assert_ok, traits::Currency};
 use mock::{
-	Recovery, Balances, Test, Origin, Call, BalancesCall, RecoveryCall,
-	new_test_ext, run_to_block
+	new_test_ext, run_to_block, Balances, BalancesCall, Call, Origin, Recovery, RecoveryCall, Test,
 };
-use sp_runtime::traits::{BadOrigin};
-use frame_support::{
-	assert_noop, assert_ok,
-	traits::{Currency},
-};
+use sp_runtime::traits::BadOrigin;
 
 #[test]
 fn basic_setup_works() {
@@ -48,7 +44,7 @@ fn set_recovered_works() {
 		// Root can set a recovered account though
 		assert_ok!(Recovery::set_recovered(Origin::root(), 5, 1));
 		// Account 1 should now be able to make a call through account 5
-		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 100)));
+		let call = Box::new(Call::Balances(BalancesCall::transfer { dest: 1, value: 100 }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 has successfully drained the funds from account 5
 		assert_eq!(Balances::free_balance(1), 200);
@@ -68,7 +64,8 @@ fn recovery_life_cycle_works() {
 		run_to_block(10);
 		// Using account 1, the user begins the recovery process to recover the lost account
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
-		// Off chain, the user contacts their friends and asks them to vouch for the recovery attempt
+		// Off chain, the user contacts their friends and asks them to vouch for the recovery
+		// attempt
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
@@ -79,15 +76,15 @@ fn recovery_life_cycle_works() {
 		assert_ok!(Recovery::claim_recovery(Origin::signed(1), 5));
 		// Account 1 can use account 5 to close the active recovery process, claiming the deposited
 		// funds used to initiate the recovery process into account 5.
-		let call = Box::new(Call::Recovery(RecoveryCall::close_recovery(1)));
+		let call = Box::new(Call::Recovery(RecoveryCall::close_recovery { rescuer: 1 }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 can then use account 5 to remove the recovery configuration, claiming the
 		// deposited funds used to create the recovery configuration into account 5.
-		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery()));
+		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery {}));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 should now be able to make a call through account 5 to get all of their funds
 		assert_eq!(Balances::free_balance(5), 110);
-		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 110)));
+		let call = Box::new(Call::Balances(BalancesCall::transfer { dest: 1, value: 110 }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// All funds have been fully recovered!
 		assert_eq!(Balances::free_balance(1), 200);
@@ -118,7 +115,7 @@ fn malicious_recovery_fails() {
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1)); // shame on you
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1)); // shame on you
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1)); // shame on you
-		// We met the threshold, lets try to recover the account...?
+															   // We met the threshold, lets try to recover the account...?
 		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::DelayPeriod);
 		// Account 1 needs to wait...
 		run_to_block(19);
@@ -136,7 +133,12 @@ fn malicious_recovery_fails() {
 		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::NotStarted);
 		// Account 5 can remove their recovery config and pick some better friends
 		assert_ok!(Recovery::remove_recovery(Origin::signed(5)));
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), vec![22, 33, 44], threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			vec![22, 33, 44],
+			threshold,
+			delay_period
+		));
 	});
 }
 
@@ -174,9 +176,7 @@ fn create_recovery_handles_basic_errors() {
 			Error::<Test>::NotSorted
 		);
 		// Already configured
-		assert_ok!(
-			Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 3, 10)
-		);
+		assert_ok!(Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 3, 10));
 		assert_noop!(
 			Recovery::create_recovery(Origin::signed(5), vec![2, 3, 4], 3, 10),
 			Error::<Test>::AlreadyRecoverable
@@ -191,17 +191,18 @@ fn create_recovery_works() {
 		let threshold = 3;
 		let delay_period = 10;
 		// Account 5 sets up a recovery configuration on their account
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		// Deposit is taken, and scales with the number of friends they pick
 		// Base 10 + 1 per friends = 13 total reserved
 		assert_eq!(Balances::reserved_balance(5), 13);
 		// Recovery configuration is correctly stored
-		let recovery_config = RecoveryConfig {
-			delay_period,
-			deposit: 13,
-			friends: friends.clone(),
-			threshold,
-		};
+		let recovery_config =
+			RecoveryConfig { delay_period, deposit: 13, friends: friends.clone(), threshold };
 		assert_eq!(Recovery::recovery_config(5), Some(recovery_config));
 	});
 }
@@ -218,10 +219,18 @@ fn initiate_recovery_handles_basic_errors() {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		// Same user cannot recover same account twice
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
-		assert_noop!(Recovery::initiate_recovery(Origin::signed(1), 5), Error::<Test>::AlreadyStarted);
+		assert_noop!(
+			Recovery::initiate_recovery(Origin::signed(1), 5),
+			Error::<Test>::AlreadyStarted
+		);
 		// No double deposit
 		assert_eq!(Balances::reserved_balance(1), 10);
 	});
@@ -234,17 +243,18 @@ fn initiate_recovery_works() {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		// Recovery can be initiated
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
 		// Deposit is reserved
 		assert_eq!(Balances::reserved_balance(1), 10);
 		// Recovery status object is created correctly
-		let recovery_status = ActiveRecovery {
-			created: 0,
-			deposit: 10,
-			friends: vec![],
-		};
+		let recovery_status = ActiveRecovery { created: 0, deposit: 10, friends: vec![] };
 		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
 		// Multiple users can attempt to recover the same account
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(2), 5));
@@ -255,12 +265,20 @@ fn initiate_recovery_works() {
 fn vouch_recovery_handles_basic_errors() {
 	new_test_ext().execute_with(|| {
 		// Cannot vouch for non-recoverable account
-		assert_noop!(Recovery::vouch_recovery(Origin::signed(2), 5, 1), Error::<Test>::NotRecoverable);
+		assert_noop!(
+			Recovery::vouch_recovery(Origin::signed(2), 5, 1),
+			Error::<Test>::NotRecoverable
+		);
 		// Create a recovery process for next tests
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		// Cannot vouch a recovery process that has not started
 		assert_noop!(Recovery::vouch_recovery(Origin::signed(2), 5, 1), Error::<Test>::NotStarted);
 		// Initiate a recovery process
@@ -269,7 +287,10 @@ fn vouch_recovery_handles_basic_errors() {
 		assert_noop!(Recovery::vouch_recovery(Origin::signed(22), 5, 1), Error::<Test>::NotFriend);
 		// Cannot vouch twice
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
-		assert_noop!(Recovery::vouch_recovery(Origin::signed(2), 5, 1), Error::<Test>::AlreadyVouched);
+		assert_noop!(
+			Recovery::vouch_recovery(Origin::signed(2), 5, 1),
+			Error::<Test>::AlreadyVouched
+		);
 	});
 }
 
@@ -280,7 +301,12 @@ fn vouch_recovery_works() {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
 		// Vouching works
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
@@ -288,11 +314,7 @@ fn vouch_recovery_works() {
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		// Final recovery status object is updated correctly
-		let recovery_status = ActiveRecovery {
-			created: 0,
-			deposit: 10,
-			friends: vec![2, 3, 4],
-		};
+		let recovery_status = ActiveRecovery { created: 0, deposit: 10, friends: vec![2, 3, 4] };
 		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
 	});
 }
@@ -306,7 +328,12 @@ fn claim_recovery_handles_basic_errors() {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		// Cannot claim an account which has not started the recovery process
 		assert_noop!(Recovery::claim_recovery(Origin::signed(1), 5), Error::<Test>::NotStarted);
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
@@ -328,7 +355,12 @@ fn claim_recovery_works() {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
@@ -372,7 +404,12 @@ fn remove_recovery_works() {
 		let friends = vec![2, 3, 4];
 		let threshold = 3;
 		let delay_period = 10;
-		assert_ok!(Recovery::create_recovery(Origin::signed(5), friends.clone(), threshold, delay_period));
+		assert_ok!(Recovery::create_recovery(
+			Origin::signed(5),
+			friends.clone(),
+			threshold,
+			delay_period
+		));
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(2), 5));
 		// Cannot remove a recovery when there are active recoveries.

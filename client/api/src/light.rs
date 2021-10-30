@@ -18,23 +18,26 @@
 
 //! Substrate light client interfaces
 
-use std::sync::Arc;
-use std::collections::{BTreeMap, HashMap};
-use std::future::Future;
+use std::{
+	collections::{BTreeMap, HashMap},
+	future::Future,
+	sync::Arc,
+};
 
-use sp_runtime::{
-	traits::{
-		Block as BlockT, Header as HeaderT, NumberFor,
-	},
-	generic::BlockId
+use crate::{
+	backend::{AuxStore, NewBlockState},
+	ProvideChtRoots, UsageInfo,
 };
-use sp_core::{ChangesTrieConfigurationRange, storage::PrefixedStorageKey};
-use sp_state_machine::StorageProof;
 use sp_blockchain::{
-	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
-	Error as ClientError, Result as ClientResult,
+	well_known_cache_keys, Cache as BlockchainCache, Error as ClientError, HeaderBackend,
+	HeaderMetadata, Result as ClientResult,
 };
-use crate::{backend::{AuxStore, NewBlockState}, UsageInfo, ProvideChtRoots};
+use sp_core::{storage::PrefixedStorageKey, ChangesTrieConfigurationRange};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+};
+use sp_state_machine::StorageProof;
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -142,48 +145,48 @@ pub struct RemoteBodyRequest<Header: HeaderT> {
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
-	type RemoteHeaderResult: Future<Output = Result<
-		Block::Header,
-		ClientError,
-	>> + Unpin + Send + 'static;
+	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>>
+		+ Unpin
+		+ Send
+		+ 'static;
 	/// Remote storage read future.
-	type RemoteReadResult: Future<Output = Result<
-		HashMap<Vec<u8>, Option<Vec<u8>>>,
-		ClientError,
-	>> + Unpin + Send + 'static;
+	type RemoteReadResult: Future<Output = Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
+		+ Unpin
+		+ Send
+		+ 'static;
 	/// Remote call result future.
-	type RemoteCallResult: Future<Output = Result<
-		Vec<u8>,
-		ClientError,
-	>> + Unpin + Send + 'static;
+	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>> + Unpin + Send + 'static;
 	/// Remote changes result future.
-	type RemoteChangesResult: Future<Output = Result<
-		Vec<(NumberFor<Block>, u32)>,
-		ClientError,
-	>> + Unpin + Send + 'static;
+	type RemoteChangesResult: Future<Output = Result<Vec<(NumberFor<Block>, u32)>, ClientError>>
+		+ Unpin
+		+ Send
+		+ 'static;
 	/// Remote block body result future.
-	type RemoteBodyResult: Future<Output = Result<
-		Vec<Block::Extrinsic>,
-		ClientError,
-	>> + Unpin + Send + 'static;
+	type RemoteBodyResult: Future<Output = Result<Vec<Block::Extrinsic>, ClientError>>
+		+ Unpin
+		+ Send
+		+ 'static;
 
 	/// Fetch remote header.
-	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
-	/// Fetch remote storage value.
-	fn remote_read(
+	fn remote_header(
 		&self,
-		request: RemoteReadRequest<Block::Header>
-	) -> Self::RemoteReadResult;
+		request: RemoteHeaderRequest<Block::Header>,
+	) -> Self::RemoteHeaderResult;
+	/// Fetch remote storage value.
+	fn remote_read(&self, request: RemoteReadRequest<Block::Header>) -> Self::RemoteReadResult;
 	/// Fetch remote storage child value.
 	fn remote_read_child(
 		&self,
-		request: RemoteReadChildRequest<Block::Header>
+		request: RemoteReadChildRequest<Block::Header>,
 	) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
 	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed
 	/// at a given blocks range.
-	fn remote_changes(&self, request: RemoteChangesRequest<Block::Header>) -> Self::RemoteChangesResult;
+	fn remote_changes(
+		&self,
+		request: RemoteChangesRequest<Block::Header>,
+	) -> Self::RemoteChangesResult;
 	/// Fetch remote block body
 	fn remote_body(&self, request: RemoteBodyRequest<Block::Header>) -> Self::RemoteBodyResult;
 }
@@ -222,20 +225,22 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 	fn check_changes_proof(
 		&self,
 		request: &RemoteChangesRequest<Block::Header>,
-		proof: ChangesProof<Block::Header>
+		proof: ChangesProof<Block::Header>,
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>>;
 	/// Check remote body proof.
 	fn check_body_proof(
 		&self,
 		request: &RemoteBodyRequest<Block::Header>,
-		body: Vec<Block::Extrinsic>
+		body: Vec<Block::Extrinsic>,
 	) -> ClientResult<Vec<Block::Extrinsic>>;
 }
 
-
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
-	+ HeaderMetadata<Block, Error=ClientError> + ProvideChtRoots<Block>
+pub trait Storage<Block: BlockT>:
+	AuxStore
+	+ HeaderBackend<Block>
+	+ HeaderMetadata<Block, Error = ClientError>
+	+ ProvideChtRoots<Block>
 {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
@@ -280,10 +285,10 @@ pub enum LocalOrRemote<Data, Request> {
 /// locally, or fetches required data from remote node.
 pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 	/// Get block header.
-	fn header(&self, id: BlockId<Block>) -> ClientResult<LocalOrRemote<
-		Block::Header,
-		RemoteHeaderRequest<Block::Header>,
-	>>;
+	fn header(
+		&self,
+		id: BlockId<Block>,
+	) -> ClientResult<LocalOrRemote<Block::Header, RemoteHeaderRequest<Block::Header>>>;
 }
 
 /// Returns future that resolves header either locally, or remotely.
@@ -295,11 +300,8 @@ pub fn future_header<Block: BlockT, F: Fetcher<Block>>(
 	use futures::future::{ready, Either, FutureExt};
 
 	match blockchain.header(id) {
-		Ok(LocalOrRemote::Remote(request)) => Either::Left(
-			fetcher
-				.remote_header(request)
-				.then(|header| ready(header.map(Some)))
-		),
+		Ok(LocalOrRemote::Remote(request)) =>
+			Either::Left(fetcher.remote_header(request).then(|header| ready(header.map(Some)))),
 		Ok(LocalOrRemote::Unknown) => Either::Right(ready(Ok(None))),
 		Ok(LocalOrRemote::Local(local_header)) => Either::Right(ready(Ok(Some(local_header)))),
 		Err(err) => Either::Right(ready(Err(err))),
@@ -308,11 +310,11 @@ pub fn future_header<Block: BlockT, F: Fetcher<Block>>(
 
 #[cfg(test)]
 pub mod tests {
+	use super::*;
 	use futures::future::Ready;
 	use parking_lot::Mutex;
 	use sp_blockchain::Error as ClientError;
-	use sp_test_primitives::{Block, Header, Extrinsic};
-	use super::*;
+	use sp_test_primitives::{Block, Extrinsic, Header};
 
 	#[derive(Debug, thiserror::Error)]
 	#[error("Not implemented on test node")]
@@ -322,12 +324,11 @@ pub mod tests {
 		fn into(self) -> ClientError {
 			ClientError::Application(Box::new(self))
 		}
-	}	
-	
+	}
+
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
-	fn not_implemented_in_tests<T>() -> Ready<Result<T, ClientError>>
-	{
+	fn not_implemented_in_tests<T>() -> Ready<Result<T, ClientError>> {
 		futures::future::ready(Err(MockError.into()))
 	}
 
@@ -346,7 +347,10 @@ pub mod tests {
 			not_implemented_in_tests()
 		}
 
-		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
+		fn remote_read_child(
+			&self,
+			_request: RemoteReadChildRequest<Header>,
+		) -> Self::RemoteReadResult {
 			not_implemented_in_tests()
 		}
 
@@ -354,7 +358,10 @@ pub mod tests {
 			futures::future::ready(Ok((*self.lock()).clone()))
 		}
 
-		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {
+		fn remote_changes(
+			&self,
+			_request: RemoteChangesRequest<Header>,
+		) -> Self::RemoteChangesResult {
 			not_implemented_in_tests()
 		}
 

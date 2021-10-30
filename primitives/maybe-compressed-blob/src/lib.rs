@@ -18,8 +18,7 @@
 //! Handling of blobs that may be compressed, based on an 8-byte magic identifier
 //! at the head.
 
-use std::borrow::Cow;
-use std::io::Read;
+use std::{borrow::Cow, io::Read};
 
 // An arbitrary prefix, that indicates a blob beginning with should be decompressed with
 // Zstd compression.
@@ -52,7 +51,7 @@ impl std::fmt::Display for Error {
 	}
 }
 
-impl std::error::Error for Error { }
+impl std::error::Error for Error {}
 
 fn read_from_decoder(
 	decoder: impl Read,
@@ -71,20 +70,10 @@ fn read_from_decoder(
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 fn decompress_zstd(blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
 	let decoder = zstd::Decoder::new(blob).map_err(|_| Error::Invalid)?;
 
 	read_from_decoder(decoder, blob.len(), bomb_limit)
-}
-
-#[cfg(target_os = "unknown")]
-fn decompress_zstd(mut blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
-	let blob_len = blob.len();
-	let decoder = ruzstd::streaming_decoder::StreamingDecoder::new(&mut blob)
-		.map_err(|_| Error::Invalid)?;
-
-	read_from_decoder(decoder, blob_len, bomb_limit)
 }
 
 /// Decode a blob, if it indicates that it is compressed. Provide a `bomb_limit`, which
@@ -100,12 +89,11 @@ pub fn decompress(blob: &[u8], bomb_limit: usize) -> Result<Cow<[u8]>, Error> {
 /// Encode a blob as compressed. If the blob's size is over the bomb limit,
 /// this will not compress the blob, as the decoder will not be able to be
 /// able to differentiate it from a compression bomb.
-#[cfg(not(target_os = "unknown"))]
 pub fn compress(blob: &[u8], bomb_limit: usize) -> Option<Vec<u8>> {
 	use std::io::Write;
 
 	if blob.len() > bomb_limit {
-		return None;
+		return None
 	}
 
 	let mut buf = ZSTD_PREFIX.to_vec();

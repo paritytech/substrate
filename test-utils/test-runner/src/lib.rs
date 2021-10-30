@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+#![deny(missing_docs, unused_extern_crates)]
 
 //! Test runner
 //! # Substrate Test Runner
@@ -22,15 +23,15 @@
 //! Allows you to test
 //! <br />
 //!
-//! -   Migrations
-//! -   Runtime Upgrades
-//! -   Pallets and general runtime functionality.
+//! - Migrations
+//! - Runtime Upgrades
+//! - Pallets and general runtime functionality.
 //!
 //! This works by running a full node with a Manual Seal-BABE™ hybrid consensus for block authoring.
 //!
 //! <h2>Note</h2>
-//! The running node has no signature verification, which allows us author extrinsics for any account on chain.
-//!     <br/>
+//! The running node has no signature verification, which allows us author extrinsics for any
+//! account on chain.     <br/>
 //!     <br/>
 //!
 //! <h2>How do I Use this?</h2>
@@ -41,7 +42,7 @@
 //! use sc_finality_grandpa::GrandpaBlockImport;
 //! use sc_service::{
 //!     TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, BasePath,
-//!     DatabaseConfig, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
+//!     DatabaseSource, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
 //!     config::{NetworkConfiguration, KeystoreConfig},
 //! };
 //! use std::sync::Arc;
@@ -61,20 +62,27 @@
 //!
 //! type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 //!
-//! sc_executor::native_executor_instance!(
-//! 	pub Executor,
-//! 	node_runtime::api::dispatch,
-//! 	node_runtime::native_version,
-//! 	SignatureVerificationOverride,
-//! );
+//! pub struct ExecutorDispatch;
+//!
+//! impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
+//! 	type ExtendHostFunctions = SignatureVerificationOverride;
+//!
+//! 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+//! 		node_runtime::api::dispatch(method, data)
+//! 	}
+//!
+//! 	fn native_version() -> sc_executor::NativeVersion {
+//! 		node_runtime::native_version()
+//! 	}
+//! }
 //!
 //! struct Requirements;
 //!
 //! impl ChainInfo for Requirements {
 //!     /// Provide a Block type with an OpaqueExtrinsic
 //!     type Block = node_primitives::Block;
-//!     /// Provide an Executor type for the runtime
-//!     type Executor = Executor;
+//!     /// Provide an ExecutorDispatch type for the runtime
+//!     type ExecutorDispatch = ExecutorDispatch;
 //!     /// Provide the runtime itself
 //!     type Runtime = node_runtime::Runtime;
 //!     /// A touch of runtime api
@@ -85,7 +93,7 @@
 //! 	type BlockImport = BlockImport<
 //! 		Self::Block,
 //! 		TFullBackend<Self::Block>,
-//! 		TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+//! 		TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 //! 		Self::SelectChain,
 //!     >;
 //!     /// and a dash of SignedExtensions
@@ -111,7 +119,7 @@
 //!     /// The function signature tells you all you need to know. ;)
 //! 	fn create_client_parts(config: &Configuration) -> Result<
 //! 		(
-//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>,
+//! 			Arc<TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>>,
 //! 			Arc<TFullBackend<Self::Block>>,
 //! 			KeyStorePtr,
 //! 			TaskManager,
@@ -120,7 +128,7 @@
 //! 				dyn ConsensusDataProvider<
 //! 					Self::Block,
 //! 					Transaction = TransactionFor<
-//! 						TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+//! 						TFullClient<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>,
 //! 						Self::Block
 //! 					>,
 //! 				>
@@ -135,7 +143,7 @@
 //! 			backend,
 //! 			keystore,
 //! 			task_manager,
-//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, Self::Executor>(config)?;
+//! 		) = new_full_parts::<Self::Block, Self::RuntimeApi, NativeElseWasmExecutor<Self::ExecutorDispatch>>(config)?;
 //! 		let client = Arc::new(client);
 //!
 //! 		let inherent_providers = InherentDataProviders::new();
@@ -186,12 +194,12 @@
 //! fn simple_balances_test() {
 //! 	// given
 //! 	let config = NodeConfig {
-//!			execution_strategies: ExecutionStrategies {
-//!				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 			execution_strategies: ExecutionStrategies {
+//! 				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 //! 		},
 //! 		chain_spec: Box::new(development_config()),
 //! 		log_targets: vec![],
@@ -226,20 +234,20 @@
 //! }
 //! ```
 
-use manual_seal::consensus::ConsensusDataProvider;
-use sc_executor::NativeExecutionDispatch;
-use sc_service::{Configuration, TFullBackend, TFullClient, TaskManager, TaskExecutor};
+use sc_consensus::BlockImport;
+use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
+use sc_service::TFullClient;
 use sp_api::{ConstructRuntimeApi, TransactionFor};
-use sp_consensus::{BlockImport, SelectChain};
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
-use sp_keystore::SyncCryptoStorePtr;
+use sp_consensus::SelectChain;
+use sp_inherents::InherentDataProvider;
 use sp_runtime::traits::{Block as BlockT, SignedExtension};
-use std::sync::Arc;
 
+mod client;
+mod host_functions;
 mod node;
 mod utils;
-mod host_functions;
 
+pub use client::*;
 pub use host_functions::*;
 pub use node::*;
 pub use utils::*;
@@ -249,8 +257,8 @@ pub trait ChainInfo: Sized {
 	/// Opaque block type
 	type Block: BlockT;
 
-	/// Executor type
-	type Executor: NativeExecutionDispatch + 'static;
+	/// ExecutorDispatch dispatch type
+	type ExecutorDispatch: NativeExecutionDispatch + 'static;
 
 	/// Runtime
 	type Runtime: frame_system::Config;
@@ -259,7 +267,14 @@ pub trait ChainInfo: Sized {
 	type RuntimeApi: Send
 		+ Sync
 		+ 'static
-		+ ConstructRuntimeApi<Self::Block, TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>;
+		+ ConstructRuntimeApi<
+			Self::Block,
+			TFullClient<
+				Self::Block,
+				Self::RuntimeApi,
+				NativeElseWasmExecutor<Self::ExecutorDispatch>,
+			>,
+		>;
 
 	/// select chain type.
 	type SelectChain: SelectChain<Self::Block> + 'static;
@@ -271,7 +286,14 @@ pub trait ChainInfo: Sized {
 		+ BlockImport<
 			Self::Block,
 			Error = sp_consensus::Error,
-			Transaction = TransactionFor<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>, Self::Block>,
+			Transaction = TransactionFor<
+				TFullClient<
+					Self::Block,
+					Self::RuntimeApi,
+					NativeElseWasmExecutor<Self::ExecutorDispatch>,
+				>,
+				Self::Block,
+			>,
 		> + 'static;
 
 	/// The signed extras required by the runtime
@@ -281,45 +303,7 @@ pub trait ChainInfo: Sized {
 	type InherentDataProviders: InherentDataProvider + 'static;
 
 	/// Signed extras, this function is caled in an externalities provided environment.
-	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras;
-
-	/// config factory
-	fn config(task_executor: TaskExecutor) -> Configuration;
-
-	/// Attempt to create client parts, including block import,
-	/// select chain strategy and consensus data provider.
-	fn create_client_parts(
-		config: &Configuration,
-	) -> Result<
-		(
-			Arc<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>,
-			Arc<TFullBackend<Self::Block>>,
-			SyncCryptoStorePtr,
-			TaskManager,
-			Box<
-				dyn CreateInherentDataProviders<
-					Self::Block,
-					(),
-					InherentDataProviders = Self::InherentDataProviders
-				>
-			>,
-			Option<
-				Box<
-					dyn ConsensusDataProvider<
-						Self::Block,
-						Transaction = TransactionFor<
-							TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
-							Self::Block,
-						>,
-					>,
-				>,
-			>,
-			Self::SelectChain,
-			Self::BlockImport,
-		),
-		sc_service::Error,
-	>;
-
-	/// Given a call and a handle to the node, execute the call with root privileges.
-	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>);
+	fn signed_extras(
+		from: <Self::Runtime as frame_system::Config>::AccountId,
+	) -> Self::SignedExtras;
 }

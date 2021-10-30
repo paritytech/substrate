@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
 use super::helper;
+use syn::spanned::Spanned;
 
 /// Implementation of the pallet hooks.
 pub struct HooksDef {
@@ -42,30 +42,31 @@ impl HooksDef {
 			item
 		} else {
 			let msg = "Invalid pallet::hooks, expected item impl";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
 
 		let mut instances = vec![];
 		instances.push(helper::check_pallet_struct_usage(&item.self_ty)?);
 		instances.push(helper::check_impl_gen(&item.generics, item.impl_token.span())?);
 
-		let item_trait = &item.trait_.as_ref()
+		let item_trait = &item
+			.trait_
+			.as_ref()
 			.ok_or_else(|| {
 				let msg = "Invalid pallet::hooks, expected impl<..> Hooks \
 					for Pallet<..>";
 				syn::Error::new(item.span(), msg)
-			})?.1;
+			})?
+			.1;
 
-		if item_trait.segments.len() != 1
-			|| item_trait.segments[0].ident != "Hooks"
-		{
+		if item_trait.segments.len() != 1 || item_trait.segments[0].ident != "Hooks" {
 			let msg = format!(
 				"Invalid pallet::hooks, expected trait to be `Hooks` found `{}`\
 				, you can import from `frame_support::pallet_prelude`",
 				quote::quote!(#item_trait)
 			);
 
-			return Err(syn::Error::new(item_trait.span(), msg));
+			return Err(syn::Error::new(item_trait.span(), msg))
 		}
 
 		let has_runtime_upgrade = item.items.iter().any(|i| match i {

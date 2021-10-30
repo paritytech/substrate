@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::logging::fast_local_time::FastLocalTime;
 use ansi_term::Colour;
 use regex::Regex;
 use std::fmt::{self, Write};
@@ -23,16 +24,13 @@ use tracing::{Event, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	field::RecordFields,
-	fmt::{
-		time::{FormatTime, SystemTime},
-		FmtContext, FormatEvent, FormatFields,
-	},
+	fmt::{time::FormatTime, FmtContext, FormatEvent, FormatFields},
 	layer::Context,
 	registry::{LookupSpan, SpanRef},
 };
 
 /// A pre-configured event formatter.
-pub struct EventFormat<T = SystemTime> {
+pub struct EventFormat<T = FastLocalTime> {
 	/// Use the given timer for log message timestamps.
 	pub timer: T,
 	/// Sets whether or not an event's target is displayed.
@@ -79,11 +77,11 @@ where
 			match current_thread.name() {
 				Some(name) => {
 					write!(writer, "{} ", FmtThreadName::new(name))?;
-				}
+				},
 				// fall-back to thread id when name is absent and ids are not enabled
 				None => {
 					write!(writer, "{:0>2?} ", current_thread.id())?;
-				}
+				},
 			}
 		}
 
@@ -93,12 +91,11 @@ where
 
 		// Custom code to display node name
 		if let Some(span) = ctx.lookup_current() {
-			let parents = span.parents();
-			for span in std::iter::once(span).chain(parents) {
+			for span in span.scope() {
 				let exts = span.extensions();
 				if let Some(prefix) = exts.get::<super::layers::Prefix>() {
 					write!(writer, "{}", prefix.as_str())?;
-					break;
+					break
 				}
 			}
 		}
@@ -125,11 +122,11 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
-		if self.dup_to_stdout && (
-			event.metadata().level() == &Level::INFO ||
-			event.metadata().level() == &Level::WARN ||
-			event.metadata().level() == &Level::ERROR
-		) {
+		if self.dup_to_stdout &&
+			(event.metadata().level() == &Level::INFO ||
+				event.metadata().level() == &Level::WARN ||
+				event.metadata().level() == &Level::ERROR)
+		{
 			let mut out = String::new();
 			self.format_event_custom(CustomFmtContext::FmtContext(ctx), &mut out, event)?;
 			writer.write_str(&out)?;
@@ -271,9 +268,8 @@ where
 	) -> fmt::Result {
 		match self {
 			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.format_fields(writer, fields),
-			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) => {
-				fmt_fields.format_fields(writer, fields)
-			}
+			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) =>
+				fmt_fields.format_fields(writer, fields),
 		}
 	}
 }
@@ -321,11 +317,7 @@ impl<'a> fmt::Write for MaybeColorWriter<'a> {
 impl<'a> MaybeColorWriter<'a> {
 	/// Creates a new instance.
 	fn new(enable_color: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
-		Self {
-			enable_color,
-			inner_writer,
-			buffer: String::new(),
-		}
+		Self { enable_color, inner_writer, buffer: String::new() }
 	}
 
 	/// Write the buffered content to the `inner_writer`.

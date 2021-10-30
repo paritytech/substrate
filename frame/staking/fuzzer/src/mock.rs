@@ -42,7 +42,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -119,7 +119,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: &[(AccountId, Ks)],
 	) {}
 
-	fn on_disabled(_: usize) {}
+	fn on_disabled(_: u32) {}
 }
 
 impl pallet_session::Config for Test {

@@ -2,6 +2,9 @@
 title: Style Guide for Rust in Substrate
 ---
 
+Where possible these styles are enforced by settings in `rustfmt.toml` so if you run `cargo fmt` 
+then you will adhere to most of these style guidelines automatically.
+
 # Formatting
 
 -   Indent using tabs.

@@ -17,41 +17,52 @@
 
 //! In-memory implementation of `Database`
 
-use std::collections::{HashMap, hash_map::Entry};
-use crate::{Database, Change, ColumnId, Transaction, error};
+use crate::{error, Change, ColumnId, Database, Transaction};
 use parking_lot::RwLock;
+use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Default)]
 /// This implements `Database` as an in-memory hash map. `commit` is not atomic.
 pub struct MemDb(RwLock<HashMap<ColumnId, HashMap<Vec<u8>, (u32, Vec<u8>)>>>);
 
 impl<H> Database<H> for MemDb
-	where H: Clone + AsRef<[u8]>
+where
+	H: Clone + AsRef<[u8]>,
 {
 	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
 		let mut s = self.0.write();
 		for change in transaction.0.into_iter() {
 			match change {
-				Change::Set(col, key, value) => { s.entry(col).or_default().insert(key, (1, value)); },
-				Change::Remove(col, key) => { s.entry(col).or_default().remove(&key); },
+				Change::Set(col, key, value) => {
+					s.entry(col).or_default().insert(key, (1, value));
+				},
+				Change::Remove(col, key) => {
+					s.entry(col).or_default().remove(&key);
+				},
 				Change::Store(col, hash, value) => {
-					s.entry(col).or_default().entry(hash.as_ref().to_vec())
+					s.entry(col)
+						.or_default()
+						.entry(hash.as_ref().to_vec())
 						.and_modify(|(c, _)| *c += 1)
 						.or_insert_with(|| (1, value));
 				},
 				Change::Reference(col, hash) => {
-					if let Entry::Occupied(mut entry) = s.entry(col).or_default().entry(hash.as_ref().to_vec()) {
+					if let Entry::Occupied(mut entry) =
+						s.entry(col).or_default().entry(hash.as_ref().to_vec())
+					{
 						entry.get_mut().0 += 1;
 					}
-				}
+				},
 				Change::Release(col, hash) => {
-					if let Entry::Occupied(mut entry) = s.entry(col).or_default().entry(hash.as_ref().to_vec()) {
+					if let Entry::Occupied(mut entry) =
+						s.entry(col).or_default().entry(hash.as_ref().to_vec())
+					{
 						entry.get_mut().0 -= 1;
 						if entry.get().0 == 0 {
 							entry.remove();
 						}
 					}
-				}
+				},
 			}
 		}
 
@@ -76,4 +87,3 @@ impl MemDb {
 		s.get(&col).map(|c| c.len()).unwrap_or(0)
 	}
 }
-

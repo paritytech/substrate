@@ -19,22 +19,25 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use sp_std::{prelude::*, convert::TryInto};
 use super::*;
-use sp_runtime::traits::Bounded;
-use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{
-	benchmarks_instance_pallet, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite
+	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
-use frame_support::{traits::{Get, EnsureOrigin}, dispatch::UnfilteredDispatchable, BoundedVec};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, Get},
+	BoundedVec,
+};
+use frame_system::RawOrigin as SystemOrigin;
+use sp_runtime::traits::Bounded;
+use sp_std::{convert::TryInto, prelude::*};
 
 use crate::Pallet as Uniques;
 
 const SEED: u32 = 0;
 
-fn create_class<T: Config<I>, I: 'static>()
-	-> (T::ClassId, T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
+fn create_class<T: Config<I>, I: 'static>(
+) -> (T::ClassId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let class = Default::default();
@@ -43,13 +46,13 @@ fn create_class<T: Config<I>, I: 'static>()
 		SystemOrigin::Signed(caller.clone()).into(),
 		class,
 		caller_lookup.clone(),
-	).is_ok());
+	)
+	.is_ok());
 	(class, caller, caller_lookup)
 }
 
-fn add_class_metadata<T: Config<I>, I: 'static>()
-	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
+fn add_class_metadata<T: Config<I>, I: 'static>(
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -60,13 +63,14 @@ fn add_class_metadata<T: Config<I>, I: 'static>()
 		Default::default(),
 		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
 		false,
-	).is_ok());
+	)
+	.is_ok());
 	(caller, caller_lookup)
 }
 
-fn mint_instance<T: Config<I>, I: 'static>(index: u16)
-	-> (T::InstanceId, T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
+fn mint_instance<T: Config<I>, I: 'static>(
+	index: u16,
+) -> (T::InstanceId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().admin;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -78,13 +82,14 @@ fn mint_instance<T: Config<I>, I: 'static>(index: u16)
 		Default::default(),
 		instance,
 		caller_lookup.clone(),
-	).is_ok());
+	)
+	.is_ok());
 	(instance, caller, caller_lookup)
 }
 
-fn add_instance_metadata<T: Config<I>, I: 'static>(instance: T::InstanceId)
-	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
+fn add_instance_metadata<T: Config<I>, I: 'static>(
+	instance: T::InstanceId,
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -96,13 +101,14 @@ fn add_instance_metadata<T: Config<I>, I: 'static>(instance: T::InstanceId)
 		instance,
 		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
 		false,
-	).is_ok());
+	)
+	.is_ok());
 	(caller, caller_lookup)
 }
 
-fn add_instance_attribute<T: Config<I>, I: 'static>(instance: T::InstanceId)
-	-> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
+fn add_instance_attribute<T: Config<I>, I: 'static>(
+	instance: T::InstanceId,
+) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -115,7 +121,8 @@ fn add_instance_attribute<T: Config<I>, I: 'static>(instance: T::InstanceId)
 		Some(instance),
 		key.clone(),
 		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
-	).is_ok());
+	)
+	.is_ok());
 	(key, caller, caller_lookup)
 }
 
@@ -278,15 +285,15 @@ benchmarks_instance_pallet! {
 	force_asset_status {
 		let (class, caller, caller_lookup) = create_class::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_asset_status(
+		let call = Call::<T, I>::force_asset_status {
 			class,
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			true,
-			false,
-		);
+			owner: caller_lookup.clone(),
+			issuer: caller_lookup.clone(),
+			admin: caller_lookup.clone(),
+			freezer: caller_lookup.clone(),
+			free_holding: true,
+			is_frozen: false,
+		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::AssetStatusChanged(class).into());
@@ -371,6 +378,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled(class, instance, caller, delegate).into());
 	}
-}
 
-impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
+}

@@ -18,11 +18,11 @@
 
 //! Test accounts.
 
-use sp_keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
-use node_primitives::{AccountId, Balance, Index};
-use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
-use sp_runtime::generic::Era;
 use codec::Encode;
+use node_primitives::{AccountId, Balance, Index};
+use node_runtime::{CheckedExtrinsic, SessionKeys, SignedExtra, UncheckedExtrinsic};
+use sp_keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
+use sp_runtime::generic::Era;
 
 /// Alice's account id.
 pub fn alice() -> AccountId {
@@ -81,26 +81,31 @@ pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 }
 
 /// Sign given `CheckedExtrinsic`.
-pub fn sign(xt: CheckedExtrinsic, spec_version: u32, tx_version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
+pub fn sign(
+	xt: CheckedExtrinsic,
+	spec_version: u32,
+	tx_version: u32,
+	genesis_hash: [u8; 32],
+) -> UncheckedExtrinsic {
 	match xt.signed {
 		Some((signed, extra)) => {
-			let payload = (xt.function, extra.clone(), spec_version, tx_version, genesis_hash, genesis_hash);
+			let payload =
+				(xt.function, extra.clone(), spec_version, tx_version, genesis_hash, genesis_hash);
 			let key = AccountKeyring::from_account_id(&signed).unwrap();
-			let signature = payload.using_encoded(|b| {
-				if b.len() > 256 {
-					key.sign(&sp_io::hashing::blake2_256(b))
-				} else {
-					key.sign(b)
-				}
-			}).into();
+			let signature = payload
+				.using_encoded(|b| {
+					if b.len() > 256 {
+						key.sign(&sp_io::hashing::blake2_256(b))
+					} else {
+						key.sign(b)
+					}
+				})
+				.into();
 			UncheckedExtrinsic {
 				signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 				function: payload.0,
 			}
-		}
-		None => UncheckedExtrinsic {
-			signature: None,
-			function: xt.function,
 		},
+		None => UncheckedExtrinsic { signature: None, function: xt.function },
 	}
 }

@@ -18,18 +18,21 @@
 //! Mock helpers for Session.
 
 use super::*;
-use std::cell::RefCell;
-use frame_support::{parameter_types, BasicExternalities};
-use sp_core::{crypto::key_types::DUMMY, H256};
-use sp_runtime::{
-	Perbill, impl_opaque_keys,
-	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
-	testing::{Header, UintAuthorityId},
-};
-use sp_staking::SessionIndex;
 use crate as pallet_session;
 #[cfg(feature = "historical")]
 use crate::historical as pallet_session_historical;
+
+use std::{cell::RefCell, collections::BTreeMap};
+
+use sp_core::{crypto::key_types::DUMMY, H256};
+use sp_runtime::{
+	impl_opaque_keys,
+	testing::{Header, UintAuthorityId},
+	traits::{BlakeTwo256, IdentityLookup},
+};
+use sp_staking::SessionIndex;
+
+use frame_support::{parameter_types, traits::GenesisBuild, BasicExternalities};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -108,13 +111,19 @@ thread_local! {
 	pub static DISABLED: RefCell<bool> = RefCell::new(false);
 	// Stores if `on_before_session_end` was called
 	pub static BEFORE_SESSION_END_CALLED: RefCell<bool> = RefCell::new(false);
+	pub static VALIDATOR_ACCOUNTS: RefCell<BTreeMap<u64, u64>> = RefCell::new(BTreeMap::new());
 }
 
 pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
 		let l = SESSION_LENGTH.with(|l| *l.borrow());
-		now % l == 0 || FORCE_SESSION_END.with(|l| { let r = *l.borrow(); *l.borrow_mut() = false; r })
+		now % l == 0 ||
+			FORCE_SESSION_END.with(|l| {
+				let r = *l.borrow();
+				*l.borrow_mut() = false;
+				r
+			})
 	}
 }
 
@@ -128,13 +137,14 @@ impl SessionHandler<u64> for TestSessionHandler {
 		_queued_validators: &[(u64, T)],
 	) {
 		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
-		AUTHORITIES.with(|l|
-			*l.borrow_mut() = validators.iter()
+		AUTHORITIES.with(|l| {
+			*l.borrow_mut() = validators
+				.iter()
 				.map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
 				.collect()
-		);
+		});
 	}
-	fn on_disabled(_validator_index: usize) {
+	fn on_disabled(_validator_index: u32) {
 		DISABLED.with(|l| *l.borrow_mut() = true)
 	}
 	fn on_before_session_ending() {
@@ -167,9 +177,7 @@ impl SessionManager<u64> for TestSessionManager {
 impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
-	fn new_session(new_index: SessionIndex)
-		-> Option<Vec<(u64, u64)>>
-	{
+	fn new_session(new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
 		<Self as SessionManager<_>>::new_session(new_index)
 			.map(|vals| vals.into_iter().map(|val| (val, val)).collect())
 	}
@@ -180,11 +188,11 @@ pub fn authorities() -> Vec<UintAuthorityId> {
 }
 
 pub fn force_new_session() {
-	FORCE_SESSION_END.with(|l| *l.borrow_mut() = true )
+	FORCE_SESSION_END.with(|l| *l.borrow_mut() = true)
 }
 
 pub fn set_session_length(x: u64) {
-	SESSION_LENGTH.with(|l| *l.borrow_mut() = x )
+	SESSION_LENGTH.with(|l| *l.borrow_mut() = x)
 }
 
 pub fn session_changed() -> bool {
@@ -205,9 +213,8 @@ pub fn reset_before_session_end_called() {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
-		l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-	);
+	let keys: Vec<_> = NEXT_VALIDATORS
+		.with(|l| l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect());
 	BasicExternalities::execute_with_storage(&mut t, || {
 		for (ref k, ..) in &keys {
 			frame_system::Pallet::<Test>::inc_providers(k);
@@ -216,7 +223,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// An additional identity that we use.
 		frame_system::Pallet::<Test>::inc_providers(&69);
 	});
-	pallet_session::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
+	pallet_session::GenesisConfig::<Test> { keys }
+		.assimilate_storage(&mut t)
+		.unwrap();
+	NEXT_VALIDATORS.with(|l| {
+		let v = l.borrow().iter().map(|&i| (i, i)).collect();
+		VALIDATOR_ACCOUNTS.with(|m| *m.borrow_mut() = v);
+	});
 	sp_io::TestExternalities::new(t)
 }
 
@@ -228,7 +241,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -260,8 +273,16 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+pub struct TestValidatorIdOf;
+impl TestValidatorIdOf {
+	pub fn set(v: BTreeMap<u64, u64>) {
+		VALIDATOR_ACCOUNTS.with(|m| *m.borrow_mut() = v);
+	}
+}
+impl Convert<u64, Option<u64>> for TestValidatorIdOf {
+	fn convert(x: u64) -> Option<u64> {
+		VALIDATOR_ACCOUNTS.with(|m| m.borrow().get(&x).cloned())
+	}
 }
 
 impl Config for Test {
@@ -272,10 +293,9 @@ impl Config for Test {
 	type SessionManager = TestSessionManager;
 	type SessionHandler = TestSessionHandler;
 	type ValidatorId = u64;
-	type ValidatorIdOf = ConvertInto;
+	type ValidatorIdOf = TestValidatorIdOf;
 	type Keys = MockSessionKeys;
 	type Event = Event;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }

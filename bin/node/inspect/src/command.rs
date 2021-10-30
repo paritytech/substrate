@@ -18,9 +18,12 @@
 
 //! Command ran by the CLI
 
-use crate::cli::{InspectCmd, InspectSubCmd};
-use crate::Inspector;
+use crate::{
+	cli::{InspectCmd, InspectSubCmd},
+	Inspector,
+};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{new_full_client, Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
 use std::str::FromStr;
@@ -34,7 +37,13 @@ impl InspectCmd {
 		RA: Send + Sync + 'static,
 		EX: NativeExecutionDispatch + 'static,
 	{
-		let client = new_full_client::<B, RA, EX>(&config, None)?;
+		let executor = NativeElseWasmExecutor::<EX>::new(
+			config.wasm_method,
+			config.default_heap_pages,
+			config.max_runtime_instances,
+		);
+
+		let client = new_full_client::<B, RA, _>(&config, None, executor)?;
 		let inspect = Inspector::<B>::new(client);
 
 		match &self.command {
@@ -43,13 +52,13 @@ impl InspectCmd {
 				let res = inspect.block(input).map_err(|e| format!("{}", e))?;
 				println!("{}", res);
 				Ok(())
-			}
+			},
 			InspectSubCmd::Extrinsic { input } => {
 				let input = input.parse()?;
 				let res = inspect.extrinsic(input).map_err(|e| format!("{}", e))?;
 				println!("{}", res);
 				Ok(())
-			}
+			},
 		}
 	}
 }

@@ -26,18 +26,23 @@
 //!
 //! See [`Worker`] and [`Service`] for more documentation.
 
-pub use crate::{service::Service, worker::{NetworkProvider, Worker, Role}};
+pub use crate::{
+	service::Service,
+	worker::{NetworkProvider, Role, Worker},
+};
 
 use std::{sync::Arc, time::Duration};
 
-use futures::channel::{mpsc, oneshot};
-use futures::Stream;
+use futures::{
+	channel::{mpsc, oneshot},
+	Stream,
+};
 
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{DhtEvent, Multiaddr, PeerId};
+use sp_api::ProvideRuntimeApi;
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId};
 use sp_runtime::traits::Block as BlockT;
-use sp_api::ProvideRuntimeApi;
 
 mod error;
 mod interval;
@@ -82,8 +87,8 @@ impl Default for WorkerConfig {
 			max_publish_interval: Duration::from_secs(1 * 60 * 60),
 			keystore_refresh_interval: Duration::from_secs(60),
 			// External addresses of remote authorities can change at any given point in time. The
-			// interval on which to trigger new queries for the current and next authorities is a trade
-			// off between efficiency and performance.
+			// interval on which to trigger new queries for the current and next authorities is a
+			// trade off between efficiency and performance.
 			//
 			// Querying 700 [`AuthorityId`]s takes ~8m on the Kusama DHT (16th Nov 2020) when
 			// comparing `authority_discovery_authority_addresses_requested_total` and
@@ -141,15 +146,8 @@ where
 {
 	let (to_worker, from_service) = mpsc::channel(0);
 
-	let worker = Worker::new(
-		from_service,
-		client,
-		network,
-		dht_event_rx,
-		role,
-		prometheus_registry,
-		config,
-	);
+	let worker =
+		Worker::new(from_service, client, network, dht_event_rx, role, prometheus_registry, config);
 	let service = Service::new(to_worker);
 
 	(worker, service)
@@ -160,5 +158,5 @@ pub(crate) enum ServicetoWorkerMsg {
 	/// See [`Service::get_addresses_by_authority_id`].
 	GetAddressesByAuthorityId(AuthorityId, oneshot::Sender<Option<Vec<Multiaddr>>>),
 	/// See [`Service::get_authority_id_by_peer_id`].
-	GetAuthorityIdByPeerId(PeerId, oneshot::Sender<Option<AuthorityId>>)
+	GetAuthorityIdByPeerId(PeerId, oneshot::Sender<Option<AuthorityId>>),
 }

@@ -17,10 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use nix::sys::signal::{kill, Signal::SIGINT};
-use nix::unistd::Pid;
-use std::convert::TryInto;
-use std::process;
+use nix::{
+	sys::signal::{kill, Signal::SIGINT},
+	unistd::Pid,
+};
+use std::{convert::TryInto, process};
 
 pub mod common;
 pub mod websocket_server;
@@ -45,27 +46,22 @@ async fn telemetry_works() {
 				Event::ConnectionOpen { address } => {
 					println!("New connection from {:?}", address);
 					server.accept();
-				}
+				},
 
 				// Received a message from a connection.
 				Event::BinaryFrame { message, .. } => {
 					let json: serde_json::Value = serde_json::from_slice(&message).unwrap();
-					let object = json
-						.as_object()
-						.unwrap()
-						.get("payload")
-						.unwrap()
-						.as_object()
-						.unwrap();
+					let object =
+						json.as_object().unwrap().get("payload").unwrap().as_object().unwrap();
 					if matches!(object.get("best"), Some(serde_json::Value::String(_))) {
-						break;
+						break
 					}
-				}
+				},
 
 				Event::TextFrame { .. } => panic!("Got a TextFrame over the socket, this is a bug"),
 
 				// Connection has been closed.
-				Event::ConnectionError { .. } => {}
+				Event::ConnectionError { .. } => {},
 			}
 		}
 	});
@@ -83,16 +79,11 @@ async fn telemetry_works() {
 
 	server_task.await;
 
-	assert!(
-		substrate.try_wait().unwrap().is_none(),
-		"the process should still be running"
-	);
+	assert!(substrate.try_wait().unwrap().is_none(), "the process should still be running");
 
 	// Stop the process
 	kill(Pid::from_raw(substrate.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(common::wait_for(&mut substrate, 40)
-		.map(|x| x.success())
-		.unwrap_or_default());
+	assert!(common::wait_for(&mut substrate, 40).map(|x| x.success()).unwrap_or_default());
 
 	let output = substrate.wait_with_output().unwrap();
 

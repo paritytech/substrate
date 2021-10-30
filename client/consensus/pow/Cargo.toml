@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "PoW consensus algorithm for substrate"
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -23,10 +23,11 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-bu
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-consensus-pow = { version = "0.10.0-dev", path = "../../../primitives/consensus/pow" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 log = "0.4.8"
-futures = { version = "0.3.1", features = ["compat"] }
+futures = "0.3.16"
 futures-timer = "3.0.1"
 parking_lot = "0.11.1"
 derive_more = "0.99.2"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
-async-trait = "0.1.42"
+async-trait = "0.1.50"

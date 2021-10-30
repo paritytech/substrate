@@ -63,20 +63,18 @@ benchmarks! {
 	} verify {
 		assert!(sp_consensus_babe::check_equivocation_proof::<Header>(equivocation_proof2));
 	}
+
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(3),
+		crate::mock::Test,
+	)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext(3).execute_with(|| {
-			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-		})
-	}
 
 	#[test]
 	fn test_generate_equivocation_report_blob() {
@@ -95,10 +93,7 @@ mod tests {
 			);
 
 			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!(
-				"equivocation_proof.encode(): {:?}",
-				equivocation_proof.encode()
-			);
+			println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 		});
 	}
 }

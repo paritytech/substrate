@@ -17,10 +17,9 @@
 
 //! Tests for transction-storage pallet.
 
-use super::*;
+use super::{Pallet as TransactionStorage, *};
 use crate::mock::*;
-use super::Pallet as TransactionStorage;
-use frame_support::{assert_ok, assert_noop};
+use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
 use sp_transaction_storage_proof::registration::build_proof;
 
@@ -41,9 +40,12 @@ fn discards_data() {
 		));
 		let proof_provider = || {
 			let block_num = <frame_system::Pallet<Test>>::block_number();
-			if block_num == 11  {
+			if block_num == 11 {
 				let parent_hash = <frame_system::Pallet<Test>>::parent_hash();
-				Some(build_proof(parent_hash.as_ref(), vec![vec![0u8; 2000], vec![0u8; 2000]]).unwrap())
+				Some(
+					build_proof(parent_hash.as_ref(), vec![vec![0u8; 2000], vec![0u8; 2000]])
+						.unwrap(),
+				)
 			} else {
 				None
 			}
@@ -64,15 +66,16 @@ fn burns_fee() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1, || None);
 		let caller = 1;
-		assert_noop!(TransactionStorage::<Test>::store(
+		assert_noop!(
+			TransactionStorage::<Test>::store(
 				RawOrigin::Signed(5).into(),
 				vec![0u8; 2000 as usize]
 			),
 			Error::<Test>::InsufficientFunds,
 		);
 		assert_ok!(TransactionStorage::<Test>::store(
-				RawOrigin::Signed(caller.clone()).into(),
-				vec![0u8; 2000 as usize]
+			RawOrigin::Signed(caller.clone()).into(),
+			vec![0u8; 2000 as usize]
 		));
 		assert_eq!(Balances::free_balance(1), 1_000_000_000 - 2000 * 2 - 200);
 	});
@@ -89,34 +92,23 @@ fn checks_proof() {
 		));
 		run_to_block(10, || None);
 		let parent_hash = <frame_system::Pallet<Test>>::parent_hash();
-		let proof = build_proof(
-			parent_hash.as_ref(),
-			vec![vec![0u8; MAX_DATA_SIZE as usize]]
-		).unwrap();
-		assert_noop!(TransactionStorage::<Test>::check_proof(
-				Origin::none(),
-				proof,
-			),
+		let proof =
+			build_proof(parent_hash.as_ref(), vec![vec![0u8; MAX_DATA_SIZE as usize]]).unwrap();
+		assert_noop!(
+			TransactionStorage::<Test>::check_proof(Origin::none(), proof,),
 			Error::<Test>::UnexpectedProof,
 		);
 		run_to_block(11, || None);
 		let parent_hash = <frame_system::Pallet<Test>>::parent_hash();
 
-		let invalid_proof = build_proof(
-			parent_hash.as_ref(),
-			vec![vec![0u8; 1000]]
-		).unwrap();
-		assert_noop!(TransactionStorage::<Test>::check_proof(
-				Origin::none(),
-				invalid_proof,
-		),
-		Error::<Test>::InvalidProof,
+		let invalid_proof = build_proof(parent_hash.as_ref(), vec![vec![0u8; 1000]]).unwrap();
+		assert_noop!(
+			TransactionStorage::<Test>::check_proof(Origin::none(), invalid_proof,),
+			Error::<Test>::InvalidProof,
 		);
 
-		let proof = build_proof(
-			parent_hash.as_ref(),
-			vec![vec![0u8; MAX_DATA_SIZE as usize]]
-		).unwrap();
+		let proof =
+			build_proof(parent_hash.as_ref(), vec![vec![0u8; MAX_DATA_SIZE as usize]]).unwrap();
 		assert_ok!(TransactionStorage::<Test>::check_proof(Origin::none(), proof));
 	});
 }
@@ -127,20 +119,20 @@ fn renews_data() {
 		run_to_block(1, || None);
 		let caller = 1;
 		assert_ok!(TransactionStorage::<Test>::store(
-				RawOrigin::Signed(caller.clone()).into(),
-				vec![0u8; 2000]
+			RawOrigin::Signed(caller.clone()).into(),
+			vec![0u8; 2000]
 		));
 		let info = BlockTransactions::<Test>::get().last().unwrap().clone();
 		run_to_block(6, || None);
 		assert_ok!(TransactionStorage::<Test>::renew(
-				RawOrigin::Signed(caller.clone()).into(),
-				1, // block
-				0, // transaction
+			RawOrigin::Signed(caller.clone()).into(),
+			1, // block
+			0, // transaction
 		));
 		assert_eq!(Balances::free_balance(1), 1_000_000_000 - 4000 * 2 - 200 * 2);
 		let proof_provider = || {
 			let block_num = <frame_system::Pallet<Test>>::block_number();
-			if block_num == 11 || block_num == 16  {
+			if block_num == 11 || block_num == 16 {
 				let parent_hash = <frame_system::Pallet<Test>>::parent_hash();
 				Some(build_proof(parent_hash.as_ref(), vec![vec![0u8; 2000]]).unwrap())
 			} else {
@@ -154,4 +146,3 @@ fn renews_data() {
 		assert!(Transactions::<Test>::get(6).is_none());
 	});
 }
-

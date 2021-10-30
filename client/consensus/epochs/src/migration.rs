@@ -18,11 +18,11 @@
 
 //! Migration types for epoch changes.
 
-use std::collections::BTreeMap;
-use codec::{Encode, Decode};
+use crate::{Epoch, EpochChanges, PersistedEpoch, PersistedEpochHeader};
+use codec::{Decode, Encode};
 use fork_tree::ForkTree;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use crate::{Epoch, EpochChanges, PersistedEpoch, PersistedEpochHeader};
+use std::collections::BTreeMap;
 
 /// Legacy definition of epoch changes.
 #[derive(Clone, Encode, Decode)]
@@ -30,10 +30,22 @@ pub struct EpochChangesV0<Hash, Number, E: Epoch> {
 	inner: ForkTree<Hash, Number, PersistedEpoch<E>>,
 }
 
-/// Type alias for legacy definition of epoch changes.
-pub type EpochChangesForV0<Block, Epoch> = EpochChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+/// Legacy definition of epoch changes.
+#[derive(Clone, Encode, Decode)]
+pub struct EpochChangesV1<Hash, Number, E: Epoch> {
+	inner: ForkTree<Hash, Number, PersistedEpochHeader<E>>,
+	epochs: BTreeMap<(Hash, Number), PersistedEpoch<E>>,
+}
 
-impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E> where
+/// Type alias for v0 definition of epoch changes.
+pub type EpochChangesV0For<Block, Epoch> =
+	EpochChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+/// Type alias for v1 and v2 definition of epoch changes.
+pub type EpochChangesV1For<Block, Epoch> =
+	EpochChangesV1<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+
+impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E>
+where
 	Hash: PartialEq + Ord + Copy,
 	Number: Ord + Copy,
 {
@@ -52,6 +64,17 @@ impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E> where
 			header
 		});
 
-		EpochChanges { inner, epochs }
+		EpochChanges { inner, epochs, gap: None }
+	}
+}
+
+impl<Hash, Number, E: Epoch> EpochChangesV1<Hash, Number, E>
+where
+	Hash: PartialEq + Ord + Copy,
+	Number: Ord + Copy,
+{
+	/// Migrate the type into current epoch changes definition.
+	pub fn migrate(self) -> EpochChanges<Hash, Number, E> {
+		EpochChanges { inner: self.inner, epochs: self.epochs, gap: None }
 	}
 }

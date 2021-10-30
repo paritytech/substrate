@@ -43,8 +43,8 @@
 //!   account that issues the asset. This is a privileged operation.
 //! * **Asset transfer**: The reduction of the balance of an asset of one account with the
 //!   corresponding increase in the balance of another.
-//! * **Asset destruction**: The process of reduce the balance of an asset of one account. This is
-//!   a privileged operation.
+//! * **Asset destruction**: The process of reduce the balance of an asset of one account. This is a
+//!   privileged operation.
 //! * **Fungible asset**: An asset whose units are interchangeable.
 //! * **Issuer**: An account ID uniquely privileged to be able to mint a particular class of assets.
 //! * **Freezer**: An account ID uniquely privileged to be able to freeze an account from
@@ -54,8 +54,8 @@
 //! * **Non-fungible asset**: An asset for which each unit has unique characteristics.
 //! * **Owner**: An account ID uniquely privileged to be able to destroy a particular asset class,
 //!   or to set the Issuer, Freezer or Admin of that asset class.
-//! * **Approval**: The act of allowing an account the permission to transfer some
-//!   balance of asset from the approving account into some third-party destination account.
+//! * **Approval**: The act of allowing an account the permission to transfer some balance of asset
+//!   from the approving account into some third-party destination account.
 //! * **Sufficiency**: The idea of a minimum-balance of an asset being sufficient to allow the
 //!   account's existence on the system without requiring any other existential-deposit.
 //!
@@ -104,7 +104,8 @@
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
 //!
-//! Please refer to the [`Call`] enum and its associated variants for documentation on each function.
+//! Please refer to the [`Call`] enum and its associated variants for documentation on each
+//! function.
 //!
 //! ### Public Functions
 //! <!-- Original author of descriptions: @gavofyork -->
@@ -122,47 +123,54 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod weights;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
 mod tests;
+pub mod weights;
 
 mod extra_mutator;
 pub use extra_mutator::*;
-mod impl_stored_map;
-mod impl_fungibles;
 mod functions;
+mod impl_fungibles;
+mod impl_stored_map;
 mod types;
 pub use types::*;
 
-use sp_std::{prelude::*, borrow::Borrow, convert::TryInto};
-use sp_runtime::{
-	TokenError, ArithmeticError,
-	traits::{
-		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
-		StoredMapError,
-	}
-};
 use codec::HasCompact;
-use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
-use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+	pallet_prelude::DispatchResultWithPostInfo,
+	traits::{
+		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
+		BalanceStatus::Reserved,
+		Currency, ReservableCurrency, StoredMap,
+	},
+};
 use frame_system::Config as SystemConfig;
+use sp_runtime::{
+	traits::{
+		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
+	},
+	ArithmeticError, TokenError,
+};
+use sp_std::{borrow::Borrow, convert::TryInto, prelude::*};
 
-pub use weights::WeightInfo;
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
+
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{
-		dispatch::DispatchResult,
-		pallet_prelude::*,
-	};
-	use frame_system::pallet_prelude::*;
 	use super::*;
+	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
+	use frame_system::pallet_prelude::*;
+	use scale_info::TypeInfo;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -176,10 +184,24 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaxEncodedLen;
+		type Balance: Member
+			+ Parameter
+			+ AtLeast32BitUnsigned
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
+		type AssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ HasCompact
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -189,19 +211,24 @@ pub mod pallet {
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The basic amount of funds that must be reserved for an asset.
+		#[pallet::constant]
 		type AssetDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The basic amount of funds that must be reserved when adding metadata to your asset.
+		#[pallet::constant]
 		type MetadataDepositBase: Get<DepositBalanceOf<Self, I>>;
 
 		/// The additional funds that must be reserved for the number of bytes you store in your
 		/// metadata.
+		#[pallet::constant]
 		type MetadataDepositPerByte: Get<DepositBalanceOf<Self, I>>;
 
 		/// The amount of funds that must be reserved when creating a new approval.
+		#[pallet::constant]
 		type ApprovalDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The maximum length of a name or symbol stored on-chain.
+		#[pallet::constant]
 		type StringLimit: Get<u32>;
 
 		/// A hook to allow a per-asset, per-account minimum balance to be enforced. This must be
@@ -267,13 +294,91 @@ pub mod pallet {
 		ConstU32<300_000>,
 	>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		/// Genesis assets: id, owner, is_sufficient, min_balance
+		pub assets: Vec<(T::AssetId, T::AccountId, bool, T::Balance)>,
+		/// Genesis metadata: id, name, symbol, decimals
+		pub metadata: Vec<(T::AssetId, Vec<u8>, Vec<u8>, u8)>,
+		/// Genesis accounts: id, account_id, balance
+		pub accounts: Vec<(T::AssetId, T::AccountId, T::Balance)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self {
+				assets: Default::default(),
+				metadata: Default::default(),
+				accounts: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			for (id, owner, is_sufficient, min_balance) in &self.assets {
+				assert!(!Asset::<T, I>::contains_key(id), "Asset id already in use");
+				assert!(!min_balance.is_zero(), "Min balance should not be zero");
+				Asset::<T, I>::insert(
+					id,
+					AssetDetails {
+						owner: owner.clone(),
+						issuer: owner.clone(),
+						admin: owner.clone(),
+						freezer: owner.clone(),
+						supply: Zero::zero(),
+						deposit: Zero::zero(),
+						min_balance: *min_balance,
+						is_sufficient: *is_sufficient,
+						accounts: 0,
+						sufficients: 0,
+						approvals: 0,
+						is_frozen: false,
+					},
+				);
+			}
+
+			for (id, name, symbol, decimals) in &self.metadata {
+				assert!(Asset::<T, I>::contains_key(id), "Asset does not exist");
+
+				let bounded_name: BoundedVec<u8, T::StringLimit> =
+					name.clone().try_into().expect("asset name is too long");
+				let bounded_symbol: BoundedVec<u8, T::StringLimit> =
+					symbol.clone().try_into().expect("asset symbol is too long");
+
+				let metadata = AssetMetadata {
+					deposit: Zero::zero(),
+					name: bounded_name,
+					symbol: bounded_symbol,
+					decimals: *decimals,
+					is_frozen: false,
+				};
+				Metadata::<T, I>::insert(id, metadata);
+			}
+
+			for (id, account_id, amount) in &self.accounts {
+				let result = <Pallet<T, I>>::increase_balance(
+					*id,
+					account_id,
+					*amount,
+					|details| -> DispatchResult {
+						debug_assert!(
+							T::Balance::max_value() - details.supply >= *amount,
+							"checked in prep; qed"
+						);
+						details.supply = details.supply.saturating_add(*amount);
+						Ok(())
+					},
+				);
+				assert!(result.is_ok());
+			}
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(
-		T::AccountId = "AccountId",
-		T::Balance = "Balance",
-		T::AssetId = "AssetId"
-	)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Some asset class was created. \[asset_id, creator, owner\]
 		Created(T::AssetId, T::AccountId, T::AccountId),
@@ -336,7 +441,8 @@ pub mod pallet {
 		BadWitness,
 		/// Minimum balance should be non-zero.
 		MinBalanceZero,
-		/// No provider reference exists to allow a non-zero balance of a non-self-sufficient asset.
+		/// No provider reference exists to allow a non-zero balance of a non-self-sufficient
+		/// asset.
 		NoProvider,
 		/// Invalid metadata given.
 		BadMetadata,
@@ -415,8 +521,8 @@ pub mod pallet {
 		/// - `id`: The identifier of the new asset. This must not be currently in use to identify
 		/// an existing asset.
 		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
-		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
-		/// and `set_team`.
+		/// over this asset, but may later change and configure the permissions using
+		/// `transfer_ownership` and `set_team`.
 		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
 		///
@@ -433,29 +539,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
-
-			ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
-			ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
-
-			Asset::<T, I>::insert(
-				id,
-				AssetDetails {
-					owner: owner.clone(),
-					issuer: owner.clone(),
-					admin: owner.clone(),
-					freezer: owner.clone(),
-					supply: Zero::zero(),
-					deposit: Zero::zero(),
-					min_balance,
-					is_sufficient,
-					accounts: 0,
-					sufficients: 0,
-					approvals: 0,
-					is_frozen: false,
-				},
-			);
-			Self::deposit_event(Event::ForceCreated(id, owner));
-			Ok(())
+			Self::do_force_create(id, owner, is_sufficient, min_balance)
 		}
 
 		/// Destroy a class of fungible assets.
@@ -490,40 +574,13 @@ pub mod pallet {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
-			Asset::<T, I>::try_mutate_exists(id, |maybe_details| {
-				let mut details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-				if let Some(check_owner) = maybe_check_owner {
-					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-				}
-				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
-				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
-				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
-
-				for (who, v) in Account::<T, I>::drain_prefix(id) {
-					Self::dead_account(id, &who, &mut details, v.sufficient);
-				}
-				debug_assert_eq!(details.accounts, 0);
-				debug_assert_eq!(details.sufficients, 0);
-
-				let metadata = Metadata::<T, I>::take(&id);
-				T::Currency::unreserve(
-					&details.owner,
-					details.deposit.saturating_add(metadata.deposit),
-				);
-
-				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
-					T::Currency::unreserve(&owner, approval.deposit);
-				}
-				Self::deposit_event(Event::Destroyed(id));
-
-				Ok(
-					Some(T::WeightInfo::destroy(
-						details.accounts.saturating_sub(details.sufficients),
-						details.sufficients,
-						details.approvals,
-					)).into()
-				)
-			})
+			let details = Self::do_destroy(id, witness, maybe_check_owner)?;
+			Ok(Some(T::WeightInfo::destroy(
+				details.accounts.saturating_sub(details.sufficients),
+				details.sufficients,
+				details.approvals,
+			))
+			.into())
 		}
 
 		/// Mint assets of a particular class.
@@ -543,7 +600,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			beneficiary: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::Balance
+			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -571,7 +628,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::Balance
+			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -604,16 +661,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::Balance
+			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			let f = TransferFlags {
-				keep_alive: false,
-				best_effort: false,
-				burn_dust: false
-			};
+			let f = TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
 			Self::do_transfer(id, &origin, &dest, amount, None, f).map(|_| ())
 		}
 
@@ -640,16 +693,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::Balance
+			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			let f = TransferFlags {
-				keep_alive: true,
-				best_effort: false,
-				burn_dust: false
-			};
+			let f = TransferFlags { keep_alive: true, best_effort: false, burn_dust: false };
 			Self::do_transfer(id, &source, &dest, amount, None, f).map(|_| ())
 		}
 
@@ -684,11 +733,7 @@ pub mod pallet {
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			let f = TransferFlags {
-				keep_alive: false,
-				best_effort: false,
-				burn_dust: false
-			};
+			let f = TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
 			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
 		}
 
@@ -706,17 +751,14 @@ pub mod pallet {
 		pub fn freeze(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source
+			who: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(&origin == &d.freezer, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
-			ensure!(
-				Account::<T, I>::contains_key(id, &who),
-				Error::<T, I>::BalanceZero
-			);
+			ensure!(Account::<T, I>::contains_key(id, &who), Error::<T, I>::BalanceZero);
 
 			Account::<T, I>::mutate(id, &who, |a| a.is_frozen = true);
 
@@ -737,19 +779,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact]
-			id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source
+			#[pallet::compact] id: T::AssetId,
+			who: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(&origin == &details.admin, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
-			ensure!(
-				Account::<T, I>::contains_key(id, &who),
-				Error::<T, I>::BalanceZero
-			);
+			ensure!(Account::<T, I>::contains_key(id, &who), Error::<T, I>::BalanceZero);
 
 			Account::<T, I>::mutate(id, &who, |a| a.is_frozen = false);
 
@@ -769,7 +807,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::freeze_asset())]
 		pub fn freeze_asset(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId
+			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -796,7 +834,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw_asset())]
 		pub fn thaw_asset(
 			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId
+			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -834,7 +872,7 @@ pub mod pallet {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
-					return Ok(());
+					return Ok(())
 				}
 
 				let metadata_deposit = Metadata::<T, I>::get(id).deposit;
@@ -913,47 +951,7 @@ pub mod pallet {
 			decimals: u8,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-
-			let bounded_name: BoundedVec<u8, T::StringLimit> = name
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
-			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
-
-			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(&origin == &d.owner, Error::<T, I>::NoPermission);
-
-			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
-				ensure!(
-					metadata.as_ref().map_or(true, |m| !m.is_frozen),
-					Error::<T, I>::NoPermission
-				);
-
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				let new_deposit = T::MetadataDepositPerByte::get()
-					.saturating_mul(((name.len() + symbol.len()) as u32).into())
-					.saturating_add(T::MetadataDepositBase::get());
-
-				if new_deposit > old_deposit {
-					T::Currency::reserve(&origin, new_deposit - old_deposit)?;
-				} else {
-					T::Currency::unreserve(&origin, old_deposit - new_deposit);
-				}
-
-				*metadata = Some(AssetMetadata {
-					deposit: new_deposit,
-					name: bounded_name,
-					symbol: bounded_symbol,
-					decimals,
-					is_frozen: false,
-				});
-
-				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, false));
-				Ok(())
-			})
+			Self::do_set_metadata(id, &origin, name, symbol, decimals)
 		}
 
 		/// Clear the metadata for an asset.
@@ -1010,15 +1008,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			let bounded_name: BoundedVec<u8, T::StringLimit> = name
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
+			let bounded_name: BoundedVec<u8, T::StringLimit> =
+				name.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
 
-			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
+			let bounded_symbol: BoundedVec<u8, T::StringLimit> =
+				symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
 
 			ensure!(Asset::<T, I>::contains_key(id), Error::<T, I>::Unknown);
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
@@ -1144,32 +1138,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
-
-			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(!d.is_frozen, Error::<T, I>::Frozen);
-			Approvals::<T, I>::try_mutate((id, &owner, &delegate), |maybe_approved| -> DispatchResult {
-				let mut approved = match maybe_approved.take() {
-					// an approval already exists and is being updated
-					Some(a) => a,
-					// a new approval is created
-					None => {
-						d.approvals.saturating_inc();
-						Default::default()
-					}
-				};
-				let deposit_required = T::ApprovalDeposit::get();
-				if approved.deposit < deposit_required {
-					T::Currency::reserve(&owner, deposit_required - approved.deposit)?;
-					approved.deposit = deposit_required;
-				}
-				approved.amount = approved.amount.saturating_add(amount);
-				*maybe_approved = Some(approved);
-				Ok(())
-			})?;
-			Asset::<T, I>::insert(id, d);
-			Self::deposit_event(Event::ApprovedTransfer(id, owner, delegate, amount));
-
-			Ok(())
+			Self::do_approve_transfer(id, &owner, &delegate, amount)
 		}
 
 		/// Cancel all of some asset approved for delegated transfer by a third-party account.
@@ -1194,7 +1163,8 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			let approval = Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+			let approval =
+				Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
 
 			d.approvals.saturating_dec();
@@ -1236,7 +1206,8 @@ pub mod pallet {
 			let owner = T::Lookup::lookup(owner)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let approval = Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+			let approval =
+				Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
 			d.approvals.saturating_dec();
 			Asset::<T, I>::insert(id, d);
@@ -1274,35 +1245,7 @@ pub mod pallet {
 			let delegate = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
-
-			Approvals::<T, I>::try_mutate_exists((id, &owner, delegate), |maybe_approved| -> DispatchResult {
-				let mut approved = maybe_approved.take().ok_or(Error::<T, I>::Unapproved)?;
-				let remaining = approved
-					.amount
-					.checked_sub(&amount)
-					.ok_or(Error::<T, I>::Unapproved)?;
-
-				let f = TransferFlags {
-					keep_alive: false,
-					best_effort: false,
-					burn_dust: false
-				};
-				Self::do_transfer(id, &owner, &destination, amount, None, f)?;
-
-				if remaining.is_zero() {
-					T::Currency::unreserve(&owner, approved.deposit);
-					Asset::<T, I>::mutate(id, |maybe_details| {
-						if let Some(details) = maybe_details {
-							details.approvals.saturating_dec();
-						}
-					});
-				} else {
-					approved.amount = remaining;
-					*maybe_approved = Some(approved);
-				}
-				Ok(())
-			})?;
-			Ok(())
+			Self::do_transfer_approved(id, &owner, &delegate, &destination, amount)
 		}
 	}
 }

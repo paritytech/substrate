@@ -17,14 +17,15 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{
-	RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner, Enum},
-	util::{unpack_ptr_and_len, pack_ptr_and_len},
-};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
 use crate::wasm::*;
+use crate::{
+	pass_by::{Codec, Enum, Inner, PassBy, PassByInner},
+	util::{pack_ptr_and_len, unpack_ptr_and_len},
+	Pointer, RIType,
+};
 
 #[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
 use static_assertions::assert_eq_size;
@@ -32,7 +33,7 @@ use static_assertions::assert_eq_size;
 #[cfg(feature = "std")]
 use sp_wasm_interface::{FunctionContext, Result};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 
 use sp_std::{any::TypeId, mem, vec::Vec};
 
@@ -195,7 +196,7 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 		let len = len as usize;
 
 		if len == 0 {
-			return Vec::new();
+			return Vec::new()
 		}
 
 		let data = unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) };
@@ -230,7 +231,8 @@ impl<T: 'static + Decode> FromFFIValue for [T] {
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
 			Ok(unsafe { mem::transmute(vec) })
 		} else {
-			Ok(Vec::<T>::decode(&mut &vec[..]).expect("Wasm to host values are encoded correctly; qed"))
+			Ok(Vec::<T>::decode(&mut &vec[..])
+				.expect("Wasm to host values are encoded correctly; qed"))
 		}
 	}
 }
@@ -247,13 +249,11 @@ impl IntoPreallocatedFFIValue for [u8] {
 		let (ptr, len) = unpack_ptr_and_len(allocated);
 
 		if (len as usize) < self_instance.len() {
-			Err(
-				format!(
-					"Preallocated buffer is not big enough (given {} vs needed {})!",
-					len,
-					self_instance.len()
-				)
-			)
+			Err(format!(
+				"Preallocated buffer is not big enough (given {} vs needed {})!",
+				len,
+				self_instance.len()
+			))
 		} else {
 			context.write_memory(Pointer::new(ptr), &self_instance)
 		}
@@ -367,7 +367,10 @@ impl<T: codec::Codec> PassBy for Option<T> {
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 #[tuple_types_no_default_trait_bound]
-impl PassBy for Tuple where Self: codec::Codec {
+impl PassBy for Tuple
+where
+	Self: codec::Codec,
+{
 	type PassBy = Codec<Self>;
 }
 
@@ -511,7 +514,8 @@ macro_rules! for_u128_i128 {
 			type SelfInstance = $type;
 
 			fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<$type> {
-				let data = context.read_memory(Pointer::new(arg), mem::size_of::<$type>() as u32)?;
+				let data =
+					context.read_memory(Pointer::new(arg), mem::size_of::<$type>() as u32)?;
 				let mut res = [0u8; mem::size_of::<$type>()];
 				res.copy_from_slice(&data);
 				Ok(<$type>::from_le_bytes(res))
@@ -526,7 +530,7 @@ macro_rules! for_u128_i128 {
 				Ok(addr.into())
 			}
 		}
-	}
+	};
 }
 
 for_u128_i128!(u128);

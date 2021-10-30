@@ -22,11 +22,8 @@ use syn::spanned::Spanned;
 /// * generate Store trait with all storages,
 /// * implement Store trait for Pallet.
 pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
-	let (trait_vis, trait_store) = if let Some(store) = &def.pallet_struct.store {
-		store
-	} else {
-		return Default::default()
-	};
+	let (trait_vis, trait_store) =
+		if let Some(store) = &def.pallet_struct.store { store } else { return Default::default() };
 
 	let type_impl_gen = &def.type_impl_generics(trait_store.span());
 	let type_use_gen = &def.type_use_generics(trait_store.span());
@@ -37,7 +34,8 @@ pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
 	let completed_where_clause = super::merge_where_clauses(&where_clauses);
 
 	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
-	let storage_cfg_attrs = &def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
+	let storage_cfg_attrs =
+		&def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
 
 	quote::quote_spanned!(trait_store.span() =>
 		#trait_vis trait #trait_store {

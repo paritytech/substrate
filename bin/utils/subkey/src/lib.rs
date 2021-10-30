@@ -16,17 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
 use sc_cli::{
-	Error, VanityCmd, SignCmd, VerifyCmd, GenerateNodeKeyCmd, GenerateCmd, InspectKeyCmd,
-	InspectNodeKeyCmd
+	Error, GenerateCmd, GenerateNodeKeyCmd, InspectKeyCmd, InspectNodeKeyCmd, SignCmd, VanityCmd,
+	VerifyCmd,
 };
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
 	name = "subkey",
 	author = "Parity Team <admin@parity.io>",
-	about = "Utility for generating and restoring with Substrate keys",
+	about = "Utility for generating and restoring with Substrate keys"
 )]
 pub enum Subkey {
 	/// Generate a random node libp2p key, save it to file or print it to stdout

@@ -18,11 +18,13 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
-	ValidateUnsigned,
+use crate::{
+	traits::{
+		self, DispatchInfoOf, Dispatchable, MaybeDisplay, Member, PostDispatchInfoOf,
+		SignedExtension, ValidateUnsigned,
+	},
+	transaction_validity::{TransactionSource, TransactionValidity},
 };
-use crate::transaction_validity::{TransactionValidity, TransactionSource};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -37,12 +39,11 @@ pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	pub function: Call,
 }
 
-impl<AccountId, Call, Extra, Origin> traits::Applyable for
-	CheckedExtrinsic<AccountId, Call, Extra>
+impl<AccountId, Call, Extra, Origin> traits::Applyable for CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
-	Call: Member + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=AccountId, Call=Call>,
+	Call: Member + Dispatchable<Origin = Origin>,
+	Extra: SignedExtension<AccountId = AccountId, Call = Call>,
 	Origin: From<Option<AccountId>>,
 {
 	type Call = Call;
@@ -64,7 +65,7 @@ where
 		}
 	}
 
-	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,

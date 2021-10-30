@@ -4,7 +4,7 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate runtime api primitives"
 readme = "README.md"
@@ -29,7 +29,7 @@ log = { version = "0.4.14", default-features = false }
 sp-test-primitives = { version = "2.0.0", path = "../test-primitives" }
 
 [features]
-default = [ "std" ]
+default = ["std"]
 std = [
 	"codec/std",
 	"sp-core/std",
@@ -48,6 +48,4 @@ std = [
 # building a runtime for registering it on chain.
 #
 # This sets the max logging level to `off` for `log`.
-disable-logging = [
-	"log/max_level_off",
-]
+disable-logging = ["log/max_level_off"]

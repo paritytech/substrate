@@ -19,9 +19,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode, Codec};
-use sp_std::vec::Vec;
+use codec::{Codec, Decode, Encode};
 use sp_runtime::ConsensusEngineId;
+use sp_std::vec::Vec;
 
 pub mod digests;
 pub mod inherents;
@@ -46,7 +46,7 @@ pub mod sr25519 {
 
 pub mod ed25519 {
 	mod app_ed25519 {
-		use sp_application_crypto::{app_crypto, key_types::AURA, ed25519};
+		use sp_application_crypto::{app_crypto, ed25519, key_types::AURA};
 		app_crypto!(ed25519, AURA);
 	}
 

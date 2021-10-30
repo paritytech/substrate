@@ -16,15 +16,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::NodeKeyParams;
-use crate::params::SharedParams;
-use crate::CliConfiguration;
+use crate::{
+	error,
+	params::{NodeKeyParams, SharedParams},
+	CliConfiguration,
+};
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, ChainSpec};
-use structopt::StructOpt;
+use sc_service::{
+	config::{MultiaddrWithPeerId, NetworkConfiguration},
+	ChainSpec,
+};
 use std::io::Write;
+use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]

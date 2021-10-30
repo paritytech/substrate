@@ -17,7 +17,7 @@
 
 //! RPC a lenient list or value type.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// RPC list or value wrapper.
 ///

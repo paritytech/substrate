@@ -1,0 +1,20 @@
+[package]
+name = "sc-utils"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "I/O for Substrate runtimes"
+readme = "README.md"
+
+[dependencies]
+futures = "0.3.9"
+lazy_static = "1.4.0"
+prometheus = { version = "0.12.0", default-features = false }
+futures-timer = "3.0.2"
+
+[features]
+default = ["metered"]
+metered = []

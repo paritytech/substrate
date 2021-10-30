@@ -23,9 +23,9 @@
 //! and without the performance penalty of full wasm emulation inside wasm.
 //!
 //! This is achieved by using bindings to the wasm VM, which are published by the host API.
-//! This API is thin and consists of only a handful functions. It contains functions for instantiating
-//! modules and executing them, but doesn't contain functions for inspecting the module
-//! structure. The user of this library is supposed to read the wasm module.
+//! This API is thin and consists of only a handful functions. It contains functions for
+//! instantiating modules and executing them, but doesn't contain functions for inspecting the
+//! module structure. The user of this library is supposed to read the wasm module.
 //!
 //! When this crate is used in the `std` environment all these functions are implemented by directly
 //! calling the wasm VM.
@@ -38,17 +38,22 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
+
 use sp_std::prelude::*;
 
 pub use sp_core::sandbox::HostError;
-pub use sp_wasm_interface::{Value, ReturnValue};
+pub use sp_wasm_interface::{ReturnValue, Value};
+
+/// The target used for logging.
+const TARGET: &str = "runtime::sandbox";
 
 mod imp {
-	#[cfg(feature = "std")]
-	include!("../with_std.rs");
+	#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
+	include!("../host_executor.rs");
 
-	#[cfg(not(feature = "std"))]
-	include!("../without_std.rs");
+	#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
+	include!("../embedded_executor.rs");
 }
 
 /// Error that can occur while using this crate.
@@ -100,9 +105,7 @@ impl Memory {
 	///
 	/// Allocated memory is always zeroed.
 	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
-		Ok(Memory {
-			inner: imp::Memory::new(initial, maximum)?,
-		})
+		Ok(Memory { inner: imp::Memory::new(initial, maximum)? })
 	}
 
 	/// Read a memory area at the address `ptr` with the size of the provided slice `buf`.
@@ -131,9 +134,7 @@ pub struct EnvironmentDefinitionBuilder<T> {
 impl<T> EnvironmentDefinitionBuilder<T> {
 	/// Construct a new `EnvironmentDefinitionBuilder`.
 	pub fn new() -> EnvironmentDefinitionBuilder<T> {
-		EnvironmentDefinitionBuilder {
-			inner: imp::EnvironmentDefinitionBuilder::new(),
-		}
+		EnvironmentDefinitionBuilder { inner: imp::EnvironmentDefinitionBuilder::new() }
 	}
 
 	/// Register a host function in this environment definition.
@@ -172,16 +173,16 @@ impl<T> Instance<T> {
 	/// run the `start` function (if it is present in the module) with the given `state`.
 	///
 	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
-	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
-	/// be returned.
+	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)`
+	/// will be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T)
-		-> Result<Instance<T>, Error>
-	{
-		Ok(Instance {
-			inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
-		})
+	pub fn new(
+		code: &[u8],
+		env_def_builder: &EnvironmentDefinitionBuilder<T>,
+		state: &mut T,
+	) -> Result<Instance<T>, Error> {
+		Ok(Instance { inner: imp::Instance::new(code, &env_def_builder.inner, state)? })
 	}
 
 	/// Invoke an exported function with the given name.
@@ -192,8 +193,8 @@ impl<T> Instance<T> {
 	///
 	/// - An export function name isn't a proper utf8 byte sequence,
 	/// - This module doesn't have an exported function with the given name,
-	/// - If types of the arguments passed to the function doesn't match function signature
-	///   then trap occurs (as if the exported function was called via call_indirect),
+	/// - If types of the arguments passed to the function doesn't match function signature then
+	///   trap occurs (as if the exported function was called via call_indirect),
 	/// - Trap occurred at the execution time.
 	pub fn invoke(
 		&mut self,
