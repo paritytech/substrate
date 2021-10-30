@@ -18,7 +18,7 @@
 //! # Pallet State Trie Migration
 //!
 //! Reads and writes all keys and values in the entire state in a systematic way. This is useful for
-//! upgrading a chain to `StorageVersion::V2`, where all keys need to be touched.
+//! upgrading a chain to [`sp-core::StateVersion::V1`], where all keys need to be touched.
 //!
 //! ## Migration Types
 //!
@@ -55,7 +55,7 @@
 //!
 //! The (minor) caveat of this approach is that we cannot know in advance how many bytes reading a
 //! certain number of keys will incur. To overcome this, the runtime needs to configure this pallet
-//! with a `SignedDepositPerItem`. This is be per-item deposit that the origin of the signed
+//! with a `SignedDepositPerItem`. This is the per-item deposit that the origin of the signed
 //! migration transactions need to have in their account (on top of the normal fee) and if the size
 //! witness data that they claim is incorrect, this deposit is slashed.
 //!
@@ -107,6 +107,7 @@ pub mod pallet {
 	pub(crate) type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+	/// The weight information of this pallet.
 	pub trait WeightInfo {
 		fn process_top_key(x: u32) -> Weight;
 		fn continue_migrate() -> Weight;
@@ -265,6 +266,8 @@ pub mod pallet {
 					break
 				}
 			}
+
+			// accumulate dynamic data into the storage items.
 			self.size = self.size.saturating_add(self.dyn_size);
 			self.child_items = self.child_items.saturating_add(self.dyn_child_items);
 			self.top_items = self.top_items.saturating_add(self.dyn_top_items);
@@ -342,13 +345,13 @@ pub mod pallet {
 				self.current_child.clone().expect("value checked to be `Some`; qed");
 			let current_top = self.current_top.clone().expect("value checked to be `Some`; qed");
 
-			let child_top_key = Pallet::<T>::child_io_key(&current_top);
-			if let Some(data) = sp_io::default_child_storage::get(child_top_key, &current_child) {
+			let child_root = Pallet::<T>::child_io_key(&current_top);
+			if let Some(data) = sp_io::default_child_storage::get(child_root, &current_child) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::default_child_storage::set(child_top_key, &current_child, &data)
+				sp_io::default_child_storage::set(child_root, &current_child, &data)
 			}
 			self.dyn_child_items.saturating_inc();
-			let next_key = sp_io::default_child_storage::next_key(child_top_key, &current_child);
+			let next_key = sp_io::default_child_storage::next_key(child_root, &current_child);
 			self.current_child = next_key;
 			log!(
 				trace,
@@ -867,6 +870,7 @@ pub mod pallet {
 						warn,
 						"some data seems to be stored under key {:?}, which is a non-default \
 						child-trie. This is a logical error and shall not happen.",
+						Self::halt();
 						HexDisplay::from(root),
 					);
 					Default::default()

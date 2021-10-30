@@ -162,14 +162,14 @@ where
 
 	/// Insert key/value into backend.
 	///
-	/// This only supports inserting `top` keys.
+	/// This only supports inserting keys in `top` trie.
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
 		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
 	}
 
 	/// Insert key/value into backend.
 	///
-	/// This only supports inserting `top` keys.
+	/// This only supports inserting keys in child tries.
 	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
 		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])], self.state_version);
 	}
