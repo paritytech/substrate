@@ -19,8 +19,8 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion, OnPostInherent,
+		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnPostInherent,
+		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -752,10 +752,22 @@ fn inherent_expand() {
 	let block = Block::new(
 		header.clone(),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: Some((1, (), ())) },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: Some((1, (), ())) },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: Some((1, (), ())),
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: Some((1, (), ())),
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: None,
+			},
 		],
 	);
 
@@ -765,9 +777,18 @@ fn inherent_expand() {
 	let block = Block::new(
 		header.clone(),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo_transactional(0)),
+				signature: None,
+			},
 		],
 	);
 
@@ -777,10 +798,22 @@ fn inherent_expand() {
 	let block = Block::new(
 		header.clone(),
 		vec![
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
+			UncheckedExtrinsic {
+				function: Call::Example(pallet::Call::foo(1, 1)),
+				signature: None,
+			},
 		],
 	);
 

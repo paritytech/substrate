@@ -121,7 +121,7 @@ use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
-		OnRuntimeUpgrade, OnPostInherent,
+		OnPostInherent, OnRuntimeUpgrade,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
@@ -354,12 +354,11 @@ where
 			"Parent hash should be valid.",
 		);
 
-
 		match System::ensure_inherents_are_first(block) {
 			Ok(i) => frame_system::Pallet::<System>::set_first_non_inherent_index(i),
 			Err(i) => {
 				panic!("Invalid inherent position for extrinsic at index {}", i);
-			}
+			},
 		}
 	}
 
@@ -422,17 +421,21 @@ where
 
 	fn do_on_post_inherent(block_number: NumberFor<Block>) {
 		let mut weight = 0;
+		weight = weight.saturating_add(<frame_system::Pallet<System> as OnPostInherent<
+			System::BlockNumber,
+		>>::on_post_inherent(block_number));
 		weight = weight.saturating_add(
-			<frame_system::Pallet<System> as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
+			<AllPallets as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number),
 		);
-		weight = weight.saturating_add(
-			<AllPallets as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
+		<frame_system::Pallet<System>>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
 		);
-		<frame_system::Pallet::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 	}
 
 	fn idle_and_finalize_hook(block_number: NumberFor<Block>) {
-		let maybe_first_non_inherent_index = frame_system::Pallet::<System>::maybe_first_non_inherent_index();
+		let maybe_first_non_inherent_index =
+			frame_system::Pallet::<System>::maybe_first_non_inherent_index();
 		// In this case, all the extrinsics in this block are inherents, so we would have never
 		// executed `on_post_inherent`, so we do so now.
 		if maybe_first_non_inherent_index.is_none() {
@@ -474,7 +477,8 @@ where
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		sp_io::init_tracing();
 
-		let maybe_first_non_inherent_index = frame_system::Pallet::<System>::maybe_first_non_inherent_index();
+		let maybe_first_non_inherent_index =
+			frame_system::Pallet::<System>::maybe_first_non_inherent_index();
 		if let Some(first_index) = maybe_first_non_inherent_index {
 			if let Some(extrinsic_index) = <frame_system::Pallet<System>>::extrinsic_index() {
 				if first_index == extrinsic_index {

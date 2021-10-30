@@ -35,7 +35,9 @@ pub trait OnInitialize<BlockNumber> {
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	///
 	/// If you want to execute something after inherents, implement `OnPostInherent`.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+		0
+	}
 }
 
 #[impl_for_tuples(30)]
@@ -58,7 +60,9 @@ pub trait OnPostInherent<BlockNumber> {
 	///
 	/// NOTE: Unlike `on_initialize`, this is called after the inherent extrinsics have been
 	/// included, so things like the `timestamp` will be up to date here.
-	fn on_post_inherent(_n: BlockNumber) -> crate::weights::Weight { 0 }
+	fn on_post_inherent(_n: BlockNumber) -> crate::weights::Weight {
+		0
+	}
 }
 
 #[impl_for_tuples(30)]
@@ -260,7 +264,9 @@ pub trait Hooks<BlockNumber> {
 	/// The inherent extrinsics have been executed. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
-	fn on_post_inherent(_n: BlockNumber) -> crate::weights::Weight { 0 }
+	fn on_post_inherent(_n: BlockNumber) -> crate::weights::Weight {
+		0
+	}
 
 	/// Perform a module upgrade.
 	///
