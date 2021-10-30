@@ -58,32 +58,32 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn addition(_i: u32, ) -> Weight {
-		(342_000 as Weight)
+		(337_000 as Weight)
 	}
 	fn subtraction(_i: u32, ) -> Weight {
-		(333_000 as Weight)
+		(343_000 as Weight)
 	}
 	fn multiplication(_i: u32, ) -> Weight {
-		(324_000 as Weight)
+		(340_000 as Weight)
 	}
 	fn division(_i: u32, ) -> Weight {
-		(325_000 as Weight)
+		(346_000 as Weight)
 	}
 	fn hashing(_i: u32, ) -> Weight {
-		(35_101_542_000 as Weight)
+		(35_449_143_000 as Weight)
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_read(i: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((2_800_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 3_000
+			.saturating_add((2_851_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_write(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
-			.saturating_add((658_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((662_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 }
@@ -91,32 +91,32 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn addition(_i: u32, ) -> Weight {
-		(342_000 as Weight)
+		(337_000 as Weight)
 	}
 	fn subtraction(_i: u32, ) -> Weight {
-		(333_000 as Weight)
+		(343_000 as Weight)
 	}
 	fn multiplication(_i: u32, ) -> Weight {
-		(324_000 as Weight)
+		(340_000 as Weight)
 	}
 	fn division(_i: u32, ) -> Weight {
-		(325_000 as Weight)
+		(346_000 as Weight)
 	}
 	fn hashing(_i: u32, ) -> Weight {
-		(35_101_542_000 as Weight)
+		(35_449_143_000 as Weight)
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_read(i: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((2_800_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 3_000
+			.saturating_add((2_851_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_write(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
-			.saturating_add((658_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((662_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 }
