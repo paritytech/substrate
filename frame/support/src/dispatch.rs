@@ -2521,6 +2521,9 @@ macro_rules! __check_reserved_fn_name {
 	(on_initialize $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_initialize);
 	};
+	(on_post_inherent $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_post_inherent);
+	};
 	(on_runtime_upgrade $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_runtime_upgrade);
 	};
