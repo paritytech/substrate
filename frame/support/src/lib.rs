@@ -50,6 +50,8 @@ pub use sp_runtime::RuntimeDebug;
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use sp_std;
+#[doc(hidden)]
+pub use tt_call::*;
 
 #[macro_use]
 pub mod dispatch;
@@ -573,7 +575,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, transactional, RuntimeDebugNoBound,
+	construct_runtime, decl_storage, match_and_insert, transactional, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
@@ -1476,11 +1478,11 @@ pub mod pallet_prelude {
 /// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
 /// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
 ///
-/// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
+/// It declares `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
 /// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet
 /// informations given by [`frame_support::traits::PalletInfo`].
-/// (The implementation use the associated type `frame_system::Config::PalletInfo`).
+/// (The implementation uses the associated type `frame_system::Config::PalletInfo`).
 ///
 /// It implements [`traits::StorageInfoTrait`] on `Pallet` which give information about all
 /// storages.

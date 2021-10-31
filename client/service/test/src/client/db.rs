@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 type TestBackend = sc_client_api::in_mem::Backend<substrate_test_runtime::Block>;
 
+
 #[test]
 fn test_leaves_with_complex_block_tree() {
 	let backend = Arc::new(TestBackend::new());
