@@ -143,10 +143,10 @@ pub struct RemoteReadResponse {
 /// Announcement summary used for debug logging.
 #[derive(Debug)]
 pub struct AnnouncementSummary<H: HeaderT> {
-	block_hash: H::Hash,
-	number: H::Number,
-	parent_hash: H::Hash,
-	state: Option<BlockState>,
+	pub block_hash: H::Hash,
+	pub number: H::Number,
+	pub parent_hash: H::Hash,
+	pub state: Option<BlockState>,
 }
 
 impl<H: HeaderT> generic::BlockAnnounce<H> {

@@ -784,3 +784,47 @@ fn balance_conversion_should_work() {
 		);
 	});
 }
+
+#[test]
+fn assets_from_genesis_should_exist() {
+	new_test_ext().execute_with(|| {
+		assert!(Asset::<Test>::contains_key(999));
+		assert!(Metadata::<Test>::contains_key(999));
+		assert_eq!(Assets::balance(999, 1), 100);
+		assert_eq!(Assets::total_supply(999), 100);
+	});
+}
+
+#[test]
+fn querying_name_symbol_and_decimals_should_work() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::fungibles::metadata::Inspect;
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::force_set_metadata(
+			Origin::root(),
+			0,
+			vec![0u8; 10],
+			vec![1u8; 10],
+			12,
+			false
+		));
+		assert_eq!(Assets::name(0), vec![0u8; 10]);
+		assert_eq!(Assets::symbol(0), vec![1u8; 10]);
+		assert_eq!(Assets::decimals(0), 12);
+	});
+}
+
+#[test]
+fn querying_allowance_should_work() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::fungibles::approvals::{Inspect, Mutate};
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve(0, &1, &2, 50));
+		assert_eq!(Assets::allowance(0, &1, &2), 50);
+		// Transfer asset 0, from owner 1 and delegate 2 to destination 3
+		assert_ok!(Assets::transfer_from(0, &1, &2, &3, 50));
+		assert_eq!(Assets::allowance(0, &1, &2), 0);
+	});
+}

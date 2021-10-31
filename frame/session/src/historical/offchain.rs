@@ -30,14 +30,10 @@ use sp_runtime::{
 	KeyTypeId,
 };
 use sp_session::MembershipProof;
-
-use super::{
-	super::{Pallet as SessionModule, SessionIndex},
-	Config, IdentificationTuple, ProvingTrie,
-};
-
-use super::shared;
 use sp_std::prelude::*;
+
+use super::{shared, Config, IdentificationTuple, ProvingTrie};
+use crate::{Pallet as SessionModule, SessionIndex};
 
 /// A set of validators, which was used for a fixed session index.
 struct ValidatorSet<T: Config> {
@@ -142,22 +138,23 @@ pub fn keep_newest<T: Config>(n_to_keep: usize) {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		super::{onchain, Module},
-		*,
+	use super::*;
+	use crate::{
+		historical::{onchain, Module},
+		mock::{force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS},
 	};
-	use crate::mock::{
-		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
-	};
+
 	use codec::Encode;
-	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
 	use sp_core::{
 		crypto::key_types::DUMMY,
 		offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt, StorageKind},
 	};
-
-	use frame_support::BasicExternalities;
 	use sp_runtime::testing::UintAuthorityId;
+
+	use frame_support::{
+		traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+		BasicExternalities,
+	};
 
 	type Historical = Module<Test>;
 

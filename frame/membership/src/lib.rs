@@ -357,9 +357,7 @@ impl<T: Config<I>, I: 'static> SortedMembers<T::AccountId> for Pallet<T, I> {
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmark {
 	use super::{Pallet as Membership, *};
-	use frame_benchmarking::{
-		account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelist,
-	};
+	use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist};
 	use frame_support::{assert_ok, traits::EnsureOrigin};
 	use frame_system::RawOrigin;
 
@@ -494,9 +492,9 @@ mod benchmark {
 			assert!(<T::MembershipChanged>::get_prime().is_none());
 			#[cfg(test)] crate::tests::clean();
 		}
-	}
 
-	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test);
+		impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test);
+	}
 }
 
 #[cfg(test)]

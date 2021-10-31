@@ -70,7 +70,10 @@ pub trait OriginTrait: Sized {
 	/// Replace the caller with caller from the other origin
 	fn set_caller_from(&mut self, other: impl Into<Self>);
 
-	/// Filter the call, if false then call is filtered out.
+	/// Filter the call if caller is not root, if false is returned then the call must be filtered
+	/// out.
+	///
+	/// For root origin caller, the filters are bypassed and true is returned.
 	fn filter_call(&self, call: &Self::Call) -> bool;
 
 	/// Get the caller.
@@ -82,12 +85,12 @@ pub trait OriginTrait: Sized {
 		f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
 	) -> Result<R, Self>;
 
-	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
+	/// Create with system none origin and `frame_system::Config::BaseCallFilter`.
 	fn none() -> Self;
 
-	/// Create with system root origin and no filter.
+	/// Create with system root origin and `frame_system::Config::BaseCallFilter`.
 	fn root() -> Self;
 
-	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
+	/// Create with system signed origin and `frame_system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
 }

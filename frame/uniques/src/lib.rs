@@ -381,37 +381,19 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			witness: DestroyWitness,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
-			Class::<T, I>::try_mutate_exists(class, |maybe_details| {
-				let class_details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-				if let Some(check_owner) = maybe_check_owner {
-					ensure!(class_details.owner == check_owner, Error::<T, I>::NoPermission);
-				}
-				ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
-				ensure!(
-					class_details.instance_metadatas == witness.instance_metadatas,
-					Error::<T, I>::BadWitness
-				);
-				ensure!(class_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
+			let details = Self::do_destroy_class(class, witness, maybe_check_owner)?;
 
-				for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
-					Account::<T, I>::remove((&details.owner, &class, &instance));
-				}
-				InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
-				ClassMetadataOf::<T, I>::remove(&class);
-				Attribute::<T, I>::remove_prefix((&class,), None);
-				T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
-
-				Self::deposit_event(Event::Destroyed(class));
-
-				// NOTE: could use postinfo to reflect the actual number of
-				// accounts/sufficient/approvals
-				Ok(())
-			})
+			Ok(Some(T::WeightInfo::destroy(
+				details.instances,
+				details.instance_metadatas,
+				details.attributes,
+			))
+			.into())
 		}
 
 		/// Mint an asset instance of a particular class.

@@ -17,8 +17,7 @@
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tracing_subscriber::{
-	filter::Directive, fmt as tracing_fmt, fmt::time::ChronoLocal, layer, reload::Handle,
-	EnvFilter, Registry,
+	filter::Directive, fmt as tracing_fmt, layer, reload::Handle, EnvFilter, Registry,
 };
 
 // Handle to reload the tracing log filter
@@ -109,6 +108,6 @@ pub(crate) fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 // Used in the reload `Handle`.
 type SCSubscriber<
 	N = tracing_fmt::format::DefaultFields,
-	E = crate::logging::EventFormat<ChronoLocal>,
-	W = fn() -> std::io::Stderr,
+	E = crate::logging::EventFormat,
+	W = crate::logging::DefaultLogger,
 > = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;

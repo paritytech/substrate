@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_support::{ensure, traits::OnInitialize};
 use frame_system::RawOrigin;
 use sp_std::{prelude::*, vec};
@@ -139,6 +139,6 @@ benchmarks! {
 			"didn't append schedule"
 		);
 	}
-}
 
-impl_benchmark_test_suite!(Scheduler, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Scheduler, crate::tests::new_test_ext(), crate::tests::Test);
+}

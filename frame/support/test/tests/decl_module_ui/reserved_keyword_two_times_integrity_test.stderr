@@ -10,7 +10,7 @@ error: `integrity_test` can only be passed once as input.
 7 | | }
   | |_^
   |
-  = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the macro `$crate::decl_module` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0601]: `main` function not found in crate `$CRATE`
  --> $DIR/reserved_keyword_two_times_integrity_test.rs:1:1

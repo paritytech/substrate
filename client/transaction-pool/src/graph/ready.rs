@@ -23,7 +23,7 @@ use std::{
 	sync::Arc,
 };
 
-use log::trace;
+use log::{debug, trace};
 use sc_transaction_pool_api::error;
 use serde::Serialize;
 use sp_runtime::{traits::Member, transaction_validity::TransactionTag as Tag};
@@ -31,7 +31,7 @@ use sp_runtime::{traits::Member, transaction_validity::TransactionTag as Tag};
 use super::{
 	base_pool::Transaction,
 	future::WaitingTransaction,
-	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},
+	tracked_map::{self, TrackedMap},
 };
 
 /// An in-pool transaction reference.
@@ -156,11 +156,16 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// - transactions that are valid for a shorter time go first
 	/// 4. Lastly we sort by the time in the queue
 	/// - transactions that are longer in the queue go first
-	pub fn get(&self) -> impl Iterator<Item = Arc<Transaction<Hash, Ex>>> {
+	///
+	/// The iterator is providing a way to report transactions that the receiver considers invalid.
+	/// In such case the entire subgraph of transactions that depend on the reported one will be
+	/// skipped.
+	pub fn get(&self) -> BestIterator<Hash, Ex> {
 		BestIterator {
-			all: self.ready.clone(),
+			all: self.ready.clone_map(),
 			best: self.best.clone(),
 			awaiting: Default::default(),
+			invalid: Default::default(),
 		}
 	}
 
@@ -479,9 +484,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 /// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
-	all: ReadOnlyTrackedMap<Hash, ReadyTx<Hash, Ex>>,
+	all: HashMap<Hash, ReadyTx<Hash, Ex>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
+	invalid: HashSet<Hash>,
 }
 
 impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
@@ -498,6 +504,34 @@ impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 	}
 }
 
+impl<Hash: hash::Hash + Member, Ex> sc_transaction_pool_api::ReadyTransactions
+	for BestIterator<Hash, Ex>
+{
+	fn report_invalid(&mut self, tx: &Self::Item) {
+		BestIterator::report_invalid(self, tx)
+	}
+}
+
+impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
+	/// Report given transaction as invalid.
+	///
+	/// As a consequence, all values that depend on the invalid one will be skipped.
+	/// When given transaction is not in the pool it has no effect.
+	/// When invoked on a fully drained iterator it has no effect either.
+	pub fn report_invalid(&mut self, tx: &Arc<Transaction<Hash, Ex>>) {
+		if let Some(to_report) = self.all.get(&tx.hash) {
+			debug!(
+				target: "txpool",
+				"[{:?}] Reported as invalid. Will skip sub-chains while iterating.",
+				to_report.transaction.transaction.hash
+			);
+			for hash in &to_report.unlocks {
+				self.invalid.insert(hash.clone());
+			}
+		}
+	}
+}
+
 impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 	type Item = Arc<Transaction<Hash, Ex>>;
 
@@ -505,9 +539,19 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 		loop {
 			let best = self.best.iter().next_back()?.clone();
 			let best = self.best.take(&best)?;
+			let hash = &best.transaction.hash;
 
-			let next = self.all.read().get(&best.transaction.hash).cloned();
-			let ready = match next {
+			// Check if the transaction was marked invalid.
+			if self.invalid.contains(hash) {
+				debug!(
+					target: "txpool",
+					"[{:?}] Skipping invalid child transaction while iterating.",
+					hash
+				);
+				continue
+			}
+
+			let ready = match self.all.get(&hash).cloned() {
 				Some(ready) => ready,
 				// The transaction is not in all, maybe it was removed in the meantime?
 				None => continue,
@@ -522,7 +566,6 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 				// then get from the pool
 				} else {
 					self.all
-						.read()
 						.get(hash)
 						.map(|next| (next.requires_offset + 1, next.transaction.clone()))
 				};
@@ -635,10 +678,13 @@ mod tests {
 		assert_eq!(ready.get().count(), 3);
 	}
 
-	#[test]
-	fn should_return_best_transactions_in_correct_order() {
-		// given
-		let mut ready = ReadyTransactions::default();
+	/// Populate the pool, with a graph that looks like so:
+	///
+	/// tx1 -> tx2 \
+	///     ->  ->  tx3
+	///     -> tx4 -> tx5 -> tx6
+	///     -> tx7
+	fn populate_pool(ready: &mut ReadyTransactions<u64, Vec<u8>>) {
 		let mut tx1 = tx(1);
 		tx1.requires.clear();
 		let mut tx2 = tx(2);
@@ -649,11 +695,17 @@ mod tests {
 		tx3.provides = vec![];
 		let mut tx4 = tx(4);
 		tx4.requires = vec![tx1.provides[0].clone()];
-		tx4.provides = vec![];
-		let tx5 = Transaction {
-			data: vec![5],
+		tx4.provides = vec![vec![107]];
+		let mut tx5 = tx(5);
+		tx5.requires = vec![tx4.provides[0].clone()];
+		tx5.provides = vec![vec![108]];
+		let mut tx6 = tx(6);
+		tx6.requires = vec![tx5.provides[0].clone()];
+		tx6.provides = vec![];
+		let tx7 = Transaction {
+			data: vec![7],
 			bytes: 1,
-			hash: 5,
+			hash: 7,
 			priority: 1,
 			valid_till: u64::MAX, // use the max here for testing.
 			requires: vec![tx1.provides[0].clone()],
@@ -663,20 +715,30 @@ mod tests {
 		};
 
 		// when
-		for tx in vec![tx1, tx2, tx3, tx4, tx5] {
-			import(&mut ready, tx).unwrap();
+		for tx in vec![tx1, tx2, tx3, tx7, tx4, tx5, tx6] {
+			import(ready, tx).unwrap();
 		}
 
-		// then
 		assert_eq!(ready.best.len(), 1);
+	}
 
+	#[test]
+	fn should_return_best_transactions_in_correct_order() {
+		// given
+		let mut ready = ReadyTransactions::default();
+		populate_pool(&mut ready);
+
+		// when
 		let mut it = ready.get().map(|tx| tx.data[0]);
 
+		// then
 		assert_eq!(it.next(), Some(1));
 		assert_eq!(it.next(), Some(2));
 		assert_eq!(it.next(), Some(3));
 		assert_eq!(it.next(), Some(4));
 		assert_eq!(it.next(), Some(5));
+		assert_eq!(it.next(), Some(6));
+		assert_eq!(it.next(), Some(7));
 		assert_eq!(it.next(), None);
 	}
 
@@ -724,5 +786,27 @@ mod tests {
 			TransactionRef { transaction: Arc::new(with_priority(3, 3)), insertion_id: 1 } >
 				TransactionRef { transaction: Arc::new(with_priority(3, 3)), insertion_id: 2 }
 		);
+	}
+
+	#[test]
+	fn should_skip_invalid_transactions_while_iterating() {
+		// given
+		let mut ready = ReadyTransactions::default();
+		populate_pool(&mut ready);
+
+		// when
+		let mut it = ready.get();
+		let data = |tx: &Arc<Transaction<u64, Vec<u8>>>| tx.data[0];
+
+		// then
+		assert_eq!(it.next().as_ref().map(data), Some(1));
+		assert_eq!(it.next().as_ref().map(data), Some(2));
+		assert_eq!(it.next().as_ref().map(data), Some(3));
+		let tx4 = it.next();
+		assert_eq!(tx4.as_ref().map(data), Some(4));
+		// report 4 as invalid, which should skip 5 & 6.
+		it.report_invalid(&tx4.unwrap());
+		assert_eq!(it.next().as_ref().map(data), Some(7));
+		assert_eq!(it.next().as_ref().map(data), None);
 	}
 }

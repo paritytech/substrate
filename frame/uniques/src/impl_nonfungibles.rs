@@ -19,13 +19,10 @@
 
 use super::*;
 use frame_support::{
-	traits::{
-		tokens::nonfungibles::{Create, Inspect, InspectEnumerable, Mutate, Transfer},
-		Get,
-	},
+	traits::{tokens::nonfungibles::*, Get},
 	BoundedSlice,
 };
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::convert::TryFrom;
 
 impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
@@ -103,6 +100,22 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet
 			false,
 			Event::Created(class.clone(), who.clone(), admin.clone()),
 		)
+	}
+}
+
+impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	type DestroyWitness = DestroyWitness;
+
+	fn get_destroy_witness(class: &Self::ClassId) -> Option<DestroyWitness> {
+		Class::<T, I>::get(class).map(|a| a.destroy_witness())
+	}
+
+	fn destroy(
+		class: Self::ClassId,
+		witness: Self::DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> Result<Self::DestroyWitness, DispatchError> {
+		Self::do_destroy_class(class, witness, maybe_check_owner)
 	}
 }
 

@@ -16,7 +16,6 @@
 // limitations under the License.
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
-
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo},

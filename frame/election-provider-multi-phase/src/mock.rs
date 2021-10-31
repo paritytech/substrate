@@ -304,11 +304,11 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
 		}
 	}
-	fn create_snapshot_internal() -> Weight {
+	fn create_snapshot_internal(v: u32, t: u32) -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal()
+			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal(v, t)
 		}
 	}
 	fn on_initialize_open_signed() -> Weight {
