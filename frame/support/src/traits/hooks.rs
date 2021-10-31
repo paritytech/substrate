@@ -34,7 +34,7 @@ pub trait OnInitialize<BlockNumber> {
 	/// including inherent extrinsics. Hence, for instance, if your runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	///
-	/// If you want to execute something after inherents, implement `OnPostInherent`.
+	/// If you want to execute something after inherents, implement [`OnPostInherent`].
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
 		0
 	}
