@@ -114,17 +114,6 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	ConsensusEngineId, KeyTypeId, Perbill, Permill, RuntimeAppPublic,
-};
-use sp_staking::SessionIndex;
-use sp_std::{
-	marker::PhantomData,
-	ops::{Rem, Sub},
-	prelude::*,
-};
-
 use frame_support::{
 	codec::{Decode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResult},
@@ -135,6 +124,17 @@ use frame_support::{
 	},
 	weights::Weight,
 	Parameter,
+};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
+	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
+};
+use sp_staking::SessionIndex;
+use sp_std::{
+	convert::TryFrom,
+	marker::PhantomData,
+	ops::{Rem, Sub},
+	prelude::*,
 };
 
 pub use pallet::*;
@@ -298,7 +298,7 @@ pub trait SessionHandler<ValidatorId> {
 	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(validator_index: usize);
+	fn on_disabled(validator_index: u32);
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
@@ -342,7 +342,7 @@ impl<AId> SessionHandler<AId> for Tuple {
 		for_tuples!( #( Tuple::on_before_session_ending(); )* )
 	}
 
-	fn on_disabled(i: usize) {
+	fn on_disabled(i: u32) {
 		for_tuples!( #( Tuple::on_disabled(i); )* )
 	}
 }
@@ -354,7 +354,7 @@ impl<AId> SessionHandler<AId> for TestSessionHandler {
 	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
 	fn on_before_session_ending() {}
-	fn on_disabled(_: usize) {}
+	fn on_disabled(_: u32) {}
 }
 
 #[frame_support::pallet]
@@ -377,7 +377,11 @@ pub mod pallet {
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize + MaxEncodedLen;
+		type ValidatorId: Member
+			+ Parameter
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ TryFrom<Self::AccountId>;
 
 		/// A conversion from account ID to validator ID.
 		///
@@ -400,12 +404,6 @@ pub mod pallet {
 
 		/// The keys.
 		type Keys: OpaqueKeys + Member + Parameter + Default + MaybeSerializeDeserialize;
-
-		/// The fraction of validators set that is safe to be disabled.
-		///
-		/// After the threshold is reached `disabled` method starts to return true,
-		/// which in combination with `pallet_staking` forces a new era.
-		type DisabledValidatorsThreshold: Get<Perbill>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -514,7 +512,9 @@ pub mod pallet {
 
 	/// Indices of disabled validators.
 	///
-	/// The set is cleared when `on_session_ending` returns a new set of identities.
+	/// The vec is always kept sorted so that we can find whether a given validator is
+	/// disabled using binary search. It gets cleared when `on_session_ending` returns
+	/// a new set of identities.
 	#[pallet::storage]
 	#[pallet::getter(fn disabled_validators)]
 	pub type DisabledValidators<T> = StorageValue<_, Vec<u32>, ValueQuery>;
@@ -599,9 +599,13 @@ pub mod pallet {
 		}
 
 		/// Removes any session key(s) of the function caller.
+		///
 		/// This doesn't take effect until the next session.
 		///
-		/// The dispatch origin of this function must be signed.
+		/// The dispatch origin of this function must be Signed and the account must be either be
+		/// convertible to a validator ID using the chain's typical addressing system (this usually
+		/// means being a controller account) or directly convertible into a validator ID (which
+		/// usually means being a stash account).
 		///
 		/// # <weight>
 		/// - Complexity: `O(1)` in number of key types. Actual cost depends on the number of length
@@ -705,42 +709,34 @@ impl<T: Config> Pallet<T> {
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
 	}
 
-	/// Disable the validator of index `i`.
-	///
-	/// Returns `true` if this causes a `DisabledValidatorsThreshold` of validators
-	/// to be already disabled.
-	pub fn disable_index(i: usize) -> bool {
-		let (fire_event, threshold_reached) = <DisabledValidators<T>>::mutate(|disabled| {
-			let i = i as u32;
-			if let Err(index) = disabled.binary_search(&i) {
-				let count = <Validators<T>>::decode_len().unwrap_or(0) as u32;
-				let threshold = T::DisabledValidatorsThreshold::get() * count;
-				disabled.insert(index, i);
-				(true, disabled.len() as u32 > threshold)
-			} else {
-				(false, false)
-			}
-		});
-
-		if fire_event {
-			T::SessionHandler::on_disabled(i);
+	/// Disable the validator of index `i`, returns `false` if the validator was already disabled.
+	pub fn disable_index(i: u32) -> bool {
+		if i >= Validators::<T>::decode_len().unwrap_or(0) as u32 {
+			return false
 		}
 
-		threshold_reached
+		<DisabledValidators<T>>::mutate(|disabled| {
+			if let Err(index) = disabled.binary_search(&i) {
+				disabled.insert(index, i);
+				T::SessionHandler::on_disabled(i);
+				return true
+			}
+
+			false
+		})
 	}
 
 	/// Disable the validator identified by `c`. (If using with the staking pallet,
 	/// this would be their *stash* account.)
 	///
-	/// Returns `Ok(true)` if more than `DisabledValidatorsThreshold` validators in current
-	/// session is already disabled.
-	/// If used with the staking pallet it allows to force a new era in such case.
-	pub fn disable(c: &T::ValidatorId) -> sp_std::result::Result<bool, ()> {
+	/// Returns `false` either if the validator could not be found or it was already
+	/// disabled.
+	pub fn disable(c: &T::ValidatorId) -> bool {
 		Self::validators()
 			.iter()
 			.position(|i| i == c)
-			.map(Self::disable_index)
-			.ok_or(())
+			.map(|i| Self::disable_index(i as u32))
+			.unwrap_or(false)
 	}
 
 	/// Upgrade the key type from some old type to a new type. Supports adding
@@ -853,6 +849,10 @@ impl<T: Config> Pallet<T> {
 
 	fn do_purge_keys(account: &T::AccountId) -> DispatchResult {
 		let who = T::ValidatorIdOf::convert(account.clone())
+			// `purge_keys` may not have a controller-stash pair any more. If so then we expect the
+			// stash account to be passed in directly and convert that to a `ValidatorId` using the
+			// `TryFrom` trait if supported.
+			.or_else(|| T::ValidatorId::try_from(account.clone()).ok())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
 		let old_keys = Self::take_keys(&who).ok_or(Error::<T>::NoKeys)?;

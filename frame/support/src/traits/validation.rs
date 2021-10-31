@@ -109,7 +109,7 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(_validator_index: usize);
+	fn on_disabled(_validator_index: u32);
 }
 
 /// Something that can estimate at which block the next session rotation will happen (i.e. a new

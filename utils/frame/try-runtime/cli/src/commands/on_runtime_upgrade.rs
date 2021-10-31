@@ -54,7 +54,7 @@ where
 	let ext = {
 		let builder = command.state.builder::<Block>()?;
 		let (code_key, code) = extract_code(&config.chain_spec)?;
-		builder.inject_key_value(&[(code_key, code)]).build().await?
+		builder.inject_hashed_key_value(&[(code_key, code)]).build().await?
 	};
 
 	if let Some(uri) = command.state.live_uri() {

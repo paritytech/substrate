@@ -120,6 +120,7 @@ members = [
 	"frame/support/procedural/tools",
 	"frame/support/procedural/tools/derive",
 	"frame/support/test",
+	"frame/support/test/compile_pass",
 	"frame/system",
 	"frame/system/benchmarking",
 	"frame/system/rpc/runtime-api",

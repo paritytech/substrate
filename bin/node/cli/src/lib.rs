@@ -33,7 +33,7 @@
 pub mod chain_spec;
 
 #[macro_use]
-mod service;
+pub mod service;
 #[cfg(feature = "cli")]
 mod cli;
 #[cfg(feature = "cli")]

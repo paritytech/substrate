@@ -44,7 +44,8 @@ pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
@@ -200,13 +201,12 @@ impl<T, S> Default for BoundedVec<T, S> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T, S> std::fmt::Debug for BoundedVec<T, S>
+impl<T, S> sp_std::fmt::Debug for BoundedVec<T, S>
 where
-	T: std::fmt::Debug,
+	T: sp_std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		f.debug_tuple("BoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
@@ -337,7 +337,7 @@ where
 	fn max_encoded_len() -> usize {
 		// BoundedVec<T, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
-		// https://substrate.dev/rustdocs/v3.0.0/src/parity_scale_codec/codec.rs.html#798-808
+		// https://docs.substrate.io/v3/advanced/scale-codec
 		codec::Compact(S::get())
 			.encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
