@@ -262,6 +262,7 @@ pub mod pallet {
 	#[pallet::storage_prefix = "Value2"]
 	pub type RenamedValue<T> = StorageValue<Value = u64>;
 
+	/// Test some doc
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
 	where
