@@ -18,13 +18,12 @@
 use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{token, Generics, Ident};
+use syn::{Generics, Ident};
 
 pub fn expand_outer_origin(
 	runtime: &Ident,
 	system_pallet: &Pallet,
 	pallets: &[Pallet],
-	pallets_token: token::Brace,
 	scrate: &TokenStream,
 ) -> syn::Result<TokenStream> {
 

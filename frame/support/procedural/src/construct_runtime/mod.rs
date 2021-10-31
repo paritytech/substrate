@@ -229,7 +229,7 @@ fn construct_runtime_final_expansion(
 
 	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 
-	let outer_origin = expand::expand_outer_origin(&name, &system_pallet, &pallets, pallets_token, &scrate)?;
+	let outer_origin = expand::expand_outer_origin(&name, &system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
