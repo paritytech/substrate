@@ -19,8 +19,8 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion,
+		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnPostInherent,
+		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -185,6 +185,12 @@ pub mod pallet {
 		fn integrity_test() {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType2); // Test for where clause
+		}
+		fn on_post_inherent(_: BlockNumberFor<T>) -> Weight {
+			T::AccountId::from(SomeType1); // Test for where clause
+			T::AccountId::from(SomeType2); // Test for where clause
+			Self::deposit_event(Event::Something(50));
+			50
 		}
 	}
 
@@ -944,6 +950,8 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
 
+		assert_eq!(AllPallets::on_post_inherent(1), 50);
+
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Example(pallet::Event::Something(10)),
@@ -955,6 +963,10 @@ fn pallet_hooks_expand() {
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
 			Event::Example(pallet::Event::Something(30)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example(pallet::Event::Something(50)),
 		);
 	})
 }
