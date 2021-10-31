@@ -144,11 +144,11 @@ impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
 	}
 
 	fn estimate_current_session_progress(_: BlockNumber) -> (Option<Permill>, Weight) {
-		(None, Zero::zero())
+		(None, Default::default())
 	}
 
 	fn estimate_next_session_rotation(_: BlockNumber) -> (Option<BlockNumber>, Weight) {
-		(None, Zero::zero())
+		(None, Default::default())
 	}
 }
 
@@ -180,7 +180,7 @@ impl<BlockNumber: Zero> EstimateNextNewSession<BlockNumber> for () {
 	}
 
 	fn estimate_next_new_session(_: BlockNumber) -> (Option<BlockNumber>, Weight) {
-		(None, Zero::zero())
+		(None, Default::default())
 	}
 }
 

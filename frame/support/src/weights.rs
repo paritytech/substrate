@@ -139,32 +139,112 @@ use sp_arithmetic::{
 };
 use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
-	traits::{SaturatedConversion, SignedExtension},
+	traits::{SaturatedConversion, SignedExtension, Zero},
 	RuntimeDebug,
 };
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
+type WeightType = u64;
+
 /// Numeric range of a transaction weight.
-pub type Weight = u64;
+#[derive(Copy, Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct Weight {
+	time: WeightType,
+	pov: WeightType,
+}
+
+impl sp_runtime::traits::Printable for Weight {
+	fn print(&self) {
+		"time_weight=".print();
+		self.time.print();
+		"pov_weight=".print();
+		self.pov.print()
+	}
+}
+
+// impl From<WeightType> for Weight {
+// 	fn from(time: WeightType) -> Self {
+// 		Self {
+// 			time,
+// 			pov: 0,
+// 		}
+// 	}
+// }
+
+impl Weight {
+	pub fn new() -> Self {
+		Self {
+			time: 0,
+			pov: 0,
+		}
+	}
+
+	pub fn add_time(&mut self, new_time: WeightType) -> Self {
+		self.time = self.time.saturating_add(new_time);
+		*self
+	}
+
+	pub fn add_pov(&mut self, new_pov: WeightType) -> Self {
+		self.pov = self.pov.saturating_add(new_pov);
+		*self
+	}
+
+	pub fn sub_time(&self, new_time: WeightType) -> Self {
+		self.time = self.time.saturating_sub(new_time);
+		*self
+	}
+
+	pub fn sub_pov(&self, new_pov: WeightType) -> Self {
+		self.pov = self.pov.saturating_sub(new_pov);
+		*self
+	}
+
+	pub fn saturating_add(&self, new_weight: Self) -> Self {
+		self.add_time(new_weight.time);
+		self.add_pov(new_weight.pov);
+		*self
+	}
+
+	pub fn saturating_sub(&self, new_weight: Self) -> Self {
+		self.sub_time(new_weight.time);
+		self.sub_pov(new_weight.pov);
+		*self
+	}
+
+	pub fn add(&self, new_weight: Self) -> Self {
+		self.saturating_add(new_weight)
+	}
+
+	pub fn sub(&self, new_weight: Self) -> Self {
+		self.saturating_sub(new_weight)
+	}
+
+	pub fn min(&self, rhs: Self) -> Self {
+		Self {
+			time: self.time.min(rhs.time),
+			pov: self.pov.min(rhs.pov),
+		}
+	}
+}
 
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::{RuntimeDbWeight, Weight};
+	use super::{RuntimeDbWeight, WeightType};
 	use crate::parameter_types;
 
-	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
-	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
-	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
-	pub const WEIGHT_PER_NANOS: Weight = WEIGHT_PER_MICROS / 1000; // 1_000
+	pub const WEIGHT_PER_SECOND: WeightType = 1_000_000_000_000;
+	pub const WEIGHT_PER_MILLIS: WeightType = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
+	pub const WEIGHT_PER_MICROS: WeightType = WEIGHT_PER_MILLIS / 1000; // 1_000_000
+	pub const WEIGHT_PER_NANOS: WeightType = WEIGHT_PER_MICROS / 1000; // 1_000
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms
-		pub const BlockExecutionWeight: Weight = 5 * WEIGHT_PER_MILLIS;
+		pub const BlockExecutionWeight: WeightType = 5 * WEIGHT_PER_MILLIS;
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
+		pub const ExtrinsicBaseWeight: WeightType = 125 * WEIGHT_PER_MICROS;
 		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
 		/// the runtime.
 		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
@@ -326,7 +406,7 @@ pub struct PostDispatchInfo {
 impl PostDispatchInfo {
 	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
 	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
-		info.weight - self.calc_actual_weight(info)
+		info.weight.sub(self.calc_actual_weight(info))
 	}
 
 	/// Calculate how much weight was actually spent by the `Dispatchable`.
@@ -599,27 +679,31 @@ where
 impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		DispatchInfo { weight: self.encode().len() as _, pays_fee: Pays::Yes, ..Default::default() }
+		let weight = Weight {
+			time: self.encode().len() as _,
+			pov: self.encode().len() as _,
+		};
+		DispatchInfo { weight, pays_fee: Pays::Yes, ..Default::default() }
 	}
 }
 
 /// The weight of database operations that the runtime can invoke.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct RuntimeDbWeight {
-	pub read: Weight,
-	pub write: Weight,
+	pub read: WeightType,
+	pub write: WeightType,
 }
 
 impl RuntimeDbWeight {
-	pub fn reads(self, r: Weight) -> Weight {
+	pub fn reads(self, r: WeightType) -> WeightType {
 		self.read.saturating_mul(r)
 	}
 
-	pub fn writes(self, w: Weight) -> Weight {
+	pub fn writes(self, w: WeightType) -> WeightType {
 		self.write.saturating_mul(w)
 	}
 
-	pub fn reads_writes(self, r: Weight, w: Weight) -> Weight {
+	pub fn reads_writes(self, r: WeightType, w: WeightType) -> WeightType {
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
 		read_weight.saturating_add(write_weight)

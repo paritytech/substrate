@@ -38,16 +38,20 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 		let version = <T as GetStorageVersion>::current_storage_version();
 		version.put::<T>();
 
-		db_weight.writes(2)
+
+		Weight {
+			time: db_weight.writes(2),
+			pov: 0, // TODO FIX
+		}
 	}
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 impl PalletVersionToStorageVersionHelper for T {
 	fn migrate(db_weight: &RuntimeDbWeight) -> Weight {
-		let mut weight: Weight = 0;
+		let mut weight = Weight::new();
 
-		for_tuples!( #( weight = weight.saturating_add(T::migrate(db_weight)); )* );
+		for_tuples!( #( weight = weight.add(T::migrate(db_weight)); )* );
 
 		weight
 	}

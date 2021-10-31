@@ -34,15 +34,15 @@ pub trait OnInitialize<BlockNumber> {
 	/// including inherent extrinsics. Hence for instance, if you runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+		Default::default()
 	}
 }
 
 #[impl_for_tuples(30)]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
-		let mut weight = 0;
-		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
+		let mut weight = crate::weights::Weight::new();
+		for_tuples!( #( weight = weight.add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
 }
@@ -75,7 +75,7 @@ pub trait OnIdle<BlockNumber> {
 		_n: BlockNumber,
 		_remaining_weight: crate::weights::Weight,
 	) -> crate::weights::Weight {
-		0
+		crate::weights::Weight::new()
 	}
 }
 
@@ -86,7 +86,7 @@ impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 			BlockNumber,
 			crate::weights::Weight,
 		) -> crate::weights::Weight] = &[for_tuples!( #( Tuple::on_idle ),* )];
-		let mut weight = 0;
+		let mut weight = Default::default();
 		let len = on_idle_functions.len();
 		let start_index = n % (len as u32).into();
 		let start_index = start_index.try_into().ok().expect(
@@ -167,7 +167,7 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+		Default::default()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -190,7 +190,7 @@ pub trait OnRuntimeUpgrade {
 #[impl_for_tuples(30)]
 impl OnRuntimeUpgrade for Tuple {
 	fn on_runtime_upgrade() -> crate::weights::Weight {
-		let mut weight = 0;
+		let mut weight = crate::weights::Weight::default();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
@@ -224,14 +224,14 @@ pub trait Hooks<BlockNumber> {
 		_n: BlockNumber,
 		_remaining_weight: crate::weights::Weight,
 	) -> crate::weights::Weight {
-		0
+		Default::default()
 	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+		Default::default()
 	}
 
 	/// Perform a module upgrade.
@@ -249,7 +249,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+		Default::default()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
