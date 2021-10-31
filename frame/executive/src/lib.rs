@@ -1237,7 +1237,10 @@ mod tests {
 			// * on_idle:              234
 			// * on_post_inherent:     345
 			// defined in the custom test module.
-			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), 10 + 123 + 234 + 345);
+			assert_eq!(
+				<frame_system::Pallet<Runtime>>::block_weight().total(),
+				10 + 123 + 234 + 345
+			);
 		})
 	}
 
