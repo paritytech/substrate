@@ -65,7 +65,7 @@ frame_support::decl_error! {
 		/// with multiple lines
 		AnotherError,
 		// Required by construct_runtime
-		BadOriginFilteredCall,
+		CallFiltered,
 	}
 }
 
