@@ -655,12 +655,12 @@ mod tests {
 			// one with block number arg and one without
 			fn on_initialize(n: T::BlockNumber) -> Weight {
 				println!("on_initialize({})", n);
-				175
+				123
 			}
 
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
-				175
+				234
 			}
 
 			fn on_finalize(n: T::BlockNumber) {
@@ -674,6 +674,11 @@ mod tests {
 
 			fn offchain_worker(n: T::BlockNumber) {
 				assert_eq!(T::BlockNumber::from(1u32), n);
+			}
+
+			fn on_post_inherent(n: T::BlockNumber) -> Weight {
+				println!("on_post_inherent({})", n);
+				345
 			}
 		}
 
@@ -953,7 +958,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!(
-						"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
+						"16626995740d9ac5dd5729222b02c90fa28283f6120ae3b4864f8cad6c95c384"
 					)
 					.into(),
 					extrinsics_root: hex!(
@@ -1040,7 +1045,7 @@ mod tests {
 		let encoded_len = encoded.len() as Weight;
 		// on_initialize weight + base block execution weight
 		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
-		let base_block_weight = 175 + block_weights.base_block;
+		let base_block_weight = 123 + block_weights.base_block;
 		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
 		let num_to_exhaust_block = limit / (encoded_len + 5);
 		t.execute_with(|| {
@@ -1097,7 +1102,7 @@ mod tests {
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
 			let base_block_weight =
-				175 + <Runtime as frame_system::Config>::BlockWeights::get().base_block;
+				123 + <Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			Executive::initialize_block(&Header::new(
 				1,
@@ -1223,11 +1228,16 @@ mod tests {
 	fn block_hooks_weight_is_stored() {
 		new_test_ext(1).execute_with(|| {
 			Executive::initialize_block(&Header::new_from_number(1));
+			Executive::on_post_inherent();
 			Executive::finalize_block();
 			// NOTE: might need updates over time if new weights are introduced.
-			// For now it only accounts for the base block execution weight and
-			// the `on_initialize` weight defined in the custom test module.
-			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), 175 + 175 + 10);
+			// For now it only accounts for:
+			// * base block execution: 10
+			// * on_initialize:        123
+			// * on_idle:              234
+			// * on_post_inherent:     345
+			// defined in the custom test module.
+			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), 10 + 123 + 234 + 345);
 		})
 	}
 
@@ -1354,6 +1364,8 @@ mod tests {
 				Digest::default(),
 			));
 
+			Executive::on_post_inherent();
+
 			Executive::apply_extrinsic(xt.clone()).unwrap().unwrap();
 
 			Executive::finalize_block()
@@ -1453,6 +1465,8 @@ mod tests {
 				Digest::default(),
 			));
 
+			Executive::on_post_inherent();
+
 			Executive::apply_extrinsic(xt.clone()).unwrap().unwrap();
 
 			Executive::finalize_block()
@@ -1485,6 +1499,8 @@ mod tests {
 			Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
 			Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
 
+			Executive::on_post_inherent();
+
 			Executive::finalize_block()
 		});
 
@@ -1509,6 +1525,9 @@ mod tests {
 			));
 
 			Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+
+			Executive::on_post_inherent();
+
 			Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
 
 			Executive::finalize_block()
