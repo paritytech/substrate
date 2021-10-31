@@ -120,9 +120,11 @@ fn find_slot<B>(header: &B::Header) -> Result<Slot, sc_consensus_aura::Error<B>>
 where
 	B: BlockT,
 {
-	sc_consensus_aura::find_pre_digest::<B, <AuraPair as sp_core::Pair>::Signature>(header).or_else(|_|
+	let maybe_slot = sc_consensus_aura::find_pre_digest::<B, <AuraPair as sp_core::Pair>::Signature>(header).or_else(|_|
 		sc_consensus_babe::find_pre_digest::<B>(header).map(|digest| digest.slot())
-	).map_err(|_| sc_consensus_aura::Error::NoDigestFound)
+	).map_err(|_| sc_consensus_aura::Error::NoDigestFound);
+	log::debug!("👻 slot: {:?}", maybe_slot);
+	maybe_slot
 }
 
 use std::sync::Mutex;
