@@ -95,6 +95,36 @@ where
 	}
 }
 
+use sp_api::HeaderT;
+struct NoopVerifier;
+#[async_trait::async_trait]
+impl Verifier<Block> for NoopVerifier
+{
+	// Will always succeed.
+	async fn verify(
+		&mut self,
+		mut block_import: BlockImportParams<Block, ()>,
+	) -> BlockVerificationResult<Block> {
+		let ref mut header = block_import.header;
+		let post_hash = header.hash();
+		let seal = header.digest_mut().pop().expect("seal should be there");
+		block_import.post_digests.push(seal);
+		block_import.post_hash = Some(post_hash);
+		block_import.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
+		Ok((block_import, None))
+	}
+}
+
+use sp_consensus_aura::Slot;
+fn find_slot<B>(header: &B::Header) -> Result<Slot, sc_consensus_aura::Error<B>>
+where
+	B: BlockT,
+{
+	sc_consensus_aura::find_pre_digest::<B, <AuraPair as sp_core::Pair>::Signature>(header).or_else(|_|
+		sc_consensus_babe::find_pre_digest::<B>(header).map(|digest| digest.slot())
+	).map_err(|_| sc_consensus_aura::Error::NoDigestFound)
+}
+
 use std::sync::Mutex;
 pub struct BailingBlockImport<Client, Inner> {
 	client: Arc<Client>,
@@ -441,30 +471,40 @@ pub fn new_partial_aura(
 
 	let slot_duration = sc_consensus_aura::slot_duration(&*client)?.slot_duration();
 
-	let import_queue =
-		sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _, _>(ImportQueueParams {
-			block_import: block_import.clone(),
-			justification_import: Some(Box::new(block_import.clone())),
-			client: client.clone(),
-			create_inherent_data_providers: move |_, ()| async move {
-				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+	let verifier = NoopVerifier;
+	use sc_consensus::BasicQueue;
+	let import_queue = BasicQueue::new(
+		verifier,
+		Box::new(block_import.clone()),
+		Some(Box::new(justification_import)),
+		&task_manager.spawn_essential_handle(),
+		config.prometheus_registry()
+	);
 
-				let slot =
-					sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_duration(
-						*timestamp,
-						slot_duration,
-					);
+	// let import_queue =
+	// 	sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _, _>(ImportQueueParams {
+	// 		block_import: block_import.clone(),
+	// 		justification_import: Some(Box::new(block_import.clone())),
+	// 		client: client.clone(),
+	// 		create_inherent_data_providers: move |_, ()| async move {
+	// 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-				Ok((timestamp, slot))
-			},
-			spawner: &task_manager.spawn_essential_handle(),
-			can_author_with: sp_consensus::CanAuthorWithNativeVersion::new(
-				client.executor().clone(),
-			),
-			registry: config.prometheus_registry(),
-			check_for_equivocation: Default::default(),
-			telemetry: telemetry.as_ref().map(|x| x.handle()),
-		})?;
+	// 			let slot =
+	// 				sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_duration(
+	// 					*timestamp,
+	// 					slot_duration,
+	// 				);
+
+	// 			Ok((timestamp, slot))
+	// 		},
+	// 		spawner: &task_manager.spawn_essential_handle(),
+	// 		can_author_with: sp_consensus::CanAuthorWithNativeVersion::new(
+	// 			client.executor().clone(),
+	// 		),
+	// 		registry: config.prometheus_registry(),
+	// 		check_for_equivocation: Default::default(),
+	// 		telemetry: telemetry.as_ref().map(|x| x.handle()),
+	// 	})?;
 
 	let import_setup = (block_import, grandpa_link);
 
@@ -606,7 +646,7 @@ pub fn new_full_base(
 			let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
 			let raw_slot_duration = slot_duration.slot_duration();
 
-			let aura = sc_consensus_aura::start_aura::<AuraPair, _, _, _, _, _, _, _, _, _, _, _>(
+			let aura = sc_consensus_aura::start_aura::<AuraPair, _, _, _, _, _, _, _, _, _, _, _, _>(
 				StartAuraParams {
 					slot_duration,
 					client: client.clone(),
@@ -633,6 +673,7 @@ pub fn new_full_base(
 					block_proposal_slot_portion: AuraSlotProportion::new(2f32 / 3f32),
 					max_block_proposal_slot_portion: None,
 					telemetry: telemetry.as_ref().map(|x| x.handle()),
+					find_slot,
 				},
 			)?;
 
