@@ -53,3 +53,6 @@ with-parity-db = ["parity-db"]
 [[bench]]
 name = "state_access"
 harness = false
+
+[lib]
+bench = false

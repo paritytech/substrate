@@ -16,43 +16,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use hash_db::{HashDB, EMPTY_PREFIX};
-use rand::{distributions::Uniform, prelude::SliceRandom, rngs::StdRng, Rng, SeedableRng};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
 use sc_client_db::{
 	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
 };
-use sp_blockchain::{lowest_common_ancestor, tree_route};
 use sp_core::H256;
 use sp_runtime::{
-	generic::{BlockId, DigestItem},
+	generic::BlockId,
 	testing::{Block as RawBlock, ExtrinsicWrapper, Header},
-	traits::{BlakeTwo256, Hash},
-	ConsensusEngineId, Storage,
+	Storage,
 };
-use sp_state_machine::{TrieDBMut, TrieMut};
-use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-const CONS0_ENGINE_ID: ConsensusEngineId = *b"CON0";
-const CONS1_ENGINE_ID: ConsensusEngineId = *b"CON1";
-
 pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
-
-fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<BlakeTwo256>) {
-	let mut changes_root = H256::default();
-	let mut changes_trie_update = MemoryDB::<BlakeTwo256>::default();
-	{
-		let mut trie = TrieDBMut::<BlakeTwo256>::new(&mut changes_trie_update, &mut changes_root);
-		for (key, value) in changes {
-			trie.insert(&key, &value).unwrap();
-		}
-	}
-
-	(changes_root, changes_trie_update)
-}
 
 fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 	let mut op = db.begin_operation().unwrap();
