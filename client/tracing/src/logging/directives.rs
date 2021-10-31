@@ -109,5 +109,5 @@ pub(crate) fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 type SCSubscriber<
 	N = tracing_fmt::format::DefaultFields,
 	E = crate::logging::EventFormat,
-	W = fn() -> std::io::Stderr,
+	W = crate::logging::DefaultLogger,
 > = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;
