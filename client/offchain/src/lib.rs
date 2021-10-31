@@ -163,11 +163,7 @@ where
 
 			let mut capabilities = offchain::Capabilities::all();
 
-			// Disable http if requested.
-			if !self.enable_http {
-				capabilities.toggle(offchain::Capabilities::HTTP);
-			}
-
+			capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
 			self.spawn_worker(move || {
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
