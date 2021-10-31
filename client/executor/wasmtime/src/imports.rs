@@ -22,10 +22,9 @@ use crate::{
 };
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, ValueType};
-use std::any::Any;
+use std::{any::Any, convert::TryInto};
 use wasmtime::{
-	Caller, Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
-	Trap, Val,
+	Caller, Extern, ExternType, Func, FuncType, ImportType, Memory, MemoryType, Module, Trap, Val,
 };
 
 pub struct Imports {
@@ -41,7 +40,7 @@ pub(crate) fn resolve_imports(
 	store: &mut Store,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
-	heap_pages: u32,
+	heap_pages: u64,
 	allow_missing_func_imports: bool,
 ) -> Result<Imports, WasmError> {
 	let mut externs = vec![];
@@ -83,7 +82,7 @@ fn import_name<'a, 'b: 'a>(import: &'a ImportType<'b>) -> Result<&'a str, WasmEr
 fn resolve_memory_import(
 	store: &mut Store,
 	import_ty: &ImportType,
-	heap_pages: u32,
+	heap_pages: u64,
 ) -> Result<Extern, WasmError> {
 	let requested_memory_ty = match import_ty.ty() {
 		ExternType::Memory(memory_ty) => memory_ty,
@@ -97,8 +96,8 @@ fn resolve_memory_import(
 
 	// Increment the min (a.k.a initial) number of pages by `heap_pages` and check if it exceeds the
 	// maximum specified by the import.
-	let initial = requested_memory_ty.limits().min().saturating_add(heap_pages);
-	if let Some(max) = requested_memory_ty.limits().max() {
+	let initial = requested_memory_ty.minimum().saturating_add(heap_pages);
+	if let Some(max) = requested_memory_ty.maximum() {
 		if initial > max {
 			return Err(WasmError::Other(format!(
 				"incremented number of pages by heap_pages (total={}) is more than maximum requested\
@@ -109,7 +108,27 @@ fn resolve_memory_import(
 		}
 	}
 
-	let memory_ty = MemoryType::new(Limits::new(initial, requested_memory_ty.limits().max()));
+	// Note that the return value of `maximum` and `minimum`, while a u64,
+	// will always fit into a u32 for 32-bit memories.
+	// 64-bit memories are part of the memory64 proposal for WebAssembly which is not standardized
+	// yet.
+	let minimum: u32 = initial.try_into().map_err(|_| {
+		WasmError::Other(format!(
+			"minimum number of memory pages ({}) doesn't fit into u32",
+			initial
+		))
+	})?;
+	let maximum: Option<u32> = match requested_memory_ty.maximum() {
+		Some(max) => Some(max.try_into().map_err(|_| {
+			WasmError::Other(format!(
+				"maximum number of memory pages ({}) doesn't fit into u32",
+				max
+			))
+		})?),
+		None => None,
+	};
+
+	let memory_ty = MemoryType::new(minimum, maximum);
 	let memory = Memory::new(store, memory_ty).map_err(|e| {
 		WasmError::Other(format!(
 			"failed to create a memory during resolving of memory import: {}",
