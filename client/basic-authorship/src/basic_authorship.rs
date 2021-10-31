@@ -113,22 +113,6 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 			_phantom: PhantomData,
 		}
 	}
-
-	/// Set soft deadline percentage.
-	///
-	/// The value is used to compute soft deadline during block production.
-	/// The soft deadline indicates where we should stop attempting to add transactions
-	/// to the block, which exhaust resources. After soft deadline is reached,
-	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
-	/// transactions which exhaust resrouces, we will conclude that the block is full.
-	///
-	/// Setting the value too low will significantly limit the amount of transactions
-	/// we try in case they exhaust resources. Setting the value too high can
-	/// potentially open a DoS vector, where many "exhaust resources" transactions
-	/// are being tried with no success, hence block producer ends up creating an empty block.
-	pub fn set_soft_deadline(&mut self, percent: Percent) {
-		self.soft_deadline_percent = percent;
-	}
 }
 
 impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
@@ -174,6 +158,22 @@ impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// will be used.
 	pub fn set_default_block_size_limit(&mut self, limit: usize) {
 		self.default_block_size_limit = limit;
+	}
+
+	/// Set soft deadline percentage.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	///
+	/// Setting the value too low will significantly limit the amount of transactions
+	/// we try in case they exhaust resources. Setting the value too high can
+	/// potentially open a DoS vector, where many "exhaust resources" transactions
+	/// are being tried with no success, hence block producer ends up creating an empty block.
+	pub fn set_soft_deadline(&mut self, percent: Percent) {
+		self.soft_deadline_percent = percent;
 	}
 }
 
