@@ -19,7 +19,10 @@
 use crate::{
 	build_network_future,
 	client::{Client, ClientConfig},
-	config::{Configuration, KeystoreConfig, OffchainWorkerConfig, PrometheusConfig, TransactionStorageMode},
+	config::{
+		Configuration, KeystoreConfig, OffchainWorkerConfig, PrometheusConfig,
+		TransactionStorageMode,
+	},
 	error::Error,
 	metrics::MetricsService,
 	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
