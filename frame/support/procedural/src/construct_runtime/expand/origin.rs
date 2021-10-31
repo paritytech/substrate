@@ -22,18 +22,11 @@ use syn::{token, Generics, Ident};
 
 pub fn expand_outer_origin(
 	runtime: &Ident,
+	system_pallet: &Pallet,
 	pallets: &[Pallet],
 	pallets_token: token::Brace,
 	scrate: &TokenStream,
 ) -> syn::Result<TokenStream> {
-	let system_pallet =
-		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
-			syn::Error::new(
-				pallets_token.span,
-				"`System` pallet declaration is missing. \
-			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
-			)
-		})?;
 
 	let mut caller_variants = TokenStream::new();
 	let mut pallet_conversions = TokenStream::new();
