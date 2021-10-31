@@ -29,7 +29,7 @@
 //! far in the future they are.
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
-#![forbid(missing_docs, unsafe_code)]
+// #![forbid(missing_docs, unsafe_code)]
 use std::{
 	convert::{TryFrom, TryInto},
 	fmt::Debug,
@@ -40,7 +40,7 @@ use std::{
 };
 
 use futures::prelude::*;
-use log::{debug, trace};
+use log::{debug, trace, warn};
 
 use codec::{Codec, Decode, Encode};
 
@@ -115,7 +115,7 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 }
 
 /// Parameters of [`start_aura`].
-pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
+pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW, F> {
 	/// The duration of a slot.
 	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
@@ -151,10 +151,12 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Function to return a given header's slot.
+	pub find_slot: F,
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
+pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, F, Error>(
 	StartAuraParams {
 		slot_duration,
 		client,
@@ -171,7 +173,8 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		telemetry,
-	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW>,
+		find_slot,
+	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW, F>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error>
 where
 	P: Pair + Send + Sync,
@@ -190,9 +193,10 @@ where
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	CAW: CanAuthorWith<B> + Send,
+	F: Fn(&B::Header) -> Result<Slot, crate::Error<B>> + Send + Sync,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
-	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
+	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client: client.clone(),
 		block_import,
 		proposer_factory,
@@ -204,6 +208,7 @@ where
 		telemetry,
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
+		find_slot,
 	});
 
 	Ok(sc_consensus_slots::start_slot_worker(
@@ -217,7 +222,7 @@ where
 }
 
 /// Parameters of [`build_aura_worker`].
-pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
+pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS, F> {
 	/// The client to interact with the chain.
 	pub client: Arc<C>,
 	/// The block import.
@@ -245,12 +250,14 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
 	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Function to return a given header's slot.
+	pub find_slot: F,
 }
 
 /// Build the aura worker.
 ///
 /// The caller is responsible for running this worker, otherwise it will do nothing.
-pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
+pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, F, Error>(
 	BuildAuraWorkerParams {
 		client,
 		block_import,
@@ -263,7 +270,8 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		max_block_proposal_slot_portion,
 		telemetry,
 		force_authoring,
-	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS>,
+		find_slot,
+	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS, F>,
 ) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof>
 where
 	B: BlockT,
@@ -279,6 +287,7 @@ where
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
+	F: Fn(&B::Header) -> Result<Slot, crate::Error<B>> + Send + Sync,
 {
 	AuraWorker {
 		client,
@@ -292,11 +301,12 @@ where
 		telemetry,
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
+		find_slot,
 		_key_type: PhantomData::<P>,
 	}
 }
 
-struct AuraWorker<C, E, I, P, SO, L, BS> {
+struct AuraWorker<C, E, I, P, SO, L, BS, F> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
@@ -308,12 +318,13 @@ struct AuraWorker<C, E, I, P, SO, L, BS> {
 	block_proposal_slot_portion: SlotProportion,
 	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
+	find_slot: F,
 	_key_type: PhantomData<P>,
 }
 
 #[async_trait::async_trait]
-impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
-	for AuraWorker<C, E, I, P, SO, L, BS>
+impl<B, C, E, I, P, Error, SO, L, BS, F> sc_consensus_slots::SimpleSlotWorker<B>
+	for AuraWorker<C, E, I, P, SO, L, BS, F>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + HeaderBackend<B> + Sync,
@@ -327,6 +338,7 @@ where
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
+	F: Fn(&B::Header) -> Result<Slot, crate::Error<B>> + Send + Sync,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	type BlockImport = I;
@@ -445,7 +457,7 @@ where
 
 	fn should_backoff(&self, slot: Slot, chain_head: &B::Header) -> bool {
 		if let Some(ref strategy) = self.backoff_authoring_blocks {
-			if let Ok(chain_head_slot) = find_pre_digest::<B, P::Signature>(chain_head) {
+			if let Ok(chain_head_slot) = (self.find_slot)(chain_head) {
 				return strategy.should_backoff(
 					*chain_head.number(),
 					chain_head_slot,
@@ -479,7 +491,7 @@ where
 	}
 
 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
-		let parent_slot = find_pre_digest::<B, P::Signature>(&slot_info.chain_head).ok();
+		let parent_slot = (self.find_slot)(&slot_info.chain_head).ok();
 
 		sc_consensus_slots::proposing_remaining_duration(
 			parent_slot,
@@ -493,12 +505,12 @@ where
 }
 
 fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: "aura", "{}", error);
+	warn!(target: "aura", "{}", error);
 	error
 }
 
 #[derive(derive_more::Display, Debug)]
-enum Error<B: BlockT> {
+pub enum Error<B: BlockT> {
 	#[display(fmt = "Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
 	#[display(fmt = "No Aura pre-runtime digest found")]
@@ -524,7 +536,7 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
+pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
 	if header.number().is_zero() {
 		return Ok(0.into())
 	}
