@@ -8329,7 +8329,6 @@ dependencies = [
  "sc-executor",
  "sc-informant",
  "sc-keystore",
- "sc-light",
  "sc-network",
  "sc-offchain",
  "sc-rpc",

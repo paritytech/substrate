@@ -27,6 +27,8 @@ mod tests;
 mod tests_instance;
 mod utils;
 
+pub mod baseline;
+
 #[cfg(feature = "std")]
 pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector, RegressionModel};
 #[doc(hidden)]
