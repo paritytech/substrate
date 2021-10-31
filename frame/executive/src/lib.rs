@@ -402,12 +402,12 @@ where
 		maybe_first_non_inherent_index: Option<u32>,
 	) {
 		if maybe_first_non_inherent_index.is_none() {
-			Self::on_post_inherent(block_number)
+			Self::on_post_inherent()
 		}
 		extrinsics.into_iter().enumerate().for_each(|(i, e)| {
 			if let Some(first_non_inherent_index) = maybe_first_non_inherent_index {
 				if first_non_inherent_index == i as u32 {
-					Self::on_post_inherent(block_number)
+					Self::on_post_inherent()
 				}
 			}
 			if let Err(e) = Self::apply_extrinsic(e) {
@@ -435,7 +435,8 @@ where
 		<frame_system::Pallet<System>>::finalize()
 	}
 
-	pub fn on_post_inherent(block_number: NumberFor<Block>) {
+	pub fn on_post_inherent() {
+		let block_number = <frame_system::Pallet<System>>::block_number();
 		let mut weight = 0;
 		weight = weight.saturating_add(<frame_system::Pallet<System> as OnPostInherent<
 			System::BlockNumber,

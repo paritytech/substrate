@@ -368,8 +368,7 @@ impl_runtime_apis! {
 		}
 
 		fn on_post_inherent() {
-			let n = frame_system::Pallet::<Self>::block_number();
-			Executive::on_post_inherent(n);
+			Executive::on_post_inherent();
 		}
 	}
 
