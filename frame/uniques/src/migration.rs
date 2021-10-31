@@ -32,8 +32,10 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 	);
 
 	if on_chain_storage_version < 1 {
+		let mut count = 0;
 		for (class, detail) in Class::<T, I>::iter() {
 			ClassAccount::<T, I>::insert(&detail.owner, &class, ());
+			count += 1;
 		}
 		StorageVersion::new(1).put::<P>();
 		log::info!(
@@ -42,7 +44,6 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 			on_chain_storage_version,
 		);
 		// calculate and return migration weights
-		let count = Class::<T, I>::iter().count();
 		T::DbWeight::get().reads_writes(count as Weight + 1, count as Weight + 1)
 	} else {
 		log::warn!(
@@ -50,6 +51,6 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 			"Attempted to apply migration to v1 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);
-		0
+		T::DbWeight::get().reads(1)
 	}
 }
