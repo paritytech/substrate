@@ -205,17 +205,16 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
+		/// A new multisig operation has begun.
 		NewMultisig { approving: T::AccountId, multisig: T::AccountId, call_hash: CallHash },
 		/// A multisig operation has been approved by someone.
-		/// \[approving, timepoint, multisig, call_hash\]
 		MultisigApproval {
 			approving: T::AccountId,
 			timepoint: Timepoint<T::BlockNumber>,
 			multisig: T::AccountId,
 			call_hash: CallHash,
 		},
-		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
+		/// A multisig operation has been executed.
 		MultisigExecuted {
 			approving: T::AccountId,
 			timepoint: Timepoint<T::BlockNumber>,
@@ -223,7 +222,7 @@ pub mod pallet {
 			call_hash: CallHash,
 			result: DispatchResult,
 		},
-		/// A multisig operation has been cancelled. \[cancelling, timepoint, multisig, call_hash\]
+		/// A multisig operation has been cancelled.
 		MultisigCancelled {
 			cancelling: T::AccountId,
 			timepoint: Timepoint<T::BlockNumber>,

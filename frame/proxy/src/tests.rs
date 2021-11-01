@@ -407,7 +407,7 @@ fn filtering_works() {
 		);
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_events(vec![
-			BalancesEvent::<Test>::Unreserved { who: 1, value: 5 }.into(),
+			BalancesEvent::<Test>::Unreserved { who: 1, amount: 5 }.into(),
 			ProxyEvent::ProxyExecuted { result: Ok(()) }.into(),
 		]);
 	});

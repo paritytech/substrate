@@ -315,13 +315,13 @@ benchmarks! {
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
 		);
 		let balance_slash = |id| core::iter::once(
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed{who: id, amount_slashed: slash_amount.into()})
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
 		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
 		);
 		let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit{who: id, deposit: amount.into()});
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
 		let mut first = true;
 		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {

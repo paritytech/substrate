@@ -448,7 +448,7 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Deposit {
 						who: ALICE,
-						deposit: 1_000_000
+						amount: 1_000_000
 					}),
 					topics: vec![],
 				},
@@ -483,7 +483,7 @@ fn instantiate_and_call_and_deposit_event() {
 					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
-						value: subsistence * 100
+						amount: subsistence * 100
 					}),
 					topics: vec![],
 				},
@@ -774,7 +774,7 @@ fn self_destruct_works() {
 					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: addr.clone(),
 						to: DJANGO,
-						value: 100_000,
+						amount: 100_000,
 					}),
 					topics: vec![],
 				},

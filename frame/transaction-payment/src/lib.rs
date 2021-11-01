@@ -1322,7 +1322,7 @@ mod tests {
 				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer {
 					from: 2,
 					to: 3,
-					value: 80,
+					amount: 80,
 				}));
 				// Killed Event
 				System::assert_has_event(Event::System(system::Event::KilledAccount(2)));

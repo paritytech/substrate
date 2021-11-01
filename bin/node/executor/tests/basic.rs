@@ -398,7 +398,7 @@ fn full_native_block_import_works() {
 				event: Event::Balances(pallet_balances::Event::Transfer {
 					from: alice().into(),
 					to: bob().into(),
-					value: 69 * DOLLARS,
+					amount: 69 * DOLLARS,
 				}),
 				topics: vec![],
 			},
@@ -406,7 +406,7 @@ fn full_native_block_import_works() {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Deposit {
 					who: pallet_treasury::Pallet::<Runtime>::account_id(),
-					deposit: fees * 8 / 10,
+					amount: fees * 8 / 10,
 				}),
 				topics: vec![],
 			},
@@ -468,7 +468,7 @@ fn full_native_block_import_works() {
 				event: Event::Balances(pallet_balances::Event::Transfer {
 					from: bob().into(),
 					to: alice().into(),
-					value: 5 * DOLLARS,
+					amount: 5 * DOLLARS,
 				}),
 				topics: vec![],
 			},
@@ -476,7 +476,7 @@ fn full_native_block_import_works() {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::Balances(pallet_balances::Event::Deposit {
 					who: pallet_treasury::Pallet::<Runtime>::account_id(),
-					deposit: fees * 8 / 10,
+					amount: fees * 8 / 10,
 				}),
 				topics: vec![],
 			},
@@ -506,7 +506,7 @@ fn full_native_block_import_works() {
 				event: Event::Balances(pallet_balances::Event::Transfer {
 					from: alice().into(),
 					to: bob().into(),
-					value: 15 * DOLLARS,
+					amount: 15 * DOLLARS,
 				}),
 				topics: vec![],
 			},
@@ -514,7 +514,7 @@ fn full_native_block_import_works() {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::Balances(pallet_balances::Event::Deposit {
 					who: pallet_treasury::Pallet::<Runtime>::account_id(),
-					deposit: fees * 8 / 10,
+					amount: fees * 8 / 10,
 				}),
 				topics: vec![],
 			},
