@@ -119,6 +119,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 					})
 					.collect(),
 			}),
+			Genesis::Hash(_) => Err("Genesis storage in hash format not supported".into())
 		}
 	}
 
@@ -144,6 +145,7 @@ pub struct RawGenesis {
 enum Genesis<G> {
 	Runtime(G),
 	Raw(RawGenesis),
+	Hash(StorageData),
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
