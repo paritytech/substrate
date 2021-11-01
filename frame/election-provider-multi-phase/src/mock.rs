@@ -446,7 +446,7 @@ impl ElectionDataProvider<AccountId, u64, MaxValidatorsCount> for StakingMock {
 			.map_err(|_| "Targets too big")?;
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
-			return Err("Targets too big");
+			return Err("Targets too big")
 		}
 
 		Ok(targets)

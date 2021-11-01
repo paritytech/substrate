@@ -78,7 +78,7 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedVec exceeds its limit".into());
+			return Err("BoundedVec exceeds its limit".into())
 		}
 		Ok(Self(inner, PhantomData))
 	}

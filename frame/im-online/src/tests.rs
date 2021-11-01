@@ -136,9 +136,8 @@ fn heartbeat(
 		signature: signature.clone(),
 	})
 	.map_err(|e| match e {
-		TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) => {
-			"invalid validators len"
-		}
+		TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) =>
+			"invalid validators len",
 		e @ _ => <&'static str>::from(e),
 	})?;
 	ImOnline::heartbeat(Origin::none(), heartbeat, signature)

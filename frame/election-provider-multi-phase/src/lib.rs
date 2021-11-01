@@ -741,14 +741,14 @@ pub mod pallet {
 						Ok(_) => {
 							Self::on_initialize_open_signed();
 							T::WeightInfo::on_initialize_open_signed()
-						}
+						},
 						Err(why) => {
 							// Not much we can do about this at this point.
 							log!(warn, "failed to open signed phase due to {:?}", why);
 							T::WeightInfo::on_initialize_nothing()
-						}
+						},
 					}
-				}
+				},
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
@@ -780,17 +780,17 @@ pub mod pallet {
 							Ok(_) => {
 								Self::on_initialize_open_unsigned(enabled, now);
 								T::WeightInfo::on_initialize_open_unsigned()
-							}
+							},
 							Err(why) => {
 								log!(warn, "failed to open unsigned phase due to {:?}", why);
 								T::WeightInfo::on_initialize_nothing()
-							}
+							},
 						}
 					} else {
 						Self::on_initialize_open_unsigned(enabled, now);
 						T::WeightInfo::on_initialize_open_unsigned()
 					}
-				}
+				},
 				_ => T::WeightInfo::on_initialize_nothing(),
 			}
 		}
@@ -810,10 +810,10 @@ pub mod pallet {
 			match lock.try_lock() {
 				Ok(_guard) => {
 					Self::do_synchronized_offchain_worker(now);
-				}
+				},
 				Err(deadline) => {
 					log!(debug, "offchain worker lock not released, deadline is {:?}", deadline);
-				}
+				},
 			};
 		}
 
@@ -980,8 +980,8 @@ pub mod pallet {
 
 			// ensure witness data is correct.
 			ensure!(
-				num_signed_submissions
-					>= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				num_signed_submissions >=
+					<SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
 				Error::<T>::SignedInvalidWitness,
 			);
 
@@ -1096,7 +1096,7 @@ pub mod pallet {
 			if let Call::submit_unsigned { raw_solution, .. } = call {
 				// Discard solution not coming from the local OCW.
 				match source {
-					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 					_ => return InvalidTransaction::Call.into(),
 				}
 
@@ -1262,15 +1262,15 @@ impl<T: Config> Pallet<T> {
 					Self::mine_check_save_submit()
 				});
 				log!(debug, "initial offchain thread output: {:?}", initial_output);
-			}
+			},
 			Phase::Unsigned((true, opened)) if opened < now => {
 				// Try and resubmit the cached solution, and recompute ONLY if it is not
 				// feasible.
 				let resubmit_output = Self::ensure_offchain_repeat_frequency(now)
 					.and_then(|_| Self::restore_or_compute_then_maybe_submit());
 				log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 	}
 
@@ -1342,7 +1342,7 @@ impl<T: Config> Pallet<T> {
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
 		Ok((targets, voters, desired_targets))
@@ -1452,7 +1452,7 @@ impl<T: Config> Pallet<T> {
 
 				// Check that all of the targets are valid based on the snapshot.
 				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote);
+					return Err(FeasibilityError::InvalidVote)
 				}
 				Ok(())
 			})
@@ -1545,12 +1545,12 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber, T::MaxTargets> fo
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
 				Ok(supports)
-			}
+			},
 			Err(why) => {
 				log!(error, "Entering emergency mode: {:?}", why);
 				<CurrentPhase<T>>::put(Phase::Emergency);
 				Err(why)
-			}
+			},
 		}
 	}
 }
@@ -2015,7 +2015,9 @@ mod tests {
 	fn snapshot_too_big_failure_onchain_fallback_fail() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
-			Targets::set((0..(crate::mock::MaxValidatorsCount::get() as u64 + 1)).collect::<Vec<_>>());
+			Targets::set(
+				(0..(crate::mock::MaxValidatorsCount::get() as u64 + 1)).collect::<Vec<_>>(),
+			);
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2118,9 +2120,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active)
-			<= <Runtime as frame_system::Config>::BlockWeights::get().max_block
-			|| active == all_voters
+		while weight_with(active) <=
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
+			active == all_voters
 		{
 			active += 1;
 		}

@@ -551,7 +551,7 @@ where
 			}
 
 			if unlocking_balance >= value {
-				break;
+				break
 			}
 		}
 

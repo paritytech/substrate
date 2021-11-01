@@ -117,7 +117,8 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: bool,
 		_: &[(AccountId, Ks)],
 		_: &[(AccountId, Ks)],
-	) {}
+	) {
+	}
 
 	fn on_disabled(_: u32) {}
 }
@@ -167,10 +168,9 @@ impl frame_election_provider_support::ElectionProvider<AccountId, BlockNumber>
 	type Error = ();
 	type DataProvider = pallet_staking::Module<Test>;
 
-	fn elect() -> Result<
-		(sp_npos_elections::Supports<AccountId>, frame_support::weights::Weight),
-		Self::Error
-	> {
+	fn elect(
+	) -> Result<(sp_npos_elections::Supports<AccountId>, frame_support::weights::Weight), Self::Error>
+	{
 		Err(())
 	}
 }

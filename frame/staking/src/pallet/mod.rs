@@ -982,23 +982,24 @@ pub mod pallet {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight =
-				if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
-					// This account must have called `unbond()` with some value that caused the active
-					// portion to fall below existential deposit + will have no more unlocking chunks
-					// left. We can now safely remove all staking-related information.
-					Self::kill_stash(&stash, num_slashing_spans)?;
-					// Remove the lock.
-					T::Currency::remove_lock(STAKING_ID, &stash);
-					// This is worst case scenario, so we use the full weight and return None
-					None
-				} else {
-					// This was the consequence of a partial unbond. just update the ledger and move on.
-					Self::update_ledger(&controller, &ledger);
+			let post_info_weight = if ledger.unlocking.is_empty() &&
+				ledger.active < T::Currency::minimum_balance()
+			{
+				// This account must have called `unbond()` with some value that caused the active
+				// portion to fall below existential deposit + will have no more unlocking chunks
+				// left. We can now safely remove all staking-related information.
+				Self::kill_stash(&stash, num_slashing_spans)?;
+				// Remove the lock.
+				T::Currency::remove_lock(STAKING_ID, &stash);
+				// This is worst case scenario, so we use the full weight and return None
+				None
+			} else {
+				// This was the consequence of a partial unbond. just update the ledger and move on.
+				Self::update_ledger(&controller, &ledger);
 
-					// This is only an update, so we use less overall weight.
-					Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-				};
+				// This is only an update, so we use less overall weight.
+				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
+			};
 
 			// `old_total` should never be less than the new total because
 			// `consolidate_unlocked` strictly subtracts balance.
