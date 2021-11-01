@@ -33,6 +33,7 @@ sc-utils = { version = "4.0.0-dev", path = "../utils" }
 threadpool = "1.7"
 hyper = "0.14.11"
 hyper-rustls = "0.22.1"
+once_cell = "1.8"
 
 [dev-dependencies]
 sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }

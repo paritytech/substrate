@@ -35,9 +35,6 @@
 //!   taken.
 //! * `clear_name` - Remove an account's associated name; the deposit is returned.
 //! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
-//!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

@@ -58,7 +58,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime},
-		EnsureOrigin, Get, IsType, OriginTrait,
+		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -69,7 +69,7 @@ use sp_runtime::{
 	traits::{BadOrigin, One, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*};
+use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
@@ -159,6 +159,15 @@ pub mod pallet {
 
 		/// Required origin to schedule or cancel calls.
 		type ScheduleOrigin: EnsureOrigin<<Self as system::Config>::Origin>;
+
+		/// Compare the privileges of origins.
+		///
+		/// This will be used when canceling a task, to ensure that the origin that tries
+		/// to cancel has greater or equal privileges as the origin that created the scheduled task.
+		///
+		/// For simplicity the [`EqualPrivilegeOnly`](frame_support::traits::EqualPrivilegeOnly) can
+		/// be used. This will only check if two given origins are equal.
+		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
 
 		/// The maximum number of scheduled calls in the queue for a single block.
 		/// Not strictly enforced, but used for weight estimation.
@@ -614,7 +623,10 @@ impl<T: Config> Pallet<T> {
 				Ok(None),
 				|s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-						if *o != s.origin {
+						if matches!(
+							T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
+							Some(Ordering::Less) | None
+						) {
 							return Err(BadOrigin.into())
 						}
 					};
@@ -709,7 +721,10 @@ impl<T: Config> Pallet<T> {
 				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
 					if let Some(s) = agenda.get_mut(i) {
 						if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-							if *o != s.origin {
+							if matches!(
+								T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
+								Some(Ordering::Less) | None
+							) {
 								return Err(BadOrigin.into())
 							}
 						}
@@ -832,7 +847,7 @@ mod tests {
 	use crate as scheduler;
 	use frame_support::{
 		assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{Contains, OnFinalize, OnInitialize},
+		traits::{Contains, EqualPrivilegeOnly, OnFinalize, OnInitialize},
 		weights::constants::RocksDbWeight,
 		Hashable,
 	};
@@ -980,6 +995,7 @@ mod tests {
 		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
+		type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	}
 
 	pub type LoggerCall = logger::Call<Test>;
