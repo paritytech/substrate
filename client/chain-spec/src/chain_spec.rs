@@ -119,6 +119,8 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 					})
 					.collect(),
 			}),
+			// The `Hash` variant exists as a way to keep note that other clients support it, but
+			// Substrate itself isn't capable of loading chain specs with just a hash.
 			Genesis::Hash(_) => Err("Genesis storage in hash format not supported".into())
 		}
 	}
