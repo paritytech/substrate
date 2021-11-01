@@ -1094,10 +1094,7 @@ mod tests {
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
-	use sp_runtime::{
-		traits::{BadOrigin, Hash},
-		DispatchError,
-	};
+	use sp_runtime::{traits::Hash, DispatchError};
 	use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 	type System = frame_system::Pallet<Test>;
@@ -2164,7 +2161,7 @@ mod tests {
 						phase: Phase::Initialization,
 						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted(
 							1,
-							BadOrigin.into()
+							frame_system::Error::<Test>::CallFiltered.into()
 						),),
 						topics: vec![],
 					},
