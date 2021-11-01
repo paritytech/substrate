@@ -294,7 +294,7 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 		// We read the entire file into memory first, as this is *a lot* faster than using
 		// `serde_json::from_reader`. See https://github.com/serde-rs/json/issues/160
 		file.read_to_end(&mut bytes)
-			.map_err(|e| format!("Error read spec file: {}", e))?;
+			.map_err(|e| format!("Error reading spec file: {}", e))?;
 
 		let client_spec =
 			json::from_slice(&bytes).map_err(|e| format!("Error parsing spec file: {}", e))?;
