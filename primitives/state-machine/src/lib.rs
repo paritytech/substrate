@@ -969,7 +969,6 @@ mod tests {
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
-		change_changes_trie_config: bool,
 		native_available: bool,
 		native_succeeds: bool,
 		fallback_succeeds: bool,
@@ -1027,7 +1026,6 @@ mod tests {
 			&backend,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: true,
@@ -1052,7 +1050,6 @@ mod tests {
 			&backend,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: true,
@@ -1078,7 +1075,6 @@ mod tests {
 			&backend,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: false,
@@ -1105,7 +1101,6 @@ mod tests {
 	#[test]
 	fn prove_execution_and_proof_check_works() {
 		let executor = DummyCodeExecutor {
-			change_changes_trie_config: false,
 			native_available: true,
 			native_succeeds: true,
 			fallback_succeeds: true,
@@ -1715,7 +1710,6 @@ mod tests {
 			&backend,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: false,
