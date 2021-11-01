@@ -53,7 +53,6 @@ sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
-sc-light = { version = "4.0.0-dev", path = "../light" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }

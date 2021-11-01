@@ -199,14 +199,14 @@ where
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
-			let res = || match state_version {
+			let res = match state_version {
 				StateVersion::V0 =>
 					delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(&mut eph, root, delta),
 				StateVersion::V1 =>
 					delta_trie_root::<LayoutV1<H>, _, _, _, _, _>(&mut eph, root, delta),
 			};
 
-			match res() {
+			match res {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}

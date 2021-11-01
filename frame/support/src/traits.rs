@@ -50,10 +50,10 @@ pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter
 
 mod misc;
 pub use misc::{
-	Backing, ConstU32, EnsureInherentsAreFirst, EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get,
-	GetBacking, GetDefault, HandleLifetime, IsSubType, IsType, Len, OffchainWorker,
-	OnKilledAccount, OnNewAccount, SameOrOther, Time, TryDrop, UnixTime, WrapperKeepOpaque,
-	WrapperOpaque,
+	Backing, ConstU32, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee, ExecuteBlock,
+	ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType, Len,
+	OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp, SameOrOther, Time, TryDrop,
+	UnixTime, WrapperKeepOpaque, WrapperOpaque,
 };
 
 mod stored_map;

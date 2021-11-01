@@ -330,7 +330,7 @@ where
 		&mut self,
 		input: Storage,
 		commit: bool,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
 
@@ -360,9 +360,9 @@ where
 			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
-		let storage_update = InMemoryBackend::from((storage, state_hash));
+		let storage_update = InMemoryBackend::from((storage, state_version));
 		let (storage_root, _) =
-			storage_update.full_storage_root(std::iter::empty(), child_delta, state_hash);
+			storage_update.full_storage_root(std::iter::empty(), child_delta, state_version);
 		if commit {
 			self.storage_update = Some(storage_update);
 		}
@@ -373,7 +373,7 @@ where
 	fn reset_storage(
 		&mut self,
 		_input: Storage,
-		_state_hash: StateVersion,
+		_state_version: StateVersion,
 	) -> ClientResult<Block::Hash> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
@@ -532,13 +532,14 @@ where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.storage_root(delta, state_hash),
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				state.storage_root(delta, state_version),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
@@ -547,14 +548,15 @@ where
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		state_hash: StateVersion,
+		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(child_info, delta, state_hash);
+				let (root, is_equal, _) =
+					state.child_storage_root(child_info, delta, state_version);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable => (H::Out::default(), true, Default::default()),

@@ -190,13 +190,13 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let state_hash = sp_core::StateVersion::default();
+		let state_version = sp_core::StateVersion::default();
 		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
 		let storage = storage.update(
 			vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])],
-			state_hash,
+			state_version,
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
 		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(), Some(b"3".to_vec()));
@@ -206,17 +206,17 @@ mod tests {
 
 	#[test]
 	fn insert_multiple_times_child_data_works() {
-		let state_hash = sp_core::StateVersion::default();
+		let state_version = sp_core::StateVersion::default();
 		let mut storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 
 		storage.insert(
 			vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])],
-			state_hash,
+			state_version,
 		);
 		storage.insert(
 			vec![(Some(child_info.clone()), vec![(b"1".to_vec(), Some(b"3".to_vec()))])],
-			state_hash,
+			state_version,
 		);
 
 		assert_eq!(storage.child_storage(&child_info, &b"2"[..]), Ok(Some(b"3".to_vec())));
