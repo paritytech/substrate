@@ -298,9 +298,9 @@ impl AsyncApi {
 	pub fn new(
 		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 		is_validator: bool,
-		shared_client: SharedClient,
+		shared_http_client: SharedClient,
 	) -> (Api, Self) {
-		let (http_api, http_worker) = http::http(shared_client);
+		let (http_api, http_worker) = http::http(shared_http_client);
 
 		let api = Api { network_provider, is_validator, http: http_api };
 
@@ -310,10 +310,8 @@ impl AsyncApi {
 	}
 
 	/// Run a processing task for the API
-	pub fn process(mut self) -> impl Future<Output = ()> {
-		let http = self.http.take().expect("Take invoked only once.");
-
-		http
+	pub fn process(self) -> impl Future<Output = ()> {
+		self.http.expect("`process` is only called once; qed")
 	}
 }
 
@@ -328,7 +326,7 @@ mod tests {
 		time::SystemTime,
 	};
 
-	struct TestNetwork();
+	pub(super) struct TestNetwork();
 
 	impl NetworkProvider for TestNetwork {
 		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {

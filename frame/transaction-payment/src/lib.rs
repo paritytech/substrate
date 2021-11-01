@@ -403,7 +403,7 @@ where
 	///
 	/// All dispatchables must be annotated with weight and will have some fee info. This function
 	/// always returns.
-	pub fn query_info<Extrinsic: GetDispatchInfo>(
+	pub fn query_info<Extrinsic: sp_runtime::traits::Extrinsic + GetDispatchInfo>(
 		unchecked_extrinsic: Extrinsic,
 		len: u32,
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
@@ -417,14 +417,20 @@ where
 		// a very very little potential gain in the future.
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
-		let partial_fee = Self::compute_fee(len, &dispatch_info, 0u32.into());
+		let partial_fee = if unchecked_extrinsic.is_signed().unwrap_or(false) {
+			Self::compute_fee(len, &dispatch_info, 0u32.into())
+		} else {
+			// Unsigned extrinsics have no partial fee.
+			0u32.into()
+		};
+
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo { weight, class, partial_fee }
 	}
 
 	/// Query the detailed fee of a given `call`.
-	pub fn query_fee_details<Extrinsic: GetDispatchInfo>(
+	pub fn query_fee_details<Extrinsic: sp_runtime::traits::Extrinsic + GetDispatchInfo>(
 		unchecked_extrinsic: Extrinsic,
 		len: u32,
 	) -> FeeDetails<BalanceOf<T>>
@@ -432,7 +438,15 @@ where
 		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
-		Self::compute_fee_details(len, &dispatch_info, 0u32.into())
+
+		let tip = 0u32.into();
+
+		if unchecked_extrinsic.is_signed().unwrap_or(false) {
+			Self::compute_fee_details(len, &dispatch_info, tip)
+		} else {
+			// Unsigned extrinsics have no inclusion fee.
+			FeeDetails { inclusion_fee: None, tip }
+		}
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -1141,20 +1155,24 @@ mod tests {
 	}
 
 	#[test]
-	fn query_info_works() {
+	fn query_info_and_fee_details_works() {
 		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let origin = 111111;
 		let extra = ();
-		let xt = TestXt::new(call, Some((origin, extra)));
+		let xt = TestXt::new(call.clone(), Some((origin, extra)));
 		let info = xt.get_dispatch_info();
 		let ext = xt.encode();
 		let len = ext.len() as u32;
+
+		let unsigned_xt = TestXt::<_, ()>::new(call, None);
+		let unsigned_xt_info = unsigned_xt.get_dispatch_info();
+
 		ExtBuilder::default().base_weight(5).weight_fee(2).build().execute_with(|| {
 			// all fees should be x1.5
 			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 
 			assert_eq!(
-				TransactionPayment::query_info(xt, len),
+				TransactionPayment::query_info(xt.clone(), len),
 				RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,
@@ -1162,6 +1180,33 @@ mod tests {
 						+ len as u64  /* len * 1 */
 						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
 				},
+			);
+
+			assert_eq!(
+				TransactionPayment::query_info(unsigned_xt.clone(), len),
+				RuntimeDispatchInfo {
+					weight: unsigned_xt_info.weight,
+					class: unsigned_xt_info.class,
+					partial_fee: 0,
+				},
+			);
+
+			assert_eq!(
+				TransactionPayment::query_fee_details(xt, len),
+				FeeDetails {
+					inclusion_fee: Some(InclusionFee {
+						base_fee: 5 * 2,
+						len_fee: len as u64,
+						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block) as u64 *
+							2 * 3 / 2
+					}),
+					tip: 0,
+				},
+			);
+
+			assert_eq!(
+				TransactionPayment::query_fee_details(unsigned_xt, len),
+				FeeDetails { inclusion_fee: None, tip: 0 },
 			);
 		});
 	}
