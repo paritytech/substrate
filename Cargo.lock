@@ -9462,6 +9462,8 @@ name = "sp-panic-handler"
 version = "3.0.0"
 dependencies = [
  "backtrace",
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]
