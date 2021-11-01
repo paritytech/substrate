@@ -287,8 +287,7 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
 		// We read the entire file into memory first, as this is *a lot* faster than using
 		// `serde_json::from_reader`. See https://github.com/serde-rs/json/issues/160
-		let bytes = std::fs::read(path)
-			.map_err(|e| format!("Error reading spec file: {}", e))?;
+		let bytes = std::fs::read(&path).map_err(|e| format!("Error reading spec file: {}", e))?;
 
 		let client_spec =
 			json::from_slice(&bytes).map_err(|e| format!("Error parsing spec file: {}", e))?;
