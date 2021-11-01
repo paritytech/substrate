@@ -325,9 +325,16 @@ impl<'a> fmt::Write for ControlCodeSanitizer<'a> {
 // NOTE: When making any changes here make sure to also change this function in `sp-panic-handler`.
 fn strip_control_codes(input: &str) -> std::borrow::Cow<str> {
 	lazy_static::lazy_static! {
-		// This regex will match all valid VT100 escape codes, as well as any other
-		// ASCII and Unicode (both C0 and C1) control codes different than a newline.
-		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m|[\x00-\x09\x0B-\x1F\x7F\\u{80}-\\u{9F}]").expect("regex parsing doesn't fail; qed");
+		static ref RE: Regex = Regex::new(r#"(?x)
+			\x1b\[[^m]+m|        # VT100 escape codes
+			[
+			  \x00-\x09\x0B-\x1F # ASCII control codes / Unicode C0 control codes, except \n
+			  \x7F               # ASCII delete
+			  \u{80}-\u{9F}      # Unicode C1 control codes
+			  \u{202A}-\u{202E}  # Unicode left-to-right / right-to-left control characters
+			  \u{2066}-\u{2069}  # Same as above
+			]
+		"#).expect("regex parsing doesn't fail; qed");
 	}
 
 	RE.replace_all(input, "")
