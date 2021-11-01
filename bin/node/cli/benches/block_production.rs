@@ -29,11 +29,10 @@ use sc_consensus::{
 use sc_service::{
 	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionPoolOptions, TransactionStorageMode, WasmExecutionMethod,
+		PruningMode, TransactionStorageMode, WasmExecutionMethod,
 	},
 	BasePath, Configuration, Role,
 };
-use sc_transaction_pool::PoolLimit;
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use sp_consensus::BlockOrigin;
 use sp_keyring::Sr25519Keyring;
@@ -57,6 +56,9 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 
 	let spec = Box::new(node_cli::chain_spec::development_config());
 
+	// NOTE: We enforce the use of the WASM runtime to benchmark block production using WASM.
+	let execution_strategy = sc_client_api::ExecutionStrategy::AlwaysWasm;
+
 	let config = Configuration {
 		impl_name: "BenchmarkImpl".into(),
 		impl_version: "1.0".into(),
@@ -64,11 +66,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		// in the background which would mess with our benchmark.
 		role: Role::Full,
 		tokio_handle,
-		transaction_pool: TransactionPoolOptions {
-			ready: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
-			future: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
-			reject_future_transactions: false,
-		},
+		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
 		keystore_remote: Default::default(),
@@ -80,13 +78,12 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
-		// NOTE: we enforce the use of the native runtime to make the errors more debuggable
 		execution_strategies: ExecutionStrategies {
-			syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+			syncing: execution_strategy,
+			importing: execution_strategy,
+			block_construction: execution_strategy,
+			offchain_worker: execution_strategy,
+			other: execution_strategy,
 		},
 		rpc_http: None,
 		rpc_ws: None,
@@ -152,6 +149,8 @@ fn import_block(
 }
 
 fn block_production(c: &mut Criterion) {
+	const MINIMUM_PERIOD_FOR_BLOCKS: u64 = 1500;
+
 	sp_tracing::try_init_simple();
 
 	let runtime = tokio::runtime::Runtime::new().expect("creating tokio runtime doesn't fail; qed");
@@ -169,7 +168,7 @@ fn block_production(c: &mut Criterion) {
 	let max_transfer_count = {
 		let mut transfer_count = 0;
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder.push(extrinsic_set_time(1 + 1500)).unwrap();
+		block_builder.push(extrinsic_set_time(1 + MINIMUM_PERIOD_FOR_BLOCKS)).unwrap();
 
 		loop {
 			match block_builder.push(extrinsic_transfer(client, transfer_count as u32)) {
@@ -195,7 +194,7 @@ fn block_production(c: &mut Criterion) {
 		b.iter_batched(
 			|| {
 				let mut extrinsics = Vec::with_capacity(max_transfer_count + 1);
-				extrinsics.push(extrinsic_set_time(1 + 1500));
+				extrinsics.push(extrinsic_set_time(1 + MINIMUM_PERIOD_FOR_BLOCKS));
 
 				for nth_transfer in 0..max_transfer_count {
 					extrinsics.push(extrinsic_transfer(client, nth_transfer as u32));
