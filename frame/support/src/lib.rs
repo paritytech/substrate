@@ -50,6 +50,8 @@ pub use sp_runtime::RuntimeDebug;
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use sp_std;
+#[doc(hidden)]
+pub use tt_call::*;
 
 #[macro_use]
 pub mod dispatch;
@@ -573,7 +575,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, transactional, RuntimeDebugNoBound,
+	construct_runtime, decl_storage, match_and_insert, transactional, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]

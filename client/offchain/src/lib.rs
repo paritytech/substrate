@@ -81,18 +81,31 @@ where
 	}
 }
 
+/// Options for [`OffchainWorkers`]
+pub struct OffchainWorkerOptions {
+	/// Enable http requests from offchain workers?
+	///
+	/// If not enabled, any http request will panic.
+	pub enable_http_requests: bool,
+}
+
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Block: traits::Block> {
 	client: Arc<Client>,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
-	shared_client: api::SharedClient,
+	shared_http_client: api::SharedClient,
+	enable_http: bool,
 }
 
 impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
-	/// Creates new `OffchainWorkers`.
+	/// Creates new [`OffchainWorkers`].
 	pub fn new(client: Arc<Client>) -> Self {
-		let shared_client = api::SharedClient::new();
+		Self::new_with_options(client, OffchainWorkerOptions { enable_http_requests: true })
+	}
+
+	/// Creates new [`OffchainWorkers`] using the given `options`.
+	pub fn new_with_options(client: Arc<Client>, options: OffchainWorkerOptions) -> Self {
 		Self {
 			client,
 			_block: PhantomData,
@@ -100,7 +113,8 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 				"offchain-worker".into(),
 				num_cpus::get(),
 			)),
-			shared_client,
+			shared_http_client: api::SharedClient::new(),
+			enable_http: options.enable_http_requests,
 		}
 	}
 }
@@ -140,18 +154,22 @@ where
 			},
 		};
 		debug!("Checking offchain workers at {:?}: version:{}", at, version);
-		if version > 0 {
+		let process = (version > 0).then(|| {
 			let (api, runner) =
-				api::AsyncApi::new(network_provider, is_validator, self.shared_client.clone());
+				api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
 			debug!("Spawning offchain workers at {:?}", at);
 			let header = header.clone();
 			let client = self.client.clone();
+
+			let mut capabilities = offchain::Capabilities::all();
+
+			capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
 			self.spawn_worker(move || {
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
 				debug!("Running offchain workers at {:?}", at);
-				let context =
-					ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all())));
+
+				let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
 				let run = if version == 2 {
 					runtime.offchain_worker_with_context(&at, context, &header)
 				} else {
@@ -166,9 +184,12 @@ where
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 				}
 			});
-			futures::future::Either::Left(runner.process())
-		} else {
-			futures::future::Either::Right(futures::future::ready(()))
+
+			runner.process()
+		});
+
+		async move {
+			futures::future::OptionFuture::from(process).await;
 		}
 	}
 

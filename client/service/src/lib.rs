@@ -49,10 +49,9 @@ use sp_runtime::{
 pub use self::{
 	builder::{
 		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
-		new_full_parts, new_light_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer,
-		NetworkStarter, NoopRpcExtensionBuilder, RpcExtensionBuilder, SpawnTasksParams,
-		TFullBackend, TFullCallExecutor, TFullClient, TLightBackend, TLightBackendWithHash,
-		TLightCallExecutor, TLightClient, TLightClientWithBackend,
+		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
+		NoopRpcExtensionBuilder, RpcExtensionBuilder, SpawnTasksParams, TFullBackend,
+		TFullCallExecutor, TFullClient,
 	},
 	client::{ClientConfig, LocalCallExecutor},
 	error::Error,
@@ -499,7 +498,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			Box::pin(futures::future::ready(TransactionImport::None));
+			return Box::pin(futures::future::ready(TransactionImport::None))
 		}
 
 		let encoded = transaction.encode();
