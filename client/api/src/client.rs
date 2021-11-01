@@ -296,3 +296,11 @@ impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 		Self::Finalized { hash: n.hash }
 	}
 }
+
+/// Interface to check migration state.
+pub trait MigrationStateBackend {
+	/// Check remaining non-migrated key.
+	/// Always run on latest block id.
+	/// Return remaining top keys and remaining child keys.
+	fn remaining_key_to_migrate(&self) -> sp_blockchain::Result<(u64, u64)>;
+}

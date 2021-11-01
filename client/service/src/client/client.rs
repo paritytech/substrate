@@ -39,7 +39,7 @@ use sc_client_api::{
 	client::{
 		BadBlocks, BlockBackend, BlockImportNotification, BlockOf, BlockchainEvents, ClientInfo,
 		FinalityNotification, FinalityNotifications, ForkBlocks, ImportNotifications,
-		ProvideUncles,
+		MigrationStateBackend, ProvideUncles,
 	},
 	execution_extensions::ExecutionExtensions,
 	light::ChangesProof,
@@ -1688,6 +1688,24 @@ where
 		}
 
 		Ok(result)
+	}
+}
+
+impl<B, E, Block, RA> MigrationStateBackend for Client<B, E, Block, RA>
+where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	fn remaining_key_to_migrate(&self) -> sp_blockchain::Result<(u64, u64)> {
+		// Warning, we use last finalized.
+		let last_finalized = self.backend.blockchain().last_finalized()?;
+		let state = self.backend.state_at(BlockId::Hash(last_finalized))?;
+		let trie_backend = state.as_trie_backend().expect("unsupported backend");
+		trie_backend.essence().check_migration_state().map_err(|err| {
+			warn!("check migration error: {:?}", err);
+			sp_blockchain::Error::Storage(err)
+		})
 	}
 }
 

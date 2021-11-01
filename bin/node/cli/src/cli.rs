@@ -84,4 +84,7 @@ pub enum Subcommand {
 
 	/// Revert the chain to a previous state.
 	Revert(sc_cli::RevertCmd),
+
+	/// Check state migration progress.
+	CheckMigration(sc_cli::CheckMigrationCmd),
 }

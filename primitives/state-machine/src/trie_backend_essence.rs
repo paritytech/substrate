@@ -36,7 +36,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 // In this module, we only use layout for read operation and empty root,
 // where V1 and V0 are equivalent.
+use sp_core::storage::{ChildType, PrefixedStorageKey};
 use sp_trie::LayoutV1 as Layout;
+use trie_db::{
+	node::{NodePlan, ValuePlan},
+	TrieDBNodeIterator,
+};
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
@@ -438,6 +443,73 @@ where
 			false,
 		);
 	}
+
+	/// Check remaining state item to migrate.
+	/// Note this function should be remove when
+	/// all state migration did finished as it is
+	/// only an utility.
+	pub fn check_migration_state(&self) -> Result<(u64, u64)> {
+		let threshold: u32 = 33;
+		let mut nb_to_migrate = 0;
+		let mut nb_to_migrate_child = 0;
+
+		let trie = sp_trie::trie_types::TrieDB::new(self, &self.root)
+			.map_err(|e| format!("TrieDB creation error: {}", e))?;
+		let iter_node = TrieDBNodeIterator::new(&trie)
+			.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+		for node in iter_node {
+			let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+			match node.2.node_plan() {
+				NodePlan::Leaf { value, .. } |
+				NodePlan::NibbledBranch { value: Some(value), .. } =>
+					if let ValuePlan::Inline(range) = value {
+						if (range.end - range.start) as u32 >= threshold {
+							nb_to_migrate += 1;
+						}
+					},
+				_ => (),
+			}
+		}
+
+		let mut child_roots: Vec<(ChildInfo, Vec<u8>)> = Vec::new();
+		// get all child trie roots
+		for key_value in trie.iter().map_err(|e| format!("TrieDB node iterator error: {}", e))? {
+			let (key, value) =
+				key_value.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+			if key[..]
+				.starts_with(sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+			{
+				let prefixed_key = PrefixedStorageKey::new(key);
+				let (_type, unprefixed) = ChildType::from_prefixed_key(&prefixed_key).unwrap();
+				child_roots.push((ChildInfo::new_default(unprefixed), value));
+			}
+		}
+		for (child_info, root) in child_roots {
+			let mut child_root = H::Out::default();
+			let storage = KeySpacedDB::new(self, child_info.keyspace());
+
+			child_root.as_mut()[..].copy_from_slice(&root[..]);
+			let trie = sp_trie::trie_types::TrieDB::new(&storage, &child_root)
+				.map_err(|e| format!("New child TrieDB error: {}", e))?;
+			let iter_node = TrieDBNodeIterator::new(&trie)
+				.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+			for node in iter_node {
+				let node = node.map_err(|e| format!("Child TrieDB node iterator error: {}", e))?;
+				match node.2.node_plan() {
+					NodePlan::Leaf { value, .. } |
+					NodePlan::NibbledBranch { value: Some(value), .. } =>
+						if let ValuePlan::Inline(range) = value {
+							if (range.end - range.start) as u32 >= threshold {
+								nb_to_migrate_child += 1;
+							}
+						},
+					_ => (),
+				}
+			}
+		}
+
+		Ok((nb_to_migrate, nb_to_migrate_child))
+	}
 }
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -642,5 +714,37 @@ mod test {
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"4"), Ok(Some(b"6".to_vec())));
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"5"), Ok(Some(b"6".to_vec())));
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"6"), Ok(None));
+	}
+
+	#[test]
+	fn check_state_mig() {
+		use sp_trie::trie_types::TrieDBMutV0 as TrieDBMut;
+		let child_info = ChildInfo::new_default(b"MyChild");
+		let child_info = &child_info;
+		// Contains values
+		let mut root_1 = H256::default();
+		// Contains child trie
+		let mut root_2 = H256::default();
+
+		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+		{
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root_1);
+			trie.insert(b"3", vec![1; 40].as_slice()).expect("insert failed");
+			trie.insert(b"4", vec![1; 32].as_slice()).expect("insert failed");
+			trie.insert(b"6", vec![1; 33].as_slice()).expect("insert failed");
+		}
+		{
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
+			trie.insert(b"3", vec![1; 33].as_slice()).expect("insert failed");
+			trie.insert(b"4", &[1]).expect("insert failed");
+			trie.insert(b"6", &[1]).expect("insert failed");
+			trie.insert(child_info.prefixed_storage_key().as_slice(), root_1.as_ref())
+				.expect("insert failed");
+		};
+
+		let essence = TrieBackendEssence::new(mdb, root_2);
+
+		assert_eq!(essence.check_migration_state(), Ok((1, 2)));
 	}
 }
