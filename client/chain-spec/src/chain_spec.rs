@@ -119,9 +119,9 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 					})
 					.collect(),
 			}),
-			// The `TrieRootHash` variant exists as a way to keep note that other clients support
-			// it, but Substrate itself isn't capable of loading chain specs with just a hash.
-			Genesis::TrieRootHash(_) => Err("Genesis storage in hash format not supported".into())
+			// The `StateRootHash` variant exists as a way to keep note that other clients support
+			// it, but Substrate itself isn't capable of loading chain specs with just a hash at the moment.
+			Genesis::StateRootHash(_) => Err("Genesis storage in hash format not supported".into())
 		}
 	}
 
@@ -147,8 +147,8 @@ pub struct RawGenesis {
 enum Genesis<G> {
 	Runtime(G),
 	Raw(RawGenesis),
-	/// State trie root of the genesis storage.
-	TrieRootHash(StorageData),
+	/// State root hash of the genesis storage.
+	StateRootHash(StorageData),
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
