@@ -43,6 +43,8 @@ type ChildStorageKey = (Vec<u8>, Vec<u8>);
 
 /// Shared canonical state cache.
 pub struct Cache<B: BlockT> {
+	/// When size is null, fully inactive TODO keep local cache.
+	active: bool,
 	/// Storage cache. `None` indicates that key is known to be missing.
 	lru_storage: LRUMap<StorageKey, Option<StorageValue>>,
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
@@ -54,7 +56,16 @@ pub struct Cache<B: BlockT> {
 	modifications: VecDeque<BlockChanges<B::Header>>,
 }
 
-struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
+pub(crate) struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
+
+impl<K, V> LRUMap<K, V>
+	where
+		K: std::hash::Hash + Eq,
+{
+	pub(crate) fn new(size_limit: usize) -> Self {
+		LRUMap(LinkedHashMap::new(), 0, size_limit)
+	}
+}
 
 /// Internal trait similar to `heapsize` but using
 /// a simply estimation.
@@ -62,7 +73,7 @@ struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 /// This should not be made public, it is implementation
 /// detail trait. If it need to become public please
 /// consider using `malloc_size_of`.
-trait EstimateSize {
+pub(crate) trait EstimateSize {
 	/// Return a size estimation of additional size needed
 	/// to cache this struct (in bytes).
 	fn estimate_size(&self) -> usize;
@@ -105,7 +116,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		}
 	}
 
-	fn add(&mut self, k: K, v: V) {
+	pub(crate) fn add(&mut self, k: K, v: V) {
 		let lmap = &mut self.0;
 		let storage_used_size = &mut self.1;
 		let limit = self.2;
@@ -137,7 +148,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		}
 	}
 
-	fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+	pub(crate) fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
 	where
 		K: std::borrow::Borrow<Q>,
 		Q: StdHash + Eq,
@@ -167,6 +178,9 @@ impl<B: BlockT> Cache<B> {
 	/// that are invalidated by chain reorganization. It should be called
 	/// externally when chain reorg happens without importing a new block.
 	pub fn sync(&mut self, enacted: &[B::Hash], retracted: &[B::Hash]) {
+		if !self.active {
+			return;
+		}
 		trace!("Syncing shared cache, enacted = {:?}, retracted = {:?}", enacted, retracted);
 
 		// Purge changes from re-enacted and retracted blocks.
@@ -235,12 +249,11 @@ pub fn new_shared_cache<B: BlockT>(
 ) -> SharedCache<B> {
 	let top = child_ratio.1.saturating_sub(child_ratio.0);
 	Arc::new(RwLock::new(Cache {
-		lru_storage: LRUMap(LinkedHashMap::new(), 0, shared_cache_size * top / child_ratio.1),
-		lru_hashes: LRUMap(LinkedHashMap::new(), 0, FIX_LRU_HASH_SIZE),
-		lru_child_storage: LRUMap(
-			LinkedHashMap::new(),
-			0,
-			shared_cache_size * child_ratio.0 / child_ratio.1,
+		active: shared_cache_size != 0,
+		lru_storage: LRUMap::new(shared_cache_size * top / child_ratio.1),
+		lru_hashes: LRUMap::new(FIX_LRU_HASH_SIZE),
+		lru_child_storage: LRUMap::new(
+			shared_cache_size * child_ratio.0 / child_ratio.1
 		),
 		modifications: VecDeque::new(),
 	}))
@@ -300,6 +313,7 @@ pub struct CacheChanges<B: BlockT> {
 /// in `sync_cache` along with the change overlay.
 /// For non-canonical clones local cache and changes are dropped.
 pub struct CachingState<S, B: BlockT> {
+	active: bool,
 	/// Usage statistics
 	usage: StateUsageStats,
 	/// State machine registered stats
@@ -447,7 +461,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 		shared_cache: SharedCache<B>,
 		parent_hash: Option<B::Hash>,
 	) -> Self {
+		let active = shared_cache.read().active;
 		CachingState {
+			active,
 			usage: StateUsageStats::new(),
 			overlay_stats: sp_state_machine::StateMachineStats::default(),
 			state,
@@ -529,6 +545,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	type TrieBackendStorage = S::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		if !self.active {
+			return self.state.storage(key)
+		}
 		let local_cache = self.cache.local_cache.upgradable_read();
 		// Note that local cache makes that lru is not refreshed
 		if let Some(entry) = local_cache.storage.get(key).cloned() {
@@ -558,6 +577,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
+		// keep storage hash it is relevant skip for runtime. TODO
+
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.hashes.get(key).cloned() {
 			trace!("Found hash in local cache: {:?}", HexDisplay::from(&key));
@@ -586,6 +607,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
+		if !self.active {
+			return self.state.child_storage(child_info, key);
+		}
+
 		let key = (child_info.storage_key().to_vec(), key.to_vec());
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {

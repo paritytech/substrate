@@ -245,6 +245,7 @@ fn node_config<
 		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path { path: root.join("key"), password: None },
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
+		trie_cache_size: 16777216,
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		state_pruning: Default::default(),

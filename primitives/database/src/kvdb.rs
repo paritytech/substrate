@@ -20,7 +20,8 @@ use ::kvdb::{DBTransaction, KeyValueDB};
 
 use crate::{error, Change, ColumnId, Database, Transaction};
 
-struct DbAdapter<D: KeyValueDB + 'static>(D);
+/// Opaque type implementing sp_database from a `KeyValueDB`.
+pub struct DbAdapter<D: KeyValueDB + 'static>(D);
 
 fn handle_err<T>(result: std::io::Result<T>) -> T {
 	match result {
@@ -39,6 +40,16 @@ where
 {
 	std::sync::Arc::new(DbAdapter(db))
 }
+
+/// Wrap RocksDb database into a trait object that implements `sp_database::Database`
+pub fn as_database_adapter<D, H>(db: D) -> DbAdapter<D> 
+where
+	D: KeyValueDB + 'static,
+	H: Clone + AsRef<[u8]>,
+{
+	DbAdapter(db)
+}
+
 
 impl<D: KeyValueDB> DbAdapter<D> {
 	// Returns counter key and counter value if it exists.
