@@ -313,7 +313,7 @@ where
 		// and therefore grow in size when the contract grows. We are not allowed to overshoot
 		// because of the maximum code size that is enforced by `instantiate_with_code`.
 		let expansions = (target_bytes.saturating_sub(63) / 6).saturating_sub(1);
-		const EXPANSION: [Instruction; 4] = [I32Const(0), If(BlockType::NoResult), Return, End];
+		const EXPANSION: [Instruction; 4] = [I32Const(1), If(BlockType::NoResult), Return, End];
 		ModuleDefinition {
 			call_body: Some(body::repeated(expansions, &EXPANSION)),
 			memory: Some(ImportedMemory::max::<T>()),
