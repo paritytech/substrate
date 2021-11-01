@@ -74,14 +74,15 @@ fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 	header.hash()
 }
 
-fn create_backend(cache_size: usize, path: PathBuf) -> Backend<Block> {
+fn create_backend(state_cache_size: usize, trie_cache_size: usize, path: PathBuf) -> Backend<Block> {
 	let settings = DatabaseSettings {
-		state_cache_size: cache_size,
+		state_cache_size,
 		state_cache_child_ratio: None,
 		state_pruning: PruningMode::ArchiveAll,
 		source: DatabaseSource::ParityDb { path },
 		keep_blocks: KeepBlocks::All,
 		transaction_storage: TransactionStorageMode::BlockBody,
+		trie_cache_size,
 	};
 
 	Backend::new(settings, 10).expect("Creates backend")
@@ -94,7 +95,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	let path = TempDir::new().expect("Creates temporary directory");
 
-	let backend = create_backend(0, path.path().to_owned());
+	let backend = create_backend(0, 0, path.path().to_owned());
 
 	let mut rng = StdRng::seed_from_u64(353893213);
 
@@ -124,9 +125,9 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	drop(backend);
 
-	let backend = create_backend(128 * 1024 * 1024, path.path().to_owned());
+	let backend = create_backend(128 * 1024 * 1024, 0, path.path().to_owned());
 
-	group.bench_function("with 128MB cache", |b| {
+	group.bench_function("with 128MB state cache", |b| {
 		b.iter_batched(
 			|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
 			|state| {
@@ -140,7 +141,23 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	drop(backend);
 
-	let backend = create_backend(0, path.path().to_owned());
+	let backend = create_backend(0, 128 * 1024 * 1024, path.path().to_owned());
+
+	group.bench_function("with 128MB trie cache", |b| {
+		b.iter_batched(
+			|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
+			|state| {
+				for key in &keys {
+					let _ = state.storage(&key).expect("Doesn't fail");
+				}
+			},
+			BatchSize::SmallInput,
+		)
+	});
+
+	drop(backend);
+
+	let backend = create_backend(0, 0, path.path().to_owned());
 
 	group.bench_function("with cache disabled", |b| {
 		b.iter_batched(
