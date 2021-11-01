@@ -5191,6 +5191,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-bags-list-remote-tests"
+version = "4.0.0-dev"
+dependencies = [
+ "clap",
+ "frame-election-provider-support",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-bags-list",
+ "pallet-staking",
+ "remote-externalities",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
+ "sp-tracing",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
 name = "pallet-balances"
 version = "4.0.0-dev"
 dependencies = [
