@@ -158,7 +158,7 @@ fn set_up_data_provider<T: Config>(v: u32) {
 		info,
 		"setting up with voters = {} [degree = {}], targets = {}",
 		v,
-		<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MaximumVotesPerVoter::get(),
+		<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber, T::MaxTargets>>::MaximumVotesPerVoter::get(),
 		t
 	);
 
@@ -171,8 +171,11 @@ fn set_up_data_provider<T: Config>(v: u32) {
 		})
 		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
-	let max_votes =
-		<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MaximumVotesPerVoter::get() as usize;
+	let max_votes = <T::DataProvider as ElectionDataProvider<
+		T::AccountId,
+		T::BlockNumber,
+		T::MaxTargets,
+	>>::MaximumVotesPerVoter::get() as usize;
 	assert!(targets.len() > max_votes);
 	targets.truncate(max_votes);
 

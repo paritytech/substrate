@@ -57,6 +57,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
 		let voters = <pallet_staking::Pallet<Runtime> as ElectionDataProvider<
 			Runtime::AccountId,
 			Runtime::BlockNumber,
+			Runtime::MaxValidatorsCount,
 		>>::voters(voter_limit)
 		.unwrap();
 
