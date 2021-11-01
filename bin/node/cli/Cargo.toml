@@ -36,7 +36,7 @@ crate-type = ["cdylib", "rlib"]
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = "0.3.16"
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "2891ca11f7da6be8022a9e165eaa9a90017d3d43", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "092081a0a2b8904c6ebd2cd99e16c7bc13ffc3ae", features = ["server"] }
 hex-literal = "0.3.3"
 log = "0.4.8"
 rand = "0.7.2"
