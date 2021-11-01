@@ -19,7 +19,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 
 use node_cli::service::{create_extrinsic, FullClient};
-use node_runtime::{constants::currency::*, BalancesCall, SudoCall};
+use node_runtime::{constants::currency::*, BalancesCall};
 use sc_block_builder::{BlockBuilderProvider, BuiltBlock};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_consensus::{
@@ -36,7 +36,6 @@ use sc_service::{
 use sc_transaction_pool::PoolLimit;
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use sp_consensus::BlockOrigin;
-use sp_core::{crypto::Pair, sr25519};
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
@@ -116,50 +115,17 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 	node_cli::service::new_full_base(config, |_, _| ()).expect("creating a full node doesn't fail")
 }
 
-fn create_account_keypair(subkey: u32) -> sr25519::Pair {
-	Pair::from_string(&format!("{}/{}", Sr25519Keyring::Alice.to_seed(), subkey), None)
-		.expect("creating a new keypair doesn't fail; qed")
-}
-
-fn extrinsic_set_balance(
-	client: &FullClient,
-	nonce: &mut u32,
-	dst: sp_runtime::AccountId32,
-) -> OpaqueExtrinsic {
-	let extrinsic = create_extrinsic(
+fn extrinsic_transfer(client: &FullClient, nonce: u32) -> OpaqueExtrinsic {
+	create_extrinsic(
 		client,
 		Sr25519Keyring::Alice.pair(),
-		SudoCall::sudo {
-			call: Box::new(
-				BalancesCall::set_balance {
-					who: dst.into(),
-					new_free: 1_000_000 * DOLLARS,
-					new_reserved: 0,
-				}
-				.into(),
-			),
+		BalancesCall::transfer {
+			dest: Sr25519Keyring::Bob.to_account_id().into(),
+			value: 1 * DOLLARS,
 		},
-		Some(*nonce),
-	);
-	*nonce += 1;
-	extrinsic.into()
-}
-
-fn extrinsic_transfer(
-	client: &FullClient,
-	nonce: &mut u32,
-	src: &sr25519::Pair,
-	dst: sp_runtime::AccountId32,
-) -> OpaqueExtrinsic {
-	let extrinsic = create_extrinsic(
-		client,
-		src.clone(),
-		BalancesCall::transfer { dest: dst.into(), value: 1 * DOLLARS },
-		Some(*nonce),
-	);
-
-	*nonce += 1;
-	extrinsic.into()
+		Some(nonce),
+	)
+	.into()
 }
 
 fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {
@@ -194,42 +160,26 @@ fn block_production(c: &mut Criterion) {
 	let node = new_node(tokio_handle.clone());
 	let client = &*node.client;
 
+	// Buliding the very first block is around ~30x slower than any subsequent one,
+	// so let's make sure it's built and imported before we benchmark anything.
 	let mut block_builder = client.new_block(Default::default()).unwrap();
 	block_builder.push(extrinsic_set_time(1)).unwrap();
-
-	let mut accounts: Vec<_> =
-		(0..10).map(create_account_keypair).zip(std::iter::repeat(0)).collect();
-
-	let mut alice_nonce = 0;
-	for (keypair, _) in &accounts {
-		let extrinsic = extrinsic_set_balance(client, &mut alice_nonce, keypair.public().into());
-		block_builder.push(extrinsic).unwrap();
-	}
-
-	let new_block = block_builder.build().unwrap();
-	import_block(client, new_block);
+	import_block(client, block_builder.build().unwrap());
 
 	let max_transfer_count = {
 		let mut transfer_count = 0;
 		let mut block_builder = client.new_block(Default::default()).unwrap();
 		block_builder.push(extrinsic_set_time(1 + 1500)).unwrap();
 
-		'outer: loop {
-			for (keypair, nonce) in &mut accounts {
-				match block_builder.push(extrinsic_transfer(
-					client,
-					nonce,
-					keypair,
-					Sr25519Keyring::Bob.to_account_id(),
-				)) {
-					Ok(_) => {},
-					Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
-						InvalidTransaction::ExhaustsResources,
-					)))) => break 'outer,
-					Err(error) => panic!("{}", error),
-				}
-				transfer_count += 1;
+		loop {
+			match block_builder.push(extrinsic_transfer(client, transfer_count as u32)) {
+				Ok(_) => {},
+				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
+					InvalidTransaction::ExhaustsResources,
+				)))) => break,
+				Err(error) => panic!("{}", error),
 			}
+			transfer_count += 1;
 		}
 		transfer_count
 	};
@@ -245,26 +195,10 @@ fn block_production(c: &mut Criterion) {
 		b.iter_batched(
 			|| {
 				let mut extrinsics = Vec::with_capacity(max_transfer_count + 1);
-				for (_, nonce) in &mut accounts {
-					*nonce = 0;
-				}
 				extrinsics.push(extrinsic_set_time(1 + 1500));
 
-				let mut transfer_count = 0;
-				'outer: loop {
-					for (keypair, nonce) in &mut accounts {
-						extrinsics.push(extrinsic_transfer(
-							client,
-							nonce,
-							keypair,
-							Sr25519Keyring::Bob.to_account_id(),
-						));
-
-						transfer_count += 1;
-						if transfer_count == max_transfer_count {
-							break 'outer
-						}
-					}
+				for nth_transfer in 0..max_transfer_count {
+					extrinsics.push(extrinsic_transfer(client, nth_transfer as u32));
 				}
 				extrinsics
 			},
