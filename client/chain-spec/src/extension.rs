@@ -107,7 +107,7 @@ impl<T: Fork> Fork for Option<T> {
 			(Some(mut a), Some(b)) => {
 				a.combine_with(b);
 				Some(a)
-			},
+			}
 			(a, b) => a.or(b),
 		};
 	}
