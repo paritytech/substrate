@@ -180,7 +180,7 @@ where
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				log::error!("[watch_extrinsic sub] failed to decode extrinsic: {:?}", e);
+				log::error!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
 				return Err(JsonRpseeError::to_call_error(e))
 			},
 		};
@@ -206,7 +206,7 @@ where
 				.take_while(|item| {
 					futures::future::ready(sink.send(&item).map_or_else(
 						|e| {
-							log::error!(
+							log::debug!(
 								"subscription author_watchExtrinsic failed: {:?}; closing",
 								e
 							);

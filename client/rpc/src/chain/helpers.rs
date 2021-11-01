@@ -88,5 +88,5 @@ pub async fn subscribe_finalized_headers<Client, Block>(
 }
 
 fn log_err<E: std::fmt::Debug>(method: &str, err: E) {
-	log::error!("Could not send data to subscription: {} error: {:?}", method, err);
+	log::debug!("Could not send data to subscription: {} error: {:?}", method, err);
 }
