@@ -668,8 +668,7 @@ impl<T: Config> Pallet<T> {
 			let nominator_count = CounterForNominators::<T>::get() as usize;
 			let validator_count = CounterForValidators::<T>::get() as usize;
 			let all_voter_count = validator_count.saturating_add(nominator_count);
-			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count) // TODO: this code is not sensible
-			                                                  // anymore, I think.
+			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
 		};
 
 		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
@@ -709,6 +708,12 @@ impl<T: Config> Pallet<T> {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
+				log!(
+					trace,
+					"fetched nominator {:?} with weight {:?}",
+					nominator,
+					weight_of(&nominator)
+				);
 				targets.retain(|stash| {
 					slashing_spans
 						.get(stash)

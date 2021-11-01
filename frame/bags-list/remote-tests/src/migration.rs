@@ -18,7 +18,7 @@
 
 use crate::{RuntimeT, LOG_TARGET};
 use frame_election_provider_support::SortedListProvider;
-use frame_support::{storage::generator::StorageMap, traits::PalletInfoAccess};
+use frame_support::traits::PalletInfoAccess;
 use pallet_staking::Nominators;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::traits::Block as BlockT;
@@ -37,8 +37,6 @@ pub async fn execute<Runtime: RuntimeT, Block: BlockT>(
 			at: None,
 			state_snapshot: None,
 		}))
-		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
-		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
 		.build()
 		.await
 		.unwrap();

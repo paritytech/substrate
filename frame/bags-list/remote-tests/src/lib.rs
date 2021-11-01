@@ -75,9 +75,9 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 				vote_weight.try_into().map_err(|_| "can't convert").unwrap();
 
 			if vote_weight_as_balance < min_nominator_bond {
-				log::warn!(
+				log::trace!(
 					target: LOG_TARGET,
-					"{} Account found below min bond: {:?}.",
+					"⚠️ {} Account found below min bond: {:?}.",
 					pretty_thresh,
 					id
 				);
