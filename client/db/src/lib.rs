@@ -1076,13 +1076,14 @@ impl<T: Clone> FrozenForDuration<T> {
 		F: FnOnce() -> T,
 	{
 		let mut lock = self.value.lock();
-		if lock.at.elapsed() > self.duration || lock.value.is_none() {
+		let now = std::time::Instant::now();
+		if now.saturating_duration_since(lock.at) > self.duration || lock.value.is_none() {
 			let new_value = f();
-			lock.at = std::time::Instant::now();
+			lock.at = now;
 			lock.value = Some(new_value.clone());
 			new_value
 		} else {
-			lock.value.as_ref().expect("checked with lock above").clone()
+			lock.value.as_ref().expect("Checked with in branch above; qed").clone()
 		}
 	}
 }

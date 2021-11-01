@@ -114,17 +114,6 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
-};
-use sp_staking::SessionIndex;
-use sp_std::{
-	marker::PhantomData,
-	ops::{Rem, Sub},
-	prelude::*,
-};
-
 use frame_support::{
 	codec::{Decode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResult},
@@ -135,6 +124,17 @@ use frame_support::{
 	},
 	weights::Weight,
 	Parameter,
+};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
+	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
+};
+use sp_staking::SessionIndex;
+use sp_std::{
+	convert::TryFrom,
+	marker::PhantomData,
+	ops::{Rem, Sub},
+	prelude::*,
 };
 
 pub use pallet::*;
@@ -377,7 +377,11 @@ pub mod pallet {
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize + MaxEncodedLen;
+		type ValidatorId: Member
+			+ Parameter
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ TryFrom<Self::AccountId>;
 
 		/// A conversion from account ID to validator ID.
 		///
@@ -595,9 +599,13 @@ pub mod pallet {
 		}
 
 		/// Removes any session key(s) of the function caller.
+		///
 		/// This doesn't take effect until the next session.
 		///
-		/// The dispatch origin of this function must be signed.
+		/// The dispatch origin of this function must be Signed and the account must be either be
+		/// convertible to a validator ID using the chain's typical addressing system (this usually
+		/// means being a controller account) or directly convertible into a validator ID (which
+		/// usually means being a stash account).
 		///
 		/// # <weight>
 		/// - Complexity: `O(1)` in number of key types. Actual cost depends on the number of length
@@ -841,6 +849,10 @@ impl<T: Config> Pallet<T> {
 
 	fn do_purge_keys(account: &T::AccountId) -> DispatchResult {
 		let who = T::ValidatorIdOf::convert(account.clone())
+			// `purge_keys` may not have a controller-stash pair any more. If so then we expect the
+			// stash account to be passed in directly and convert that to a `ValidatorId` using the
+			// `TryFrom` trait if supported.
+			.or_else(|| T::ValidatorId::try_from(account.clone()).ok())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
 		let old_keys = Self::take_keys(&who).ok_or(Error::<T>::NoKeys)?;
