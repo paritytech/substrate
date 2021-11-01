@@ -26,7 +26,6 @@ pub fn expand_outer_origin(
 	pallets: &[Pallet],
 	scrate: &TokenStream,
 ) -> syn::Result<TokenStream> {
-
 	let mut caller_variants = TokenStream::new();
 	let mut pallet_conversions = TokenStream::new();
 	let mut query_origin_part_macros = Vec::new();
