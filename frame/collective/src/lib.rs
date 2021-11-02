@@ -347,9 +347,9 @@ pub mod pallet {
 		///
 		/// # WARNING:
 		///
-		/// The pallet collective can also be managed by logic outside of the pallet throught the
+		/// The `pallet-collective` can also be managed by logic outside of the pallet through the
 		/// implementation of the trait [`ChangeMembers`].
-		/// Any call to `set_members` must be careful that member set doesn't get out of sync with
+		/// Any call to `set_members` must be careful that the member set doesn't get out of sync with
 		/// other logic managing the member set.
 		///
 		/// # <weight>
