@@ -1450,6 +1450,10 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn slot_duration() -> sp_consensus_babe::SlotDuration {
+			Babe::slot_duration()
+		}
+
 		fn current_epoch_start() -> sp_consensus_babe::Slot {
 			Babe::current_epoch_start()
 		}

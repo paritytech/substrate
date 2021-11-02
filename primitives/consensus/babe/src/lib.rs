@@ -367,11 +367,22 @@ sp_api::decl_runtime_apis! {
 	#[api_version(2)]
 	pub trait BabeApi {
 		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
+		///
+		/// This method is used to obtain the BABE configuration of epoch #0. Its output is valid
+		/// only when called at the genesis block.
 		fn configuration() -> BabeGenesisConfiguration;
 
 		/// Return the configuration for BABE. Version 1.
+		///
+		/// This method is used to obtain the BABE configuration of epoch #0. Its output is valid
+		/// only when called at the genesis block.
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
+
+		/// Returns the slot duration for BABE.
+		///
+		/// This value currently never changes.
+		fn slot_duration() -> SlotDuration;
 
 		/// Returns the slot that started the current epoch.
 		fn current_epoch_start() -> Slot;

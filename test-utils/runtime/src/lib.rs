@@ -867,6 +867,10 @@ cfg_if! {
 					}
 				}
 
+				fn slot_duration() -> sp_consensus_babe::SlotDuration {
+					1000
+				}
+
 				fn current_epoch_start() -> Slot {
 					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
 				}
@@ -1123,6 +1127,10 @@ cfg_if! {
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
+				}
+
+				fn slot_duration() -> sp_consensus_babe::SlotDuration {
+					1000
 				}
 
 				fn current_epoch_start() -> Slot {
