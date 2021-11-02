@@ -867,7 +867,7 @@ cfg_if! {
 					}
 				}
 
-				fn slot_duration() -> sp_consensus_babe::SlotDuration {
+				fn slot_duration() -> u64 {
 					1000
 				}
 
@@ -1129,7 +1129,7 @@ cfg_if! {
 					}
 				}
 
-				fn slot_duration() -> sp_consensus_babe::SlotDuration {
+				fn slot_duration() -> u64 {
 					1000
 				}
 

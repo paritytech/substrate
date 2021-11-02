@@ -379,7 +379,7 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
 
-		/// Returns the slot duration for BABE.
+		/// Returns the slot duration for BABE, in milliseconds.
 		///
 		/// This value currently never changes.
 		fn slot_duration() -> u64;
