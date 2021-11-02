@@ -1,14 +1,14 @@
 # Substrate Node Template
 
-[![Try on playground](https://img.shields.io/badge/Playground-Node_Template-brightgreen?logo=Parity%20Substrate)](https://playground.substrate.dev/?deploy=node-template) [![Matrix](https://img.shields.io/matrix/substrate-technical:matrix.org)](https://matrix.to/#/#substrate-technical:matrix.org)
+[![Try on playground](https://img.shields.io/badge/Playground-Node_Template-brightgreen?logo=Parity%20Substrate)](https://docs.substrate.io/playground/) [![Matrix](https://img.shields.io/matrix/substrate-technical:matrix.org)](https://matrix.to/#/#substrate-technical:matrix.org)
 
 A fresh FRAME-based [Substrate](https://www.substrate.io/) node, ready for hacking :rocket:
 
 ## Getting Started
 
 Follow the steps below to get started with the Node Template, or get it up and running right from
-your browser in just a few clicks using [Playground](https://playground.substrate.dev/)
-:hammer_and_wrench:
+your browser in just a few clicks using
+the [Substrate Playground](https://docs.substrate.io/playground/) :hammer_and_wrench:
 
 ### Using Nix
 
@@ -19,7 +19,7 @@ lorri `lorri shell`.
 
 ### Rust Setup
 
-First, complete the [basic Rust setup instructions](./doc/rust-setup.md).
+First, complete the [basic Rust setup instructions](./docs/rust-setup.md).
 
 ### Run
 
@@ -83,7 +83,7 @@ local node template.
 ### Multi-Node Local Testnet
 
 If you want to see the multi-node consensus algorithm in action, refer to our
-[Start a Private Network tutorial](https://substrate.dev/docs/en/tutorials/start-a-private-network/).
+[Start a Private Network tutorial](https://docs.substrate.io/tutorials/v3/private-network).
 
 ## Template Structure
 
@@ -98,7 +98,7 @@ Substrate-based blockchain nodes expose a number of capabilities:
 - Networking: Substrate nodes use the [`libp2p`](https://libp2p.io/) networking stack to allow the
   nodes in the network to communicate with one another.
 - Consensus: Blockchains must have a way to come to
-  [consensus](https://substrate.dev/docs/en/knowledgebase/advanced/consensus) on the state of the
+  [consensus](https://docs.substrate.io/v3/advanced/consensus) on the state of the
   network. Substrate makes it possible to supply custom consensus engines and also ships with
   several consensus mechanisms that have been built on top of
   [Web3 Foundation research](https://research.web3.foundation/en/latest/polkadot/NPoS/index.html).
@@ -107,21 +107,21 @@ Substrate-based blockchain nodes expose a number of capabilities:
 There are several files in the `node` directory - take special note of the following:
 
 - [`chain_spec.rs`](./node/src/chain_spec.rs): A
-  [chain specification](https://substrate.dev/docs/en/knowledgebase/integrate/chain-spec) is a
+  [chain specification](https://docs.substrate.io/v3/runtime/chain-specs) is a
   source code file that defines a Substrate chain's initial (genesis) state. Chain specifications
   are useful for development and testing, and critical when architecting the launch of a
   production chain. Take note of the `development_config` and `testnet_genesis` functions, which
   are used to define the genesis state for the local development chain configuration. These
   functions identify some
-  [well-known accounts](https://substrate.dev/docs/en/knowledgebase/integrate/subkey#well-known-keys)
+  [well-known accounts](https://docs.substrate.io/v3/tools/subkey#well-known-keys)
   and use them to configure the blockchain's initial state.
 - [`service.rs`](./node/src/service.rs): This file defines the node implementation. Take note of
   the libraries that this file imports and the names of the functions it invokes. In particular,
   there are references to consensus-related topics, such as the
-  [longest chain rule](https://substrate.dev/docs/en/knowledgebase/advanced/consensus#longest-chain-rule),
-  the [Aura](https://substrate.dev/docs/en/knowledgebase/advanced/consensus#aura) block authoring
+  [longest chain rule](https://docs.substrate.io/v3/advanced/consensus#longest-chain-rule),
+  the [Aura](https://docs.substrate.io/v3/advanced/consensus#aura) block authoring
   mechanism and the
-  [GRANDPA](https://substrate.dev/docs/en/knowledgebase/advanced/consensus#grandpa) finality
+  [GRANDPA](https://docs.substrate.io/v3/advanced/consensus#grandpa) finality
   gadget.
 
 After the node has been [built](#build), refer to the embedded documentation to learn more about the
@@ -134,14 +134,14 @@ capabilities and configuration parameters that it exposes:
 ### Runtime
 
 In Substrate, the terms
-"[runtime](https://substrate.dev/docs/en/knowledgebase/getting-started/glossary#runtime)" and
-"[state transition function](https://substrate.dev/docs/en/knowledgebase/getting-started/glossary#stf-state-transition-function)"
+"[runtime](https://docs.substrate.io/v3/getting-started/glossary#runtime)" and
+"[state transition function](https://docs.substrate.io/v3/getting-started/glossary#state-transition-function-stf)"
 are analogous - they refer to the core logic of the blockchain that is responsible for validating
 blocks and executing the state changes they define. The Substrate project in this repository uses
-the [FRAME](https://substrate.dev/docs/en/knowledgebase/runtime/frame) framework to construct a
+the [FRAME](https://docs.substrate.io/v3/runtime/frame) framework to construct a
 blockchain runtime. FRAME allows runtime developers to declare domain-specific logic in modules
 called "pallets". At the heart of FRAME is a helpful
-[macro language](https://substrate.dev/docs/en/knowledgebase/runtime/macros) that makes it easy to
+[macro language](https://docs.substrate.io/v3/runtime/macros) that makes it easy to
 create pallets and flexibly compose them to create blockchains that can address
 [a variety of needs](https://www.substrate.io/substrate-users/).
 
@@ -153,7 +153,7 @@ the following:
 - The pallets are composed into a single runtime by way of the
   [`construct_runtime!`](https://crates.parity.io/frame_support/macro.construct_runtime.html)
   macro, which is part of the core
-  [FRAME Support](https://substrate.dev/docs/en/knowledgebase/runtime/frame#support-library)
+  [FRAME Support](https://docs.substrate.io/v3/runtime/frame#support-crate)
   library.
 
 ### Pallets
@@ -165,13 +165,13 @@ template pallet that is [defined in the `pallets`](./pallets/template/src/lib.rs
 A FRAME pallet is compromised of a number of blockchain primitives:
 
 - Storage: FRAME defines a rich set of powerful
-  [storage abstractions](https://substrate.dev/docs/en/knowledgebase/runtime/storage) that makes
+  [storage abstractions](https://docs.substrate.io/v3/runtime/storage) that makes
   it easy to use Substrate's efficient key-value database to manage the evolving state of a
   blockchain.
 - Dispatchables: FRAME pallets define special types of functions that can be invoked (dispatched)
   from outside of the runtime in order to update its state.
-- Events: Substrate uses [events](https://substrate.dev/docs/en/knowledgebase/runtime/events) to
-  notify users of important changes in the runtime.
+- Events: Substrate uses [events and errors](https://docs.substrate.io/v3/runtime/events-and-errors)
+  to notify users of important changes in the runtime.
 - Errors: When a dispatchable fails, it returns an error.
 - Config: The `Config` configuration interface is used to define the types and parameters upon
   which a FRAME pallet depends.
