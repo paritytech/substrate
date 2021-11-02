@@ -747,6 +747,17 @@ pub trait Crypto {
 		ecdsa::Pair::verify(sig, msg, pub_key)
 	}
 
+	/// Verify `ecdsa` signature with pre-hashed `msg`.
+	///
+	/// Returns `true` when the verification was successful.
+	fn ecdsa_verify_prehashed(
+		sig: &ecdsa::Signature,
+		msg: &[u8; 32],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		ecdsa::Pair::verify_prehashed(sig, msg, pub_key)
+	}
+
 	/// Register a `ecdsa` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
