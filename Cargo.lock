@@ -2051,6 +2051,7 @@ dependencies = [
  "smallvec 1.7.0",
  "sp-arithmetic",
  "sp-core",
+ "sp-core-hashing-proc-macro",
  "sp-inherents",
  "sp-io",
  "sp-runtime",
@@ -7919,6 +7920,7 @@ dependencies = [
  "sc-tracing",
  "sp-api",
  "sp-core",
+ "sp-core-hashing-proc-macro",
  "sp-externalities",
  "sp-io",
  "sp-maybe-compressed-blob",
@@ -9303,6 +9305,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.9.8",
+ "sp-core-hashing",
+ "sp-core-hashing-proc-macro",
  "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
@@ -9317,6 +9321,28 @@ dependencies = [
  "twox-hash",
  "wasmi",
  "zeroize",
+]
+
+[[package]]
+name = "sp-core-hashing"
+version = "4.0.0-dev"
+dependencies = [
+ "blake2-rfc",
+ "byteorder",
+ "sha2 0.9.8",
+ "sp-std",
+ "tiny-keccak",
+ "twox-hash",
+]
+
+[[package]]
+name = "sp-core-hashing-proc-macro"
+version = "4.0.0-dev"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sp-core-hashing",
+ "syn",
 ]
 
 [[package]]
