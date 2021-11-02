@@ -2113,7 +2113,7 @@ mod tests {
 			// simple cases: direct call
 			assert_err!(
 				ctx.ext.call_runtime(forbidden_call.clone()),
-				frame_system::<Error<Test>>::CallFiltered
+				frame_system::Error::<Test>::CallFiltered
 			);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
