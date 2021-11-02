@@ -28,11 +28,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::DispatchResult;
+use sp_runtime::{
+	traits::{BadOrigin, Hash, Saturating},
+	DispatchResult,
+};
 use sp_std::{convert::TryFrom, prelude::*};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	ensure,
 	pallet_prelude::Get,
 	traits::{Currency, ReservableCurrency},
 	BoundedVec,
@@ -42,11 +46,8 @@ use scale_info::TypeInfo;
 pub use pallet::*;
 
 #[derive(Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct Preimage<MaxSize, Balance, AccountId>
-where
-	MaxSize: Get<u32>,
-{
-	preimage: BoundedVec<u8, MaxSize>,
+pub struct Preimage<BoundedVec, Balance, AccountId> {
+	preimage: BoundedVec,
 	deposit: Option<(Balance, AccountId)>,
 }
 
@@ -71,7 +72,7 @@ pub mod pallet {
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Max size allowed for a preimage.
-		type MaxSize: Get<u32> + TypeInfo + MaxEncodedLen;
+		type MaxSize: Get<u32>;
 
 		/// The base deposit for placing a preimage on chain.
 		type BaseDeposit: Get<BalanceOf<Self>>;
@@ -88,28 +89,26 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A sudo just took place. \[result\]
-		Sudid(DispatchResult),
-		/// The \[sudoer\] just switched identity; the old key is supplied.
-		KeyChanged(T::AccountId),
-		/// A sudo just took place. \[result\]
-		SudoAsDone(DispatchResult),
+		/// A preimage has been noted.
+		Noted { hash: T::Hash },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Preimage is too large to store on-chain.
 		TooLarge,
+		/// Preimage has already been noted on-chain.
+		AlreadyNoted,
 	}
 
 	/// The preimages stored by this pallet.
 	#[pallet::storage]
 	#[pallet::getter(fn key)]
-	pub(super) type Key<T: Config> = StorageMap<
+	pub(super) type Preimages<T: Config> = StorageMap<
 		_,
 		Identity, // TODO: Double Check
 		T::Hash,
-		Preimage<T::MaxSize, BalanceOf<T>, T::AccountId>,
+		Preimage<BoundedVec<u8, T::MaxSize>, BalanceOf<T>, T::AccountId>,
 	>;
 
 	#[pallet::call]
@@ -117,14 +116,47 @@ pub mod pallet {
 		/// Register a preimage by paying a deposit proportional to the length of the preimage.
 		#[pallet::weight(0)] //T::WeightInfo::note_preimage(encoded_proposal.len() as u32))]
 		pub fn note_preimage(origin: OriginFor<T>, bytes: Vec<u8>) -> DispatchResult {
-			// This is a public call, so we ensure that the origin is some signed account.
-			let sender = ensure_signed(origin)?;
-			ensure!(bytes.len() as u32 <= T::MaxSize::get(), Error::<T>::TooLarge);
-
-			let bounded_vec =
-				BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
-
+			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
+			// is not taken.
+			let maybe_sender = Self::ensure_signed_or_root(origin)?;
+			Self::note_bytes(bytes, maybe_sender)?;
 			Ok(())
 		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Ensure that the origin is either root, or `PalletOwner`.
+	fn ensure_signed_or_root(origin: T::Origin) -> Result<Option<T::AccountId>, BadOrigin> {
+		use frame_system::RawOrigin;
+		match origin.into() {
+			Ok(RawOrigin::Root) => Ok(None),
+			Ok(RawOrigin::Signed(signer)) => Ok(Some(signer)),
+			_ => Err(BadOrigin),
+		}
+	}
+
+	pub fn note_bytes(bytes: Vec<u8>, maybe_depositor: Option<T::AccountId>) -> DispatchResult {
+		let bounded_vec =
+			BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
+
+		let hash = T::Hashing::hash(&bounded_vec);
+		ensure!(!Preimages::<T>::contains_key(hash), Error::<T>::AlreadyNoted);
+
+		let deposit = if let Some(depositor) = maybe_depositor {
+			let length = bounded_vec.len() as u32;
+			let deposit = T::BaseDeposit::get()
+				.saturating_add(T::ByteDeposit::get().saturating_mul(length.into()));
+			T::Currency::reserve(&depositor, deposit)?;
+			Some((depositor, deposit))
+		} else {
+			None
+		};
+
+		let preimage = Preimage { preimage: bounded_vec, deposit };
+
+		//Preimages::<T>::insert(hash, preimage);
+		Self::deposit_event(Event::Noted { hash });
+		Ok(())
 	}
 }
