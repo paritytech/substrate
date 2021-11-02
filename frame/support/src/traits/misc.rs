@@ -564,6 +564,26 @@ impl<T: TypeInfo + 'static> TypeInfo for WrapperKeepOpaque<T> {
 	}
 }
 
+/// A interface for managing preimages to hashes on chain.
+///
+/// Note that this API does not assume any underlying user is calling, and thus
+/// does not handle any preimage ownership or fees. Other system level logic that
+/// uses this API should implement that on their own side.
+pub trait PreimageHandler<Hash> {
+	/// Returns whether a preimage exists for a given hash.
+	fn preimage_exists(hash: Hash) -> bool;
+	/// Returns whether a preimage request exists for a given hash.
+	fn preimage_requested(hash: Hash) -> bool;
+	/// Returns the preimage for a given hash.
+	fn get_preimage(hash: Hash) -> Option<Vec<u8>>;
+	/// Store the bytes of a preimage on chain.
+	fn note_preimage(bytes: Vec<u8>) -> Result<(), ()>;
+	/// Request that someone report a preimage.å
+	fn request_preimage(hash: Hash);
+	/// Clear an existing preimage.
+	fn clear_preimage(hash: Hash);
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;

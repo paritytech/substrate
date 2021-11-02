@@ -103,6 +103,8 @@ pub mod pallet {
 		TooLarge,
 		/// Preimage has already been noted on-chain.
 		AlreadyNoted,
+		/// The user is not authorized to perform this action.
+		NotAuthorized,
 	}
 
 	/// The preimages stored by this pallet.
@@ -160,7 +162,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn clear_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
-			Self::do_clear_preimage(hash, maybe_sender);
+			Self::do_clear_preimage(hash, maybe_sender)?;
 			Ok(())
 		}
 	}
@@ -237,8 +239,10 @@ impl<T: Config> Pallet<T> {
 	//
 	// If `maybe_owner` is provided, we verify that it is the correct owner before clearing the
 	// data.
-	fn do_clear_preimage(hash: T::Hash, maybe_owner: Option<T::AccountId>) {
-		Preimages::<T>::mutate_exists(hash, |maybe_value| {
+	//
+	// If `maybe_owner` is not provided, this function cannot return an error.
+	fn do_clear_preimage(hash: T::Hash, maybe_owner: Option<T::AccountId>) -> DispatchResult {
+		Preimages::<T>::mutate_exists(hash, |maybe_value| -> DispatchResult {
 			if let Some(preimage_metadata) = maybe_value {
 				// If there is a deposit on hold, we return it if there is no `maybe_owner` or
 				// if the owner matches.
@@ -246,7 +250,7 @@ impl<T: Config> Pallet<T> {
 					if let Some(owner) = maybe_owner {
 						if &owner != who {
 							// Ownership check did not pass. Return early without mutating anything.
-							return
+							return Err(Error::<T>::NotAuthorized.into())
 						}
 					}
 					// At this point, we have done all the authorization needed, and we can simply
@@ -256,6 +260,36 @@ impl<T: Config> Pallet<T> {
 				*maybe_value = None;
 				Self::deposit_event(Event::Cleared { hash });
 			}
-		});
+			Ok(())
+		})
+	}
+}
+
+impl<T: Config> frame_support::traits::PreimageHandler<T::Hash> for Pallet<T> {
+	fn preimage_exists(hash: T::Hash) -> bool {
+		Preimages::<T>::contains_key(hash)
+	}
+
+	fn preimage_requested(hash: T::Hash) -> bool {
+		Requests::<T>::contains_key(hash)
+	}
+
+	fn get_preimage(hash: T::Hash) -> Option<Vec<u8>> {
+		Preimages::<T>::get(hash).map(|preimage| preimage.preimage.to_vec())
+	}
+
+	fn note_preimage(bytes: Vec<u8>) -> Result<(), ()> {
+		Self::note_bytes(bytes, None).map_err(|_| ())?;
+		Ok(())
+	}
+
+	fn request_preimage(hash: T::Hash) {
+		Self::do_request_preimage(hash)
+	}
+
+	fn clear_preimage(hash: T::Hash) {
+		// Should never fail if authorization check is skipped.
+		let res = Self::do_clear_preimage(hash, None);
+		debug_assert!(res.is_ok(), "do_clear_preimage failed when authorization check was skipped");
 	}
 }
