@@ -48,7 +48,7 @@ pub use pallet::*;
 #[derive(Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Preimage<BoundedVec, Balance, AccountId> {
 	preimage: BoundedVec,
-	deposit: Option<(Balance, AccountId)>,
+	deposit: Option<(AccountId, Balance)>,
 }
 
 type BalanceOf<T> =
@@ -155,7 +155,7 @@ impl<T: Config> Pallet<T> {
 
 		let preimage = Preimage { preimage: bounded_vec, deposit };
 
-		//Preimages::<T>::insert(hash, preimage);
+		Preimages::<T>::insert(hash, preimage);
 		Self::deposit_event(Event::Noted { hash });
 		Ok(())
 	}
