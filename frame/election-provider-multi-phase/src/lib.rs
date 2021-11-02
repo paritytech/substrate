@@ -1753,6 +1753,7 @@ mod tests {
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_npos_elections::Support;
+	use std::convert::TryFrom;
 
 	#[test]
 	fn phase_rotation_works() {
@@ -1994,7 +1995,12 @@ mod tests {
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
-			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
+			Targets::set(
+				BoundedVec::try_from(
+					(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+				)
+				.expect("Testing configuration needs changing"),
+			);
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -2016,7 +2022,10 @@ mod tests {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
 			Targets::set(
-				(0..(crate::mock::MaxValidatorsCount::get() as u64 + 1)).collect::<Vec<_>>(),
+				BoundedVec::try_from(
+					(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+				)
+				.expect("Testing configuration needs changing"),
 			);
 
 			// Signed phase failed to open.
@@ -2040,7 +2049,10 @@ mod tests {
 		// and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
 			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+				BoundedVec::try_from(
+					(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+				)
+				.expect("Testing configuration needs changing"),
 			);
 
 			// Signed phase failed to open.

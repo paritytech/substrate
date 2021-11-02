@@ -73,11 +73,14 @@ fn solution_with_size<T: Config>(
 	let active_voters = (0..active_voters_count)
 		.map(|i| {
 			// chose a random subset of winners.
-			let winner_votes = winners
-				.as_slice()
-				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
-				.cloned()
-				.collect::<Vec<_>>();
+			let winner_votes = BoundedVec::try_from(
+				winners
+					.as_slice()
+					.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
+					.cloned()
+					.collect::<Vec<_>>(),
+			)
+			.expect("Benchmarking adjustment may be needed");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, winner_votes)
 		})
@@ -91,10 +94,13 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<T::AccountId>>();
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
-			let votes = (&non_winners)
-				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
-				.cloned()
-				.collect::<Vec<T::AccountId>>();
+			let votes = BoundedVec::try_from(
+				(&non_winners)
+					.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
+					.cloned()
+					.collect::<Vec<T::AccountId>>(),
+			)
+			.expect("Benchmarking adjustment may be needed");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
@@ -113,6 +119,8 @@ fn solution_with_size<T: Config>(
 		targets: targets.len() as u32,
 	});
 	<DesiredTargets<T>>::put(desired_targets);
+	let targets =
+		BoundedVec::<_, T::MaxTargets>::try_from(targets).expect("Benchmark adjustment needed");
 	<Snapshot<T>>::put(RoundSnapshot { voters: all_voters.clone(), targets: targets.clone() });
 
 	// write the snapshot to staking or whoever is the data provider, in case it is needed further
@@ -178,6 +186,17 @@ fn set_up_data_provider<T: Config>(v: u32) {
 	>>::MaximumVotesPerVoter::get() as usize;
 	assert!(targets.len() > max_votes);
 	targets.truncate(max_votes);
+
+	let targets =
+		BoundedVec::<
+			_,
+			<T::DataProvider as ElectionDataProvider<
+				T::AccountId,
+				T::BlockNumber,
+				T::MaxTargets,
+			>>::MaximumVotesPerVoter,
+		>::try_from(targets)
+		.expect("Just truncated");
 
 	// fill voters.
 	(0..v).for_each(|i| {
@@ -252,11 +271,11 @@ frame_benchmarking::benchmarks! {
 	create_snapshot_internal {
 		// number of votes in snapshot.
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
-		// number of targets in snapshot.
-		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+
+		let t = T::MaxTargets::get();
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		set_up_data_provider::<T>(v, t);
+		set_up_data_provider::<T>(v);
 		let targets = T::DataProvider::targets(None)?;
 		let voters = T::DataProvider::voters(None)?;
 		let desired_targets = T::DataProvider::desired_targets()?;
@@ -296,7 +315,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<Snapshot<T>>::get().is_some());
 		assert!(<SnapshotMetadata<T>>::get().is_some());
 	}: {
-		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
+		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber, T::MaxTargets>>::elect());
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		assert!(<DesiredTargets<T>>::get().is_none());
@@ -400,7 +419,7 @@ frame_benchmarking::benchmarks! {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::MINER_MAXIMUM_VOTERS;
 
-		set_up_data_provider::<T>(v, t);
+		set_up_data_provider::<T>(v);
 		let now = frame_system::Pallet::<T>::block_number();
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
 		<MultiPhase::<T>>::create_snapshot().unwrap();
@@ -419,8 +438,9 @@ frame_benchmarking::benchmarks! {
 	create_snapshot_memory {
 		// number of votes in snapshot. Fixed to maximum.
 		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
+		let t = T::MaxTargets::get();
 
-		set_up_data_provider::<T>(v, t);
+		set_up_data_provider::<T>(v);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
 		<MultiPhase::<T>>::create_snapshot().map_err(|_| "could not create snapshot")?;

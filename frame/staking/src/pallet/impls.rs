@@ -1042,7 +1042,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>, T::MaxVali
 			VoteWeight,
 			BoundedVec<T::AccountId, Self::MaximumVotesPerVoter>,
 		)>,
-		targets: BoundedVec<T::AccountId, Self::MaximumVotesPerVoter>,
+		targets: BoundedVec<T::AccountId, T::MaxValidatorsCount>,
 		target_stake: Option<VoteWeight>,
 	) {
 		targets.into_iter().for_each(|v| {

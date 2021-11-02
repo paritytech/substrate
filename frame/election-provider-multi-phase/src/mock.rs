@@ -254,17 +254,18 @@ impl pallet_balances::Config for Runtime {
 }
 
 parameter_types! {
-	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
-		(1, 10, vec![10, 20]),
-		(2, 10, vec![30, 40]),
-		(3, 10, vec![40]),
-		(4, 10, vec![10, 20, 30, 40]),
+	pub static Targets: BoundedVec<AccountId, MaxValidatorsCount> = BoundedVec::try_from(
+		vec![10, 20, 30, 40]).expect("LIMIT >= 4");
+	pub static Voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, ConstU32<{ <TestNposSolution as NposSolution>::LIMIT as u32 }>>)> = vec![
+		(1, 10, BoundedVec::try_from(vec![10, 20]).expect("LIMIT >= 2")),
+		(2, 10, BoundedVec::try_from(vec![30, 40]).expect("LIMIT >= 2")),
+		(3, 10, BoundedVec::try_from(vec![40]).expect("LIMIT >= 1")),
+		(4, 10, BoundedVec::try_from(vec![10, 20, 30, 40]).expect("LIMIT >= 4")),
 		// self votes.
-		(10, 10, vec![10]),
-		(20, 20, vec![20]),
-		(30, 30, vec![30]),
-		(40, 40, vec![40]),
+		(10, 10, BoundedVec::try_from(vec![10]).expect("LIMIT >= 1")),
+		(20, 20, BoundedVec::try_from(vec![20]).expect("LIMIT >= 1")),
+		(30, 30, BoundedVec::try_from(vec![30]).expect("LIMIT >= 1")),
+		(40, 40, BoundedVec::try_from(vec![40]).expect("LIMIT >= 1")),
 	];
 
 	pub static DesiredTargets: u32 = 2;
@@ -442,8 +443,7 @@ impl ElectionDataProvider<AccountId, u64, MaxValidatorsCount> for StakingMock {
 	fn targets(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<BoundedVec<AccountId, MaxValidatorsCount>> {
-		let targets = BoundedVec::<_, MaxValidatorsCount>::try_from(Targets::get())
-			.map_err(|_| "Targets too big")?;
+		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
 			return Err("Targets too big")
@@ -487,8 +487,8 @@ impl ElectionDataProvider<AccountId, u64, MaxValidatorsCount> for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		targets: Vec<AccountId>,
+		voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaximumVotesPerVoter>)>,
+		targets: BoundedVec<AccountId, MaxValidatorsCount>,
 		_target_stake: Option<VoteWeight>,
 	) {
 		Targets::set(targets);
@@ -497,12 +497,16 @@ impl ElectionDataProvider<AccountId, u64, MaxValidatorsCount> for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn clear() {
-		Targets::set(vec![]);
+		Targets::set(BoundedVec::default());
 		Voters::set(vec![]);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
+	fn add_voter(
+		voter: AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<AccountId, Self::MaximumVotesPerVoter>,
+	) {
 		let mut current = Voters::get();
 		current.push((voter, weight, targets));
 		Voters::set(current);
@@ -511,13 +515,17 @@ impl ElectionDataProvider<AccountId, u64, MaxValidatorsCount> for StakingMock {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_target(target: AccountId) {
 		let mut current = Targets::get();
-		current.push(target);
+		current.try_push(target).expect("Benchamrk configuration needs adjustment");
 		Targets::set(current);
 
 		// to be on-par with staking, we add a self vote as well. the stake is really not that
 		// important.
 		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
+		current.push((
+			target,
+			ExistentialDeposit::get() as u64,
+			BoundedVec::try_from(vec![target]).expect("MaxValidatorsCount >= 1"),
+		));
 		Voters::set(current);
 	}
 }
@@ -553,6 +561,8 @@ impl ExtBuilder {
 		self
 	}
 	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
+		let targets =
+			BoundedVec::try_from(targets).expect("Benchmark configuration may need changing");
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
 		self
 	}

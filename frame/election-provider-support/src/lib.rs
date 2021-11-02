@@ -232,7 +232,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber, MaxTargets> {
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
 		_voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaximumVotesPerVoter>)>,
-		_targets: BoundedVec<AccountId, Self::MaximumVotesPerVoter>,
+		_targets: BoundedVec<AccountId, MaxTargets>,
 		_target_stake: Option<VoteWeight>,
 	) {
 	}
