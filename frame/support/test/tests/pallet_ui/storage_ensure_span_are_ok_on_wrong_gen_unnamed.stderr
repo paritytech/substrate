@@ -12,6 +12,7 @@ note: required by `partial_storage_info`
    |
 88 |     fn partial_storage_info() -> Vec<StorageInfo>;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:9:12
    |
@@ -26,6 +27,7 @@ note: required by `partial_storage_info`
    |
 88 |     fn partial_storage_info() -> Vec<StorageInfo>;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
   --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:9:12
    |
@@ -41,6 +43,7 @@ note: required by `partial_storage_info`
    |
 88 |     fn partial_storage_info() -> Vec<StorageInfo>;
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 error[E0277]: the trait bound `Bar: TypeInfo` is not satisfied
    --> $DIR/storage_ensure_span_are_ok_on_wrong_gen_unnamed.rs:20:12
     |

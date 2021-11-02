@@ -15,6 +15,7 @@ help: consider further restricting the associated type
    |
 24 |     #[pallet::type_value] fn Foo<T: Config>() -> u32 where <T as frame_system::Config>::AccountId: From<u32> { 3u32 }
    |                                                      +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 error[E0277]: the trait bound `<T as frame_system::Config>::AccountId: From<u32>` is not satisfied
   --> $DIR/type_value_forgotten_where_clause.rs:24:12
    |
@@ -32,6 +33,7 @@ help: consider further restricting the associated type
    |
 24 |     #[pallet::type_value where <T as frame_system::Config>::AccountId: From<u32>] fn Foo<T: Config>() -> u32 { 3u32 }
    |                          +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 error[E0277]: the trait bound `<T as frame_system::Config>::AccountId: From<u32>` is not satisfied
   --> $DIR/type_value_forgotten_where_clause.rs:24:12
    |
