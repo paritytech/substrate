@@ -28,10 +28,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::{
-	traits::{BadOrigin, Hash, Saturating},
-	DispatchResult,
-};
+use sp_runtime::traits::{BadOrigin, Hash, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -39,9 +36,13 @@ use frame_support::{
 	ensure,
 	pallet_prelude::Get,
 	traits::{Currency, ReservableCurrency},
+	weights::Pays,
 	BoundedVec,
 };
 use scale_info::TypeInfo;
+
+use frame_support::pallet_prelude::*;
+use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
@@ -56,9 +57,7 @@ type BalanceOf<T> =
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{DispatchResult, *};
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -68,8 +67,9 @@ pub mod pallet {
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		/// An origin that can bypass deposits to place a preimage on-chain.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		/// An origin that can request a preimage be placed on-chain without a deposit or fee, or
+		/// manage existing preimages.
+		type ManagerOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Max size allowed for a preimage.
 		type MaxSize: Get<u32>;
@@ -91,6 +91,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A preimage has been noted.
 		Noted { hash: T::Hash },
+		/// A preimage has been requested.
+		Requested { hash: T::Hash },
+		/// A preimage has ben cleared.
+		Cleared { hash: T::Hash },
 	}
 
 	#[pallet::error]
@@ -102,8 +106,8 @@ pub mod pallet {
 	}
 
 	/// The preimages stored by this pallet.
+	// TODO: Maybe store preimage metadata in its own storage.
 	#[pallet::storage]
-	#[pallet::getter(fn key)]
 	pub(super) type Preimages<T: Config> = StorageMap<
 		_,
 		Identity, // TODO: Double Check
@@ -111,39 +115,68 @@ pub mod pallet {
 		Preimage<BoundedVec<u8, T::MaxSize>, BalanceOf<T>, T::AccountId>,
 	>;
 
+	/// The preimages stored by this pallet.
+	#[pallet::storage]
+	pub(super) type Requests<T: Config> = StorageMap<
+		_,
+		Identity, // TODO: Double Check
+		T::Hash,
+		(),
+	>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Register a preimage by paying a deposit proportional to the length of the preimage.
-		#[pallet::weight(0)] //T::WeightInfo::note_preimage(encoded_proposal.len() as u32))]
-		pub fn note_preimage(origin: OriginFor<T>, bytes: Vec<u8>) -> DispatchResult {
+		#[pallet::weight(0)]
+		pub fn note_preimage(origin: OriginFor<T>, bytes: Vec<u8>) -> DispatchResultWithPostInfo {
 			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
 			// is not taken.
-			let maybe_sender = Self::ensure_signed_or_root(origin)?;
-			Self::note_bytes(bytes, maybe_sender)?;
+			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
+			Self::note_bytes(bytes, maybe_sender)
+		}
+
+		#[pallet::weight(0)]
+		pub fn request_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
+			T::ManagerOrigin::ensure_origin(origin)?;
+			Self::do_request_preimage(hash);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn clear_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
+			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
+			Self::do_clear_preimage(hash, maybe_sender);
 			Ok(())
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Ensure that the origin is either root, or `PalletOwner`.
-	fn ensure_signed_or_root(origin: T::Origin) -> Result<Option<T::AccountId>, BadOrigin> {
-		use frame_system::RawOrigin;
-		match origin.into() {
-			Ok(RawOrigin::Root) => Ok(None),
-			Ok(RawOrigin::Signed(signer)) => Ok(Some(signer)),
-			_ => Err(BadOrigin),
+	/// Ensure that the origin is either the `ManagerOrigin` or a signed origin.
+	fn ensure_signed_or_manager(origin: T::Origin) -> Result<Option<T::AccountId>, BadOrigin> {
+		if T::ManagerOrigin::ensure_origin(origin.clone()).is_ok() {
+			return Ok(None)
 		}
+		let who = ensure_signed(origin)?;
+		Ok(Some(who))
 	}
 
-	pub fn note_bytes(bytes: Vec<u8>, maybe_depositor: Option<T::AccountId>) -> DispatchResult {
+	fn note_bytes(
+		bytes: Vec<u8>,
+		maybe_depositor: Option<T::AccountId>,
+	) -> DispatchResultWithPostInfo {
 		let bounded_vec =
 			BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
 
 		let hash = T::Hashing::hash(&bounded_vec);
 		ensure!(!Preimages::<T>::contains_key(hash), Error::<T>::AlreadyNoted);
 
-		let deposit = if let Some(depositor) = maybe_depositor {
+		// We take a deposit only if there is a provided depositor, and the preimage was not
+		// previously requested. This also allows the tx to pay no fee.
+		let deposit = if Requests::<T>::contains_key(hash) {
+			Requests::<T>::remove(hash);
+			None
+		} else if let Some(depositor) = maybe_depositor {
 			let length = bounded_vec.len() as u32;
 			let deposit = T::BaseDeposit::get()
 				.saturating_add(T::ByteDeposit::get().saturating_mul(length.into()));
@@ -153,10 +186,57 @@ impl<T: Config> Pallet<T> {
 			None
 		};
 
-		let preimage = Preimage { preimage: bounded_vec, deposit };
+		let preimage = Preimage { preimage: bounded_vec, deposit: deposit.clone() };
 
 		Preimages::<T>::insert(hash, preimage);
 		Self::deposit_event(Event::Noted { hash });
-		Ok(())
+
+		// We don't pay a fee if a deposit wasn't taken.
+		if deposit.is_none() {
+			Ok(Pays::No.into())
+		} else {
+			Ok(().into())
+		}
+	}
+
+	// This function will add a hash to the list of requested preimages.
+	//
+	// If the preimage already exists before the request is made, the deposit for the preimage is
+	// returned to the user, and removed from their management.
+	fn do_request_preimage(hash: T::Hash) {
+		// Preimage already exists.
+		if let Some(preimage_metadata) = Preimages::<T>::get(hash) {
+			if let Some((who, amount)) = preimage_metadata.deposit {
+				T::Currency::unreserve(&who, amount);
+			}
+		} else {
+			Requests::<T>::insert(hash, ());
+			Self::deposit_event(Event::Requested { hash });
+		}
+	}
+
+	// Clear a preimage from the storage of the chain, returning any deposit that may be reserved.
+	//
+	// If `maybe_owner` is provided, we verify that it is the correct owner before clearing the
+	// data.
+	fn do_clear_preimage(hash: T::Hash, maybe_owner: Option<T::AccountId>) {
+		Preimages::<T>::mutate_exists(hash, |maybe_value| {
+			if let Some(preimage_metadata) = maybe_value {
+				// If there is a deposit on hold, we return it if there is no `maybe_owner` or
+				// if the owner matches.
+				if let Some((who, amount)) = &preimage_metadata.deposit {
+					if let Some(owner) = maybe_owner {
+						if &owner != who {
+							// Ownership check did not pass. Return early without mutating anything.
+							return
+						}
+					}
+					// At this point, we have done all the authorization needed, and we can simply
+					// unreserve the deposit.
+					T::Currency::unreserve(&who, *amount);
+				}
+				*maybe_value = None;
+			}
+		});
 	}
 }
