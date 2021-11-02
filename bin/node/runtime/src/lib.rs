@@ -1450,7 +1450,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn slot_duration() -> sp_consensus_babe::SlotDuration {
+		fn slot_duration() -> u64 {
 			Babe::slot_duration()
 		}
 

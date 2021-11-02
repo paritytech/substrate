@@ -382,7 +382,7 @@ sp_api::decl_runtime_apis! {
 		/// Returns the slot duration for BABE.
 		///
 		/// This value currently never changes.
-		fn slot_duration() -> SlotDuration;
+		fn slot_duration() -> u64;
 
 		/// Returns the slot that started the current epoch.
 		fn current_epoch_start() -> Slot;
