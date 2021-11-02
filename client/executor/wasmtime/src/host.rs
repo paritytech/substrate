@@ -333,6 +333,7 @@ impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> 
 		state: u32,
 		func_idx: SupervisorFuncIndex,
 	) -> Result<i64> {
+		let mut ret_vals = Vec::new();
 		let result = self.dispatch_thunk.call(
 			&mut self.host_context.caller,
 			&[
@@ -341,10 +342,11 @@ impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> 
 				Val::I32(state as i32),
 				Val::I32(usize::from(func_idx) as i32),
 			],
+			&mut ret_vals,
 		);
 
 		match result {
-			Ok(ret_vals) => {
+			Ok(()) => {
 				let ret_val = if ret_vals.len() != 1 {
 					return Err(format!(
 						"Supervisor function returned {} results, expected 1",
