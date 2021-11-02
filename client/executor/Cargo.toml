@@ -33,6 +33,7 @@ sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime", optional = t
 parking_lot = "0.11.1"
 log = "0.4.8"
 libsecp256k1 = "0.6"
+sp-core-hashing-proc-macro = { version = "4.0.0-dev", path = "../../primitives/core/hashing/proc-macro" }
 
 [dev-dependencies]
 wat = "1.0"
