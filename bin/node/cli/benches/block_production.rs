@@ -77,7 +77,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		keep_blocks: KeepBlocks::All,
 		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: spec,
-		wasm_method: WasmExecutionMethod::Interpreted,
+		wasm_method: WasmExecutionMethod::Compiled,
 		execution_strategies: ExecutionStrategies {
 			syncing: execution_strategy,
 			importing: execution_strategy,
