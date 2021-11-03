@@ -1531,9 +1531,9 @@ dependencies = [
 
 [[package]]
 name = "directories"
-version = "3.0.2"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e69600ff1703123957937708eb27f7a564e48885c537782722ed0ba3189ce1d7"
+checksum = "f51c5d4ddabd36886dd3e1438cb358cdcb0d7c499cb99cb4ac2e38e18b5cb210"
 dependencies = [
  "dirs-sys",
 ]
@@ -9767,7 +9767,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "trie-db",
- "trie-root",
+ "trie-root 0.17.0",
 ]
 
 [[package]]
@@ -9875,7 +9875,7 @@ dependencies = [
  "sp-std",
  "trie-bench",
  "trie-db",
- "trie-root",
+ "trie-root 0.17.0",
  "trie-standardmap",
 ]
 
@@ -10834,7 +10834,7 @@ dependencies = [
  "memory-db",
  "parity-scale-codec",
  "trie-db",
- "trie-root",
+ "trie-root 0.16.0",
  "trie-standardmap",
 ]
 
@@ -10856,6 +10856,15 @@ name = "trie-root"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
+dependencies = [
+ "hash-db",
+]
+
+[[package]]
+name = "trie-root"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a36c5ca3911ed3c9a5416ee6c679042064b93fc637ded67e25f92e68d783891"
 dependencies = [
  "hash-db",
 ]
