@@ -212,7 +212,7 @@ pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, tri
 	root: &TrieHash<L>,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	TrieDB::<L>::new(&*db, root)?.get(key)
 }
 
 /// Read a value from the trie with given Query.
@@ -226,9 +226,7 @@ pub fn read_trie_value_with<
 	key: &[u8],
 	query: Q,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDB::<L>::new(&*db, root)?
-		.get_with(key, query)
-		.map(|x| x.map(|val| val.to_vec()))
+	TrieDB::<L>::new(&*db, root)?.get_with(key, query)
 }
 
 /// Determine the empty trie root.
