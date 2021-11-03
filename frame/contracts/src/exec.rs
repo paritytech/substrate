@@ -2155,10 +2155,10 @@ mod tests {
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted(
-							1,
-							BadOrigin.into()
-						),),
+						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted {
+							index: 1,
+							error: BadOrigin.into()
+						},),
 						topics: vec![],
 					},
 				]

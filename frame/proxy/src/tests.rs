@@ -358,7 +358,7 @@ fn filtering_works() {
 		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_events(vec![
-			UtilityEvent::BatchInterrupted(0, DispatchError::BadOrigin).into(),
+			UtilityEvent::BatchInterrupted { index: 0, error: DispatchError::BadOrigin }.into(),
 			ProxyEvent::ProxyExecuted(Ok(())).into(),
 		]);
 
@@ -374,7 +374,7 @@ fn filtering_works() {
 		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_events(vec![
-			UtilityEvent::BatchInterrupted(0, DispatchError::BadOrigin).into(),
+			UtilityEvent::BatchInterrupted { index: 0, error: DispatchError::BadOrigin }.into(),
 			ProxyEvent::ProxyExecuted(Ok(())).into(),
 		]);
 
