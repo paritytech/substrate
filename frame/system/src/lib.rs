@@ -89,8 +89,8 @@ use frame_support::{
 		PalletInfo, SortedMembers, StoredMap,
 	},
 	weights::{
-		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
-		Weight,
+		extract_actual_weight, DispatchClass, DispatchInfo, GetDispatchInfo, PerDispatchClass,
+		PostDispatchInfo, RuntimeDbWeight, Weight,
 	},
 	Parameter,
 };
@@ -179,7 +179,14 @@ pub mod pallet {
 			+ OriginTrait<Call = Self::Call>;
 
 		/// The aggregated `Call` type.
-		type Call: Dispatchable + Debug;
+		type Call: Debug
+			+ GetDispatchInfo
+			+ FullCodec
+			+ Clone
+			+ Eq
+			+ PartialEq
+			+ scale_info::TypeInfo
+			+ Dispatchable<Origin = Self::Origin, Info = DispatchInfo, PostInfo = PostDispatchInfo>;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.
