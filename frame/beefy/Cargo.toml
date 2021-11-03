@@ -38,3 +38,4 @@ std = [
 	"sp-std/std",
 	"pallet-session/std",
 ]
+try-runtime = []
