@@ -53,6 +53,7 @@ impl<T: Default> Get<T> for () {
 }
 
 /// Implement Get by returning Default for any type that implements Default.
+#[derive(TypeInfo)]
 pub struct GetDefault;
 impl<T: Default> Get<T> for GetDefault {
 	fn get() -> T {
@@ -61,6 +62,7 @@ impl<T: Default> Get<T> for GetDefault {
 }
 
 /// Implement `Get<u32>` and `Get<Option<u32>>` using the given const.
+#[derive(TypeInfo)]
 pub struct ConstU32<const T: u32>;
 
 impl<const T: u32> Get<u32> for ConstU32<T> {

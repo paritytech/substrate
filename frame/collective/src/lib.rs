@@ -46,9 +46,10 @@ use scale_info::TypeInfo;
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
-use sp_std::{marker::PhantomData, prelude::*, result};
+use sp_std::{marker::PhantomData, prelude::*, result, convert::TryInto};
 
 use frame_support::{
+	BoundedVec,
 	codec::{Decode, Encode},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
@@ -147,15 +148,15 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 
 /// Info for keeping track of a motion being voted on.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Votes<AccountId, BlockNumber> {
+pub struct Votes<BoundedAccountIdVec, BlockNumber> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
 	threshold: MemberCount,
 	/// The current set of voters that approved it.
-	ayes: Vec<AccountId>,
+	ayes: BoundedAccountIdVec,
 	/// The current set of voters that rejected it.
-	nays: Vec<AccountId>,
+	nays: BoundedAccountIdVec,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
@@ -172,6 +173,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	//#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -256,7 +258,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
 	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, T::BlockNumber>, OptionQuery>;
+		StorageMap<_, Identity, T::Hash, Votes<BoundedVec<T::AccountId, T::MaxMembers>, T::BlockNumber>, OptionQuery>;
 
 	/// Proposals so far.
 	#[pallet::storage]
@@ -328,6 +330,8 @@ pub mod pallet {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// Too many votes are being placed in storage.
+		TooManyVotes,
 	}
 
 	// Note that councillor operations are assigned to the operational class.
@@ -541,7 +545,7 @@ pub mod pallet {
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
 				let votes = {
 					let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
-					Votes { index, threshold, ayes: vec![], nays: vec![], end }
+					Votes { index, threshold, ayes: Default::default(), nays: Default::default(), end }
 				};
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -593,7 +597,7 @@ pub mod pallet {
 
 			if approve {
 				if position_yes.is_none() {
-					voting.ayes.push(who.clone());
+					voting.ayes.try_push(who.clone()).map_err(|()| Error::<T, I>::TooManyVotes)?;
 				} else {
 					return Err(Error::<T, I>::DuplicateVote.into())
 				}
@@ -602,7 +606,7 @@ pub mod pallet {
 				}
 			} else {
 				if position_no.is_none() {
-					voting.nays.push(who.clone());
+					voting.nays.try_push(who.clone()).map_err(|()| Error::<T, I>::TooManyVotes)?;
 				} else {
 					return Err(Error::<T, I>::DuplicateVote.into())
 				}
@@ -917,12 +921,14 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 						.ayes
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect();
+						.collect::<Vec<_>>()
+						.try_into().expect("filter never increases vec length. qed");
 					votes.nays = votes
 						.nays
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect();
+						.collect::<Vec<_>>()
+						.try_into().expect("filter never increases vec length. qed");
 					*v = Some(votes);
 				}
 			});
