@@ -45,7 +45,10 @@ fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 
 	header.state_root = op
 		.set_genesis_state(
-			Storage { top: storage.into_iter().collect(), children_default: Default::default() },
+			Storage {
+				top: vec![(vec![1], vec![2])].into_iter().collect(),
+				children_default: Default::default(),
+			},
 			true,
 		)
 		.unwrap();
@@ -55,26 +58,55 @@ fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 
 	db.commit_operation(op).unwrap();
 
-	let mut op = db.begin_operation().unwrap();
-	let mut header = Header {
-		number: 1,
-		parent_hash: Default::default(),
-		state_root: Default::default(),
-		digest: Default::default(),
-		extrinsics_root: Default::default(),
-	};
+	let mut number = 1;
+	let mut parent_hash = header.hash();
 
-	header.state_root = db.state_at(BlockId::Number(0)).unwrap().storage_root(std::iter::empty()).0;
+	for i in 0..10 {
+		let mut op = db.begin_operation().unwrap();
 
-	op.set_block_data(header.clone(), Some(vec![]), None, None, NewBlockState::Best)
-		.unwrap();
+		db.begin_state_operation(&mut op, BlockId::Hash(parent_hash)).unwrap();
 
-	db.commit_operation(op).unwrap();
+		let mut header = Header {
+			number,
+			parent_hash,
+			state_root: Default::default(),
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+		};
 
-	header.hash()
+		let changes = storage
+			.iter()
+			.skip(i * 100_000)
+			.take(100_000)
+			.map(|(k, v)| (k.clone(), Some(v.clone())))
+			.collect::<Vec<_>>();
+
+		let (state_root, tx) = db
+			.state_at(BlockId::Number(number - 1))
+			.unwrap()
+			.storage_root(changes.iter().map(|(k, v)| (k.as_slice(), v.as_deref())));
+		header.state_root = state_root;
+
+		op.update_db_storage(tx).unwrap();
+		op.update_storage(changes, Default::default()).unwrap();
+
+		op.set_block_data(header.clone(), Some(vec![]), None, None, NewBlockState::Best)
+			.unwrap();
+
+		db.commit_operation(op).unwrap();
+
+		number += 1;
+		parent_hash = header.hash();
+	}
+
+	parent_hash
 }
 
-fn create_backend(state_cache_size: usize, trie_cache_size: usize, path: PathBuf) -> Backend<Block> {
+fn create_backend(
+	state_cache_size: usize,
+	trie_cache_size: usize,
+	path: PathBuf,
+) -> Backend<Block> {
 	let settings = DatabaseSettings {
 		state_cache_size,
 		state_cache_child_ratio: None,
@@ -125,7 +157,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	drop(backend);
 
-	let backend = create_backend(128 * 1024 * 1024, 0, path.path().to_owned());
+	let backend = create_backend(512 * 1024 * 1024, 0, path.path().to_owned());
 
 	group.bench_function("with 128MB state cache", |b| {
 		b.iter_batched(
@@ -141,7 +173,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	drop(backend);
 
-	let backend = create_backend(0, 128 * 1024 * 1024, path.path().to_owned());
+	let backend = create_backend(0, 512 * 1024 * 1024, path.path().to_owned());
 
 	group.bench_function("with 128MB trie cache", |b| {
 		b.iter_batched(
