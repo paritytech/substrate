@@ -161,13 +161,13 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
 
-		if capabilities.has(offchain::Capability::Keystore) {
+		if capabilities.contains(offchain::Capabilities::KEYSTORE) {
 			if let Some(ref keystore) = self.keystore {
 				extensions.register(KeystoreExt(keystore.clone()));
 			}
 		}
 
-		if capabilities.has(offchain::Capability::TransactionPool) {
+		if capabilities.contains(offchain::Capabilities::TRANSACTION_POOL) {
 			if let Some(pool) = self.transaction_pool.read().as_ref().and_then(|x| x.upgrade()) {
 				extensions
 					.register(TransactionPoolExt(
@@ -176,8 +176,8 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			}
 		}
 
-		if capabilities.has(offchain::Capability::OffchainDbRead) ||
-			capabilities.has(offchain::Capability::OffchainDbWrite)
+		if capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_READ) ||
+			capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_WRITE)
 		{
 			if let Some(offchain_db) = self.offchain_db.as_ref() {
 				extensions.register(OffchainDbExt::new(offchain::LimitedExternalities::new(
@@ -210,7 +210,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			ExecutionContext::BlockConstruction => self.strategies.block_construction.get_manager(),
 			ExecutionContext::Syncing => self.strategies.syncing.get_manager(),
 			ExecutionContext::Importing => self.strategies.importing.get_manager(),
-			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
+			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.is_all() =>
 				self.strategies.offchain_worker.get_manager(),
 			ExecutionContext::OffchainCall(_) => self.strategies.other.get_manager(),
 		};

@@ -101,12 +101,13 @@ pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
 	[(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
 
 #[derive(Default)]
-pub(crate) struct ExtBuilder {
+pub struct ExtBuilder {
 	ids: Vec<(AccountId, VoteWeight)>,
 }
 
 impl ExtBuilder {
 	/// Add some AccountIds to insert into `List`.
+	#[cfg(test)]
 	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
 		self.ids = ids;
 		self
@@ -126,18 +127,20 @@ impl ExtBuilder {
 		ext
 	}
 
-	pub(crate) fn build_and_execute(self, test: impl FnOnce() -> ()) {
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
 			List::<Runtime>::sanity_check().expect("Sanity check post condition failed")
 		})
 	}
 
+	#[cfg(test)]
 	pub(crate) fn build_and_execute_no_post_check(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}
 }
 
+#[cfg(test)]
 pub(crate) mod test_utils {
 	use super::*;
 	use list::Bag;

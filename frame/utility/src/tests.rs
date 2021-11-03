@@ -151,7 +151,6 @@ parameter_types! {
 impl example::Config for Test {}
 
 pub struct TestBaseCallFilter;
-
 impl Contains<Call> for TestBaseCallFilter {
 	fn contains(c: &Call) -> bool {
 		match *c {
@@ -166,7 +165,6 @@ impl Contains<Call> for TestBaseCallFilter {
 		}
 	}
 }
-
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
@@ -184,8 +182,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
 	}
-		.assimilate_storage(&mut t)
-		.unwrap();
+	.assimilate_storage(&mut t)
+	.unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -290,7 +288,7 @@ fn as_derivative_filters() {
 					value: 1
 				})),
 			),
-			DispatchError::BadOrigin
+			DispatchError::from(frame_system::Error::<Test>::CallFiltered),
 		);
 	});
 }
@@ -340,7 +338,8 @@ fn batch_with_signed_filters() {
 			vec![Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })]
 		),);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted { index: 0, error: DispatchError::BadOrigin }.into(),
+			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
+				.into(),
 		);
 	});
 }
@@ -411,7 +410,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
 		);
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
@@ -426,7 +425,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
 		);
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
@@ -439,7 +438,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
 		);
 		assert_eq!(
 			extract_actual_weight(&result, &info),
@@ -575,7 +574,7 @@ fn batch_all_does_not_nest() {
 					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
 					pays_fee: Pays::Yes
 				},
-				error: DispatchError::BadOrigin,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
 			}
 		);
 
@@ -587,7 +586,8 @@ fn batch_all_does_not_nest() {
 		// and balances.
 		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
 		System::assert_has_event(
-			utility::Event::BatchInterrupted { index: 0, error: DispatchError::BadOrigin }.into(),
+			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
+				.into(),
 		);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
