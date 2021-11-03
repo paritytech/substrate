@@ -258,65 +258,35 @@ impl Timestamp {
 	}
 }
 
-/// Execution context extra capabilities.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[repr(u8)]
-pub enum Capability {
-	/// Access to transaction pool.
-	TransactionPool = 1,
-	/// External http calls.
-	Http = 2,
-	/// Keystore access.
-	Keystore = 4,
-	/// Randomness source.
-	Randomness = 8,
-	/// Access to opaque network state.
-	NetworkState = 16,
-	/// Access to offchain worker DB (read only).
-	OffchainDbRead = 32,
-	/// Access to offchain worker DB (writes).
-	OffchainDbWrite = 64,
-	/// Manage the authorized nodes
-	NodeAuthorization = 128,
+bitflags::bitflags! {
+	/// Execution context extra capabilities.
+	pub struct Capabilities: u32 {
+		/// Access to transaction pool.
+		const TRANSACTION_POOL = 0b0000_0001;
+		/// External http calls.
+		const HTTP = 0b0000_0010;
+		/// Keystore access.
+		const KEYSTORE = 0b0000_0100;
+		/// Randomness source.
+		const RANDOMNESS = 0b0000_1000;
+		/// Access to opaque network state.
+		const NETWORK_STATE = 0b0001_0000;
+		/// Access to offchain worker DB (read only).
+		const OFFCHAIN_DB_READ = 0b0010_0000;
+		/// Access to offchain worker DB (writes).
+		const OFFCHAIN_DB_WRITE = 0b0100_0000;
+		/// Manage the authorized nodes
+		const NODE_AUTHORIZATION = 0b1000_0000;
+	}
 }
 
-/// A set of capabilities
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Capabilities(u8);
-
 impl Capabilities {
-	/// Return an object representing an empty set of capabilities.
-	pub fn none() -> Self {
-		Self(0)
-	}
-
-	/// Return an object representing all capabilities enabled.
-	pub fn all() -> Self {
-		Self(u8::MAX)
-	}
-
 	/// Return capabilities for rich offchain calls.
 	///
 	/// Those calls should be allowed to sign and submit transactions
 	/// and access offchain workers database (but read only!).
 	pub fn rich_offchain_call() -> Self {
-		[Capability::TransactionPool, Capability::Keystore, Capability::OffchainDbRead][..].into()
-	}
-
-	/// Check if particular capability is enabled.
-	pub fn has(&self, capability: Capability) -> bool {
-		self.0 & capability as u8 != 0
-	}
-
-	/// Check if this capability object represents all capabilities.
-	pub fn has_all(&self) -> bool {
-		self == &Capabilities::all()
-	}
-}
-
-impl<'a> From<&'a [Capability]> for Capabilities {
-	fn from(list: &'a [Capability]) -> Self {
-		Capabilities(list.iter().fold(0_u8, |a, b| a | *b as u8))
+		Capabilities::TRANSACTION_POOL | Capabilities::KEYSTORE | Capabilities::OFFCHAIN_DB_READ
 	}
 }
 
@@ -552,8 +522,8 @@ impl<T> LimitedExternalities<T> {
 	/// Check if given capability is allowed.
 	///
 	/// Panics in case it is not.
-	fn check(&self, capability: Capability, name: &'static str) {
-		if !self.capabilities.has(capability) {
+	fn check(&self, capability: Capabilities, name: &'static str) {
+		if !self.capabilities.contains(capability) {
 			panic!("Accessing a forbidden API: {}. No: {:?} capability.", name, capability);
 		}
 	}
@@ -561,27 +531,27 @@ impl<T> LimitedExternalities<T> {
 
 impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	fn is_validator(&self) -> bool {
-		self.check(Capability::Keystore, "is_validator");
+		self.check(Capabilities::KEYSTORE, "is_validator");
 		self.externalities.is_validator()
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		self.check(Capability::NetworkState, "network_state");
+		self.check(Capabilities::NETWORK_STATE, "network_state");
 		self.externalities.network_state()
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		self.check(Capability::Http, "timestamp");
+		self.check(Capabilities::HTTP, "timestamp");
 		self.externalities.timestamp()
 	}
 
 	fn sleep_until(&mut self, deadline: Timestamp) {
-		self.check(Capability::Http, "sleep_until");
+		self.check(Capabilities::HTTP, "sleep_until");
 		self.externalities.sleep_until(deadline)
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		self.check(Capability::Randomness, "random_seed");
+		self.check(Capabilities::RANDOMNESS, "random_seed");
 		self.externalities.random_seed()
 	}
 
@@ -591,7 +561,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		uri: &str,
 		meta: &[u8],
 	) -> Result<HttpRequestId, ()> {
-		self.check(Capability::Http, "http_request_start");
+		self.check(Capabilities::HTTP, "http_request_start");
 		self.externalities.http_request_start(method, uri, meta)
 	}
 
@@ -601,7 +571,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		name: &str,
 		value: &str,
 	) -> Result<(), ()> {
-		self.check(Capability::Http, "http_request_add_header");
+		self.check(Capabilities::HTTP, "http_request_add_header");
 		self.externalities.http_request_add_header(request_id, name, value)
 	}
 
@@ -611,7 +581,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		chunk: &[u8],
 		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
-		self.check(Capability::Http, "http_request_write_body");
+		self.check(Capabilities::HTTP, "http_request_write_body");
 		self.externalities.http_request_write_body(request_id, chunk, deadline)
 	}
 
@@ -620,12 +590,12 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		ids: &[HttpRequestId],
 		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
-		self.check(Capability::Http, "http_response_wait");
+		self.check(Capabilities::HTTP, "http_response_wait");
 		self.externalities.http_response_wait(ids, deadline)
 	}
 
 	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.check(Capability::Http, "http_response_headers");
+		self.check(Capabilities::HTTP, "http_response_headers");
 		self.externalities.http_response_headers(request_id)
 	}
 
@@ -635,12 +605,12 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
-		self.check(Capability::Http, "http_response_read_body");
+		self.check(Capabilities::HTTP, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
 	}
 
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
-		self.check(Capability::NodeAuthorization, "set_authorized_nodes");
+		self.check(Capabilities::NODE_AUTHORIZATION, "set_authorized_nodes");
 		self.externalities.set_authorized_nodes(nodes, authorized_only)
 	}
 }
@@ -724,12 +694,12 @@ impl<T: DbExternalities + ?Sized> DbExternalities for Box<T> {
 
 impl<T: DbExternalities> DbExternalities for LimitedExternalities<T> {
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		self.check(Capability::OffchainDbWrite, "local_storage_set");
+		self.check(Capabilities::OFFCHAIN_DB_WRITE, "local_storage_set");
 		self.externalities.local_storage_set(kind, key, value)
 	}
 
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		self.check(Capability::OffchainDbWrite, "local_storage_clear");
+		self.check(Capabilities::OFFCHAIN_DB_WRITE, "local_storage_clear");
 		self.externalities.local_storage_clear(kind, key)
 	}
 
@@ -740,13 +710,13 @@ impl<T: DbExternalities> DbExternalities for LimitedExternalities<T> {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		self.check(Capability::OffchainDbWrite, "local_storage_compare_and_set");
+		self.check(Capabilities::OFFCHAIN_DB_WRITE, "local_storage_compare_and_set");
 		self.externalities
 			.local_storage_compare_and_set(kind, key, old_value, new_value)
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		self.check(Capability::OffchainDbRead, "local_storage_get");
+		self.check(Capabilities::OFFCHAIN_DB_READ, "local_storage_get");
 		self.externalities.local_storage_get(kind, key)
 	}
 }
@@ -815,15 +785,15 @@ mod tests {
 
 	#[test]
 	fn capabilities() {
-		let none = Capabilities::none();
+		let none = Capabilities::empty();
 		let all = Capabilities::all();
-		let some = Capabilities::from(&[Capability::Keystore, Capability::Randomness][..]);
+		let some = Capabilities::KEYSTORE | Capabilities::RANDOMNESS;
 
-		assert!(!none.has(Capability::Keystore));
-		assert!(all.has(Capability::Keystore));
-		assert!(some.has(Capability::Keystore));
-		assert!(!none.has(Capability::TransactionPool));
-		assert!(all.has(Capability::TransactionPool));
-		assert!(!some.has(Capability::TransactionPool));
+		assert!(!none.contains(Capabilities::KEYSTORE));
+		assert!(all.contains(Capabilities::KEYSTORE));
+		assert!(some.contains(Capabilities::KEYSTORE));
+		assert!(!none.contains(Capabilities::TRANSACTION_POOL));
+		assert!(all.contains(Capabilities::TRANSACTION_POOL));
+		assert!(!some.contains(Capabilities::TRANSACTION_POOL));
 	}
 }

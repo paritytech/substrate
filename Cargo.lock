@@ -1647,7 +1647,7 @@ checksum = "42276e3f205fe63887cca255aa9a65a63fb72764c30b9a6252a7c7e46994f689"
 dependencies = [
  "byteorder",
  "dynasm",
- "memmap2",
+ "memmap2 0.2.3",
 ]
 
 [[package]]
@@ -2050,6 +2050,7 @@ dependencies = [
  "smallvec 1.7.0",
  "sp-arithmetic",
  "sp-core",
+ "sp-core-hashing-proc-macro",
  "sp-inherents",
  "sp-io",
  "sp-runtime",
@@ -2057,6 +2058,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
+ "tt-call",
 ]
 
 [[package]]
@@ -2110,6 +2112,19 @@ dependencies = [
  "sp-std",
  "sp-version",
  "trybuild",
+]
+
+[[package]]
+name = "frame-support-test-compile-pass"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+ "sp-version",
 ]
 
 [[package]]
@@ -4071,6 +4086,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memmap2"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4647a11b578fead29cdbb34d4adef8dd3dc35b876c9c6d5240d83f205abfe96e"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5174,6 +5198,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-bags-list-fuzzer"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-election-provider-support",
+ "honggfuzz",
+ "pallet-bags-list",
+ "rand 0.8.4",
+]
+
+[[package]]
+name = "pallet-bags-list-remote-tests"
+version = "4.0.0-dev"
+dependencies = [
+ "clap",
+ "frame-election-provider-support",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-bags-list",
+ "pallet-staking",
+ "remote-externalities",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
+ "sp-tracing",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
 name = "pallet-balances"
 version = "4.0.0-dev"
 dependencies = [
@@ -6146,9 +6201,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91b679c6acc14fac74382942e2b73bea441686a33430b951ea03b5aeb6a7f254"
+checksum = "e7ccc4a8687027deb53d45c5434a1f1b330c9d1069a59cfe80a62aa9a1da25ae"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
@@ -6157,7 +6212,7 @@ dependencies = [
  "libc",
  "log 0.4.14",
  "lz4",
- "memmap2",
+ "memmap2 0.2.3",
  "parking_lot 0.11.2",
  "rand 0.8.4",
  "snap",
@@ -7493,6 +7548,7 @@ name = "sc-chain-spec"
 version = "4.0.0-dev"
 dependencies = [
  "impl-trait-for-tuples",
+ "memmap2 0.5.0",
  "parity-scale-codec",
  "sc-chain-spec-derive",
  "sc-network",
@@ -7878,6 +7934,7 @@ dependencies = [
  "sc-tracing",
  "sp-api",
  "sp-core",
+ "sp-core-hashing-proc-macro",
  "sp-externalities",
  "sp-io",
  "sp-maybe-compressed-blob",
@@ -8184,6 +8241,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.14",
  "num_cpus",
+ "once_cell",
  "parity-scale-codec",
  "parking_lot 0.11.2",
  "rand 0.7.3",
@@ -9238,6 +9296,7 @@ name = "sp-core"
 version = "4.0.0-dev"
 dependencies = [
  "base58",
+ "bitflags",
  "blake2-rfc",
  "byteorder",
  "criterion",
@@ -9266,6 +9325,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.9.8",
+ "sp-core-hashing",
+ "sp-core-hashing-proc-macro",
  "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
@@ -9280,6 +9341,28 @@ dependencies = [
  "twox-hash",
  "wasmi",
  "zeroize",
+]
+
+[[package]]
+name = "sp-core-hashing"
+version = "4.0.0-dev"
+dependencies = [
+ "blake2-rfc",
+ "byteorder",
+ "sha2 0.9.8",
+ "sp-std",
+ "tiny-keccak",
+ "twox-hash",
+]
+
+[[package]]
+name = "sp-core-hashing-proc-macro"
+version = "4.0.0-dev"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sp-core-hashing",
+ "syn",
 ]
 
 [[package]]
@@ -9456,6 +9539,8 @@ name = "sp-panic-handler"
 version = "3.0.0"
 dependencies = [
  "backtrace",
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]
@@ -9840,9 +9925,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "structopt"
-version = "0.3.25"
+version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b9788f4202aa75c240ecc9c15c65185e6a39ccdeb0fd5d008b98825464c87c"
+checksum = "bf9d950ef167e25e0bdb073cf1d68e9ad2795ac826f2f3f59647817cf23c0bfa"
 dependencies = [
  "clap",
  "lazy_static",
@@ -9851,9 +9936,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.18"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
+checksum = "134d838a2c9943ac3125cf6df165eda53493451b719f3255b2a26b85f772d0ba"
 dependencies = [
  "heck",
  "proc-macro-error 1.0.4",
@@ -10818,6 +10903,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "tt-call"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e66dcbec4290c69dd03c57e76c2469ea5c7ce109c6dd4351c13055cf71ea055"
+
+[[package]]
 name = "twox-hash"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11257,7 +11348,7 @@ dependencies = [
  "backtrace",
  "bincode",
  "lazy_static",
- "memmap2",
+ "memmap2 0.2.3",
  "more-asserts",
  "rustc-demangle",
  "serde",

@@ -560,6 +560,8 @@ pub mod pallet {
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
 		NonZeroRefCount,
+		/// The origin filter prevent the call to be dispatched.
+		CallFiltered,
 	}
 
 	/// Exposed trait-generic origin type.

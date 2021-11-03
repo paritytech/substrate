@@ -1,0 +1,37 @@
+[package]
+name = "pallet-bags-list-remote-tests"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet bags list remote test"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# frame
+pallet-staking = { path = "../../staking", version = "4.0.0-dev" }
+pallet-bags-list = { path = "../../bags-list", version = "4.0.0-dev" }
+frame-election-provider-support = { path = "../../election-provider-support", version = "4.0.0-dev" }
+frame-system = { path = "../../system", version = "4.0.0-dev" }
+frame-support = { path = "../../support", version = "4.0.0-dev" }
+
+# core
+sp-storage = { path = "../../../primitives/storage", version = "4.0.0-dev" }
+sp-core = { path = "../../../primitives/core", version = "4.0.0-dev" }
+sp-tracing = { path = "../../../primitives/tracing", version = "4.0.0-dev" }
+sp-runtime = { path = "../../../primitives/runtime", version = "4.0.0-dev" }
+sp-std = { path = "../../../primitives/std", version = "4.0.0-dev" }
+
+# utils
+remote-externalities = { path = "../../../utils/frame/remote-externalities", version = "0.10.0-dev" }
+
+# others
+tokio = { version = "1", features = ["macros"] }
+log = "0.4.14"
+structopt = "0.3.23"
+clap = "2.33.3"

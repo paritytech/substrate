@@ -288,7 +288,7 @@ fn as_derivative_filters() {
 					value: 1
 				})),
 			),
-			DispatchError::BadOrigin
+			DispatchError::from(frame_system::Error::<Test>::CallFiltered),
 		);
 	});
 }
@@ -338,7 +338,8 @@ fn batch_with_signed_filters() {
 			vec![Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })]
 		),);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into(),
+			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
+				.into(),
 		);
 	});
 }
@@ -573,7 +574,7 @@ fn batch_all_does_not_nest() {
 					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
 					pays_fee: Pays::Yes
 				},
-				error: DispatchError::BadOrigin,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
 			}
 		);
 
@@ -585,7 +586,8 @@ fn batch_all_does_not_nest() {
 		// and balances.
 		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
 		System::assert_has_event(
-			utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into(),
+			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
+				.into(),
 		);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
