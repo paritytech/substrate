@@ -38,6 +38,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/timestamp" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }

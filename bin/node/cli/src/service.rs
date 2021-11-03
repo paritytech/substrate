@@ -93,6 +93,7 @@ pub fn create_extrinsic(
 		frame_system::CheckNonce::<node_runtime::Runtime>::from(nonce),
 		frame_system::CheckWeight::<node_runtime::Runtime>::new(),
 		pallet_transaction_payment::ChargeTransactionPayment::<node_runtime::Runtime>::from(tip),
+		pallet_asset_tx_payment::ChargeAssetTxPayment::<node_runtime::Runtime>::from(tip, None),
 	);
 
 	let raw_payload = node_runtime::SignedPayload::from_raw(
@@ -103,6 +104,7 @@ pub fn create_extrinsic(
 			node_runtime::VERSION.transaction_version,
 			genesis_hash,
 			best_hash,
+			(),
 			(),
 			(),
 			(),
