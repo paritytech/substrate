@@ -38,4 +38,4 @@ std = [
 	"sp-std/std",
 	"pallet-session/std",
 ]
-try-runtime = []
+try-runtime = ["frame-support/try-runtime"]
