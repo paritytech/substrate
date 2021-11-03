@@ -63,7 +63,7 @@ impl SpawnNamed for TaskExecutor {
 
 /// Wrap a future in a timeout a little more concisely
 pub(crate) fn timeout_secs<I, F: Future<Output = I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
-	toko::time::timeout(std::time::Duration::from_secs(s), f)
+	tokio::time::timeout(std::time::Duration::from_secs(s), f)
 }
 
 pub(crate) fn deser_call<T: DeserializeOwned>(raw: String) -> T {
