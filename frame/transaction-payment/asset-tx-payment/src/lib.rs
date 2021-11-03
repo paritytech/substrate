@@ -157,7 +157,8 @@ where
 		Self { tip, asset_id }
 	}
 
-	/// Fee withdrawal logic that dispatches to either `OnChargeAssetTransaction` or `OnChargeTransaction`.
+	/// Fee withdrawal logic that dispatches to either `OnChargeAssetTransaction` or
+	/// `OnChargeTransaction`.
 	fn withdraw_fee(
 		&self,
 		who: &T::AccountId,
