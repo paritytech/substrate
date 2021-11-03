@@ -272,3 +272,9 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+trie-db = { path = "../trie/trie-db" }
+hash-db = { path = "../trie/hash-db" }
+memory-db = { path = "../trie/memory-db" }
+trie-root = { path = "../trie/trie-root" }
