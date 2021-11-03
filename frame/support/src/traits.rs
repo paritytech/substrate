@@ -75,7 +75,7 @@ pub use hooks::{
 	Hooks, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade, OnTimestampSet,
 };
 #[cfg(feature = "try-runtime")]
-pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};
+pub use hooks::{OnRuntimeUpgradeHelpersExt, SanityCheck, ON_RUNTIME_UPGRADE_PREFIX};
 
 pub mod schedule;
 mod storage;

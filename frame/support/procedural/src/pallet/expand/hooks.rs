@@ -191,5 +191,19 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				>::integrity_test()
 			}
 		}
+
+		#[cfg(feature = "try-runtime")]
+		impl<#type_impl_gen>
+			#frame_support::traits::SanityCheck<<T as #frame_system::Config>::BlockNumber>
+			for #pallet_ident<#type_use_gen> #where_clause
+		{
+			fn sanity_check(n: <T as #frame_system::Config>::BlockNumber) -> Result<(), &'static str> {
+				<
+					Self as #frame_support::traits::Hooks<
+						<T as #frame_system::Config>::BlockNumber
+					>
+				>::sanity_check(n)
+			}
+		}
 	)
 }

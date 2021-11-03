@@ -205,6 +205,7 @@ impl<T: Config> List<T> {
 			crate::ListBags::<T>::remove(removed_bag);
 		}
 
+		#[cfg(feature = "std")]
 		debug_assert_eq!(Self::sanity_check(), Ok(()));
 
 		num_affected
@@ -654,11 +655,6 @@ impl<T: Config> Bag<T> {
 			"duplicate found in bag"
 		);
 
-		Ok(())
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn sanity_check(&self) -> Result<(), &'static str> {
 		Ok(())
 	}
 

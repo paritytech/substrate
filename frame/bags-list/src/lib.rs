@@ -204,6 +204,12 @@ pub mod pallet {
 				"thresholds must strictly increase, and have no duplicates",
 			);
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn sanity_check(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+			log!(info, "sanity-checking pallet-bags-list");
+			List::<T>::sanity_check()
+		}
 	}
 }
 
@@ -273,7 +279,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 
 	#[cfg(not(feature = "std"))]
 	fn sanity_check() -> Result<(), &'static str> {
-		Ok(())
+		Err("sanity checks should not be called from wasm")
 	}
 
 	fn clear(maybe_count: Option<u32>) -> u32 {

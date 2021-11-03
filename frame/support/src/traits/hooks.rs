@@ -122,7 +122,6 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	///
 	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
 	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
-	#[cfg(feature = "try-runtime")]
 	fn storage_key(ident: &str) -> [u8; 32] {
 		crate::storage::storage_prefix(ON_RUNTIME_UPGRADE_PREFIX, ident.as_bytes())
 	}
@@ -132,7 +131,6 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	/// Returns `None` if either the data is unavailable or un-decodable.
 	///
 	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
-	#[cfg(feature = "try-runtime")]
 	fn get_temp_storage<T: codec::Decode>(at: &str) -> Option<T> {
 		sp_io::storage::get(&Self::storage_key(at))
 			.and_then(|bytes| codec::Decode::decode(&mut &*bytes).ok())
@@ -143,7 +141,6 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	///
 	/// A `at` storage identifier must be provided to indicate where the storage is being written
 	/// to.
-	#[cfg(feature = "try-runtime")]
 	fn set_temp_storage<T: codec::Encode>(data: T, at: &str) {
 		sp_io::storage::set(&Self::storage_key(at), &data.encode());
 	}
@@ -210,6 +207,27 @@ impl OnRuntimeUpgrade for Tuple {
 	}
 }
 
+/// Execute the sanity checks of this pallet, per block.
+///
+/// It should focus on certain checks to ensure that the state is sensible. Can consume as much
+/// weight as it needs.
+#[cfg(feature = "try-runtime")]
+pub trait SanityCheck<BlockNumber> {
+	/// Execute the sanity-checks.
+	fn sanity_check(_n: BlockNumber) -> Result<(), &'static str> {
+		Ok(())
+	}
+}
+
+#[cfg(feature = "try-runtime")]
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> SanityCheck<BlockNumber> for Tuple {
+	fn sanity_check(n: BlockNumber) -> Result<(), &'static str> {
+		for_tuples!(#( Tuple::sanity_check(n.clone())?; )*);
+		Ok(())
+	}
+}
+
 /// The pallet hooks trait. Implementing this lets you express some logic to execute.
 pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
@@ -250,6 +268,15 @@ pub trait Hooks<BlockNumber> {
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		0
+	}
+
+	/// Execute the sanity checks of this pallet, per block.
+	///
+	/// It should focus on certain checks to ensure that the state is sensible. Can consume as much
+	/// weight as it needs.
+	#[cfg(feature = "try-runtime")]
+	fn sanity_check(_n: BlockNumber) -> Result<(), &'static str> {
+		Ok(())
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.

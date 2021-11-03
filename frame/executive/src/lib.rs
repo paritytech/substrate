@@ -160,11 +160,17 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPallets: OnRuntimeUpgrade
+		#[cfg(not(feature = "try-runtime"))] AllPallets: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
+		#[cfg(feature = "try-runtime")] AllPallets: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>
+			+ frame_support::traits::SanityCheck<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
@@ -193,11 +199,17 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPallets: OnRuntimeUpgrade
+		#[cfg(not(feature = "try-runtime"))] AllPallets: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
+		#[cfg(feature = "try-runtime")] AllPallets: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>
+			+ frame_support::traits::SanityCheck<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
@@ -247,6 +259,16 @@ where
 				"Transaction trie root must be valid.",
 			);
 		}
+
+		// run the sanity-checks of all pallets.
+		<AllPallets as frame_support::traits::SanityCheck<System::BlockNumber>>::sanity_check(
+			*header.number(),
+		)
+		.map_err(|e| {
+			sp_runtime::print("failure:");
+			sp_runtime::print(e);
+		})
+		.expect("sanity-checks should not fail");
 
 		frame_system::Pallet::<System>::block_weight().total()
 	}
