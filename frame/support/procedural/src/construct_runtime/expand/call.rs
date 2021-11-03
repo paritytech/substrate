@@ -22,6 +22,7 @@ use syn::Ident;
 
 pub fn expand_outer_dispatch(
 	runtime: &Ident,
+	system_pallet: &Pallet,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
 ) -> TokenStream {
@@ -29,6 +30,7 @@ pub fn expand_outer_dispatch(
 	let mut variant_patterns = Vec::new();
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
+	let system_path = &system_pallet.path;
 
 	let pallets_with_call = pallet_decls.iter().filter(|decl| decl.exists_part("Call"));
 
@@ -106,7 +108,9 @@ pub fn expand_outer_dispatch(
 			type PostInfo = #scrate::weights::PostDispatchInfo;
 			fn dispatch(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				if !<Self::Origin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
-					return #scrate::sp_std::result::Result::Err(#scrate::dispatch::DispatchError::BadOrigin.into());
+					return #scrate::sp_std::result::Result::Err(
+						#system_path::Error::<#runtime>::CallFiltered.into()
+					);
 				}
 
 				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)

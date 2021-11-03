@@ -51,10 +51,8 @@ use sp_runtime::{
 pub use self::{
 	builder::{
 		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
-		new_full_parts, new_light_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer,
-		NetworkStarter, SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
-		TLightBackend, TLightBackendWithHash, TLightCallExecutor, TLightClient,
-		TLightClientWithBackend,
+		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
+		SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
 	},
 	client::{ClientConfig, LocalCallExecutor},
 	error::Error,
@@ -293,7 +291,6 @@ fn start_rpc_servers<R>(
 where
 	R: FnOnce(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
 {
-
 	fn deny_unsafe(addrs: &[SocketAddr], methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = addrs.iter().any(|addr| !addr.ip().is_loopback());
 		match (is_exposed_addr, methods) {
@@ -331,26 +328,6 @@ where
 	.map_err(|e| Error::Application(e.into()))?;
 
 	Ok(Box::new((http, ws)))
-}
-
-// TODO: (dp) Not sure this makes sense to us, I put it back mostly to make the code compile.
-/// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
-/// the HTTP or WebSockets server).
-#[derive(Clone)]
-pub struct RpcSession {
-	metadata: futures::channel::mpsc::UnboundedSender<String>,
-}
-
-impl RpcSession {
-	/// Creates an RPC session.
-	///
-	/// The `sender` is stored inside the `RpcSession` and is used to communicate spontaneous JSON
-	/// messages.
-	///
-	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(sender: futures::channel::mpsc::UnboundedSender<String>) -> RpcSession {
-		RpcSession { metadata: sender }
-	}
 }
 
 /// Transaction pool adapter.
@@ -399,7 +376,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			Box::pin(futures::future::ready(TransactionImport::None));
+			return Box::pin(futures::future::ready(TransactionImport::None))
 		}
 
 		let encoded = transaction.encode();

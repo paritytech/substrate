@@ -79,17 +79,6 @@ pub type HttpServer = HttpStopHandle;
 /// Type alias for ws server
 pub type WsServer = WsStopHandle;
 
-// TODO: (dp) port this stuff
-// impl ws::SessionStats for ServerMetrics {
-// 	fn open_session(&self, _id: ws::SessionId) {
-// 		self.session_opened.as_ref().map(|m| m.inc());
-// 	}
-
-// 	fn close_session(&self, _id: ws::SessionId) {
-// 		self.session_closed.as_ref().map(|m| m.inc());
-// 	}
-// }
-
 /// Start HTTP server listening on given address.
 pub fn start_http<M: Send + Sync + 'static>(
 	addr: std::net::SocketAddr,

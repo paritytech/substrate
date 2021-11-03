@@ -39,10 +39,7 @@ pub use sp_state_machine::ExecutionStrategy;
 
 use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
-use sc_service::{
-	client::{ClientConfig, LocalCallExecutor},
-	RpcSession,
-};
+use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{BlakeTwo256, Block as BlockT};
@@ -301,22 +298,6 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 	}
 }
 
-// TODO: (dp) I don't think we actually need this but leaving for now.
-/// The output of an RPC transaction.
-pub struct RpcTransactionOutput {
-	/// The output string of the transaction if any.
-	pub result: Option<String>,
-	/// The session object.
-	pub session: RpcSession,
-	/// An async receiver if data will be returned via a callback.
-	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
-}
-
-impl std::fmt::Debug for RpcTransactionOutput {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "RpcTransactionOutput {{ result: {:?}, session, receiver }}", self.result)
-	}
-}
 /// An error for when the RPC call fails.
 #[derive(Deserialize, Debug)]
 pub struct RpcTransactionError {
@@ -367,82 +348,5 @@ where
 				}
 			}
 		})
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use sc_service::RpcSession;
-
-	fn create_session_and_receiver(
-	) -> (RpcSession, futures::channel::mpsc::UnboundedReceiver<String>) {
-		let (tx, rx) = futures::channel::mpsc::unbounded();
-		let mem = RpcSession::new(tx.into());
-
-		(mem, rx)
-	}
-	// TODO: (dp) This test is testing the testing code. Seems pretty pointless to me.
-	#[test]
-	fn parses_error_properly() {
-		let (mem, rx) = create_session_and_receiver();
-		assert!(super::parse_rpc_result(None, mem, rx).is_ok());
-
-		let (mem, rx) = create_session_and_receiver();
-		assert!(super::parse_rpc_result(
-			Some(
-				r#"{
-				"jsonrpc": "2.0",
-				"result": 19,
-				"id": 1
-			}"#
-				.to_string()
-			),
-			mem,
-			rx
-		)
-		.is_ok(),);
-
-		let (mem, rx) = create_session_and_receiver();
-		let error = super::parse_rpc_result(
-			Some(
-				r#"{
-				"jsonrpc": "2.0",
-				"error": {
-					"code": -32601,
-					"message": "Method not found"
-				},
-				"id": 1
-			}"#
-				.to_string(),
-			),
-			mem,
-			rx,
-		)
-		.unwrap_err();
-		assert_eq!(error.code, -32601);
-		assert_eq!(error.message, "Method not found");
-		assert!(error.data.is_none());
-
-		let (mem, rx) = create_session_and_receiver();
-		let error = super::parse_rpc_result(
-			Some(
-				r#"{
-				"jsonrpc": "2.0",
-				"error": {
-					"code": -32601,
-					"message": "Method not found",
-					"data": 42
-				},
-				"id": 1
-			}"#
-				.to_string(),
-			),
-			mem,
-			rx,
-		)
-		.unwrap_err();
-		assert_eq!(error.code, -32601);
-		assert_eq!(error.message, "Method not found");
-		assert!(error.data.is_some());
 	}
 }

@@ -60,10 +60,7 @@ where
 		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 		executor: SubscriptionTaskExecutor,
 	) -> Self {
-		Self {
-			signed_commitment_stream,
-			executor,
-		}
+		Self { signed_commitment_stream, executor }
 	}
 }
 

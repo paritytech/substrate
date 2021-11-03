@@ -40,6 +40,7 @@ parking_lot = "0.11.1"
 lazy_static = { version = "1.4.0", optional = true }
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "092081a0a2b8904c6ebd2cd99e16c7bc13ffc3ae", features = ["server"] }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
+tokio = { version = "1", optional = true }
 
 [dev-dependencies]
 env_logger = "0.9"
@@ -53,4 +54,4 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 tokio = "1"
 
 [features]
-test-helpers = ["lazy_static"]
+test-helpers = ["lazy_static", "tokio"]
