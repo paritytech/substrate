@@ -579,7 +579,7 @@ pub trait PreimageHandler<Hash> {
 	/// Returns the preimage for a given hash.
 	fn get_preimage(hash: Hash) -> Option<Vec<u8>>;
 	/// Store the bytes of a preimage on chain.
-	fn note_preimage(bytes: Vec<u8>) -> Result<(), ()>;
+	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
 	/// Request that someone report a preimage.
 	fn request_preimage(hash: Hash);
 	/// Clear an existing preimage.

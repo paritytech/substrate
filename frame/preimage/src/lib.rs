@@ -146,10 +146,17 @@ pub mod pallet {
 			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
 			// is not taken.
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
+			let bounded_vec =
+				BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
 			if let Some(sender) = maybe_sender {
-				Self::note_user_bytes(bytes, sender)
+				let system_requested = Self::note_user_bytes(bounded_vec, sender)?;
+				if system_requested {
+					Ok(Pays::No.into())
+				} else {
+					Ok(().into())
+				}
 			} else {
-				Self::note_system_bytes(bytes)?;
+				Self::note_system_bytes(bounded_vec);
 				Ok(Pays::No.into())
 			}
 		}
@@ -202,16 +209,11 @@ impl<T: Config> Pallet<T> {
 
 	/// Store some preimage on chain from a trusted source.
 	///
-	/// We verify that the preimage is within the bounds of what the pallet supports.
-	///
 	/// If the preimage is already uploaded, we increase the reference counter, ensuring it is
 	/// not cleared before all uses of this preimage is complete.
 	fn note_system_bytes(
-		bytes: Vec<u8>,
-	) -> DispatchResult {
-		let bounded_vec =
-			BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
-
+		bounded_vec: BoundedVec<u8, T::MaxSize>,
+	) {
 		let hash = T::Hashing::hash(&bounded_vec);
 		Preimages::<T>::mutate_exists(hash, |maybe_preimage| {
 			if let Some(preimage) = maybe_preimage {
@@ -234,7 +236,6 @@ impl<T: Config> Pallet<T> {
 		});
 
 		Self::deposit_event(Event::Noted { hash });
-		Ok(())
 	}
 
 	/// Store some preimage on chain.
@@ -243,12 +244,9 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If the preimage was requested to be uploaded, then the user pays no deposits or tx fees.
 	fn note_user_bytes(
-		bytes: Vec<u8>,
+		bounded_vec: BoundedVec<u8, T::MaxSize>,
 		depositor: T::AccountId,
-	) -> DispatchResultWithPostInfo {
-		let bounded_vec =
-			BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
-
+	) -> Result<bool, DispatchError> {
 		let hash = T::Hashing::hash(&bounded_vec);
 		ensure!(!Preimages::<T>::contains_key(hash), Error::<T>::AlreadyNoted);
 
@@ -265,10 +263,10 @@ impl<T: Config> Pallet<T> {
 			RefCount::User(depositor, deposit)
 		};
 
-		// We don't pay a fee if it is a system preimage.
-		let dispatch_result = match ref_count {
-			RefCount::System(_) => Ok(Pays::No.into()),
-			RefCount::User(_, _) => Ok(().into())
+		// Return whether this was requested by the system.
+		let system_request = match ref_count {
+			RefCount::System(_) => true,
+			RefCount::User(_, _) => false,
 		};
 
 		let preimage = Preimage { preimage: bounded_vec, ref_count };
@@ -276,7 +274,7 @@ impl<T: Config> Pallet<T> {
 		Preimages::<T>::insert(hash, preimage);
 		Self::deposit_event(Event::Noted { hash });
 
-		dispatch_result
+		Ok(system_request)
 	}
 
 	// This function will add a hash to the list of requested preimages.
@@ -371,9 +369,8 @@ impl<T: Config> frame_support::traits::PreimageHandler<T::Hash> for Pallet<T> {
 		Preimages::<T>::get(hash).map(|preimage| preimage.preimage.to_vec())
 	}
 
-	fn note_preimage(bytes: Vec<u8>) -> Result<(), ()> {
-		Self::note_system_bytes(bytes).map_err(|_| ())?;
-		Ok(())
+	fn note_preimage(bytes: BoundedVec<u8, Self::MaxSize>) {
+		Self::note_system_bytes(bytes)
 	}
 
 	fn request_preimage(hash: T::Hash) {
