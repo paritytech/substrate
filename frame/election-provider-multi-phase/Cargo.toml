@@ -37,7 +37,7 @@ rand = { version = "0.7.3", default-features = false, optional = true, features 
 	"alloc",
 	"small_rng",
 ] }
-strum = { optional = true, version = "0.21.0" }
+strum = { optional = true, version = "0.22.0" }
 strum_macros = { optional = true, version = "0.21.1" }
 
 [dev-dependencies]

@@ -35,4 +35,4 @@ beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
 [dev-dependencies]
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 
-strum = { version = "0.21", features = ["derive"] }
+strum = { version = "0.22", features = ["derive"] }
