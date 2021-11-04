@@ -368,7 +368,7 @@ fn filtering_works() {
 		);
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_events(vec![
-			UtilityEvent::BatchInterrupted(0, SystemError::CallFiltered.into()).into(),
+			UtilityEvent::BatchInterrupted { index: 0, error: SystemError::CallFiltered.into() }.into(),
 			ProxyEvent::ProxyExecuted(Ok(())).into(),
 		]);
 
@@ -386,7 +386,7 @@ fn filtering_works() {
 		);
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_events(vec![
-			UtilityEvent::BatchInterrupted(0, SystemError::CallFiltered.into()).into(),
+			UtilityEvent::BatchInterrupted { index: 0, error: SystemError::CallFiltered.into() }.into(),
 			ProxyEvent::ProxyExecuted(Ok(())).into(),
 		]);
 
