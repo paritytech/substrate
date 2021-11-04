@@ -80,7 +80,7 @@ parity-util-mem = { version = "0.10.0", default-features = false, features = [
 async-trait = "0.1.50"
 tokio = { version = "1.10", features = ["time", "rt-multi-thread"] }
 tempfile = "3.1.0"
-directories = "3.0.2"
+directories = "4.0.1"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

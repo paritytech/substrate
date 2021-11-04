@@ -42,6 +42,8 @@ pub use scale_info;
 pub use serde;
 pub use sp_core::Void;
 #[doc(hidden)]
+pub use sp_core_hashing_proc_macro;
+#[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
@@ -427,9 +429,7 @@ macro_rules! parameter_types {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
-				$crate::sp_io::hashing::twox_128(
-					concat!(":", stringify!($name), ":").as_bytes()
-				)
+				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
 
 			/// Set the value of this parameter type in the storage.
