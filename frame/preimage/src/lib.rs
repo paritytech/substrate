@@ -28,7 +28,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::traits::{BadOrigin, Hash, Saturating, One};
+use sp_runtime::traits::{BadOrigin, Hash, One, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -46,9 +46,12 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
+/// A type to note whether a preimage is owned by a user or the system.
 #[derive(Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum RefCount<AccountId, Balance> {
+	/// This preimage is owned by a user who has the following deposit on hold.
 	User(AccountId, Balance),
+	/// This preimage is managed by the system with a number of reference counters.
 	System(u32),
 }
 
@@ -211,9 +214,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If the preimage is already uploaded, we increase the reference counter, ensuring it is
 	/// not cleared before all uses of this preimage is complete.
-	fn note_system_bytes(
-		bounded_vec: BoundedVec<u8, T::MaxSize>,
-	) {
+	fn note_system_bytes(bounded_vec: BoundedVec<u8, T::MaxSize>) {
 		let hash = T::Hashing::hash(&bounded_vec);
 		Preimages::<T>::mutate_exists(hash, |maybe_preimage| {
 			if let Some(preimage) = maybe_preimage {
@@ -226,12 +227,13 @@ impl<T: Config> Pallet<T> {
 					},
 					RefCount::System(mut count) => {
 						count.saturating_inc();
-					}
+					},
 				}
 			} else {
-				*maybe_preimage = Some(
-					Preimage { preimage: bounded_vec, ref_count: RefCount::System(One::one()) }
-				)
+				*maybe_preimage = Some(Preimage {
+					preimage: bounded_vec,
+					ref_count: RefCount::System(One::one()),
+				})
 			}
 		});
 
@@ -294,7 +296,7 @@ impl<T: Config> Pallet<T> {
 					// Preimage already exists and is owned by the system.
 					// We simply increase the number of reference counters.
 					count.saturating_inc();
-				}
+				},
 			}
 			Preimages::<T>::insert(hash, preimage_metadata);
 		} else {
@@ -315,16 +317,17 @@ impl<T: Config> Pallet<T> {
 			if let Some(preimage_metadata) = maybe_value {
 				match &preimage_metadata.ref_count {
 					RefCount::User(who, deposit) => {
-						// If there is a deposit on hold, we return it if there is no `maybe_owner` or
-						// if the owner matches.
+						// If there is a deposit on hold, we return it if there is no `maybe_owner`
+						// or if the owner matches.
 						if let Some(owner) = maybe_owner {
 							if &owner != who {
-								// Ownership check did not pass. Return early without mutating anything.
+								// Ownership check did not pass. Return early without mutating
+								// anything.
 								return Err(Error::<T>::NotAuthorized.into())
 							}
 						}
-						// At this point, we have done all the authorization needed, and we can simply
-						// unreserve the deposit.
+						// At this point, we have done all the authorization needed, and we can
+						// simply unreserve the deposit.
 						T::Currency::unreserve(who, *deposit);
 					},
 					RefCount::System(mut count) => {
@@ -337,7 +340,7 @@ impl<T: Config> Pallet<T> {
 							count.saturating_dec();
 							return Ok(())
 						}
-					}
+					},
 				};
 
 				// If we got this far, we are removing the value.
