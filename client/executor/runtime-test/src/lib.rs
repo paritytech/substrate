@@ -502,10 +502,10 @@ fn execute_sandboxed<T>(
 	let mut state = State { counter: 0 };
 
 	let env_builder = {
-		let mut env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
+		let mut env_builder = T::EnvironmentBuilder::new();
 		env_builder.add_host_func("env", "assert", env_assert);
 		env_builder.add_host_func("env", "inc_counter", env_inc_counter);
-		let memory = match sp_sandbox::host_executor::Memory::new(1, Some(16)) {
+		let memory = match T::Memory::new(1, Some(16)) {
 			Ok(m) => m,
 			Err(_) => unreachable!(
 				"
@@ -518,7 +518,7 @@ fn execute_sandboxed<T>(
 		env_builder
 	};
 
-	let mut instance = sp_sandbox::host_executor::Instance::new(code, &env_builder, &mut state)?;
+	let mut instance = T::new(code, &env_builder, &mut state)?;
 	let result = instance.invoke("call", args, &mut state);
 
 	result.map_err(|_| sp_sandbox::HostError)
