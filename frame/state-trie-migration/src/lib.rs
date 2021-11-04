@@ -679,7 +679,7 @@ pub mod pallet {
 			let mut dyn_size = 0u32;
 			for child_key in &child_keys {
 				if let Some(data) =
-					sp_io::default_child_storage::get(Self::child_io_key(child_key), &top_key)
+					sp_io::default_child_storage::get(Self::child_io_key(top_key), &child_key)
 				{
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
 					sp_io::default_child_storage::set(
