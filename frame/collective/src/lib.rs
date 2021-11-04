@@ -46,17 +46,18 @@ use scale_info::TypeInfo;
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
-use sp_std::{marker::PhantomData, prelude::*, result, convert::TryInto};
+use sp_std::{convert::TryInto, fmt::Debug, marker::PhantomData, prelude::*, result};
 
 use frame_support::{
-	BoundedVec,
 	codec::{Decode, Encode},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
 	traits::{
-		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
+		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, GetOptionWrapper, InitializeMembers,
+		StorageVersion,
 	},
 	weights::{GetDispatchInfo, Weight},
+	BoundedVec,
 };
 
 #[cfg(test)]
@@ -147,16 +148,18 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 }
 
 /// Info for keeping track of a motion being voted on.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Votes<BoundedAccountIdVec, BlockNumber> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[codec(mel_bound(AccountId: MaxEncodedLen + Encode, MaxMembers: Get<u32>))]
+#[scale_info(skip_type_params(MaxMembers))]
+pub struct Votes<AccountId, BlockNumber, MaxMembers> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
 	threshold: MemberCount,
 	/// The current set of voters that approved it.
-	ayes: BoundedAccountIdVec,
+	ayes: BoundedVec<AccountId, MaxMembers>,
 	/// The current set of voters that rejected it.
-	nays: BoundedAccountIdVec,
+	nays: BoundedVec<AccountId, MaxMembers>,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
@@ -185,7 +188,8 @@ pub mod pallet {
 		type Proposal: Parameter
 			+ Dispatchable<Origin = <Self as Config<I>>::Origin, PostInfo = PostDispatchInfo>
 			+ From<frame_system::Call<Self>>
-			+ GetDispatchInfo;
+			+ GetDispatchInfo
+			+ MaxEncodedLen;
 
 		/// The outer event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
@@ -201,7 +205,7 @@ pub mod pallet {
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependents keep to the limit without enforcing it.
-		type MaxMembers: Get<MemberCount>;
+		type MaxMembers: Get<MemberCount> + Debug;
 
 		/// Default vote strategy of this collective.
 		type DefaultVote: DefaultVote;
@@ -251,14 +255,28 @@ pub mod pallet {
 	/// Actual proposal for a given hash, if it's current.
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_of)]
-	pub type ProposalOf<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, <T as Config<I>>::Proposal, OptionQuery>;
+	pub type ProposalOf<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Identity,
+		T::Hash,
+		<T as Config<I>>::Proposal,
+		OptionQuery,
+		GetDefault,
+		GetOptionWrapper<T::MaxProposals>,
+	>;
 
 	/// Votes on a given proposal, if it is ongoing.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<BoundedVec<T::AccountId, T::MaxMembers>, T::BlockNumber>, OptionQuery>;
+	pub type Voting<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Identity,
+		T::Hash,
+		Votes<T::AccountId, T::BlockNumber, T::MaxMembers>,
+		OptionQuery,
+		GetDefault,
+		GetOptionWrapper<T::MaxProposals>,
+	>;
 
 	/// Proposals so far.
 	#[pallet::storage]
@@ -545,7 +563,13 @@ pub mod pallet {
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
 				let votes = {
 					let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
-					Votes { index, threshold, ayes: Default::default(), nays: Default::default(), end }
+					Votes {
+						index,
+						threshold,
+						ayes: Default::default(),
+						nays: Default::default(),
+						end,
+					}
 				};
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -922,13 +946,15 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect::<Vec<_>>()
-						.try_into().expect("filter never increases vec length. qed");
+						.try_into()
+						.expect("filter never increases vec length. qed");
 					votes.nays = votes
 						.nays
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect::<Vec<_>>()
-						.try_into().expect("filter never increases vec length. qed");
+						.try_into()
+						.expect("filter never increases vec length. qed");
 					*v = Some(votes);
 				}
 			});

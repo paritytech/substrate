@@ -77,6 +77,13 @@ impl<const T: u32> Get<Option<u32>> for ConstU32<T> {
 	}
 }
 
+pub struct GetOptionWrapper<T>(core::marker::PhantomData<T>);
+impl<T: Get<u32>> Get<Option<u32>> for GetOptionWrapper<T> {
+	fn get() -> Option<u32> {
+		Some(<T as Get<u32>>::get())
+	}
+}
+
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".

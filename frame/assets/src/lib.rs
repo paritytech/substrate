@@ -291,7 +291,7 @@ pub mod pallet {
 		AssetMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
+		ConstU32<300_000>, // TODO: Update
 	>;
 
 	#[pallet::genesis_config]
