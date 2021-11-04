@@ -52,7 +52,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 			type_: const_.type_.clone(),
 			doc: const_.doc.clone(),
 			default_byte_impl: quote::quote!(
-				let value = <<T as Config#trait_use_gen>::#ident as
+				let value = <<T as Config #trait_use_gen>::#ident as
 					#frame_support::traits::Get<#const_type>>::get();
 				#frame_support::codec::Encode::encode(&value)
 			),
