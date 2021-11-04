@@ -58,7 +58,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime},
-		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp,
+		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp, PreimageHandler,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -122,6 +122,14 @@ impl Default for Releases {
 	}
 }
 
+#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub enum CallOrCallHash<Call, Hash> {
+   Call(Call),
+   CallHash(Hash),
+}
+
+type CallOrCallHashOf<T> = CallOrCallHash<<T as Config>::Call, <T as frame_system::Config>::Hash>;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -173,6 +181,8 @@ pub mod pallet {
 		/// Not strictly enforced, but used for weight estimation.
 		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
+
+		type PreimageHandler: PreimageHandler<Self::Hash>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
