@@ -1411,14 +1411,15 @@ impl<T: Config> Pallet<T> {
 
 	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), &'static str> {
 		// ensures ledger.total == ledger.active + sum(ledger.unlocking).
-		let ledger = Self::ledger(ctrl).ok_or("Not a controller.")?;
+		let ledger = Self::ledger(ctrl.clone()).ok_or("Not a controller.")?;
 		let real_total: BalanceOf<T> =
 			ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 		ensure!(real_total == ledger.total, "ledger.total corrupt");
-		ensure!(
-			ledger.active >= T::Currency::minimum_balance() || ledger.active.is_zero(),
-			"ledger.active corrupt"
-		);
+
+		if !(ledger.active >= T::Currency::minimum_balance() || ledger.active.is_zero()) {
+			log!(warn, "ledger.active less than ED: {:?}, {:?}", ctrl, ledger)
+		}
+
 		Ok(())
 	}
 }
