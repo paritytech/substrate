@@ -183,12 +183,16 @@ sp_core::wasm_export_functions! {
 	   ).as_ref().to_vec()
    }
 
-   fn test_sandbox(code: Vec<u8>) -> bool {
-	   execute_sandboxed(&code, &[]).is_ok()
+   fn test_sandbox_host(code: Vec<u8>) -> bool {
+	   execute_sandboxed_host(&code, &[]).is_ok()
    }
 
-   fn test_sandbox_args(code: Vec<u8>) -> bool {
-	   execute_sandboxed(
+   fn test_sandbox_embedded(code: Vec<u8>) -> bool {
+	   execute_sandboxed_embedded(&code, &[]).is_ok()
+   }
+
+   fn test_sandbox_args_host(code: Vec<u8>) -> bool {
+	   execute_sandboxed_host(
 		   &code,
 		   &[
 			   Value::I32(0x12345678),
@@ -197,8 +201,18 @@ sp_core::wasm_export_functions! {
 	   ).is_ok()
    }
 
-   fn test_sandbox_return_val(code: Vec<u8>) -> bool {
-	   let ok = match execute_sandboxed(
+   fn test_sandbox_args_embedded(code: Vec<u8>) -> bool {
+	   execute_sandboxed_embedded(
+		   &code,
+		   &[
+			   Value::I32(0x12345678),
+			   Value::I64(0x1234567887654321),
+		   ],
+	   ).is_ok()
+   }
+
+   fn test_sandbox_return_val_host(code: Vec<u8>) -> bool {
+	   let ok = match execute_sandboxed_host(
 		   &code,
 		   &[
 			   Value::I32(0x1336),
@@ -211,9 +225,23 @@ sp_core::wasm_export_functions! {
 	   ok
    }
 
-   fn test_sandbox_instantiate(code: Vec<u8>) -> u8 {
-	   let env_builder = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
-	   let code = match sp_sandbox::default_executor::Instance::new(&code, &env_builder, &mut ()) {
+   fn test_sandbox_return_val_embedded(code: Vec<u8>) -> bool {
+	   let ok = match execute_sandboxed_embedded(
+		   &code,
+		   &[
+			   Value::I32(0x1336),
+		   ]
+	   ) {
+		   Ok(sp_sandbox::ReturnValue::Value(Value::I32(0x1337))) => true,
+		   _ => false,
+	   };
+
+	   ok
+   }
+
+   fn test_sandbox_instantiate_host(code: Vec<u8>) -> u8 {
+	   let env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
+	   let code = match sp_sandbox::host_executor::Instance::new(&code, &env_builder, &mut ()) {
 		   Ok(_) => 0,
 		   Err(sp_sandbox::Error::Module) => 1,
 		   Err(sp_sandbox::Error::Execution) => 2,
@@ -223,9 +251,36 @@ sp_core::wasm_export_functions! {
 	   code
    }
 
-   fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
-	   let env_builder = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
-	   let instance = if let Ok(i) = sp_sandbox::default_executor::Instance::new(&code, &env_builder, &mut ()) {
+   fn test_sandbox_instantiate_embedded(code: Vec<u8>) -> u8 {
+	   let env_builder = sp_sandbox::embedded_executor::EnvironmentDefinitionBuilder::new();
+	   let code = match sp_sandbox::embedded_executor::Instance::new(&code, &env_builder, &mut ()) {
+		   Ok(_) => 0,
+		   Err(sp_sandbox::Error::Module) => 1,
+		   Err(sp_sandbox::Error::Execution) => 2,
+		   Err(sp_sandbox::Error::OutOfBounds) => 3,
+	   };
+
+	   code
+   }
+
+   fn test_sandbox_get_global_val_host(code: Vec<u8>) -> i64 {
+	   let env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
+	   let instance = if let Ok(i) = sp_sandbox::host_executor::Instance::new(&code, &env_builder, &mut ()) {
+		   i
+	   } else {
+		   return 20;
+	   };
+
+	   match instance.get_global_val("test_global") {
+		   Some(sp_sandbox::Value::I64(val)) => val,
+		   None => 30,
+		   _ => 40,
+	   }
+   }
+
+   fn test_sandbox_get_global_val_embedded(code: Vec<u8>) -> i64 {
+	   let env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
+	   let instance = if let Ok(i) = sp_sandbox::host_executor::Instance::new(&code, &env_builder, &mut ()) {
 		   i
 	   } else {
 		   return 20;
@@ -409,14 +464,15 @@ mod tasks {
 }
 
 #[cfg(not(feature = "std"))]
-fn execute_sandboxed(
+struct State {
+    counter: u32,
+}
+
+#[cfg(not(feature = "std"))]
+fn execute_sandboxed<T>(
 	code: &[u8],
 	args: &[Value],
-) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
-	struct State {
-		counter: u32,
-	}
-
+) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> where T: sp_sandbox::SandboxInstance<State> {
 	fn env_assert(
 		_e: &mut State,
 		args: &[Value],
@@ -446,10 +502,10 @@ fn execute_sandboxed(
 	let mut state = State { counter: 0 };
 
 	let env_builder = {
-		let mut env_builder = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
+		let mut env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
 		env_builder.add_host_func("env", "assert", env_assert);
 		env_builder.add_host_func("env", "inc_counter", env_inc_counter);
-		let memory = match sp_sandbox::default_executor::Memory::new(1, Some(16)) {
+		let memory = match sp_sandbox::host_executor::Memory::new(1, Some(16)) {
 			Ok(m) => m,
 			Err(_) => unreachable!(
 				"
@@ -462,8 +518,24 @@ fn execute_sandboxed(
 		env_builder
 	};
 
-	let mut instance = sp_sandbox::default_executor::Instance::new(code, &env_builder, &mut state)?;
+	let mut instance = sp_sandbox::host_executor::Instance::new(code, &env_builder, &mut state)?;
 	let result = instance.invoke("call", args, &mut state);
 
 	result.map_err(|_| sp_sandbox::HostError)
+}
+
+#[cfg(not(feature = "std"))]
+fn execute_sandboxed_host(
+	code: &[u8],
+	args: &[Value],
+) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
+    execute_sandboxed::<sp_sandbox::host_executor::Instance<State>>(code, args)
+}
+
+#[cfg(not(feature = "std"))]
+fn execute_sandboxed_embedded(
+	code: &[u8],
+	args: &[Value],
+) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
+    execute_sandboxed::<sp_sandbox::embedded_executor::Instance<State>>(code, args)
 }

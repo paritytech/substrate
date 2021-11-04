@@ -51,7 +51,14 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	.unwrap()
 	.encode();
 
-	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext).unwrap(), true.encode());
+	assert_eq!(
+		call_in_wasm("test_sandbox_host", &code, wasm_method, &mut ext).unwrap(),
+		true.encode()
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_embedded", &code, wasm_method, &mut ext).unwrap(),
+		true.encode()
+	);
 }
 
 test_wasm_execution!(sandbox_trap);
@@ -72,7 +79,11 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	)
 	.unwrap();
 
-	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext).unwrap(), vec![0]);
+	assert_eq!(call_in_wasm("test_sandbox_host", &code, wasm_method, &mut ext).unwrap(), vec![0]);
+	assert_eq!(
+		call_in_wasm("test_sandbox_embedded", &code, wasm_method, &mut ext).unwrap(),
+		vec![0]
+	);
 }
 
 test_wasm_execution!(start_called);
@@ -111,7 +122,14 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 	.unwrap()
 	.encode();
 
-	assert_eq!(call_in_wasm("test_sandbox", &code, wasm_method, &mut ext).unwrap(), true.encode());
+	assert_eq!(
+		call_in_wasm("test_sandbox_host", &code, wasm_method, &mut ext).unwrap(),
+		true.encode()
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_embedded", &code, wasm_method, &mut ext).unwrap(),
+		true.encode()
+	);
 }
 
 test_wasm_execution!(invoke_args);
@@ -147,7 +165,11 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 	.encode();
 
 	assert_eq!(
-		call_in_wasm("test_sandbox_args", &code, wasm_method, &mut ext,).unwrap(),
+		call_in_wasm("test_sandbox_args_host", &code, wasm_method, &mut ext,).unwrap(),
+		true.encode(),
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_args_embedded", &code, wasm_method, &mut ext,).unwrap(),
 		true.encode(),
 	);
 }
@@ -173,7 +195,11 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 	.encode();
 
 	assert_eq!(
-		call_in_wasm("test_sandbox_return_val", &code, wasm_method, &mut ext,).unwrap(),
+		call_in_wasm("test_sandbox_return_val_host", &code, wasm_method, &mut ext,).unwrap(),
+		true.encode(),
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_return_val_embedded", &code, wasm_method, &mut ext,).unwrap(),
 		true.encode(),
 	);
 }
@@ -197,7 +223,11 @@ fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	.encode();
 
 	assert_eq!(
-		call_in_wasm("test_sandbox_instantiate", &code, wasm_method, &mut ext,).unwrap(),
+		call_in_wasm("test_sandbox_instantiate_host", &code, wasm_method, &mut ext,).unwrap(),
+		1u8.encode(),
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_instantiate_embedded", &code, wasm_method, &mut ext,).unwrap(),
 		1u8.encode(),
 	);
 }
@@ -211,7 +241,11 @@ fn corrupted_module(wasm_method: WasmExecutionMethod) {
 	let code = vec![0u8, 0, 0, 0, 1, 0, 0, 0].encode();
 
 	assert_eq!(
-		call_in_wasm("test_sandbox_instantiate", &code, wasm_method, &mut ext,).unwrap(),
+		call_in_wasm("test_sandbox_instantiate_host", &code, wasm_method, &mut ext,).unwrap(),
+		1u8.encode(),
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_instantiate_embedded", &code, wasm_method, &mut ext,).unwrap(),
 		1u8.encode(),
 	);
 }
@@ -238,7 +272,11 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	.encode();
 
 	assert_eq!(
-		call_in_wasm("test_sandbox_instantiate", &code, wasm_method, &mut ext,).unwrap(),
+		call_in_wasm("test_sandbox_instantiate_host", &code, wasm_method, &mut ext,).unwrap(),
+		0u8.encode(),
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_instantiate_embedded", &code, wasm_method, &mut ext,).unwrap(),
 		0u8.encode(),
 	);
 }
@@ -266,7 +304,11 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	.encode();
 
 	assert_eq!(
-		call_in_wasm("test_sandbox_instantiate", &code, wasm_method, &mut ext,).unwrap(),
+		call_in_wasm("test_sandbox_instantiate_host", &code, wasm_method, &mut ext,).unwrap(),
+		2u8.encode(),
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_instantiate_embedded", &code, wasm_method, &mut ext,).unwrap(),
 		2u8.encode(),
 	);
 }
@@ -287,7 +329,12 @@ fn get_global_val_works(wasm_method: WasmExecutionMethod) {
 	.encode();
 
 	assert_eq!(
-		call_in_wasm("test_sandbox_get_global_val", &code, wasm_method, &mut ext,).unwrap(),
+		call_in_wasm("test_sandbox_get_global_val_host", &code, wasm_method, &mut ext,).unwrap(),
+		500i64.encode(),
+	);
+	assert_eq!(
+		call_in_wasm("test_sandbox_get_global_val_embedded", &code, wasm_method, &mut ext,)
+			.unwrap(),
 		500i64.encode(),
 	);
 }
