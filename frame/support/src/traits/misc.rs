@@ -580,10 +580,10 @@ pub trait PreimageHandler<Hash> {
 	fn get_preimage(hash: Hash) -> Option<Vec<u8>>;
 	/// Store the bytes of a preimage on chain.
 	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
-	/// Request that someone report a preimage.
-	fn request_preimage(hash: Hash);
 	/// Clear an existing preimage.
 	fn clear_preimage(hash: Hash);
+	/// Request that someone report a preimage.
+	fn request_preimage(hash: Hash);
 	/// Clear a preimage request.
 	fn clear_request(hash: Hash);
 }

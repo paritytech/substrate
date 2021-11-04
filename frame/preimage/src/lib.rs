@@ -55,12 +55,13 @@ pub enum RefCount<AccountId, Balance> {
 	System(u32),
 }
 
+/// The preimage metadata.
 #[derive(Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Preimage<BoundedVec, AccountId, Balance> {
 	// The preimage we are storing.
-	preimage: BoundedVec,
+	pub preimage: BoundedVec,
 	// A reference counter for who depends on this resource.
-	ref_count: RefCount<AccountId, Balance>,
+	pub ref_count: RefCount<AccountId, Balance>,
 }
 
 type BalanceOf<T> =
@@ -353,7 +354,12 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear a preimage request.
 	fn do_clear_request(hash: T::Hash) {
-		Requests::<T>::remove(hash);
+		let count = Requests::<T>::get(hash);
+		if count > 1 {
+			Requests::<T>::insert(hash, count - 1);
+		} else {
+			Requests::<T>::remove(hash);
+		}
 	}
 }
 
