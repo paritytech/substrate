@@ -465,14 +465,17 @@ mod tasks {
 
 #[cfg(not(feature = "std"))]
 struct State {
-    counter: u32,
+	counter: u32,
 }
 
 #[cfg(not(feature = "std"))]
 fn execute_sandboxed<T>(
 	code: &[u8],
 	args: &[Value],
-) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> where T: sp_sandbox::SandboxInstance<State> {
+) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
+where
+	T: sp_sandbox::SandboxInstance<State>,
+{
 	fn env_assert(
 		_e: &mut State,
 		args: &[Value],
@@ -529,7 +532,7 @@ fn execute_sandboxed_host(
 	code: &[u8],
 	args: &[Value],
 ) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
-    execute_sandboxed::<sp_sandbox::host_executor::Instance<State>>(code, args)
+	execute_sandboxed::<sp_sandbox::host_executor::Instance<State>>(code, args)
 }
 
 #[cfg(not(feature = "std"))]
@@ -537,5 +540,5 @@ fn execute_sandboxed_embedded(
 	code: &[u8],
 	args: &[Value],
 ) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
-    execute_sandboxed::<sp_sandbox::embedded_executor::Instance<State>>(code, args)
+	execute_sandboxed::<sp_sandbox::embedded_executor::Instance<State>>(code, args)
 }
