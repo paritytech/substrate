@@ -48,12 +48,18 @@ pub use sp_wasm_interface::{ReturnValue, Value};
 /// The target used for logging.
 const TARGET: &str = "runtime::sandbox";
 
+#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
+mod host_executor;
+
+#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
+mod embedded_executor;
+
 mod imp {
 	#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
-	include!("../host_executor.rs");
+	pub use crate::host_executor::*;
 
 	#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
-	include!("../embedded_executor.rs");
+	pub use crate::embedded_executor::*;
 }
 
 /// Error that can occur while using this crate.
