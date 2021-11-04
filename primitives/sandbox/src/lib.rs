@@ -48,11 +48,9 @@ pub use sp_wasm_interface::{ReturnValue, Value};
 /// The target used for logging.
 const TARGET: &str = "runtime::sandbox";
 
-#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
-pub mod host_executor;
-
-#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
 pub mod embedded_executor;
+#[cfg(not(feature = "std"))]
+pub mod host_executor;
 
 #[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
 pub use host_executor as default_executor;
