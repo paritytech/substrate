@@ -1129,7 +1129,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allow society to make judgement on a suspended member.
+		/// Allow suspension judgement origin to make judgement on a suspended member.
 		///
 		/// If a suspended member is forgiven, we simply add them back as a member, not affecting
 		/// any of the existing storage items for that member.
@@ -1137,7 +1137,7 @@ pub mod pallet {
 		/// If a suspended member is rejected, remove all associated storage items, including
 		/// their payouts, and remove any vouched bids they currently have.
 		///
-		/// The dispatch origin for this call must be from the society account.
+		/// The dispatch origin for this call must be from the _SuspensionJudgementOrigin_.
 		///
 		/// Parameters:
 		/// - `who` - The suspended member to be judged.
@@ -1243,7 +1243,7 @@ pub mod pallet {
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
 				match judgement {
 					Judgement::Approve => {
-						// Society has approved this candidate
+						// Suspension Judgement origin has approved this candidate
 						// Make sure we can pay them
 						let pot = Self::pot();
 						ensure!(pot >= value, Error::<T, I>::InsufficientPot);
@@ -1257,7 +1257,7 @@ pub mod pallet {
 						Self::execute_accepted_candidate(&who, value, kind, maturity);
 					},
 					Judgement::Reject => {
-						// Society has rejected this candidate
+						// Suspension Judgement origin has rejected this candidate
 						match kind {
 							BidKind::Deposit(deposit) => {
 								// Slash deposit and move it to the treasury account
@@ -1287,8 +1287,8 @@ pub mod pallet {
 						}
 					},
 					Judgement::Rebid => {
-						// Society has taken no judgement, and candidate is placed back into the
-						// pool.
+						// Suspension Judgement origin has taken no judgement, and candidate is
+						// placed back into the pool.
 						let bids = <Bids<T, I>>::get();
 						Self::put_bid(bids, &who, value, kind);
 					},
@@ -1302,10 +1302,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allows society to change the maximum number of members in society.
+		/// Allows root origin to change the maximum number of members in society.
 		/// Max membership count must be greater than 1.
 		///
-		/// The dispatch origin for this call must be from the society account.
+		/// The dispatch origin for this call must be from _ROOT_.
 		///
 		/// Parameters:
 		/// - `max` - The maximum number of members for the society.
@@ -1370,9 +1370,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let actor = ensure_signed(origin)?;
 			// Check value is at least per-byte deposit for call
-			// let min_value = <BalanceOf<T, I>>::from(call.encode().len() as u32)
-			// 	.saturating_mul(T::ActionByteDeposit::get());
-			// ensure!(value >= min_value, Error::<T, I>::InsufficientActionDeposit);
+			let min_value = <BalanceOf<T, I>>::from(call.encode().len() as u32)
+				.saturating_mul(T::ActionByteDeposit::get());
+			ensure!(value >= min_value, Error::<T, I>::InsufficientActionDeposit);
 			// Check user is not suspended.
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&actor), Error::<T, I>::Suspended);
 			ensure!(!<SuspendedMembers<T, I>>::contains_key(&actor), Error::<T, I>::Suspended);
