@@ -1496,7 +1496,7 @@ mod tests {
 		}
 		overlay.start_transaction();
 
-		// Then only initlaization item and second (commited) item should persist.
+		// Then only initlaization item and second (committed) item should persist.
 		{
 			let ext = Ext::new(
 				&mut overlay,

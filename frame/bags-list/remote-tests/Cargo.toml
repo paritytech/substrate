@@ -14,21 +14,21 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 # frame
-pallet-staking = { path = "../../staking" }
-pallet-bags-list = { path = "../../bags-list" }
-frame-election-provider-support = { path = "../../election-provider-support" }
-frame-system = { path = "../../system" }
-frame-support = { path = "../../support" }
+pallet-staking = { path = "../../staking", version = "4.0.0-dev" }
+pallet-bags-list = { path = "../../bags-list", version = "4.0.0-dev" }
+frame-election-provider-support = { path = "../../election-provider-support", version = "4.0.0-dev" }
+frame-system = { path = "../../system", version = "4.0.0-dev" }
+frame-support = { path = "../../support", version = "4.0.0-dev" }
 
 # core
-sp-storage = { path = "../../../primitives/storage" }
-sp-core = { path = "../../../primitives/core" }
-sp-tracing = { path = "../../../primitives/tracing" }
-sp-runtime = { path = "../../../primitives/runtime" }
-sp-std = { path = "../../../primitives/std" }
+sp-storage = { path = "../../../primitives/storage", version = "4.0.0-dev" }
+sp-core = { path = "../../../primitives/core", version = "4.0.0-dev" }
+sp-tracing = { path = "../../../primitives/tracing", version = "4.0.0-dev" }
+sp-runtime = { path = "../../../primitives/runtime", version = "4.0.0-dev" }
+sp-std = { path = "../../../primitives/std", version = "4.0.0-dev" }
 
 # utils
-remote-externalities = { path = "../../../utils/frame/remote-externalities" }
+remote-externalities = { path = "../../../utils/frame/remote-externalities", version = "0.10.0-dev" }
 
 # others
 tokio = { version = "1", features = ["macros"] }
