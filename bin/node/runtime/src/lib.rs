@@ -1092,6 +1092,7 @@ parameter_types! {
 	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
 	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
+	pub const SchedulerBlocksOffset: u32 = 4;
 }
 
 impl pallet_society::Config for Runtime {
@@ -1108,11 +1109,14 @@ impl pallet_society::Config for Runtime {
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin =
 		pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
-	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
+	type SuspensionJudgementOrigin = pallet_society::EnsureSociety<Runtime>;
 	type MaxCandidateIntake = MaxCandidateIntake;
 	type ChallengePeriod = ChallengePeriod;
 	type Call = Call;
 	type ActionByteDeposit = PreimageByteDeposit;
+	type PalletsOrigin = OriginCaller;
+	type Scheduler = Scheduler;
+	type SchedulerBlocksOffset = SchedulerBlocksOffset;
 }
 
 parameter_types! {

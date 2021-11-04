@@ -5882,6 +5882,7 @@ dependencies = [
  "frame-support-test",
  "frame-system",
  "pallet-balances",
+ "pallet-scheduler",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",

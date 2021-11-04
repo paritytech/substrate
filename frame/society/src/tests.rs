@@ -116,7 +116,7 @@ fn bidding_works() {
 		run_to_block(4);
 		// Pot is 1000 after "PeriodSpend"
 		assert_eq!(Society::pot(), 1000);
-		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+		assert_eq!(Balances::free_balance(Society::treasury()), 10_000);
 		// Choose smallest bidding users whose total is less than pot
 		assert_eq!(
 			Society::candidates(),
@@ -132,7 +132,7 @@ fn bidding_works() {
 		// Candidates become members after a period rotation
 		assert_eq!(Society::members(), vec![10, 30, 40]);
 		// Pot is increased by 1000, but pays out 700 to the members
-		assert_eq!(Balances::free_balance(Society::account_id()), 9_300);
+		assert_eq!(Balances::free_balance(Society::treasury()), 9_300);
 		assert_eq!(Society::pot(), 1_300);
 		// Left over from the original bids is 50 who satisfies the condition of bid less than pot.
 		assert_eq!(Society::candidates(), vec![create_bid(500, 50, BidKind::Deposit(25))]);
@@ -143,7 +143,7 @@ fn bidding_works() {
 		assert_eq!(Society::members(), vec![10, 30, 40, 50]);
 		// Pot is increased by 1000, and 500 is paid out. Total payout so far is 1200.
 		assert_eq!(Society::pot(), 1_800);
-		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
+		assert_eq!(Balances::free_balance(Society::treasury()), 8_800);
 		// No more candidates satisfy the requirements
 		assert_eq!(Society::candidates(), vec![]);
 		assert_ok!(Society::defender_vote(Origin::signed(10), true)); // Keep defender around
@@ -154,7 +154,7 @@ fn bidding_works() {
 		// Pot is increased by 1000 again
 		assert_eq!(Society::pot(), 2_800);
 		// No payouts
-		assert_eq!(Balances::free_balance(Society::account_id()), 8_800);
+		assert_eq!(Balances::free_balance(Society::treasury()), 8_800);
 		// Candidate 60 now qualifies based on the increased pot size.
 		assert_eq!(Society::candidates(), vec![create_bid(1900, 60, BidKind::Deposit(25))]);
 		// Candidate 60 is voted in.
@@ -164,7 +164,7 @@ fn bidding_works() {
 		assert_eq!(Society::members(), vec![10, 30, 40, 50, 60]);
 		// Pay them
 		assert_eq!(Society::pot(), 1_900);
-		assert_eq!(Balances::free_balance(Society::account_id()), 6_900);
+		assert_eq!(Balances::free_balance(Society::treasury()), 6_900);
 	});
 }
 
@@ -312,17 +312,17 @@ fn suspended_member_life_cycle_works() {
 		// Normal people cannot make judgement
 		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), BadOrigin);
 
-		// Suspension judgment origin can judge thee
-		// Suspension judgement origin forgives the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, true));
+		// Society can judge thee
+		// Society forgives the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, true));
 		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
 		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
 
 		// Let's suspend them again, directly
 		Society::suspend_member(&20);
 		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
-		// Suspension judgement origin does not forgive the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
+		// Society does not forgive the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, false));
 		// Cleaned up
 		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
 		assert_eq!(<Members<Test>>::get(), vec![10]);
@@ -335,7 +335,7 @@ fn suspended_candidate_rejected_works() {
 	EnvBuilder::new().execute(|| {
 		// Starting Balance
 		assert_eq!(Balances::free_balance(20), 50);
-		assert_eq!(Balances::free_balance(Society::account_id()), 10000);
+		assert_eq!(Balances::free_balance(Society::treasury()), 10000);
 		// 20 makes a bid
 		assert_ok!(Society::bid(Origin::signed(20), 0));
 		assert_eq!(Balances::free_balance(20), 25);
@@ -358,8 +358,12 @@ fn suspended_candidate_rejected_works() {
 			BadOrigin
 		);
 
-		// Suspension judgement origin makes no direct judgement
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Rebid));
+		// Society makes no direct judgement
+		assert_ok!(Society::judge_suspended_candidate(
+			Origin::signed(society_account()),
+			20,
+			Judgement::Rebid
+		));
 		// They are placed back in bid pool, repeat suspension process
 		// Rotation Period
 		run_to_block(12);
@@ -373,13 +377,17 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Society::candidates(), vec![]);
 		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
-		// Suspension judgement origin rejects the candidate
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Reject));
+		// Society rejects the candidate
+		assert_ok!(Society::judge_suspended_candidate(
+			Origin::signed(society_account()),
+			20,
+			Judgement::Reject
+		));
 		// User is slashed
 		assert_eq!(Balances::free_balance(20), 25);
 		assert_eq!(Balances::reserved_balance(20), 0);
 		// Funds are deposited to society account
-		assert_eq!(Balances::free_balance(Society::account_id()), 10025);
+		assert_eq!(Balances::free_balance(Society::treasury()), 10025);
 		// Cleaned up
 		assert_eq!(Society::candidates(), vec![]);
 		assert_eq!(<SuspendedCandidates<Test>>::get(20), None);
@@ -478,7 +486,11 @@ fn unvouch_works() {
 		// User is stuck vouching until judgement origin resolves suspended candidate
 		assert_eq!(<Vouching<Test, _>>::get(10), Some(VouchingStatus::Vouching));
 		// Judge denies candidate
-		assert_ok!(Society::judge_suspended_candidate(Origin::signed(2), 20, Judgement::Reject));
+		assert_ok!(Society::judge_suspended_candidate(
+			Origin::signed(society_account()),
+			20,
+			Judgement::Reject
+		));
 		// 10 is banned from vouching
 		assert_eq!(<Vouching<Test, _>>::get(10), Some(VouchingStatus::Banned));
 		assert_eq!(Society::members(), vec![10]);
@@ -714,7 +726,7 @@ fn vouching_handles_removed_member_with_bid() {
 		assert_eq!(<Bids<Test>>::get(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Remove member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, false));
 		// Bid is removed, vouching status is removed
 		assert_eq!(<Bids<Test>>::get(), vec![]);
 		assert_eq!(<Vouching<Test>>::get(20), None);
@@ -741,7 +753,7 @@ fn vouching_handles_removed_member_with_candidate() {
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Remove member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(2), 20, false));
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, false));
 		// Vouching status is removed, but candidate is still in the queue
 		assert_eq!(<Vouching<Test>>::get(20), None);
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
@@ -816,7 +828,7 @@ fn max_limits_work() {
 		// Fill up members with suspended candidates from the first rotation
 		for i in 100..104 {
 			assert_ok!(Society::judge_suspended_candidate(
-				Origin::signed(2),
+				Origin::signed(society_account()),
 				i,
 				Judgement::Approve
 			));
@@ -863,7 +875,7 @@ fn zero_bid_works() {
 		run_to_block(4);
 		// Pot is 1000 after "PeriodSpend"
 		assert_eq!(Society::pot(), 1000);
-		assert_eq!(Balances::free_balance(Society::account_id()), 10_000);
+		assert_eq!(Balances::free_balance(Society::treasury()), 10_000);
 		// Choose smallest bidding users whose total is less than pot, with only one zero bid.
 		assert_eq!(
 			Society::candidates(),
@@ -921,15 +933,15 @@ fn bidding_action_works() {
 		// 10 is the only member, founder, and head
 		assert_eq!(Society::members(), vec![10]);
 
-		// Funding actions account
-		assert_ok!(Balances::transfer(Origin::signed(50), Society::actions(), 25));
-		assert_eq!(Balances::free_balance(Society::actions()), 25);
+		// Funding society's account
+		assert_ok!(Balances::transfer(Origin::signed(50), society_account(), 25));
+		assert_eq!(Balances::free_balance(society_account()), 25);
 
 		// Users make bids
 		assert_ok!(Society::bid(Origin::signed(20), 1000));
 		assert_ok!(Society::bid(Origin::signed(30), 500));
 
-		// 10 makes an action bid that transfers 15 from actions account to itself
+		// 10 makes an action bid that transfers 15 from society's account to itself
 		let boxed_call = Box::new(call_transfer(10, 15));
 		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
 
@@ -967,26 +979,29 @@ fn bidding_action_works() {
 		// Pot is 1950 after second "PeriodSpend" (2000) minus 50 from the winning bids' payout
 		assert_eq!(Society::pot(), 1950);
 
-		// The value (15) was transferred (Actions -> 10)
-		assert_eq!(Balances::free_balance(10), 65);
-
-		// Actions balance: 25 - 15
-		assert_eq!(Balances::free_balance(Society::actions()), 10);
-
 		// Checking candidates (20 is now a candidate)
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 20, BidKind::Deposit(25))]);
 
-		run_to_block(12);
+		// Scheduler triggers and the transfer call is executed
+		run_to_block((12 + SchedulerBlocksOffset::get()).into());
+
+		// The value (15) was transferred (Society -> 10)
+		assert_eq!(Balances::free_balance(10), 65);
+
+		// Actions balance: 25 - 15
+		assert_eq!(Balances::free_balance(society_account()), 10);
+
+		run_to_block(20);
 
 		// 20 is now suspended
 		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
-		run_to_block(16);
+		run_to_block(24);
 
 		// 10 makes same action bid
 		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
 
-		run_to_block(20);
+		run_to_block(28);
 
 		// Checking candidates
 		assert_eq!(
@@ -994,71 +1009,129 @@ fn bidding_action_works() {
 			vec![create_bid(50, 10, BidKind::Action(50, boxed_call.clone()))]
 		);
 
-		run_to_block(24);
+		run_to_block(32);
+
+		// Checking candidates
+		assert_eq!(Society::candidates(), vec![]);
 
 		// 10 was not suspended even with a rejected action bid
 		assert_noop!(
-			Society::judge_suspended_candidate(Origin::signed(2), 10, Judgement::Approve),
+			Society::judge_suspended_candidate(
+				Origin::signed(society_account()),
+				10,
+				Judgement::Approve
+			),
 			Error::<Test, _>::NotSuspended
 		);
 	});
 }
 
 #[test]
-fn change_founder_works() {
+fn bid_judge_actions_works() {
 	// This tests that change_founder() works as expected.
 	EnvBuilder::new().execute(|| {
-		// 10 is the only members
+		// Society members
 		assert_eq!(Society::members(), vec![10]);
-		// and the Founder
-		assert_eq!(Society::founder(), Some(10));
 
-		// 20 makes a bid
+		// Users make bids
 		assert_ok!(Society::bid(Origin::signed(20), 100));
+		assert_ok!(Society::bid(Origin::signed(30), 0));
 
 		run_to_block(4);
 
-		// Checking candidates
-		assert_eq!(Society::candidates(), vec![create_bid(100, 20, BidKind::Deposit(25))]);
-
-		// 10 votes for 20 to become a member
 		assert_ok!(Society::vote(Origin::signed(10), 20, true));
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
 
 		run_to_block(8);
 
-		// 10 and 20 are now members
-		assert_eq!(Society::members(), vec![10, 20]);
-
-		// 10 is still the Founder
-		assert_eq!(Society::founder(), Some(10));
-
-		// 20 makes an action bid that calls change_founder, setting itself as the Founder
-		let boxed_change_founder_call = Box::new(call_change_founder(20));
-		assert_ok!(Society::bid_action(Origin::signed(20), 50, boxed_change_founder_call.clone()));
+		// Society members
+		assert_eq!(Society::members(), vec![10, 20, 30]);
 
 		run_to_block(12);
+
+		// Users make bids
+		assert_ok!(Society::bid(Origin::signed(50), 500));
+		assert_ok!(Society::bid(Origin::signed(60), 600));
+		assert_ok!(Society::bid(Origin::signed(70), 700));
+
+		run_to_block(16);
+
+		// 20 got suspended
+		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
+
+		run_to_block(24);
+
+		// All candidates are suspended
+		assert_eq!(Society::suspended_candidate(50).is_some(), true);
+		assert_eq!(Society::suspended_candidate(60).is_some(), true);
+		assert_eq!(Society::suspended_candidate(70).is_some(), true);
+
+		// Checking candidates
+		assert_eq!(Society::candidates(), vec![]);
+
+		// 10 makes an action bid that moves 50's bid back
+		let boxed_call = Box::new(call_judge_suspended_candidate(50, Judgement::Rebid));
+		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
+
+		run_to_block(28);
 
 		// Checking candidates
 		assert_eq!(
 			Society::candidates(),
-			vec![create_bid(50, 20, BidKind::Action(50, boxed_change_founder_call.clone()))]
+			vec![create_bid(50, 10, BidKind::Action(50, boxed_call.clone())),]
 		);
 
-		// 20 votes for its action bid
-		assert_ok!(Society::vote(Origin::signed(20), 20, true));
+		// 10 and 30 vote for 10's bid_action
+		assert_ok!(Society::vote(Origin::signed(10), 10, true));
+		assert_ok!(Society::vote(Origin::signed(30), 10, true));
 
-		run_to_block(16);
+		// Run to the block in which Scheduler triggers
+		run_to_block((32 + SchedulerBlocksOffset::get()).into());
 
-		// 10 is not the Founder anymore, 20 is the new one
-		assert_eq!(Society::founder(), Some(20));
+		// 50 is not suspended anymore
+		assert_eq!(Society::suspended_candidate(50).is_some(), false);
 
-		// 10 tries to call change_founder directly (fails with NotFromActions)
-		assert_noop!(
-			Society::change_founder(Origin::signed(10), 10),
-			Error::<Test, _>::NotFromActions
+		// 60 cannot bid as it is still suspended
+		assert_noop!(Society::bid(Origin::signed(60), 300), Error::<Test, _>::Suspended);
+
+		run_to_block(40);
+
+		// 50's bid is ready for voting again
+		assert_eq!(Society::candidates(), vec![create_bid(500, 50, BidKind::Deposit(25)),]);
+
+		// 10 and 30 vote for 50
+		assert_ok!(Society::vote(Origin::signed(10), 50, true));
+		assert_ok!(Society::vote(Origin::signed(30), 50, true));
+
+		run_to_block(44);
+
+		// 50 is now a member
+		assert_eq!(Society::members(), vec![10, 30, 50]);
+
+		// 30 makes an action bid that forgives member 20
+		let boxed_member_call = Box::new(call_judge_suspended_member(20, true));
+		assert_ok!(Society::bid_action(Origin::signed(30), 50, boxed_member_call.clone()));
+
+		run_to_block(48);
+
+		// Checking candidates
+		assert_eq!(
+			Society::candidates(),
+			vec![create_bid(50, 30, BidKind::Action(50, boxed_member_call.clone())),]
 		);
 
-		// 20 is still the Founder
-		assert_eq!(Society::founder(), Some(20));
+		// 10, 30 and 50 vote for 30's action bid
+		assert_ok!(Society::vote(Origin::signed(10), 30, true));
+		assert_ok!(Society::vote(Origin::signed(30), 30, true));
+		assert_ok!(Society::vote(Origin::signed(50), 30, true));
+
+		// Run to the block in which Scheduler triggers
+		run_to_block((52 + SchedulerBlocksOffset::get()).into());
+
+		// 20 is no longer suspended
+		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
+
+		// 20 is a member again
+		assert_eq!(<Members<Test>>::get(), vec![10, 20, 30, 50]);
 	});
 }
