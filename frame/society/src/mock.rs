@@ -20,7 +20,7 @@
 use super::*;
 use crate as pallet_society;
 
-use frame_support::{ord_parameter_types, parameter_types};
+use frame_support::{ord_parameter_types, parameter_types, traits::EqualPrivilegeOnly};
 use frame_support_test::TestRandomness;
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -105,6 +105,7 @@ impl pallet_scheduler::Config for Test {
 	type ScheduleOrigin = frame_system::EnsureRoot<u128>;
 	type MaxScheduledPerBlock = MaxScheduledPerBlock;
 	type WeightInfo = ();
+	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 }
 
 impl pallet_balances::Config for Test {
