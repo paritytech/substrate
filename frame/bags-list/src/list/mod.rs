@@ -53,7 +53,7 @@ mod tests;
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
-pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
@@ -690,7 +690,7 @@ pub struct Node<T: Config> {
 
 impl<T: Config> Node<T> {
 	/// Get a node by id.
-	pub(crate) fn get(id: &T::AccountId) -> Option<Node<T>> {
+	pub fn get(id: &T::AccountId) -> Option<Node<T>> {
 		crate::ListNodes::<T>::try_get(id).ok()
 	}
 
@@ -734,7 +734,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// `true` when this voter is in the wrong bag.
-	pub(crate) fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 

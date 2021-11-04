@@ -1111,7 +1111,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			Ok(())
 		})?;
 		TotalIssuance::<T, I>::mutate(|t| *t += amount);
-		Self::deposit_event(Event::Deposit { who: who.clone(), amount: amount });
+		Self::deposit_event(Event::Deposit { who: who.clone(), amount });
 		Ok(())
 	}
 
@@ -1537,7 +1537,11 @@ where
 		)?;
 
 		// Emit transfer event.
-		Self::deposit_event(Event::Transfer { from: transactor.clone(), to: dest.clone(), amount: value });
+		Self::deposit_event(Event::Transfer {
+			from: transactor.clone(),
+			to: dest.clone(),
+			amount: value,
+		});
 
 		Ok(())
 	}
@@ -2002,10 +2006,7 @@ where
 					// `actual <= to_change` and `to_change <= amount`; qed;
 					reserves[index].amount -= actual;
 
-					Self::deposit_event(Event::Slashed {
-						who: who.clone(),
-						amount: actual,
-					});
+					Self::deposit_event(Event::Slashed { who: who.clone(), amount: actual });
 					(imb, value - actual)
 				},
 				Err(_) => (NegativeImbalance::zero(), value),
