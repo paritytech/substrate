@@ -1,0 +1,37 @@
+[package]
+name = "pallet-bags-list-remote-tests"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet bags list remote test"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# frame
+pallet-staking = { path = "../../staking" }
+pallet-bags-list = { path = "../../bags-list" }
+frame-election-provider-support = { path = "../../election-provider-support" }
+frame-system = { path = "../../system" }
+frame-support = { path = "../../support" }
+
+# core
+sp-storage = { path = "../../../primitives/storage" }
+sp-core = { path = "../../../primitives/core" }
+sp-tracing = { path = "../../../primitives/tracing" }
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-std = { path = "../../../primitives/std" }
+
+# utils
+remote-externalities = { path = "../../../utils/frame/remote-externalities" }
+
+# others
+tokio = { version = "1", features = ["macros"] }
+log = "0.4.14"
+structopt = "0.3.23"
+clap = "2.33.3"

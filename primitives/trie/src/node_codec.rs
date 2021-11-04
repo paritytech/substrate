@@ -80,8 +80,19 @@ impl<'a> Input for ByteSliceInput<'a> {
 #[derive(Default, Clone)]
 pub struct NodeCodec<H>(PhantomData<H>);
 
-impl<H: Hasher> NodeCodec<H> {
-	fn decode_plan_inner_hashed(data: &[u8]) -> Result<NodePlan, Error> {
+impl<H> NodeCodecT for NodeCodec<H>
+where
+	H: Hasher,
+{
+	const ESCAPE_HEADER: Option<u8> = Some(trie_constants::ESCAPE_COMPACT_HEADER);
+	type Error = Error;
+	type HashOut = H::Out;
+
+	fn hashed_null_node() -> <H as Hasher>::Out {
+		H::hash(<Self as NodeCodecT>::empty_node())
+	}
+
+	fn decode_plan(data: &[u8]) -> Result<NodePlan, Self::Error> {
 		let mut input = ByteSliceInput::new(data);
 
 		let header = NodeHeader::decode(&mut input)?;
@@ -164,23 +175,6 @@ impl<H: Hasher> NodeCodec<H> {
 				})
 			},
 		}
-	}
-}
-
-impl<H> NodeCodecT for NodeCodec<H>
-where
-	H: Hasher,
-{
-	const ESCAPE_HEADER: Option<u8> = Some(trie_constants::ESCAPE_COMPACT_HEADER);
-	type Error = Error;
-	type HashOut = H::Out;
-
-	fn hashed_null_node() -> <H as Hasher>::Out {
-		H::hash(<Self as NodeCodecT>::empty_node())
-	}
-
-	fn decode_plan(data: &[u8]) -> Result<NodePlan, Self::Error> {
-		Self::decode_plan_inner_hashed(data)
 	}
 
 	fn is_empty_node(data: &[u8]) -> bool {

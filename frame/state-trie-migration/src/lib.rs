@@ -132,14 +132,14 @@ pub mod pallet {
 		/// The top key that we currently have to iterate.
 		///
 		/// If it does not exist, it means that the migration is done and no further keys exist.
-		pub(crate) current_top: Option<Vec<u8>>,
+		pub(crate) last_top: Option<Vec<u8>>,
 		/// The last child key that we have processed.
 		///
-		/// This is a child key under the current `self.current_top`.
+		/// This is a child key under the current `self.last_top`.
 		///
 		/// If this is set, no further top keys are processed until the child key migration is
 		/// complete.
-		pub(crate) current_child: Option<Vec<u8>>,
+		pub(crate) last_child: Option<Vec<u8>>,
 
 		/// A marker to indicate if the previous tick was a child tree migration or not.
 		pub(crate) prev_tick_child: bool,
@@ -187,11 +187,11 @@ pub mod pallet {
 			f.debug_struct("MigrationTask")
 				.field(
 					"top",
-					&self.current_top.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
+					&self.last_top.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
 				)
 				.field(
 					"child",
-					&self.current_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
+					&self.last_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
 				)
 				.field("prev_tick_child", &self.prev_tick_child)
 				.field("dyn_top_items", &self.dyn_top_items)
@@ -207,8 +207,8 @@ pub mod pallet {
 	impl<T: Config> Default for MigrationTask<T> {
 		fn default() -> Self {
 			Self {
-				current_top: Some(Default::default()),
-				current_child: Default::default(),
+				last_top: Some(Default::default()),
+				last_child: Default::default(),
 				dyn_child_items: Default::default(),
 				dyn_top_items: Default::default(),
 				dyn_size: Default::default(),
@@ -224,7 +224,7 @@ pub mod pallet {
 	impl<T: Config> MigrationTask<T> {
 		/// Return true if the task is finished.
 		pub(crate) fn finished(&self) -> bool {
-			self.current_top.is_none() && self.current_child.is_none()
+			self.last_top.is_none() && self.last_child.is_none()
 		}
 
 		/// Returns `true` if the task fully complies with the given limits.
@@ -234,7 +234,7 @@ pub mod pallet {
 
 		/// Check if there's any work left, or if we have exhausted the limits already.
 		fn exhausted(&self, limits: MigrationLimits) -> bool {
-			self.current_top.is_none() ||
+			self.last_top.is_none() ||
 				self.dyn_total_items() >= limits.item ||
 				self.dyn_size >= limits.size
 		}
@@ -278,7 +278,7 @@ pub mod pallet {
 		///
 		/// This function is the core of this entire pallet.
 		fn migrate_tick(&mut self) {
-			match (self.current_top.as_ref(), self.current_child.as_ref()) {
+			match (self.last_top.as_ref(), self.last_child.as_ref()) {
 				(Some(_), Some(_)) => {
 					// we're in the middle of doing work on a child tree.
 					self.migrate_child();
@@ -297,9 +297,8 @@ pub mod pallet {
 						top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX),
 						self.prev_tick_child,
 					) {
-						(true, true) => {
-							// we're done with migrating a child-root.
-							self.prev_tick_child = false;
+						(false, false) => {
+							// continue the top key migration
 							self.migrate_top();
 						},
 						(true, false) => {
@@ -309,21 +308,22 @@ pub mod pallet {
 								sp_io::default_child_storage::next_key(child_top_key, &vec![])
 							};
 							if let Some(first_child_key) = maybe_first_child_key {
-								self.current_child = Some(first_child_key);
+								self.last_child = Some(first_child_key);
 								self.prev_tick_child = true;
 								self.migrate_child();
 							} else {
 								self.migrate_top();
 							}
 						},
+						(true, true) => {
+							// we're done with migrating a child-root.
+							self.prev_tick_child = false;
+							self.migrate_top();
+						},
 						(false, true) => {
 							// should never happen.
 							log!(error, "LOGIC ERROR: unreachable code [0].");
 							Pallet::<T>::halt();
-						},
-						(false, false) => {
-							// continue the top key migration
-							self.migrate_top();
 						},
 					};
 				},
@@ -341,49 +341,42 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
-			let current_child =
-				self.current_child.clone().expect("value checked to be `Some`; qed");
-			let current_top = self.current_top.clone().expect("value checked to be `Some`; qed");
+			let last_child =
+				self.last_child.as_ref().expect("value checked to be `Some`; qed");
+			let last_top = self.last_top.clone().expect("value checked to be `Some`; qed");
 
-			let child_root = Pallet::<T>::child_io_key(&current_top);
-			if let Some(data) = sp_io::default_child_storage::get(child_root, &current_child) {
+			let child_root = Pallet::<T>::child_io_key(&last_top);
+			let added_size = if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::default_child_storage::set(child_root, &current_child, &data)
-			}
+				sp_io::default_child_storage::set(child_root, last_child, &data);
+				data.len() as u32
+			} else {
+				Zero::zero()
+			};
+
 			self.dyn_child_items.saturating_inc();
-			let next_key = sp_io::default_child_storage::next_key(child_root, &current_child);
-			self.current_child = next_key;
-			log!(
-				trace,
-				"migrating child key {:?}, next task: {:?}",
-				sp_core::hexdisplay::HexDisplay::from(&current_child),
-				self
-			);
+			let next_key = sp_io::default_child_storage::next_key(child_root, last_child);
+			self.last_child = next_key;
+			log!(trace, "migrated a child key with size: {:?}, next task: {:?}", self, added_size);
 		}
 
 		/// Migrate the current top key, setting it to its new value, if one exists.
 		///
 		/// It updates the dynamic counters.
 		fn migrate_top(&mut self) {
-			let current_top = self.current_top.clone().expect("value checked to be `Some`; qed");
-			let added_size = if let Some(data) = sp_io::storage::get(&current_top) {
+			let last_top = self.last_top.as_ref().expect("value checked to be `Some`; qed");
+			let added_size = if let Some(data) = sp_io::storage::get(&last_top) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::storage::set(&current_top, &data);
+				sp_io::storage::set(last_top, &data);
 				data.len() as u32
 			} else {
 				Zero::zero()
 			};
 
 			self.dyn_top_items.saturating_inc();
-			let next_key = sp_io::storage::next_key(&current_top);
-			self.current_top = next_key;
-			log!(
-				trace,
-				"migrated top key {:?} with size {}, next_task = {:?}",
-				sp_core::hexdisplay::HexDisplay::from(&current_top),
-				added_size,
-				self
-			);
+			let next_key = sp_io::storage::next_key(last_top);
+			self.last_top = next_key;
+			log!(trace, "migrated a top key with size {}, next_task = {:?}", added_size, self);
 		}
 	}
 
@@ -475,7 +468,7 @@ pub mod pallet {
 	/// The size limits imposed on unsigned migrations.
 	///
 	/// This should:
-	/// 1. be large enough to accommodate things like `:code:`
+	/// 1. be large enough to accommodate things like `:code`
 	/// 2. small enough to never brick a parachain due to PoV limits.
 	///
 	/// if set to `None`, then no unsigned migration happens.
@@ -615,7 +608,7 @@ pub mod pallet {
 			));
 
 			MigrationProcess::<T>::put(task);
-			Ok(().into())
+			Ok(Pays::No.into())
 		}
 
 		/// Migrate the list of top keys by iterating each of them one by one.
@@ -679,12 +672,12 @@ pub mod pallet {
 			let mut dyn_size = 0u32;
 			for child_key in &child_keys {
 				if let Some(data) =
-					sp_io::default_child_storage::get(Self::child_io_key(child_key), &top_key)
+					sp_io::default_child_storage::get(Self::child_io_key(&top_key), &child_key)
 				{
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
 					sp_io::default_child_storage::set(
-						Self::child_io_key(child_key),
-						&top_key,
+						Self::child_io_key(&top_key),
+						&child_key,
 						&data,
 					);
 				}
@@ -707,6 +700,10 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			assert!(!T::UnsignedBackOff::get().is_zero(), "UnsignedBackOff should not be zero");
+		}
+
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if let Some(limits) = Self::auto_limits() {
 				let mut task = Self::migration_process();
@@ -763,7 +760,7 @@ pub mod pallet {
 					let mut new_task = Self::migration_process();
 					new_task.migrate_until_exhaustion(MigrationLimits {
 						size: chain_limits.size,
-						item: task.dyn_total_items().saturating_sub(T::UnsignedBackOff::get()),
+						item: task.dyn_total_items().saturating_sub(T::UnsignedBackOff::get().max(1)),
 					});
 					task = new_task;
 				}
@@ -1206,7 +1203,7 @@ mod test {
 				// eventually everything is over.
 				assert!(matches!(
 					StateTrieMigration::migration_process(),
-					MigrationTask { current_child: None, current_top: None, .. }
+					MigrationTask { last_child: None, last_top: None, .. }
 				));
 				root
 			});

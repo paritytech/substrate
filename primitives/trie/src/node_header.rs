@@ -146,7 +146,7 @@ pub(crate) fn size_and_prefix_iterator(
 	first_byte.chain(sp_std::iter::from_fn(next_bytes))
 }
 
-/// Encodes size and prefix to a stream output (prefix on 2 first bit only).
+/// Encodes size and prefix to a stream output.
 fn encode_size_and_prefix<W>(size: usize, prefix: u8, prefix_mask: usize, out: &mut W)
 where
 	W: Output + ?Sized,
