@@ -80,7 +80,7 @@ pub mod weights;
 
 use frame_support::traits::{BalanceStatus, Currency, OnUnbalanced, ReservableCurrency};
 use sp_runtime::traits::{AppendZerosInput, Saturating, StaticLookup, Zero};
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;

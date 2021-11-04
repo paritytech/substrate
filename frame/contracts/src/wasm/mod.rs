@@ -1967,7 +1967,6 @@ mod tests {
 	#[test]
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
-		use std::convert::TryInto;
 		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
