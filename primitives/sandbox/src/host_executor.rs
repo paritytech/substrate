@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! A WASM executor utilizing the sandbox runtime interface of the host.
+
 use super::{Error, HostFuncType, ReturnValue, Value};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
@@ -56,6 +58,7 @@ impl Drop for MemoryHandle {
 	}
 }
 
+/// The linear memory used by the sandbox.
 #[derive(Clone)]
 pub struct Memory {
 	// Handle to memory instance is wrapped to add reference-counting semantics
@@ -63,8 +66,8 @@ pub struct Memory {
 	handle: Rc<MemoryHandle>,
 }
 
-impl Memory {
-	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
+impl super::SandboxMemory for Memory {
+	fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
 		let maximum =
 			if let Some(maximum) = maximum { maximum } else { sandbox_primitives::MEM_UNLIMITED };
 
@@ -74,7 +77,7 @@ impl Memory {
 		}
 	}
 
-	pub fn get(&self, offset: u32, buf: &mut [u8]) -> Result<(), Error> {
+	fn get(&self, offset: u32, buf: &mut [u8]) -> Result<(), Error> {
 		let result =
 			sandbox::memory_get(self.handle.memory_idx, offset, buf.as_mut_ptr(), buf.len() as u32);
 		match result {
@@ -84,7 +87,7 @@ impl Memory {
 		}
 	}
 
-	pub fn set(&self, offset: u32, val: &[u8]) -> Result<(), Error> {
+	fn set(&self, offset: u32, val: &[u8]) -> Result<(), Error> {
 		let result = sandbox::memory_set(
 			self.handle.memory_idx,
 			offset,
@@ -99,6 +102,7 @@ impl Memory {
 	}
 }
 
+/// A builder for the environment of the sandboxed WASM module.
 pub struct EnvironmentDefinitionBuilder<T> {
 	env_def: sandbox_primitives::EnvironmentDefinition,
 	retained_memories: Vec<Memory>,
@@ -106,14 +110,6 @@ pub struct EnvironmentDefinitionBuilder<T> {
 }
 
 impl<T> EnvironmentDefinitionBuilder<T> {
-	pub fn new() -> EnvironmentDefinitionBuilder<T> {
-		EnvironmentDefinitionBuilder {
-			env_def: sandbox_primitives::EnvironmentDefinition { entries: Vec::new() },
-			retained_memories: Vec::new(),
-			_marker: marker::PhantomData::<T>,
-		}
-	}
-
 	fn add_entry<N1, N2>(
 		&mut self,
 		module: N1,
@@ -130,8 +126,18 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		};
 		self.env_def.entries.push(entry);
 	}
+}
 
-	pub fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
+impl<T> super::SandboxEnvironmentBuilder<T, Memory> for EnvironmentDefinitionBuilder<T> {
+	fn new() -> EnvironmentDefinitionBuilder<T> {
+		EnvironmentDefinitionBuilder {
+			env_def: sandbox_primitives::EnvironmentDefinition { entries: Vec::new() },
+			retained_memories: Vec::new(),
+			_marker: marker::PhantomData::<T>,
+		}
+	}
+
+	fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
 	where
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
@@ -140,7 +146,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		self.add_entry(module, field, f);
 	}
 
-	pub fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
+	fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
 	where
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
@@ -153,6 +159,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 	}
 }
 
+/// Sandboxed instance of a WASM module.
 pub struct Instance<T> {
 	instance_idx: u32,
 	_retained_memories: Vec<Memory>,
@@ -201,8 +208,11 @@ extern "C" fn dispatch_thunk<T>(
 	}
 }
 
-impl<T> Instance<T> {
-	pub fn new(
+impl<T> super::SandboxInstance<T> for Instance<T> {
+	type Memory = Memory;
+	type EnvironmentBuilder = EnvironmentDefinitionBuilder<T>;
+
+	fn new(
 		code: &[u8],
 		env_def_builder: &EnvironmentDefinitionBuilder<T>,
 		state: &mut T,
@@ -232,12 +242,7 @@ impl<T> Instance<T> {
 		})
 	}
 
-	pub fn invoke(
-		&mut self,
-		name: &str,
-		args: &[Value],
-		state: &mut T,
-	) -> Result<ReturnValue, Error> {
+	fn invoke(&mut self, name: &str, args: &[Value], state: &mut T) -> Result<ReturnValue, Error> {
 		let serialized_args = args.to_vec().encode();
 		let mut return_val = vec![0u8; ReturnValue::ENCODED_MAX_SIZE];
 
@@ -261,7 +266,7 @@ impl<T> Instance<T> {
 		}
 	}
 
-	pub fn get_global_val(&self, name: &str) -> Option<Value> {
+	fn get_global_val(&self, name: &str) -> Option<Value> {
 		sandbox::get_global_val(self.instance_idx, name)
 	}
 }

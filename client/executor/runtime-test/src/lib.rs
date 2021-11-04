@@ -30,7 +30,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 };
 #[cfg(not(feature = "std"))]
-use sp_sandbox::Value;
+use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory, Value};
 
 extern "C" {
 	#[allow(dead_code)]
@@ -212,8 +212,8 @@ sp_core::wasm_export_functions! {
    }
 
    fn test_sandbox_instantiate(code: Vec<u8>) -> u8 {
-	   let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
-	   let code = match sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
+	   let env_builder = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
+	   let code = match sp_sandbox::default_executor::Instance::new(&code, &env_builder, &mut ()) {
 		   Ok(_) => 0,
 		   Err(sp_sandbox::Error::Module) => 1,
 		   Err(sp_sandbox::Error::Execution) => 2,
@@ -224,8 +224,8 @@ sp_core::wasm_export_functions! {
    }
 
    fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
-	   let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
-	   let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
+	   let env_builder = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
+	   let instance = if let Ok(i) = sp_sandbox::default_executor::Instance::new(&code, &env_builder, &mut ()) {
 		   i
 	   } else {
 		   return 20;
@@ -446,10 +446,10 @@ fn execute_sandboxed(
 	let mut state = State { counter: 0 };
 
 	let env_builder = {
-		let mut env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
+		let mut env_builder = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
 		env_builder.add_host_func("env", "assert", env_assert);
 		env_builder.add_host_func("env", "inc_counter", env_inc_counter);
-		let memory = match sp_sandbox::Memory::new(1, Some(16)) {
+		let memory = match sp_sandbox::default_executor::Memory::new(1, Some(16)) {
 			Ok(m) => m,
 			Err(_) => unreachable!(
 				"
@@ -462,7 +462,7 @@ fn execute_sandboxed(
 		env_builder
 	};
 
-	let mut instance = sp_sandbox::Instance::new(code, &env_builder, &mut state)?;
+	let mut instance = sp_sandbox::default_executor::Instance::new(code, &env_builder, &mut state)?;
 	let result = instance.invoke("call", args, &mut state);
 
 	result.map_err(|_| sp_sandbox::HostError)
