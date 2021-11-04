@@ -15,15 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::{Error, HostFuncType, ReturnValue, Value};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 use sp_io::sandbox;
-use sp_std::{prelude::*, slice, marker, mem, vec, rc::Rc};
-use super::{Error, Value, ReturnValue, HostFuncType};
+use sp_std::{marker, mem, prelude::*, rc::Rc, slice, vec};
 
 mod ffi {
-	use sp_std::mem;
 	use super::HostFuncType;
+	use sp_std::mem;
 
 	/// Index into the default table that points to a `HostFuncType`.
 	pub type HostFuncIndex = usize;
@@ -38,8 +38,9 @@ mod ffi {
 	pub unsafe fn coerce_host_index_to_func<T>(idx: HostFuncIndex) -> HostFuncType<T> {
 		// We need to ensure that sizes of a callable function pointer and host function index is
 		// indeed equal.
-		// We can't use `static_assertions` create because it makes compiler panic, fallback to runtime assert.
-		// const_assert!(mem::size_of::<HostFuncIndex>() == mem::size_of::<HostFuncType<T>>());
+		// We can't use `static_assertions` create because it makes compiler panic, fallback to
+		// runtime assert. const_assert!(mem::size_of::<HostFuncIndex>() ==
+		// mem::size_of::<HostFuncType<T>>());
 		assert!(mem::size_of::<HostFuncIndex>() == mem::size_of::<HostFuncType<T>>());
 		mem::transmute::<HostFuncIndex, HostFuncType<T>>(idx)
 	}
@@ -64,27 +65,18 @@ pub struct Memory {
 
 impl Memory {
 	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
-		let maximum = if let Some(maximum) = maximum {
-			maximum
-		} else {
-			sandbox_primitives::MEM_UNLIMITED
-		};
+		let maximum =
+			if let Some(maximum) = maximum { maximum } else { sandbox_primitives::MEM_UNLIMITED };
 
 		match sandbox::memory_new(initial, maximum) {
 			sandbox_primitives::ERR_MODULE => Err(Error::Module),
-			memory_idx => Ok(Memory {
-				handle: Rc::new(MemoryHandle { memory_idx, }),
-			}),
+			memory_idx => Ok(Memory { handle: Rc::new(MemoryHandle { memory_idx }) }),
 		}
 	}
 
 	pub fn get(&self, offset: u32, buf: &mut [u8]) -> Result<(), Error> {
-		let result = sandbox::memory_get(
-			self.handle.memory_idx,
-			offset,
-			buf.as_mut_ptr(),
-			buf.len() as u32,
-		);
+		let result =
+			sandbox::memory_get(self.handle.memory_idx, offset, buf.as_mut_ptr(), buf.len() as u32);
 		match result {
 			sandbox_primitives::ERR_OK => Ok(()),
 			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
@@ -96,7 +88,7 @@ impl Memory {
 		let result = sandbox::memory_set(
 			self.handle.memory_idx,
 			offset,
-			val.as_ptr() as _ ,
+			val.as_ptr() as _,
 			val.len() as u32,
 		);
 		match result {
@@ -116,9 +108,7 @@ pub struct EnvironmentDefinitionBuilder<T> {
 impl<T> EnvironmentDefinitionBuilder<T> {
 	pub fn new() -> EnvironmentDefinitionBuilder<T> {
 		EnvironmentDefinitionBuilder {
-			env_def: sandbox_primitives::EnvironmentDefinition {
-				entries: Vec::new(),
-			},
+			env_def: sandbox_primitives::EnvironmentDefinition { entries: Vec::new() },
 			retained_memories: Vec::new(),
 			_marker: marker::PhantomData::<T>,
 		}
@@ -262,10 +252,10 @@ impl<T> Instance<T> {
 
 		match result {
 			sandbox_primitives::ERR_OK => {
-				let return_val = ReturnValue::decode(&mut &return_val[..])
-					.map_err(|_| Error::Execution)?;
+				let return_val =
+					ReturnValue::decode(&mut &return_val[..]).map_err(|_| Error::Execution)?;
 				Ok(return_val)
-			}
+			},
 			sandbox_primitives::ERR_EXECUTION => Err(Error::Execution),
 			_ => unreachable!(),
 		}
