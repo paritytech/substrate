@@ -168,8 +168,8 @@ pub struct StorageChild {
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
-	/// Children trie storage data. The key does not including prefix, for the `default` trie kind,
-	/// so this is exclusively for the `ChildType::ParentKeyId` tries.
+	/// Children trie storage data. Key does not include prefix, only for the `default` trie kind,
+	/// of `ChildType::ParentKeyId` type.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
 }
 
