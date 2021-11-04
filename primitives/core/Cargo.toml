@@ -72,7 +72,7 @@ ss58-registry = "1.0.0"
 sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
-sp-serializer = { version = "3.0.0", path = "../serializer" }
+sp-serializer = { version = "4.0.0-dev", path = "../serializer" }
 hex-literal = "0.3.3"
 rand = "0.7.2"
 criterion = "0.3.3"
