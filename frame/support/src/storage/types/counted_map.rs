@@ -31,6 +31,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_arithmetic::traits::Bounded;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -262,9 +263,10 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		CounterFor::<Prefix>::set(0u32);
-		<Self as MapWrapper>::Map::remove_all(None);
+	pub fn remove_all(maybe_limit: Option<u32>) {
+		let leftover = Self::count().saturating_sub(maybe_limit.unwrap_or_else(Bounded::max_value));
+		CounterFor::<Prefix>::set(leftover);
+		<Self as MapWrapper>::Map::remove_all(maybe_limit);
 	}
 
 	/// Iter over all value of the storage.
