@@ -53,7 +53,7 @@ pub use misc::{
 	Backing, ConstU32, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee, ExecuteBlock,
 	ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType, Len,
 	OffchainWorker, OnKilledAccount, OnNewAccount, PreimageHandler, PrivilegeCmp, SameOrOther,
-	Time, TryDrop, UnixTime, WrapperKeepOpaque, WrapperOpaque,
+	Time, TryDrop, UnixTime, WrapperKeepOpaque, WrapperOpaque, NoopPreimageHandler,
 };
 
 mod stored_map;

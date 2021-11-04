@@ -129,6 +129,7 @@ pub enum CallOrCallHash<Call, Hash> {
 }
 
 type CallOrCallHashOf<T> = CallOrCallHash<<T as Config>::Call, <T as frame_system::Config>::Hash>;
+type ScheduledOf<T> = Scheduled<<T as Config>::Call, <T as frame_system::Config>::BlockNumber, <T as Config>::PalletsOrigin, <T as frame_system::Config>::AccountId>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -194,7 +195,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<Option<Scheduled<<T as Config>::Call, T::BlockNumber, T::PalletsOrigin, T::AccountId>>>,
+		Vec<Option<ScheduledOf<T>>>,
 		ValueQuery,
 	>;
 
@@ -631,7 +632,7 @@ impl<T: Config> Pallet<T> {
 		let scheduled = Agenda::<T>::try_mutate(when, |agenda| {
 			agenda.get_mut(index as usize).map_or(
 				Ok(None),
-				|s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
+				|s| -> Result<Option<ScheduledOf<T>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
 						if matches!(
 							T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
@@ -1006,6 +1007,7 @@ mod tests {
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
 		type OriginPrivilegeCmp = EqualPrivilegeOnly;
+		type PreimageHandler = frame_support::traits::NoopPreimageHandler<Self::Hash>;
 	}
 
 	pub type LoggerCall = logger::Call<Test>;

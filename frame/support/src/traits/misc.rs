@@ -588,6 +588,19 @@ pub trait PreimageHandler<Hash> {
 	fn clear_request(hash: Hash);
 }
 
+pub struct NoopPreimageHandler<Hash>(core::marker::PhantomData<Hash>);
+// A noop preimage handler.
+impl<Hash> PreimageHandler<Hash> for NoopPreimageHandler<Hash> {
+	type MaxSize = ConstU32<0>;
+	fn preimage_exists(_hash: Hash) -> bool { false }
+	fn preimage_requested(_hash: Hash) -> bool { false }
+	fn get_preimage(_hash: Hash) -> Option<Vec<u8>> { None }
+	fn note_preimage(_bytes: crate::BoundedVec<u8, Self::MaxSize>) {}
+	fn clear_preimage(_hash: Hash) {}
+	fn request_preimage(_hash: Hash) {}
+	fn clear_request(_hash: Hash) {}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
