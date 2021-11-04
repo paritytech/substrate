@@ -28,7 +28,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::traits::{BadOrigin, Hash, Saturating};
+use sp_runtime::traits::{BadOrigin, Hash, Saturating, One};
 use sp_std::{convert::TryFrom, prelude::*};
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -46,10 +46,19 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
+pub enum RefCount<AccountId, Balance> {
+	User(AccountId, Balance),
+	System(u32),
+}
+
 #[derive(Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Preimage<BoundedVec, Balance, AccountId> {
+	// The preimage we are storing.
 	preimage: BoundedVec,
+	// The user who has a deposit for holding this preimage, if any.
 	deposit: Option<(AccountId, Balance)>,
+	// A reference counter for how many different resources are using this preimage.
+	ref_count: u32,
 }
 
 type BalanceOf<T> =
@@ -123,7 +132,8 @@ pub mod pallet {
 		_,
 		Identity, // TODO: Double Check
 		T::Hash,
-		(),
+		u32,
+		ValueQuery,
 	>;
 
 	#[pallet::call]
@@ -137,18 +147,12 @@ pub mod pallet {
 			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
 			// is not taken.
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
-			Self::note_bytes(bytes, maybe_sender)
-		}
-
-		/// Request a preimage be uploaded to the chain without paying any fees or deposits.
-		///
-		/// If the preimage requests has already been provided on-chain, we unreserve any deposit
-		/// a user may have paid, and take the control of the preimage out of their hands.
-		#[pallet::weight(0)]
-		pub fn request_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
-			T::ManagerOrigin::ensure_origin(origin)?;
-			Self::do_request_preimage(hash);
-			Ok(())
+			if let Some(sender) = maybe_sender {
+				Self::note_user_bytes(bytes, sender)
+			} else {
+				Self::note_bytes(bytes)?;
+				Ok(Pays::No.into())
+			}
 		}
 
 		/// Clear a preimage from the runtime storage.
@@ -165,6 +169,25 @@ pub mod pallet {
 			Self::do_clear_preimage(hash, maybe_sender)?;
 			Ok(())
 		}
+
+		/// Request a preimage be uploaded to the chain without paying any fees or deposits.
+		///
+		/// If the preimage requests has already been provided on-chain, we unreserve any deposit
+		/// a user may have paid, and take the control of the preimage out of their hands.
+		#[pallet::weight(0)]
+		pub fn request_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
+			T::ManagerOrigin::ensure_origin(origin)?;
+			Self::do_request_preimage(hash);
+			Ok(())
+		}
+
+		/// Clear the request for a preimage.
+		#[pallet::weight(0)]
+		pub fn clear_request(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
+			T::ManagerOrigin::ensure_origin(origin)?;
+			Self::do_clear_request(hash);
+			Ok(())
+		}
 	}
 }
 
@@ -178,14 +201,41 @@ impl<T: Config> Pallet<T> {
 		Ok(Some(who))
 	}
 
+	/// Store some preimage on chain from a trusted source.
+	///
+	/// We verify that the preimage is within the bounds of what the pallet supports.
+	///
+	/// If the preimage is already uploaded, we increase the reference counter, ensuring it is
+	/// not cleared before all uses of this preimage is complete.
+	fn note_bytes(
+		bytes: Vec<u8>,
+	) -> DispatchResult {
+		let bounded_vec =
+			BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
+
+		let hash = T::Hashing::hash(&bounded_vec);
+		Preimages::<T>::mutate_exists(hash, |maybe_preimage| {
+			if let Some(preimage) = maybe_preimage {
+				preimage.ref_count = preimage.ref_count.saturating_add(One::one());
+			} else {
+				*maybe_preimage = Some(
+					Preimage { preimage: bounded_vec, deposit: None, ref_count: One::one() }
+				)
+			}
+		});
+
+		Self::deposit_event(Event::Noted { hash });
+		Ok(())
+	}
+
 	/// Store some preimage on chain.
 	///
 	/// We verify that the preimage is within the bounds of what the pallet supports.
 	///
 	/// If the preimage was requested to be uploaded, then the user pays no deposits or tx fees.
-	fn note_bytes(
+	fn note_user_bytes(
 		bytes: Vec<u8>,
-		maybe_depositor: Option<T::AccountId>,
+		depositor: T::AccountId,
 	) -> DispatchResultWithPostInfo {
 		let bounded_vec =
 			BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
@@ -195,23 +245,21 @@ impl<T: Config> Pallet<T> {
 
 		// We take a deposit only if there is a provided depositor, and the preimage was not
 		// previously requested. This also allows the tx to pay no fee.
-		let deposit = if Requests::<T>::contains_key(hash) {
-			Requests::<T>::remove(hash);
-			None
-		} else if let Some(depositor) = maybe_depositor {
+		let requests = Requests::<T>::take(hash);
+		let (deposit, ref_count) = if requests > 0 {
+			(None, requests)
+		} else {
 			let length = bounded_vec.len() as u32;
 			let deposit = T::BaseDeposit::get()
 				.saturating_add(T::ByteDeposit::get().saturating_mul(length.into()));
 			T::Currency::reserve(&depositor, deposit)?;
-			Some((depositor, deposit))
-		} else {
-			None
+			(Some((depositor, deposit)), One::one())
 		};
 
 		// We don't pay a fee if a deposit wasn't taken.
 		let dispatch_result = if deposit.is_none() { Ok(Pays::No.into()) } else { Ok(().into()) };
 
-		let preimage = Preimage { preimage: bounded_vec, deposit };
+		let preimage = Preimage { preimage: bounded_vec, deposit, ref_count };
 
 		Preimages::<T>::insert(hash, preimage);
 		Self::deposit_event(Event::Noted { hash });
@@ -224,13 +272,17 @@ impl<T: Config> Pallet<T> {
 	// If the preimage already exists before the request is made, the deposit for the preimage is
 	// returned to the user, and removed from their management.
 	fn do_request_preimage(hash: T::Hash) {
-		if let Some(preimage_metadata) = Preimages::<T>::get(hash) {
+		if let Some(mut preimage_metadata) = Preimages::<T>::get(hash) {
 			// Preimage already exists, so we return the deposit of the user who uploaded it.
-			if let Some((who, amount)) = preimage_metadata.deposit {
-				T::Currency::unreserve(&who, amount);
+			if let Some((ref who, amount)) = preimage_metadata.deposit {
+				T::Currency::unreserve(who, amount);
 			}
+			// Increase the ref_count
+			preimage_metadata.ref_count.saturating_inc();
+			Preimages::<T>::insert(hash, preimage_metadata);
 		} else {
-			Requests::<T>::insert(hash, ());
+			// Increase the number of requests
+			Requests::<T>::mutate(hash, |requests| requests.saturating_inc());
 			Self::deposit_event(Event::Requested { hash });
 		}
 	}
@@ -244,6 +296,13 @@ impl<T: Config> Pallet<T> {
 	fn do_clear_preimage(hash: T::Hash, maybe_owner: Option<T::AccountId>) -> DispatchResult {
 		Preimages::<T>::mutate_exists(hash, |maybe_value| -> DispatchResult {
 			if let Some(preimage_metadata) = maybe_value {
+				// If this preimage still has reference counters, decrement, and exit early.
+				if preimage_metadata.ref_count > 1 {
+					preimage_metadata.ref_count.saturating_dec();
+					return Ok(())
+				}
+				// So we are definitely cleaning up this preimage now...
+
 				// If there is a deposit on hold, we return it if there is no `maybe_owner` or
 				// if the owner matches.
 				if let Some((who, amount)) = &preimage_metadata.deposit {
@@ -263,9 +322,16 @@ impl<T: Config> Pallet<T> {
 			Ok(())
 		})
 	}
+
+	/// Clear a preimage request.
+	fn do_clear_request(hash: T::Hash) {
+		Requests::<T>::remove(hash);
+	}
 }
 
 impl<T: Config> frame_support::traits::PreimageHandler<T::Hash> for Pallet<T> {
+	type MaxSize = T::MaxSize;
+
 	fn preimage_exists(hash: T::Hash) -> bool {
 		Preimages::<T>::contains_key(hash)
 	}
@@ -279,7 +345,7 @@ impl<T: Config> frame_support::traits::PreimageHandler<T::Hash> for Pallet<T> {
 	}
 
 	fn note_preimage(bytes: Vec<u8>) -> Result<(), ()> {
-		Self::note_bytes(bytes, None).map_err(|_| ())?;
+		Self::note_bytes(bytes).map_err(|_| ())?;
 		Ok(())
 	}
 
@@ -291,5 +357,9 @@ impl<T: Config> frame_support::traits::PreimageHandler<T::Hash> for Pallet<T> {
 		// Should never fail if authorization check is skipped.
 		let res = Self::do_clear_preimage(hash, None);
 		debug_assert!(res.is_ok(), "do_clear_preimage failed when authorization check was skipped");
+	}
+
+	fn clear_request(hash: T::Hash) {
+		Self::do_clear_request(hash);
 	}
 }

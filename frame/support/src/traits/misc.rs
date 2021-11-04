@@ -570,6 +570,8 @@ impl<T: TypeInfo + 'static> TypeInfo for WrapperKeepOpaque<T> {
 /// does not handle any preimage ownership or fees. Other system level logic that
 /// uses this API should implement that on their own side.
 pub trait PreimageHandler<Hash> {
+	/// Maximum size of a preimage.
+	type MaxSize: Get<u32>;
 	/// Returns whether a preimage exists for a given hash.
 	fn preimage_exists(hash: Hash) -> bool;
 	/// Returns whether a preimage request exists for a given hash.
@@ -578,10 +580,12 @@ pub trait PreimageHandler<Hash> {
 	fn get_preimage(hash: Hash) -> Option<Vec<u8>>;
 	/// Store the bytes of a preimage on chain.
 	fn note_preimage(bytes: Vec<u8>) -> Result<(), ()>;
-	/// Request that someone report a preimage.å
+	/// Request that someone report a preimage.
 	fn request_preimage(hash: Hash);
 	/// Clear an existing preimage.
 	fn clear_preimage(hash: Hash);
+	/// Clear a preimage request.
+	fn clear_request(hash: Hash);
 }
 
 #[cfg(test)]
