@@ -683,8 +683,8 @@ pub mod pallet {
 				{
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
 					sp_io::default_child_storage::set(
-						Self::child_io_key(child_key),
-						&top_key,
+						Self::child_io_key(top_key),
+						&child_key,
 						&data,
 					);
 				}
