@@ -92,7 +92,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 	let where_clause = &def.where_clause;
 
 	quote!(
-		impl#module_impl #module_struct #where_clause {
+		impl #module_impl #module_struct #where_clause {
 			#getters
 		}
 	)

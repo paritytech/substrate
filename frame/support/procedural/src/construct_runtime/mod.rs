@@ -214,17 +214,26 @@ fn construct_runtime_final_expansion(
 		pallets_token,
 	} = definition;
 
+	let system_pallet =
+		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
+			syn::Error::new(
+				pallets_token.span,
+				"`System` pallet declaration is missing. \
+			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
+			)
+		})?;
+
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
 	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 
-	let outer_origin = expand::expand_outer_origin(&name, &pallets, pallets_token, &scrate)?;
+	let outer_origin = expand::expand_outer_origin(&name, &system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
-	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
+	let dispatch = expand::expand_outer_dispatch(&name, &system_pallet, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent =
