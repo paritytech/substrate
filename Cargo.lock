@@ -7569,6 +7569,7 @@ version = "0.10.0-dev"
 dependencies = [
  "criterion",
  "hash-db",
+ "hashbrown 0.11.2",
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
@@ -7591,6 +7592,7 @@ dependencies = [
  "sp-trie",
  "substrate-test-runtime-client",
  "tempfile",
+ "trie-db",
 ]
 
 [[package]]
@@ -9595,6 +9597,7 @@ name = "sp-state-machine"
 version = "0.10.0-dev"
 dependencies = [
  "hash-db",
+ "hashbrown 0.11.2",
  "hex-literal",
  "log 0.4.14",
  "num-traits",

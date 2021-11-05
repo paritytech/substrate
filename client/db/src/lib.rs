@@ -1109,6 +1109,7 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
+	trie_level_cache: Arc<RwLock<hashbrown::HashMap<Block::Hash, trie_db::node::NodeOwned<Block::Hash>>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1199,6 +1200,7 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
 			genesis_state: RwLock::new(None),
+			trie_level_cache: Default::default()
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1903,7 +1905,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		let db_state = DbState::<Block>::new(self.storage.clone(), root);
+		let db_state = DbState::<Block>::new(self.storage.clone(), root, self.trie_level_cache.clone());
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 		Ok(SyncingCachingState::new(
@@ -2376,7 +2378,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
 				let root = genesis_state.root.clone();
-				let db_state = DbState::<Block>::new(genesis_state.clone(), root);
+				let db_state = DbState::<Block>::new(genesis_state.clone(), root, self.trie_level_cache.clone());
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 				let mut state = SyncingCachingState::new(
@@ -2407,7 +2409,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let db_state = DbState::<Block>::new(self.storage.clone(), root);
+					let db_state = DbState::<Block>::new(self.storage.clone(), root, self.trie_level_cache.clone());
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					let caching_state =

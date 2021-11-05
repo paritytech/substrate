@@ -206,7 +206,7 @@ where
 		let essence = backend.essence();
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend { backend: essence.backend_storage(), proof_recorder };
-		ProvingBackend(TrieBackend::new(recorder, root))
+		ProvingBackend(TrieBackend::new(recorder, root, Default::default()))
 	}
 
 	/// Extracting the gathered unordered proof.
@@ -370,7 +370,7 @@ where
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root))
+		Ok(TrieBackend::new(db, root, Default::default()))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}

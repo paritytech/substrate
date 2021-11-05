@@ -24,6 +24,7 @@ use crate::{
 };
 use codec::{Codec, Decode};
 use hash_db::Hasher;
+use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, ChildType};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
@@ -31,6 +32,7 @@ use sp_trie::{
 	trie_types::{Layout, TrieDB, TrieError},
 	Trie,
 };
+use std::sync::Arc;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -42,8 +44,8 @@ where
 	H::Out: Codec,
 {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root) }
+	pub fn new(storage: S, root: H::Out, cache: Arc<RwLock<hashbrown::HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>) -> Self {
+		TrieBackend { essence: TrieBackendEssence::new(storage, root, cache) }
 	}
 
 	/// Get backend essence reference.

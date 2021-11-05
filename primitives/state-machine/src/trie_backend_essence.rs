@@ -73,6 +73,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	empty: H::Out,
 	#[cfg(feature = "std")]
 	pub(crate) cache: Arc<RwLock<Cache>>,
+	trie_cache: Arc<RwLock<hashbrown::HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
@@ -80,13 +81,14 @@ where
 	H::Out: Encode,
 {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
+	pub fn new(storage: S, root: H::Out, cache: Arc<RwLock<hashbrown::HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
 			empty: H::hash(&[0u8]),
 			#[cfg(feature = "std")]
 			cache: Arc::new(RwLock::new(Cache::new())),
+			trie_cache: cache,
 		}
 	}
 
@@ -219,7 +221,7 @@ where
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value::<Layout<H>, _>(self, &self.root, key).map_err(map_e)
+		TrieDB::<H>::new_with_cache(self, &self.root, &mut *self.trie_cache.write()).get_test(key).map_err(map_e)
 	}
 
 	/// Get the value of child storage at given key.
