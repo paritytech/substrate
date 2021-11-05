@@ -12,4 +12,4 @@ note: trait defined here, with 1 generic parameter: `BlockNumber`
 help: add missing generic argument
     |
 12  |     impl<T: Config> Hooks<BlockNumber> for Pallet<T> {}
-    |                     ^^^^^^^^^^^^^^^^^^
+    |                     ~~~~~~~~~~~~~~~~~~

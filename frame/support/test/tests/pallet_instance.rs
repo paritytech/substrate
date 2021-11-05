@@ -302,13 +302,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Instance1Example: pallet::<Instance1>::{
-			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
-		},
-		Example2: pallet2::{Pallet, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Event<T>, Config<T>, Storage},
+		// Exclude part `Storage` in order not to check its metadata in tests.
+		System: frame_system exclude_parts { Storage },
+		Example: pallet,
+		Instance1Example: pallet::<Instance1>,
+		Example2: pallet2,
+		Instance1Example2: pallet2::<Instance1>,
 	}
 );
 
@@ -601,7 +600,7 @@ fn metadata() {
 	let system_pallet_metadata = PalletMetadata {
 		index: 0,
 		name: "System",
-		storage: None,
+		storage: None, // The storage metadatas have been excluded.
 		calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata {
 			ty: scale_info::meta_type::<frame_system::Event<Runtime>>(),
