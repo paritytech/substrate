@@ -41,24 +41,46 @@ use inflector::Inflector;
 
 use std::iter::{self, Iterator};
 
+fn feature_patch(
+	feature_patch: &Vec<(String, String, String)>,
+	version: &u32,
+	method: &TraitItemMethod,
+) -> TokenStream {
+	let method = method.sig.ident.to_string();
+	for (feature, method_patch, version_patch) in feature_patch {
+		if &version.to_string() == version_patch && &method == method_patch {
+			return quote! {
+				#[cfg(not(feature=#feature))]
+			}
+		}
+	}
+	quote! {}
+}
 /// Generate the extern host functions for wasm and the `HostFunctions` struct that provides the
 /// implementations for the host functions on the host.
-pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+pub fn generate(
+	trait_def: &ItemTrait,
+	is_wasm_only: bool,
+	features_patch: Vec<(String, String, String)>,
+) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let extern_host_function_impls = get_runtime_interface(trait_def)?.latest_versions().try_fold(
 		TokenStream::new(),
 		|mut t, (version, method)| {
-			t.extend(generate_extern_host_function(method, version, trait_name)?);
+			let patch = feature_patch(&features_patch, &version, &method);
+			t.extend(generate_extern_host_function(method, version, trait_name, patch)?);
 			Ok::<_, Error>(t)
 		},
 	)?;
 	let exchangeable_host_functions = get_runtime_interface(trait_def)?
 		.latest_versions()
-		.try_fold(TokenStream::new(), |mut t, (_, m)| {
-			t.extend(generate_exchangeable_host_function(m)?);
+		.try_fold(TokenStream::new(), |mut t, (version, method)| {
+			let patch = feature_patch(&features_patch, &version, &method);
+			t.extend(generate_exchangeable_host_function(method, patch)?);
 			Ok::<_, Error>(t)
 		})?;
-	let host_functions_struct = generate_host_functions_struct(trait_def, is_wasm_only)?;
+	let host_functions_struct =
+		generate_host_functions_struct(trait_def, is_wasm_only, features_patch)?;
 
 	Ok(quote! {
 		/// The implementations of the extern host functions. This special implementation module
@@ -82,6 +104,7 @@ fn generate_extern_host_function(
 	method: &TraitItemMethod,
 	version: u32,
 	trait_name: &Ident,
+	patch: TokenStream,
 ) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig);
@@ -113,6 +136,7 @@ fn generate_extern_host_function(
 	};
 
 	Ok(quote! {
+		#patch
 		#[doc = #doc_string]
 		pub fn #function ( #( #args ),* ) #return_value {
 			extern "C" {
@@ -137,7 +161,10 @@ fn generate_extern_host_function(
 }
 
 /// Generate the host exchangeable function for the given method.
-fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<TokenStream> {
+fn generate_exchangeable_host_function(
+	method: &TraitItemMethod,
+	patch: TokenStream,
+) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let arg_types = get_function_argument_types(&method.sig);
 	let function = &method.sig.ident;
@@ -146,6 +173,7 @@ fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<Token
 	let output = &method.sig.output;
 
 	Ok(quote! {
+		#patch
 		#[cfg(not(feature = "std"))]
 		#[allow(non_upper_case_globals)]
 		#[doc = #doc_string]
@@ -160,13 +188,21 @@ fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<Token
 fn generate_host_functions_struct(
 	trait_def: &ItemTrait,
 	is_wasm_only: bool,
+	features_patch: Vec<(String, String, String)>,
 ) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 
 	let host_functions = get_runtime_interface(trait_def)?
 		.all_versions()
 		.map(|(version, method)| {
-			generate_host_function_implementation(&trait_def.ident, method, version, is_wasm_only)
+			let patch = feature_patch(&features_patch, &version, &method);
+			generate_host_function_implementation(
+				&trait_def.ident,
+				method,
+				version,
+				is_wasm_only,
+				patch,
+			)
 		})
 		.collect::<Result<Vec<_>>>()?;
 
@@ -194,6 +230,7 @@ fn generate_host_function_implementation(
 	method: &TraitItemMethod,
 	version: u32,
 	is_wasm_only: bool,
+	feature_patch: TokenStream,
 ) -> Result<TokenStream> {
 	let name = create_host_function_ident(&method.sig.ident, version, trait_name).to_string();
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
@@ -207,6 +244,7 @@ fn generate_host_function_implementation(
 	let convert_return_value = generate_return_value_into_wasm_value(&method.sig);
 
 	Ok(quote! {
+		#feature_patch
 		{
 			struct #struct_name;
 

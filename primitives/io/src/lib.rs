@@ -98,7 +98,7 @@ pub enum KillStorageResult {
 }
 
 /// Interface for accessing the storage from within the runtime.
-#[runtime_interface]
+#[runtime_interface(feature_patch=new_state,root,2)]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
 	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -265,7 +265,7 @@ pub trait Storage {
 
 /// Interface for accessing the child storage for default child trie,
 /// from within the runtime.
-#[runtime_interface]
+#[runtime_interface(feature_patch=new_state,root,2)]
 pub trait DefaultChildStorage {
 	/// Get a default child storage value for a given key.
 	///

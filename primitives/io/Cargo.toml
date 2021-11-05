@@ -54,6 +54,7 @@ std = [
 	"futures",
 	"parking_lot",
 ]
+new-state = []
 
 with-tracing = [
 	"sp-tracing/with-tracing"
