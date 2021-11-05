@@ -106,6 +106,7 @@ members = [
 	"frame/proxy",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/referenda",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",

@@ -1026,6 +1026,21 @@ where
 	}
 }
 
+/// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
+/// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
+pub fn ensure_signed_or_root<OuterOrigin, AccountId>(o: OuterOrigin)
+	-> Result<Option<AccountId>, BadOrigin>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
+{
+	match o.into() {
+		Ok(RawOrigin::Signed(t)) => Ok(Some(t)),
+		Ok(RawOrigin::Root) => Ok(None),
+		_ => Err(BadOrigin),
+	}
+}
+
+
 /// A type of block initialization to perform.
 pub enum InitKind {
 	/// Leave inspectable storage entries in state.
@@ -1749,7 +1764,7 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	pub use crate::{ensure_none, ensure_root, ensure_signed};
+	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
 
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::Origin;
