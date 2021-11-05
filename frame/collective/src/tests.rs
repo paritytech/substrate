@@ -84,6 +84,12 @@ mod mock_democracy {
 	}
 }
 
+impl MaxEncodedLen for Call {
+	fn max_encoded_len() -> usize {
+		0
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MotionDuration: u64 = 3;
@@ -177,6 +183,12 @@ fn make_proposal(value: u64) -> Call {
 
 fn record(event: Event) -> EventRecord<Event, H256> {
 	EventRecord { phase: Phase::Initialization, event, topics: vec![] }
+}
+
+macro_rules! bounded_vec {
+	($($v:expr),*) => (
+		BoundedVec::<u64, MaxMembers>::try_from(vec![$( $v ),*]).unwrap()
+	);
 }
 
 #[test]
@@ -436,12 +448,24 @@ fn removal_of_old_voters_votes_works() {
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
+			Some(Votes {
+				index: 0,
+				threshold: 3,
+				ayes: bounded_vec![1, 2],
+				nays: bounded_vec![],
+				end
+			})
 		);
 		Collective::change_members_sorted(&[4], &[1], &[2, 3, 4]);
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
+			Some(Votes {
+				index: 0,
+				threshold: 3,
+				ayes: bounded_vec![2],
+				nays: bounded_vec![],
+				end
+			})
 		);
 
 		let proposal = make_proposal(69);
@@ -457,12 +481,24 @@ fn removal_of_old_voters_votes_works() {
 		assert_ok!(Collective::vote(Origin::signed(3), hash, 1, false));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
+			Some(Votes {
+				index: 1,
+				threshold: 2,
+				ayes: bounded_vec![2],
+				nays: bounded_vec![3],
+				end
+			})
 		);
 		Collective::change_members_sorted(&[], &[3], &[2, 4]);
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
+			Some(Votes {
+				index: 1,
+				threshold: 2,
+				ayes: bounded_vec![2],
+				nays: bounded_vec![],
+				end
+			})
 		);
 	});
 }
@@ -484,12 +520,24 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
+			Some(Votes {
+				index: 0,
+				threshold: 3,
+				ayes: bounded_vec![1, 2],
+				nays: bounded_vec![],
+				end
+			})
 		);
 		assert_ok!(Collective::set_members(Origin::root(), vec![2, 3, 4], None, MaxMembers::get()));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
+			Some(Votes {
+				index: 0,
+				threshold: 3,
+				ayes: bounded_vec![2],
+				nays: bounded_vec![],
+				end
+			})
 		);
 
 		let proposal = make_proposal(69);
@@ -505,12 +553,24 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 		assert_ok!(Collective::vote(Origin::signed(3), hash, 1, false));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
+			Some(Votes {
+				index: 1,
+				threshold: 2,
+				ayes: bounded_vec![2],
+				nays: bounded_vec![3],
+				end
+			})
 		);
 		assert_ok!(Collective::set_members(Origin::root(), vec![2, 4], None, MaxMembers::get()));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
+			Some(Votes {
+				index: 1,
+				threshold: 2,
+				ayes: bounded_vec![2],
+				nays: bounded_vec![],
+				end
+			})
 		);
 	});
 }
@@ -532,7 +592,7 @@ fn propose_works() {
 		assert_eq!(Collective::proposal_of(&hash), Some(proposal));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 3, ayes: vec![], nays: vec![], end })
+			Some(Votes { index: 0, threshold: 3, ayes: bounded_vec![], nays: bounded_vec![], end })
 		);
 
 		assert_eq!(
@@ -668,13 +728,19 @@ fn motions_vote_after_works() {
 		// Initially there a no votes when the motion is proposed.
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![], end })
+			Some(Votes { index: 0, threshold: 2, ayes: bounded_vec![], nays: bounded_vec![], end })
 		);
 		// Cast first aye vote.
 		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, true));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
+			Some(Votes {
+				index: 0,
+				threshold: 2,
+				ayes: bounded_vec![1],
+				nays: bounded_vec![],
+				end
+			})
 		);
 		// Try to cast a duplicate aye vote.
 		assert_noop!(
@@ -685,7 +751,13 @@ fn motions_vote_after_works() {
 		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, false));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![1], end })
+			Some(Votes {
+				index: 0,
+				threshold: 2,
+				ayes: bounded_vec![],
+				nays: bounded_vec![1],
+				end
+			})
 		);
 		// Try to cast a duplicate nay vote.
 		assert_noop!(
@@ -719,7 +791,7 @@ fn motions_all_first_vote_free_works() {
 		));
 		assert_eq!(
 			Collective::voting(&hash),
-			Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![], end })
+			Some(Votes { index: 0, threshold: 2, ayes: bounded_vec![], nays: bounded_vec![], end })
 		);
 
 		// For the motion, acc 2's first vote, expecting Ok with Pays::No.

@@ -92,6 +92,11 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedVec<T, S> {}
 
 impl<T, S> BoundedVec<T, S> {
+	/// Create a new, empty bounded vec.
+	pub fn new() -> Self {
+		Self(Vec::new(), Default::default())
+	}
+
 	/// Create `Self` from `t` without any checks.
 	fn unchecked_from(t: Vec<T>) -> Self {
 		Self(t, Default::default())
@@ -193,6 +198,8 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		}
 	}
 
+	/// Create a new bounded vec from an arbitrary sized vec by taking the first
+	/// items up till the bound.
 	pub fn truncating_from(i: Vec<T>) -> Self {
 		let bounded = i.into_iter().take(S::get() as usize).collect();
 		Self::unchecked_from(bounded)
