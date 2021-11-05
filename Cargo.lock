@@ -7520,7 +7520,7 @@ dependencies = [
 
 [[package]]
 name = "sc-allocator"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "log 0.4.14",
  "sp-core",
