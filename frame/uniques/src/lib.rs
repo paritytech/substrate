@@ -193,32 +193,32 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An asset class was created.
 		Created { class: T::ClassId, creator: T::AccountId, owner: T::AccountId },
-		/// An asset class was force-created. \[ class, owner \]
+		/// An asset class was force-created.
 		ForceCreated { class: T::ClassId, owner: T::AccountId },
-		/// An asset `class` was destroyed. \[ class \]
+		/// An asset `class` was destroyed.
 		Destroyed { class: T::ClassId },
-		/// An asset `instance` was issued. \[ class, instance, owner \]
+		/// An asset `instance` was issued.
 		Issued { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
-		/// An asset `instance` was transferred. \[ class, instance, from, to \]
+		/// An asset `instance` was transferred.
 		Transferred {
 			class: T::ClassId,
 			instance: T::InstanceId,
 			from: T::AccountId,
 			to: T::AccountId,
 		},
-		/// An asset `instance` was destroyed. \[ class, instance, owner \]
+		/// An asset `instance` was destroyed.
 		Burned { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
-		/// Some asset `instance` was frozen. \[ class, instance \]
+		/// Some asset `instance` was frozen.
 		Frozen { class: T::ClassId, instance: T::InstanceId },
-		/// Some asset `instance` was thawed. \[ class, instance \]
+		/// Some asset `instance` was thawed.
 		Thawed { class: T::ClassId, instance: T::InstanceId },
-		/// Some asset `class` was frozen. \[ class \]
+		/// Some asset `class` was frozen.
 		ClassFrozen { class: T::ClassId },
-		/// Some asset `class` was thawed. \[ class \]
+		/// Some asset `class` was thawed.
 		ClassThawed { class: T::ClassId },
-		/// The owner changed \[ class, new_owner \]
+		/// The owner changed.
 		OwnerChanged { class: T::ClassId, new_owner: T::AccountId },
-		/// The management team changed \[ class, issuer, admin, freezer \]
+		/// The management team changed.
 		TeamChanged {
 			class: T::ClassId,
 			issuer: T::AccountId,
@@ -227,7 +227,6 @@ pub mod pallet {
 		},
 		/// An `instance` of an asset `class` has been approved by the `owner` for transfer by a
 		/// `delegate`.
-		/// \[ class, instance, owner, delegate \]
 		ApprovedTransfer {
 			class: T::ClassId,
 			instance: T::InstanceId,
@@ -236,7 +235,6 @@ pub mod pallet {
 		},
 		/// An approval for a `delegate` account to transfer the `instance` of an asset `class` was
 		/// cancelled by its `owner`.
-		/// \[ class, instance, owner, delegate \]
 		ApprovalCancelled {
 			class: T::ClassId,
 			instance: T::InstanceId,
@@ -244,30 +242,27 @@ pub mod pallet {
 			delegate: T::AccountId,
 		},
 		/// An asset `class` has had its attributes changed by the `Force` origin.
-		/// \[ class \]
 		AssetStatusChanged { class: T::ClassId },
-		/// New metadata has been set for an asset class. \[ class, data, is_frozen \]
+		/// New metadata has been set for an asset class.
 		ClassMetadataSet {
 			class: T::ClassId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		},
-		/// Metadata has been cleared for an asset class. \[ class \]
+		/// Metadata has been cleared for an asset class.
 		ClassMetadataCleared { class: T::ClassId },
 		/// New metadata has been set for an asset instance.
-		/// \[ class, instance, data, is_frozen \]
 		MetadataSet {
 			class: T::ClassId,
 			instance: T::InstanceId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		},
-		/// Metadata has been cleared for an asset instance. \[ class, instance \]
+		/// Metadata has been cleared for an asset instance.
 		MetadataCleared { class: T::ClassId, instance: T::InstanceId },
-		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
+		/// Metadata has been cleared for an asset instance.
 		Redeposited { class: T::ClassId, successful_instances: Vec<T::InstanceId> },
 		/// New attribute metadata has been set for an asset class or instance.
-		/// \[ class, maybe_instance, key, value \]
 		AttributeSet {
 			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
@@ -275,7 +270,6 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		},
 		/// Attribute metadata has been cleared for an asset class or instance.
-		/// \[ class, maybe_instance, key, maybe_value \]
 		AttributeCleared {
 			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,

@@ -109,7 +109,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
-		/// well as the error. \[index, error\]
+		/// well as the error.
 		BatchInterrupted { index: u32, error: DispatchError },
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
