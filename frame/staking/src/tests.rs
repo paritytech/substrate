@@ -34,7 +34,7 @@ use sp_runtime::{
 	Perbill, Percent,
 };
 use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler, DisableStrategy},
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
 use sp_std::prelude::*;

@@ -246,7 +246,11 @@ pub(crate) fn compute_slash<T: Config>(
 	// compare slash proportions rather than slash values to avoid issues due to rounding
 	// error.
 	if params.slash.deconstruct() > prior_slash_p.deconstruct() {
-		<Pallet<T> as Store>::ValidatorSlashInEra::insert(&params.slash_era, params.stash, &(params.slash, own_slash));
+		<Pallet<T> as Store>::ValidatorSlashInEra::insert(
+			&params.slash_era,
+			params.stash,
+			&(params.slash, own_slash),
+		);
 	} else {
 		// we slash based on the max in era - this new event is not the max,
 		// so neither the validator or any nominators will need an update.
@@ -281,7 +285,7 @@ pub(crate) fn compute_slash<T: Config>(
 		}
 	}
 
-	let disable_when_slashed = ! matches!(params.disable, DisableStrategy::Never);
+	let disable_when_slashed = !matches!(params.disable, DisableStrategy::Never);
 	add_offending_validator::<T>(params.stash, disable_when_slashed);
 
 	let mut nominators_slashed = Vec::new();
@@ -383,8 +387,9 @@ fn slash_nominators<T: Config>(
 			let own_slash_by_validator = params.slash * nominator.value;
 			let own_slash_difference = own_slash_by_validator.saturating_sub(own_slash_prior);
 
-			let mut era_slash = <Pallet<T> as Store>::NominatorSlashInEra::get(&params.slash_era, stash)
-				.unwrap_or_else(|| Zero::zero());
+			let mut era_slash =
+				<Pallet<T> as Store>::NominatorSlashInEra::get(&params.slash_era, stash)
+					.unwrap_or_else(|| Zero::zero());
 
 			era_slash += own_slash_difference;
 

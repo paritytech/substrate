@@ -38,7 +38,19 @@ pub type Kind = [u8; 16];
 pub type OffenceCount = u32;
 
 /// In case of an offence, which conditions get an offender validator disabled
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
+#[derive(
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Hash,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	sp_runtime::RuntimeDebug,
+	scale_info::TypeInfo,
+)]
 pub enum DisableStrategy {
 	/// Independently of slashing, this offence will not disable the offender
 	Never,
@@ -94,7 +106,9 @@ pub trait Offence<Offender> {
 	///
 	/// In previous versions any slashed offenders got disabled in every offence. Now each offence
 	/// can decide whether to disable them regardless of the slashed amount.
-	fn disable(&self) -> DisableStrategy { DisableStrategy::WhenSlashed }
+	fn disable(&self) -> DisableStrategy {
+		DisableStrategy::WhenSlashed
+	}
 
 	/// A slash fraction of the total exposure that should be slashed for this
 	/// particular offence kind for the given parameters that happened at a singular `TimeSlot`.
@@ -166,7 +180,7 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	/// Zero is a valid value for a fraction.
 	///
 	/// The `session` parameter is the session index of the offence.
-	/// 
+	///
 	/// The `disable` parameter decides if the offenders need to be disabled immediately.
 	///
 	/// The receiver might decide to not accept this offence. In this case, the call site is

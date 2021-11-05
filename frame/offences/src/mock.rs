@@ -36,7 +36,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{self, Kind, OffenceDetails, DisableStrategy},
+	offence::{self, DisableStrategy, Kind, OffenceDetails},
 	SessionIndex,
 };
 use std::cell::RefCell;

@@ -36,7 +36,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler, DisableStrategy},
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
