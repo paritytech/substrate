@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Randomness Module
+//! # Randomness Pallet
 //!
-//! The Randomness Collective Flip module provides a [`random`](./struct.Module.html#method.random)
+//! The Randomness Collective Flip pallet provides a [`random`](./struct.Module.html#method.random)
 //! function that generates low-influence random values based on the block hashes from the previous
 //! `81` blocks. Low-influence randomness can be useful when defending against relatively weak
 //! adversaries. Using this pallet as a randomness source is advisable primarily in low-security
@@ -31,7 +31,7 @@
 //!
 //! ### Prerequisites
 //!
-//! Import the Randomness Collective Flip module and derive your module's configuration trait from
+//! Import the Randomness Collective Flip pallet and derive your pallet's configuration trait from
 //! the system trait.
 //!
 //! ### Example - Get random seed for the current block
@@ -41,9 +41,9 @@
 //!
 //! #[frame_support::pallet]
 //! pub mod pallet {
+//!     use super::*;
 //!     use frame_support::pallet_prelude::*;
 //!     use frame_system::pallet_prelude::*;
-//!     use super::*;
 //!
 //!     #[pallet::pallet]
 //!     #[pallet::generate_store(pub(super) trait Store)]

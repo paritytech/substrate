@@ -52,9 +52,8 @@ mod mock_democracy {
 	pub use pallet::*;
 	#[frame_support::pallet]
 	pub mod pallet {
-		use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
+		use frame_support::pallet_prelude::*;
 		use frame_system::pallet_prelude::*;
-		use sp_runtime::DispatchResult;
 
 		#[pallet::pallet]
 		#[pallet::generate_store(pub(super) trait Store)]
