@@ -4,7 +4,8 @@ error[E0277]: the trait bound `pallet::GenesisConfig: std::default::Default` is 
 22  |     impl<T: Config> GenesisBuild<T> for GenesisConfig {}
     |                     ^^^^^^^^^^^^^^^ the trait `std::default::Default` is not implemented for `pallet::GenesisConfig`
     |
-   ::: $WORKSPACE/frame/support/src/traits/hooks.rs
+note: required by a bound in `GenesisBuild`
+   --> $DIR/hooks.rs:297:36
     |
-    | pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
-    |                                    ------- required by this bound in `GenesisBuild`
+297 | pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
+    |                                    ^^^^^^^ required by this bound in `GenesisBuild`

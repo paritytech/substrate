@@ -248,7 +248,7 @@ pub mod pallet {
 
 	/// Randomness under construction.
 	///
-	/// We make a tradeoff between storage accesses and list length.
+	/// We make a trade-off between storage accesses and list length.
 	/// We store the under-construction randomness in segments of up to
 	/// `UNDER_CONSTRUCTION_SEGMENT_LENGTH`.
 	///
