@@ -20,11 +20,9 @@
 use super::*;
 use crate::{AccountVote, Conviction, Vote};
 use codec::{Decode, Encode};
+use frame_support::Parameter;
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Saturating, Zero},
-	RuntimeDebug,
-};
+use sp_runtime::{traits::{Saturating, Zero}, RuntimeDebug};
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -73,10 +71,7 @@ impl<Balance: Saturating> Saturating for Delegations<Balance> {
 	}
 }
 
-impl<Balance> Tally<Balance> where
-	Balance: From<u8> + Zero + Copy + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Bounded
-		+ Saturating,
-{
+impl<Balance: AtLeast32BitUnsigned + Copy> Tally<Balance> {
 	/// Create a new tally.
 	pub fn new(vote: Vote, balance: Balance) -> Self {
 		let Delegations { votes, capital } = vote.conviction.votes(balance);
@@ -159,7 +154,7 @@ impl<Balance> Tally<Balance> where
 		Perbill::from_rational(self.ayes, self.ayes.saturating_add(self.nays))
 	}
 
-	pub fn is_passing<Moment: AtLeast32BitUnsigned>(
+	pub fn is_passing<Moment: AtLeast32BitUnsigned + Copy>(
 		&self,
 		t: Moment,
 		period: Moment,
@@ -168,7 +163,7 @@ impl<Balance> Tally<Balance> where
 		approval_needed: Curve,
 	) -> bool {
 		let x = Perbill::from_rational(t.min(period), period);
-		turnout_needed.passing(x, self.turnout) && approval_needed.passing(x, self.approval::<T>())
+		turnout_needed.passing(x, self.turnout(total)) && approval_needed.passing(x, self.approval())
 	}
 }
 
@@ -216,7 +211,7 @@ pub struct TrackInfo<Balance, Moment> {
 }
 
 pub trait TracksInfo<Balance, Moment> {
-	type Id: Copy + Eq + Codec;
+	type Id: Copy + Eq + Codec + TypeInfo + Parameter + Ord + PartialOrd;
 	type Origin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
 	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()>;
@@ -272,10 +267,11 @@ pub struct ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Accou
 	pub(crate) ayes_in_queue: Option<Votes>,
 }
 
-impl<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId>
-	ReferendumStatus<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId>
+impl<TrackId, Origin, Moment: AtLeast32BitUnsigned + Copy, Hash, Balance, Votes, AccountId>
+	ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>
 {
 	pub fn begin_deciding(&mut self, now: Moment, decision_period: Moment) {
+		self.ayes_in_queue = None;
 		self.deciding = Some(DecidingStatus {
 			ending: now.saturating_add(decision_period),
 			period: decision_period,
@@ -286,11 +282,9 @@ impl<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId>
 
 /// Info regarding a referendum, present or past.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum ReferendumInfo<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId> {
+pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId> {
 	/// Referendum has been submitted and is being voted on.
-	Ongoing(ReferendumStatus<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId>),
-	/// Referendum finished at `end` with approval. Submission deposit is held.
-	Confirmed(ReferendumStatus<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId>),
+	Ongoing(ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>),
 	/// Referendum finished at `end` with approval. Submission deposit is held.
 	Approved(Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished at `end` with rejection. Submission deposit is held.
@@ -299,14 +293,13 @@ pub enum ReferendumInfo<TrackId, Origin, BlockNumber, Hash, Balance, Votes, Acco
 	TimedOut(Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 }
 
-impl<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId>
-	ReferendumInfo<TrackId, Origin, BlockNumber, Hash, Balance, Votes, AccountId>
+impl<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>
+	ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>
 {
 	pub fn take_decision_deposit(&mut self) -> Option<Deposit<AccountId, Balance>> {
 		use ReferendumInfo::*;
 		match self {
 			Approved(_, d) | Rejected(_, d) | TimedOut(_, d) => d.take(),
-			Confirmed(status) => status.decision_deposit.take(),
 			// Cannot refund deposit if Ongoing as this breaks assumptions.
 			_ => None,
 		}
@@ -332,13 +325,13 @@ pub enum Curve {
 impl Curve {
 	fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { begin, delta } => begin - delta * x,
+			Self::LinearDecreasing { begin, delta } => *begin - *delta * x,
 		}
 	}
-	pub fn delay(&self, y: Perbill) {
+	pub fn delay(&self, y: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { begin, delta } => {
-				(begin - y.min(begin)).min(delta) / delta
+				(*begin - y.min(*begin)).min(*delta) / *delta
 			},
 		}
 	}

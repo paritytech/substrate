@@ -151,6 +151,21 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		S::get() as usize
 	}
 
+	/// Exactly as `Vec::truncate`.
+	pub fn truncate(&mut self, s: usize) {
+		self.0.truncate(s);
+	}
+
+	/// Forces the insertion of `s` into `self`, truncating `self` first, if necessary.
+	///
+	/// Infallible, but if the limit is zero, then it's a no-op.
+	pub fn force_insert(&mut self, index: usize, element: T) {
+		if S::get() > 0 {
+			self.0.truncate(S::get() as usize - 1);
+			self.0.insert(index, element);
+		}
+	}
+
 	/// Consumes self and mutates self via the given `mutate` function.
 	///
 	/// If the outcome of mutation is within bounds, `Some(Self)` is returned. Else, `None` is
