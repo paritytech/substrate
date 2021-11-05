@@ -154,8 +154,6 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 
 /// Info for keeping track of a motion being voted on.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-//#[codec(mel_bound(AccountId: MaxEncodedLen + Encode, MaxMembers: Get<u32>))]
-//#[scale_info(skip_type_params(MaxMembers))]
 pub struct Votes<BoundedAccountIdVec, BlockNumber> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
