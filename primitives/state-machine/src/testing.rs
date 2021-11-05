@@ -123,7 +123,6 @@ where
 		overlay.set_collect_extrinsics(changes_trie_config.is_some());
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
@@ -161,9 +160,18 @@ where
 		self.offchain_db.clone()
 	}
 
-	/// Insert key/value into backend
+	/// Insert key/value into backend.
+	///
+	/// This only supports inserting keys in `top` trie.
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
 		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
+	}
+
+	/// Insert key/value into backend.
+	///
+	/// This only supports inserting keys in child tries.
+	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
+		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])], self.state_version);
 	}
 
 	/// Registers the given extension for this instance.

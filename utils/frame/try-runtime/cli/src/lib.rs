@@ -484,6 +484,7 @@ impl State {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 						pallets: pallets.to_owned().unwrap_or_default(),
+						scrape_children: false,
 						at,
 					}))
 					.inject_hashed_key(

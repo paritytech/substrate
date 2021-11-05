@@ -116,12 +116,6 @@ where
 				.inject_hashed_key_value(&[(code_key.clone(), code.clone())])
 				.build()
 				.await?;
-			log::info!(
-				target: LOG_TARGET,
-				"initialized state externalities at {:?}, storage root {:?}",
-				number,
-				new_ext.as_backend().root()
-			);
 
 			let (expected_spec_name, expected_spec_version, spec_state_version) =
 				local_spec::<Block, ExecDispatch>(&new_ext, &executor);

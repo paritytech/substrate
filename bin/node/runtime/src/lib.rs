@@ -1243,6 +1243,23 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const SignedMigrationMaxLimits: pallet_state_trie_migration::MigrationLimits =
+		pallet_state_trie_migration::MigrationLimits { size: 1024 * 512, item: 512 };
+	pub const SignedDepositPerItem: Balance = 1 * DOLLARS;
+}
+impl pallet_state_trie_migration::Config for Runtime {
+	type Event = Event;
+	type ControlOrigin = EnsureRoot<AccountId>;
+	type Currency = Balances;
+	type SignedDepositPerItem = SignedDepositPerItem;
+	type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
+	type UnsignedPriority = ImOnlineUnsignedPriority;
+	type UnsignedBackOff = frame_support::traits::ConstU32<5>;
+	type OffchainRepeat = frame_support::traits::ConstU32<3>;
+	type WeightInfo = ();
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1290,6 +1307,7 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
 		BagsList: pallet_bags_list,
+		StateTrieMigration: pallet_state_trie_migration,
 	}
 );
 
@@ -1648,6 +1666,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_scheduler, Scheduler);
 			list_benchmark!(list, extra, pallet_session, SessionBench::<Runtime>);
 			list_benchmark!(list, extra, pallet_staking, Staking);
+			list_benchmark!(list, extra, pallet_state_trie_migration, StateTrieMigration);
 			list_benchmark!(list, extra, frame_system, SystemBench::<Runtime>);
 			list_benchmark!(list, extra, pallet_timestamp, Timestamp);
 			list_benchmark!(list, extra, pallet_tips, Tips);
@@ -1725,6 +1744,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_scheduler, Scheduler);
 			add_benchmark!(params, batches, pallet_session, SessionBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_staking, Staking);
+			add_benchmark!(params, batches, pallet_state_trie_migration, StateTrieMigration);
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_tips, Tips);

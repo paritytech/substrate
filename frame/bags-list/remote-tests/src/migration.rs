@@ -36,6 +36,7 @@ pub async fn execute<Runtime: RuntimeT, Block: BlockT>(
 			pallets: vec![pallet_staking::Pallet::<Runtime>::name().to_string()],
 			at: None,
 			state_snapshot: None,
+			scrape_children: false,
 		}))
 		.build()
 		.await
