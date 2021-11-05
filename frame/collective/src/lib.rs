@@ -48,7 +48,6 @@ use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
 use sp_std::{
 	convert::{TryFrom, TryInto},
-	fmt::Debug,
 	marker::PhantomData,
 	prelude::*,
 	result,
@@ -211,7 +210,7 @@ pub mod pallet {
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependents keep to the limit without enforcing it.
-		type MaxMembers: Get<MemberCount> + Debug;
+		type MaxMembers: Get<MemberCount>;
 
 		/// Default vote strategy of this collective.
 		type DefaultVote: DefaultVote;
