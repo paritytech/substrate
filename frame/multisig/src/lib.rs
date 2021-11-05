@@ -218,7 +218,7 @@ pub mod pallet {
 			CallHash,
 			DispatchResult,
 		),
-		/// A multisig operation has been cancelled. \[cancelling, timepoint, multisig, call_hash\]
+		/// A multisig operation has been cancelled. \[canceling, timepoint, multisig, call_hash\]
 		MultisigCancelled(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
 	}
 
