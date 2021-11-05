@@ -79,6 +79,7 @@ pallet-offences-benchmarking = { version = "4.0.0-dev", path = "../../../frame/o
 pallet-proxy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/proxy" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
+pallet-safe-mode = { version = "4.0.0-dev", default-features = false, path = "../../../frame/safe-mode" }
 pallet-session = { version = "4.0.0-dev", features = [
 	"historical",
 ], path = "../../../frame/session", default-features = false }

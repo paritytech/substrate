@@ -4702,6 +4702,7 @@ dependencies = [
  "pallet-proxy",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
+ "pallet-safe-mode",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",

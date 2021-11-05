@@ -196,7 +196,7 @@ parameter_types! {
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = Everything;
+	type BaseCallFilter = SafeMode;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -1243,6 +1243,22 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const SafeModeBurnAmount: Balance = 1_000_000 * DOLLARS;
+	pub SafeModeBurnDestination: AccountId = [0u8; 32].into();
+}
+
+impl pallet_safe_mode::Config for Runtime {
+	type Event = Event;
+	type BaseCallFilter = Everything;
+	// Should be a lesser filter.
+	type SafeModeCallFilter = Everything;
+	type Currency = Balances;
+	type BurnAmount = SafeModeBurnAmount;
+	type BurnDestination = SafeModeBurnDestination;
+	type DisableOrigin = EnsureRoot<AccountId>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1290,6 +1306,7 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
 		BagsList: pallet_bags_list,
+		SafeMode: pallet_safe_mode,
 	}
 );
 
