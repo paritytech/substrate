@@ -50,7 +50,7 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::weight(0)]
-	    pub fn privileged_function(origin: OriginFor<T>) -> DispatchResult {
+        pub fn privileged_function(origin: OriginFor<T>) -> DispatchResult {
             ensure_root(origin)?;
 
             // do something...
