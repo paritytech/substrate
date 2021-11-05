@@ -36,7 +36,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
+	offence::{OffenceDetails, OnOffenceHandler, DisableStrategy},
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
@@ -1139,6 +1139,7 @@ where
 		>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
+		disable: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight: Weight = 0;
@@ -1208,6 +1209,7 @@ where
 				window_start,
 				now: active_era,
 				reward_proportion,
+				disable,
 			});
 
 			if let Some(mut unapplied) = unapplied {

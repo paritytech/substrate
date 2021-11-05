@@ -34,7 +34,7 @@ use sp_runtime::{
 	Perbill, Percent,
 };
 use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
+	offence::{OffenceDetails, OnOffenceHandler, DisableStrategy},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -2316,6 +2316,7 @@ fn slash_in_old_span_does_not_deselect() {
 			}],
 			&[Perbill::from_percent(0)],
 			1,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// the validator doesn't get chilled again
@@ -2332,6 +2333,7 @@ fn slash_in_old_span_does_not_deselect() {
 			// NOTE: A 100% slash here would clean up the account, causing de-registration.
 			&[Perbill::from_percent(95)],
 			1,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// the validator doesn't get chilled again
@@ -2628,6 +2630,7 @@ fn slashing_nominators_by_span_max() {
 			}],
 			&[Perbill::from_percent(10)],
 			2,
+			DisableStrategy::WhenSlashed,
 		);
 
 		assert_eq!(Balances::free_balance(11), 900);
@@ -2654,6 +2657,7 @@ fn slashing_nominators_by_span_max() {
 			}],
 			&[Perbill::from_percent(30)],
 			3,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// 11 was not further slashed, but 21 and 101 were.
@@ -2675,6 +2679,7 @@ fn slashing_nominators_by_span_max() {
 			}],
 			&[Perbill::from_percent(20)],
 			2,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// 11 was further slashed, but 21 and 101 were not.
@@ -2810,6 +2815,7 @@ fn remove_deferred() {
 			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(15)],
 			1,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// fails if empty
@@ -3661,7 +3667,7 @@ fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
 		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), zero_offence_weight);
+		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
 		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
@@ -3674,7 +3680,7 @@ fn offences_weight_calculated_correctly() {
 					reporters: vec![],
 				}
 			).collect();
-		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), n_offence_unapplied_weight);
+		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), n_offence_unapplied_weight);
 
 		// On Offence with one offenders, Applied
 		let one_offender = [
@@ -3695,7 +3701,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), one_offence_unapplied_weight);
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), one_offence_unapplied_weight);
 	});
 }
 

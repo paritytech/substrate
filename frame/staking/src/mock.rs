@@ -33,7 +33,7 @@ use sp_runtime::{
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
-use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
+use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 use std::cell::RefCell;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -764,11 +764,12 @@ pub(crate) fn on_offence_in_era(
 	>],
 	slash_fraction: &[Perbill],
 	era: EraIndex,
+	disable: DisableStrategy,
 ) {
 	let bonded_eras = crate::BondedEras::<Test>::get();
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
-			let _ = Staking::on_offence(offenders, slash_fraction, start_session);
+			let _ = Staking::on_offence(offenders, slash_fraction, start_session, disable);
 			return
 		} else if bonded_era > era {
 			break
@@ -780,6 +781,7 @@ pub(crate) fn on_offence_in_era(
 			offenders,
 			slash_fraction,
 			Staking::eras_start_session_index(era).unwrap(),
+			disable,
 		);
 	} else {
 		panic!("cannot slash in era {}", era);
@@ -794,7 +796,7 @@ pub(crate) fn on_offence_now(
 	slash_fraction: &[Perbill],
 ) {
 	let now = Staking::active_era().unwrap().index;
-	on_offence_in_era(offenders, slash_fraction, now)
+	on_offence_in_era(offenders, slash_fraction, now, DisableStrategy::WhenSlashed)
 }
 
 pub(crate) fn add_slash(who: &AccountId) {

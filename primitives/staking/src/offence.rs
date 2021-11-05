@@ -37,6 +37,17 @@ pub type Kind = [u8; 16];
 /// so that we can slash it accordingly.
 pub type OffenceCount = u32;
 
+/// In case of an offence, which conditions get an offender validator disabled
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
+pub enum DisableStrategy {
+	/// Independently of slashing, this offence will not disable the offender
+	Never,
+	/// Only disable the offender if it is also slashed
+	WhenSlashed,
+	/// Independently of slashing, this offence will disable the offender
+	Always,
+}
+
 /// A trait implemented by an offence report.
 ///
 /// This trait assumes that the offence is legitimate and was validated already.
@@ -78,6 +89,12 @@ pub trait Offence<Offender> {
 	/// As an example, for GRANDPA timescale could be a round number and for BABE it could be a slot
 	/// number. Note that for GRANDPA the round number is reset each epoch.
 	fn time_slot(&self) -> Self::TimeSlot;
+
+	/// Whether this offense needs to disable offenders until the next era starts.
+	///
+	/// In previous versions any slashed offenders got disabled in every offence. Now each offence
+	/// can decide whether to disable them regardless of the slashed amount.
+	fn disable(&self) -> DisableStrategy { DisableStrategy::WhenSlashed }
 
 	/// A slash fraction of the total exposure that should be slashed for this
 	/// particular offence kind for the given parameters that happened at a singular `TimeSlot`.
@@ -149,6 +166,8 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	/// Zero is a valid value for a fraction.
 	///
 	/// The `session` parameter is the session index of the offence.
+	/// 
+	/// The `disable` parameter decides if the offenders need to be disabled immediately.
 	///
 	/// The receiver might decide to not accept this offence. In this case, the call site is
 	/// responsible for queuing the report and re-submitting again.
@@ -156,6 +175,7 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
+		disable: DisableStrategy,
 	) -> Res;
 }
 
@@ -164,6 +184,7 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
+		_disable: DisableStrategy,
 	) -> Res {
 		Default::default()
 	}
