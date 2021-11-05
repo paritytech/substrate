@@ -20,9 +20,11 @@ kvdb-rocksdb = { version = "0.14.0", optional = true }
 kvdb-memorydb = "0.10.0"
 linked-hash-map = "0.5.4"
 hash-db = "0.15.2"
+trie-db = "0.22.6"
 codec = { package = "parity-scale-codec", version = "2.0.0", features = [
     "derive",
 ] }
+hashbrown = "0.11.2"
 
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }

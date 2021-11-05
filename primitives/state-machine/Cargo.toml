@@ -30,6 +30,7 @@ sp-externalities = { version = "0.10.0-dev", path = "../externalities", default-
 smallvec = "1.7.0"
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 tracing = { version = "0.1.29", optional = true }
+hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"] }
 
 [dev-dependencies]
 hex-literal = "0.3.3"
