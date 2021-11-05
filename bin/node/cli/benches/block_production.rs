@@ -38,7 +38,7 @@ use sp_consensus::BlockOrigin;
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
-	OpaqueExtrinsic,
+	AccountId32, MultiAddress, OpaqueExtrinsic,
 };
 use tokio::runtime::Handle;
 
@@ -112,19 +112,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 	node_cli::service::new_full_base(config, |_, _| ()).expect("creating a full node doesn't fail")
 }
 
-fn extrinsic_transfer(client: &FullClient, nonce: u32) -> OpaqueExtrinsic {
-	create_extrinsic(
-		client,
-		Sr25519Keyring::Alice.pair(),
-		BalancesCall::transfer {
-			dest: Sr25519Keyring::Bob.to_account_id().into(),
-			value: 1 * DOLLARS,
-		},
-		Some(nonce),
-	)
-	.into()
-}
-
 fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {
 	node_runtime::UncheckedExtrinsic {
 		signature: None,
@@ -148,9 +135,48 @@ fn import_block(
 		.expect("importing a block doesn't fail");
 }
 
-fn block_production(c: &mut Criterion) {
+fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 	const MINIMUM_PERIOD_FOR_BLOCKS: u64 = 1500;
 
+	let mut max_transfer_count = 0;
+	let mut extrinsics = Vec::new();
+	let mut block_builder = client.new_block(Default::default()).unwrap();
+
+	// Every block needs one timestamp extrinsic.
+	let extrinsic_set_time = extrinsic_set_time(1 + MINIMUM_PERIOD_FOR_BLOCKS);
+	block_builder.push(extrinsic_set_time.clone()).unwrap();
+	extrinsics.push(extrinsic_set_time);
+
+	// Creating those is surprisingly costly, so let's only do it once and later just `clone` them.
+	let src = Sr25519Keyring::Alice.pair();
+	let dst: MultiAddress<AccountId32, u32> = Sr25519Keyring::Bob.to_account_id().into();
+
+	// Add as many tranfer extrinsics as possible into a single block.
+	for nonce in 0.. {
+		let extrinsic: OpaqueExtrinsic = create_extrinsic(
+			client,
+			src.clone(),
+			BalancesCall::transfer { dest: dst.clone(), value: 1 * DOLLARS },
+			Some(nonce),
+		)
+		.into();
+
+		match block_builder.push(extrinsic.clone()) {
+			Ok(_) => {},
+			Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
+				InvalidTransaction::ExhaustsResources,
+			)))) => break,
+			Err(error) => panic!("{}", error),
+		}
+
+		extrinsics.push(extrinsic);
+		max_transfer_count += 1;
+	}
+
+	(max_transfer_count, extrinsics)
+}
+
+fn block_production(c: &mut Criterion) {
 	sp_tracing::try_init_simple();
 
 	let runtime = tokio::runtime::Runtime::new().expect("creating tokio runtime doesn't fail; qed");
@@ -165,24 +191,7 @@ fn block_production(c: &mut Criterion) {
 	block_builder.push(extrinsic_set_time(1)).unwrap();
 	import_block(client, block_builder.build().unwrap());
 
-	let max_transfer_count = {
-		let mut transfer_count = 0;
-		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder.push(extrinsic_set_time(1 + MINIMUM_PERIOD_FOR_BLOCKS)).unwrap();
-
-		loop {
-			match block_builder.push(extrinsic_transfer(client, transfer_count as u32)) {
-				Ok(_) => {},
-				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
-					InvalidTransaction::ExhaustsResources,
-				)))) => break,
-				Err(error) => panic!("{}", error),
-			}
-			transfer_count += 1;
-		}
-		transfer_count
-	};
-
+	let (max_transfer_count, extrinsics) = prepare_benchmark(&client);
 	log::info!("Maximum transfer count: {}", max_transfer_count);
 
 	let mut group = c.benchmark_group("Block production");
@@ -192,15 +201,7 @@ fn block_production(c: &mut Criterion) {
 
 	group.bench_function(format!("{} transfers", max_transfer_count), move |b| {
 		b.iter_batched(
-			|| {
-				let mut extrinsics = Vec::with_capacity(max_transfer_count + 1);
-				extrinsics.push(extrinsic_set_time(1 + MINIMUM_PERIOD_FOR_BLOCKS));
-
-				for nth_transfer in 0..max_transfer_count {
-					extrinsics.push(extrinsic_transfer(client, nth_transfer as u32));
-				}
-				extrinsics
-			},
+			|| extrinsics.clone(),
 			|extrinsics| {
 				let mut block_builder = client.new_block(Default::default()).unwrap();
 				for extrinsic in extrinsics {
