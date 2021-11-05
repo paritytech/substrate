@@ -72,7 +72,7 @@ pub mod logger {
 			let sender = ensure_signed(origin)?;
 			<I32Log<T>>::append(i);
 			<AccountLog<T>>::append(sender.clone());
-			Self::deposit_event(Event::AppendI32AndAccount{ sender: sender, value: i, weight: weight));
+			Self::deposit_event(Event::AppendI32AndAccount{ sender: sender, value: i, weight: weight });
 			Ok(().into())
 		}
 	}
