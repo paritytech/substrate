@@ -192,6 +192,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 			Err(())
 		}
 	}
+
+	pub fn truncating_from(i: Vec<T>) -> Self {
+		let bounded = i.into_iter().take(S::get() as usize).collect();
+		Self::unchecked_from(bounded)
+	}
 }
 
 impl<T, S> Default for BoundedVec<T, S> {

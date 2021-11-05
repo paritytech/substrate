@@ -46,10 +46,16 @@ use scale_info::TypeInfo;
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
-use sp_std::{convert::TryInto, fmt::Debug, marker::PhantomData, prelude::*, result};
+use sp_std::{
+	convert::{TryFrom, TryInto},
+	fmt::Debug,
+	marker::PhantomData,
+	prelude::*,
+	result,
+};
 
 use frame_support::{
-	codec::{Decode, Encode},
+	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
 	traits::{
@@ -148,18 +154,18 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 }
 
 /// Info for keeping track of a motion being voted on.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
-#[codec(mel_bound(AccountId: MaxEncodedLen + Encode, MaxMembers: Get<u32>))]
-#[scale_info(skip_type_params(MaxMembers))]
-pub struct Votes<AccountId, BlockNumber, MaxMembers> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
+//#[codec(mel_bound(AccountId: MaxEncodedLen + Encode, MaxMembers: Get<u32>))]
+//#[scale_info(skip_type_params(MaxMembers))]
+pub struct Votes<BoundedAccountIdVec, BlockNumber> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
 	threshold: MemberCount,
 	/// The current set of voters that approved it.
-	ayes: BoundedVec<AccountId, MaxMembers>,
+	ayes: BoundedAccountIdVec,
 	/// The current set of voters that rejected it.
-	nays: BoundedVec<AccountId, MaxMembers>,
+	nays: BoundedAccountIdVec,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
@@ -176,7 +182,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	//#[pallet::generate_storage_info]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -238,7 +244,11 @@ pub mod pallet {
 				"Members cannot contain duplicate accounts."
 			);
 
-			Pallet::<T, I>::initialize_members(&self.members)
+			let bounded_members =
+				BoundedVec::<T::AccountId, T::MaxMembers>::try_from(self.members.to_vec())
+					.expect("too many members in genesis");
+
+			Pallet::<T, I>::initialize_members(&bounded_members)
 		}
 	}
 
@@ -272,7 +282,7 @@ pub mod pallet {
 		_,
 		Identity,
 		T::Hash,
-		Votes<T::AccountId, T::BlockNumber, T::MaxMembers>,
+		Votes<BoundedVec<T::AccountId, T::MaxMembers>, T::BlockNumber>,
 		OptionQuery,
 		GetDefault,
 		GetOptionWrapper<T::MaxProposals>,
@@ -287,7 +297,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxMembers>, ValueQuery>;
 
 	/// The prime member that helps determine the default vote behavior in case of absentations.
 	#[pallet::storage]
@@ -907,21 +917,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 	/// Update the members of the collective. Votes are updated and the prime is reset.
 	///
-	/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
-	///       the weight estimations rely on it to estimate dispatchable weight.
-	///
-	/// # <weight>
-	/// ## Weight
-	/// - `O(MP + N)`
-	///   - where `M` old-members-count (governance-bounded)
-	///   - where `N` new-members-count (governance-bounded)
-	///   - where `P` proposals-count
-	/// - DB:
-	///   - 1 storage read (codec `O(P)`) for reading the proposals
-	///   - `P` storage mutations for updating the votes (codec `O(M)`)
-	///   - 1 storage write (codec `O(N)`) for storing the new members
-	///   - 1 storage write (codec `O(1)`) for deleting the old prime
-	/// # </weight>
+	/// If too many members are passed into this function, we truncate the new members to ensure
+	/// the max bounds are enforced.
 	fn change_members_sorted(
 		_incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],
@@ -935,6 +932,9 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 				T::MaxMembers::get(),
 			);
 		}
+
+		let bounded_new = BoundedVec::<T::AccountId, T::MaxMembers>::truncating_from(new.to_vec());
+
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort();
@@ -959,7 +959,7 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 				}
 			});
 		}
-		Members::<T, I>::put(new);
+		Members::<T, I>::put(bounded_new);
 		Prime::<T, I>::kill();
 	}
 
@@ -976,7 +976,10 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
-			<Members<T, I>>::put(members);
+			let bounded_members =
+				BoundedVec::<T::AccountId, T::MaxMembers>::try_from(members.to_vec())
+					.expect("initializing too many members!");
+			<Members<T, I>>::put(bounded_members);
 		}
 	}
 }
