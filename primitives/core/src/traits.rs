@@ -190,7 +190,8 @@ sp_externalities::decl_extension! {
 	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
-/// Something that can spawn tasks (blocking and non-blocking) with an assigned name.
+/// Something that can spawn tasks (blocking and non-blocking) with an assigned name 
+/// and subsystem.
 #[dyn_clonable::clonable]
 pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
@@ -201,6 +202,20 @@ pub trait SpawnNamed: Clone + Send + Sync {
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	/// Spawn the given blocking future.
+	///
+	/// The given `subsystem` and `name` is used to identify the future in tracing.
+	fn spawn_blocking_with_subsystem(&self, name: &'static str, _subsystem: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		// Default impl doesn't trace subsystem.
+		self.spawn_blocking(name, future);
+	}
+	/// Spawn the given non-blocking future.
+	///
+	/// The given `subsystem` and `name` is used to identify the future in tracing.
+	fn spawn_with_subsystem(&self, name: &'static str, _subsystem: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		// Default impl doesn't trace subsystem.
+		self.spawn(name, future);
+	}
 }
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
@@ -210,6 +225,12 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 
 	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		(**self).spawn(name, future)
+	}
+	fn spawn_blocking_with_subsystem(&self, name: &'static str, subsystem: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_blocking_with_subsystem(name, subsystem, future)
+	}
+	fn spawn_with_subsystem(&self, name: &'static str, subsystem: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_with_subsystem(name, subsystem, future)
 	}
 }
 
