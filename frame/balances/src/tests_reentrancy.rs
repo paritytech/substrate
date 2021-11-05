@@ -219,7 +219,7 @@ fn transfer_dust_removal_tst2_should_work() {
 
 #[test]
 fn repatriating_reserved_balance_dust_removal_should_work() {
-	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		// Verification of reentrancy in dust removal
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
@@ -255,10 +255,11 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 			destination_status: Status::Free,
 		}));
 
-		System::assert_last_event(Event::Balances(crate::Event::DustLost {
+		System::assert_has_event(Event::Balances(crate::Event::DustLost {
 			account: 2,
 			amount: 50,
 		}));
+
 		System::assert_last_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
 	});
 }
