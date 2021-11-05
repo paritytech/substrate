@@ -200,7 +200,12 @@ pub mod pallet {
 		/// An asset `instance` was issued. \[ class, instance, owner \]
 		Issued { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
 		/// An asset `instance` was transferred. \[ class, instance, from, to \]
-		Transferred { class: T::ClassId, instance: T::InstanceId, from: T::AccountId, to: T::AccountId },
+		Transferred {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			from: T::AccountId,
+			to: T::AccountId,
+		},
 		/// An asset `instance` was destroyed. \[ class, instance, owner \]
 		Burned { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
 		/// Some asset `instance` was frozen. \[ class, instance \]
@@ -214,29 +219,53 @@ pub mod pallet {
 		/// The owner changed \[ class, new_owner \]
 		OwnerChanged { class: T::ClassId, new_owner: T::AccountId },
 		/// The management team changed \[ class, issuer, admin, freezer \]
-		TeamChanged { class: T::ClassId, issuer: T::AccountId, admin: T::AccountId, freezer: T::AccountId },
+		TeamChanged {
+			class: T::ClassId,
+			issuer: T::AccountId,
+			admin: T::AccountId,
+			freezer: T::AccountId,
+		},
 		/// An `instance` of an asset `class` has been approved by the `owner` for transfer by a
 		/// `delegate`.
 		/// \[ class, instance, owner, delegate \]
-		ApprovedTransfer { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId, delegate: T::AccountId },
+		ApprovedTransfer {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
 		/// An approval for a `delegate` account to transfer the `instance` of an asset `class` was
 		/// cancelled by its `owner`.
 		/// \[ class, instance, owner, delegate \]
-		ApprovalCancelled { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId, delegate: T::AccountId },
+		ApprovalCancelled {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
 		/// An asset `class` has had its attributes changed by the `Force` origin.
 		/// \[ class \]
 		AssetStatusChanged { class: T::ClassId },
 		/// New metadata has been set for an asset class. \[ class, data, is_frozen \]
-		ClassMetadataSet { class: T::ClassId, data: BoundedVec<u8, T::StringLimit>, is_frozen: bool },
+		ClassMetadataSet {
+			class: T::ClassId,
+			data: BoundedVec<u8, T::StringLimit>,
+			is_frozen: bool,
+		},
 		/// Metadata has been cleared for an asset class. \[ class \]
 		ClassMetadataCleared { class: T::ClassId },
 		/// New metadata has been set for an asset instance.
 		/// \[ class, instance, data, is_frozen \]
-		MetadataSet { class: T::ClassId, instance: T::InstanceId, data: BoundedVec<u8, T::StringLimit>, is_frozen: bool },
+		MetadataSet {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			data: BoundedVec<u8, T::StringLimit>,
+			is_frozen: bool,
+		},
 		/// Metadata has been cleared for an asset instance. \[ class, instance \]
 		MetadataCleared { class: T::ClassId, instance: T::InstanceId },
 		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
-		Redeposited { class: T::ClassId, successful_instances: Vec < T::InstanceId > },
+		Redeposited { class: T::ClassId, successful_instances: Vec<T::InstanceId> },
 		/// New attribute metadata has been set for an asset class or instance.
 		/// \[ class, maybe_instance, key, value \]
 		AttributeSet {
@@ -247,7 +276,11 @@ pub mod pallet {
 		},
 		/// Attribute metadata has been cleared for an asset class or instance.
 		/// \[ class, maybe_instance, key, maybe_value \]
-		AttributeCleared { class: T::ClassId, maybe_instance: Option<T::InstanceId>, key: BoundedVec<u8, T::KeyLimit> },
+		AttributeCleared {
+			class: T::ClassId,
+			maybe_instance: Option<T::InstanceId>,
+			key: BoundedVec<u8, T::KeyLimit>,
+		},
 	}
 
 	#[pallet::error]
@@ -549,7 +582,10 @@ pub mod pallet {
 			}
 			Class::<T, I>::insert(&class, &class_details);
 
-			Self::deposit_event(Event::<T, I>::Redeposited { class, successful_instances: successful });
+			Self::deposit_event(Event::<T, I>::Redeposited {
+				class,
+				successful_instances: successful,
+			});
 
 			Ok(())
 		}
@@ -783,7 +819,12 @@ pub mod pallet {
 			Asset::<T, I>::insert(&class, &instance, &details);
 
 			let delegate = details.approved.expect("set as Some above; qed");
-			Self::deposit_event(Event::ApprovedTransfer { class, instance, owner: details.owner, delegate });
+			Self::deposit_event(Event::ApprovedTransfer {
+				class,
+				instance,
+				owner: details.owner,
+				delegate,
+			});
 
 			Ok(())
 		}
@@ -829,7 +870,12 @@ pub mod pallet {
 			}
 
 			Asset::<T, I>::insert(&class, &instance, &details);
-			Self::deposit_event(Event::ApprovalCancelled { class, instance, owner: details.owner, delegate: old });
+			Self::deposit_event(Event::ApprovalCancelled {
+				class,
+				instance,
+				owner: details.owner,
+				delegate: old,
+			});
 
 			Ok(())
 		}

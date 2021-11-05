@@ -114,7 +114,7 @@ impl VestingAction {
 	fn should_remove(&self, index: usize) -> bool {
 		match self {
 			Self::Passive => false,
-			Self::Remove { index: index1} => *index1 == index,
+			Self::Remove { index: index1 } => *index1 == index,
 			Self::Merge { index1, index2 } => *index1 == index || *index2 == index,
 		}
 	}
@@ -280,7 +280,7 @@ pub mod pallet {
 		/// The amount vested has been updated. This could indicate a change in funds available.
 		/// The balance given is the amount which is left unvested (and thus locked).
 		/// \[account, unvested\]
-		VestingUpdated { account: T::AccountId, unvested: BalanceOf < T > },
+		VestingUpdated { account: T::AccountId, unvested: BalanceOf<T> },
 		/// An \[account\] has become fully vested.
 		VestingCompleted { account: T::AccountId },
 	}
@@ -450,7 +450,8 @@ pub mod pallet {
 			let schedule2_index = schedule2_index as usize;
 
 			let schedules = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-			let merge_action = VestingAction::Merge { index1: schedule1_index, index2: schedule2_index };
+			let merge_action =
+				VestingAction::Merge { index1: schedule1_index, index2: schedule2_index };
 
 			let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), merge_action)?;
 
@@ -594,7 +595,10 @@ impl<T: Config> Pallet<T> {
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, who, total_locked_now, reasons);
-			Self::deposit_event(Event::<T>::VestingUpdated { account: who.clone(), unvested: total_locked_now });
+			Self::deposit_event(Event::<T>::VestingUpdated {
+				account: who.clone(),
+				unvested: total_locked_now,
+			});
 		};
 	}
 

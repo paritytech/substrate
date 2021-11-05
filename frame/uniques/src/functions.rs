@@ -44,7 +44,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		details.owner = dest;
 		Asset::<T, I>::insert(&class, &instance, &details);
 
-		Self::deposit_event(Event::Transferred { class, instance, from: origin, to: details.owner });
+		Self::deposit_event(Event::Transferred {
+			class,
+			instance,
+			from: origin,
+			to: details.owner,
+		});
 		Ok(())
 	}
 

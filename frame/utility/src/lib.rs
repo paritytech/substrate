@@ -210,7 +210,10 @@ pub mod pallet {
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
-					Self::deposit_event(Event::BatchInterrupted { index: index as u32, error: e.error });
+					Self::deposit_event(Event::BatchInterrupted {
+						index: index as u32,
+						error: e.error,
+					});
 					// Take the weight of this function itself into account.
 					let base_weight = T::WeightInfo::batch(index.saturating_add(1) as u32);
 					// Return the actual used weight + base_weight of this call.
