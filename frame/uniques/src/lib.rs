@@ -191,7 +191,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// An asset class was created. \[ class, creator, owner \]
+		/// An asset class was created.
 		Created { class: T::ClassId, creator: T::AccountId, owner: T::AccountId },
 		/// An asset class was force-created. \[ class, owner \]
 		ForceCreated { class: T::ClassId, owner: T::AccountId },
