@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.80", features = ["full", "visit"] }
+syn = { version = "1.0.81", features = ["full", "visit"] }
 quote = "1.0"
 proc-macro2 = "1.0.29"
 proc-macro-crate = "1.0.0"
