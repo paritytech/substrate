@@ -2,7 +2,7 @@
 name = "sp-runtime-interface"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -31,7 +31,7 @@ sp-state-machine = { version = "0.10.0-dev", path = "../state-machine" }
 sp-core = { version = "4.0.0-dev", path = "../core" }
 sp-io = { version = "4.0.0-dev", path = "../io" }
 rustversion = "1.0.0"
-trybuild = "1.0.43"
+trybuild = "1.0.52"
 
 [features]
 default = [ "std" ]

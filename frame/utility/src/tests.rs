@@ -168,6 +168,7 @@ impl Contains<Call> for TestBaseCallFilter {
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
+	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
 
