@@ -27,7 +27,7 @@ serde = "1.0.126"
 thiserror = "1.0.21"
 tracing = "0.1.29"
 tracing-log = "0.1.2"
-tracing-subscriber = { version = "0.2.25", features = ["parking_lot"] }
+tracing-subscriber = { version = "0.3.1", features = ["parking_lot"] }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }

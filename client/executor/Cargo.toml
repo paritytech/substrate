@@ -45,7 +45,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-maybe-compressed-blob = { version = "4.0.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing = "0.1.29"
-tracing-subscriber = "0.2.19"
+tracing-subscriber = "0.3.1"
 paste = "1.0"
 regex = "1"
 
