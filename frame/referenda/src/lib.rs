@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Assembly Pallet
+//! # Referenda Pallet
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! The Assembly pallet handles the administration of general stakeholder voting.
+//! The Referenda pallet handles the administration of general stakeholder voting.
 
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
