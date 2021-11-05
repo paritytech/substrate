@@ -2,7 +2,7 @@
 name = "test-runner-example"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 publish = false
 
 [dependencies]
