@@ -219,7 +219,7 @@ fn transfer_dust_removal_tst2_should_work() {
 
 #[test]
 fn repatriating_reserved_balance_dust_removal_should_work() {
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		// Verification of reentrancy in dust removal
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
 		assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
