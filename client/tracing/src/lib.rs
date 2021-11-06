@@ -265,7 +265,7 @@ impl<S> Layer<S> for ProfilingLayer
 where
 	S: Subscriber + for<'span> LookupSpan<'span>,
 {
-	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<S>) {
+	fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<S>) {
 		if let Some(span) = ctx.span(id) {
 			let mut extension = span.extensions_mut();
 			let parent_id = attrs.parent().cloned().or_else(|| {

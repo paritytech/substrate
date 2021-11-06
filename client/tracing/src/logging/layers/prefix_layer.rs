@@ -32,7 +32,7 @@ impl<S> Layer<S> for PrefixLayer
 where
 	S: Subscriber + for<'a> LookupSpan<'a>,
 {
-	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+	fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
 		let span = match ctx.span(id) {
 			Some(span) => span,
 			None => {
