@@ -148,15 +148,15 @@ impl Default for MakeStderrWriter {
 	}
 }
 
-impl tracing_subscriber::fmt::MakeWriter for MakeStderrWriter {
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for MakeStderrWriter {
 	type Writer = StderrWriter;
 
-	fn make_writer(&self) -> Self::Writer {
+	fn make_writer(&'a self) -> Self::Writer {
 		StderrWriter::new(false)
 	}
 
 	// The `tracing-subscriber` crate calls this for every line logged.
-	fn make_writer_for(&self, meta: &Metadata<'_>) -> Self::Writer {
+	fn make_writer_for(&'a self, meta: &Metadata<'_>) -> Self::Writer {
 		StderrWriter::new(*meta.level() <= SYNC_FLUSH_LEVEL_THRESHOLD)
 	}
 }
