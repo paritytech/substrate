@@ -59,17 +59,15 @@ use sp_std::prelude::*;
 mod benchmarks;
 
 mod list;
-#[cfg(test)]
-mod mock;
+#[cfg(any(test, feature = "fuzz"))]
+pub mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
 
+pub use list::{notional_bag_for, Bag, Error, List, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
-
-pub use list::Error;
-use list::List;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
 
@@ -155,7 +153,7 @@ pub mod pallet {
 
 	/// How many ids are registered.
 	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the
-	// `CountedMaop` storage.
+	// `CountedMap` storage.
 	#[pallet::storage]
 	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
 
