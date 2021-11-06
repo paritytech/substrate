@@ -96,7 +96,6 @@ type VotingOf<T> = Voting<
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
 >;
-type TracksInfoOf<T> = <T as Config>::Tracks;
 type TrackInfoOf<T> = TrackInfo<
 	BalanceOf<T>,
 	<T as frame_system::Config>::BlockNumber,
@@ -109,22 +108,26 @@ type TrackIdOf<T> = <
 >::Id;
 
 pub trait InsertSorted<T> {
+	/// Inserts an item into a sorted series.
+	///
+	/// Returns `true` if it was inserted, `false` if it would belong beyond the bound of the
+	/// series.
 	fn insert_sorted_by_key<
 		F: FnMut(&T) -> K,
 		K: PartialOrd<K> + Ord,
-	>(&mut self, t: T, f: F,) -> Result<(), ()>;
+	>(&mut self, t: T, f: F,) -> bool;
 }
 impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 	fn insert_sorted_by_key<
 		F: FnMut(&T) -> K,
 		K: PartialOrd<K> + Ord,
-	>(&mut self, t: T, mut f: F,) -> Result<(), ()> {
+	>(&mut self, t: T, mut f: F,) -> bool {
 		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
 		if index >= S::get() as usize {
-			return Err(())
+			return false
 		}
 		self.force_insert(index, t);
-		Ok(())
+		true
 	}
 }
 
@@ -450,7 +453,7 @@ pub mod pallet {
 			index: ReferendumIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let status = Self::ensure_ongoing(index)?;
+			let mut status = Self::ensure_ongoing(index)?;
 			ensure!(status.decision_deposit.is_none(), Error::<T>::HaveDeposit);
 			let track = Self::track(status.track).ok_or(Error::<T>::NoTrack)?;
 			status.decision_deposit = Some(Self::take_deposit(who, track.decision_deposit)?);
@@ -549,6 +552,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Sets a track's alarm call. Returns `true` if there was not already an alarm call in place
 	/// for the same time.
+	#[allow(dead_code)]
 	fn set_track_alarm(track: TrackIdOf<T>, when: T::BlockNumber) -> bool {
 		let scheduler_id = (ASSEMBLY_ID, "track", track).encode();
 		// NOTE: This only works because we know that that this ID will only ever be used for this
@@ -624,9 +628,9 @@ impl<T: Config> Pallet<T> {
 	/// This should never be needed, since referenda should automatically begin when others end.
 	fn advance_track(track: TrackIdOf<T>) -> Result<u32, DispatchError> {
 		let track_info = Self::track(track).ok_or(Error::<T>::BadTrack)?;
-		let deciding_count = DecidingCount::<T>::get(track);
+		let mut deciding_count = DecidingCount::<T>::get(track);
 		let mut track_queue = TrackQueue::<T>::get(track);
-		let count = 0;
+		let mut count = 0;
 		while deciding_count < track_info.max_deciding {
 			if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
 				let now = frame_system::Pallet::<T>::block_number();
@@ -704,11 +708,10 @@ impl<T: Config> Pallet<T> {
 			Some(x) => x,
 			None => return (ReferendumInfo::Ongoing(status), false),
 		};
-		let mut alarm;
 		let timeout = status.submitted + T::UndecidingTimeout::get();
+		// Default the alarm to the submission timeout.
+		let mut alarm = timeout;
 		if status.deciding.is_none() {
-			// Default the alarm to the submission timeout.
-			alarm = timeout;
 			// Are we already queued for deciding?
 			if let Some(_) = status.ayes_in_queue.as_ref() {
 				// Does our position in the queue need updating?
@@ -718,8 +721,7 @@ impl<T: Config> Pallet<T> {
 				let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
 				if maybe_old_pos.is_none() && new_pos < queue.len() {
 					// Just insert.
-					queue.truncate(queue.len() - 1);
-					queue.insert(new_pos, (index, ayes));
+					queue.force_insert(new_pos, (index, ayes));
 				} else if let Some(old_pos) = maybe_old_pos {
 					// We were in the queue - just update and sort.
 					queue[old_pos].1 = ayes;
@@ -748,8 +750,8 @@ impl<T: Config> Pallet<T> {
 				now,
 				deciding.period,
 				T::Currency::total_issuance(),
-				track.min_turnout,
-				track.min_approvals,
+				&track.min_turnout,
+				&track.min_approvals,
 			);
 			if is_passing {
 				if deciding.confirming.map_or(false, |c| now >= c) {
@@ -777,7 +779,7 @@ impl<T: Config> Pallet<T> {
 				// Cannot be confirming
 				dirty = deciding.confirming.is_some();
 				deciding.confirming = None;
-				alarm = Self::decision_time(&deciding, &status, track);
+				alarm = Self::decision_time(&deciding, &status.tally, track);
 			}
 		} else if now >= timeout {
 			// Too long without being decided - end it.
@@ -792,12 +794,12 @@ impl<T: Config> Pallet<T> {
 
 	fn decision_time(
 		deciding: &DecidingStatusOf<T>,
-		status: &ReferendumStatusOf<T>,
+		tally: &Tally<BalanceOf<T>>,
 		track: &TrackInfoOf<T>,
 	) -> T::BlockNumber {
 		// Set alarm to the point where the current voting would make it pass.
-		let approvals = Perbill::from_rational(status.tally.ayes, status.tally.ayes + status.tally.nays);
-		let turnout = Perbill::from_rational(status.tally.turnout, T::Currency::total_issuance());
+		let approvals = Perbill::from_rational(tally.ayes, tally.ayes + tally.nays);
+		let turnout = Perbill::from_rational(tally.turnout, T::Currency::total_issuance());
 		let until_approvals = track.min_approvals.delay(approvals) * deciding.period;
 		let until_turnout = track.min_turnout.delay(turnout) * deciding.period;
 		deciding.ending.min(until_turnout.max(until_approvals))

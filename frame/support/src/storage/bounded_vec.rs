@@ -137,6 +137,17 @@ impl<T, S> BoundedVec<T, S> {
 	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
 		self.0.get_mut(index)
 	}
+
+	/// Exactly the same semantics as [`Vec::truncate`].
+	pub fn truncate(&mut self, s: usize) {
+		self.0.truncate(s);
+	}
+
+	/// Exactly the same semantics as [`Vec::pop`].
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
+	}
+
 }
 
 impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {
@@ -151,18 +162,23 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		S::get() as usize
 	}
 
-	/// Exactly as `Vec::truncate`.
-	pub fn truncate(&mut self, s: usize) {
-		self.0.truncate(s);
-	}
-
-	/// Forces the insertion of `s` into `self`, truncating `self` first, if necessary.
+	/// Forces the insertion of `s` into `self` truncating first if necessary.
 	///
 	/// Infallible, but if the limit is zero, then it's a no-op.
 	pub fn force_insert(&mut self, index: usize, element: T) {
-		if S::get() > 0 {
-			self.0.truncate(S::get() as usize - 1);
+		if Self::bound() > 0 {
+			self.0.truncate(Self::bound() as usize - 1);
 			self.0.insert(index, element);
+		}
+	}
+
+	/// Forces the insertion of `s` into `self` truncating first if necessary.
+	///
+	/// Infallible, but if the limit is zero, then it's a no-op.
+	pub fn force_push(&mut self, element: T) {
+		if Self::bound() > 0 {
+			self.0.truncate(Self::bound() as usize - 1);
+			self.0.push(element);
 		}
 	}
 

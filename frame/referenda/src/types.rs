@@ -159,8 +159,8 @@ impl<Balance: AtLeast32BitUnsigned + Copy> Tally<Balance> {
 		t: Moment,
 		period: Moment,
 		total: Balance,
-		turnout_needed: Curve,
-		approval_needed: Curve,
+		turnout_needed: &Curve,
+		approval_needed: &Curve,
 	) -> bool {
 		let x = Perbill::from_rational(t.min(period), period);
 		turnout_needed.passing(x, self.turnout(total)) && approval_needed.passing(x, self.approval())
