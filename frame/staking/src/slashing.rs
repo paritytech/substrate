@@ -214,8 +214,8 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The maximum percentage of a slash that ever gets paid out.
 	/// This is f_inf in the paper.
 	pub(crate) reward_proportion: Perbill,
-	/// When to disable offenders immediately
-	pub(crate) disable: DisableStrategy,
+	/// When to disable offenders.
+	pub(crate) disable_strategy: DisableStrategy,
 }
 
 /// Computes a slash of a validator and nominators. It returns an unapplied
@@ -285,7 +285,7 @@ pub(crate) fn compute_slash<T: Config>(
 		}
 	}
 
-	let disable_when_slashed = !matches!(params.disable, DisableStrategy::Never);
+	let disable_when_slashed = params.disable_strategy != DisableStrategy::Never;
 	add_offending_validator::<T>(params.stash, disable_when_slashed);
 
 	let mut nominators_slashed = Vec::new();
@@ -319,7 +319,7 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 		<Pallet<T>>::chill_stash(params.stash);
 	}
 
-	let disable_without_slash = matches!(params.disable, DisableStrategy::Always);
+	let disable_without_slash = params.disable_strategy == DisableStrategy::Always;
 	add_offending_validator::<T>(params.stash, disable_without_slash);
 }
 

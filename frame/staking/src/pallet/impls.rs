@@ -1139,7 +1139,7 @@ where
 		>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
-		disable: DisableStrategy,
+		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight: Weight = 0;
@@ -1209,7 +1209,7 @@ where
 				window_start,
 				now: active_era,
 				reward_proportion,
-				disable,
+				disable_strategy,
 			});
 
 			if let Some(mut unapplied) = unapplied {

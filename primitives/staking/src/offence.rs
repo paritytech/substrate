@@ -102,11 +102,8 @@ pub trait Offence<Offender> {
 	/// number. Note that for GRANDPA the round number is reset each epoch.
 	fn time_slot(&self) -> Self::TimeSlot;
 
-	/// Whether this offense needs to disable offenders until the next era starts.
-	///
-	/// In previous versions any slashed offenders got disabled in every offence. Now each offence
-	/// can decide whether to disable them regardless of the slashed amount.
-	fn disable(&self) -> DisableStrategy {
+	/// In which cases this offence needs to disable offenders until the next era starts.
+	fn disable_strategy(&self) -> DisableStrategy {
 		DisableStrategy::WhenSlashed
 	}
 
@@ -189,7 +186,7 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-		disable: DisableStrategy,
+		disable_strategy: DisableStrategy,
 	) -> Res;
 }
 
@@ -198,7 +195,7 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-		_disable: DisableStrategy,
+		_disable_strategy: DisableStrategy,
 	) -> Res {
 		Default::default()
 	}
