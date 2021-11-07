@@ -409,7 +409,7 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32 / 1024))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
@@ -423,7 +423,7 @@ pub mod pallet {
 		///
 		/// A code can only be removed by its original uploader (its owner) and only if it is
 		/// not used by any contract.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::remove_code())]
 		pub fn remove_code(
 			origin: OriginFor<T>,
 			code_hash: CodeHash<T>,
