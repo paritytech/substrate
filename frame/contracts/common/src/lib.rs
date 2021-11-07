@@ -22,7 +22,10 @@
 use bitflags::bitflags;
 use codec::{Decode, Encode};
 use sp_core::Bytes;
-use sp_runtime::{traits::Zero, DispatchError, RuntimeDebug, traits::Saturating};
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	DispatchError, RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 #[cfg(feature = "std")]
@@ -192,7 +195,7 @@ impl<Balance: Zero> StorageDeposit<Balance> {
 
 impl<Balance> StorageDeposit<Balance>
 where
-	Balance: Saturating + Ord + Copy
+	Balance: Saturating + Ord + Copy,
 {
 	/// This is essentially a saturating signed add.
 	pub fn saturating_add(&self, rhs: &Self) -> Self {
@@ -200,16 +203,18 @@ where
 		match (self, rhs) {
 			(Charge(lhs), Charge(rhs)) => Charge(lhs.saturating_add(*rhs)),
 			(Refund(lhs), Refund(rhs)) => Refund(lhs.saturating_add(*rhs)),
-			(Charge(lhs), Refund(rhs)) => if lhs >= rhs {
-				Charge(lhs.saturating_sub(*rhs))
-			} else {
-				Refund(rhs.saturating_sub(*lhs))
-			},
-			(Refund(lhs), Charge(rhs)) => if lhs > rhs {
-				Refund(lhs.saturating_sub(*rhs))
-			} else {
-				Charge(rhs.saturating_sub(*lhs))
-			},
+			(Charge(lhs), Refund(rhs)) =>
+				if lhs >= rhs {
+					Charge(lhs.saturating_sub(*rhs))
+				} else {
+					Refund(rhs.saturating_sub(*lhs))
+				},
+			(Refund(lhs), Charge(rhs)) =>
+				if lhs > rhs {
+					Refund(lhs.saturating_sub(*rhs))
+				} else {
+					Charge(rhs.saturating_sub(*lhs))
+				},
 		}
 	}
 
@@ -219,16 +224,18 @@ where
 		match (self, rhs) {
 			(Charge(lhs), Refund(rhs)) => Charge(lhs.saturating_add(*rhs)),
 			(Refund(lhs), Charge(rhs)) => Refund(lhs.saturating_add(*rhs)),
-			(Charge(lhs), Charge(rhs)) => if lhs >= rhs {
-				Charge(lhs.saturating_sub(*rhs))
-			} else {
-				Refund(rhs.saturating_sub(*lhs))
-			},
-			(Refund(lhs), Refund(rhs)) => if lhs > rhs {
-				Refund(lhs.saturating_sub(*rhs))
-			} else {
-				Charge(rhs.saturating_sub(*lhs))
-			},
+			(Charge(lhs), Charge(rhs)) =>
+				if lhs >= rhs {
+					Charge(lhs.saturating_sub(*rhs))
+				} else {
+					Refund(rhs.saturating_sub(*lhs))
+				},
+			(Refund(lhs), Refund(rhs)) =>
+				if lhs > rhs {
+					Refund(lhs.saturating_sub(*rhs))
+				} else {
+					Charge(rhs.saturating_sub(*lhs))
+				},
 		}
 	}
 
