@@ -9664,6 +9664,7 @@ dependencies = [
 name = "substrate-frame-rpc-system"
 version = "4.0.0-dev"
 dependencies = [
+ "assert_matches",
  "async-trait",
  "derive_more",
  "frame-system-rpc-runtime-api",
@@ -9683,6 +9684,7 @@ dependencies = [
  "sp-runtime",
  "sp-tracing",
  "substrate-test-runtime-client",
+ "tokio",
  "tracing",
 ]
 

@@ -297,125 +297,124 @@ where
 
 #[cfg(test)]
 mod tests {
-	// use super::*;
+	use super::*;
 
-	// use futures::executor::block_on;
-	// use sc_transaction_pool::BasicPool;
-	// use sp_runtime::{
-	// 	transaction_validity::{InvalidTransaction, TransactionValidityError},
-	// 	ApplyExtrinsicResult,
-	// };
-	// use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
+	use futures::executor::block_on;
+	use sc_transaction_pool::BasicPool;
+	use sp_runtime::{
+		transaction_validity::{InvalidTransaction, TransactionValidityError},
+		ApplyExtrinsicResult,
+	};
+	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
+	use assert_matches::assert_matches;
 
-	// #[test]
-	// fn should_return_next_nonce_for_some_account() {
-	// 	sp_tracing::try_init_simple();
+	#[tokio::test]
+	async fn should_return_next_nonce_for_some_account() {
+		sp_tracing::try_init_simple();
 
-	// 	// given
-	// 	let client = Arc::new(substrate_test_runtime_client::new());
-	// 	let spawner = sp_core::testing::TaskExecutor::new();
-	// 	let pool =
-	// 		BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-	// 	let source = sp_runtime::transaction_validity::TransactionSource::External;
-	// 	let new_transaction = |nonce: u64| {
-	// 		let t = Transfer {
-	// 			from: AccountKeyring::Alice.into(),
-	// 			to: AccountKeyring::Bob.into(),
-	// 			amount: 5,
-	// 			nonce,
-	// 		};
-	// 		t.into_signed_tx()
-	// 	};
-	// 	// Populate the pool
-	// 	let ext0 = new_transaction(0);
-	// 	block_on(pool.submit_one(&BlockId::number(0), source, ext0)).unwrap();
-	// 	let ext1 = new_transaction(1);
-	// 	block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
+		let source = sp_runtime::transaction_validity::TransactionSource::External;
+		let new_transaction = |nonce: u64| {
+			let t = Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Bob.into(),
+				amount: 5,
+				nonce,
+			};
+			t.into_signed_tx()
+		};
+		// Populate the pool
+		let ext0 = new_transaction(0);
+		block_on(pool.submit_one(&BlockId::number(0), source, ext0)).unwrap();
+		let ext1 = new_transaction(1);
+		block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
 
-	// 	let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
 
-	// 	// when
-	// 	let nonce = accounts.nonce(AccountKeyring::Alice.into());
+		// when
+		let nonce = accounts.nonce(AccountKeyring::Alice.into()).await;
 
-	// 	// then
-	// 	assert_eq!(block_on(nonce).unwrap(), 2);
-	// }
+		// then
+		assert_eq!(nonce.unwrap(), 2);
+	}
 
-	// #[test]
-	// fn dry_run_should_deny_unsafe() {
-	// 	sp_tracing::try_init_simple();
+	#[tokio::test]
+	async fn dry_run_should_deny_unsafe() {
+		sp_tracing::try_init_simple();
 
-	// 	// given
-	// 	let client = Arc::new(substrate_test_runtime_client::new());
-	// 	let spawner = sp_core::testing::TaskExecutor::new();
-	// 	let pool =
-	// 		BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-	// 	let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
 
-	// 	// when
-	// 	let res = accounts.dry_run(vec![].into(), None);
+		// when
+		let res = accounts.dry_run(vec![].into(), None).await;
+		assert_matches!(res, Err(JsonRpseeError::Call(CallError::Failed(e))) => {
+			assert_eq!(e.to_string(), "RPC call is unsafe to be called externally");
+		});
+	}
 
-	// 	// then
-	// 	assert_eq!(block_on(res), Err(RpcError::method_not_found()));
-	// }
+	#[tokio::test]
+	async fn dry_run_should_work() {
+		sp_tracing::try_init_simple();
 
-	// #[test]
-	// fn dry_run_should_work() {
-	// 	sp_tracing::try_init_simple();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-	// 	// given
-	// 	let client = Arc::new(substrate_test_runtime_client::new());
-	// 	let spawner = sp_core::testing::TaskExecutor::new();
-	// 	let pool =
-	// 		BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
 
-	// 	let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
+		let tx = Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 5,
+			nonce: 0,
+		}
+		.into_signed_tx();
 
-	// 	let tx = Transfer {
-	// 		from: AccountKeyring::Alice.into(),
-	// 		to: AccountKeyring::Bob.into(),
-	// 		amount: 5,
-	// 		nonce: 0,
-	// 	}
-	// 	.into_signed_tx();
+		// when
+		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");
 
-	// 	// when
-	// 	let res = accounts.dry_run(tx.encode().into(), None);
+		// then
+		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_ref()).unwrap();
+		assert_eq!(apply_res, Ok(Ok(())));
+	}
 
-	// 	// then
-	// 	let bytes = block_on(res).unwrap().0;
-	// 	let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
-	// 	assert_eq!(apply_res, Ok(Ok(())));
-	// }
+	#[tokio::test]
+	async fn dry_run_should_indicate_error() {
+		sp_tracing::try_init_simple();
 
-	// #[test]
-	// fn dry_run_should_indicate_error() {
-	// 	sp_tracing::try_init_simple();
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-	// 	// given
-	// 	let client = Arc::new(substrate_test_runtime_client::new());
-	// 	let spawner = sp_core::testing::TaskExecutor::new();
-	// 	let pool =
-	// 		BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
 
-	// 	let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
+		let tx = Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 5,
+			nonce: 100,
+		}
+		.into_signed_tx();
 
-	// 	let tx = Transfer {
-	// 		from: AccountKeyring::Alice.into(),
-	// 		to: AccountKeyring::Bob.into(),
-	// 		amount: 5,
-	// 		nonce: 100,
-	// 	}
-	// 	.into_signed_tx();
+		// when
+		let bytes = accounts.dry_run(tx.encode().into(), None).await.expect("Call is successful");
 
-	// 	// when
-	// 	let res = accounts.dry_run(tx.encode().into(), None);
-
-	// 	// then
-	// 	let bytes = block_on(res).unwrap().0;
-	// 	let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
-	// 	assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
-	// }
+		// then
+		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_ref()).unwrap();
+		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
+	}
 }
