@@ -75,13 +75,18 @@ use sp_runtime::{
 	BuildStorage, Digest, Justification, Justifications,
 };
 use sp_state_machine::{
-	prove_child_read, prove_range_read_with_child_with_size,
-	prove_read, read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend,
-	KeyValueStates, KeyValueStorageLevel, MAX_NESTED_TRIE_DEPTH,
+	prove_child_read, prove_range_read_with_child_with_size, prove_read,
+	read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend, KeyValueStates,
+	KeyValueStorageLevel, MAX_NESTED_TRIE_DEPTH,
 };
 use sp_trie::{CompactProof, StorageProof};
 use std::{
-	collections::{HashMap, HashSet}, marker::PhantomData, panic::UnwindSafe, path::PathBuf, result, sync::Arc,
+	collections::{HashMap, HashSet},
+	marker::PhantomData,
+	panic::UnwindSafe,
+	path::PathBuf,
+	result,
+	sync::Arc,
 };
 
 #[cfg(feature = "test-helpers")]
