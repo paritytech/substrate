@@ -83,7 +83,6 @@ mod tests;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use core::convert::TryFrom;
 use frame_support::{
 	traits::{
 		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
