@@ -18,7 +18,7 @@
 
 use chrono::{Datelike, Timelike};
 use std::{cell::RefCell, fmt::Write, time::SystemTime};
-use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::fmt::{format, time::FormatTime};
 
 /// A structure which, when `Display`d, will print out the current local time.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
@@ -76,7 +76,7 @@ thread_local! {
 }
 
 impl FormatTime for FastLocalTime {
-	fn format_time(&self, w: &mut dyn Write) -> std::fmt::Result {
+	fn format_time(&self, w: &mut format::Writer) -> std::fmt::Result {
 		const TIMESTAMP_PARTIAL_LENGTH: usize = "0000-00-00 00:00:00".len();
 
 		let elapsed = SystemTime::now()

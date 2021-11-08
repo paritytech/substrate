@@ -24,7 +24,7 @@ use tracing::{Event, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	field::RecordFields,
-	fmt::{time::FormatTime, FmtContext, FormatEvent, FormatFields},
+	fmt::{format, time::FormatTime, FmtContext, FormatEvent, FormatFields},
 	layer::Context,
 	registry::{LookupSpan, SpanRef},
 };
@@ -55,14 +55,14 @@ where
 	pub(crate) fn format_event_custom<'b, S, N>(
 		&self,
 		ctx: CustomFmtContext<'b, S, N>,
-		writer: &mut dyn fmt::Write,
+		mut writer: format::Writer<'_>,
 		event: &Event,
 	) -> fmt::Result
 	where
 		S: Subscriber + for<'a> LookupSpan<'a>,
 		N: for<'a> FormatFields<'a> + 'static,
 	{
-		let writer = &mut ControlCodeSanitizer::new(!self.enable_color, writer);
+		let writer = &mut ControlCodeSanitizer::new(!self.enable_color, writer.by_ref());
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
 		time::write(&self.timer, writer, self.enable_color)?;
@@ -127,7 +127,7 @@ where
 	fn format_event(
 		&self,
 		ctx: &FmtContext<S, N>,
-		writer: &mut dyn fmt::Write,
+		mut writer: format::Writer,
 		event: &Event,
 	) -> fmt::Result {
 		if self.dup_to_stdout &&
@@ -141,7 +141,7 @@ where
 			print!("{}", out);
 			Ok(())
 		} else {
-			self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
+			self.format_event_custom(CustomFmtContext::FmtContext(ctx), &mut writer, event)
 		}
 	}
 }
@@ -271,7 +271,7 @@ where
 {
 	fn format_fields<R: RecordFields>(
 		&self,
-		writer: &'a mut dyn fmt::Write,
+		writer: format::Writer,
 		fields: R,
 	) -> fmt::Result {
 		match self {
@@ -309,13 +309,13 @@ where
 /// It is required to call [`ControlCodeSanitizer::flush`] after all writes are done,
 /// because the content of these writes is buffered and will only be written to the
 /// `inner_writer` at that point.
-struct ControlCodeSanitizer<'a> {
+struct ControlCodeSanitizer<'writer> {
 	sanitize: bool,
 	buffer: String,
-	inner_writer: &'a mut dyn fmt::Write,
+	inner_writer: format::Writer<'writer>,
 }
 
-impl<'a> fmt::Write for ControlCodeSanitizer<'a> {
+impl<'writer> fmt::Write for ControlCodeSanitizer<'writer> {
 	fn write_str(&mut self, buf: &str) -> fmt::Result {
 		self.buffer.push_str(buf);
 		Ok(())
@@ -340,9 +340,9 @@ fn strip_control_codes(input: &str) -> std::borrow::Cow<str> {
 	RE.replace_all(input, "")
 }
 
-impl<'a> ControlCodeSanitizer<'a> {
+impl<'writer> ControlCodeSanitizer<'writer> {
 	/// Creates a new instance.
-	fn new(sanitize: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
+	fn new(sanitize: bool, inner_writer: format::Writer<'writer>) -> Self {
 		Self { sanitize, inner_writer, buffer: String::new() }
 	}
 
