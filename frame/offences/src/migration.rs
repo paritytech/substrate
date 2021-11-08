@@ -41,8 +41,9 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 	let mut weight = T::DbWeight::get().reads_writes(1, 1);
 	let deferred = <DeferredOffences<T>>::take();
 	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
-	for (offences, perbill, session, disable) in deferred.iter() {
-		let consumed = T::OnOffenceHandler::on_offence(&offences, &perbill, *session, *disable);
+	for (offences, perbill, session, disable_strategy) in deferred.iter() {
+		let consumed =
+			T::OnOffenceHandler::on_offence(&offences, &perbill, *session, *disable_strategy);
 		weight = weight.saturating_add(consumed);
 	}
 

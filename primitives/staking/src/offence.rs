@@ -178,7 +178,7 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	///
 	/// The `session` parameter is the session index of the offence.
 	///
-	/// The `disable` parameter decides if the offenders need to be disabled immediately.
+	/// The `disable_strategy` parameter decides if the offenders need to be disabled immediately.
 	///
 	/// The receiver might decide to not accept this offence. In this case, the call site is
 	/// responsible for queuing the report and re-submitting again.
