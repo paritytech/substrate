@@ -183,116 +183,6 @@ sp_core::wasm_export_functions! {
 	   ).as_ref().to_vec()
    }
 
-   fn test_sandbox_host(code: Vec<u8>) -> bool {
-	   execute_sandboxed_host(&code, &[]).is_ok()
-   }
-
-   fn test_sandbox_embedded(code: Vec<u8>) -> bool {
-	   execute_sandboxed_embedded(&code, &[]).is_ok()
-   }
-
-   fn test_sandbox_args_host(code: Vec<u8>) -> bool {
-	   execute_sandboxed_host(
-		   &code,
-		   &[
-			   Value::I32(0x12345678),
-			   Value::I64(0x1234567887654321),
-		   ],
-	   ).is_ok()
-   }
-
-   fn test_sandbox_args_embedded(code: Vec<u8>) -> bool {
-	   execute_sandboxed_embedded(
-		   &code,
-		   &[
-			   Value::I32(0x12345678),
-			   Value::I64(0x1234567887654321),
-		   ],
-	   ).is_ok()
-   }
-
-   fn test_sandbox_return_val_host(code: Vec<u8>) -> bool {
-	   let ok = match execute_sandboxed_host(
-		   &code,
-		   &[
-			   Value::I32(0x1336),
-		   ]
-	   ) {
-		   Ok(sp_sandbox::ReturnValue::Value(Value::I32(0x1337))) => true,
-		   _ => false,
-	   };
-
-	   ok
-   }
-
-   fn test_sandbox_return_val_embedded(code: Vec<u8>) -> bool {
-	   let ok = match execute_sandboxed_embedded(
-		   &code,
-		   &[
-			   Value::I32(0x1336),
-		   ]
-	   ) {
-		   Ok(sp_sandbox::ReturnValue::Value(Value::I32(0x1337))) => true,
-		   _ => false,
-	   };
-
-	   ok
-   }
-
-   fn test_sandbox_instantiate_host(code: Vec<u8>) -> u8 {
-	   let env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
-	   let code = match sp_sandbox::host_executor::Instance::new(&code, &env_builder, &mut ()) {
-		   Ok(_) => 0,
-		   Err(sp_sandbox::Error::Module) => 1,
-		   Err(sp_sandbox::Error::Execution) => 2,
-		   Err(sp_sandbox::Error::OutOfBounds) => 3,
-	   };
-
-	   code
-   }
-
-   fn test_sandbox_instantiate_embedded(code: Vec<u8>) -> u8 {
-	   let env_builder = sp_sandbox::embedded_executor::EnvironmentDefinitionBuilder::new();
-	   let code = match sp_sandbox::embedded_executor::Instance::new(&code, &env_builder, &mut ()) {
-		   Ok(_) => 0,
-		   Err(sp_sandbox::Error::Module) => 1,
-		   Err(sp_sandbox::Error::Execution) => 2,
-		   Err(sp_sandbox::Error::OutOfBounds) => 3,
-	   };
-
-	   code
-   }
-
-   fn test_sandbox_get_global_val_host(code: Vec<u8>) -> i64 {
-	   let env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
-	   let instance = if let Ok(i) = sp_sandbox::host_executor::Instance::new(&code, &env_builder, &mut ()) {
-		   i
-	   } else {
-		   return 20;
-	   };
-
-	   match instance.get_global_val("test_global") {
-		   Some(sp_sandbox::Value::I64(val)) => val,
-		   None => 30,
-		   _ => 40,
-	   }
-   }
-
-   fn test_sandbox_get_global_val_embedded(code: Vec<u8>) -> i64 {
-	   let env_builder = sp_sandbox::host_executor::EnvironmentDefinitionBuilder::new();
-	   let instance = if let Ok(i) = sp_sandbox::host_executor::Instance::new(&code, &env_builder, &mut ()) {
-		   i
-	   } else {
-		   return 20;
-	   };
-
-	   match instance.get_global_val("test_global") {
-		   Some(sp_sandbox::Value::I64(val)) => val,
-		   None => 30,
-		   _ => 40,
-	   }
-   }
-
    fn test_offchain_index_set() {
 	   sp_io::offchain_index::set(b"k", b"v");
    }
@@ -463,6 +353,99 @@ mod tasks {
 	}
 }
 
+/// A macro to define a test entrypoint for each available sandbox executor.
+macro_rules! wasm_export_sandbox_test_functions {
+	(
+		$(
+			fn $name:ident<T>(
+				$( $arg_name:ident: $arg_ty:ty ),* $(,)?
+			) $( -> $ret_ty:ty )? where T: SandboxInstance<$state:ty> $(,)?
+			{ $( $fn_impl:tt )* }
+		)*
+	) => {
+		$(
+				#[cfg(not(feature = "std"))]
+				fn $name<T>( $($arg_name: $arg_ty),* ) $( -> $ret_ty )? where T: SandboxInstance<$state> {
+					$( $fn_impl )*
+				}
+
+				paste::paste! {
+					sp_core::wasm_export_functions! {
+						fn [<$name _host>]( $($arg_name: $arg_ty),* ) $( -> $ret_ty )? {
+							$name::<sp_sandbox::host_executor::Instance<$state>>( $( $arg_name ),* )
+						}
+
+						fn [<$name _embedded>]( $($arg_name: $arg_ty),* ) $( -> $ret_ty )? {
+							$name::<sp_sandbox::embedded_executor::Instance<$state>>( $( $arg_name ),* )
+						}
+					}
+				}
+		)*
+	};
+}
+
+wasm_export_sandbox_test_functions! {
+	fn test_sandbox<T>(code: Vec<u8>) -> bool
+	where
+		T: SandboxInstance<State>,
+	{
+		execute_sandboxed::<T>(&code, &[]).is_ok()
+	}
+
+	fn test_sandbox_args<T>(code: Vec<u8>) -> bool
+	where
+		T: SandboxInstance<State>,
+	{
+		execute_sandboxed::<T>(&code, &[Value::I32(0x12345678), Value::I64(0x1234567887654321)])
+			.is_ok()
+	}
+
+	fn test_sandbox_return_val<T>(code: Vec<u8>) -> bool
+	where
+		T: SandboxInstance<State>,
+	{
+		let ok = match execute_sandboxed::<T>(&code, &[Value::I32(0x1336)]) {
+			Ok(sp_sandbox::ReturnValue::Value(Value::I32(0x1337))) => true,
+			_ => false,
+		};
+
+		ok
+	}
+
+	fn test_sandbox_instantiate<T>(code: Vec<u8>) -> u8
+	where
+		T: SandboxInstance<()>,
+	{
+		let env_builder = T::EnvironmentBuilder::new();
+		let code = match T::new(&code, &env_builder, &mut ()) {
+			Ok(_) => 0,
+			Err(sp_sandbox::Error::Module) => 1,
+			Err(sp_sandbox::Error::Execution) => 2,
+			Err(sp_sandbox::Error::OutOfBounds) => 3,
+		};
+
+		code
+	}
+
+	fn test_sandbox_get_global_val<T>(code: Vec<u8>) -> i64
+	where
+		T: SandboxInstance<()>,
+	{
+		let env_builder = T::EnvironmentBuilder::new();
+		let instance = if let Ok(i) = T::new(&code, &env_builder, &mut ()) {
+			i
+		} else {
+			return 20
+		};
+
+		match instance.get_global_val("test_global") {
+			Some(sp_sandbox::Value::I64(val)) => val,
+			None => 30,
+			_ => 40,
+		}
+	}
+}
+
 #[cfg(not(feature = "std"))]
 struct State {
 	counter: u32,
@@ -525,20 +508,4 @@ where
 	let result = instance.invoke("call", args, &mut state);
 
 	result.map_err(|_| sp_sandbox::HostError)
-}
-
-#[cfg(not(feature = "std"))]
-fn execute_sandboxed_host(
-	code: &[u8],
-	args: &[Value],
-) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
-	execute_sandboxed::<sp_sandbox::host_executor::Instance<State>>(code, args)
-}
-
-#[cfg(not(feature = "std"))]
-fn execute_sandboxed_embedded(
-	code: &[u8],
-	args: &[Value],
-) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
-	execute_sandboxed::<sp_sandbox::embedded_executor::Instance<State>>(code, args)
 }
