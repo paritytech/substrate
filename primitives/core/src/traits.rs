@@ -231,6 +231,22 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 	) {
 		(**self).spawn(name, group, future)
 	}
+	fn spawn_blocking_with_subsystem(
+		&self,
+		name: &'static str,
+		subsystem: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		(**self).spawn_blocking_with_subsystem(name, subsystem, future)
+	}
+	fn spawn_with_subsystem(
+		&self,
+		name: &'static str,
+		subsystem: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		(**self).spawn_with_subsystem(name, subsystem, future)
+	}
 }
 
 /// Something that can spawn essential tasks (blocking and non-blocking) with an assigned name.

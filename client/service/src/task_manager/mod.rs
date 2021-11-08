@@ -85,11 +85,13 @@ impl SpawnTaskHandle {
 	) {
 		if self.task_notifier.is_closed() {
 			debug!("Attempt to spawn a new task has been prevented: {}", name);
-			return
+			return;
 		}
 
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
+		// Provide a default subsystem name.
+		let subsystem_name = subsystem.unwrap_or("substrate-unspecified");
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
@@ -117,7 +119,7 @@ impl SpawnTaskHandle {
 					Either::Right((Err(payload), _)) => {
 						metrics.tasks_ended.with_label_values(&[name, "panic", group]).inc();
 						panic::resume_unwind(payload)
-					},
+					}
 					Either::Right((Ok(()), _)) => {
 						metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc();
 					},
@@ -140,7 +142,7 @@ impl SpawnTaskHandle {
 				self.tokio_handle.spawn_blocking(move || {
 					handle.block_on(future);
 				})
-			},
+			}
 		};
 
 		let _ = self.task_notifier.unbounded_send(join_handle);
@@ -160,6 +162,15 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn(&self, name: &'static str, group: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn_inner(name, group, future, TaskType::Async)
 	}
+
+	fn spawn_blocking_with_subsystem(&self, name: &'static str, subsystem: &'static str,future: BoxFuture<'static, ()>) {
+		self.spawn_inner(name, Some(subsystem), future, TaskType::Blocking)
+	}
+
+	fn spawn_with_subsystem(&self, name: &'static str, subsystem: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn_inner(name, Some(subsystem), future, TaskType::Async)
+	}
+	
 }
 
 /// A wrapper over `SpawnTaskHandle` that will notify a receiver whenever any
