@@ -634,3 +634,60 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 			assert_eq!(Assets::balance(asset_id, caller), balance - 1);
 		});
 }
+
+#[test]
+fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
+	let base_weight = 1;
+	ExtBuilder::default()
+		.balance_factor(100)
+		.base_weight(base_weight)
+		.build()
+		.execute_with(|| {
+			// create the asset
+			let asset_id = 1;
+			let min_balance = 100;
+			assert_ok!(Assets::force_create(
+				Origin::root(),
+				asset_id,
+				42,   /* owner */
+				true, /* is_sufficient */
+				min_balance
+			));
+
+			// mint into the caller account
+			let caller = 333;
+			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
+			let balance = 100;
+			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_eq!(Assets::balance(asset_id, caller), balance);
+			let weight = 1;
+			let len = 1;
+			// we convert the from weight to fee based on the ratio between asset min balance and
+			// existential deposit
+			let fee = (base_weight + weight + len as u64) * min_balance / ExistentialDeposit::get();
+			// calculated fee is greater than 0
+			assert!(fee > 0);
+			let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
+				.pre_dispatch(&caller, CALL, &info_from_pays(Pays::No), len)
+				.unwrap();
+			// `Pays::No` implies no pre-dispatch fees
+			assert_eq!(Assets::balance(asset_id, caller), balance);
+			let (_tip, _who, initial_payment) = &pre;
+			let not_paying = match initial_payment {
+				&InitialPayment::Nothing => true,
+				_ => false,
+			};
+			assert!(not_paying, "initial payment should be Nothing if we pass Pays::No");
+
+			// `Pays::Yes` on post-dispatch does not mean we pay (we never charge more than the
+			// initial fee)
+			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
+				pre,
+				&info_from_pays(Pays::No),
+				&post_info_from_pays(Pays::Yes),
+				len,
+				&Ok(())
+			));
+			assert_eq!(Assets::balance(asset_id, caller), balance);
+		});
+}
