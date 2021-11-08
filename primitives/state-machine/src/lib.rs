@@ -2194,6 +2194,7 @@ mod tests {
 		assert_eq!(remote_proof.encode().len(), remote_proof.encoded_size());
 	}
 
+	#[test]
 	fn prove_range_with_child_works() {
 		let state_version = StateVersion::V0;
 		let remote_backend = trie_backend::tests::test_trie(state_version);
