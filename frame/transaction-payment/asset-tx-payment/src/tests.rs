@@ -719,8 +719,12 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 1;
 			let len = 1;
-			let pre = ChargeAssetTxPayment::<Runtime>::pre_dispatch_unsigned(CALL, &info_from_weight(weight), len)
-				.unwrap();
+			let pre = ChargeAssetTxPayment::<Runtime>::pre_dispatch_unsigned(
+				CALL,
+				&info_from_weight(weight),
+				len,
+			)
+			.unwrap();
 
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let (_tip, _who, initial_payment) = &pre;
