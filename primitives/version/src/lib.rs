@@ -218,7 +218,7 @@ impl RuntimeVersion {
 	#[cfg(feature = "new-state")]
 	/// Returns state version to use for update.
 	pub fn state_version(&self) -> StateVersion {
-		let core_api_id = sp_runtime::hashing::blake2_64(b"State");
+		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"State");
 		if self.has_api_with(&core_api_id, |v| v >= 1) {
 			StateVersion::V1
 		} else {
