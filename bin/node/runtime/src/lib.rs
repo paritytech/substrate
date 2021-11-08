@@ -1737,6 +1737,9 @@ impl_runtime_apis! {
 			Ok(batches)
 		}
 	}
+
+	impl sp_api::State<Block> for Runtime {
+	}
 }
 
 #[cfg(test)]

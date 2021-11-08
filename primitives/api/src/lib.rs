@@ -720,7 +720,6 @@ decl_runtime_apis! {
 	}
 }
 
-#[cfg(feature = "new-state")]
 decl_runtime_apis! {
 	/// State api mainly for checking
 	/// if new state should apply during state migration.

@@ -946,6 +946,9 @@ cfg_if! {
 					0
 				}
 			}
+
+			impl sp_api::State<Block> for Runtime {
+			}
 		}
 	} else {
 		impl_runtime_apis! {
@@ -1176,6 +1179,9 @@ cfg_if! {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}
+			}
+
+			impl sp_api::State<Block> for Runtime {
 			}
 		}
 	}
