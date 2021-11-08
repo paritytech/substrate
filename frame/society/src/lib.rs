@@ -1273,17 +1273,8 @@ pub mod pallet {
 								// Ban the voucher from vouching again
 								<Vouching<T, I>>::insert(&voucher, VouchingStatus::Banned);
 							},
-							BidKind::Action(deposit, _) => {
-								// Punish the member for the bad proposal, but do not do anything
-								// outside of that repatriate to the action account of the society
-								// instead of the "treasury"
-								let _ = T::Currency::repatriate_reserved(
-									&who,
-									&Self::account().unwrap(),
-									deposit,
-									BalanceStatus::Free,
-								);
-							},
+							// We do not suspend action bidders, so no punishment here
+							BidKind::Action(_, _) => {},
 						}
 					},
 					Judgement::Rebid => {
@@ -1666,8 +1657,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// "primary" below.
 						Some((candidate, total_approvals, value))
 					} else {
-						// Do nothing for actions - they've already paid via deposit
-						if let BidKind::Action(_, _) = kind {
+						// Punish the member for the bad action proposal, but do anything other than
+						// repatriate bid's value to the society account instead of the "treasury"
+						if let BidKind::Action(deposit, _) = kind {
+							let _ = T::Currency::repatriate_reserved(
+								&candidate,
+								&Self::account().unwrap(),
+								deposit,
+								BalanceStatus::Free,
+							);
 							None
 						} else {
 							// Suspend Candidate

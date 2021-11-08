@@ -1009,13 +1009,19 @@ fn bidding_action_works() {
 			vec![create_bid(50, 10, BidKind::Action(50, boxed_call.clone()))]
 		);
 
+		// 10 free balance (65 - 50 reserved for bid_action)
+		assert_eq!(Balances::free_balance(10), 15);
+
+		// Society account free balance
+		assert_eq!(Balances::free_balance(society_account()), 10);
+
 		run_to_block(32);
 
-		// Checking candidates
+		// Checking candidates, 10 bid action was rejected
 		assert_eq!(Society::candidates(), vec![]);
 
 		// 10 was not suspended even with a rejected action bid
-		// note: judge_suspended_candidate() can also be called by Society account
+		// note: judge_suspended_candidate() can also be called by society_account
 		assert_noop!(
 			Society::judge_suspended_candidate(
 				Origin::signed(society_account()),
@@ -1024,6 +1030,9 @@ fn bidding_action_works() {
 			),
 			Error::<Test, _>::NotSuspended
 		);
+
+		// 10 rejected bid action's value (50) is transferred to society account
+		assert_eq!(Balances::free_balance(society_account()), 60);
 	});
 }
 
