@@ -18,6 +18,6 @@ proc-macro = true
 proc-macro-crate = "1.0.0"
 proc-macro2 = "1.0.29"
 quote = "1.0.10"
-syn = "1.0.80"
+syn = "1.0.81"
 
 [dev-dependencies]
