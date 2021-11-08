@@ -333,7 +333,7 @@ impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> 
 		state: u32,
 		func_idx: SupervisorFuncIndex,
 	) -> Result<i64> {
-		let mut ret_vals = Vec::new();
+		let mut ret_vals = [Val::null()];
 		let result = self.dispatch_thunk.call(
 			&mut self.host_context.caller,
 			&[
@@ -347,17 +347,7 @@ impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> 
 
 		match result {
 			Ok(()) => {
-				let ret_val = if ret_vals.len() != 1 {
-					return Err(format!(
-						"Supervisor function returned {} results, expected 1",
-						ret_vals.len()
-					)
-					.into())
-				} else {
-					&ret_vals[0]
-				};
-
-				if let Some(ret_val) = ret_val.i64() {
+				if let Some(ret_val) = ret_vals[0].i64() {
 					Ok(ret_val)
 				} else {
 					return Err("Supervisor function returned unexpected result!".into())
