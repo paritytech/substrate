@@ -110,19 +110,6 @@ where
 		}
 	}
 
-	/// Returns a reference to the rpc handlers, use this to send rpc requests.
-	/// eg
-	/// ```ignore
-	/// 	let request = r#"{"jsonrpc":"2.0","method":"engine_createBlock","params": [true, true],"id":1}"#;
-	/// 		let response = node.rpc_handler()
-	/// 		.handle_request_sync(request, Default::default());
-	/// ```
-	// pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata,
-	// sc_rpc_server::RpcMiddleware>> {
-	pub fn rpc_handler(&self) {
-		todo!("not ported to jsonrpsee yet");
-	}
-
 	/// Return a reference to the Client
 	pub fn client(
 		&self,
