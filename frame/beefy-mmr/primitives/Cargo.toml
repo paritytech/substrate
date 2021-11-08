@@ -18,7 +18,7 @@ hex = "0.4"
 hex-literal = "0.3"
 
 [features]
-debug = ["hex", "log"]
+debug = ["hex", "hex/std", "log"]
 default = ["std", "debug", "keccak"]
 keccak = ["tiny-keccak"]
 std = []
