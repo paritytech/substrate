@@ -131,7 +131,7 @@ fn derive_totokens_enum(input: syn::ItemEnum) -> TokenStream {
 		};
 		let field = fields_idents(v.fields.iter().map(Clone::clone));
 		quote! {
-			#ident::#v_ident#fields_build => {
+			#ident::#v_ident #fields_build => {
 				#(
 					#field.to_tokens(tokens);
 				)*

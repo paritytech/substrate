@@ -57,9 +57,6 @@ use substrate_test_runtime_client::{
 	Sr25519Keyring, TestClientBuilder, TestClientBuilderExt,
 };
 
-mod db;
-mod light;
-
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
 pub struct ExecutorDispatch;

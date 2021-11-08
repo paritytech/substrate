@@ -302,13 +302,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Instance1Example: pallet::<Instance1>::{
-			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
-		},
-		Example2: pallet2::{Pallet, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Event<T>, Config<T>, Storage},
+		// Exclude part `Storage` in order not to check its metadata in tests.
+		System: frame_system exclude_parts { Storage },
+		Example: pallet,
+		Instance1Example: pallet::<Instance1>,
+		Example2: pallet2,
+		Instance1Example2: pallet2::<Instance1>,
 	}
 );
 
@@ -506,6 +505,48 @@ fn storage_expand() {
 }
 
 #[test]
+fn pallet_metadata_expands() {
+	use frame_support::traits::{CrateVersion, PalletInfoData, PalletsInfoAccess};
+	let mut infos = AllPalletsWithSystem::infos();
+	infos.sort_by_key(|x| x.index);
+	assert_eq!(
+		infos,
+		vec![
+			PalletInfoData {
+				index: 0,
+				name: "System",
+				module_name: "frame_system",
+				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 1,
+				name: "Example",
+				module_name: "pallet",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 2,
+				name: "Instance1Example",
+				module_name: "pallet",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 3,
+				name: "Example2",
+				module_name: "pallet2",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 4,
+				name: "Instance1Example2",
+				module_name: "pallet2",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+		]
+	);
+}
+
+#[test]
 fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
@@ -559,7 +600,7 @@ fn metadata() {
 	let system_pallet_metadata = PalletMetadata {
 		index: 0,
 		name: "System",
-		storage: None,
+		storage: None, // The storage metadatas have been excluded.
 		calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata {
 			ty: scale_info::meta_type::<frame_system::Event<Runtime>>(),
