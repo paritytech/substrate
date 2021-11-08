@@ -6798,20 +6798,6 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5986aa8d62380092d2f50f8b1cdba9cb9b6731ffd4b25b51fd126b6c3e05b99c"
-dependencies = [
- "cfg-if 1.0.0",
- "fnv",
- "lazy_static",
- "memchr",
- "parking_lot 0.11.1",
- "thiserror",
-]
-
-[[package]]
-name = "prometheus"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
@@ -8701,7 +8687,7 @@ dependencies = [
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "lazy_static",
- "prometheus 0.12.0",
+ "prometheus",
 ]
 
 [[package]]
@@ -10130,7 +10116,7 @@ dependencies = [
  "futures-util",
  "hyper 0.14.14",
  "log 0.4.14",
- "prometheus 0.13.0",
+ "prometheus",
  "tokio",
 ]
 
