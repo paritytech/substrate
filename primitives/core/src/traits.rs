@@ -191,66 +191,45 @@ sp_externalities::decl_extension! {
 }
 
 /// Something that can spawn tasks (blocking and non-blocking) with an assigned name
-/// and subsystem.
+/// and group.
 #[dyn_clonable::clonable]
 pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
-	/// The given `name` is used to identify the future in tracing.
-	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
-	/// Spawn the given non-blocking future.
-	///
-	/// The given `name` is used to identify the future in tracing.
-	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
-	/// Spawn the given blocking future.
-	///
-	/// The given `subsystem` and `name` is used to identify the future in tracing.
-	fn spawn_blocking_with_subsystem(
+	/// The given `group` and `name` is used to identify the future in tracing.
+	fn spawn_blocking(
 		&self,
 		name: &'static str,
-		_subsystem: &'static str,
+		group: &'static str,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		// Default impl doesn't trace subsystem.
-		self.spawn_blocking(name, future);
-	}
+	);
 	/// Spawn the given non-blocking future.
 	///
-	/// The given `subsystem` and `name` is used to identify the future in tracing.
-	fn spawn_with_subsystem(
+	/// The given `group` and `name` is used to identify the future in tracing.
+	fn spawn(
 		&self,
 		name: &'static str,
-		_subsystem: &'static str,
+		group: &'static str,
 		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		// Default impl doesn't trace subsystem.
-		self.spawn(name, future);
-	}
+	);
 }
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
-	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(**self).spawn_blocking(name, future)
-	}
-
-	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(**self).spawn(name, future)
-	}
-	fn spawn_blocking_with_subsystem(
+	fn spawn_blocking(
 		&self,
 		name: &'static str,
-		subsystem: &'static str,
+		group: &'static str,
 		future: futures::future::BoxFuture<'static, ()>,
 	) {
-		(**self).spawn_blocking_with_subsystem(name, subsystem, future)
+		(**self).spawn_blocking(name, group, future)
 	}
-	fn spawn_with_subsystem(
+	fn spawn(
 		&self,
 		name: &'static str,
-		subsystem: &'static str,
+		group: &'static str,
 		future: futures::future::BoxFuture<'static, ()>,
 	) {
-		(**self).spawn_with_subsystem(name, subsystem, future)
+		(**self).spawn(name, group, future)
 	}
 }
 
@@ -258,31 +237,33 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 ///
 /// Essential tasks are special tasks that should take down the node when they end.
 #[dyn_clonable::clonable]
-pub trait SpawnEssentialNamed: Clone + Send + Sync {
+pub trait SpawnNamedSpawnNamedSpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn_essential_blocking(
 		&self,
 		name: &'static str,
+		group: &'static str,
 		future: futures::future::BoxFuture<'static, ()>,
 	);
 	/// Spawn the given non-blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
-	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	fn spawn_essential(&self, name: &'static str, group: &'static str, future: futures::future::BoxFuture<'static, ()>);
 }
 
 impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
 	fn spawn_essential_blocking(
 		&self,
 		name: &'static str,
+		group: &'static str,
 		future: futures::future::BoxFuture<'static, ()>,
 	) {
-		(**self).spawn_essential_blocking(name, future)
+		(**self).spawn_essential_blocking(name, group, future)
 	}
 
-	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(**self).spawn_essential(name, future)
+	fn spawn_essential(&self, name: &'static str, group: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_essential(name, group, future)
 	}
 }
