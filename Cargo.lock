@@ -7439,6 +7439,7 @@ dependencies = [
  "sp-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

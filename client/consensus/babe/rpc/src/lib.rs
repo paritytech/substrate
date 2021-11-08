@@ -205,83 +205,76 @@ where
 
 #[cfg(test)]
 mod tests {
-	// use super::*;
-	// use sc_keystore::LocalKeystore;
-	// use sp_application_crypto::AppPair;
-	// use sp_core::crypto::key_types::BABE;
-	// use sp_keyring::Sr25519Keyring;
-	// use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-	// use substrate_test_runtime_client::{
-	// 	runtime::Block, Backend, DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
-	// 	TestClientBuilderExt,
-	// };
+	use super::*;
+	use sc_keystore::LocalKeystore;
+	use sp_application_crypto::AppPair;
+	use sp_core::crypto::key_types::BABE;
+	use sp_keyring::Sr25519Keyring;
+	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+	use substrate_test_runtime_client::{
+		runtime::Block, Backend, DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
+		TestClientBuilderExt,
+	};
+	use jsonrpsee::types::v2::RpcError;
 
-	// use jsonrpc_core::IoHandler;
-	// use sc_consensus_babe::{block_import, AuthorityPair, Config};
-	// use std::sync::Arc;
+	use sc_consensus_babe::{block_import, AuthorityPair, Config};
+	use std::sync::Arc;
 
-	// /// creates keystore backed by a temp file
-	// fn create_temp_keystore<P: AppPair>(
-	// 	authority: Sr25519Keyring,
-	// ) -> (SyncCryptoStorePtr, tempfile::TempDir) {
-	// 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	// 	let keystore =
-	// 		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-	// 	SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
-	// 		.expect("Creates authority key");
+	/// creates keystore backed by a temp file
+	fn create_temp_keystore<P: AppPair>(
+		authority: Sr25519Keyring,
+	) -> (SyncCryptoStorePtr, tempfile::TempDir) {
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore =
+			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
+			.expect("Creates authority key");
 
-	// 	(keystore, keystore_path)
-	// }
+		(keystore, keystore_path)
+	}
 
-	// fn test_babe_rpc_handler(
-	// 	deny_unsafe: DenyUnsafe,
-	// ) -> BabeRpcHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
-	// 	let builder = TestClientBuilder::new();
-	// 	let (client, longest_chain) = builder.build_with_longest_chain();
-	// 	let client = Arc::new(client);
-	// 	let config = Config::get_or_compute(&*client).expect("config available");
-	// 	let (_, link) = block_import(config.clone(), client.clone(), client.clone())
-	// 		.expect("can initialize block-import");
+	fn test_babe_rpc_module(
+		deny_unsafe: DenyUnsafe,
+	) -> BabeRpc<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
+		let builder = TestClientBuilder::new();
+		let (client, longest_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
+		let config = Config::get_or_compute(&*client).expect("config available");
+		let (_, link) = block_import(config.clone(), client.clone(), client.clone())
+			.expect("can initialize block-import");
 
-	// 	let epoch_changes = link.epoch_changes().clone();
-	// 	let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
+		let epoch_changes = link.epoch_changes().clone();
+		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
 
-	// 	BabeRpcHandlerRemoveMe::new(
-	// 		client.clone(),
-	// 		epoch_changes,
-	// 		keystore,
-	// 		config,
-	// 		longest_chain,
-	// 		deny_unsafe,
-	// 	)
-	// }
+		BabeRpc::new(
+			client.clone(),
+			epoch_changes,
+			keystore,
+			config,
+			longest_chain,
+			deny_unsafe,
+		)
+	}
 
-	// #[test]
-	// fn epoch_authorship_works() {
-	// 	let handler = test_babe_rpc_handler(DenyUnsafe::No);
-	// 	let mut io = IoHandler::new();
+	#[tokio::test]
+	async fn epoch_authorship_works() {
+		let babe_rpc = test_babe_rpc_module(DenyUnsafe::No);
+		let api = babe_rpc.into_rpc();
+		let response = api.call("babe_epochAuthorship", None).await;
 
-	// 	io.extend_with(BabeApiRemoveMe::to_delegate(handler));
-	// 	let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
-	// 	let response =
-	// r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":
-	// [0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
+		let expected = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":0}"#;
 
-	// 	assert_eq!(Some(response.into()), io.handle_request_sync(request));
-	// }
+		assert_eq!(response, Some(expected.to_string()));
+	}
 
-	// #[test]
-	// fn epoch_authorship_is_unsafe() {
-	// 	let handler = test_babe_rpc_handler(DenyUnsafe::Yes);
-	// 	let mut io = IoHandler::new();
+	#[tokio::test]
+	async fn epoch_authorship_is_unsafe() {
+		let babe_rpc = test_babe_rpc_module(DenyUnsafe::Yes);
+		let api = babe_rpc.into_rpc();
 
-	// 	io.extend_with(BabeApiRemoveMe::to_delegate(handler));
-	// 	let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+		let response = api.call("babe_epochAuthorship", None).await.unwrap();
+		let response = serde_json::from_str::<RpcError>(&response).expect("DenyUnsafe works");
 
-	// 	let response = io.handle_request_sync(request).unwrap();
-	// 	let mut response: serde_json::Value = serde_json::from_str(&response).unwrap();
-	// 	let error: RpcError = serde_json::from_value(response["error"].take()).unwrap();
-
-	// 	assert_eq!(error, RpcError::method_not_found())
-	// }
+		assert_eq!(response.error.message, "RPC call is unsafe to be called externally");
+	}
 }
