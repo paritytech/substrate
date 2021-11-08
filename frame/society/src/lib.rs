@@ -394,6 +394,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
+		/// The society account id
+		#[pallet::constant]
+		type SocietyAccountId: Get<Self::AccountId>;
+
 		/// The currency type used for bidding.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
@@ -722,10 +726,9 @@ pub mod pallet {
 			Pot::<T, I>::put(self.pot);
 			MaxMembers::<T, I>::put(self.max_members);
 			let first_member = self.members.first();
-			let society_account: T::AccountId = T::PalletId::get().into_sub_account(b"society");
 			if let Some(member) = first_member {
 				Founder::<T, I>::put(member.clone());
-				SocietyAccount::<T, I>::put(society_account);
+				SocietyAccount::<T, I>::put(T::SocietyAccountId::get());
 				Head::<T, I>::put(member.clone());
 			};
 			let mut m = self.members.clone();

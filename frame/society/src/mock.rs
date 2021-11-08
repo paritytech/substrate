@@ -68,6 +68,7 @@ parameter_types! {
 
 ord_parameter_types! {
 	pub const FounderSetAccount: u128 = 1;
+	pub const SocietySetAccount: u128 = 2;
 }
 
 impl frame_system::Config for Test {
@@ -122,6 +123,7 @@ impl pallet_balances::Config for Test {
 
 impl Config for Test {
 	type Event = Event;
+	type SocietyAccountId = SocietySetAccount;
 	type Currency = pallet_balances::Pallet<Self>;
 	type Randomness = TestRandomness<Self>;
 	type CandidateDeposit = CandidateDeposit;
