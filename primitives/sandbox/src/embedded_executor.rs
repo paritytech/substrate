@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! An embedded WASM executor utilizing `wasmi`.
+
 use super::{Error, HostError, HostFuncType, ReturnValue, Value, TARGET};
 use alloc::string::String;
 use log::debug;
@@ -27,13 +29,14 @@ use wasmi::{
 	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind,
 };
 
+/// The linear memory used by the sandbox.
 #[derive(Clone)]
 pub struct Memory {
 	memref: MemoryRef,
 }
 
-impl Memory {
-	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
+impl super::SandboxMemory for Memory {
+	fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
 		Ok(Memory {
 			memref: MemoryInstance::alloc(
 				Pages(initial as usize),
@@ -43,12 +46,12 @@ impl Memory {
 		})
 	}
 
-	pub fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> {
+	fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> {
 		self.memref.get_into(ptr, buf).map_err(|_| Error::OutOfBounds)?;
 		Ok(())
 	}
 
-	pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
+	fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
 		self.memref.set(ptr, value).map_err(|_| Error::OutOfBounds)?;
 		Ok(())
 	}
@@ -118,20 +121,21 @@ enum ExternVal {
 	Memory(Memory),
 }
 
+/// A builder for the environment of the sandboxed WASM module.
 pub struct EnvironmentDefinitionBuilder<T> {
 	map: BTreeMap<(Vec<u8>, Vec<u8>), ExternVal>,
 	defined_host_functions: DefinedHostFunctions<T>,
 }
 
-impl<T> EnvironmentDefinitionBuilder<T> {
-	pub fn new() -> EnvironmentDefinitionBuilder<T> {
+impl<T> super::SandboxEnvironmentBuilder<T, Memory> for EnvironmentDefinitionBuilder<T> {
+	fn new() -> EnvironmentDefinitionBuilder<T> {
 		EnvironmentDefinitionBuilder {
 			map: BTreeMap::new(),
 			defined_host_functions: DefinedHostFunctions::new(),
 		}
 	}
 
-	pub fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
+	fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
 	where
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
@@ -140,7 +144,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		self.map.insert((module.into(), field.into()), ExternVal::HostFunc(idx));
 	}
 
-	pub fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
+	fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
 	where
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
@@ -213,14 +217,18 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 	}
 }
 
+/// Sandboxed instance of a WASM module.
 pub struct Instance<T> {
 	instance: ModuleRef,
 	defined_host_functions: DefinedHostFunctions<T>,
 	_marker: PhantomData<T>,
 }
 
-impl<T> Instance<T> {
-	pub fn new(
+impl<T> super::SandboxInstance<T> for Instance<T> {
+	type Memory = Memory;
+	type EnvironmentBuilder = EnvironmentDefinitionBuilder<T>;
+
+	fn new(
 		code: &[u8],
 		env_def_builder: &EnvironmentDefinitionBuilder<T>,
 		state: &mut T,
@@ -241,12 +249,7 @@ impl<T> Instance<T> {
 		Ok(Instance { instance, defined_host_functions, _marker: PhantomData::<T> })
 	}
 
-	pub fn invoke(
-		&mut self,
-		name: &str,
-		args: &[Value],
-		state: &mut T,
-	) -> Result<ReturnValue, Error> {
+	fn invoke(&mut self, name: &str, args: &[Value], state: &mut T) -> Result<ReturnValue, Error> {
 		let args = args.iter().cloned().map(to_wasmi).collect::<Vec<_>>();
 
 		let mut externals =
@@ -260,7 +263,7 @@ impl<T> Instance<T> {
 		}
 	}
 
-	pub fn get_global_val(&self, name: &str) -> Option<Value> {
+	fn get_global_val(&self, name: &str) -> Option<Value> {
 		let global = self.instance.export_by_name(name)?.as_global()?.get();
 
 		Some(to_interface(global))
@@ -289,7 +292,8 @@ fn to_interface(value: RuntimeValue) -> Value {
 
 #[cfg(test)]
 mod tests {
-	use crate::{EnvironmentDefinitionBuilder, Error, HostError, Instance, ReturnValue, Value};
+	use super::{EnvironmentDefinitionBuilder, Instance};
+	use crate::{Error, HostError, ReturnValue, SandboxEnvironmentBuilder, SandboxInstance, Value};
 	use assert_matches::assert_matches;
 
 	fn execute_sandboxed(code: &[u8], args: &[Value]) -> Result<ReturnValue, HostError> {
