@@ -56,7 +56,12 @@ impl SpawnTaskHandle {
 	///
 	/// In other words, it would be a bad idea for someone to do for example
 	/// `spawn(format!("{:?}", some_public_key))`.
-	pub fn spawn(&self, name: &'static str, group: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+	pub fn spawn(
+		&self,
+		name: &'static str,
+		group: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
@@ -67,7 +72,7 @@ impl SpawnTaskHandle {
 		group: &'static str,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
-		self.spawn_inner(name, group, task,  TaskType::Blocking)
+		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
 	/// Helper function that implements the spawning logic. See `spawn` and `spawn_blocking`.
@@ -80,7 +85,7 @@ impl SpawnTaskHandle {
 	) {
 		if self.task_notifier.is_closed() {
 			debug!("Attempt to spawn a new task has been prevented: {}", name);
-			return;
+			return
 		}
 
 		let on_exit = self.on_exit.clone();
@@ -91,20 +96,15 @@ impl SpawnTaskHandle {
 		if let Some(metrics) = &self.metrics {
 			metrics.tasks_spawned.with_label_values(&[name, group]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
-			metrics
-				.tasks_ended
-				.with_label_values(&[name, "finished", group])
-				.inc_by(0);
+			metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc_by(0);
 		}
 
 		let future = async move {
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
-					let poll_duration =
-						metrics.poll_duration.with_label_values(&[name, group]);
-					let poll_start =
-						metrics.poll_start.with_label_values(&[name, group]);
+					let poll_duration = metrics.poll_duration.with_label_values(&[name, group]);
+					let poll_start = metrics.poll_start.with_label_values(&[name, group]);
 					let inner =
 						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
@@ -115,25 +115,16 @@ impl SpawnTaskHandle {
 
 				match select(on_exit, task).await {
 					Either::Right((Err(payload), _)) => {
-						metrics
-							.tasks_ended
-							.with_label_values(&[name, "panic", group])
-							.inc();
+						metrics.tasks_ended.with_label_values(&[name, "panic", group]).inc();
 						panic::resume_unwind(payload)
-					}
+					},
 					Either::Right((Ok(()), _)) => {
-						metrics
-							.tasks_ended
-							.with_label_values(&[name, "finished", group])
-							.inc();
-					}
+						metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc();
+					},
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
-						metrics
-							.tasks_ended
-							.with_label_values(&[name, "interrupted", group])
-							.inc();
-					}
+						metrics.tasks_ended.with_label_values(&[name, "interrupted", group]).inc();
+					},
 				}
 			} else {
 				futures::pin_mut!(task);
@@ -149,7 +140,7 @@ impl SpawnTaskHandle {
 				self.tokio_handle.spawn_blocking(move || {
 					handle.block_on(future);
 				})
-			}
+			},
 		};
 
 		let _ = self.task_notifier.unbounded_send(join_handle);
@@ -157,14 +148,18 @@ impl SpawnTaskHandle {
 }
 
 impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
-	fn spawn_blocking(&self, name: &'static str, group: &'static str,future: BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		name: &'static str,
+		group: &'static str,
+		future: BoxFuture<'static, ()>,
+	) {
 		self.spawn_inner(name, group, future, TaskType::Blocking)
 	}
 
 	fn spawn(&self, name: &'static str, group: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn_inner(name, group, future, TaskType::Async)
 	}
-	
 }
 
 /// A wrapper over `SpawnTaskHandle` that will notify a receiver whenever any
@@ -189,7 +184,12 @@ impl SpawnEssentialTaskHandle {
 	/// Spawns the given task with the given name.
 	///
 	/// See also [`SpawnTaskHandle::spawn`].
-	pub fn spawn(&self, name: &'static str, group: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+	pub fn spawn(
+		&self,
+		name: &'static str,
+		group: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
@@ -223,11 +223,21 @@ impl SpawnEssentialTaskHandle {
 }
 
 impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
-	fn spawn_essential_blocking(&self, name: &'static str, group: &'static str, future: BoxFuture<'static, ()>) {
+	fn spawn_essential_blocking(
+		&self,
+		name: &'static str,
+		group: &'static str,
+		future: BoxFuture<'static, ()>,
+	) {
 		self.spawn_blocking(name, group, future);
 	}
 
-	fn spawn_essential(&self, name: &'static str, group: &'static str, future: BoxFuture<'static, ()>) {
+	fn spawn_essential(
+		&self,
+		name: &'static str,
+		group: &'static str,
+		future: BoxFuture<'static, ()>,
+	) {
 		self.spawn(name, group, future);
 	}
 }

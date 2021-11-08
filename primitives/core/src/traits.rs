@@ -250,7 +250,12 @@ pub trait SpawnEssentialNamed: Clone + Send + Sync {
 	/// Spawn the given non-blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
-	fn spawn_essential(&self, name: &'static str, group: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	fn spawn_essential(
+		&self,
+		name: &'static str,
+		group: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	);
 }
 
 impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
@@ -263,7 +268,12 @@ impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
 		(**self).spawn_essential_blocking(name, group, future)
 	}
 
-	fn spawn_essential(&self, name: &'static str, group: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_essential(
+		&self,
+		name: &'static str,
+		group: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		(**self).spawn_essential(name, group, future)
 	}
 }
