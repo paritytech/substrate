@@ -312,17 +312,17 @@ fn suspended_member_life_cycle_works() {
 		// Normal people cannot make judgement
 		assert_noop!(Society::judge_suspended_member(Origin::signed(20), 20, true), BadOrigin);
 
-		// Society can judge thee
-		// Society forgives the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, true));
+		// Founder can judge thee
+		// Founder forgives the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_founder()), 20, true));
 		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
 		assert_eq!(<Members<Test>>::get(), vec![10, 20]);
 
 		// Let's suspend them again, directly
 		Society::suspend_member(&20);
 		assert_eq!(<SuspendedMembers<Test>>::get(20), true);
-		// Society does not forgive the suspended member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, false));
+		// Founder does not forgive the suspended member
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_founder()), 20, false));
 		// Cleaned up
 		assert_eq!(<SuspendedMembers<Test>>::get(20), false);
 		assert_eq!(<Members<Test>>::get(), vec![10]);
@@ -358,9 +358,9 @@ fn suspended_candidate_rejected_works() {
 			BadOrigin
 		);
 
-		// Society makes no direct judgement
+		// Founder makes no direct judgement
 		assert_ok!(Society::judge_suspended_candidate(
-			Origin::signed(society_account()),
+			Origin::signed(society_founder()),
 			20,
 			Judgement::Rebid
 		));
@@ -377,9 +377,9 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Society::candidates(), vec![]);
 		assert_eq!(Society::suspended_candidate(20).is_some(), true);
 
-		// Society rejects the candidate
+		// Founder rejects the candidate
 		assert_ok!(Society::judge_suspended_candidate(
-			Origin::signed(society_account()),
+			Origin::signed(society_founder()),
 			20,
 			Judgement::Reject
 		));
@@ -485,9 +485,9 @@ fn unvouch_works() {
 		assert_eq!(Society::members(), vec![10]);
 		// User is stuck vouching until judgement origin resolves suspended candidate
 		assert_eq!(<Vouching<Test, _>>::get(10), Some(VouchingStatus::Vouching));
-		// Judge denies candidate
+		// Judge (Founder) denies candidate
 		assert_ok!(Society::judge_suspended_candidate(
-			Origin::signed(society_account()),
+			Origin::signed(society_founder()),
 			20,
 			Judgement::Reject
 		));
@@ -726,7 +726,7 @@ fn vouching_handles_removed_member_with_bid() {
 		assert_eq!(<Bids<Test>>::get(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Remove member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, false));
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_founder()), 20, false));
 		// Bid is removed, vouching status is removed
 		assert_eq!(<Bids<Test>>::get(), vec![]);
 		assert_eq!(<Vouching<Test>>::get(20), None);
@@ -753,7 +753,7 @@ fn vouching_handles_removed_member_with_candidate() {
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
 		assert_eq!(<Vouching<Test>>::get(20), Some(VouchingStatus::Vouching));
 		// Remove member
-		assert_ok!(Society::judge_suspended_member(Origin::signed(society_account()), 20, false));
+		assert_ok!(Society::judge_suspended_member(Origin::signed(society_founder()), 20, false));
 		// Vouching status is removed, but candidate is still in the queue
 		assert_eq!(<Vouching<Test>>::get(20), None);
 		assert_eq!(Society::candidates(), vec![create_bid(1000, 30, BidKind::Vouch(20, 100))]);
@@ -828,7 +828,7 @@ fn max_limits_work() {
 		// Fill up members with suspended candidates from the first rotation
 		for i in 100..104 {
 			assert_ok!(Society::judge_suspended_candidate(
-				Origin::signed(society_account()),
+				Origin::signed(society_founder()),
 				i,
 				Judgement::Approve
 			));
@@ -1015,6 +1015,7 @@ fn bidding_action_works() {
 		assert_eq!(Society::candidates(), vec![]);
 
 		// 10 was not suspended even with a rejected action bid
+		// note: judge_suspended_candidate() can also be called by Society account
 		assert_noop!(
 			Society::judge_suspended_candidate(
 				Origin::signed(society_account()),

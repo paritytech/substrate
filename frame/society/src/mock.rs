@@ -22,7 +22,7 @@ use crate as pallet_society;
 
 use frame_support::{ord_parameter_types, parameter_types, traits::EqualPrivilegeOnly};
 use frame_support_test::TestRandomness;
-use frame_system::EnsureSignedBy;
+use frame_system::{EnsureOneOf, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -132,7 +132,7 @@ impl Config for Test {
 	type RotationPeriod = RotationPeriod;
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
-	type SuspensionJudgementOrigin = EnsureSociety<Test>;
+	type SuspensionJudgementOrigin = EnsureOneOf<u128, EnsureFounder<Test>, EnsureSociety<Test>>;
 	type ChallengePeriod = ChallengePeriod;
 	type MaxCandidateIntake = MaxCandidateIntake;
 	type PalletId = SocietyPalletId;
@@ -240,6 +240,11 @@ pub fn create_bid<AccountId, Balance, Call>(
 
 type BalancesCall = pallet_balances::Call<Test>;
 type SocietyCall = pallet_society::Call<Test>;
+
+/// Returns the founder account.
+pub fn society_founder() -> u128 {
+	Society::founder().unwrap()
+}
 
 /// Returns the society account.
 pub fn society_account() -> u128 {

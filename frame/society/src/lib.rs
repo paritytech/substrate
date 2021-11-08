@@ -1393,6 +1393,24 @@ pub mod pallet {
 	}
 }
 
+/// Simple ensure origin struct to filter for the founder account.
+pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
+	type Success = T::AccountId;
+	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+		o.into().and_then(|o| match (o, Founder::<T>::get()) {
+			(frame_system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
+			(r, _) => Err(T::Origin::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let founder = Founder::<T>::get().expect("society founder should exist");
+		T::Origin::from(frame_system::RawOrigin::Signed(founder))
+	}
+}
+
 /// Simple ensure origin struct to filter for the society account.
 pub struct EnsureSociety<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> EnsureOrigin<T::Origin> for EnsureSociety<T> {
