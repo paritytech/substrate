@@ -237,7 +237,7 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 ///
 /// Essential tasks are special tasks that should take down the node when they end.
 #[dyn_clonable::clonable]
-pub trait SpawnNamedSpawnNamedSpawnNamed: Clone + Send + Sync {
+pub trait SpawnEssentialNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
