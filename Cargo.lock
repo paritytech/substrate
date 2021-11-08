@@ -4658,17 +4658,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-rpc-client"
-version = "2.0.0"
-dependencies = [
- "futures 0.3.16",
- "jsonrpc-core-client",
- "node-primitives",
- "sc-rpc",
- "sp-tracing",
-]
-
-[[package]]
 name = "node-runtime"
 version = "3.0.0-dev"
 dependencies = [
@@ -8430,6 +8419,7 @@ dependencies = [
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
+ "paste 1.0.4",
  "sp-core",
  "sp-io",
  "sp-runtime",
