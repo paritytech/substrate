@@ -36,7 +36,7 @@ use pwasm_utils::parity_wasm::{
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
-use sp_std::{borrow::ToOwned, convert::TryFrom, prelude::*};
+use sp_std::{borrow::ToOwned, prelude::*};
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///

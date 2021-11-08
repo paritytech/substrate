@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use super::helper;
-use core::convert::TryFrom;
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use syn::spanned::Spanned;

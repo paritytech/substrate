@@ -42,7 +42,7 @@ use std::{
 	sync::Arc,
 };
 
-pub use sp_state_machine::Backend as StateBackend;
+pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
 use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
