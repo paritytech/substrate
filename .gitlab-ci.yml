@@ -482,7 +482,7 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
-    - cd frame/example-offchain-worker/
+    - cd frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - cd ../example
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
