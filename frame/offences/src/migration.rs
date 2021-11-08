@@ -82,8 +82,7 @@ mod test {
 			<DeferredOffences<T>>::append((
 				vec![offence_details],
 				vec![Perbill::from_percent(5 + 1 * 100 / 5)],
-				1,
-				DisableStrategy::WhenSlashed,
+				1
 			));
 
 			// when
