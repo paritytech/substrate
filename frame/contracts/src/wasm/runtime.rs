@@ -32,6 +32,7 @@ use pwasm_utils::parity_wasm::elements::ValueType;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
 use sp_runtime::traits::Bounded;
+use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -357,7 +358,7 @@ fn already_charged(_: u32) -> Option<RuntimeCosts> {
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
-	memory: sp_sandbox::Memory,
+	memory: sp_sandbox::default_executor::Memory,
 	trap_reason: Option<TrapReason>,
 }
 
@@ -367,7 +368,11 @@ where
 	<E::T as frame_system::Config>::AccountId:
 		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
-	pub fn new(ext: &'a mut E, input_data: Vec<u8>, memory: sp_sandbox::Memory) -> Self {
+	pub fn new(
+		ext: &'a mut E,
+		input_data: Vec<u8>,
+		memory: sp_sandbox::default_executor::Memory,
+	) -> Self {
 		Runtime { ext, input_data: Some(input_data), memory, trap_reason: None }
 	}
 
