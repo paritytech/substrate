@@ -346,6 +346,11 @@ where
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
+	/// Re-execute the given block with the tracing targets given in `targets`
+	/// and capture all state changes.
+	///
+	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
+	/// Note: requires runtimes compiled with wasm tracing support, `--features with-tracing`.
 	async fn trace_block(
 		&self,
 		block: Block::Hash,
