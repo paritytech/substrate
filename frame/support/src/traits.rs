@@ -87,4 +87,6 @@ mod dispatch;
 pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
-pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+pub use voting::{
+	CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote, VoteTally, Referenda,
+};

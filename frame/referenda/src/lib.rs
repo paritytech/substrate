@@ -30,6 +30,7 @@ use frame_support::{
 	ensure, BoundedVec, traits::{
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
+		Referenda, VoteTally,
 	},
 };
 use scale_info::TypeInfo;
@@ -39,17 +40,14 @@ use sp_runtime::{
 };
 use sp_std::{prelude::*, fmt::Debug};
 
-mod conviction;
 mod types;
-mod vote;
 pub mod weights;
-pub use conviction::Conviction;
 pub use pallet::*;
 pub use types::{
-	Delegations, ReferendumInfo, ReferendumStatus, Tally, UnvoteScope, TrackInfo, TracksInfo,
-	Curve, DecidingStatus, Deposit, AtOrAfter,
+	ReferendumInfo, ReferendumStatus, TrackInfo, TracksInfo, Curve, DecidingStatus, Deposit,
+	AtOrAfter, BalanceOf, NegativeImbalanceOf, CallOf, OriginOf, VotesOf, TallyOf, ReferendumInfoOf,
+	ReferendumStatusOf, DecidingStatusOf, TrackInfoOf, TrackIdOf, InsertSorted, ReferendumIndex,
 };
-pub use vote::{AccountVote, Vote, Voting};
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -60,86 +58,10 @@ pub mod benchmarking;
 
 const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 
-/// A referendum index.
-pub type ReferendumIndex = u32;
-
-type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
-type CallOf<T> = <T as Config>::Call;
-type OriginOf<T> = <T as Config>::Origin;
-type ReferendumInfoOf<T> = ReferendumInfo<
-	TrackIdOf<T>,
-	OriginOf<T>,
-	<T as frame_system::Config>::BlockNumber,
-	<T as frame_system::Config>::Hash,
-	BalanceOf<T>,
-	BalanceOf<T>,
-	<T as frame_system::Config>::AccountId,
->;
-type ReferendumStatusOf<T> = ReferendumStatus<
-	TrackIdOf<T>,
-	OriginOf<T>,
-	<T as frame_system::Config>::BlockNumber,
-	<T as frame_system::Config>::Hash,
-	BalanceOf<T>,
-	BalanceOf<T>,
-	<T as frame_system::Config>::AccountId,
->;
-type DecidingStatusOf<T> = DecidingStatus<
-	<T as frame_system::Config>::BlockNumber,
->;
-type VotingOf<T> = Voting<
-	BalanceOf<T>,
-	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
->;
-type TrackInfoOf<T> = TrackInfo<
-	BalanceOf<T>,
-	<T as frame_system::Config>::BlockNumber,
->;
-type TrackIdOf<T> = <
-	<T as Config>::Tracks as TracksInfo<
-		BalanceOf<T>,
-		<T as frame_system::Config>::BlockNumber,
-	>
->::Id;
-
-pub trait InsertSorted<T> {
-	/// Inserts an item into a sorted series.
-	///
-	/// Returns `true` if it was inserted, `false` if it would belong beyond the bound of the
-	/// series.
-	fn insert_sorted_by_key<
-		F: FnMut(&T) -> K,
-		K: PartialOrd<K> + Ord,
-	>(&mut self, t: T, f: F,) -> bool;
-}
-impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
-	fn insert_sorted_by_key<
-		F: FnMut(&T) -> K,
-		K: PartialOrd<K> + Ord,
-	>(&mut self, t: T, mut f: F,) -> bool {
-		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
-		if index >= S::get() as usize {
-			return false
-		}
-		self.force_insert(index, t);
-		true
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		pallet_prelude::*,
-		traits::EnsureOrigin,
-		weights::Pays,
-		Parameter,
-	};
+	use frame_support::{Parameter, pallet_prelude::*, traits::EnsureOrigin, weights::Pays};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::DispatchResult;
 
@@ -168,18 +90,15 @@ pub mod pallet {
 		type KillOrigin: EnsureOrigin<OriginOf<Self>>;
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// The counting type for votes. Usually just balance.
+		type Votes: AtLeast32BitUnsigned + Copy + Parameter + Member;
+		/// The tallying type.
+		type Tally: VoteTally<Self::Votes> + Default + Clone + Codec + Eq + Debug + TypeInfo;
 
 		// Constants
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
 		#[pallet::constant]
 		type SubmissionDeposit: Get<BalanceOf<Self>>;
-
-		/// The maximum number of concurrent votes an account may have.
-		///
-		/// Also used to compute weight, an overly large value can
-		/// lead to extrinsic with large weight estimation: see `delegate` for instance.
-		#[pallet::constant]
-		type MaxVotes: Get<u32>;
 
 		/// Maximum size of the referendum queue for a single track.
 		#[pallet::constant]
@@ -189,13 +108,6 @@ pub mod pallet {
 		/// Once this passes, then anyone may cancel the referendum.
 		#[pallet::constant]
 		type UndecidingTimeout: Get<Self::BlockNumber>;
-
-		/// The minimum period of vote locking.
-		///
-		/// It should be no shorter than enactment period to ensure that in the case of an approval,
-		/// those successful voters are locked into the consequences that their votes entail.
-		#[pallet::constant]
-		type VoteLockingPeriod: Get<Self::BlockNumber>;
 
 		/// Quantization level for the referendum wakeup scheduler. A higher number will result in
 		/// fewer storage reads/writes needed for smaller voters, but also result in delays to the
@@ -221,7 +133,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		TrackIdOf<T>,
-		BoundedVec<(ReferendumIndex, BalanceOf<T>), T::MaxQueued>,
+		BoundedVec<(ReferendumIndex, T::Votes), T::MaxQueued>,
 		ValueQuery,
 	>;
 
@@ -244,19 +156,6 @@ pub mod pallet {
 		Twox64Concat,
 		ReferendumIndex,
 		ReferendumInfoOf<T>,
-	>;
-
-	/// All votes for a particular voter. We store the balance for the number of votes that we
-	/// have recorded. The second item is the total amount of delegations, that will be added.
-	///
-	/// TWOX-NOTE: SAFE as `AccountId`s are crypto hashes anyway.
-	#[pallet::storage]
-	pub type VotingFor<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		T::AccountId,
-		VotingOf<T>,
-		ValueQuery,
 	>;
 
 	/// Accounts for which there are locks in action which may be removed at some point in the
@@ -307,14 +206,14 @@ pub mod pallet {
 			/// The hash of the proposal up for referendum.
 			proposal_hash: T::Hash,
 			/// The current tally of votes in this referendum.
-			tally: Tally<BalanceOf<T>>,
+			tally: T::Tally,
 		},
 		/// A referendum has ended its confirmation phase and is ready for approval.
 		Confirmed {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The final tally of votes in this referendum.
-			tally: Tally<BalanceOf<T>>,
+			tally: T::Tally,
 		},
 		/// A referendum has been approved and its proposal has been scheduled.
 		Approved {
@@ -326,39 +225,33 @@ pub mod pallet {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The final tally of votes in this referendum.
-			tally: Tally<BalanceOf<T>>,
+			tally: T::Tally,
 		},
 		/// A referendum has been timed out without being decided.
 		TimedOut {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The final tally of votes in this referendum.
-			tally: Tally<BalanceOf<T>>,
+			tally: T::Tally,
 		},
 		/// A referendum has been cancelled.
 		Cancelled {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The final tally of votes in this referendum.
-			tally: Tally<BalanceOf<T>>,
+			tally: T::Tally,
 		},
 		/// A referendum has been killed.
 		Killed {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The final tally of votes in this referendum.
-			tally: Tally<BalanceOf<T>>,
+			tally: T::Tally,
 		},
-		/// An account has delegated their vote to another account. \[who, target\]
-		Delegated(T::AccountId, T::AccountId),
-		/// An \[account\] has cancelled a previous delegation operation.
-		Undelegated(T::AccountId),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Value too low
-		ValueLow,
 		/// Referendum is not ongoing.
 		NotOngoing,
 		/// Referendum's decision deposit is already paid.
@@ -388,8 +281,6 @@ pub mod pallet {
 		Nonsense,
 		/// Invalid upper bound.
 		WrongUpperBound,
-		/// Maximum number of votes reached.
-		MaxVotesReached,
 		/// The track identifier given was invalid.
 		BadTrack,
 		/// There are already a full complement of referendums in progress for this track.
@@ -405,6 +296,10 @@ pub mod pallet {
 	}
 
 	// TODO: bans
+	// TODO: cancel_referendum
+	// TODO: kill_referendum
+	// TODO: check events cover everything useful
+	// TODO: remove unused errors
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -438,7 +333,7 @@ pub mod pallet {
 				submission_deposit: Self::take_deposit(who, T::SubmissionDeposit::get())?,
 				decision_deposit: None,
 				deciding: None,
-				tally: Tally::default(),
+				tally: Default::default(),
 				ayes_in_queue: None,
 			};
 			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
@@ -475,9 +370,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO: cancel_referendum
-		// TODO: kill_referendum
-
 		/// Advance a referendum onto its next logical state. This will happen eventually anyway,
 		/// but you can nudge it
 		#[pallet::weight(0)]
@@ -501,6 +393,11 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn stub(_origin: OriginFor<T>, _call_hash: T::Hash) -> DispatchResult { Ok(()) }
 	}
+}
+
+impl<T: Config> Referenda for Pallet<T> {
+	type Index = ReferendumIndex;
+	type Votes = VotesOf<T>;
 }
 
 impl<T: Config> Pallet<T> {
@@ -601,8 +498,8 @@ impl<T: Config> Pallet<T> {
 			DecidingCount::<T>::insert(status.track, deciding_count.saturating_add(1));
 		} else {
 			// Add to queue.
-			let item = (index, status.tally.ayes);
-			status.ayes_in_queue = Some(status.tally.ayes);
+			let item = (index, status.tally.ayes());
+			status.ayes_in_queue = Some(status.tally.ayes());
 			TrackQueue::<T>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
 		}
 	}
@@ -610,7 +507,7 @@ impl<T: Config> Pallet<T> {
 	/// Grab the index and status for the referendum which is the highest priority of those for the
 	/// given track which are ready for being decided.
 	fn next_for_deciding(
-		track_queue: &mut BoundedVec<(u32, BalanceOf<T>), T::MaxQueued>,
+		track_queue: &mut BoundedVec<(u32, VotesOf<T>), T::MaxQueued>,
 	) -> Option<(ReferendumIndex, ReferendumStatusOf<T>)> {
 		loop {
 			let (index, _) = track_queue.pop()?;
@@ -715,7 +612,7 @@ impl<T: Config> Pallet<T> {
 			// Are we already queued for deciding?
 			if let Some(_) = status.ayes_in_queue.as_ref() {
 				// Does our position in the queue need updating?
-				let ayes = status.tally.ayes;
+				let ayes = status.tally.ayes();
 				let mut queue = TrackQueue::<T>::get(status.track);
 				let maybe_old_pos = queue.iter().position(|(x, _)| *x == index);
 				let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
@@ -746,12 +643,12 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		if let Some(deciding) = &mut status.deciding {
-			let is_passing = status.tally.is_passing(
+			let is_passing = Self::is_passing(
+				&status.tally,
 				now,
 				deciding.period,
-				T::Currency::total_issuance(),
 				&track.min_turnout,
-				&track.min_approvals,
+				&track.min_approval,
 			);
 			if is_passing {
 				if deciding.confirming.map_or(false, |c| now >= c) {
@@ -794,15 +691,15 @@ impl<T: Config> Pallet<T> {
 
 	fn decision_time(
 		deciding: &DecidingStatusOf<T>,
-		tally: &Tally<BalanceOf<T>>,
+		tally: &T::Tally,
 		track: &TrackInfoOf<T>,
 	) -> T::BlockNumber {
 		// Set alarm to the point where the current voting would make it pass.
-		let approvals = Perbill::from_rational(tally.ayes, tally.ayes + tally.nays);
-		let turnout = Perbill::from_rational(tally.turnout, T::Currency::total_issuance());
-		let until_approvals = track.min_approvals.delay(approvals) * deciding.period;
+		let approval = tally.approval();
+		let turnout = tally.turnout();
+		let until_approval = track.min_approval.delay(approval) * deciding.period;
 		let until_turnout = track.min_turnout.delay(turnout) * deciding.period;
-		deciding.ending.min(until_turnout.max(until_approvals))
+		deciding.ending.min(until_turnout.max(until_approval))
 	}
 
 	/// Reserve a deposit and return the `Deposit` instance.
@@ -826,386 +723,16 @@ impl<T: Config> Pallet<T> {
     		.unwrap_or_else(|x| x);
 		Some(&tracks[index].1)
 	}
-}
 
-/*
-		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
-		/// otherwise it is a vote to keep the status quo.
-		///
-		/// The dispatch origin of this call must be _Signed_.
-		///
-		/// - `ref_index`: The index of the referendum to vote for.
-		/// - `vote`: The vote configuration.
-		///
-		/// Weight: `O(R)` where R is the number of referenda the voter has voted on.
-		#[pallet::weight(
-			T::WeightInfo::vote_new(T::MaxVotes::get())
-				.max(T::WeightInfo::vote_existing(T::MaxVotes::get()))
-		)]
-		pub fn vote(
-			origin: OriginFor<T>,
-			#[pallet::compact] ref_index: ReferendumIndex,
-			vote: AccountVote<BalanceOf<T>>,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			Self::try_vote(&who, ref_index, vote)
-		}
-
-		/// Delegate the voting power (with some given conviction) of the sending account.
-		///
-		/// The balance delegated is locked for as long as it's delegated, and thereafter for the
-		/// time appropriate for the conviction's lock period.
-		///
-		/// The dispatch origin of this call must be _Signed_, and the signing account must either:
-		///   - be delegating already; or
-		///   - have no voting activity (if there is, then it will need to be removed/consolidated
-		///     through `reap_vote` or `unvote`).
-		///
-		/// - `to`: The account whose voting the `target` account's voting power will follow.
-		/// - `conviction`: The conviction that will be attached to the delegated votes. When the
-		///   account is undelegated, the funds will be locked for the corresponding period.
-		/// - `balance`: The amount of the account's balance to be used in delegating. This must not
-		///   be more than the account's current balance.
-		///
-		/// Emits `Delegated`.
-		///
-		/// Weight: `O(R)` where R is the number of referenda the voter delegating to has
-		///   voted on. Weight is charged as if maximum votes.
-		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
-		// because a valid delegation cover decoding a direct voting with max votes.
-		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
-		pub fn delegate(
-			origin: OriginFor<T>,
-			to: T::AccountId,
-			conviction: Conviction,
-			balance: BalanceOf<T>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let votes = Self::try_delegate(who, to, conviction, balance)?;
-
-			Ok(Some(T::WeightInfo::delegate(votes)).into())
-		}
-
-		/// Undelegate the voting power of the sending account.
-		///
-		/// Tokens may be unlocked following once an amount of time consistent with the lock period
-		/// of the conviction with which the delegation was issued.
-		///
-		/// The dispatch origin of this call must be _Signed_ and the signing account must be
-		/// currently delegating.
-		///
-		/// Emits `Undelegated`.
-		///
-		/// Weight: `O(R)` where R is the number of referenda the voter delegating to has
-		///   voted on. Weight is charged as if maximum votes.
-		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
-		// because a valid delegation cover decoding a direct voting with max votes.
-		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
-		pub fn undelegate(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let votes = Self::try_undelegate(who)?;
-			Ok(Some(T::WeightInfo::undelegate(votes)).into())
-		}
-
-		/// Unlock tokens that have an expired lock.
-		///
-		/// The dispatch origin of this call must be _Signed_.
-		///
-		/// - `target`: The account to remove the lock on.
-		///
-		/// Weight: `O(R)` with R number of vote of target.
-		#[pallet::weight(
-			T::WeightInfo::unlock_set(T::MaxVotes::get())
-				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
-		)]
-		pub fn unlock(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
-			ensure_signed(origin)?;
-			Self::update_lock(&target);
-			Ok(())
-		}
-
-		/// Remove a vote for a referendum.
-		///
-		/// If:
-		/// - the referendum was cancelled, or
-		/// - the referendum is ongoing, or
-		/// - the referendum has ended such that
-		///   - the vote of the account was in opposition to the result; or
-		///   - there was no conviction to the account's vote; or
-		///   - the account made a split vote
-		/// ...then the vote is removed cleanly and a following call to `unlock` may result in more
-		/// funds being available.
-		///
-		/// If, however, the referendum has ended and:
-		/// - it finished corresponding to the vote of the account, and
-		/// - the account made a standard vote with conviction, and
-		/// - the lock period of the conviction is not over
-		/// ...then the lock will be aggregated into the overall account's lock, which may involve
-		/// *overlocking* (where the two locks are combined into a single lock that is the maximum
-		/// of both the amount locked and the time is it locked for).
-		///
-		/// The dispatch origin of this call must be _Signed_, and the signer must have a vote
-		/// registered for referendum `index`.
-		///
-		/// - `index`: The index of referendum of the vote to be removed.
-		///
-		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
-		///   Weight is calculated for the maximum number of vote.
-		#[pallet::weight(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
-		pub fn remove_vote(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			Self::try_remove_vote(&who, index, UnvoteScope::Any)
-		}
-
-		/// Remove a vote for a referendum.
-		///
-		/// If the `target` is equal to the signer, then this function is exactly equivalent to
-		/// `remove_vote`. If not equal to the signer, then the vote must have expired,
-		/// either because the referendum was cancelled, because the voter lost the referendum or
-		/// because the conviction period is over.
-		///
-		/// The dispatch origin of this call must be _Signed_.
-		///
-		/// - `target`: The account of the vote to be removed; this account must have voted for
-		///   referendum `index`.
-		/// - `index`: The index of referendum of the vote to be removed.
-		///
-		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
-		///   Weight is calculated for the maximum number of vote.
-		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
-		pub fn remove_other_vote(
-			origin: OriginFor<T>,
-			target: T::AccountId,
-			index: ReferendumIndex,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
-			Self::try_remove_vote(&target, index, scope)?;
-			Ok(())
-		}
-
-impl<T: Config> Pallet<T> {
-	/// Actually enact a vote, if legit.
-	fn try_vote(
-		who: &T::AccountId,
-		ref_index: ReferendumIndex,
-		vote: AccountVote<BalanceOf<T>>,
-	) -> DispatchResult {
-		let mut status = Self::referendum_status(ref_index)?;
-		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
-		VotingFor::<T>::try_mutate(who, |voting| -> DispatchResult {
-			if let Voting::Direct { ref mut votes, delegations, .. } = voting {
-				match votes.binary_search_by_key(&ref_index, |i| i.0) {
-					Ok(i) => {
-						// Shouldn't be possible to fail, but we handle it gracefully.
-						status.tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
-						if let Some(approve) = votes[i].1.as_standard() {
-							status.tally.reduce(approve, *delegations);
-						}
-						votes[i].1 = vote;
-					},
-					Err(i) => {
-						ensure!(
-							votes.len() as u32 <= T::MaxVotes::get(),
-							Error::<T>::MaxVotesReached
-						);
-						votes.insert(i, (ref_index, vote));
-					},
-				}
-				// Shouldn't be possible to fail, but we handle it gracefully.
-				status.tally.add(vote).ok_or(ArithmeticError::Overflow)?;
-				if let Some(approve) = vote.as_standard() {
-					status.tally.increase(approve, *delegations);
-				}
-				Ok(())
-			} else {
-				Err(Error::<T>::AlreadyDelegating.into())
-			}
-		})?;
-		// Extend the lock to `balance` (rather than setting it) since we don't know what other
-		// votes are in place.
-		T::Currency::extend_lock(ASSEMBLY_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
-		ReferendumInfoFor::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
-		Ok(())
-	}
-
-	/// Remove the account's vote for the given referendum if possible. This is possible when:
-	/// - The referendum has not finished.
-	/// - The referendum has finished and the voter lost their direction.
-	/// - The referendum has finished and the voter's lock period is up.
-	///
-	/// This will generally be combined with a call to `unlock`.
-	fn try_remove_vote(
-		who: &T::AccountId,
-		ref_index: ReferendumIndex,
-		scope: UnvoteScope,
-	) -> DispatchResult {
-		let info = ReferendumInfoFor::<T>::get(ref_index);
-		VotingFor::<T>::try_mutate(who, |voting| -> DispatchResult {
-			if let Voting::Direct { ref mut votes, delegations, ref mut prior } = voting {
-				let i = votes
-					.binary_search_by_key(&ref_index, |i| i.0)
-					.map_err(|_| Error::<T>::NotVoter)?;
-				match info {
-					Some(ReferendumInfo::Ongoing(mut status)) => {
-						ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
-						// Shouldn't be possible to fail, but we handle it gracefully.
-						status.tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
-						if let Some(approve) = votes[i].1.as_standard() {
-							status.tally.reduce(approve, *delegations);
-						}
-						ReferendumInfoFor::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
-					},
-					Some(ReferendumInfo::Finished { end, approved }) => {
-						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
-							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
-							let now = frame_system::Pallet::<T>::block_number();
-							if now < unlock_at {
-								ensure!(
-									matches!(scope, UnvoteScope::Any),
-									Error::<T>::NoPermission
-								);
-								prior.accumulate(unlock_at, balance)
-							}
-						}
-					},
-					None => {}, // Referendum was cancelled.
-				}
-				votes.remove(i);
-			}
-			Ok(())
-		})?;
-		Ok(())
-	}
-
-	/// Return the number of votes for `who`
-	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
-		VotingFor::<T>::mutate(who, |voting| match voting {
-			Voting::Delegating { delegations, .. } => {
-				// We don't support second level delegating, so we don't need to do anything more.
-				*delegations = delegations.saturating_add(amount);
-				1
-			},
-			Voting::Direct { votes, delegations, .. } => {
-				*delegations = delegations.saturating_add(amount);
-				for &(ref_index, account_vote) in votes.iter() {
-					if let AccountVote::Standard { vote, .. } = account_vote {
-						ReferendumInfoFor::<T>::mutate(ref_index, |maybe_info| {
-							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
-								status.tally.increase(vote.aye, amount);
-							}
-						});
-					}
-				}
-				votes.len() as u32
-			},
-		})
-	}
-
-	/// Return the number of votes for `who`
-	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
-		VotingFor::<T>::mutate(who, |voting| match voting {
-			Voting::Delegating { delegations, .. } => {
-				// We don't support second level delegating, so we don't need to do anything more.
-				*delegations = delegations.saturating_sub(amount);
-				1
-			},
-			Voting::Direct { votes, delegations, .. } => {
-				*delegations = delegations.saturating_sub(amount);
-				for &(ref_index, account_vote) in votes.iter() {
-					if let AccountVote::Standard { vote, .. } = account_vote {
-						ReferendumInfoFor::<T>::mutate(ref_index, |maybe_info| {
-							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
-								status.tally.reduce(vote.aye, amount);
-							}
-						});
-					}
-				}
-				votes.len() as u32
-			},
-		})
-	}
-
-	/// Attempt to delegate `balance` times `conviction` of voting power from `who` to `target`.
-	///
-	/// Return the upstream number of votes.
-	fn try_delegate(
-		who: T::AccountId,
-		target: T::AccountId,
-		conviction: Conviction,
-		balance: BalanceOf<T>,
-	) -> Result<u32, DispatchError> {
-		ensure!(who != target, Error::<T>::Nonsense);
-		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
-		let votes = VotingFor::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
-			let mut old = Voting::Delegating {
-				balance,
-				target: target.clone(),
-				conviction,
-				delegations: Default::default(),
-				prior: Default::default(),
-			};
-			sp_std::mem::swap(&mut old, voting);
-			match old {
-				Voting::Delegating { balance, target, conviction, delegations, prior, .. } => {
-					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
-					voting.set_common(delegations, prior);
-				},
-				Voting::Direct { votes, delegations, prior } => {
-					// here we just ensure that we're currently idling with no votes recorded.
-					ensure!(votes.is_empty(), Error::<T>::VotesExist);
-					voting.set_common(delegations, prior);
-				},
-			}
-			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
-			// Extend the lock to `balance` (rather than setting it) since we don't know what other
-			// votes are in place.
-			T::Currency::extend_lock(ASSEMBLY_ID, &who, balance, WithdrawReasons::TRANSFER);
-			Ok(votes)
-		})?;
-		Self::deposit_event(Event::<T>::Delegated(who, target));
-		Ok(votes)
-	}
-
-	/// Attempt to end the current delegation.
-	///
-	/// Return the number of votes of upstream.
-	fn try_undelegate(who: T::AccountId) -> Result<u32, DispatchError> {
-		let votes = VotingFor::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
-			let mut old = Voting::default();
-			sp_std::mem::swap(&mut old, voting);
-			match old {
-				Voting::Delegating { balance, target, conviction, delegations, mut prior } => {
-					// remove any delegation votes to our current target.
-					let votes =
-						Self::reduce_upstream_delegation(&target, conviction.votes(balance));
-					let now = frame_system::Pallet::<T>::block_number();
-					let lock_periods = conviction.lock_periods().into();
-					prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
-					voting.set_common(delegations, prior);
-
-					Ok(votes)
-				},
-				Voting::Direct { .. } => Err(Error::<T>::NotDelegating.into()),
-			}
-		})?;
-		Self::deposit_event(Event::<T>::Undelegated(who));
-		Ok(votes)
-	}
-
-	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
-	/// a security hole) but may be reduced from what they are currently.
-	fn update_lock(who: &T::AccountId) {
-		let lock_needed = VotingFor::<T>::mutate(who, |voting| {
-			voting.rejig(frame_system::Pallet::<T>::block_number());
-			voting.locked_balance()
-		});
-		if lock_needed.is_zero() {
-			T::Currency::remove_lock(ASSEMBLY_ID, who);
-		} else {
-			T::Currency::set_lock(ASSEMBLY_ID, who, lock_needed, WithdrawReasons::TRANSFER);
-		}
+	fn is_passing(
+		tally: &T::Tally,
+		now: T::BlockNumber,
+		period: T::BlockNumber,
+		turnout_needed: &Curve,
+		approval_needed: &Curve,
+	) -> bool {
+		let x = Perbill::from_rational(now.min(period), period);
+		turnout_needed.passing(x, tally.turnout())
+			&& approval_needed.passing(x, tally.approval())
 	}
 }
-*/

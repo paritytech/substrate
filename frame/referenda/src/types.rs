@@ -18,152 +18,78 @@
 //! Miscellaneous additional datatypes.
 
 use super::*;
-use crate::{AccountVote, Conviction, Vote};
 use codec::{Decode, Encode};
 use frame_support::Parameter;
 use scale_info::TypeInfo;
-use sp_runtime::{traits::{Saturating, Zero}, RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 
-/// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct Tally<Balance> {
-	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
-	pub ayes: Balance,
-	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
-	pub nays: Balance,
-	/// The amount of funds currently expressing its opinion. Pre-conviction.
-	pub turnout: Balance,
+pub type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
+pub type CallOf<T> = <T as Config>::Call;
+pub type OriginOf<T> = <T as Config>::Origin;
+pub type VotesOf<T> = <T as Config>::Votes;
+pub type TallyOf<T> = <T as Config>::Tally;
+pub type ReferendumInfoOf<T> = ReferendumInfo<
+	TrackIdOf<T>,
+	OriginOf<T>,
+	<T as frame_system::Config>::BlockNumber,
+	<T as frame_system::Config>::Hash,
+	BalanceOf<T>,
+	VotesOf<T>,
+	TallyOf<T>,
+	<T as frame_system::Config>::AccountId,
+>;
+pub type ReferendumStatusOf<T> = ReferendumStatus<
+	TrackIdOf<T>,
+	OriginOf<T>,
+	<T as frame_system::Config>::BlockNumber,
+	<T as frame_system::Config>::Hash,
+	BalanceOf<T>,
+	VotesOf<T>,
+	TallyOf<T>,
+	<T as frame_system::Config>::AccountId,
+>;
+pub type DecidingStatusOf<T> = DecidingStatus<
+	<T as frame_system::Config>::BlockNumber,
+>;
+pub type TrackInfoOf<T> = TrackInfo<
+	BalanceOf<T>,
+	<T as frame_system::Config>::BlockNumber,
+>;
+pub type TrackIdOf<T> = <
+	<T as Config>::Tracks as TracksInfo<
+		BalanceOf<T>,
+		<T as frame_system::Config>::BlockNumber,
+	>
+>::Id;
+
+/// A referendum index.
+pub type ReferendumIndex = u32;
+
+pub trait InsertSorted<T> {
+	/// Inserts an item into a sorted series.
+	///
+	/// Returns `true` if it was inserted, `false` if it would belong beyond the bound of the
+	/// series.
+	fn insert_sorted_by_key<
+		F: FnMut(&T) -> K,
+		K: PartialOrd<K> + Ord,
+	>(&mut self, t: T, f: F,) -> bool;
 }
-
-/// Amount of votes and capital placed in delegation for an account.
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct Delegations<Balance> {
-	/// The number of votes (this is post-conviction).
-	pub votes: Balance,
-	/// The amount of raw capital, used for the turnout.
-	pub capital: Balance,
-}
-
-impl<Balance: Saturating> Saturating for Delegations<Balance> {
-	fn saturating_add(self, o: Self) -> Self {
-		Self {
-			votes: self.votes.saturating_add(o.votes),
-			capital: self.capital.saturating_add(o.capital),
+impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
+	fn insert_sorted_by_key<
+		F: FnMut(&T) -> K,
+		K: PartialOrd<K> + Ord,
+	>(&mut self, t: T, mut f: F,) -> bool {
+		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
+		if index >= S::get() as usize {
+			return false
 		}
-	}
-
-	fn saturating_sub(self, o: Self) -> Self {
-		Self {
-			votes: self.votes.saturating_sub(o.votes),
-			capital: self.capital.saturating_sub(o.capital),
-		}
-	}
-
-	fn saturating_mul(self, o: Self) -> Self {
-		Self {
-			votes: self.votes.saturating_mul(o.votes),
-			capital: self.capital.saturating_mul(o.capital),
-		}
-	}
-
-	fn saturating_pow(self, exp: usize) -> Self {
-		Self { votes: self.votes.saturating_pow(exp), capital: self.capital.saturating_pow(exp) }
-	}
-}
-
-impl<Balance: AtLeast32BitUnsigned + Copy> Tally<Balance> {
-	/// Create a new tally.
-	pub fn new(vote: Vote, balance: Balance) -> Self {
-		let Delegations { votes, capital } = vote.conviction.votes(balance);
-		Self {
-			ayes: if vote.aye { votes } else { Zero::zero() },
-			nays: if vote.aye { Zero::zero() } else { votes },
-			turnout: capital,
-		}
-	}
-
-	/// Add an account's vote into the tally.
-	pub fn add(&mut self, vote: AccountVote<Balance>) -> Option<()> {
-		match vote {
-			AccountVote::Standard { vote, balance } => {
-				let Delegations { votes, capital } = vote.conviction.votes(balance);
-				self.turnout = self.turnout.checked_add(&capital)?;
-				match vote.aye {
-					true => self.ayes = self.ayes.checked_add(&votes)?,
-					false => self.nays = self.nays.checked_add(&votes)?,
-				}
-			},
-			AccountVote::Split { aye, nay } => {
-				let aye = Conviction::None.votes(aye);
-				let nay = Conviction::None.votes(nay);
-				self.turnout = self.turnout.checked_add(&aye.capital)?.checked_add(&nay.capital)?;
-				self.ayes = self.ayes.checked_add(&aye.votes)?;
-				self.nays = self.nays.checked_add(&nay.votes)?;
-			},
-		}
-		Some(())
-	}
-
-	/// Remove an account's vote from the tally.
-	pub fn remove(&mut self, vote: AccountVote<Balance>) -> Option<()> {
-		match vote {
-			AccountVote::Standard { vote, balance } => {
-				let Delegations { votes, capital } = vote.conviction.votes(balance);
-				self.turnout = self.turnout.checked_sub(&capital)?;
-				match vote.aye {
-					true => self.ayes = self.ayes.checked_sub(&votes)?,
-					false => self.nays = self.nays.checked_sub(&votes)?,
-				}
-			},
-			AccountVote::Split { aye, nay } => {
-				let aye = Conviction::None.votes(aye);
-				let nay = Conviction::None.votes(nay);
-				self.turnout = self.turnout.checked_sub(&aye.capital)?.checked_sub(&nay.capital)?;
-				self.ayes = self.ayes.checked_sub(&aye.votes)?;
-				self.nays = self.nays.checked_sub(&nay.votes)?;
-			},
-		}
-		Some(())
-	}
-
-	/// Increment some amount of votes.
-	pub fn increase(&mut self, approve: bool, delegations: Delegations<Balance>) -> Option<()> {
-		self.turnout = self.turnout.saturating_add(delegations.capital);
-		match approve {
-			true => self.ayes = self.ayes.saturating_add(delegations.votes),
-			false => self.nays = self.nays.saturating_add(delegations.votes),
-		}
-		Some(())
-	}
-
-	/// Decrement some amount of votes.
-	pub fn reduce(&mut self, approve: bool, delegations: Delegations<Balance>) -> Option<()> {
-		self.turnout = self.turnout.saturating_sub(delegations.capital);
-		match approve {
-			true => self.ayes = self.ayes.saturating_sub(delegations.votes),
-			false => self.nays = self.nays.saturating_sub(delegations.votes),
-		}
-		Some(())
-	}
-
-	pub fn turnout(&self, total: Balance) -> Perbill {
-		Perbill::from_rational(self.turnout, total)
-	}
-
-	pub fn approval(&self) -> Perbill {
-		Perbill::from_rational(self.ayes, self.ayes.saturating_add(self.nays))
-	}
-
-	pub fn is_passing<Moment: AtLeast32BitUnsigned + Copy>(
-		&self,
-		t: Moment,
-		period: Moment,
-		total: Balance,
-		turnout_needed: &Curve,
-		approval_needed: &Curve,
-	) -> bool {
-		let x = Perbill::from_rational(t.min(period), period);
-		turnout_needed.passing(x, self.turnout(total)) && approval_needed.passing(x, self.approval())
+		self.force_insert(index, t);
+		true
 	}
 }
 
@@ -204,7 +130,7 @@ pub struct TrackInfo<Balance, Moment> {
 	pub(crate) min_enactment_period: Moment,
 	/// Minimum aye votes as percentage of overall conviction-weighted votes needed for
 	/// approval as a function of time into decision period.
-	pub(crate) min_approvals: Curve,
+	pub(crate) min_approval: Curve,
 	/// Minimum turnout as percentage of overall population that is needed for
 	/// approval as a function of time into decision period.
 	pub(crate) min_turnout: Curve,
@@ -239,7 +165,7 @@ impl<Moment: AtLeast32BitUnsigned + Copy> AtOrAfter<Moment> {
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId> {
+pub struct ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId> {
 	/// The track of this referendum.
 	pub(crate) track: TrackId,
 	/// The origin for this referendum.
@@ -258,7 +184,7 @@ pub struct ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Accou
 	/// The status of a decision being made. If `None`, it has not entered the deciding period.
 	pub(crate) deciding: Option<DecidingStatus<Moment>>,
 	/// The current tally of votes in this referendum.
-	pub(crate) tally: Tally<Votes>,
+	pub(crate) tally: Tally,
 	/// The number of aye votes we are in the track queue for, if any. `None` if we're not
 	/// yet in the deciding queue or are already deciding. If a vote results in fewer ayes
 	/// in the `tally` than this, then the voter is required to pay to reorder the track queue.
@@ -267,8 +193,8 @@ pub struct ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Accou
 	pub(crate) ayes_in_queue: Option<Votes>,
 }
 
-impl<TrackId, Origin, Moment: AtLeast32BitUnsigned + Copy, Hash, Balance, Votes, AccountId>
-	ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>
+impl<TrackId, Origin, Moment: AtLeast32BitUnsigned + Copy, Hash, Balance, Votes, Tally, AccountId>
+	ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
 {
 	pub fn begin_deciding(&mut self, now: Moment, decision_period: Moment) {
 		self.ayes_in_queue = None;
@@ -282,9 +208,9 @@ impl<TrackId, Origin, Moment: AtLeast32BitUnsigned + Copy, Hash, Balance, Votes,
 
 /// Info regarding a referendum, present or past.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId> {
+pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId> {
 	/// Referendum has been submitted and is being voted on.
-	Ongoing(ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>),
+	Ongoing(ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>),
 	/// Referendum finished at `end` with approval. Submission deposit is held.
 	Approved(Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished at `end` with rejection. Submission deposit is held.
@@ -293,8 +219,8 @@ pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId
 	TimedOut(Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 }
 
-impl<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>
-	ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>
+impl<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
+	ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
 {
 	pub fn take_decision_deposit(&mut self) -> Option<Deposit<AccountId, Balance>> {
 		use ReferendumInfo::*;
@@ -305,16 +231,6 @@ impl<TrackId, Origin, Moment, Hash, Balance, Votes, AccountId>
 		}
 	}
 }
-
-/// Whether an `unvote` operation is able to make actions that are not strictly always in the
-/// interest of an account.
-pub enum UnvoteScope {
-	/// Permitted to do everything.
-	Any,
-	/// Permitted to do only the changes that do not need the owner's permission.
-	OnlyExpired,
-}
-
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
 pub enum Curve {

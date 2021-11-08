@@ -18,7 +18,9 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
-use sp_arithmetic::traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto};
+use sp_arithmetic::{Perbill, traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto}};
+use sp_runtime::traits::Member;
+use crate::dispatch::Parameter;
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
@@ -87,3 +89,17 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
 		B::unique_saturated_from(value)
 	}
 }
+
+pub trait VoteTally<Votes> {
+	fn ayes(&self) -> Votes;
+	fn turnout(&self) -> Perbill;
+	fn approval(&self) -> Perbill;
+}
+
+pub trait Referenda {
+	type Index: Parameter + Member + Ord + PartialOrd + Copy;
+	type Votes: Parameter + Member + Ord + PartialOrd + Copy;
+
+	// TODO
+}
+
