@@ -258,11 +258,11 @@ where
 		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
 		let (tip, who, initial_payment) = pre;
-		let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
-			len as u32, info, post_info, tip,
-		);
 		match initial_payment {
 			InitialPayment::Native(already_withdrawn) => {
+				let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
+					len as u32, info, post_info, tip,
+				);
 				<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::correct_and_deposit_fee(
 					&who,
 					info,
@@ -273,6 +273,9 @@ where
 				)?;
 			},
 			InitialPayment::Asset(already_withdrawn) => {
+				let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
+					len as u32, info, post_info, tip,
+				);
 				T::OnChargeAssetTransaction::correct_and_deposit_fee(
 					&who,
 					info,
@@ -283,10 +286,10 @@ where
 				)?;
 			},
 			InitialPayment::Nothing => {
-				debug_assert!(
-					actual_fee.is_zero(),
-					"actual fee should be zero if initial fee was zero."
-				);
+				// `actual_fee` should be zero here for any signed extrinsic. It would be non-zero
+				// here in case of unsigned extrinsics as they don't pay fees but
+				// `compute_actual_fee` is not aware of them. In both cases it's fine to just move
+				// ahead without adjusting the fee, though, so we do nothing.
 				debug_assert!(tip.is_zero(), "tip should be zero if initial fee was zero.");
 			},
 		}
