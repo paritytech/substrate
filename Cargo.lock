@@ -8429,6 +8429,7 @@ dependencies = [
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
+ "paste 1.0.4",
  "sp-core",
  "sp-io",
  "sp-runtime",
