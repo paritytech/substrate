@@ -71,7 +71,7 @@ use safe_mix::TripletMix;
 use codec::Encode;
 use frame_support::traits::Randomness;
 use sp_runtime::traits::{Hash, Saturating};
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
