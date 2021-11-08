@@ -90,8 +90,6 @@ impl SpawnTaskHandle {
 
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
-		// Provide a default subsystem name.
-		let subsystem_name = subsystem.unwrap_or("substrate-unspecified");
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
@@ -162,15 +160,6 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn(&self, name: &'static str, group: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn_inner(name, group, future, TaskType::Async)
 	}
-
-	fn spawn_blocking_with_subsystem(&self, name: &'static str, subsystem: &'static str,future: BoxFuture<'static, ()>) {
-		self.spawn_inner(name, Some(subsystem), future, TaskType::Blocking)
-	}
-
-	fn spawn_with_subsystem(&self, name: &'static str, subsystem: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn_inner(name, Some(subsystem), future, TaskType::Async)
-	}
-	
 }
 
 /// A wrapper over `SpawnTaskHandle` that will notify a receiver whenever any
