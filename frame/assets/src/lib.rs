@@ -157,7 +157,7 @@ use sp_runtime::{
 	},
 	ArithmeticError, TokenError,
 };
-use sp_std::{borrow::Borrow, convert::TryInto, prelude::*};
+use sp_std::{borrow::Borrow, prelude::*};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
