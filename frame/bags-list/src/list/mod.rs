@@ -384,8 +384,8 @@ impl<T: Config> List<T> {
 		})
 	}
 
-	/// Put `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in
-	/// same bag  and the `weight_of` `lighter_id` must be less than that of `heavier_id`.
+	/// Put `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in the
+	/// same bag and the `weight_of` `lighter_id` must be less than that of `heavier_id`.
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
@@ -440,7 +440,7 @@ impl<T: Config> List<T> {
 			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
 			// tail.
 			let mut bag =
-				Bag::<T>::get(at.bag_upper).expect("given nodes must always have a valid. qed.");
+				Bag::<T>::get(at.bag_upper).expect("given nodes must always have a valid bag. qed.");
 
 			if node.prev == None {
 				bag.head = Some(node.id().clone())

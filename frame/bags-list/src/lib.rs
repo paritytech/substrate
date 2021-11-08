@@ -185,10 +185,6 @@ pub mod pallet {
 		IdNotFound,
 		/// An Id does not have a greater vote weight than another Id.
 		NotHeavier,
-		/// Heavier weight Id is already in a higher position than a lesser weight Id.
-		AlreadyHigherPosition,
-		/// Bag could not be found. This is a system logic error that should never happen.
-		BagNotFound,
 	}
 
 	#[pallet::call]

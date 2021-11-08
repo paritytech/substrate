@@ -368,7 +368,7 @@ mod list {
 	}
 
 	#[test]
-	#[should_panic = "given nodes must always have a valid. qed."]
+	#[should_panic = "given nodes must always have a valid bag. qed."]
 	fn put_in_front_of_panics_if_bag_not_found() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			let node_10_no_bag = Node::<Runtime> { id: 10, prev: None, next: None, bag_upper: 15 };
@@ -384,18 +384,16 @@ mod list {
 
 			let weight_fn = Box::new(<Runtime as Config>::VoteWeightProvider::vote_weight);
 
-			// then
-			assert_storage_noop!(assert_eq!(
-				List::<Runtime>::put_in_front_of(&10, &11, weight_fn).unwrap_err(),
-				crate::pallet::Error::<Runtime>::BagNotFound
-			));
+			// then .. this panics
+			let _ = List::<Runtime>::put_in_front_of(&10, &11, weight_fn);
 		});
 	}
 
 	#[test]
 	fn insert_at_unchecked_at_is_only_node() {
-		// Note that `insert_at_unchecked` tests should fail post checks because it does not
-		// increment the node counter.
+		// Note that this `insert_at_unchecked` test should fail post checks because node 42 does not
+		// get re-assigned the correct bagu pper. This is because `insert_at_unchecked` assumes
+		// both nodes are already in the same bag with the correct bag upper.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
@@ -420,7 +418,7 @@ mod list {
 
 	#[test]
 	fn insert_at_unchecked_at_is_head() {
-		ExtBuilder::default().build_and_execute_no_post_check(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
@@ -443,7 +441,7 @@ mod list {
 
 	#[test]
 	fn insert_at_unchecked_at_is_non_terminal() {
-		ExtBuilder::default().build_and_execute_no_post_check(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
@@ -466,7 +464,7 @@ mod list {
 
 	#[test]
 	fn insert_at_unchecked_at_is_tail() {
-		ExtBuilder::default().build_and_execute_no_post_check(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
