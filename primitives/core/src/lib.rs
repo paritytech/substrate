@@ -118,15 +118,13 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction => offchain::Capabilities::none(),
+			Importing | Syncing | BlockConstruction => offchain::Capabilities::empty(),
 			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
 			// calls.
-			OffchainCall(None) => [
-				offchain::Capability::Keystore,
-				offchain::Capability::OffchainDbRead,
-				offchain::Capability::TransactionPool,
-			][..]
-				.into(),
+			OffchainCall(None) =>
+				offchain::Capabilities::KEYSTORE |
+					offchain::Capabilities::OFFCHAIN_DB_READ |
+					offchain::Capabilities::TRANSACTION_POOL,
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}

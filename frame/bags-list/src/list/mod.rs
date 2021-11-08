@@ -53,7 +53,7 @@ mod tests;
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
-pub(crate) fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
@@ -391,8 +391,8 @@ impl<T: Config> List<T> {
 	///
 	/// * there are no duplicate ids,
 	/// * length of this list is in sync with `CounterForListNodes`,
-	/// * and sanity-checks all bags. This will cascade down all the checks and makes sure all bags
-	///   are checked per *any* update to `List`.
+	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
+	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(feature = "std")]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		use frame_support::ensure;
@@ -414,7 +414,6 @@ impl<T: Config> List<T> {
 			let thresholds = T::BagThresholds::get().iter().copied();
 			let thresholds: Vec<u64> = if thresholds.clone().last() == Some(VoteWeight::MAX) {
 				// in the event that they included it, we don't need to make any changes
-				// Box::new(thresholds.collect()
 				thresholds.collect()
 			} else {
 				// otherwise, insert it here.
@@ -691,7 +690,7 @@ pub struct Node<T: Config> {
 
 impl<T: Config> Node<T> {
 	/// Get a node by id.
-	pub(crate) fn get(id: &T::AccountId) -> Option<Node<T>> {
+	pub fn get(id: &T::AccountId) -> Option<Node<T>> {
 		crate::ListNodes::<T>::try_get(id).ok()
 	}
 
@@ -735,7 +734,7 @@ impl<T: Config> Node<T> {
 	}
 
 	/// `true` when this voter is in the wrong bag.
-	pub(crate) fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
 		notional_bag_for::<T>(current_weight) != self.bag_upper
 	}
 
@@ -774,10 +773,13 @@ impl<T: Config> Node<T> {
 			"node does not exist in the expected bag"
 		);
 
+		let non_terminal_check = !self.is_terminal() &&
+			expected_bag.head.as_ref() != Some(id) &&
+			expected_bag.tail.as_ref() != Some(id);
+		let terminal_check =
+			expected_bag.head.as_ref() == Some(id) || expected_bag.tail.as_ref() == Some(id);
 		frame_support::ensure!(
-			!self.is_terminal() ||
-				expected_bag.head.as_ref() == Some(id) ||
-				expected_bag.tail.as_ref() == Some(id),
+			non_terminal_check || terminal_check,
 			"a terminal node is neither its bag head or tail"
 		);
 

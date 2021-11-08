@@ -697,6 +697,8 @@ pub struct FullPeerConfig {
 	pub is_authority: bool,
 	/// Syncing mode
 	pub sync_mode: SyncMode,
+	/// Extra genesis storage.
+	pub extra_storage: Option<sp_core::storage::Storage>,
 	/// Enable transaction indexing.
 	pub storage_chain: bool,
 }
@@ -765,6 +767,11 @@ where
 			(Some(keep_blocks), false) => TestClientBuilder::with_pruning_window(keep_blocks),
 			(None, false) => TestClientBuilder::with_default_backend(),
 		};
+		if let Some(storage) = config.extra_storage {
+			let genesis_extra_storage = test_client_builder.genesis_init_mut().extra_storage();
+			*genesis_extra_storage = storage;
+		}
+
 		if matches!(config.sync_mode, SyncMode::Fast { .. } | SyncMode::Warp) {
 			test_client_builder = test_client_builder.set_no_genesis();
 		}
