@@ -18,9 +18,10 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
+use codec::HasCompact;
 use sp_arithmetic::{Perbill, traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto}};
 use sp_runtime::traits::Member;
-use crate::dispatch::Parameter;
+use crate::dispatch::{Parameter, DispatchError};
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
@@ -96,10 +97,35 @@ pub trait VoteTally<Votes> {
 	fn approval(&self) -> Perbill;
 }
 
-pub trait Referenda {
-	type Index: Parameter + Member + Ord + PartialOrd + Copy;
-	type Votes: Parameter + Member + Ord + PartialOrd + Copy;
-
-	// TODO
+pub enum PollStatus<Tally, Moment> {
+	None,
+	Ongoing(Tally),
+	Done(Moment, bool),
 }
 
+impl<Tally, Moment> PollStatus<Tally, Moment> {
+	pub fn ensure_ongoing(self) -> Option<Tally> {
+		match self {
+			Self::Ongoing(t) => Some(t),
+			_ => None,
+		}
+	}
+}
+
+pub trait Referenda<Tally> {
+	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
+	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
+	type Moment;
+
+	/// `true` if the referendum `index` can be voted on. Once this is `false`, existing votes may
+	/// be cancelled permissionlessly.
+	fn is_active(index: Self::Index) -> bool;
+
+	/// Don't use this if you might mutate - use `try_mutate_tally` instead.
+	fn tally<R>(index: Self::Index) -> Option<Tally>;
+
+	fn access_poll<R>(
+		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment>) -> Result<R, DispatchError>,
+	) -> Result<R, DispatchError>;
+}

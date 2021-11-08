@@ -18,32 +18,19 @@
 //! The crate's tests.
 
 use super::*;
-use crate as pallet_democracy;
-use codec::Encode;
+use crate as pallet_conviction_voting;
 use frame_support::{
-	assert_noop, assert_ok, ord_parameter_types, parameter_types,
+	ord_parameter_types, parameter_types,
 	traits::{Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers},
 	weights::Weight,
 };
-use frame_system::{EnsureRoot, EnsureSignedBy};
-use pallet_balances::{BalanceLock, Error as BalancesError};
+use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
-
-mod cancellation;
-mod decoders;
-mod delegation;
-mod external_proposing;
-mod fast_tracking;
-mod lock_voting;
-mod preimage;
-mod public_proposals;
-mod scheduling;
-mod voting;
 
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
@@ -64,7 +51,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Config, Event<T>},
-		Democracy: pallet_democracy::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Voting: pallet_conviction_voting::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -165,35 +152,38 @@ impl SortedMembers<u64> for OneToFive {
 	fn add(_m: &u64) {}
 }
 
+pub struct TotalIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)>);
+impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
+	fn get() -> C::Balance {
+		C::total_issuance()
+	}
+}
+
+pub struct TestReferenda;
+impl Referenda<TallyOf<Test>> for TestReferenda {
+	type Index = u8;
+	type Votes = u64;
+	type Moment = u64;
+	fn is_active(_index: u8) -> bool { false }
+	fn access_poll<R>(
+		_index: Self::Index,
+		_f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64>) -> Result<R, DispatchError>,
+	) -> Result<R, DispatchError> {
+		Err(DispatchError::Other("Unimplemented"))
+	}
+	fn tally<R>(_index: Self::Index) -> Option<TallyOf<Test>> {
+		None
+	}
+}
+
 impl Config for Test {
-	type Proposal = Call;
 	type Event = Event;
 	type Currency = pallet_balances::Pallet<Self>;
-	type EnactmentPeriod = EnactmentPeriod;
-	type LaunchPeriod = LaunchPeriod;
-	type VotingPeriod = VotingPeriod;
 	type VoteLockingPeriod = VoteLockingPeriod;
-	type FastTrackVotingPeriod = FastTrackVotingPeriod;
-	type MinimumDeposit = MinimumDeposit;
-	type ExternalOrigin = EnsureSignedBy<Two, u64>;
-	type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
-	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
-	type FastTrackOrigin = EnsureSignedBy<Five, u64>;
-	type CancellationOrigin = EnsureSignedBy<Four, u64>;
-	type BlacklistOrigin = EnsureRoot<u64>;
-	type CancelProposalOrigin = EnsureRoot<u64>;
-	type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
-	type CooloffPeriod = CooloffPeriod;
-	type PreimageByteDeposit = PreimageByteDeposit;
-	type Slash = ();
-	type InstantOrigin = EnsureSignedBy<Six, u64>;
-	type InstantAllowed = InstantAllowed;
-	type Scheduler = Scheduler;
 	type MaxVotes = MaxVotes;
-	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
-	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
-	type MaxProposals = MaxProposals;
+	type MaxTurnout = TotalIssuanceOf<Balances, Self::AccountId>;
+	type Referenda = TestReferenda;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -203,9 +193,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	pallet_democracy::GenesisConfig::<Test>::default()
-		.assimilate_storage(&mut t)
-		.unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -220,65 +207,20 @@ pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) 
 #[test]
 fn params_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Democracy::referendum_count(), 0);
 		assert_eq!(Balances::free_balance(42), 0);
 		assert_eq!(Balances::total_issuance(), 210);
 	});
 }
 
-fn set_balance_proposal(value: u64) -> Vec<u8> {
-	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
-		.encode()
-}
-
-#[test]
-fn set_balance_proposal_is_correctly_filtered_out() {
-	for i in 0..10 {
-		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
-		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
-	}
-}
-
-fn set_balance_proposal_hash(value: u64) -> H256 {
-	BlakeTwo256::hash(&set_balance_proposal(value)[..])
-}
-
-fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
-	let p = set_balance_proposal(value);
-	let h = BlakeTwo256::hash(&p[..]);
-	match Democracy::note_preimage(Origin::signed(6), p) {
-		Ok(_) => (),
-		Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
-		Err(x) => panic!("{:?}", x),
-	}
-	h
-}
-
-fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(Origin::signed(who), set_balance_proposal_hash(value), delay)
-}
-
-fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(Origin::signed(who), set_balance_proposal_hash_and_note(value), delay)
-}
-
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 	Scheduler::on_initialize(System::block_number());
-	Democracy::begin_block(System::block_number());
 }
 
 fn fast_forward_to(n: u64) {
 	while System::block_number() < n {
 		next_block();
 	}
-}
-
-fn begin_referendum() -> ReferendumIndex {
-	System::set_block_number(0);
-	assert_ok!(propose_set_balance_and_note(1, 2, 1));
-	fast_forward_to(2);
-	0
 }
 
 fn aye(who: u64) -> AccountVote<u64> {
@@ -297,6 +239,6 @@ fn big_nay(who: u64) -> AccountVote<u64> {
 	AccountVote::Standard { vote: BIG_NAY, balance: Balances::free_balance(&who) }
 }
 
-fn tally(r: ReferendumIndex) -> Tally<u64> {
-	Democracy::referendum_status(r).unwrap().tally
+fn tally(r: u32) -> TallyOf<Test> {
+	todo!()
 }

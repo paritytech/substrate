@@ -53,7 +53,7 @@ impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> VoteTally<Votes>
 	}
 }
 
-impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> Tally<Votes> {
+impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> Tally<Votes, Total> {
 	/// Create a new tally.
 	pub fn new(vote: Vote, balance: Votes) -> Self {
 		let Delegations { votes, capital } = vote.conviction.votes(balance);

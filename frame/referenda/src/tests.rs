@@ -33,7 +33,7 @@ use sp_runtime::{
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	Perbill,
 };
-
+/*
 mod cancellation;
 mod decoders;
 mod delegation;
@@ -44,7 +44,7 @@ mod preimage;
 mod public_proposals;
 mod scheduling;
 mod voting;
-
+*/
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
 const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };

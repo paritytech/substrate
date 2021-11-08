@@ -17,7 +17,7 @@
 
 //! The vote datatype.
 
-use crate::{Conviction, Delegations, ReferendumIndex};
+use crate::{Conviction, Delegations};
 use codec::{Decode, Encode, EncodeLike, Input, Output};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -132,7 +132,7 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub enum Voting<Balance, AccountId, BlockNumber> {
+pub enum Voting<Balance, AccountId, BlockNumber, ReferendumIndex> {
 	/// The account is voting directly. `delegations` is the total amount of post-conviction voting
 	/// weight that it controls from those that have delegated to it.
 	Direct {
@@ -155,8 +155,8 @@ pub enum Voting<Balance, AccountId, BlockNumber> {
 	},
 }
 
-impl<Balance: Default, AccountId, BlockNumber: Zero> Default
-	for Voting<Balance, AccountId, BlockNumber>
+impl<Balance: Default, AccountId, BlockNumber: Zero, ReferendumIndex> Default
+	for Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
 {
 	fn default() -> Self {
 		Voting::Direct {
@@ -167,8 +167,8 @@ impl<Balance: Default, AccountId, BlockNumber: Zero> Default
 	}
 }
 
-impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, AccountId>
-	Voting<Balance, AccountId, BlockNumber>
+impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, AccountId, ReferendumIndex>
+	Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
 		match self {

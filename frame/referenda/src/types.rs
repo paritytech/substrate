@@ -211,12 +211,12 @@ impl<TrackId, Origin, Moment: AtLeast32BitUnsigned + Copy, Hash, Balance, Votes,
 pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId> {
 	/// Referendum has been submitted and is being voted on.
 	Ongoing(ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>),
-	/// Referendum finished at `end` with approval. Submission deposit is held.
-	Approved(Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
-	/// Referendum finished at `end` with rejection. Submission deposit is held.
-	Rejected(Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
-	/// Referendum finished at `end` and was never decided. Submission deposit is held.
-	TimedOut(Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	/// Referendum finished with approval. Submission deposit is held.
+	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	/// Referendum finished with rejection. Submission deposit is held.
+	Rejected(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	/// Referendum finished and was never decided. Submission deposit is held.
+	TimedOut(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 }
 
 impl<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
@@ -225,7 +225,7 @@ impl<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
 	pub fn take_decision_deposit(&mut self) -> Option<Deposit<AccountId, Balance>> {
 		use ReferendumInfo::*;
 		match self {
-			Approved(_, d) | Rejected(_, d) | TimedOut(_, d) => d.take(),
+			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) => d.take(),
 			// Cannot refund deposit if Ongoing as this breaks assumptions.
 			_ => None,
 		}

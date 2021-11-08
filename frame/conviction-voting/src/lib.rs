@@ -26,7 +26,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Codec};
-use frame_support::{BoundedVec, ensure, traits::{Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, Referenda, ReservableCurrency, WithdrawReasons, schedule::{DispatchTime, Named as ScheduleNamed}}};
+use frame_support::{
+	BoundedVec, ensure, traits::{
+		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
+		WithdrawReasons, PollStatus, Referenda,
+		schedule::{DispatchTime, Named as ScheduleNamed},
+	}
+};
 use scale_info::TypeInfo;
 use sp_runtime::{ArithmeticError, DispatchError, DispatchResult, Perbill, traits::{Dispatchable, Saturating, One, AtLeast32BitUnsigned}};
 use sp_std::{prelude::*, fmt::Debug};
@@ -58,8 +64,10 @@ type VotingOf<T> = Voting<
 	BalanceOf<T>,
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
+	ReferendumIndexOf<T>,
 >;
-type ReferendumIndexOf<T> = <<T as Config>::Referenda as Referenda>::Index;
+type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
+type ReferendumIndexOf<T> = <<T as Config>::Referenda as Referenda<TallyOf<T>>>::Index;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -88,7 +96,16 @@ pub mod pallet {
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
 		/// The implementation of the logic which conducts referenda.
-		type Referenda: Referenda<Votes = BalanceOf<Self>>;
+		type Referenda: Referenda<
+			TallyOf<Self>,
+			Votes = BalanceOf<Self>,
+			Moment = Self::BlockNumber,
+		>;
+
+		/// The maximum amount of tokens which may be used for voting. May just be
+		/// `Currency::total_issuance`, but you might want to reduce this in order to account for
+		/// funds in the system which are unable to vote (e.g. parachain auction deposits).
+		type MaxTurnout: Get<BalanceOf<Self>>;
 
 		/// The maximum number of concurrent votes an account may have.
 		///
@@ -338,44 +355,43 @@ impl<T: Config> Pallet<T> {
 		ref_index: ReferendumIndexOf<T>,
 		vote: AccountVote<BalanceOf<T>>,
 	) -> DispatchResult {
-		let mut status = Self::referendum_status(ref_index)?;
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
-		VotingFor::<T>::try_mutate(who, |voting| -> DispatchResult {
-			if let Voting::Direct { ref mut votes, delegations, .. } = voting {
-				match votes.binary_search_by_key(&ref_index, |i| i.0) {
-					Ok(i) => {
-						// Shouldn't be possible to fail, but we handle it gracefully.
-						status.tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
-						if let Some(approve) = votes[i].1.as_standard() {
-							status.tally.reduce(approve, *delegations);
-						}
-						votes[i].1 = vote;
-					},
-					Err(i) => {
-						ensure!(
-							votes.len() as u32 <= T::MaxVotes::get(),
-							Error::<T>::MaxVotesReached
-						);
-						votes.insert(i, (ref_index, vote));
-					},
+		T::Referenda::access_poll(ref_index, |poll_status| {
+			let tally = poll_status.ensure_ongoing().ok_or(Error::<T>::NotOngoing)?;
+			VotingFor::<T>::try_mutate(who, |voting| {
+				if let Voting::Direct { ref mut votes, delegations, .. } = voting {
+					match votes.binary_search_by_key(&ref_index, |i| i.0) {
+						Ok(i) => {
+							// Shouldn't be possible to fail, but we handle it gracefully.
+							tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
+							if let Some(approve) = votes[i].1.as_standard() {
+								tally.reduce(approve, *delegations);
+							}
+							votes[i].1 = vote;
+						},
+						Err(i) => {
+							ensure!(
+								votes.len() as u32 <= T::MaxVotes::get(),
+								Error::<T>::MaxVotesReached
+							);
+							votes.insert(i, (ref_index, vote));
+						},
+					}
+					// Shouldn't be possible to fail, but we handle it gracefully.
+					tally.add(vote).ok_or(ArithmeticError::Overflow)?;
+					if let Some(approve) = vote.as_standard() {
+						tally.increase(approve, *delegations);
+					}
+				} else {
+					return Err(Error::<T>::AlreadyDelegating.into())
 				}
-				// Shouldn't be possible to fail, but we handle it gracefully.
-				status.tally.add(vote).ok_or(ArithmeticError::Overflow)?;
-				if let Some(approve) = vote.as_standard() {
-					status.tally.increase(approve, *delegations);
-				}
+				// Extend the lock to `balance` (rather than setting it) since we don't know what other
+				// votes are in place.
+				T::Currency::extend_lock(CONVICTION_VOTING_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
 				Ok(())
-			} else {
-				Err(Error::<T>::AlreadyDelegating.into())
-			}
-		})?;
-		// Extend the lock to `balance` (rather than setting it) since we don't know what other
-		// votes are in place.
-		T::Currency::extend_lock(CONVICTION_VOTING_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
-		ReferendumInfoFor::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
-		Ok(())
+			})
+		})
 	}
-	/*
 
 	/// Remove the account's vote for the given referendum if possible. This is possible when:
 	/// - The referendum has not finished.
@@ -388,24 +404,25 @@ impl<T: Config> Pallet<T> {
 		ref_index: ReferendumIndexOf<T>,
 		scope: UnvoteScope,
 	) -> DispatchResult {
-		let info = ReferendumInfoFor::<T>::get(ref_index);
-		VotingFor::<T>::try_mutate(who, |voting| -> DispatchResult {
+		VotingFor::<T>::try_mutate(who, |voting| {
 			if let Voting::Direct { ref mut votes, delegations, ref mut prior } = voting {
 				let i = votes
 					.binary_search_by_key(&ref_index, |i| i.0)
 					.map_err(|_| Error::<T>::NotVoter)?;
-				match info {
-					Some(ReferendumInfo::Ongoing(mut status)) => {
+				let v = votes.remove(i);
+
+				T::Referenda::access_poll(ref_index, |poll_status| match poll_status {
+					PollStatus::Ongoing(tally) => {
 						ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
 						// Shouldn't be possible to fail, but we handle it gracefully.
-						status.tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
-						if let Some(approve) = votes[i].1.as_standard() {
-							status.tally.reduce(approve, *delegations);
+						tally.remove(v.1).ok_or(ArithmeticError::Underflow)?;
+						if let Some(approve) = v.1.as_standard() {
+							tally.reduce(approve, *delegations);
 						}
-						ReferendumInfoFor::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
+						Ok(())
 					},
-					Some(ReferendumInfo::Finished { end, approved }) => {
-						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
+					PollStatus::Done(end, approved) => {
+						if let Some((lock_periods, balance)) = v.1.locked_if(approved) {
 							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
 							let now = frame_system::Pallet::<T>::block_number();
 							if now < unlock_at {
@@ -416,18 +433,20 @@ impl<T: Config> Pallet<T> {
 								prior.accumulate(unlock_at, balance)
 							}
 						}
+						Ok(())
 					},
-					None => {}, // Referendum was cancelled.
-				}
-				votes.remove(i);
+					PollStatus::None => Ok(()), // Referendum was cancelled.
+				})
+			} else {
+				Ok(())
 			}
-			Ok(())
-		})?;
-		Ok(())
+		})
 	}
 
 	/// Return the number of votes for `who`
 	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
+		todo!()
+	/*
 		VotingFor::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } => {
 				// We don't support second level delegating, so we don't need to do anything more.
@@ -447,11 +466,13 @@ impl<T: Config> Pallet<T> {
 				}
 				votes.len() as u32
 			},
-		})
+		})*/
 	}
 
 	/// Return the number of votes for `who`
 	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
+		todo!()
+	/*
 		VotingFor::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } => {
 				// We don't support second level delegating, so we don't need to do anything more.
@@ -471,9 +492,9 @@ impl<T: Config> Pallet<T> {
 				}
 				votes.len() as u32
 			},
-		})
+		})*/
 	}
-*/
+
 	/// Attempt to delegate `balance` times `conviction` of voting power from `who` to `target`.
 	///
 	/// Return the upstream number of votes.
@@ -483,6 +504,8 @@ impl<T: Config> Pallet<T> {
 		conviction: Conviction,
 		balance: BalanceOf<T>,
 	) -> Result<u32, DispatchError> {
+		todo!()
+	/*
 		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
 		let votes = VotingFor::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
@@ -513,13 +536,15 @@ impl<T: Config> Pallet<T> {
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated(who, target));
-		Ok(votes)
+		Ok(votes)*/
 	}
 
 	/// Attempt to end the current delegation.
 	///
 	/// Return the number of votes of upstream.
 	fn try_undelegate(who: T::AccountId) -> Result<u32, DispatchError> {
+		todo!()
+	/*
 		let votes = VotingFor::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::default();
 			sp_std::mem::swap(&mut old, voting);
@@ -539,12 +564,14 @@ impl<T: Config> Pallet<T> {
 			}
 		})?;
 		Self::deposit_event(Event::<T>::Undelegated(who));
-		Ok(votes)
+		Ok(votes)*/
 	}
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
 	/// a security hole) but may be reduced from what they are currently.
 	fn update_lock(who: &T::AccountId) {
+		todo!()
+	/*
 		let lock_needed = VotingFor::<T>::mutate(who, |voting| {
 			voting.rejig(frame_system::Pallet::<T>::block_number());
 			voting.locked_balance()
@@ -553,6 +580,6 @@ impl<T: Config> Pallet<T> {
 			T::Currency::remove_lock(CONVICTION_VOTING_ID, who);
 		} else {
 			T::Currency::set_lock(CONVICTION_VOTING_ID, who, lock_needed, WithdrawReasons::TRANSFER);
-		}
+		}*/
 	}
 }

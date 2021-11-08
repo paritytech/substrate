@@ -30,7 +30,7 @@ use frame_support::{
 	ensure, BoundedVec, traits::{
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		Referenda, VoteTally,
+		Referenda, VoteTally, PollStatus,
 	},
 };
 use scale_info::TypeInfo;
@@ -50,11 +50,11 @@ pub use types::{
 };
 pub use weights::WeightInfo;
 
-#[cfg(test)]
-mod tests;
+//#[cfg(test)]
+//mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
+//#[cfg(feature = "runtime-benchmarks")]
+//pub mod benchmarking;
 
 const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 
@@ -395,9 +395,33 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Referenda for Pallet<T> {
+impl<T: Config> Referenda<T::Tally> for Pallet<T> {
 	type Index = ReferendumIndex;
 	type Votes = VotesOf<T>;
+	type Moment = T::BlockNumber;
+	fn access_poll<R>(
+		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber>) -> Result<R, DispatchError>,
+	) -> Result<R, DispatchError> {
+		match ReferendumInfoFor::<T>::get(index) {
+			Some(ReferendumInfo::Ongoing(mut status)) => {
+				let result = f(PollStatus::Ongoing(&mut status.tally))?;
+				let now = frame_system::Pallet::<T>::block_number();
+				let (info, _)  = Self::service_referendum(now, index, status);
+				ReferendumInfoFor::<T>::insert(index, info);
+				Ok(result)
+			},
+			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Done(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Done(end, false)),
+			_ => f(PollStatus::None),
+		}
+	}
+	fn tally<R>(index: Self::Index) -> Option<T::Tally> {
+		Some(Self::ensure_ongoing(index).ok()?.tally)
+	}
+	fn is_active(index: Self::Index) -> bool {
+		Self::ensure_ongoing(index).is_ok()
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -658,7 +682,7 @@ impl<T: Config> Pallet<T> {
 					let (desired, call_hash) = (status.enactment, status.proposal_hash);
 					Self::schedule_enactment(index, track, desired, status.origin, call_hash);
 					Self::deposit_event(Event::<T>::Confirmed { index, tally: status.tally });
-					return (ReferendumInfo::Approved(status.submission_deposit, status.decision_deposit), true)
+					return (ReferendumInfo::Approved(now, status.submission_deposit, status.decision_deposit), true)
 				}
 				dirty = deciding.confirming.is_none();
 				let confirmation = deciding.confirming
@@ -671,7 +695,7 @@ impl<T: Config> Pallet<T> {
 					Self::cancel_referendum_alarm(index);
 					Self::note_one_fewer_deciding(status.track, track);
 					Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
-					return (ReferendumInfo::Rejected(status.submission_deposit, status.decision_deposit), true)
+					return (ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit), true)
 				}
 				// Cannot be confirming
 				dirty = deciding.confirming.is_some();
@@ -682,7 +706,7 @@ impl<T: Config> Pallet<T> {
 			// Too long without being decided - end it.
 			Self::cancel_referendum_alarm(index);
 			Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
-			return (ReferendumInfo::TimedOut(status.submission_deposit, status.decision_deposit), true)
+			return (ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit), true)
 		}
 
 		Self::set_referendum_alarm(index, alarm);
