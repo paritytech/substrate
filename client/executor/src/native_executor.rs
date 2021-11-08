@@ -399,6 +399,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		let scheduler = self.scheduler.clone();
 		self.scheduler.spawn(
 			"executor-extra-runtime-instance",
+			"",
 			Box::pin(async move {
 				let module = AssertUnwindSafe(module);
 

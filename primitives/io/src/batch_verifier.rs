@@ -74,6 +74,7 @@ impl BatchVerifier {
 
 		self.scheduler.spawn(
 			name,
+			"",
 			async move {
 				if !f() {
 					invalid_clone.store(true, AtomicOrdering::Relaxed);
@@ -178,6 +179,7 @@ impl BatchVerifier {
 			let (sender, receiver) = std::sync::mpsc::channel();
 			self.scheduler.spawn(
 				"substrate_batch_verify_join",
+				"",
 				async move {
 					futures::future::join_all(pending).await;
 					sender.send(()).expect(

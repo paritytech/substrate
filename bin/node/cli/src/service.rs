@@ -170,7 +170,7 @@ pub fn new_partial(
 	let client = Arc::new(client);
 
 	let telemetry = telemetry.map(|(worker, telemetry)| {
-		task_manager.spawn_handle().spawn("telemetry", worker.run());
+		task_manager.spawn_handle().spawn("telemetry", "", worker.run());
 		telemetry
 	});
 
@@ -434,7 +434,7 @@ pub fn new_full_base(
 		};
 
 		let babe = sc_consensus_babe::start_babe(babe_config)?;
-		task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", babe);
+		task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", "", babe);
 	}
 
 	// Spawn authority discovery module.
@@ -463,7 +463,7 @@ pub fn new_full_base(
 
 		task_manager
 			.spawn_handle()
-			.spawn("authority-discovery-worker", authority_discovery_worker.run());
+			.spawn("authority-discovery-worker", "", authority_discovery_worker.run());
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -503,7 +503,7 @@ pub fn new_full_base(
 		// if it fails we take down the service with it.
 		task_manager
 			.spawn_essential_handle()
-			.spawn_blocking("grandpa-voter", grandpa::run_grandpa_voter(grandpa_config)?);
+			.spawn_blocking("grandpa-voter", "", grandpa::run_grandpa_voter(grandpa_config)?);
 	}
 
 	network_starter.start_network();

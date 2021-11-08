@@ -217,7 +217,7 @@ where
 		};
 
 		if let Some(background_task) = background_task {
-			spawner.spawn_essential("txpool-background", background_task);
+			spawner.spawn_essential("txpool-background", "substrate_tx_pool", background_task);
 		}
 
 		Self {
