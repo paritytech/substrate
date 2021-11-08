@@ -691,3 +691,54 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 		});
 }
+
+#[test]
+fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
+	let base_weight = 1;
+	ExtBuilder::default()
+		.balance_factor(100)
+		.base_weight(base_weight)
+		.build()
+		.execute_with(|| {
+			// create the asset
+			let asset_id = 1;
+			let min_balance = 100;
+			assert_ok!(Assets::force_create(
+				Origin::root(),
+				asset_id,
+				42,   /* owner */
+				true, /* is_sufficient */
+				min_balance
+			));
+
+			// mint into the caller account
+			let caller = 333;
+			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
+			let balance = 100;
+			assert_ok!(Assets::mint_into(asset_id, &beneficiary, balance));
+			assert_eq!(Assets::balance(asset_id, caller), balance);
+			let weight = 1;
+			let len = 1;
+			let pre = ChargeAssetTxPayment::<Runtime>::pre_dispatch_unsigned(CALL, &info_from_weight(weight), len)
+				.unwrap();
+
+			assert_eq!(Assets::balance(asset_id, caller), balance);
+			let (_tip, _who, initial_payment) = &pre;
+			let not_paying = match initial_payment {
+				&InitialPayment::Nothing => true,
+				_ => false,
+			};
+			assert!(not_paying, "initial payment is Nothing for unsigned extrinsics");
+
+			// `Pays::Yes` on post-dispatch does not mean we pay (we never charge more than the
+			// initial fee)
+			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
+				pre,
+				&info_from_weight(weight),
+				&post_info_from_pays(Pays::Yes),
+				len,
+				&Ok(())
+			));
+			assert_eq!(Assets::balance(asset_id, caller), balance);
+		});
+}
