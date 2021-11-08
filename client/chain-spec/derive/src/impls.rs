@@ -52,7 +52,7 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 					use std::any::{Any, TypeId};
 
 					match TypeId::of::<T>() {
-						#( x if x == TypeId::of::<#field_types>() => Any::downcast_ref(&self.#field_names) ),*,
+						#( x if x == TypeId::of::<#field_types>() => <dyn Any>::downcast_ref(&self.#field_names) ),*,
 						_ => None,
 					}
 				}

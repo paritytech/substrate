@@ -37,7 +37,7 @@ use sp_state_machine::{
 use sp_storage::{ChildInfo, StorageData, StorageKey};
 use std::collections::{HashMap, HashSet};
 
-pub use sp_state_machine::Backend as StateBackend;
+pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
 use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
