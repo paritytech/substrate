@@ -28,7 +28,9 @@ In the pipeline screen, pick:
     https://paritytech.github.io/substrate/latest. Currently, it is set to [`monthly-2021-10`](../.gitlab-ci.yml#L56).
 
   - `RESET_INDEX`: "true" (optional)
-    This parameter specifies if you want to reset the current deployed `index.html`.
+    This parameter specifies if you want to reset the currently deployed `index.html`. When you set
+    this parameter to `true`, please also specified the `LATEST` parameter so the index page shows
+    which branch is `latest` shortcut pointing to.
 
 - Wait for the whole pipeline to complete. This may take 30 - 60 mins.
 
