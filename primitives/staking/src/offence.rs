@@ -37,7 +37,7 @@ pub type Kind = [u8; 16];
 /// so that we can slash it accordingly.
 pub type OffenceCount = u32;
 
-/// In case of an offence, which conditions get an offender validator disabled
+/// In case of an offence, which conditions get an offending validator disabled.
 #[derive(
 	Clone,
 	Copy,
@@ -52,11 +52,11 @@ pub type OffenceCount = u32;
 	scale_info::TypeInfo,
 )]
 pub enum DisableStrategy {
-	/// Independently of slashing, this offence will not disable the offender
+	/// Independently of slashing, this offence will not disable the offender.
 	Never,
-	/// Only disable the offender if it is also slashed
+	/// Only disable the offender if it is also slashed.
 	WhenSlashed,
-	/// Independently of slashing, this offence will disable the offender
+	/// Independently of slashing, this offence will always disable the offender.
 	Always,
 }
 

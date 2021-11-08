@@ -27,7 +27,6 @@ type DeferredOffenceOf<T> = (
 	Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Config>::IdentificationTuple>>,
 	Vec<Perbill>,
 	SessionIndex,
-	DisableStrategy,
 );
 
 // Deferred reports that have been rejected by the offence handler and need to be submitted
@@ -41,9 +40,13 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 	let mut weight = T::DbWeight::get().reads_writes(1, 1);
 	let deferred = <DeferredOffences<T>>::take();
 	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
-	for (offences, perbill, session, disable_strategy) in deferred.iter() {
-		let consumed =
-			T::OnOffenceHandler::on_offence(&offences, &perbill, *session, *disable_strategy);
+	for (offences, perbill, session) in deferred.iter() {
+		let consumed = T::OnOffenceHandler::on_offence(
+			&offences,
+			&perbill,
+			*session,
+			DisableStrategy::WhenSlashed,
+		);
 		weight = weight.saturating_add(consumed);
 	}
 
