@@ -229,8 +229,7 @@ where
 		_at: Option<<Block as traits::Block>::Hash>,
 	) -> Result<Bytes, JsonRpseeError> {
 		Err(CallError::Custom {
-			code: -32601, /* TODO: (dp) We have this in jsonrpsee too somewhere. This is
-			               * jsonrpsee::ErrorCode::MethodNotFound */
+			code: jsonrpsee::types::v2::error::METHOD_NOT_FOUND_CODE,
 			message: "Not implemented for light clients".into(),
 			data: None,
 		}
