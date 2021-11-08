@@ -346,13 +346,12 @@ impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> 
 		);
 
 		match result {
-			Ok(()) => {
+			Ok(()) =>
 				if let Some(ret_val) = ret_vals[0].i64() {
 					Ok(ret_val)
 				} else {
 					return Err("Supervisor function returned unexpected result!".into())
-				}
-			},
+				},
 			Err(err) => Err(err.to_string().into()),
 		}
 	}
