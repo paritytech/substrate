@@ -1004,9 +1004,14 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
-
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+			let maybe_nomination = Nominators::<T>::get(stash);
+			let nomination_limit = maybe_nomination
+				.as_ref()
+				.and_then(|n| n.forced_max_nominations)
+				.unwrap_or(T::MAX_NOMINATIONS);
+			println!("limit = {}", nomination_limit);
+			ensure!(targets.len() <= nomination_limit as usize, Error::<T>::TooManyTargets);
+			let old = maybe_nomination.map_or_else(Vec::new, |x| x.targets);
 
 			let targets = targets
 				.into_iter()
@@ -1026,7 +1031,7 @@ pub mod pallet {
 				targets,
 				// Initial nominations are considered submitted at era 0. See `Nominations` doc
 				submitted_in: Self::current_era().unwrap_or(0),
-				suppressed: false,
+				forced_max_nominations: None,
 			};
 
 			Self::do_remove_validator(stash);
@@ -1594,6 +1599,25 @@ pub mod pallet {
 
 			Self::chill_stash(&stash);
 			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn force_set_max_nominations(
+			origin: OriginFor<T>,
+			stash: T::AccountId,
+			limit: Option<u32>,
+		) -> DispatchResult {
+			let _ = ensure_root(origin);
+
+			Nominators::<T>::try_mutate(stash, |maybe_nomination| {
+				// if it is a nominator, update it.
+				if let Some(nomination) = maybe_nomination {
+					nomination.forced_max_nominations = limit;
+					Ok(())
+				} else {
+					Err(Error::<T>::NotStash.into())
+				}
+			})
 		}
 	}
 }

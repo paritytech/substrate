@@ -567,12 +567,14 @@ pub struct Nominations<AccountId> {
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
 	pub submitted_in: EraIndex,
-	/// Whether the nominations have been suppressed. This can happen due to slashing of the
-	/// validators, or other events that might invalidate the nomination.
+	/// Whether this nominator can have an extra quota of nominations.
 	///
-	/// NOTE: this for future proofing and is thus far not used.
-	pub suppressed: bool,
+	/// If `None`, then `T::MAX_NOMINATIONS` is used. Can only be set to `Some` by the `root`
+	/// origin.
+	pub forced_max_nominations: Option<u32>,
 }
+
+// TODO: migration to remove the stale `suppressed` and write `None` for everyone.
 
 /// The amount of exposure (to slashing) than an individual nominator has.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]

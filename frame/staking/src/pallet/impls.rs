@@ -705,7 +705,7 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
-			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
+			if let Some(Nominations { submitted_in, mut targets, forced_max_nominations: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
 				log!(

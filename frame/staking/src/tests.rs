@@ -4267,7 +4267,11 @@ fn count_check_works() {
 		Validators::<Test>::insert(987654321, ValidatorPrefs::default());
 		Nominators::<Test>::insert(
 			987654321,
-			Nominations { targets: vec![], submitted_in: Default::default(), suppressed: false },
+			Nominations {
+				targets: vec![],
+				submitted_in: Default::default(),
+				forced_max_nominations: None,
+			},
 		);
 	})
 }
@@ -4545,6 +4549,37 @@ fn capped_stakers_works() {
 		assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
+	})
+}
+
+#[test]
+fn force_set_max_nominations_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// add a nominator with an allowed number of nominators.
+		bond_nominator(61, 60, 100, vec![11, 21]);
+
+		// can't submit more than max-limit.
+		let max = <Test as Config>::MAX_NOMINATIONS as u32;
+		let invalid = (0..(max + 1)).map(|x| x as u64).collect::<Vec<_>>();
+		assert_noop!(
+			Staking::nominate(Origin::signed(60), invalid.clone()),
+			Error::<Test>::TooManyTargets
+		);
+
+		// allow 61 to submit more.
+		assert_ok!(Staking::force_set_max_nominations(Origin::root(), 61, Some(max + 1)));
+
+		// should work now.
+		assert_ok!(Staking::nominate(Origin::signed(60), invalid));
+
+		// but not too much
+		assert_noop!(
+			Staking::nominate(
+				Origin::signed(60),
+				(0..(max + 2)).map(|x| x as u64).collect::<Vec<_>>()
+			),
+			Error::<Test>::TooManyTargets
+		);
 	})
 }
 
