@@ -173,14 +173,13 @@ default:
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
-    - if: $CI_PIPELINE_SOURCE == "web" && $RM_RUSTDOC_REF
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $RM_RUSTDOC_REF
       when: never
-    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "push" ||
-        ($CI_PIPELINE_SOURCE == "web" && $BUILD_RUSTDOC_REF)
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $BUILD_RUSTDOC_REF
 
 .rm-rustdoc-rules:                 &rm-rustdoc-rules
   rules:
-    - if: $CI_PIPELINE_SOURCE == "web" && $RM_RUSTDOC_REF
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $RM_RUSTDOC_REF
 
 .merge-ref-into-master-script:     &merge-ref-into-master-script
   - if [ $CI_COMMIT_REF_NAME != "master" ]; then
