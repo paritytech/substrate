@@ -21,7 +21,6 @@
 //! (see `enlist_participants` dispatch).
 //!
 //! **This pallet serves as an example and is not meant to be used in production.**
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
