@@ -1095,13 +1095,13 @@ parameter_types! {
 	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
 	pub const SchedulerBlocksOffset: u32 = 4;
-	pub const SocietyAccountId: AccountId = SocietyPalletId::get().into_sub_account(b"society");
+	pub const SocietySubAccount: &'static [u8] = b"society";
 }
 
 impl pallet_society::Config for Runtime {
 	type Event = Event;
 	type PalletId = SocietyPalletId;
-	type SocietyAccountId = SocietyAccountId;
+	type SocietySubAccount = SocietySubAccount;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
 	type CandidateDeposit = CandidateDeposit;
