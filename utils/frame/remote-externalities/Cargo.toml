@@ -32,6 +32,7 @@ sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
 [dev-dependencies]
 tokio = { version = "1.10", features = ["macros", "rt-multi-thread"] }
 pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev" }
+frame-support = { path = "../../../frame/support", version = "4.0.0-dev" }
 
 [features]
 remote-test = []
