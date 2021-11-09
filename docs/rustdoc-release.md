@@ -46,7 +46,7 @@ In the pipeline screen, pick:
 
 - Run for branch name or tag: `master`
 
-- Add the following variables:
+- Add the following variable:
   - `RM_RUSTDOC_REF`: `<git branch name | tag name>` (required)
     This parameter specifies the version of rustdoc to be removed.
 
