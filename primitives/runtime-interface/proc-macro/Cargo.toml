@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.80", features = ["full", "visit", "fold", "extra-traits"] }
+syn = { version = "1.0.81", features = ["full", "visit", "fold", "extra-traits"] }
 quote = "1.0.10"
 proc-macro2 = "1.0.29"
 Inflector = "0.11.4"

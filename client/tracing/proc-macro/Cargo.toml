@@ -18,4 +18,4 @@ proc-macro = true
 proc-macro-crate = "1.0.0"
 proc-macro2 = "1.0.29"
 quote = { version = "1.0.10", features = ["proc-macro"] }
-syn = { version = "1.0.80", features = ["proc-macro", "full", "extra-traits", "parsing"] }
+syn = { version = "1.0.81", features = ["proc-macro", "full", "extra-traits", "parsing"] }
