@@ -28,6 +28,8 @@
 //! - [`Call`]
 //! - [`Pallet`]
 //!
+//! **This pallet serves as an example showcasing Substrate off-chain worker and is not meant to
+//! be used in production.**
 //!
 //! ## Overview
 //!

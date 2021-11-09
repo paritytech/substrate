@@ -2,10 +2,12 @@
 # Basic Example Pallet
 
 <!-- Original author of paragraph: @gavofyork -->
-The Example: A basic example of a FRAME pallet demonstrating
+The Example: A simple example of a FRAME pallet demonstrating
 concepts, APIs and structures common to most FRAME runtimes.
 
 Run `cargo doc --package pallet-example-basic --open` to view this pallet's documentation.
+
+**This pallet serves as an example and is not meant to be used in production.**
 
 ### Documentation Guidelines:
 
