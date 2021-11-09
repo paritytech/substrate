@@ -1,10 +1,14 @@
 # Substrate Rustdoc Release Process
 
-Substrate rustdoc sits on the [paritytech/substrate `gh-pages` branch](https://github.com/paritytech/substrate/tree/gh-pages) and is accessible at https://paritytech.github.io/substrate.
+Substrate rustdoc sits on the
+[paritytech/substrate `gh-pages` branch](https://github.com/paritytech/substrate/tree/gh-pages) and
+is accessible at https://paritytech.github.io/substrate.
 
-If you inspect the `gh-pages` branch, it is just various different versions of rustdocs located in different folders, with folder names marking the monthly tag version, or a release tag version.
+If you inspect the `gh-pages` branch, it is just various different versions of rustdocs located in
+different folders, with folder names marking the monthly tag version, or a release tag version.
 
-The actual rustdoc generation process takes place as part of the projects' [GitLab pipeline](https://gitlab.parity.io/parity/substrate/-/pipelines).
+The actual rustdoc generation process takes place as part of the projects'
+[GitLab pipeline](https://gitlab.parity.io/parity/substrate/-/pipelines).
 
 ## Add a new version of rustdoc
 
@@ -54,7 +58,8 @@ In the pipeline screen, pick:
 
 ## Config branch/tag for rebuilding rustdoc when there is new commit
 
-In the [`.gitlab-ci.yml`](../.gitlab-ci.yml), there is [`CONT_RUSTDOC_BUILT_REFS` variable](../.gitlab-ci.yml#L52).
+In the [`.gitlab-ci.yml`](../.gitlab-ci.yml), there is
+[`CONT_RUSTDOC_BUILT_REFS` variable](../.gitlab-ci.yml#L52).
 Tags and branches specified in this var will be rebuilt every time when new
 commits are pushed. Currently, it is set to `master` only. It supports multiple values by separating
 with a space, e.g. `master development`.
