@@ -4007,6 +4007,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "loupe"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b6a72dfa44fe15b5e76b94307eeb2ff995a8c5b283b55008940c02e0c5b634d"
+dependencies = [
+ "indexmap",
+ "loupe-derive",
+ "rustversion",
+]
+
+[[package]]
+name = "loupe-derive"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0fbfc88337168279f2e9ae06e157cfed4efd3316e14dc96ed074d4f2e6c5952"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "lru"
 version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6938,6 +6959,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ptr_meta"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0738ccf7ea06b608c10564b31debd4f5bc5e197fc8bfe088f68ae5ce81e7a4f1"
+dependencies = [
+ "ptr_meta_derive",
+]
+
+[[package]]
+name = "ptr_meta_derive"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16b845dbfca988fa33db069c0e230574d15a3088f147a87b64c7589eb662c9ac"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "pwasm-utils"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7413,6 +7454,29 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "rkyv"
+version = "0.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb135b3e5e3311f0a254bfb00333f4bac9ef1d89888b84242a89eb8722b09a07"
+dependencies = [
+ "memoffset",
+ "ptr_meta",
+ "rkyv_derive",
+ "seahash",
+]
+
+[[package]]
+name = "rkyv_derive"
+version = "0.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba8f489f6b6d8551bb15904293c1ad58a6abafa7d8390d15f7ed05a2afcd87d5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -8817,6 +8881,12 @@ dependencies = [
  "ring",
  "untrusted",
 ]
+
+[[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "secrecy"
@@ -11370,14 +11440,14 @@ dependencies = [
  "more-asserts",
  "target-lexicon 0.11.2",
  "thiserror",
- "wasmer-compiler",
+ "wasmer-compiler 1.0.2",
  "wasmer-compiler-cranelift",
  "wasmer-derive",
  "wasmer-engine",
  "wasmer-engine-jit",
  "wasmer-engine-native",
- "wasmer-types",
- "wasmer-vm",
+ "wasmer-types 1.0.2",
+ "wasmer-vm 1.0.2",
  "wat",
  "winapi 0.3.9",
 ]
@@ -11394,9 +11464,25 @@ dependencies = [
  "smallvec 1.7.0",
  "target-lexicon 0.11.2",
  "thiserror",
- "wasmer-types",
- "wasmer-vm",
+ "wasmer-types 1.0.2",
+ "wasmer-vm 1.0.2",
  "wasmparser 0.65.0",
+]
+
+[[package]]
+name = "wasmer-compiler"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc86dda6f715f03104800be575a38382b35c3962953af9e9d8722dcf0bd2458f"
+dependencies = [
+ "enumset",
+ "loupe",
+ "smallvec 1.7.0",
+ "target-lexicon 0.12.0",
+ "thiserror",
+ "wasmer-types 2.0.0",
+ "wasmer-vm 2.0.0",
+ "wasmparser 0.78.2",
 ]
 
 [[package]]
@@ -11413,28 +11499,28 @@ dependencies = [
  "serde",
  "smallvec 1.7.0",
  "tracing",
- "wasmer-compiler",
- "wasmer-types",
- "wasmer-vm",
+ "wasmer-compiler 1.0.2",
+ "wasmer-types 1.0.2",
+ "wasmer-vm 1.0.2",
 ]
 
 [[package]]
 name = "wasmer-compiler-singlepass"
-version = "1.0.2"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "426ae6ef0f606ca815510f3e2ef6f520e217514bfb7a664defe180b9a9e75d07"
+checksum = "9429b9f7708c582d855b1787f09c7029ff23fb692550d4a1cc351c8ea84c3014"
 dependencies = [
  "byteorder",
  "dynasm",
  "dynasmrt",
  "lazy_static",
+ "loupe",
  "more-asserts",
  "rayon",
- "serde",
  "smallvec 1.7.0",
- "wasmer-compiler",
- "wasmer-types",
- "wasmer-vm",
+ "wasmer-compiler 2.0.0",
+ "wasmer-types 2.0.0",
+ "wasmer-vm 2.0.0",
 ]
 
 [[package]]
@@ -11465,9 +11551,9 @@ dependencies = [
  "serde_bytes",
  "target-lexicon 0.11.2",
  "thiserror",
- "wasmer-compiler",
- "wasmer-types",
- "wasmer-vm",
+ "wasmer-compiler 1.0.2",
+ "wasmer-types 1.0.2",
+ "wasmer-vm 1.0.2",
 ]
 
 [[package]]
@@ -11481,10 +11567,10 @@ dependencies = [
  "region",
  "serde",
  "serde_bytes",
- "wasmer-compiler",
+ "wasmer-compiler 1.0.2",
  "wasmer-engine",
- "wasmer-types",
- "wasmer-vm",
+ "wasmer-types 1.0.2",
+ "wasmer-vm 1.0.2",
  "winapi 0.3.9",
 ]
 
@@ -11501,11 +11587,11 @@ dependencies = [
  "serde",
  "tempfile",
  "tracing",
- "wasmer-compiler",
+ "wasmer-compiler 1.0.2",
  "wasmer-engine",
  "wasmer-object",
- "wasmer-types",
- "wasmer-vm",
+ "wasmer-types 1.0.2",
+ "wasmer-vm 1.0.2",
  "which",
 ]
 
@@ -11517,8 +11603,8 @@ checksum = "abf8e0c12b82ff81ebecd30d7e118be5fec871d6de885a90eeb105df0a769a7b"
 dependencies = [
  "object 0.22.0",
  "thiserror",
- "wasmer-compiler",
- "wasmer-types",
+ "wasmer-compiler 1.0.2",
+ "wasmer-types 1.0.2",
 ]
 
 [[package]]
@@ -11528,6 +11614,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7f4ac28c2951cd792c18332f03da523ed06b170f5cf6bb5b1bdd7e36c2a8218"
 dependencies = [
  "cranelift-entity 0.68.0",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "wasmer-types"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c91f75d3c31f8b1f8d818ff49624fc974220243cbc07a2252f408192e97c6b51"
+dependencies = [
+ "indexmap",
+ "loupe",
+ "rkyv",
  "serde",
  "thiserror",
 ]
@@ -11548,7 +11647,28 @@ dependencies = [
  "region",
  "serde",
  "thiserror",
- "wasmer-types",
+ "wasmer-types 1.0.2",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "wasmer-vm"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "469a12346a4831e7dac639b9646d8c9b24c7d2cf0cf458b77f489edb35060c1f"
+dependencies = [
+ "backtrace",
+ "cc",
+ "cfg-if 1.0.0",
+ "indexmap",
+ "libc",
+ "loupe",
+ "memoffset",
+ "more-asserts",
+ "region",
+ "serde",
+ "thiserror",
+ "wasmer-types 2.0.0",
  "winapi 0.3.9",
 ]
 
@@ -11583,6 +11703,12 @@ name = "wasmparser"
 version = "0.65.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87cc2fe6350834b4e528ba0901e7aa405d78b89dc1fa3145359eb4de0e323fcf"
+
+[[package]]
+name = "wasmparser"
+version = "0.78.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52144d4c78e5cf8b055ceab8e5fa22814ce4315d6002ad32cfd914f37c12fd65"
 
 [[package]]
 name = "wasmparser"
