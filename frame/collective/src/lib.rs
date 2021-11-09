@@ -62,7 +62,7 @@ use frame_support::{
 		StorageVersion,
 	},
 	weights::{GetDispatchInfo, Weight},
-	BoundedVec,
+	BoundedSlice, BoundedVec,
 };
 
 #[cfg(test)]
@@ -932,7 +932,7 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 			);
 		}
 
-		let bounded_new = BoundedVec::<T::AccountId, T::MaxMembers>::truncating_from(new.to_vec());
+		let bounded_new = BoundedSlice::<T::AccountId, T::MaxMembers>::truncating_from(new);
 
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();

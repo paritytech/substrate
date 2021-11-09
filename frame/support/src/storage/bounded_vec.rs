@@ -74,6 +74,20 @@ impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
 	}
 }
 
+impl<'a, T, S: Get<u32>> BoundedSlice<'a, T, S> {
+	/// Create a new `BoundedSlice` from an arbitrary sized slice by splitting
+	/// off elements up till the bound.
+	pub fn truncating_from(slice: &'a [T]) -> Self {
+		let bound = S::get() as usize;
+		if slice.len() > bound {
+			let trunc = slice.split_at(bound).0;
+			BoundedSlice(trunc, PhantomData)
+		} else {
+			BoundedSlice(slice, PhantomData)
+		}
+	}
+}
+
 impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
@@ -196,13 +210,6 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		} else {
 			Err(())
 		}
-	}
-
-	/// Create a new bounded vec from an arbitrary sized vec by taking the first
-	/// items up till the bound.
-	pub fn truncating_from(i: Vec<T>) -> Self {
-		let bounded = i.into_iter().take(S::get() as usize).collect();
-		Self::unchecked_from(bounded)
 	}
 }
 
