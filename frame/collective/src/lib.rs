@@ -154,15 +154,17 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 
 /// Info for keeping track of a motion being voted on.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub struct Votes<BoundedAccountIdVec, BlockNumber> {
+#[codec(mel_bound(AccountId: Encode + MaxEncodedLen, BlockNumber: Encode + MaxEncodedLen, MaxMembers: Get<u32>))]
+#[scale_info(skip_type_params(MaxMembers))]
+pub struct Votes<AccountId, BlockNumber, MaxMembers: Get<u32>> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
 	threshold: MemberCount,
 	/// The current set of voters that approved it.
-	ayes: BoundedAccountIdVec,
+	ayes: BoundedVec<AccountId, MaxMembers>,
 	/// The current set of voters that rejected it.
-	nays: BoundedAccountIdVec,
+	nays: BoundedVec<AccountId, MaxMembers>,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
@@ -279,7 +281,7 @@ pub mod pallet {
 		_,
 		Identity,
 		T::Hash,
-		Votes<BoundedVec<T::AccountId, T::MaxMembers>, T::BlockNumber>,
+		Votes<T::AccountId, T::BlockNumber, T::MaxMembers>,
 		OptionQuery,
 		GetDefault,
 		GetOptionWrapper<T::MaxProposals>,
