@@ -20,7 +20,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughpu
 
 use node_cli::service::{create_extrinsic, FullClient};
 use node_runtime::{constants::currency::*, BalancesCall};
-use sc_block_builder::{BlockBuilderProvider, BuiltBlock};
+use sc_block_builder::{BlockBuilderProvider, BuiltBlock, RecordProof};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_consensus::{
 	block_import::{BlockImportParams, ForkChoiceStrategy},
@@ -37,6 +37,7 @@ use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed}
 use sp_consensus::BlockOrigin;
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{
+	generic::BlockId,
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	AccountId32, MultiAddress, OpaqueExtrinsic,
 };
@@ -199,11 +200,29 @@ fn block_production(c: &mut Criterion) {
 	group.sample_size(10);
 	group.throughput(Throughput::Elements(max_transfer_count as u64));
 
-	group.bench_function(format!("{} transfers", max_transfer_count), move |b| {
+	let block_id = BlockId::Hash(client.chain_info().best_hash);
+
+	group.bench_function(format!("{} transfers (no proof)", max_transfer_count), |b| {
 		b.iter_batched(
 			|| extrinsics.clone(),
 			|extrinsics| {
-				let mut block_builder = client.new_block(Default::default()).unwrap();
+				let mut block_builder =
+					client.new_block_at(&block_id, Default::default(), RecordProof::No).unwrap();
+				for extrinsic in extrinsics {
+					block_builder.push(extrinsic).unwrap();
+				}
+				block_builder.build().unwrap()
+			},
+			BatchSize::SmallInput,
+		)
+	});
+
+	group.bench_function(format!("{} transfers (with proof)", max_transfer_count), |b| {
+		b.iter_batched(
+			|| extrinsics.clone(),
+			|extrinsics| {
+				let mut block_builder =
+					client.new_block_at(&block_id, Default::default(), RecordProof::Yes).unwrap();
 				for extrinsic in extrinsics {
 					block_builder.push(extrinsic).unwrap();
 				}
