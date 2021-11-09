@@ -11,7 +11,6 @@ members = [
 	"bin/node/executor",
 	"bin/node/primitives",
 	"bin/node/rpc",
-	"bin/node/rpc-client",
 	"bin/node/runtime",
 	"bin/node/testing",
 	"bin/utils/chain-spec-builder",
