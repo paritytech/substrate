@@ -216,8 +216,8 @@ default:
   - sccache -s
 
 .cargo-doc-script:                 &cargo-doc-script
-  # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
-  # Try to run with nightly rustc first. If failed, when use the stable rustc.
+  # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"` some progress to fix this was
+  # here https://github.com/paritytech/substrate/pull/7670
   - (RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" &&
     time cargo +nightly doc --no-deps --workspace --all-features --verbose) ||
     { echo "Generate $BUILD_REF rustdocs failed" && exit 0; }
