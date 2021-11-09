@@ -2,9 +2,9 @@
 
 Substrate rustdoc sits on the [paritytech/substrate `gh-pages` branch](https://github.com/paritytech/substrate/tree/gh-pages) and is accessible at https://paritytech.github.io/substrate.
 
-If you inspect the `gh-pages` branch, it is just various different version of rustdocs located in different folders, with folder name marking the monthly tag version, or a release tag version.
+If you inspect the `gh-pages` branch, it is just various different versions of rustdocs located in different folders, with folder names marking the monthly tag version, or a release tag version.
 
-The actual rustdoc generation process takes place as part of the project [GitLab pipeline](https://gitlab.parity.io/parity/substrate/-/pipelines).
+The actual rustdoc generation process takes place as part of the projects' [GitLab pipeline](https://gitlab.parity.io/parity/substrate/-/pipelines).
 
 ## Add a new version of rustdoc
 
