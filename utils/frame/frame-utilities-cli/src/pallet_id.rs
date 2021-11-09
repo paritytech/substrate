@@ -24,7 +24,6 @@ use sc_cli::{
 };
 use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::AccountIdConversion;
-use std::convert::{TryFrom, TryInto};
 use structopt::StructOpt;
 
 /// The `palletid` command
