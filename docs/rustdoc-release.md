@@ -8,8 +8,8 @@ The actual rustdoc generation process takes place as part of the project [GitLab
 
 ## Add a new version of rustdoc
 
-To add a new version of rustdocs, you need to manually trigger a build job in the
-[GitLab pipeline](https://gitlab.parity.io/parity/substrate/-/pipelines/new).
+To add a new version of rustdocs, you need to manually trigger a schedule pipeline in the
+[GitLab schedules](https://gitlab.parity.io/parity/substrate/-/pipeline_schedules).
 
 In the pipeline screen, pick:
 
@@ -46,7 +46,7 @@ In the pipeline screen, pick:
 
 - Run for branch name or tag: `master`
 
-- Add the following variables:
+- Add the following variable:
   - `RM_RUSTDOC_REF`: `<git branch name | tag name>` (required)
     This parameter specifies the version of rustdoc to be removed.
 
@@ -54,6 +54,7 @@ In the pipeline screen, pick:
 
 ## Config branch/tag for rebuilding rustdoc when there is new commit
 
-In the [`.gitlab-ci.yml`](../.gitlab-ci.yml), there is [`CONT_RUSTDOC_BUILT_REFS` variable](../.gitlab-ci.yml#L52). Tags branches specified in this var will be rebuilt everytime when new
-commits are pushed. Currently it is set to `master` only. It supports multiple value by separating
+In the [`.gitlab-ci.yml`](../.gitlab-ci.yml), there is [`CONT_RUSTDOC_BUILT_REFS` variable](../.gitlab-ci.yml#L52).
+Tags and branches specified in this var will be rebuilt every time when new
+commits are pushed. Currently, it is set to `master` only. It supports multiple values by separating
 with a space, e.g. `master development`.
