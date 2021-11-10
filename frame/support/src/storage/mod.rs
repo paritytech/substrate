@@ -1136,7 +1136,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
 	///
 	/// All values in the client overlay will be deleted, if there is some `limit` then up to
-	/// `limit` values are deleted from the client backend, if `limit` is none then all values from
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
 	/// the client backend are deleted.
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)

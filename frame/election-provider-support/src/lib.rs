@@ -340,7 +340,7 @@ pub trait SortedListProvider<AccountId> {
 
 	/// Remove all items from the list.
 	///
-	/// WARNING: should never be done in production settings because it can lead to an unbounded
+	/// WARNING: should never be called in production settings because it can lead to an unbounded
 	/// amount of storage accesses.
 	fn clear();
 
