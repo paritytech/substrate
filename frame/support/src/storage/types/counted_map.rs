@@ -263,6 +263,9 @@ where
 
 	/// Remove all value of the storage.
 	pub fn remove_all() {
+		// NOTE: it is not possible to remove up to some limit because
+		// `sp_io::storage::clear_prefix` and `StorageMap::remove_all` don't give the number of
+		// value removed from the overlay.
 		CounterFor::<Prefix>::set(0u32);
 		<Self as MapWrapper>::Map::remove_all(None);
 	}
