@@ -37,8 +37,7 @@ pub struct CreditToBlockAuthor;
 impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 	fn handle_credit(credit: CreditOf<AccountId, Assets>) {
 		let author = pallet_authorship::Pallet::<Runtime>::author();
-		// TODO: what to do in case paying the author fails (e.g. because `fee < min_balance`)
-		// default: drop the result which will trigger the `OnDrop` of the imbalance.
+		// Drop the result which will trigger the `OnDrop` of the imbalance in case of error.
 		let _ = Assets::resolve(&author, credit);
 	}
 }
