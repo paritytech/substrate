@@ -4,8 +4,8 @@ name = "sc-offchain"
 version = "4.0.0-dev"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-homepage = "https://substrate.dev"
+edition = "2021"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -33,6 +33,7 @@ sc-utils = { version = "4.0.0-dev", path = "../utils" }
 threadpool = "1.7"
 hyper = "0.14.11"
 hyper-rustls = "0.22.1"
+once_cell = "1.8"
 
 [dev-dependencies]
 sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }

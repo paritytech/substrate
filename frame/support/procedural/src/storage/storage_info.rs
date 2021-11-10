@@ -48,7 +48,7 @@ pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
 	let where_clause = &def.where_clause;
 
 	quote!(
-		impl#module_impl #scrate::traits::StorageInfoTrait for #module_struct #where_clause {
+		impl #module_impl #scrate::traits::StorageInfoTrait for #module_struct #where_clause {
 			fn storage_info() -> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo> {
 				let mut res = #scrate::sp_std::vec![];
 				#res_append_storage

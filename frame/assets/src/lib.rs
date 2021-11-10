@@ -157,7 +157,7 @@ use sp_runtime::{
 	},
 	ArithmeticError, TokenError,
 };
-use sp_std::{borrow::Borrow, convert::TryInto, prelude::*};
+use sp_std::{borrow::Borrow, prelude::*};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -189,7 +189,8 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// Identifier for the class of asset.
 		type AssetId: Member
@@ -198,7 +199,8 @@ pub mod pallet {
 			+ Copy
 			+ HasCompact
 			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;

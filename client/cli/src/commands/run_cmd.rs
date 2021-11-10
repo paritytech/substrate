@@ -58,7 +58,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
@@ -89,7 +89,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
@@ -126,6 +126,10 @@ pub struct RunCmd {
 	/// Maximum number of WS RPC server connections.
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
+
+	/// Set the the maximum WebSocket output buffer size in MiB. Default is 16.
+	#[structopt(long = "ws-max-out-buffer-capacity")]
+	pub ws_max_out_buffer_capacity: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	///
@@ -432,6 +436,10 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_max_payload(&self) -> Result<Option<usize>> {
 		Ok(self.rpc_max_payload)
+	}
+
+	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
+		Ok(self.ws_max_out_buffer_capacity)
 	}
 
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {

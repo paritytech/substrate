@@ -2,9 +2,9 @@
 name = "sp-debug-derive"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Macros to derive runtime debug implementation."
 documentation = "https://docs.rs/sp-debug-derive"
@@ -18,7 +18,7 @@ proc-macro = true
 
 [dependencies]
 quote = "1.0.10"
-syn = "1.0.80"
+syn = "1.0.81"
 proc-macro2 = "1.0"
 
 [features]
