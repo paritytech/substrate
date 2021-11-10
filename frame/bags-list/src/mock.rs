@@ -21,30 +21,21 @@ use super::*;
 use crate::{self as bags_list};
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
-use std::{cell::RefCell, collections::HashMap};
+use std::collections::HashMap;
 
 pub type AccountId = u32;
 pub type Balance = u32;
 
-thread_local! {
-	static NEXT_VOTE_WEIGHT_MAP: RefCell<HashMap<AccountId, VoteWeight>>
-		= RefCell::new(Default::default());
-}
-
 parameter_types! {
 	// Set the vote weight for any id who's weight has _not_ been set with `set_vote_weight_of`.
 	pub static NextVoteWeight: VoteWeight = 0;
+	pub static NextVoteWeightMap: HashMap<AccountId, VoteWeight> = Default::default();
 }
 
 pub struct StakingMock;
 impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
 	fn vote_weight(id: &AccountId) -> VoteWeight {
-		NEXT_VOTE_WEIGHT_MAP.with(|m| {
-			m.borrow_mut()
-				.get(id)
-				.map(|weight| weight.clone())
-				.unwrap_or(NextVoteWeight::get())
-		})
+		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
@@ -117,16 +108,6 @@ impl ExtBuilder {
 	#[cfg(test)]
 	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
 		self.ids = ids;
-		self
-	}
-
-	/// Set vote weights of some Id's used for special case
-	pub(crate) fn add_aux_data(mut self) -> Self {
-		StakingMock::set_vote_weight_of(&710, 15);
-		StakingMock::set_vote_weight_of(&711, 16);
-		StakingMock::set_vote_weight_of(&712, 2_000);
-		self.ids.extend([(710, 15), (711, 16), (712, 2_000)].iter());
-
 		self
 	}
 
