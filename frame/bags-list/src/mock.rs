@@ -119,6 +119,7 @@ impl ExtBuilder {
 		ext.execute_with(|| {
 			for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
 				frame_support::assert_ok!(List::<Runtime>::insert(*id, *weight));
+				StakingMock::set_vote_weight_of(id, *weight);
 			}
 		});
 

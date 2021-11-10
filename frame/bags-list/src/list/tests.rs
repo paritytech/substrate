@@ -112,10 +112,6 @@ fn migrate_works() {
 	ExtBuilder::default()
 		.add_ids(vec![(710, 15), (711, 16), (712, 2_000)])
 		.build_and_execute(|| {
-			StakingMock::set_vote_weight_of(&710, 15);
-			StakingMock::set_vote_weight_of(&711, 16);
-			StakingMock::set_vote_weight_of(&712, 2_000);
-
 			// given
 			assert_eq!(
 				List::<Runtime>::get_bags(),
