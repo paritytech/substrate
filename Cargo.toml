@@ -1,4 +1,6 @@
 [workspace]
+resolver = "2"
+
 members = [
 	"bin/node-template/node",
 	"bin/node-template/pallets/template",
