@@ -1425,8 +1425,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Remove all data structure concerning a staker/stash once it is at a state where it can
-		/// be considered `dust` in staking system. The requirements are:
+		/// Remove all data structures concerning a staker/stash once it is at a state where it can
+		/// be considered `dust` in the staking system. The requirements are:
 		///
 		/// 1. the `total_balance` of the stash is below existential deposit.
 		/// 2. or, the `ledger.total` of the stash is below existential deposit.
