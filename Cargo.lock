@@ -4520,6 +4520,7 @@ dependencies = [
  "pallet-asset-tx-payment",
  "pallet-balances",
  "pallet-im-online",
+ "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "platforms",
@@ -4528,6 +4529,7 @@ dependencies = [
  "remote-externalities",
  "sc-authority-discovery",
  "sc-basic-authorship",
+ "sc-block-builder",
  "sc-chain-spec",
  "sc-cli",
  "sc-client-api",
@@ -4554,6 +4556,7 @@ dependencies = [
  "sp-api",
  "sp-authority-discovery",
  "sp-authorship",
+ "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",
  "sp-core",
@@ -7366,6 +7369,7 @@ name = "remote-externalities"
 version = "0.10.0-dev"
 dependencies = [
  "env_logger 0.9.0",
+ "frame-support",
  "jsonrpsee-proc-macros",
  "jsonrpsee-ws-client",
  "log 0.4.14",
