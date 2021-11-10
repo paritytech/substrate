@@ -101,9 +101,15 @@ pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
 #[derive(Default)]
 pub struct ExtBuilder {
 	ids: Vec<(AccountId, VoteWeight)>,
+	skip_genesis_ids: bool,
 }
 
 impl ExtBuilder {
+	pub(crate) fn skip_genesis_ids(mut self) -> Self {
+		self.skip_genesis_ids = true;
+		self
+	}
+
 	/// Add some AccountIds to insert into `List`.
 	#[cfg(test)]
 	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
@@ -115,9 +121,15 @@ impl ExtBuilder {
 		sp_tracing::try_init_simple();
 		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
+		let ids_with_weight: Vec<_> = if self.skip_genesis_ids {
+			self.ids.iter().collect()
+		} else {
+			GENESIS_IDS.iter().chain(self.ids.iter()).collect()
+		};
+
 		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
-			for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
+			for (id, weight) in ids_with_weight {
 				frame_support::assert_ok!(List::<Runtime>::insert(*id, *weight));
 				StakingMock::set_vote_weight_of(id, *weight);
 			}

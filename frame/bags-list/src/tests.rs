@@ -203,42 +203,36 @@ mod pallet {
 
 	#[test]
 	fn put_in_front_of_two_node_bag_heavier_is_tail() {
-		ExtBuilder::default().add_ids(vec![(10, 15), (11, 16)]).build_and_execute(|| {
-			// given
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![10, 11]), (1_000, vec![2, 3, 4])]
-			);
+		ExtBuilder::default()
+			.skip_genesis_ids()
+			.add_ids(vec![(10, 15), (11, 16)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![10, 11])]);
 
-			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
 
-			// then
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![11, 10]), (1_000, vec![2, 3, 4])]
-			);
-		});
+				// then
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
+			});
 	}
 
 	#[test]
 	fn put_in_front_of_two_node_bag_heavier_is_head() {
-		ExtBuilder::default().add_ids(vec![(11, 16), (10, 15)]).build_and_execute(|| {
-			// given
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![11, 10]), (1_000, vec![2, 3, 4])]
-			);
+		ExtBuilder::default()
+			.skip_genesis_ids()
+			.add_ids(vec![(11, 16), (10, 15)])
+			.build_and_execute(|| {
+				// given
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
 
-			// when
-			assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
+				// when
+				assert_ok!(BagsList::put_in_front_of(Origin::signed(11), 10));
 
-			// then
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![11, 10]), (1_000, vec![2, 3, 4])]
-			);
-		});
+				// then
+				assert_eq!(List::<Runtime>::get_bags(), vec![(20, vec![11, 10])]);
+			});
 	}
 
 	#[test]
@@ -393,21 +387,13 @@ mod pallet {
 
 	#[test]
 	fn put_in_front_of_errors_if_heavier_is_equal_weight_to_lighter() {
-		ExtBuilder::default().add_ids(vec![(5, 15), (6, 15)]).build_and_execute(|| {
-			//	note insertion order ^^^^^^
-
+		ExtBuilder::default().build_and_execute(|| {
 			// given
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (20, vec![5, 6]), (1_000, vec![2, 3, 4])]
-			);
-
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&5), 15);
-			assert_eq!(<Runtime as Config>::VoteWeightProvider::vote_weight(&6), 15);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// then
 			assert_noop!(
-				BagsList::put_in_front_of(Origin::signed(6), 5),
+				BagsList::put_in_front_of(Origin::signed(3), 4),
 				crate::pallet::Error::<Runtime>::NotHeavier
 			);
 		});

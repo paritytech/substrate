@@ -378,7 +378,7 @@ mod list {
 	#[test]
 	#[should_panic = "given nodes must always have a valid bag. qed."]
 	fn put_in_front_of_panics_if_bag_not_found() {
-		ExtBuilder::default().build_and_execute_no_post_check(|| {
+		ExtBuilder::default().skip_genesis_ids().build_and_execute_no_post_check(|| {
 			let node_10_no_bag = Node::<Runtime> { id: 10, prev: None, next: None, bag_upper: 15 };
 			let node_11_no_bag = Node::<Runtime> { id: 11, prev: None, next: None, bag_upper: 15 };
 
@@ -388,7 +388,7 @@ mod list {
 			StakingMock::set_vote_weight_of(&10, 14);
 			StakingMock::set_vote_weight_of(&11, 15);
 			assert!(!ListBags::<Runtime>::contains_key(15));
-			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![]);
 
 			let weight_fn = Box::new(<Runtime as Config>::VoteWeightProvider::vote_weight);
 
