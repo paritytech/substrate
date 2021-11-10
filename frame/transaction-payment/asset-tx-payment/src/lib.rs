@@ -111,9 +111,6 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
-
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_transaction_payment::Config {
 		/// The fungibles instance used to pay for transactions in assets.
@@ -251,21 +248,17 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
 		len: usize,
-		_result: &DispatchResult,
+		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
 		let (tip, who, initial_payment) = pre;
 		match initial_payment {
 			InitialPayment::Native(already_withdrawn) => {
-				let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
-					len as u32, info, post_info, tip,
-				);
-				<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::correct_and_deposit_fee(
-					&who,
+				pallet_transaction_payment::ChargeTransactionPayment::<T>::post_dispatch(
+					(tip, who, already_withdrawn),
 					info,
 					post_info,
-					actual_fee,
-					tip,
-					already_withdrawn,
+					len,
+					result,
 				)?;
 			},
 			InitialPayment::Asset(already_withdrawn) => {
