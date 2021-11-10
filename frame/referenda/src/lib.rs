@@ -85,9 +85,9 @@ pub mod pallet {
 
 		// Origins and unbalances.
 		/// Origin from which any vote may be cancelled.
-		type CancelOrigin: EnsureOrigin<OriginOf<Self>>;
+		type CancelOrigin: EnsureOrigin<<Self as frame_system::Config>::Origin>;
 		/// Origin from which any vote may be killed.
-		type KillOrigin: EnsureOrigin<OriginOf<Self>>;
+		type KillOrigin: EnsureOrigin<<Self as frame_system::Config>::Origin>;
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 		/// The counting type for votes. Usually just balance.
@@ -256,31 +256,6 @@ pub mod pallet {
 		NotOngoing,
 		/// Referendum's decision deposit is already paid.
 		HaveDeposit,
-		/// Proposal does not exist
-		ProposalMissing,
-		/// Cannot cancel the same proposal twice
-		AlreadyCanceled,
-		/// Proposal already made
-		DuplicateProposal,
-		/// Vote given for invalid referendum
-		ReferendumInvalid,
-		/// The given account did not vote on the referendum.
-		NotVoter,
-		/// The actor has no permission to conduct the action.
-		NoPermission,
-		/// The account is already delegating.
-		AlreadyDelegating,
-		/// Too high a balance was provided that the account cannot afford.
-		InsufficientFunds,
-		/// The account is not currently delegating.
-		NotDelegating,
-		/// The account currently has votes attached to it and the operation cannot succeed until
-		/// these are removed, either through `unvote` or `reap_vote`.
-		VotesExist,
-		/// Delegation to oneself makes no sense.
-		Nonsense,
-		/// Invalid upper bound.
-		WrongUpperBound,
 		/// The track identifier given was invalid.
 		BadTrack,
 		/// There are already a full complement of referendums in progress for this track.
@@ -294,12 +269,6 @@ pub mod pallet {
 		/// No track exists for the proposal origin.
 		NoTrack,
 	}
-
-	// TODO: bans
-	// TODO: cancel_referendum
-	// TODO: kill_referendum
-	// TODO: check events cover everything useful
-	// TODO: remove unused errors
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -366,6 +335,44 @@ pub mod pallet {
 			ensure_signed_or_root(origin)?;
 			let mut info = ReferendumInfoFor::<T>::get(index).ok_or(Error::<T>::BadReferendum)?;
 			Self::refund_deposit(info.take_decision_deposit());
+			ReferendumInfoFor::<T>::insert(index, info);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn cancel(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+		) -> DispatchResult {
+			T::CancelOrigin::ensure_origin(origin)?;
+			let status = Self::ensure_ongoing(index)?;
+			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
+			Self::cancel_referendum_alarm(index);
+			Self::note_one_fewer_deciding(status.track, track);
+			Self::deposit_event(Event::<T>::Cancelled { index, tally: status.tally });
+			let info = ReferendumInfo::Cancelled(
+				frame_system::Pallet::<T>::block_number(),
+				status.submission_deposit,
+				status.decision_deposit,
+			);
+			ReferendumInfoFor::<T>::insert(index, info);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn kill(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+		) -> DispatchResult {
+			T::CancelOrigin::ensure_origin(origin)?;
+			let status = Self::ensure_ongoing(index)?;
+			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
+			Self::cancel_referendum_alarm(index);
+			Self::note_one_fewer_deciding(status.track, track);
+			Self::deposit_event(Event::<T>::Killed { index, tally: status.tally });
+			Self::slash_deposit(Some(status.submission_deposit));
+			Self::slash_deposit(status.decision_deposit);
+			let info = ReferendumInfo::Killed(frame_system::Pallet::<T>::block_number());
 			ReferendumInfoFor::<T>::insert(index, info);
 			Ok(())
 		}
@@ -755,6 +762,13 @@ impl<T: Config> Pallet<T> {
 	fn refund_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T>>>) {
 		if let Some(Deposit { who, amount }) = deposit {
 			T::Currency::unreserve(&who, amount);
+		}
+	}
+
+	/// Slash a deposit, if `Some`.
+	fn slash_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T>>>) {
+		if let Some(Deposit { who, amount }) = deposit {
+			T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 		}
 	}
 

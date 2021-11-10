@@ -215,8 +215,12 @@ pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, Ac
 	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with rejection. Submission deposit is held.
 	Rejected(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	/// Referendum finished with cancelation. Submission deposit is held.
+	Cancelled(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished and was never decided. Submission deposit is held.
 	TimedOut(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	/// Referendum finished with a kill.
+	Killed(Moment),
 }
 
 impl<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
