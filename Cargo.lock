@@ -5515,7 +5515,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-example"
+name = "pallet-example-basic"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
