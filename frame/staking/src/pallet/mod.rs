@@ -1446,7 +1446,7 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 
 			let ed = T::Currency::minimum_balance();
-			let reapable = T::Currency::total_balance(&stash) <= ed ||
+			let reapable = T::Currency::total_balance(&stash) < ed ||
 				Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
 					.map(|l| l.total)
 					.unwrap_or_default() < ed;
