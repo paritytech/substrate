@@ -64,7 +64,7 @@ fn spawn_validation_pool_task(
 ) {
 	spawner.spawn_essential_blocking(
 		name,
-		"substrate_tx_pool",
+		Some("transaction-pool"),
 		async move {
 			loop {
 				let task = receiver.lock().await.next().await;

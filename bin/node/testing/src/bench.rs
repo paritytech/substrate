@@ -246,7 +246,7 @@ impl SpawnNamed for TaskExecutor {
 	fn spawn(
 		&self,
 		_: &'static str,
-		_: &'static str,
+		_: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
 	) {
 		self.pool.spawn_ok(future);
@@ -255,7 +255,7 @@ impl SpawnNamed for TaskExecutor {
 	fn spawn_blocking(
 		&self,
 		_: &'static str,
-		_: &'static str,
+		_: Option<&'static str>,
 		future: futures::future::BoxFuture<'static, ()>,
 	) {
 		self.pool.spawn_ok(future);

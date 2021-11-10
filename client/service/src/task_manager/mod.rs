@@ -38,6 +38,9 @@ mod prometheus_future;
 #[cfg(test)]
 mod tests;
 
+/// Default task group name.
+pub const DEFAULT_GROUP_NAME: &'static str = "default";
+
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
@@ -48,18 +51,19 @@ pub struct SpawnTaskHandle {
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name.
+	/// Spawns the given task with the given name and an optional group name.
+	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
-	/// Note that the `name` is a `&'static str`. The reason for this choice is that statistics
-	/// about this task are getting reported to the Prometheus endpoint (if enabled), and that
-	/// therefore the set of possible task names must be bounded.
+	/// Note that the `name`/`group` is a `&'static str`. The reason for this choice is that
+	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
+	/// that therefore the set of possible task names must be bounded.
 	///
 	/// In other words, it would be a bad idea for someone to do for example
 	/// `spawn(format!("{:?}", some_public_key))`.
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
@@ -69,7 +73,7 @@ impl SpawnTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -79,7 +83,7 @@ impl SpawnTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
@@ -90,6 +94,8 @@ impl SpawnTaskHandle {
 
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
+		// If no group is specified use default.
+		let group = group.unwrap_or(DEFAULT_GROUP_NAME);
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
@@ -151,13 +157,18 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		future: BoxFuture<'static, ()>,
 	) {
 		self.spawn_inner(name, group, future, TaskType::Blocking)
 	}
 
-	fn spawn(&self, name: &'static str, group: &'static str, future: BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
 		self.spawn_inner(name, group, future, TaskType::Async)
 	}
 }
@@ -187,7 +198,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
@@ -199,7 +210,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -208,7 +219,7 @@ impl SpawnEssentialTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
@@ -226,7 +237,7 @@ impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
 	fn spawn_essential_blocking(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		future: BoxFuture<'static, ()>,
 	) {
 		self.spawn_blocking(name, group, future);
@@ -235,7 +246,7 @@ impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
 	fn spawn_essential(
 		&self,
 		name: &'static str,
-		group: &'static str,
+		group: Option<&'static str>,
 		future: BoxFuture<'static, ()>,
 	) {
 		self.spawn(name, group, future);
