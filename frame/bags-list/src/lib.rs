@@ -59,6 +59,7 @@ use sp_std::prelude::*;
 mod benchmarks;
 
 mod list;
+pub mod migrations;
 #[cfg(any(test, feature = "fuzz"))]
 pub mod mock;
 #[cfg(test)]

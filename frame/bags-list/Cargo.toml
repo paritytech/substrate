@@ -64,9 +64,10 @@ runtime-benchmarks = [
 	"frame-election-provider-support/runtime-benchmarks",
 ]
 fuzz = [
-  "sp-core",
+	"sp-core",
 	"sp-io",
-  "pallet-balances",
+	"pallet-balances",
 	"sp-tracing",
 ]
+try-runtime = [ "frame-support/try-runtime" ]
 
