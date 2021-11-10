@@ -3134,9 +3134,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6373a33d987866ccfe1af4bc11b089dce941764313f9fd8b7cf13fcb51b72dc5"
 dependencies = [
  "jsonrpsee-proc-macros",
- "jsonrpsee-types 0.4.1",
+ "jsonrpsee-types",
  "jsonrpsee-utils",
- "jsonrpsee-ws-client 0.4.1",
+ "jsonrpsee-ws-client",
 ]
 
 [[package]]
@@ -3150,24 +3150,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "jsonrpsee-types"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cc738fd55b676ada3271ef7c383a14a0867a2a88b0fa941311bf5fc0a29d498"
-dependencies = [
- "async-trait",
- "beef",
- "futures-channel",
- "futures-util",
- "hyper 0.14.11",
- "log 0.4.14",
- "serde",
- "serde_json",
- "soketto 0.6.0",
- "thiserror",
 ]
 
 [[package]]
@@ -3197,31 +3179,7 @@ checksum = "0109c4f972058f3b1925b73a17210aff7b63b65967264d0045d15ee88fe84f0c"
 dependencies = [
  "arrayvec 0.7.1",
  "beef",
- "jsonrpsee-types 0.4.1",
-]
-
-[[package]]
-name = "jsonrpsee-ws-client"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9841352dbecf4c2ed5dc71698df9f1660262ae4e0b610e968602529bdbcf7b30"
-dependencies = [
- "async-trait",
- "fnv",
- "futures 0.3.16",
- "jsonrpsee-types 0.3.1",
- "log 0.4.14",
- "pin-project 1.0.8",
- "rustls",
- "rustls-native-certs",
- "serde",
- "serde_json",
- "soketto 0.6.0",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-util",
- "url 2.2.1",
+ "jsonrpsee-types",
 ]
 
 [[package]]
@@ -3235,7 +3193,7 @@ dependencies = [
  "fnv",
  "futures 0.3.16",
  "http",
- "jsonrpsee-types 0.4.1",
+ "jsonrpsee-types",
  "log 0.4.14",
  "pin-project 1.0.8",
  "rustls-native-certs",
@@ -4570,7 +4528,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "futures 0.3.16",
  "hex-literal",
- "jsonrpsee-ws-client 0.4.1",
+ "jsonrpsee-ws-client",
  "log 0.4.14",
  "nix",
  "node-executor",
@@ -9182,21 +9140,6 @@ dependencies = [
 
 [[package]]
 name = "soketto"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a74e48087dbeed4833785c2f3352b59140095dc192dce966a3bfc155020a439f"
-dependencies = [
- "base64 0.13.0",
- "bytes 1.0.1",
- "futures 0.3.16",
- "httparse",
- "log 0.4.14",
- "rand 0.8.4",
- "sha-1 0.9.4",
-]
-
-[[package]]
-name = "soketto"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "083624472e8817d44d02c0e55df043737ff11f279af924abdf93845717c2b75c"
@@ -11003,7 +10946,7 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
- "jsonrpsee-ws-client 0.3.1",
+ "jsonrpsee",
  "log 0.4.14",
  "parity-scale-codec",
  "remote-externalities",
