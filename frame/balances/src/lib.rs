@@ -222,7 +222,7 @@ pub mod pallet {
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// The means of storing the balances of an account.
-		type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
+		type AccountStore: StorageMapShim<Self::Account<Runtime>, frame_system::Provider<Runtime>, AccountId, Self::AccountData<Balance>>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
