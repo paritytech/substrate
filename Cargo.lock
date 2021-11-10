@@ -2402,7 +2402,7 @@ dependencies = [
 
 [[package]]
 name = "generate-bags"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "chrono",
  "frame-election-provider-support",
@@ -5522,7 +5522,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-example"
+name = "pallet-example-basic"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
@@ -6821,9 +6821,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5986aa8d62380092d2f50f8b1cdba9cb9b6731ffd4b25b51fd126b6c3e05b99c"
+checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
 dependencies = [
  "cfg-if 1.0.0",
  "fnv",
@@ -7589,7 +7589,7 @@ dependencies = [
 
 [[package]]
 name = "sc-allocator"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "log 0.4.14",
  "sp-core",
@@ -8402,7 +8402,7 @@ dependencies = [
 
 [[package]]
 name = "sc-proposer-metrics"
-version = "0.9.0"
+version = "0.10.0-dev"
 dependencies = [
  "log 0.4.14",
  "substrate-prometheus-endpoint",
@@ -9501,7 +9501,7 @@ dependencies = [
 
 [[package]]
 name = "sp-debug-derive"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9602,7 +9602,7 @@ dependencies = [
 
 [[package]]
 name = "sp-maybe-compressed-blob"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "zstd",
 ]
@@ -9662,7 +9662,7 @@ dependencies = [
 
 [[package]]
 name = "sp-panic-handler"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -9793,7 +9793,7 @@ dependencies = [
 
 [[package]]
 name = "sp-serializer"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "serde",
  "serde_json",
@@ -10176,7 +10176,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-prometheus-endpoint"
-version = "0.9.0"
+version = "0.10.0-dev"
 dependencies = [
  "async-std",
  "derive_more",

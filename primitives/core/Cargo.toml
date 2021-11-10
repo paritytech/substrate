@@ -40,7 +40,7 @@ zeroize = { version = "1.4.2", default-features = false }
 secrecy = { version = "0.8.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, optional = true }
 parking_lot = { version = "0.11.1", optional = true }
-sp-debug-derive = { version = "3.0.0", default-features = false, path = "../debug-derive" }
+sp-debug-derive = { version = "4.0.0-dev", default-features = false, path = "../debug-derive" }
 sp-externalities = { version = "0.10.0-dev", optional = true, path = "../externalities" }
 sp-storage = { version = "4.0.0-dev", default-features = false, path = "../storage" }
 parity-util-mem = { version = "0.10.0", default-features = false, features = [
@@ -72,7 +72,7 @@ ss58-registry = { version = "1.5.0", default-features = false }
 sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
-sp-serializer = { version = "3.0.0", path = "../serializer" }
+sp-serializer = { version = "4.0.0-dev", path = "../serializer" }
 hex-literal = "0.3.3"
 rand = "0.7.2"
 criterion = "0.3.3"
