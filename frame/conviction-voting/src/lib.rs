@@ -25,17 +25,14 @@
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Codec};
-use frame_support::{
-	BoundedVec, ensure, traits::{
-		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		WithdrawReasons, PollStatus, Referenda,
-		schedule::{DispatchTime, Named as ScheduleNamed},
-	}
-};
-use scale_info::TypeInfo;
-use sp_runtime::{ArithmeticError, DispatchError, DispatchResult, Perbill, traits::{Dispatchable, Saturating, One, AtLeast32BitUnsigned}};
-use sp_std::{prelude::*, fmt::Debug};
+use frame_support::{ensure, traits::{
+	Currency, Get, LockIdentifier, LockableCurrency, ReservableCurrency, WithdrawReasons,
+	PollStatus, Referenda,
+}};
+use sp_runtime::{ArithmeticError, DispatchError, DispatchResult, Perbill, traits::{
+	Saturating, Zero, AtLeast32BitUnsigned
+}};
+use sp_std::prelude::*;
 
 mod conviction;
 mod types;
@@ -57,9 +54,6 @@ const CONVICTION_VOTING_ID: LockIdentifier = *b"pyconvot";
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
 type VotingOf<T> = Voting<
 	BalanceOf<T>,
 	<T as frame_system::Config>::AccountId,
@@ -72,12 +66,7 @@ type ReferendumIndexOf<T> = <<T as Config>::Referenda as Referenda<TallyOf<T>>>:
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		pallet_prelude::*,
-		traits::EnsureOrigin,
-		weights::Pays,
-		Parameter,
-	};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::DispatchResult;
 
@@ -356,7 +345,7 @@ impl<T: Config> Pallet<T> {
 		vote: AccountVote<BalanceOf<T>>,
 	) -> DispatchResult {
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
-		T::Referenda::access_poll(ref_index, |poll_status| {
+		T::Referenda::try_access_poll(ref_index, |poll_status| {
 			let tally = poll_status.ensure_ongoing().ok_or(Error::<T>::NotOngoing)?;
 			VotingFor::<T>::try_mutate(who, |voting| {
 				if let Voting::Direct { ref mut votes, delegations, .. } = voting {
@@ -411,7 +400,7 @@ impl<T: Config> Pallet<T> {
 					.map_err(|_| Error::<T>::NotVoter)?;
 				let v = votes.remove(i);
 
-				T::Referenda::access_poll(ref_index, |poll_status| match poll_status {
+				T::Referenda::try_access_poll(ref_index, |poll_status| match poll_status {
 					PollStatus::Ongoing(tally) => {
 						ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
 						// Shouldn't be possible to fail, but we handle it gracefully.
@@ -445,8 +434,6 @@ impl<T: Config> Pallet<T> {
 
 	/// Return the number of votes for `who`
 	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
-		todo!()
-	/*
 		VotingFor::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } => {
 				// We don't support second level delegating, so we don't need to do anything more.
@@ -457,22 +444,20 @@ impl<T: Config> Pallet<T> {
 				*delegations = delegations.saturating_add(amount);
 				for &(ref_index, account_vote) in votes.iter() {
 					if let AccountVote::Standard { vote, .. } = account_vote {
-						ReferendumInfoFor::<T>::mutate(ref_index, |maybe_info| {
-							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
-								status.tally.increase(vote.aye, amount);
+						T::Referenda::access_poll(ref_index, |poll_status| {
+							if let PollStatus::Ongoing(tally) = poll_status {
+								tally.increase(vote.aye, amount);
 							}
 						});
 					}
 				}
 				votes.len() as u32
 			},
-		})*/
+		})
 	}
 
 	/// Return the number of votes for `who`
 	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
-		todo!()
-	/*
 		VotingFor::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } => {
 				// We don't support second level delegating, so we don't need to do anything more.
@@ -483,16 +468,16 @@ impl<T: Config> Pallet<T> {
 				*delegations = delegations.saturating_sub(amount);
 				for &(ref_index, account_vote) in votes.iter() {
 					if let AccountVote::Standard { vote, .. } = account_vote {
-						ReferendumInfoFor::<T>::mutate(ref_index, |maybe_info| {
-							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
-								status.tally.reduce(vote.aye, amount);
+						T::Referenda::access_poll(ref_index, |poll_status| {
+							if let PollStatus::Ongoing(tally) = poll_status {
+								tally.reduce(vote.aye, amount);
 							}
 						});
 					}
 				}
 				votes.len() as u32
 			},
-		})*/
+		})
 	}
 
 	/// Attempt to delegate `balance` times `conviction` of voting power from `who` to `target`.
@@ -504,8 +489,6 @@ impl<T: Config> Pallet<T> {
 		conviction: Conviction,
 		balance: BalanceOf<T>,
 	) -> Result<u32, DispatchError> {
-		todo!()
-	/*
 		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
 		let votes = VotingFor::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
@@ -536,15 +519,13 @@ impl<T: Config> Pallet<T> {
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated(who, target));
-		Ok(votes)*/
+		Ok(votes)
 	}
 
 	/// Attempt to end the current delegation.
 	///
 	/// Return the number of votes of upstream.
 	fn try_undelegate(who: T::AccountId) -> Result<u32, DispatchError> {
-		todo!()
-	/*
 		let votes = VotingFor::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::default();
 			sp_std::mem::swap(&mut old, voting);
@@ -564,14 +545,12 @@ impl<T: Config> Pallet<T> {
 			}
 		})?;
 		Self::deposit_event(Event::<T>::Undelegated(who));
-		Ok(votes)*/
+		Ok(votes)
 	}
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
 	/// a security hole) but may be reduced from what they are currently.
 	fn update_lock(who: &T::AccountId) {
-		todo!()
-	/*
 		let lock_needed = VotingFor::<T>::mutate(who, |voting| {
 			voting.rejig(frame_system::Pallet::<T>::block_number());
 			voting.locked_balance()
@@ -580,6 +559,6 @@ impl<T: Config> Pallet<T> {
 			T::Currency::remove_lock(CONVICTION_VOTING_ID, who);
 		} else {
 			T::Currency::set_lock(CONVICTION_VOTING_ID, who, lock_needed, WithdrawReasons::TRANSFER);
-		}*/
+		}
 	}
 }

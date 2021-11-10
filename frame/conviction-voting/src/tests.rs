@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_conviction_voting;
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers},
+	traits::{Contains, EqualPrivilegeOnly, OnInitialize, SortedMembers},
 	weights::Weight,
 };
 use frame_system::EnsureRoot;
@@ -167,9 +167,15 @@ impl Referenda<TallyOf<Test>> for TestReferenda {
 	fn is_active(_index: u8) -> bool { false }
 	fn access_poll<R>(
 		_index: Self::Index,
-		_f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64>) -> Result<R, DispatchError>,
+		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64>) -> R,
+	) -> R {
+		f(PollStatus::None)
+	}
+	fn try_access_poll<R>(
+		_index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64>) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
-		Err(DispatchError::Other("Unimplemented"))
+		f(PollStatus::None)
 	}
 	fn tally<R>(_index: Self::Index) -> Option<TallyOf<Test>> {
 		None
@@ -239,6 +245,18 @@ fn big_nay(who: u64) -> AccountVote<u64> {
 	AccountVote::Standard { vote: BIG_NAY, balance: Balances::free_balance(&who) }
 }
 
-fn tally(r: u32) -> TallyOf<Test> {
+fn tally(_r: u32) -> TallyOf<Test> {
 	todo!()
+}
+
+#[test]
+fn basic_stuff() {
+	new_test_ext_execute_with_cond(|_x| {
+		let _ = tally(0);
+		let _ = aye(0);
+		let _ = nay(0);
+		let _ = big_aye(0);
+		let _ = big_nay(0);
+		fast_forward_to(1);
+	});
 }

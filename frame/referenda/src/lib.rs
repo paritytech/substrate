@@ -401,6 +401,23 @@ impl<T: Config> Referenda<T::Tally> for Pallet<T> {
 	type Moment = T::BlockNumber;
 	fn access_poll<R>(
 		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber>) -> R,
+	) -> R {
+		match ReferendumInfoFor::<T>::get(index) {
+			Some(ReferendumInfo::Ongoing(mut status)) => {
+				let result = f(PollStatus::Ongoing(&mut status.tally));
+				let now = frame_system::Pallet::<T>::block_number();
+				let (info, _)  = Self::service_referendum(now, index, status);
+				ReferendumInfoFor::<T>::insert(index, info);
+				result
+			},
+			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Done(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Done(end, false)),
+			_ => f(PollStatus::None),
+		}
+	}
+	fn try_access_poll<R>(
+		index: Self::Index,
 		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber>) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
 		match ReferendumInfoFor::<T>::get(index) {

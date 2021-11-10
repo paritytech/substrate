@@ -126,6 +126,11 @@ pub trait Referenda<Tally> {
 
 	fn access_poll<R>(
 		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment>) -> R,
+	) -> R;
+
+	fn try_access_poll<R>(
+		index: Self::Index,
 		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment>) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError>;
 }
