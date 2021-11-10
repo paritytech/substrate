@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Benchmarking for pallet-example.
+//! Benchmarking for pallet-example-basic.
 
 #![cfg(feature = "runtime-benchmarks")]
 
@@ -23,7 +23,7 @@ use crate::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 
-// To actually run this benchmark on pallet-example, we need to put this pallet into the
+// To actually run this benchmark on pallet-example-basic, we need to put this pallet into the
 //   runtime and compile it with `runtime-benchmarks` feature. The detail procedures are
 //   documented at:
 //   https://docs.substrate.io/v3/runtime/benchmarking#how-to-benchmark
@@ -67,7 +67,7 @@ benchmarks! {
 	}
 
 	// This line generates test cases for benchmarking, and could be run by:
-	//   `cargo test -p pallet-example --all-features`, you will see one line per case:
+	//   `cargo test -p pallet-example-basic --all-features`, you will see one line per case:
 	//   `test benchmarking::bench_sort_vector ... ok`
 	//   `test benchmarking::bench_accumulate_dummy ... ok`
 	//   `test benchmarking::bench_set_dummy_benchmark ... ok` in the result.

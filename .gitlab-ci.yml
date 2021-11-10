@@ -41,7 +41,7 @@ variables:                         &default-vars
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example-* subkey chain-spec-builder"
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
@@ -482,9 +482,9 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
-    - cd frame/example-offchain-worker/
+    - cd frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
-    - cd ../example
+    - cd ../basic
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 

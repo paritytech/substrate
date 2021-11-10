@@ -1,5 +1,5 @@
 <!-- markdown-link-check-disable -->
-# Offchain Worker Example Module
+# Offchain Worker Example Pallet
 
 The Offchain Worker Example: A simple pallet demonstrating
 concepts, APIs and structures common to most offchain workers.
@@ -11,6 +11,8 @@ documentation.
 - [`Call`](./enum.Call.html)
 - [`Module`](./struct.Module.html)
 
+**This pallet serves as an example showcasing Substrate off-chain worker and is not meant to be
+used in production.**
 
 ## Overview
 
