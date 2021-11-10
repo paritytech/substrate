@@ -1431,8 +1431,8 @@ pub mod pallet {
 		/// 1. the `total_balance` of the stash is below existential deposit.
 		/// 2. or, the `ledger.total` of the stash is below existential deposit.
 		///
-		/// The former can happen in cases like slashed, the latter when a fully unbonded account
-		/// still receives staking rewards in `RewardDestination::Staked`.
+		/// The former can happen in cases like a slash; the latter when a fully unbonded account
+		/// is still receiving staking rewards in `RewardDestination::Staked`.
 		///
 		/// It can be called by anyone, as long as `stash` meets the above requirements.
 		///
