@@ -82,7 +82,6 @@ pub mod pallet {
 		traits::{Currency, OnUnbalanced, ReservableCurrency},
 	};
 	use frame_system::pallet_prelude::*;
-	use scale_info::TypeInfo;
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::traits::{Saturating, Zero};
 	use sp_std::prelude::*;
@@ -128,7 +127,6 @@ pub mod pallet {
 
 		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
 		/// the issuance by which we inflate or deflate the gilt.
-		#[pallet::constant]
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is

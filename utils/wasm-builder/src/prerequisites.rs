@@ -58,7 +58,7 @@ fn create_check_toolchain_project(project_dir: &Path) {
 			[package]
 			name = "wasm-test"
 			version = "1.0.0"
-			edition = "2018"
+			edition = "2021"
 			build = "build.rs"
 
 			[lib]
@@ -137,6 +137,13 @@ fn check_wasm_toolchain_installed(
 	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock
 	build_cmd.env_remove("CARGO_TARGET_DIR");
 	run_cmd.env_remove("CARGO_TARGET_DIR");
+
+	// Make sure the host's flags aren't used here, e.g. if an alternative linker is specified
+	// in the RUSTFLAGS then the check we do here will break unless we clear these.
+	build_cmd.env_remove("CARGO_ENCODED_RUSTFLAGS");
+	run_cmd.env_remove("CARGO_ENCODED_RUSTFLAGS");
+	build_cmd.env_remove("RUSTFLAGS");
+	run_cmd.env_remove("RUSTFLAGS");
 
 	build_cmd.output().map_err(|_| err_msg.clone()).and_then(|s| {
 		if s.status.success() {

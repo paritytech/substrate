@@ -149,7 +149,7 @@
 //! - `cancel_queued` - Cancels a proposal that is queued for enactment.
 //! - `clear_public_proposal` - Removes all public proposals.
 
-#![recursion_limit = "128"]
+#![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode, Input};
@@ -613,10 +613,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Weight: see `begin_block`
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			Self::begin_block(n).unwrap_or_else(|e| {
-				sp_runtime::print(e);
-				0
-			})
+			Self::begin_block(n)
 		}
 	}
 
@@ -1682,7 +1679,7 @@ impl<T: Config> Pallet<T> {
 		now: T::BlockNumber,
 		index: ReferendumIndex,
 		status: ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>,
-	) -> Result<bool, DispatchError> {
+	) -> bool {
 		let total_issuance = T::Currency::total_issuance();
 		let approved = status.threshold.approved(status.tally, total_issuance);
 
@@ -1719,44 +1716,68 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::NotPassed(index));
 		}
 
-		Ok(approved)
+		approved
 	}
 
 	/// Current era is ending; we should finish up any proposals.
 	///
 	///
 	/// # <weight>
-	/// If a referendum is launched or maturing, this will take full block weight. Otherwise:
+	/// If a referendum is launched or maturing, this will take full block weight if queue is not
+	/// empty. Otherwise:
 	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
 	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
 	///   `ReferendumCount`, `LowestUnbaked`
 	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
 	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
 	/// # </weight>
-	fn begin_block(now: T::BlockNumber) -> Result<Weight, DispatchError> {
+	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = 0;
-
-		// pick out another public referendum if it's time.
-		if (now % T::LaunchPeriod::get()).is_zero() {
-			// Errors come from the queue being empty. we don't really care about that, and even if
-			// we did, there is nothing we can do here.
-			let _ = Self::launch_next(now);
-			weight = max_block_weight;
-		}
 
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		let r = last.saturating_sub(next);
-		weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
+
+		// pick out another public referendum if it's time.
+		if (now % T::LaunchPeriod::get()).is_zero() {
+			// Errors come from the queue being empty. If the queue is not empty, it will take
+			// full block weight.
+			if Self::launch_next(now).is_ok() {
+				weight = max_block_weight;
+			} else {
+				weight =
+					weight.saturating_add(T::WeightInfo::on_initialize_base_with_launch_period(r));
+			}
+		} else {
+			weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
+		}
+
 		// tally up votes for any expiring referenda.
 		for (index, info) in Self::maturing_referenda_at_inner(now, next..last).into_iter() {
-			let approved = Self::bake_referendum(now, index, info)?;
+			let approved = Self::bake_referendum(now, index, info);
 			ReferendumInfoOf::<T>::insert(index, ReferendumInfo::Finished { end: now, approved });
 			weight = max_block_weight;
 		}
 
-		Ok(weight)
+		// Notes:
+		// * We don't consider the lowest unbaked to be the last maturing in case some refendum have
+		//   longer voting period than others.
+		// * The iteration here shouldn't trigger any storage read that are not in cache, due to
+		//   `maturing_referenda_at_inner` having already read them.
+		// * We shouldn't iterate more than `LaunchPeriod/VotingPeriod + 1` times because the number
+		//   of unbaked referendum is bounded by this number. In case those number have changed in a
+		//   runtime upgrade the formula should be adjusted but the bound should still be sensible.
+		<LowestUnbaked<T>>::mutate(|ref_index| {
+			while *ref_index < last &&
+				Self::referendum_info(*ref_index)
+					.map_or(true, |info| matches!(info, ReferendumInfo::Finished { .. }))
+			{
+				*ref_index += 1
+			}
+		});
+
+		weight
 	}
 
 	/// Reads the length of account in DepositOf without getting the complete value in the runtime.

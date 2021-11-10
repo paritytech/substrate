@@ -71,7 +71,6 @@ fn existential_weight<T: pallet_staking::Config>(
 	minimum_balance: u128,
 ) -> VoteWeight {
 	use frame_support::traits::CurrencyToVote;
-	use std::convert::TryInto;
 
 	T::CurrencyToVote::to_vote(
 		minimum_balance

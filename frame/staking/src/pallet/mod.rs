@@ -141,6 +141,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
+		/// The fraction of the validator set that is safe to be offending.
+		/// After the threshold is reached a new era will be forced.
+		type OffendingValidatorsThreshold: Get<Perbill>;
+
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
@@ -436,6 +440,19 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_planned_session)]
 	pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
+
+	/// Indices of validators that have offended in the active era and whether they are currently
+	/// disabled.
+	///
+	/// This value should be a superset of disabled validators since not all offences lead to the
+	/// validator being disabled (if there was no slash). This is needed to track the percentage of
+	/// validators that have offended in the current era, ensuring a new era is forced if
+	/// `OffendingValidatorsThreshold` is reached. The vec is always kept sorted so that we can find
+	/// whether a given validator has previously offended using binary search. It gets cleared when
+	/// the era ends.
+	#[pallet::storage]
+	#[pallet::getter(fn offending_validators)]
+	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.

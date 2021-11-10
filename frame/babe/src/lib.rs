@@ -31,7 +31,7 @@ use frame_support::{
 	weights::{Pays, Weight},
 	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::{Public, TryFrom};
+use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
@@ -248,7 +248,7 @@ pub mod pallet {
 
 	/// Randomness under construction.
 	///
-	/// We make a tradeoff between storage accesses and list length.
+	/// We make a trade-off between storage accesses and list length.
 	/// We store the under-construction randomness in segments of up to
 	/// `UNDER_CONSTRUCTION_SEGMENT_LENGTH`.
 	///
@@ -926,8 +926,8 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
 	}
 
-	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
+	fn on_disabled(i: u32) {
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i))
 	}
 }
 

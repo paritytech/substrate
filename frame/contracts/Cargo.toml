@@ -2,9 +2,9 @@
 name = "pallet-contracts"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for WASM contracts"
 readme = "README.md"
@@ -28,7 +28,7 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
-libsecp256k1 = { version = "0.3.5", optional = true, default-features = false, features = ["hmac"] }
+libsecp256k1 = { version = "0.6.0", optional = true, default-features = false, features = ["hmac", "static-context"] }
 rand = { version = "0.7.3", optional = true, default-features = false }
 rand_pcg = { version = "0.2", optional = true }
 
@@ -47,7 +47,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primit
 [dev-dependencies]
 assert_matches = "1"
 hex-literal = "0.3"
-pretty_assertions = "0.7"
+pretty_assertions = "1.0.0"
 wat = "1"
 
 # Substrate Dependencies

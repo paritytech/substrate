@@ -616,9 +616,10 @@ fn syncs_header_only_forks() {
 	let small_hash = net.peer(0).client().info().best_hash;
 	net.peer(1).push_blocks(4, false);
 
-	net.block_until_sync();
 	// Peer 1 will sync the small fork even though common block state is missing
-	assert!(net.peer(1).has_block(&small_hash));
+	while !net.peer(1).has_block(&small_hash) {
+		net.block_until_idle();
+	}
 }
 
 #[test]
@@ -855,12 +856,19 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	net.block_until_idle();
 
 	// Connect another node that should now sync to the tip
-	net.add_full_peer_with_config(Default::default());
-	net.block_until_connected();
+	net.add_full_peer_with_config(FullPeerConfig {
+		connect_to_peers: Some(vec![0]),
+		..Default::default()
+	});
 
-	while !net.peer(2).has_block(&block_hash) {
-		net.block_until_idle();
-	}
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(2).has_block(&block_hash) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}));
 
 	// However peer 1 should still not have the block.
 	assert!(!net.peer(1).has_block(&block_hash));
@@ -1102,11 +1110,44 @@ fn syncs_state() {
 	sp_tracing::try_init_simple();
 	for skip_proofs in &[false, true] {
 		let mut net = TestNet::new(0);
-		net.add_full_peer_with_config(Default::default());
-		net.add_full_peer_with_config(FullPeerConfig {
-			sync_mode: SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false },
-			..Default::default()
-		});
+		let mut genesis_storage: sp_core::storage::Storage = Default::default();
+		genesis_storage.top.insert(b"additional_key".to_vec(), vec![1]);
+		let mut child_data: std::collections::BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
+		for i in 0u8..16 {
+			child_data.insert(vec![i; 5], vec![i; 33]);
+		}
+		let child1 = sp_core::storage::StorageChild {
+			data: child_data.clone(),
+			child_info: sp_core::storage::ChildInfo::new_default(b"child1"),
+		};
+		let child3 = sp_core::storage::StorageChild {
+			data: child_data.clone(),
+			child_info: sp_core::storage::ChildInfo::new_default(b"child3"),
+		};
+		for i in 22u8..33 {
+			child_data.insert(vec![i; 5], vec![i; 33]);
+		}
+		let child2 = sp_core::storage::StorageChild {
+			data: child_data.clone(),
+			child_info: sp_core::storage::ChildInfo::new_default(b"child2"),
+		};
+		genesis_storage
+			.children_default
+			.insert(child1.child_info.storage_key().to_vec(), child1);
+		genesis_storage
+			.children_default
+			.insert(child2.child_info.storage_key().to_vec(), child2);
+		genesis_storage
+			.children_default
+			.insert(child3.child_info.storage_key().to_vec(), child3);
+		let mut config_one = FullPeerConfig::default();
+		config_one.extra_storage = Some(genesis_storage.clone());
+		net.add_full_peer_with_config(config_one);
+		let mut config_two = FullPeerConfig::default();
+		config_two.extra_storage = Some(genesis_storage);
+		config_two.sync_mode =
+			SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false };
+		net.add_full_peer_with_config(config_two);
 		net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
 		net.block_until_sync();
@@ -1192,6 +1233,38 @@ fn syncs_indexed_blocks() {
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_some());
+}
+
+#[test]
+fn warp_sync() {
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(0);
+	// Create 3 synced peers and 1 peer trying to warp sync.
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig {
+		sync_mode: SyncMode::Warp,
+		..Default::default()
+	});
+	let gap_end = net.peer(0).push_blocks(63, false);
+	net.peer(0).push_blocks(1, false);
+	net.peer(1).push_blocks(64, false);
+	net.peer(2).push_blocks(64, false);
+	// Wait for peer 1 to sync state.
+	net.block_until_sync();
+	assert!(!net.peer(3).client().has_state_at(&BlockId::Number(1)));
+	assert!(net.peer(3).client().has_state_at(&BlockId::Number(64)));
+
+	// Wait for peer 1 download block history
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(3).has_block(&gap_end) {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}));
 }
 
 #[test]

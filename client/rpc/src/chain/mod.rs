@@ -83,8 +83,6 @@ where
 		match number {
 			None => Ok(Some(self.client().info().best_hash)),
 			Some(num_or_hex) => {
-				use std::convert::TryInto;
-
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
 					Error::Other(format!(

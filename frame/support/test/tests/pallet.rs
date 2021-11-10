@@ -146,6 +146,12 @@ pub mod pallet {
 		fn some_extra_extra() -> T::AccountId {
 			SomeType1.into()
 		}
+
+		/// Some doc
+		#[pallet::constant_name(SomeExtraRename)]
+		fn some_extra_rename() -> T::AccountId {
+			SomeType1.into()
+		}
 	}
 
 	#[pallet::pallet]
@@ -160,25 +166,25 @@ pub mod pallet {
 		T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
 			10
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(20));
 		}
 		fn on_runtime_upgrade() -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
 			30
 		}
 		fn integrity_test() {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 		}
 	}
 
@@ -194,8 +200,8 @@ pub mod pallet {
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
 		) -> DispatchResultWithPostInfo {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType3); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType3); // Test for where clause
 			let _ = origin;
 			Self::deposit_event(Event::Something(3));
 			Ok(().into())
@@ -256,12 +262,13 @@ pub mod pallet {
 	#[pallet::storage_prefix = "Value2"]
 	pub type RenamedValue<T> = StorageValue<Value = u64>;
 
+	/// Test some doc
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
 	where
 		T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1,
 	{
-		T::AccountId::from(SomeType7); // Test where clause works
+		let _ = T::AccountId::from(SomeType7); // Test where clause works
 		4u16
 	}
 
@@ -345,8 +352,8 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>,
 	{
 		fn build(&self) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType4); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType4); // Test for where clause
 		}
 	}
 
@@ -363,8 +370,8 @@ pub mod pallet {
 	{
 		type Call = Call<T>;
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType5); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_transactional { .. }) {
 				return Ok(ValidTransaction::default())
 			}
@@ -383,8 +390,8 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType6); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType6); // Test for where clause
 			Some(Call::foo_no_post_info {})
 		}
 
@@ -503,6 +510,18 @@ pub mod pallet3 {
 	pub struct Pallet<T>(_);
 }
 
+#[frame_support::pallet]
+pub mod pallet4 {
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
+}
+
 frame_support::parameter_types!(
 	pub const MyGetParam: u32 = 10;
 	pub const MyGetParam2: u32 = 11;
@@ -547,6 +566,8 @@ impl pallet2::Config for Runtime {
 	type Event = Event;
 }
 
+impl pallet4::Config for Runtime {}
+
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
@@ -557,11 +578,20 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Call, Event<T>},
-		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Example2: pallet2::{Pallet, Call, Event, Config<T>, Storage},
+		// Exclude part `Storage` in order not to check its metadata in tests.
+		System: frame_system exclude_parts { Pallet, Storage },
+		Example: pallet,
+		Example2: pallet2 exclude_parts { Call },
+		Example4: pallet4 use_parts { Call },
 	}
 );
+
+// Test that the part `Call` is excluded from Example2 and included in Example4.
+fn _ensure_call_is_correctly_excluded_and_included(call: Call) {
+	match call {
+		Call::System(_) | Call::Example(_) | Call::Example4(_) => (),
+	}
+}
 
 #[test]
 fn transactional_works() {
@@ -989,8 +1019,8 @@ fn migrate_from_pallet_version_to_storage_version() {
 			AllPalletsWithSystem,
 		>(&db_weight);
 
-		// 3 pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(3 * 2 * 5, weight);
+		// 4 pallets, 2 writes and every write costs 5 weight.
+		assert_eq!(4 * 2 * 5, weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
@@ -1220,6 +1250,12 @@ fn metadata() {
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![" Some doc"],
 				},
+				PalletConstantMetadata {
+					name: "SomeExtraRename",
+					ty: meta_type::<u64>(),
+					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					docs: vec![" Some doc"],
+				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
 		},
@@ -1256,7 +1292,7 @@ fn metadata() {
 					},
 				],
 			}),
-			calls: Some(meta_type::<pallet2::Call<Runtime>>().into()),
+			calls: None,
 			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
 			constants: vec![],
 			error: None,

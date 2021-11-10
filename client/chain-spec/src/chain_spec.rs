@@ -58,8 +58,9 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 
 		match self {
 			Self::File(path) => {
-				let file =
-					File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
+				let file = File::open(path).map_err(|e| {
+					format!("Error opening spec file at `{}`: {}", path.display(), e)
+				})?;
 				let genesis: GenesisContainer<G> = json::from_reader(file)
 					.map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
@@ -118,6 +119,10 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 					})
 					.collect(),
 			}),
+			// The `StateRootHash` variant exists as a way to keep note that other clients support
+			// it, but Substrate itself isn't capable of loading chain specs with just a hash at the
+			// moment.
+			Genesis::StateRootHash(_) => Err("Genesis storage in hash format not supported".into()),
 		}
 	}
 
@@ -143,6 +148,8 @@ pub struct RawGenesis {
 enum Genesis<G> {
 	Runtime(G),
 	Raw(RawGenesis),
+	/// State root hash of the genesis storage.
+	StateRootHash(StorageData),
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
@@ -284,9 +291,20 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 
 	/// Parse json file into a `ChainSpec`
 	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
-		let file = File::open(&path).map_err(|e| format!("Error opening spec file: {}", e))?;
+		// We mmap the file into memory first, as this is *a lot* faster than using
+		// `serde_json::from_reader`. See https://github.com/serde-rs/json/issues/160
+		let file = File::open(&path)
+			.map_err(|e| format!("Error opening spec file `{}`: {}", path.display(), e))?;
+
+		// SAFETY: `mmap` is fundamentally unsafe since technically the file can change
+		//         underneath us while it is mapped; in practice it's unlikely to be a problem
+		let bytes = unsafe {
+			memmap2::Mmap::map(&file)
+				.map_err(|e| format!("Error mmaping spec file `{}`: {}", path.display(), e))?
+		};
+
 		let client_spec =
-			json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+			json::from_slice(&bytes).map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec { client_spec, genesis: GenesisSource::File(path) })
 	}
 }

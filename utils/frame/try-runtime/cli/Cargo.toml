@@ -2,9 +2,9 @@
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Cli command runtime testing and dry-running"
 readme = "README.md"
@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = "0.4.8"
-parity-scale-codec = { version = "2.0.0" }
+parity-scale-codec = { version = "2.3.1" }
 serde = "1.0.126"
 structopt = "0.3.8"
 
@@ -31,6 +31,6 @@ sp-externalities = { version = "0.10.0-dev", path = "../../../../primitives/exte
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
-jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = [
+jsonrpsee-ws-client = { version = "0.3.1", default-features = false, features = [
     "tokio1",
 ]}

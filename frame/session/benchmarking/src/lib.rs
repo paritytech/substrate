@@ -24,7 +24,7 @@ mod mock;
 
 use sp_std::{prelude::*, vec};
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
 	traits::{KeyOwnerProofSystem, OnInitialize},
@@ -115,6 +115,8 @@ benchmarks! {
 	verify {
 		assert!(Historical::<T>::check_proof(key, key_owner_proof2).is_some());
 	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false);
 }
 
 /// Sets up the benchmark for checking a membership proof. It creates the given
@@ -161,5 +163,3 @@ fn check_membership_proof_setup<T: Config>(
 
 	(key, Historical::<T>::prove(key).unwrap())
 }
-
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test, extra = false);

@@ -256,7 +256,6 @@ benchmarks! {
 	}
 
 	unbond {
-		use sp_std::convert::TryFrom;
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
@@ -887,6 +886,13 @@ benchmarks! {
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));
 	}
+
+	impl_benchmark_test_suite!(
+		Staking,
+		crate::mock::ExtBuilder::default().has_stakers(true),
+		crate::mock::Test,
+		exec_name = build_and_execute
+	);
 }
 
 #[cfg(test)]
@@ -1001,10 +1007,3 @@ mod tests {
 		});
 	}
 }
-
-impl_benchmark_test_suite!(
-	Staking,
-	crate::mock::ExtBuilder::default().has_stakers(true),
-	crate::mock::Test,
-	exec_name = build_and_execute
-);

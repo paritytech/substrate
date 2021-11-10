@@ -75,7 +75,6 @@ mod tests;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use core::convert::TryFrom;
 use frame_support::{
 	traits::{
 		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
@@ -412,7 +411,7 @@ pub mod pallet {
 	pub(crate) type Keys<T: Config> =
 		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
-	/// For each session index, we keep a mapping of 'SessionIndex` and `AuthIndex` to
+	/// For each session index, we keep a mapping of `SessionIndex` and `AuthIndex` to
 	/// `WrapperOpaque<BoundedOpaqueNetworkState>`.
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
@@ -919,7 +918,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		}
 	}
 
-	fn on_disabled(_i: usize) {
+	fn on_disabled(_i: u32) {
 		// ignore
 	}
 }

@@ -74,7 +74,7 @@ impl ImportResult {
 		&self,
 		hash: &B::Hash,
 		number: NumberFor<B>,
-		justification_sync_link: &mut dyn JustificationSyncLink<B>,
+		justification_sync_link: &dyn JustificationSyncLink<B>,
 	) where
 		B: BlockT,
 	{
@@ -133,7 +133,7 @@ pub struct ImportedState<B: BlockT> {
 	/// Target block hash.
 	pub block: B::Hash,
 	/// State keys and values.
-	pub state: Vec<(Vec<u8>, Vec<u8>)>,
+	pub state: sp_state_machine::KeyValueStates,
 }
 
 impl<B: BlockT> std::fmt::Debug for ImportedState<B> {

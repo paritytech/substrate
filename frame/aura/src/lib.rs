@@ -49,7 +49,7 @@ use sp_runtime::{
 	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
 	RuntimeAppPublic,
 };
-use sp_std::{convert::TryFrom, vec::Vec};
+use sp_std::prelude::*;
 
 pub mod migrations;
 mod mock;
@@ -221,7 +221,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		}
 	}
 
-	fn on_disabled(i: usize) {
+	fn on_disabled(i: u32) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),

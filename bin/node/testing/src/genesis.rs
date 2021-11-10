@@ -98,7 +98,10 @@ pub fn config_endowed(
 		treasury: Default::default(),
 		society: SocietyConfig { members: vec![alice(), bob()], pot: 0, max_members: 999 },
 		vesting: Default::default(),
+		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
+		scheduler: Default::default(),
+		transaction_payment: Default::default(),
 	}
 }

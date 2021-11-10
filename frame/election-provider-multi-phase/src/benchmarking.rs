@@ -19,17 +19,13 @@
 
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
-use frame_benchmarking::{account, impl_benchmark_test_suite};
+use frame_benchmarking::account;
 use frame_support::{assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
-use sp_std::{
-	boxed::Box,
-	convert::{TryFrom, TryInto},
-};
 
 const SEED: u32 = 999;
 
@@ -497,10 +493,10 @@ frame_benchmarking::benchmarks! {
 		log!(trace, "actual encoded size = {}", encoding.len());
 		assert!(encoding.len() <= desired_size);
 	}
-}
 
-impl_benchmark_test_suite!(
-	MultiPhase,
-	crate::mock::ExtBuilder::default().build_offchainify(10).0,
-	crate::mock::Runtime,
-);
+	impl_benchmark_test_suite!(
+		MultiPhase,
+		crate::mock::ExtBuilder::default().build_offchainify(10).0,
+		crate::mock::Runtime,
+	);
+}

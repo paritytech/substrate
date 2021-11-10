@@ -19,7 +19,7 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::assert_ok;
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul};
@@ -374,10 +374,10 @@ benchmarks! {
 			T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath)
 		);
 	}
-}
 
-impl_benchmark_test_suite!(
-	Vesting,
-	crate::mock::ExtBuilder::default().existential_deposit(256).build(),
-	crate::mock::Test,
-);
+	impl_benchmark_test_suite!(
+		Vesting,
+		crate::mock::ExtBuilder::default().existential_deposit(256).build(),
+		crate::mock::Test,
+	);
+}

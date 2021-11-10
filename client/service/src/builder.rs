@@ -18,7 +18,7 @@
 
 use crate::{
 	build_network_future,
-	client::{light, Client, ClientConfig},
+	client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
@@ -58,7 +58,7 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, HashFor, Zero},
+	traits::{Block as BlockT, BlockIdTo, Zero},
 	BuildStorage,
 };
 use std::{str::FromStr, sync::Arc, time::SystemTime};
@@ -137,46 +137,8 @@ pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 pub type TFullCallExecutor<TBl, TExec> =
 	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
 
-/// Light client type.
-pub type TLightClient<TBl, TRtApi, TExec> =
-	TLightClientWithBackend<TBl, TRtApi, TExec, TLightBackend<TBl>>;
-
-/// Light client backend type.
-pub type TLightBackend<TBl> =
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>;
-
-/// Light call executor type.
-pub type TLightCallExecutor<TBl, TExec> = sc_light::GenesisCallExecutor<
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
-	crate::client::LocalCallExecutor<
-		TBl,
-		sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
-		TExec,
-	>,
->;
-
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
-
-type TLightParts<TBl, TRtApi, TExec> = (
-	Arc<TLightClient<TBl, TRtApi, TExec>>,
-	Arc<TLightBackend<TBl>>,
-	KeystoreContainer,
-	TaskManager,
-	Arc<OnDemand<TBl>>,
-);
-
-/// Light client backend type with a specific hash type.
-pub type TLightBackendWithHash<TBl, THash> =
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, THash>;
-
-/// Light client type with a specific backend.
-pub type TLightClientWithBackend<TBl, TRtApi, TExec, TBackend> = Client<
-	TBackend,
-	sc_light::GenesisCallExecutor<TBackend, crate::client::LocalCallExecutor<TBl, TBackend, TExec>>,
-	TBl,
-	TRtApi,
->;
 
 trait AsCryptoStoreRef {
 	fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
@@ -359,53 +321,6 @@ where
 	Ok((client, backend, keystore_container, task_manager))
 }
 
-/// Create the initial parts of a light node.
-pub fn new_light_parts<TBl, TRtApi, TExec>(
-	config: &Configuration,
-	telemetry: Option<TelemetryHandle>,
-	executor: TExec,
-) -> Result<TLightParts<TBl, TRtApi, TExec>, Error>
-where
-	TBl: BlockT,
-	TExec: CodeExecutor + RuntimeVersionOf + Clone,
-{
-	let keystore_container = KeystoreContainer::new(&config.keystore)?;
-	let task_manager = {
-		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.tokio_handle.clone(), registry)?
-	};
-
-	let db_storage = {
-		let db_settings = sc_client_db::DatabaseSettings {
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
-			state_pruning: config.state_pruning.clone(),
-			source: config.database.clone(),
-			keep_blocks: config.keep_blocks.clone(),
-			transaction_storage: config.transaction_storage.clone(),
-		};
-		sc_client_db::light::LightStorage::new(db_settings)?
-	};
-	let light_blockchain = sc_light::new_light_blockchain(db_storage);
-	let fetch_checker = Arc::new(sc_light::new_fetch_checker::<_, TBl, _>(
-		light_blockchain.clone(),
-		executor.clone(),
-		Box::new(task_manager.spawn_handle()),
-	));
-	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-	let backend = sc_light::new_light_backend(light_blockchain);
-	let client = Arc::new(light::new_light(
-		backend.clone(),
-		config.chain_spec.as_storage_builder(),
-		executor,
-		Box::new(task_manager.spawn_handle()),
-		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		telemetry,
-	)?);
-
-	Ok((client, backend, keystore_container, task_manager, on_demand))
-}
-
 /// Create an instance of default DB-backend backend.
 pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
@@ -559,12 +474,12 @@ where
 		mut config,
 		task_manager,
 		client,
-		on_demand,
+		on_demand: _,
 		backend,
 		keystore,
 		transaction_pool,
 		rpc_extensions_builder,
-		remote_blockchain,
+		remote_blockchain: _,
 		network,
 		system_rpc_tx,
 		telemetry,
@@ -630,8 +545,6 @@ where
 			client.clone(),
 			transaction_pool.clone(),
 			keystore.clone(),
-			on_demand.clone(),
-			remote_blockchain.clone(),
 			&*rpc_extensions_builder,
 			backend.offchain_storage(),
 			system_rpc_tx.clone(),
@@ -729,8 +642,6 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	keystore: SyncCryptoStorePtr,
-	on_demand: Option<Arc<OnDemand<TBl>>>,
-	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
@@ -769,34 +680,17 @@ where
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
 
-	let (chain, state, child_state) =
-		if let (Some(remote_blockchain), Some(on_demand)) = (remote_blockchain, on_demand) {
-			// Light clients
-			let chain = sc_rpc::chain::new_light(
-				client.clone(),
-				subscriptions.clone(),
-				remote_blockchain.clone(),
-				on_demand.clone(),
-			);
-			let (state, child_state) = sc_rpc::state::new_light(
-				client.clone(),
-				subscriptions.clone(),
-				remote_blockchain.clone(),
-				on_demand,
-				deny_unsafe,
-			);
-			(chain, state, child_state)
-		} else {
-			// Full nodes
-			let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-			let (state, child_state) = sc_rpc::state::new_full(
-				client.clone(),
-				subscriptions.clone(),
-				deny_unsafe,
-				config.rpc_max_payload,
-			);
-			(chain, state, child_state)
-		};
+	let (chain, state, child_state) = {
+		// Full nodes
+		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
+		let (state, child_state) = sc_rpc::state::new_full(
+			client.clone(),
+			subscriptions.clone(),
+			deny_unsafe,
+			config.rpc_max_payload,
+		);
+		(chain, state, child_state)
+	};
 
 	let author =
 		sc_rpc::author::Author::new(client, transaction_pool, subscriptions, keystore, deny_unsafe);

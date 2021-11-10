@@ -302,6 +302,13 @@ impl<T: Config> Pallet<T> {
 				Self::start_era(start_session);
 			}
 		}
+
+		// disable all offending validators that have been disabled for the whole era
+		for (index, disabled) in <OffendingValidators<T>>::get() {
+			if disabled {
+				T::SessionInterface::disable_validator(index);
+			}
+		}
 	}
 
 	/// End a session potentially ending an era.
@@ -374,6 +381,9 @@ impl<T: Config> Pallet<T> {
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
 			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
+
+			// Clear offending validators.
+			<OffendingValidators<T>>::kill();
 		}
 	}
 
@@ -682,6 +692,9 @@ impl<T: Config> Pallet<T> {
 		// track every nominator iterated over, but not necessarily added to `all_voters`
 		let mut nominators_seen = 0u32;
 
+		// cache the total-issuance once in this function
+		let weight_of = Self::weight_of_fn();
+
 		let mut nominators_iter = T::SortedListProvider::iter();
 		while nominators_taken < nominators_quota && nominators_seen < nominators_quota * 2 {
 			let nominator = match nominators_iter.next() {
@@ -695,17 +708,23 @@ impl<T: Config> Pallet<T> {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
+				log!(
+					trace,
+					"fetched nominator {:?} with weight {:?}",
+					nominator,
+					weight_of(&nominator)
+				);
 				targets.retain(|stash| {
 					slashing_spans
 						.get(stash)
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), Self::weight_of(&nominator), targets));
+					all_voters.push((nominator.clone(), weight_of(&nominator), targets));
 					nominators_taken.saturating_inc();
 				}
 			} else {
-				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
+				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
 			}
 		}
 
@@ -907,7 +926,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
-		use sp_std::convert::TryFrom;
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -962,7 +980,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
-		use sp_std::convert::TryFrom;
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
@@ -1237,7 +1254,6 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
-		use sp_std::convert::TryInto;
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = Self::ledger(who).unwrap_or_default();
 		ledger.active = active;
