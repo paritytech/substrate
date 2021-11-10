@@ -267,7 +267,6 @@ fn create_project_cargo_toml(
 	package.insert("name".into(), format!("{}-wasm", crate_name).into());
 	package.insert("version".into(), "1.0.0".into());
 	package.insert("edition".into(), "2021".into());
-	package.insert("resolver".into(), "2".into());
 
 	wasm_workspace_toml.insert("package".into(), package.into());
 
