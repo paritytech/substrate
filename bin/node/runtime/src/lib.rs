@@ -1330,7 +1330,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
-	(),
+	pallet_bags_list::migrations::CheckCounterPrefix<Runtime>,
 >;
 
 /// MMR helper types.
