@@ -19,6 +19,7 @@
 //! main token of the chain.
 //!
 //! ## Overview
+
 //! It does this by extending transactions to include an optional `AssetId` that specifies the asset
 //! to be used for payment (defaulting to the native token on `None`). It expects an
 //! [`OnChargeAssetTransaction`] implementation analogously to [`pallet-transaction-payment`]. The
@@ -27,6 +28,7 @@
 //! asset.
 //!
 //! ## Integration
+
 //! This pallet wraps FRAME's transaction payment pallet and functions as a replacement. This means
 //! you should include both pallets in your `construct_runtime` macro, but only include this
 //! pallet's [`SignedExtension`] ([`ChargeAssetTxPayment`]).
@@ -123,12 +125,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 }
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
@@ -152,7 +148,7 @@ where
 	ChargeAssetIdOf<T>: Send + Sync,
 	CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
-	/// utility constructor. Used only in client/factory code.
+	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
 		Self { tip, asset_id }
 	}
