@@ -18,7 +18,7 @@
 
 use frame_support::traits::PalletInfoAccess;
 use remote_externalities::{Builder, Mode, OnlineConfig};
-use sp_runtime::{DeserializeOwned, traits::Block as BlockT};
+use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute create a snapshot from pallet-staking.
 pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
