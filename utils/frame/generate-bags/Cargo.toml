@@ -1,6 +1,6 @@
 [package]
 name = "generate-bags"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,13 +11,13 @@ readme = "README.md"
 
 [dependencies]
 # FRAME
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
+frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../../../frame/election-provider-support", features = ["runtime-benchmarks"] }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
 
 # primitives
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 
 # third party
 chrono = { version = "0.4.19" }

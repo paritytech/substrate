@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.8"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
@@ -28,7 +28,7 @@ sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../client/transaction-pool/api" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
-sc-proposer-metrics = { version = "0.9.0", path = "../proposer-metrics" }
+sc-proposer-metrics = { version = "0.10.0-dev", path = "../proposer-metrics" }
 
 [dev-dependencies]
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }

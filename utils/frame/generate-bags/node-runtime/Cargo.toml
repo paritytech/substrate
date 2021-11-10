@@ -11,7 +11,7 @@ readme = "README.md"
 
 [dependencies]
 node-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
-generate-bags = { version = "3.0.0", path = "../" }
+generate-bags = { version = "4.0.0-dev", path = "../" }
 
 # third-party
 structopt = "0.3.21"

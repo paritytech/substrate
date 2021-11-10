@@ -2400,7 +2400,7 @@ checksum = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
 
 [[package]]
 name = "generate-bags"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "chrono",
  "frame-election-provider-support",
@@ -2698,9 +2698,9 @@ dependencies = [
 
 [[package]]
 name = "httparse"
-version = "1.4.1"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3a87b616e37e93c22fb19bcd386f02f3af5ea98a25670ad0fce773de23c5e68"
+checksum = "acd94fdbe1d4ff688b67b04eee2e17bd50995534a61539e45adfefb45e5e5503"
 
 [[package]]
 name = "httpdate"
@@ -2744,9 +2744,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.14.11"
+version = "0.14.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b61cf2d1aebcf6e6352c97b81dc2244ca29194be1b276f5d8ad5c6330fffb11"
+checksum = "2b91bb1f221b6ea1f1e4371216b70f40748774c2fb5971b450c07773fb92d26b"
 dependencies = [
  "bytes 1.0.1",
  "futures-channel",
@@ -2773,7 +2773,7 @@ checksum = "5f9f7a97316d44c0af9b0301e65010573a853a9fc97046d7331d7f6bc0fd5a64"
 dependencies = [
  "ct-logs",
  "futures-util",
- "hyper 0.14.11",
+ "hyper 0.14.14",
  "log 0.4.14",
  "rustls",
  "rustls-native-certs",
@@ -2789,7 +2789,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
  "bytes 1.0.1",
- "hyper 0.14.11",
+ "hyper 0.14.14",
  "native-tls",
  "tokio",
  "tokio-native-tls",
@@ -3012,7 +3012,7 @@ checksum = "d2b99d4207e2a04fb4581746903c2bb7eb376f88de9c699d0f3e10feeac0cd3a"
 dependencies = [
  "derive_more",
  "futures 0.3.16",
- "hyper 0.14.11",
+ "hyper 0.14.14",
  "hyper-tls",
  "jsonrpc-core",
  "jsonrpc-pubsub",
@@ -3068,7 +3068,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
 dependencies = [
  "futures 0.3.16",
- "hyper 0.14.11",
+ "hyper 0.14.14",
  "jsonrpc-core",
  "jsonrpc-server-utils",
  "log 0.4.14",
@@ -3164,7 +3164,7 @@ dependencies = [
  "beef",
  "futures-channel",
  "futures-util",
- "hyper 0.14.11",
+ "hyper 0.14.14",
  "log 0.4.14",
  "serde",
  "serde_json",
@@ -6815,9 +6815,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5986aa8d62380092d2f50f8b1cdba9cb9b6731ffd4b25b51fd126b6c3e05b99c"
+checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
 dependencies = [
  "cfg-if 1.0.0",
  "fnv",
@@ -7584,7 +7584,7 @@ dependencies = [
 
 [[package]]
 name = "sc-allocator"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "log 0.4.14",
  "sp-core",
@@ -8355,7 +8355,7 @@ dependencies = [
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "hex",
- "hyper 0.14.11",
+ "hyper 0.14.14",
  "hyper-rustls",
  "lazy_static",
  "log 0.4.14",
@@ -8397,7 +8397,7 @@ dependencies = [
 
 [[package]]
 name = "sc-proposer-metrics"
-version = "0.9.0"
+version = "0.10.0-dev"
 dependencies = [
  "log 0.4.14",
  "substrate-prometheus-endpoint",
@@ -9496,7 +9496,7 @@ dependencies = [
 
 [[package]]
 name = "sp-debug-derive"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9597,7 +9597,7 @@ dependencies = [
 
 [[package]]
 name = "sp-maybe-compressed-blob"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "zstd",
 ]
@@ -9657,7 +9657,7 @@ dependencies = [
 
 [[package]]
 name = "sp-panic-handler"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -9788,7 +9788,7 @@ dependencies = [
 
 [[package]]
 name = "sp-serializer"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "serde",
  "serde_json",
@@ -10171,12 +10171,12 @@ dependencies = [
 
 [[package]]
 name = "substrate-prometheus-endpoint"
-version = "0.9.0"
+version = "0.10.0-dev"
 dependencies = [
  "async-std",
  "derive_more",
  "futures-util",
- "hyper 0.14.11",
+ "hyper 0.14.14",
  "log 0.4.14",
  "prometheus",
  "tokio",
