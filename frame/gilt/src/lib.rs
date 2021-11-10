@@ -82,7 +82,6 @@ pub mod pallet {
 		traits::{Currency, OnUnbalanced, ReservableCurrency},
 	};
 	use frame_system::pallet_prelude::*;
-	use scale_info::TypeInfo;
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::traits::{Saturating, Zero};
 	use sp_std::prelude::*;

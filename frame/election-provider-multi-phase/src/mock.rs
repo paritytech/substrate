@@ -40,7 +40,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
-use std::{convert::TryFrom, sync::Arc};
+use std::sync::Arc;
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, Call, (), ()>;

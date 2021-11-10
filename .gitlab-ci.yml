@@ -41,12 +41,11 @@ variables:                         &default-vars
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example-* subkey chain-spec-builder"
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
   SIMNET_FEATURES_PATH:            "simnet_tests/tests"
-  PIPELINE_SCRIPTS_TAG:            "v0.1"
 
 default:
   cache:                           {}
@@ -364,6 +363,8 @@ cargo-check-benches:
     - *rust-info-script
   script:
     - *cargo-check-benches-script
+  tags:
+    - linux-docker-benches
 
 node-bench-regression-guard:
   # it's not belong to `build` semantically, but dag jobs can't depend on each other
@@ -385,6 +386,9 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
+    - echo "------- IMPORTANT -------"
+    - echo "node-bench-regression-guard depends on the results of a cargo-check-benches job"
+    - echo "In case of this job failure, check your pipeline's cargo-check-benches"
     - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
@@ -478,9 +482,9 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
-    - cd frame/example-offchain-worker/
+    - cd frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
-    - cd ../example
+    - cd ../basic
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 
@@ -570,7 +574,6 @@ cargo-check-macos:
         --substrate
         "$DEPENDENT_REPO"
         "$GITHUB_PR_TOKEN"
-    - cd "$DEPENDENT_REPO" && git rev-parse --abbrev-ref HEAD
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -658,8 +661,7 @@ build-rustdoc:
     - ./crate-docs/
   script:
     # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
-    - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
-        time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
