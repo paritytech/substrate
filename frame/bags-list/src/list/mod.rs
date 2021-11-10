@@ -130,7 +130,7 @@ impl<T: Config> List<T> {
 	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
 		let new_thresholds = T::BagThresholds::get();
 		if new_thresholds == old_thresholds {
-			return 0
+			return 0;
 		}
 
 		// we can't check all preconditions, but we can check one
@@ -163,7 +163,7 @@ impl<T: Config> List<T> {
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
 				// no point iterating through bag 10 twice.
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(affected_bag) {
@@ -175,7 +175,7 @@ impl<T: Config> List<T> {
 		// a removed bag means that all members of that bag must be rebagged
 		for removed_bag in removed_bags.clone() {
 			if !affected_old_bags.insert(removed_bag) {
-				continue
+				continue;
 			}
 
 			if let Some(bag) = Bag::<T>::get(removed_bag) {
@@ -263,7 +263,7 @@ impl<T: Config> List<T> {
 	/// Returns an error if the list already contains `id`.
 	pub(crate) fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
 		if Self::contains(&id) {
-			return Err(Error::Duplicate)
+			return Err(Error::Duplicate);
 		}
 
 		let bag_weight = notional_bag_for::<T>(weight);
@@ -389,7 +389,6 @@ impl<T: Config> List<T> {
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
-		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> Result<(), crate::pallet::Error<T>> {
 		use crate::pallet;
 		use frame_support::ensure;
@@ -400,7 +399,11 @@ impl<T: Config> List<T> {
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
 
 		// this is the most expensive check, so we do it last.
-		ensure!(weight_of(&heavier_id) > weight_of(&lighter_id), pallet::Error::NotHeavier);
+		ensure!(
+			T::VoteWeightProvider::vote_weight(&heavier_id)
+				> T::VoteWeightProvider::vote_weight(&lighter_id),
+			pallet::Error::NotHeavier
+		);
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
@@ -439,8 +442,8 @@ impl<T: Config> List<T> {
 			// since `node` is always in front of `at` we know that 1) there is always at least 2
 			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
 			// tail.
-			let mut bag =
-				Bag::<T>::get(at.bag_upper).expect("given nodes must always have a valid bag. qed.");
+			let mut bag = Bag::<T>::get(at.bag_upper)
+				.expect("given nodes must always have a valid bag. qed.");
 
 			if node.prev == None {
 				bag.head = Some(node.id().clone())
@@ -646,7 +649,7 @@ impl<T: Config> Bag<T> {
 				// infinite loop.
 				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
 				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
-				return
+				return;
 			};
 		}
 
@@ -852,9 +855,9 @@ impl<T: Config> Node<T> {
 			"node does not exist in the expected bag"
 		);
 
-		let non_terminal_check = !self.is_terminal() &&
-			expected_bag.head.as_ref() != Some(id) &&
-			expected_bag.tail.as_ref() != Some(id);
+		let non_terminal_check = !self.is_terminal()
+			&& expected_bag.head.as_ref() != Some(id)
+			&& expected_bag.tail.as_ref() != Some(id);
 		let terminal_check =
 			expected_bag.head.as_ref() == Some(id) || expected_bag.tail.as_ref() == Some(id);
 		frame_support::ensure!(

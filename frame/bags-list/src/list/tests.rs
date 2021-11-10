@@ -390,10 +390,8 @@ mod list {
 			assert!(!ListBags::<Runtime>::contains_key(15));
 			assert_eq!(List::<Runtime>::get_bags(), vec![]);
 
-			let weight_fn = Box::new(<Runtime as Config>::VoteWeightProvider::vote_weight);
-
 			// then .. this panics
-			let _ = List::<Runtime>::put_in_front_of(&10, &11, weight_fn);
+			let _ = List::<Runtime>::put_in_front_of(&10, &11);
 		});
 	}
 

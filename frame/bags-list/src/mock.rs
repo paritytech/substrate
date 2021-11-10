@@ -105,6 +105,8 @@ pub struct ExtBuilder {
 }
 
 impl ExtBuilder {
+	/// Skip adding the default genesis ids to the list.
+	#[cfg(test)]
 	pub(crate) fn skip_genesis_ids(mut self) -> Self {
 		self.skip_genesis_ids = true;
 		self
