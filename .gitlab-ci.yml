@@ -661,7 +661,7 @@ build-rustdoc:
     - ./crate-docs/
   script:
     # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
-    - time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
