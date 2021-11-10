@@ -272,8 +272,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		Ok(())
 	}
 
-	fn clear(maybe_count: Option<u32>) -> u32 {
-		List::<T>::clear(maybe_count)
+	fn clear() {
+		List::<T>::clear()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
