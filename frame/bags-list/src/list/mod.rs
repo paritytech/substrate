@@ -82,7 +82,7 @@ impl<T: Config> List<T> {
 	/// ## WARNING
 	///
 	/// `None` will clear all items and should generally not be used in production as it could lead
-	/// to a vary large number of storage accesses.
+	/// to a very large number of storage accesses.
 	pub(crate) fn clear(maybe_count: Option<u32>) -> u32 {
 		crate::ListBags::<T>::remove_all(maybe_count);
 		let pre = crate::ListNodes::<T>::count();
