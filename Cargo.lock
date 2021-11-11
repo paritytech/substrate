@@ -7744,6 +7744,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "tokio",
  "tracing",
 ]
 

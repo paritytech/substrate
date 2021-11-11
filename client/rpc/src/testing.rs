@@ -62,15 +62,17 @@ impl SpawnNamed for TaskExecutor {
 }
 
 /// Wrap a future in a timeout a little more concisely
-pub(crate) fn timeout_secs<I, F: Future<Output = I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
+pub fn timeout_secs<I, F: Future<Output = I>>(s: u64, f: F) -> tokio::time::Timeout<F> {
 	tokio::time::timeout(std::time::Duration::from_secs(s), f)
 }
 
-pub(crate) fn deser_call<T: DeserializeOwned>(raw: String) -> T {
+/// Deserialize jsonrpsee call.
+pub fn deser_call<T: DeserializeOwned>(raw: String) -> T {
 	let out: RpcResponse<T> = serde_json::from_str(&raw).unwrap();
 	out.result
 }
 
-pub(crate) fn deser_error<'a>(raw: &'a str) -> RpcError<'a> {
+/// Deserialize jsonrpsee call error.
+pub fn deser_error<'a>(raw: &'a str) -> RpcError<'a> {
 	serde_json::from_str(&raw).unwrap()
 }
