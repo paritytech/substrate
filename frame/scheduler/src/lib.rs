@@ -103,9 +103,26 @@ pub struct ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId> {
 	_phantom: PhantomData<AccountId>,
 }
 
+/// Information regarding an item to be executed in the future.
+#[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
+#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId, Hash> {
+	/// The unique identity for this task, if there is one.
+	maybe_id: Option<Vec<u8>>,
+	/// This task's priority.
+	priority: schedule::Priority,
+	/// The call to be dispatched.
+	call: CallOrCallHash<Call, Hash>,
+	/// If the call is periodic, then this points to the information concerning that.
+	maybe_periodic: Option<schedule::Period<BlockNumber>>,
+	/// The origin to dispatch the call.
+	origin: PalletsOrigin,
+	_phantom: PhantomData<AccountId>,
+}
+
 /// The current version of Scheduled struct.
-pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
-	ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId>;
+pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId, Hash> =
+	ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId, Hash>;
 
 // A value placed in storage that represents the current version of the Scheduler storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
@@ -122,14 +139,14 @@ impl Default for Releases {
 	}
 }
 
-#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum CallOrCallHash<Call, Hash> {
    Call(Call),
    CallHash(Hash),
 }
 
 type CallOrCallHashOf<T> = CallOrCallHash<<T as Config>::Call, <T as frame_system::Config>::Hash>;
-type ScheduledOf<T> = Scheduled<<T as Config>::Call, <T as frame_system::Config>::BlockNumber, <T as Config>::PalletsOrigin, <T as frame_system::Config>::AccountId>;
+type ScheduledOf<T> = Scheduled<<T as Config>::Call, <T as frame_system::Config>::BlockNumber, <T as Config>::PalletsOrigin, <T as frame_system::Config>::AccountId, <T as frame_system::Config>::Hash>;
 
 #[frame_support::pallet]
 pub mod pallet {
