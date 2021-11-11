@@ -2,7 +2,7 @@
 name = "sc-rpc-server"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -17,7 +17,7 @@ futures = "0.3.16"
 jsonrpc-core = "18.0.0"
 pubsub = { package = "jsonrpc-pubsub", version = "18.0.0" }
 log = "0.4.8"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
 serde_json = "1.0.68"
 tokio = "1.10"
 http = { package = "jsonrpc-http-server", version = "18.0.0" }

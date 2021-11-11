@@ -36,6 +36,7 @@ use crate::{
 use codec::{Decode, Encode};
 use frame_support::dispatch::DispatchError;
 use sp_core::crypto::UncheckedFrom;
+use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
 #[cfg(test)]
 pub use tests::MockExt;
@@ -182,8 +183,8 @@ where
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
 	) -> ExecResult {
-		let memory =
-			sp_sandbox::Memory::new(self.initial, Some(self.maximum)).unwrap_or_else(|_| {
+		let memory = sp_sandbox::default_executor::Memory::new(self.initial, Some(self.maximum))
+			.unwrap_or_else(|_| {
 				// unlike `.expect`, explicit panic preserves the source location.
 				// Needed as we can't use `RUST_BACKTRACE` in here.
 				panic!(
@@ -193,7 +194,7 @@ where
 				)
 			});
 
-		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
+		let mut imports = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
 		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
 		runtime::Env::impls(&mut |module, name, func_ptr| {
 			imports.add_host_func(module, name, func_ptr);
@@ -209,7 +210,7 @@ where
 
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
-		let result = sp_sandbox::Instance::new(&code, &imports, &mut runtime)
+		let result = sp_sandbox::default_executor::Instance::new(&code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(function.identifier(), &[], &mut runtime));
 
 		runtime.to_execution_result(result)
@@ -1967,7 +1968,6 @@ mod tests {
 	#[test]
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
-		use std::convert::TryInto;
 		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();

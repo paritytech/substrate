@@ -49,7 +49,7 @@ use sp_runtime::{
 	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
 	RuntimeAppPublic,
 };
-use sp_std::{convert::TryFrom, vec::Vec};
+use sp_std::prelude::*;
 
 pub mod migrations;
 mod mock;

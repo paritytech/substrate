@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for pallet-example.
+//! Tests for pallet-example-basic.
 
 use crate::*;
 use frame_support::{
@@ -32,7 +32,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 // Reexport crate as its pallet name for construct_runtime.
-use crate as pallet_example;
+use crate as pallet_example_basic;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -46,7 +46,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Example: pallet_example::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Example: pallet_example_basic::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -111,7 +111,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// We use default for brevity, but you can configure as desired if needed.
 		system: Default::default(),
 		balances: Default::default(),
-		example: pallet_example::GenesisConfig {
+		example: pallet_example_basic::GenesisConfig {
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],
@@ -163,7 +163,7 @@ fn set_dummy_works() {
 #[test]
 fn signed_ext_watch_dummy_works() {
 	new_test_ext().execute_with(|| {
-		let call = pallet_example::Call::set_dummy { new_value: 10 }.into();
+		let call = pallet_example_basic::Call::set_dummy { new_value: 10 }.into();
 		let info = DispatchInfo::default();
 
 		assert_eq!(
@@ -192,14 +192,14 @@ fn counted_map_works() {
 #[test]
 fn weights_work() {
 	// must have a defined weight.
-	let default_call = pallet_example::Call::<Test>::accumulate_dummy { increase_by: 10 };
+	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 	assert!(info1.weight > 0);
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
-	let custom_call = pallet_example::Call::<Test>::set_dummy { new_value: 20 };
+	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
 	assert!(info1.weight > info2.weight);
 }

@@ -181,7 +181,11 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::v1::pre_migrate::<T>()
+			if StorageVersion::<T>::get() == Releases::V0 {
+				migrations::v1::pre_migrate::<T>()
+			} else {
+				Ok(())
+			}
 		}
 
 		fn on_runtime_upgrade() -> Weight {

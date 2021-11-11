@@ -219,7 +219,7 @@ pub enum PublicError {
 
 /// Key that can be encoded to/from SS58.
 ///
-/// See <https://github.com/paritytech/substrate/wiki/External-Address-Format-(SS58)#address-type>
+/// See <https://docs.substrate.io/v3/advanced/ss58/>
 /// for information on the codec.
 #[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {

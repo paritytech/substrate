@@ -1,11 +1,13 @@
 <!-- markdown-link-check-disable -->
-# Example Pallet
+# Basic Example Pallet
 
 <!-- Original author of paragraph: @gavofyork -->
 The Example: A simple example of a FRAME pallet demonstrating
 concepts, APIs and structures common to most FRAME runtimes.
 
-Run `cargo doc --package pallet-example --open` to view this pallet's documentation.
+Run `cargo doc --package pallet-example-basic --open` to view this pallet's documentation.
+
+**This pallet serves as an example and is not meant to be used in production.**
 
 ### Documentation Guidelines:
 
@@ -34,7 +36,7 @@ Run `cargo doc --package pallet-example --open` to view this pallet's documentat
 
 ### Documentation Template:<br>
 
-Copy and paste this template from frame/example/src/lib.rs into file
+Copy and paste this template from frame/examples/basic/src/lib.rs into file
 `frame/<INSERT_CUSTOM_PALLET_NAME>/src/lib.rs` of your own custom pallet and complete it.
 <details><p><pre>
 // Add heading with custom pallet name
@@ -46,9 +48,9 @@ Copy and paste this template from frame/example/src/lib.rs into file
 // Include the following links that shows what trait needs to be implemented to use the pallet
 // and the supported dispatchables that are documented in the Call enum.
 
-- \[`<INSERT_CUSTOM_PALLET_NAME>::Config`](https://docs.rs/pallet-example/latest/pallet_example/trait.Config.html)
-- \[`Call`](https://docs.rs/pallet-example/latest/pallet_example/enum.Call.html)
-- \[`Module`](https://docs.rs/pallet-example/latest/pallet_example/struct.Module.html)
+- \[`<INSERT_CUSTOM_PALLET_NAME>::Config`](https://docs.rs/pallet-example-basic/latest/pallet_example_basic/trait.Config.html)
+- \[`Call`](https://docs.rs/pallet-example-basic/latest/pallet_example_basic/enum.Call.html)
+- \[`Module`](https://docs.rs/pallet-example-basic/latest/pallet_example_basic/struct.Module.html)
 
 \## Overview
 

@@ -15,10 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Parallel tasks example
+//! # Parallel Tasks Example Pallet
 //!
-//! This example pallet parallelizes validation of the enlisted participants
+//! This example pallet demonstrates parallelizing validation of the enlisted participants
 //! (see `enlist_participants` dispatch).
+//!
+//! **This pallet serves as an example and is not meant to be used in production.**
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -105,7 +107,6 @@ impl EnlistedParticipant {
 	fn verify(&self, event_id: &[u8]) -> bool {
 		use sp_core::Public;
 		use sp_runtime::traits::Verify;
-		use std::convert::TryFrom;
 
 		match sp_core::sr25519::Signature::try_from(&self.signature[..]) {
 			Ok(signature) => {

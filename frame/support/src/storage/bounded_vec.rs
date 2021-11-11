@@ -28,7 +28,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::{IterMut, SliceIndex},
 };
-use sp_std::{convert::TryFrom, marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain};
+use sp_std::{marker::PhantomData, ops::RangeBounds, prelude::*, vec::Drain};
 
 /// A bounded vector.
 ///
@@ -372,7 +372,6 @@ pub mod test {
 	use super::*;
 	use crate::Twox128;
 	use sp_io::TestExternalities;
-	use sp_std::convert::TryInto;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

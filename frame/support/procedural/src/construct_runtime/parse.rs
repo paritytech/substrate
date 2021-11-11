@@ -225,7 +225,7 @@ impl Parse for PalletDeclaration {
 		{
 			return Err(input.error(
 				"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
-			))
+			));
 		} else {
 			None
 		};

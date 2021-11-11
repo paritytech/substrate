@@ -20,7 +20,7 @@
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
 use frame_election_provider_support::ElectionDataProvider;
 use frame_support::{storage::bounded_btree_map::BoundedBTreeMap, BoundedVec};
-use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 #[macro_export]
 macro_rules! log {
