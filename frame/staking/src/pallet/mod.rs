@@ -246,7 +246,6 @@ pub mod pallet {
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
-
 	#[pallet::storage]
 	pub type CounterForNominators<T> =
 		CountedStorageMap<Hasher = Twox64Concat, Key = u32, Value = u32>;
