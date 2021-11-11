@@ -83,9 +83,6 @@ pub mod v7 {
 		let validator_count = Validators::<T>::iter().count() as u32;
 		let nominator_count = Nominators::<T>::iter().count() as u32;
 
-		CounterForValidators::<T>::put(validator_count);
-		CounterForNominators::<T>::put(nominator_count);
-
 		StorageVersion::<T>::put(Releases::V7_0_0);
 		log!(info, "Completed staking migration to Releases::V7_0_0");
 
