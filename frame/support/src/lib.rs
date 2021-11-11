@@ -1613,7 +1613,9 @@ pub mod pallet_prelude {
 /// #[pallet::error]
 /// pub enum Error<T> {
 /// 	/// $some_optional_doc
-/// 	$SomeFieldLessOr1FieldVariant,
+/// 	$SomeFieldLessVariant,
+/// 	/// $some_more_optional_doc
+/// 	$SomeSingleFieldVariant(FieldType),
 /// 	...
 /// }
 /// ```
