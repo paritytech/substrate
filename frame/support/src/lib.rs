@@ -1613,11 +1613,15 @@ pub mod pallet_prelude {
 /// #[pallet::error]
 /// pub enum Error<T> {
 /// 	/// $some_optional_doc
-/// 	$SomeFieldLessVariant,
+/// 	$SomeFieldLessOr1FieldVariant,
 /// 	...
 /// }
 /// ```
-/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless variants.
+/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless or single-field
+/// variants.
+/// Any field in the enum variants must implement `scale_info::TypeInfo` in order to be properly
+/// used in the metadata, and its encoded size should be as small as possible, preferably 1 byte
+/// in size.
 /// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and
 /// where clause shouldn't be needed for any usecase.
 ///
