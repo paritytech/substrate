@@ -30,7 +30,7 @@ use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
 use sc_network::{Event, NetworkService};
-use sc_service::{config::Configuration, error::Error as ServiceError, TaskManager, RpcHandlers};
+use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -513,8 +513,8 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<(TaskManager, RpcHandlers), ServiceError> {
-	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, rpc_handlers, .. }| (task_manager, rpc_handlers))
+pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
+	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| task_manager)
 }
 
 #[cfg(test)]
