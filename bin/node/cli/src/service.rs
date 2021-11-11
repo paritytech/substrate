@@ -30,7 +30,7 @@ use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
 use sc_network::{Event, NetworkService};
-use sc_service::{config::Configuration, error::Error as ServiceError, TaskManager};
+use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -298,6 +298,8 @@ pub struct NewFullBase {
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	/// The transaction pool of the node.
 	pub transaction_pool: Arc<TransactionPool>,
+	/// The rpc handlers of the node.
+	pub rpc_handlers: RpcHandlers,
 }
 
 /// Creates a full service from the configuration.
@@ -358,7 +360,7 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let _rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
+	let rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		config,
 		backend,
 		client: client.clone(),
@@ -507,7 +509,7 @@ pub fn new_full_base(
 	}
 
 	network_starter.start_network();
-	Ok(NewFullBase { task_manager, client, network, transaction_pool })
+	Ok(NewFullBase { task_manager, client, network, transaction_pool, rpc_handlers })
 }
 
 /// Builds a new service for a full client.
