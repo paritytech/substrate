@@ -14,16 +14,17 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore", optional = true }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
+sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore", optional = true }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
 
 [features]
 default = ["std"]
