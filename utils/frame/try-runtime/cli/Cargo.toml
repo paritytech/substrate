@@ -31,6 +31,4 @@ sp-externalities = { version = "0.10.0-dev", path = "../../../../primitives/exte
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
-jsonrpsee-ws-client = { version = "0.3.1", default-features = false, features = [
-    "tokio1",
-]}
+jsonrpsee = { version = "0.4.1", default-features = false, features = ["ws-client"]}

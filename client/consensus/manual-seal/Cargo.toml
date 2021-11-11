@@ -42,7 +42,7 @@ sp-api = { path = "../../../primitives/api", version = "4.0.0-dev" }
 sc-transaction-pool-api = { path = "../../../client/transaction-pool/api", version = "4.0.0-dev" }
 sp-timestamp = { path = "../../../primitives/timestamp", version = "4.0.0-dev" }
 
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 
 [dev-dependencies]
 tokio = { version = "1.10.0", features = ["rt-multi-thread", "macros"] }

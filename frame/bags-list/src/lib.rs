@@ -59,6 +59,7 @@ use sp_std::prelude::*;
 mod benchmarks;
 
 mod list;
+pub mod migrations;
 #[cfg(any(test, feature = "fuzz"))]
 pub mod mock;
 #[cfg(test)]
@@ -151,17 +152,12 @@ pub mod pallet {
 		type BagThresholds: Get<&'static [VoteWeight]>;
 	}
 
-	/// How many ids are registered.
-	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the
-	// `CountedMap` storage.
-	#[pallet::storage]
-	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
-
 	/// A single node, within some bag.
 	///
 	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
-	pub(crate) type ListNodes<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
+	pub(crate) type ListNodes<T: Config> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
 	/// A bag stored in storage.
 	///
@@ -240,7 +236,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	fn count() -> u32 {
-		CounterForListNodes::<T>::get()
+		ListNodes::<T>::count()
 	}
 
 	fn contains(id: &T::AccountId) -> bool {
