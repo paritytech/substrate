@@ -4,7 +4,7 @@ version = "3.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic Substrate node implementation in Rust."
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 default-run = "substrate"
 homepage = "https://substrate.io"
@@ -116,7 +116,9 @@ sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/commo
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 futures = "0.3.16"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
@@ -128,9 +130,10 @@ async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = [ "async_tokio" ] }
 tokio = { version = "1.10", features = ["macros", "time"] }
-jsonrpsee-ws-client = { version = "0.3.1", default-features = false, features = ["tokio1"] }
+jsonrpsee-ws-client = "0.4.1"
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
@@ -165,4 +168,8 @@ try-runtime = ["node-runtime/try-runtime", "try-runtime-cli"]
 
 [[bench]]
 name = "transaction_pool"
+harness = false
+
+[[bench]]
+name = "block_production"
 harness = false

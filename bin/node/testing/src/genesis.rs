@@ -101,5 +101,7 @@ pub fn config_endowed(
 		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
+		scheduler: Default::default(),
+		transaction_payment: Default::default(),
 	}
 }

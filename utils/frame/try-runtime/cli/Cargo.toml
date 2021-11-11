@@ -2,7 +2,7 @@
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -31,6 +31,4 @@ sp-externalities = { version = "0.10.0-dev", path = "../../../../primitives/exte
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
-jsonrpsee-ws-client = { version = "0.3.1", default-features = false, features = [
-    "tokio1",
-]}
+jsonrpsee = { version = "0.4.1", default-features = false, features = ["ws-client"]}

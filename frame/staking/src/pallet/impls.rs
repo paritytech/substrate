@@ -721,6 +721,9 @@ impl<T: Config> Pallet<T> {
 		// track every nominator iterated over, but not necessarily added to `all_voters`
 		let mut nominators_seen = 0u32;
 
+		// cache the total-issuance once in this function
+		let weight_of = Self::weight_of_fn();
+
 		let mut nominators_iter = T::SortedListProvider::iter();
 		while nominators_taken < nominators_quota && nominators_seen < nominators_quota * 2 {
 			let nominator = match nominators_iter.next() {
@@ -734,21 +737,23 @@ impl<T: Config> Pallet<T> {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
+				log!(
+					trace,
+					"fetched nominator {:?} with weight {:?}",
+					nominator,
+					weight_of(&nominator)
+				);
 				targets.retain(|stash| {
 					slashing_spans
 						.get(stash)
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((
-						nominator.clone(),
-						Self::weight_of(&nominator),
-						targets.to_vec(),
-					));
+					all_voters.push((nominator.clone(), weight_of(&nominator), targets.to_vec()));
 					nominators_taken.saturating_inc();
 				}
 			} else {
-				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
+				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
 			}
 		}
 
@@ -1303,7 +1308,6 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
-		use sp_std::convert::TryInto;
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = Self::ledger(who).unwrap_or_default();
 		ledger.active = active;
