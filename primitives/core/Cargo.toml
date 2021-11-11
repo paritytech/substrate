@@ -43,7 +43,7 @@ parking_lot = { version = "0.11.1", optional = true }
 sp-debug-derive = { version = "4.0.0-dev", default-features = false, path = "../debug-derive" }
 sp-externalities = { version = "0.10.0-dev", optional = true, path = "../externalities" }
 sp-storage = { version = "4.0.0-dev", default-features = false, path = "../storage" }
-parity-util-mem = { version = "0.10.0", default-features = false, features = [
+parity-util-mem = { version = "0.10.2", default-features = false, features = [
 	"primitive-types",
 ] }
 futures = { version = "0.3.1", optional = true }
