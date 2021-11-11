@@ -72,8 +72,8 @@ pub mod v7 {
 	use super::*;
 
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-		assert!(CounterForValidators::<T>::get().is_zero(), "CounterForValidators already set.");
-		assert!(CounterForNominators::<T>::get().is_zero(), "CounterForNominators already set.");
+		assert!(Validators::<T>::count().is_zero(), "Validators already set.");
+		assert!(Nominators::<T>::count().is_zero(), "Nominators already set.");
 		assert!(StorageVersion::<T>::get() == Releases::V6_0_0);
 		Ok(())
 	}
