@@ -410,7 +410,7 @@ impl<T: Config> Pallet<T> {
 						}
 						Ok(())
 					},
-					PollStatus::Done(end, approved) => {
+					PollStatus::Completed(end, approved) => {
 						if let Some((lock_periods, balance)) = v.1.locked_if(approved) {
 							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
 							let now = frame_system::Pallet::<T>::block_number();

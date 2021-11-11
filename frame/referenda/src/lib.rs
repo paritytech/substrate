@@ -30,7 +30,7 @@ use frame_support::{
 	ensure, BoundedVec, traits::{
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		Referenda, VoteTally, PollStatus,
+		Referenda, VoteTally, PollStatus, OriginTrait,
 	},
 };
 use scale_info::TypeInfo;
@@ -45,13 +45,16 @@ pub mod weights;
 pub use pallet::*;
 pub use types::{
 	ReferendumInfo, ReferendumStatus, TrackInfo, TracksInfo, Curve, DecidingStatus, Deposit,
-	AtOrAfter, BalanceOf, NegativeImbalanceOf, CallOf, OriginOf, VotesOf, TallyOf, ReferendumInfoOf,
+	AtOrAfter, BalanceOf, NegativeImbalanceOf, CallOf, VotesOf, TallyOf, ReferendumInfoOf,
 	ReferendumStatusOf, DecidingStatusOf, TrackInfoOf, TrackIdOf, InsertSorted, ReferendumIndex,
+	PalletsOriginOf,
 };
 pub use weights::WeightInfo;
 
-//#[cfg(test)]
-//mod tests;
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 
 //#[cfg(feature = "runtime-benchmarks")]
 //pub mod benchmarking;
@@ -72,22 +75,21 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Sized {
 		// System level stuff.
-		type Call: Parameter + Dispatchable<Origin = OriginOf<Self>> + From<Call<Self>>;
-		type Origin: From<frame_system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq + TypeInfo + Debug;
+		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleNamed<Self::BlockNumber, CallOf<Self>, OriginOf<Self>>;
+		type Scheduler: ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
 		// Origins and unbalances.
 		/// Origin from which any vote may be cancelled.
-		type CancelOrigin: EnsureOrigin<<Self as frame_system::Config>::Origin>;
+		type CancelOrigin: EnsureOrigin<Self::Origin>;
 		/// Origin from which any vote may be killed.
-		type KillOrigin: EnsureOrigin<<Self as frame_system::Config>::Origin>;
+		type KillOrigin: EnsureOrigin<Self::Origin>;
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 		/// The counting type for votes. Usually just balance.
@@ -117,7 +119,11 @@ pub mod pallet {
 
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
-		type Tracks: TracksInfo<BalanceOf<Self>, Self::BlockNumber, Origin = OriginOf<Self>>;
+		type Tracks: TracksInfo<
+			BalanceOf<Self>,
+			Self::BlockNumber,
+			Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
+		>;
 	}
 
 	/// The next free referendum index, aka the number of referenda started so far.
@@ -285,7 +291,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn submit(
 			origin: OriginFor<T>,
-			proposal_origin: OriginOf<T>,
+			proposal_origin: PalletsOriginOf<T>,
 			proposal_hash: T::Hash,
 			enactment_moment: AtOrAfter<T::BlockNumber>,
 		) -> DispatchResult {
@@ -418,8 +424,8 @@ impl<T: Config> Referenda<T::Tally> for Pallet<T> {
 				ReferendumInfoFor::<T>::insert(index, info);
 				result
 			},
-			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Done(end, true)),
-			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Done(end, false)),
+			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Completed(end, false)),
 			_ => f(PollStatus::None),
 		}
 	}
@@ -435,8 +441,8 @@ impl<T: Config> Referenda<T::Tally> for Pallet<T> {
 				ReferendumInfoFor::<T>::insert(index, info);
 				Ok(result)
 			},
-			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Done(end, true)),
-			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Done(end, false)),
+			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Completed(end, false)),
 			_ => f(PollStatus::None),
 		}
 	}
@@ -463,7 +469,7 @@ impl<T: Config> Pallet<T> {
 		index: ReferendumIndex,
 		track: &TrackInfoOf<T>,
 		desired: AtOrAfter<T::BlockNumber>,
-		origin: OriginOf<T>,
+		origin: PalletsOriginOf<T>,
 		call_hash: T::Hash,
 	) {
 		let now = frame_system::Pallet::<T>::block_number();
@@ -525,7 +531,7 @@ impl<T: Config> Pallet<T> {
 				DispatchTime::At(when),
 				None,
 				128u8,
-				OriginOf::<T>::from(frame_system::Origin::<T>::Root),
+				frame_system::RawOrigin::Root.into(),
 				call.into(),
 			).is_ok();
 			debug_assert!(ok, "Unable to schedule a new referendum?!");

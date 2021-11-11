@@ -18,7 +18,7 @@
 //! Miscellaneous additional datatypes.
 
 use super::*;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, EncodeLike};
 use frame_support::Parameter;
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
@@ -29,12 +29,12 @@ pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 pub type CallOf<T> = <T as Config>::Call;
-pub type OriginOf<T> = <T as Config>::Origin;
 pub type VotesOf<T> = <T as Config>::Votes;
 pub type TallyOf<T> = <T as Config>::Tally;
+pub type PalletsOriginOf<T> = <<T as frame_system::Config>::Origin as OriginTrait>::PalletsOrigin;
 pub type ReferendumInfoOf<T> = ReferendumInfo<
 	TrackIdOf<T>,
-	OriginOf<T>,
+	PalletsOriginOf<T>,
 	<T as frame_system::Config>::BlockNumber,
 	<T as frame_system::Config>::Hash,
 	BalanceOf<T>,
@@ -44,7 +44,7 @@ pub type ReferendumInfoOf<T> = ReferendumInfo<
 >;
 pub type ReferendumStatusOf<T> = ReferendumStatus<
 	TrackIdOf<T>,
-	OriginOf<T>,
+	PalletsOriginOf<T>,
 	<T as frame_system::Config>::BlockNumber,
 	<T as frame_system::Config>::Hash,
 	BalanceOf<T>,
@@ -137,7 +137,7 @@ pub struct TrackInfo<Balance, Moment> {
 }
 
 pub trait TracksInfo<Balance, Moment> {
-	type Id: Copy + Eq + Codec + TypeInfo + Parameter + Ord + PartialOrd;
+	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync;
 	type Origin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
 	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()>;
@@ -145,7 +145,7 @@ pub trait TracksInfo<Balance, Moment> {
 
 /// Indication of either a specific moment or a delay from a implicitly defined moment.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum AtOrAfter<Moment> {
+pub enum AtOrAfter<Moment: Parameter> {
 	/// Indiciates that the event should occur at the moment given.
 	At(Moment),
 	/// Indiciates that the event should occur some period of time (defined by the parameter) after
@@ -154,7 +154,7 @@ pub enum AtOrAfter<Moment> {
 	After(Moment),
 }
 
-impl<Moment: AtLeast32BitUnsigned + Copy> AtOrAfter<Moment> {
+impl<Moment: AtLeast32BitUnsigned + Copy + Parameter> AtOrAfter<Moment> {
 	pub fn evaluate(&self, since: Moment) -> Moment {
 		match &self {
 			Self::At(m) => *m,
@@ -165,7 +165,16 @@ impl<Moment: AtLeast32BitUnsigned + Copy> AtOrAfter<Moment> {
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId> {
+pub struct ReferendumStatus<
+	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Moment: Parameter + Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone
+> {
 	/// The track of this referendum.
 	pub(crate) track: TrackId,
 	/// The origin for this referendum.
@@ -193,7 +202,16 @@ pub struct ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally
 	pub(crate) ayes_in_queue: Option<Votes>,
 }
 
-impl<TrackId, Origin, Moment: AtLeast32BitUnsigned + Copy, Hash, Balance, Votes, Tally, AccountId>
+impl<
+	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Moment: Parameter + Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + AtLeast32BitUnsigned + Copy + EncodeLike,
+	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone
+>
 	ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
 {
 	pub fn begin_deciding(&mut self, now: Moment, decision_period: Moment) {
@@ -208,7 +226,16 @@ impl<TrackId, Origin, Moment: AtLeast32BitUnsigned + Copy, Hash, Balance, Votes,
 
 /// Info regarding a referendum, present or past.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId> {
+pub enum ReferendumInfo<
+	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Moment: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone
+> {
 	/// Referendum has been submitted and is being voted on.
 	Ongoing(ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>),
 	/// Referendum finished with approval. Submission deposit is held.
@@ -223,7 +250,16 @@ pub enum ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, Ac
 	Killed(Moment),
 }
 
-impl<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
+impl<
+	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Moment: Parameter + Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone
+>
 	ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId>
 {
 	pub fn take_decision_deposit(&mut self) -> Option<Deposit<AccountId, Balance>> {

@@ -100,7 +100,7 @@ pub trait VoteTally<Votes> {
 pub enum PollStatus<Tally, Moment> {
 	None,
 	Ongoing(Tally),
-	Done(Moment, bool),
+	Completed(Moment, bool),
 }
 
 impl<Tally, Moment> PollStatus<Tally, Moment> {
