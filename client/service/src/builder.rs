@@ -369,6 +369,7 @@ where
 	if let Some(offchain) = offchain_workers.clone() {
 		spawn_handle.spawn(
 			"offchain-notifications",
+			Some("offchain-worker"),
 			sc_offchain::notification_future(
 				config.role.is_authority(),
 				client.clone(),
@@ -449,11 +450,13 @@ where
 	// Inform the tx pool about imported and finalized blocks.
 	spawn_handle.spawn(
 		"txpool-notifications",
+		Some("transaction-pool"),
 		sc_transaction_pool::notification_future(client.clone(), transaction_pool.clone()),
 	);
 
 	spawn_handle.spawn(
 		"on-transaction-imported",
+		Some("transaction-pool"),
 		transaction_notifications(transaction_pool.clone(), network.clone(), telemetry.clone()),
 	);
 
@@ -464,6 +467,7 @@ where
 			let metrics = MetricsService::with_prometheus(telemetry.clone(), &registry, &config)?;
 			spawn_handle.spawn(
 				"prometheus-endpoint",
+				None,
 				prometheus_endpoint::init_prometheus(port, registry).map(drop),
 			);
 
@@ -475,6 +479,7 @@ where
 	// Periodically updated metrics and telemetry updates.
 	spawn_handle.spawn(
 		"telemetry-periodic-send",
+		None,
 		metrics_service.run(client.clone(), transaction_pool.clone(), network.clone()),
 	);
 
@@ -498,6 +503,7 @@ where
 	// Spawn informant task
 	spawn_handle.spawn(
 		"informant",
+		None,
 		sc_informant::build(
 			client.clone(),
 			network.clone(),
@@ -735,7 +741,7 @@ where
 				config.network.default_peers_set.in_peers as usize +
 					config.network.default_peers_set.out_peers as usize,
 			);
-			spawn_handle.spawn("block_request_handler", handler.run());
+			spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
 			protocol_config
 		}
 	};
@@ -752,7 +758,7 @@ where
 				config.network.default_peers_set.in_peers as usize +
 					config.network.default_peers_set.out_peers as usize,
 			);
-			spawn_handle.spawn("state_request_handler", handler.run());
+			spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
 			protocol_config
 		}
 	};
@@ -765,7 +771,7 @@ where
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) =
 				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
-			spawn_handle.spawn("warp_sync_request_handler", handler.run());
+			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
 			protocol_config
 		};
 		(provider, protocol_config)
@@ -779,7 +785,7 @@ where
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) =
 				LightClientRequestHandler::new(&protocol_id, client.clone());
-			spawn_handle.spawn("light_client_request_handler", handler.run());
+			spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
 			protocol_config
 		}
 	};
@@ -789,13 +795,13 @@ where
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
 			Some(Box::new(move |fut| {
-				spawn_handle.spawn("libp2p-node", fut);
+				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
 			}))
 		},
 		transactions_handler_executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
 			Box::new(move |fut| {
-				spawn_handle.spawn("network-transactions-handler", fut);
+				spawn_handle.spawn("network-transactions-handler", Some("networking"), fut);
 			})
 		},
 		network_config: config.network.clone(),
@@ -857,7 +863,7 @@ where
 	// issue, and ideally we would like to fix the network future to take as little time as
 	// possible, but we also take the extra harm-prevention measure to execute the networking
 	// future using `spawn_blocking`.
-	spawn_handle.spawn_blocking("network-worker", async move {
+	spawn_handle.spawn_blocking("network-worker", Some("networking"), async move {
 		if network_start_rx.await.is_err() {
 			log::warn!(
 				"The NetworkStart returned as part of `build_network` has been silently dropped"

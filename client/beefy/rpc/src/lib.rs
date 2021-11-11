@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 
 use beefy_gadget::notification::BeefySignedCommitmentStream;
-use futures::{future, FutureExt, StreamExt};
+use futures::{future, task::Spawn, FutureExt, StreamExt};
 use jsonrpsee::{
 	proc_macros::rpc,
 	types::{Error as JsonRpseeError, RpcResult},
@@ -90,7 +90,8 @@ where
 		}
 		.boxed();
 
-		self.executor.execute(fut);
-		Ok(())
+		self.executor
+			.spawn_obj(fut.into())
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }

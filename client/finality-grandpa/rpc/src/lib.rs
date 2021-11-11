@@ -19,7 +19,7 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{future, FutureExt, StreamExt};
+use futures::{future, task::Spawn, FutureExt, StreamExt};
 use log::warn;
 use std::sync::Arc;
 
@@ -127,8 +127,9 @@ where
 				.await;
 		}
 		.boxed();
-		self.executor.execute(fut);
-		Ok(())
+		self.executor
+			.spawn_obj(fut.into())
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
 	async fn prove_finality(

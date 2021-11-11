@@ -206,6 +206,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use jsonrpsee::types::v2::RpcError;
 	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::AppPair;
 	use sp_core::crypto::key_types::BABE;
@@ -215,7 +216,6 @@ mod tests {
 		runtime::Block, Backend, DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
 		TestClientBuilderExt,
 	};
-	use jsonrpsee::types::v2::RpcError;
 
 	use sc_consensus_babe::{block_import, AuthorityPair, Config};
 	use std::sync::Arc;
@@ -246,14 +246,7 @@ mod tests {
 		let epoch_changes = link.epoch_changes().clone();
 		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
 
-		BabeRpc::new(
-			client.clone(),
-			epoch_changes,
-			keystore,
-			config,
-			longest_chain,
-			deny_unsafe,
-		)
+		BabeRpc::new(client.clone(), epoch_changes, keystore, config, longest_chain, deny_unsafe)
 	}
 
 	#[tokio::test]

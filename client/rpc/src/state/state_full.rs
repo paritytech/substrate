@@ -32,7 +32,7 @@ use super::{
 };
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, stream, FutureExt, StreamExt};
+use futures::{future, stream, task::Spawn, FutureExt, StreamExt};
 use jsonrpsee::SubscriptionSink;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
@@ -494,9 +494,8 @@ where
 			()
 		}
 		.boxed();
-		executor.execute(fut);
 
-		Ok(())
+		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn subscribe_storage(
@@ -553,9 +552,7 @@ where
 		}
 		.boxed();
 
-		executor.execute(fut);
-
-		Ok(())
+		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	async fn trace_block(

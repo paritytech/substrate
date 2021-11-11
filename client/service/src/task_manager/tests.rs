@@ -96,8 +96,8 @@ fn ensure_tasks_are_awaited_on_shutdown() {
 	let task_manager = new_task_manager(handle);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
-	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
-	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task1", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", None, run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
@@ -115,7 +115,7 @@ fn ensure_keep_alive_during_shutdown() {
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	task_manager.keep_alive(drop_tester.new_ref());
-	spawn_handle.spawn("task1", run_background_task(()));
+	spawn_handle.spawn("task1", None, run_background_task(()));
 	assert_eq!(drop_tester, 1);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
@@ -134,10 +134,12 @@ fn ensure_blocking_futures_are_awaited_on_shutdown() {
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn(
 		"task1",
+		None,
 		run_background_task_blocking(Duration::from_secs(3), drop_tester.new_ref()),
 	);
 	spawn_handle.spawn(
 		"task2",
+		None,
 		run_background_task_blocking(Duration::from_secs(3), drop_tester.new_ref()),
 	);
 	assert_eq!(drop_tester, 2);
@@ -156,14 +158,14 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 	let mut task_manager = new_task_manager(handle);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
-	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
-	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task1", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", None, run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	task_manager.terminate();
-	spawn_handle.spawn("task3", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task3", None, run_background_task(drop_tester.new_ref()));
 	runtime.block_on(task_manager.clean_shutdown());
 	drop_tester.wait_on_drop();
 }
@@ -176,8 +178,8 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 	let mut task_manager = new_task_manager(handle);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
-	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
-	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task1", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", None, run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
@@ -197,13 +199,13 @@ fn ensure_task_manager_future_ends_with_error_when_essential_task_fails() {
 	let spawn_handle = task_manager.spawn_handle();
 	let spawn_essential_handle = task_manager.spawn_essential_handle();
 	let drop_tester = DropTester::new();
-	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
-	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task1", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", None, run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 2);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
-	spawn_essential_handle.spawn("task3", async { panic!("task failed") });
+	spawn_essential_handle.spawn("task3", None, async { panic!("task failed") });
 	runtime
 		.block_on(task_manager.future())
 		.expect_err("future()'s Result must be Err");
@@ -226,10 +228,10 @@ fn ensure_children_tasks_ends_when_task_manager_terminated() {
 	task_manager.add_child(child_2);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
-	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
-	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
-	spawn_handle_child_1.spawn("task3", run_background_task(drop_tester.new_ref()));
-	spawn_handle_child_2.spawn("task4", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task1", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle_child_1.spawn("task3", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle_child_2.spawn("task4", None, run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 4);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
@@ -255,15 +257,15 @@ fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails()
 	task_manager.add_child(child_2);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
-	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
-	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
-	spawn_handle_child_1.spawn("task3", run_background_task(drop_tester.new_ref()));
-	spawn_handle_child_2.spawn("task4", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task1", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle_child_1.spawn("task3", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle_child_2.spawn("task4", None, run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 4);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 4);
-	spawn_essential_handle_child_1.spawn("task5", async { panic!("task failed") });
+	spawn_essential_handle_child_1.spawn("task5", None, async { panic!("task failed") });
 	runtime
 		.block_on(task_manager.future())
 		.expect_err("future()'s Result must be Err");
@@ -286,15 +288,15 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 	task_manager.add_child(child_2);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
-	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
-	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
-	spawn_handle_child_1.spawn("task3", run_background_task(drop_tester.new_ref()));
-	spawn_handle_child_2.spawn("task4", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task1", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle_child_1.spawn("task3", None, run_background_task(drop_tester.new_ref()));
+	spawn_handle_child_2.spawn("task4", None, run_background_task(drop_tester.new_ref()));
 	assert_eq!(drop_tester, 4);
 	// allow the tasks to even start
 	runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 4);
-	spawn_handle_child_1.spawn("task5", async { panic!("task failed") });
+	spawn_handle_child_1.spawn("task5", None, async { panic!("task failed") });
 	runtime.block_on(async {
 		let t1 = task_manager.future().fuse();
 		let t2 = tokio::time::sleep(Duration::from_secs(3)).fuse();

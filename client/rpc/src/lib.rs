@@ -22,6 +22,10 @@
 
 #![warn(missing_docs)]
 
+use futures::{
+	task::{FutureObj, Spawn, SpawnError},
+	FutureExt,
+};
 use sp_core::{testing::TaskExecutor, traits::SpawnNamed};
 use std::sync::Arc;
 
@@ -45,10 +49,13 @@ impl SubscriptionTaskExecutor {
 	pub fn new(spawn: impl SpawnNamed + 'static) -> Self {
 		Self(Arc::new(spawn))
 	}
+}
 
-	/// Execute task on executor.
-	pub fn execute(&self, fut: futures::future::BoxFuture<'static, ()>) {
-		let _ = self.0.spawn("substrate-rpc-subscriber", fut);
+impl Spawn for SubscriptionTaskExecutor {
+	fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
+		self.0
+			.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
+		Ok(())
 	}
 }
 

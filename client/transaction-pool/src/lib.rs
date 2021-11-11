@@ -217,7 +217,7 @@ where
 		};
 
 		if let Some(background_task) = background_task {
-			spawner.spawn_essential("txpool-background", background_task);
+			spawner.spawn_essential("txpool-background", Some("transaction-pool"), background_task);
 		}
 
 		Self {

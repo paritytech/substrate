@@ -75,7 +75,7 @@ pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
-pub use task_manager::{SpawnTaskHandle, TaskManager};
+pub use task_manager::{SpawnTaskHandle, TaskManager, DEFAULT_GROUP_NAME};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 

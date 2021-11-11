@@ -26,7 +26,7 @@ use std::{convert::TryInto, sync::Arc};
 use crate::SubscriptionTaskExecutor;
 
 use codec::{Decode, Encode};
-use futures::StreamExt;
+use futures::{task::Spawn, StreamExt};
 use jsonrpsee::{
 	types::{async_trait, error::Error as JsonRpseeError, RpcResult},
 	SubscriptionSink,
@@ -219,7 +219,8 @@ where
 				.await;
 		};
 
-		executor.execute(Box::pin(fut));
-		Ok(())
+		executor
+			.spawn_obj(Box::pin(fut).into())
+			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }

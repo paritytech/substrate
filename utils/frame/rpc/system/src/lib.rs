@@ -299,6 +299,7 @@ where
 mod tests {
 	use super::*;
 
+	use assert_matches::assert_matches;
 	use futures::executor::block_on;
 	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{
@@ -306,7 +307,6 @@ mod tests {
 		ApplyExtrinsicResult,
 	};
 	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
-	use assert_matches::assert_matches;
 
 	#[tokio::test]
 	async fn should_return_next_nonce_for_some_account() {

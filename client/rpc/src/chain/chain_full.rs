@@ -22,6 +22,7 @@ use super::{client_err, ChainBackend, Error};
 use crate::{chain::helpers, SubscriptionTaskExecutor};
 use std::{marker::PhantomData, sync::Arc};
 
+use futures::task::Spawn;
 use jsonrpsee::ws_server::SubscriptionSink;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
@@ -71,8 +72,7 @@ where
 		let executor = self.executor.clone();
 
 		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeAllHeads");
-		executor.execute(Box::pin(fut));
-		Ok(())
+		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
@@ -80,8 +80,7 @@ where
 		let executor = self.executor.clone();
 
 		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeNewHeads");
-		executor.execute(Box::pin(fut));
-		Ok(())
+		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
@@ -90,7 +89,6 @@ where
 
 		let fut =
 			helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
-		executor.execute(Box::pin(fut));
-		Ok(())
+		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 }
