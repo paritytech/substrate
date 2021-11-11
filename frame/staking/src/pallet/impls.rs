@@ -774,7 +774,6 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
-
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
 				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
