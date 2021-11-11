@@ -35,7 +35,7 @@ fs_extra = "1"
 hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-util-mem = { version = "0.10.0", default-features = false, features = [
+parity-util-mem = { version = "0.10.2", default-features = false, features = [
     "primitive-types",
 ] }
 parity-db = { version = "0.3" }
