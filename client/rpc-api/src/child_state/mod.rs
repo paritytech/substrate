@@ -39,7 +39,7 @@ pub trait ChildStateApi<Hash> {
 	/// Returns the keys with prefix from a child storage with pagination support.
 	/// Up to `count` keys will be returned.
 	/// If `start_key` is passed, return next keys in storage in lexicographic order.
-	#[method(name = "getKeysPaged", aliases = "getKeysPagedAt")]
+	#[method(name = "getKeysPaged", aliases = ["getKeysPagedAt"])]
 	async fn storage_keys_paged(
 		&self,
 		child_storage_key: PrefixedStorageKey,
@@ -86,7 +86,7 @@ pub trait ChildStateApi<Hash> {
 	) -> RpcResult<Option<u64>>;
 
 	/// Returns proof of storage for child key entries at a specific block's state.
-	#[method(name = "getChildReadProof", aliases = "state_getChildReadProof")]
+	#[method(name = "getChildReadProof", aliases = ["state_getChildReadProof"])]
 	async fn read_child_proof(
 		&self,
 		child_storage_key: PrefixedStorageKey,

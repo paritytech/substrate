@@ -36,21 +36,21 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	#[method(name = "getBlockHash", aliases = "chain_getHead")]
+	#[method(name = "getBlockHash", aliases = ["chain_getHead"])]
 	fn block_hash(
 		&self,
 		hash: Option<ListOrValue<NumberOrHex>>,
 	) -> RpcResult<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
-	#[method(name = "getFinalizedHead", aliases = "chain_getFinalisedHead")]
+	#[method(name = "getFinalizedHead", aliases = ["chain_getFinalisedHead"])]
 	fn finalized_head(&self) -> RpcResult<Hash>;
 
 	/// All head subscription.
 	#[subscription(
 		name = "allHead",
-		aliases = "chain_subscribeAllHeads",
-		unsubscribe_aliases = "chain_unsubscribeAllHeads",
+		aliases = ["chain_subscribeAllHeads"],
+		unsubscribe_aliases = ["chain_unsubscribeAllHeads"],
 		item = Header
 	)]
 	fn subscribe_all_heads(&self) -> RpcResult<()>;
@@ -58,8 +58,8 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// New head subscription.
 	#[subscription(
 		name = "newHead",
-		aliases = "subscribe_newHead, chain_subscribeNewHead, chain_subscribeNewHeads",
-		unsubscribe_aliases = "chain_unsubscribeNewHead, chain_unsubscribeNewHeads",
+		aliases = ["subscribe_newHead", "chain_subscribeNewHead", "chain_subscribeNewHeads"],
+		unsubscribe_aliases = ["chain_unsubscribeNewHead", "chain_unsubscribeNewHeads"],
 		item = Header
 	)]
 	fn subscribe_new_heads(&self) -> RpcResult<()>;
@@ -67,8 +67,8 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Finalized head subscription.
 	#[subscription(
 		name = "finalizedHead",
-		aliases = "chain_subscribeFinalisedHeads, chain_subscribeFinalizedHeads",
-		unsubscribe_aliases = "chain_unsubscribeFinalizedHeads, chain_unsubscribeFinalisedHeads",
+		aliases = ["chain_subscribeFinalisedHeads", "chain_subscribeFinalizedHeads"],
+		unsubscribe_aliases = ["chain_unsubscribeFinalizedHeads", "chain_unsubscribeFinalisedHeads"],
 		item = Header
 	)]
 	fn subscribe_finalized_heads(&self) -> RpcResult<()>;
