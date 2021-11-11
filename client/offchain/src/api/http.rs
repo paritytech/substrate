@@ -976,6 +976,55 @@ mod tests {
 	}
 
 	#[test]
+	fn test_GET_request_from_gh_api() {
+		let deadline = timestamp::now().add(Duration::from_millis(4_000));
+
+		let (mut api, addr) = build_api_server!();
+
+		let id = api.request_start(
+			"GET",
+			&format!("https://api.github.com/orgs/substrate-developer-hub")
+		).unwrap();
+
+		// let id = api.request_start("GET", &format!("https://www.google.com")).unwrap();
+
+		match api.response_wait(&[id], Some(deadline))[0] {
+			HttpRequestStatus::Finished(200) => {},
+			v => panic!("Connecting to google website failed: {:?}", v),
+		}
+
+		let mut buf = [0; 10240];
+		let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
+
+		println!("{:?}", buf);
+		// assert_eq!(&buf[..n], b"Hello World!");
+	}
+
+	#[test]
+	fn test_POST_request_from_polkadot_rpc() {
+		let deadline = timestamp::now().add(Duration::from_millis(4_000));
+
+		let (mut api, addr) = build_api_server!();
+		let id = api.request_start("POST", &format!("https://rpc.polkadot.io")).unwrap();
+		api.request_write_body(
+			id,
+			b"{\"id\": 1,\"jsonrpc\": \"2.0\",\"method\": \"chain_getHeader\"}",
+			Some(deadline)
+		).unwrap();
+
+		match api.response_wait(&[id], Some(deadline))[0] {
+			HttpRequestStatus::Finished(200) => {},
+			v => panic!("Connecting to Polkadot RPC failed: {:?}", v),
+		}
+
+		let mut buf = [0; 10240];
+		let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
+
+		println!("{:?}", buf);
+		// assert_eq!(&buf[..n], b"Hello World!");
+	}
+
+	#[test]
 	fn fuzzing() {
 		// Uses the API in random ways to try to trigger panics.
 		// Doesn't test some paths, such as waiting for multiple requests. Also doesn't test what
