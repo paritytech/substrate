@@ -696,6 +696,32 @@ impl From<RuntimeVersion> for OldRuntimeVersion {
 	}
 }
 
+#[cfg(not(feature = "old_state"))]
+decl_runtime_apis! {
+	/// The `Core` runtime api that every Substrate runtime needs to implement.
+	#[core_trait]
+	#[api_version(4)]
+	pub trait Core {
+		/// Returns the version of the runtime.
+		fn version() -> RuntimeVersion;
+		/// Returns the version of the runtime.
+		#[changed_in(3)]
+		fn version() -> OldRuntimeVersion;
+		/// Execute the given block.
+		fn execute_block(block: Block);
+		/// Initialize a block with the given header.
+		#[renamed("initialise_block", 2)]
+		fn initialize_block(header: &<Block as BlockT>::Header);
+	}
+
+	/// The `Metadata` api trait that returns metadata for the runtime.
+	pub trait Metadata {
+		/// Returns the metadata of a runtime.
+		fn metadata() -> OpaqueMetadata;
+	}
+}
+
+#[cfg(feature = "old_state")]
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
@@ -717,15 +743,5 @@ decl_runtime_apis! {
 	pub trait Metadata {
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
-	}
-}
-
-decl_runtime_apis! {
-	/// State api mainly for checking
-	/// if new state should apply during state migration.
-	/// When no state migration support is needed, this
-	/// could be remove in favor of a Core versioning update.
-	#[api_version(1)]
-	pub trait State {
 	}
 }

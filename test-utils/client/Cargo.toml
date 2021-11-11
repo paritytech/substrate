@@ -17,7 +17,7 @@ futures = "0.3.16"
 hex = "0.4"
 serde = "1.0.126"
 serde_json = "1.0.68"
-sc-client-api = { version = "4.0.0-dev", path = "../../client/api", features = ["new-state"] }
+sc-client-api = { version = "4.0.0-dev", path = "../../client/api", features = ["old_state"] }
 sc-client-db = { version = "0.10.0-dev", features = [
     "test-helpers",
 ], path = "../../client/db" }

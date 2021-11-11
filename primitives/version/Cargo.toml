@@ -38,4 +38,3 @@ std = [
 	"parity-wasm",
 	"thiserror",
 ]
-new-state = []

@@ -215,21 +215,14 @@ impl RuntimeVersion {
 		self.apis.iter().find_map(|a| (a.0 == *id).then(|| a.1))
 	}
 
-	#[cfg(feature = "new-state")]
 	/// Returns state version to use for update.
 	pub fn state_version(&self) -> StateVersion {
-		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"State");
-		if self.has_api_with(&core_api_id, |v| v >= 1) {
+		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
+		if self.has_api_with(&core_api_id, |v| v >= 4) {
 			StateVersion::V1
 		} else {
 			StateVersion::V0
 		}
-	}
-
-	#[cfg(not(feature = "new-state"))]
-	/// Returns state version to use for update.
-	pub fn state_version(&self) -> StateVersion {
-		StateVersion::V0
 	}
 }
 
