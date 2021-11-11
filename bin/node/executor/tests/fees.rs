@@ -241,7 +241,10 @@ fn block_weight_capacity_report() {
 		let mut xts = (0..num_transfers)
 			.map(|i| CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 0)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 0,
+				}),
 			})
 			.collect::<Vec<CheckedExtrinsic>>();
 
@@ -249,7 +252,7 @@ fn block_weight_capacity_report() {
 			0,
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 			},
 		);
 
@@ -319,7 +322,7 @@ fn block_length_capacity_report() {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),
