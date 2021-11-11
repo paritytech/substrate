@@ -203,7 +203,7 @@ impl<B: BlockT> BlockCollection<B> {
 				{
 					*downloading -= 1;
 					false
-				}
+				},
 				Some(&mut BlockRangeState::Downloading { .. }) => true,
 				_ => false,
 			};

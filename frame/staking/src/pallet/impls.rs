@@ -774,9 +774,11 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
-			let count = CounterForNominators::<T>::count();
+			let mut count = CounterForNominators::<T>::count();
+			let counter_key = count;
+			count.saturating_inc();
 			// maybe update the counter.
-			CounterForNominators::<T>::insert(count, count);
+			CounterForNominators::<T>::insert(counter_key, count);
 
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
@@ -801,8 +803,10 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			let count = CounterForNominators::<T>::count();
-			CounterForNominators::<T>::insert(count, count);
+			let mut count = CounterForNominators::<T>::count();
+			let counter_key = count;
+			count.saturating_dec();
+			CounterForNominators::<T>::insert(counter_key, count);
 			T::SortedListProvider::on_remove(who);
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 			debug_assert_eq!(CounterForNominators::<T>::count(), T::SortedListProvider::count());
@@ -822,8 +826,10 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
-			let count = CounterForValidators::<T>::count();
-			CounterForValidators::<T>::insert(count, count)
+			let mut count = CounterForValidators::<T>::count();
+			let counter_key = count;
+			count.saturating_inc();
+			CounterForValidators::<T>::insert(counter_key, count)
 		}
 		Validators::<T>::insert(who, prefs);
 	}
@@ -839,8 +845,10 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			let count = CounterForValidators::<T>::count();
-			CounterForValidators::<T>::insert(count, count);
+			let mut count = CounterForValidators::<T>::count();
+			let counter_key = count;
+			count.saturating_dec();
+			CounterForValidators::<T>::insert(counter_key, count);
 			true
 		} else {
 			false

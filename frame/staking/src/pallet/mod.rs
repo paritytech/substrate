@@ -230,7 +230,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
 
 	#[pallet::storage]
-	pub type CounterForValidators<T> = CountedStorageMap<Hasher = Twox64Concat, Key = u32, Value = u32>;
+	pub type CounterForValidators<T> =
+		CountedStorageMap<Hasher = Twox64Concat, Key = u32, Value = u32>;
 
 	/// The maximum validator count before we stop allowing new validators to join.
 	///
@@ -247,7 +248,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
 
 	#[pallet::storage]
-	pub type CounterForNominators<T> = CountedStorageMap<Hasher = Twox64Concat, Key = u32, Value = u32>;
+	pub type CounterForNominators<T> =
+		CountedStorageMap<Hasher = Twox64Concat, Key = u32, Value = u32>;
 
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
