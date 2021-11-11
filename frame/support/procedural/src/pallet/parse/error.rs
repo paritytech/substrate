@@ -18,7 +18,7 @@
 use super::helper;
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
-use syn::{Fields, spanned::Spanned};
+use syn::{spanned::Spanned, Fields};
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -78,7 +78,7 @@ impl ErrorDef {
 						let msg = "Invalid pallet::error, unexpected fields, must be `Unit` or \
 							contain only 1 field";
 						return Err(syn::Error::new(variant.fields.span(), msg))
-					}
+					},
 				}
 				if variant.discriminant.is_some() {
 					let msg = "Invalid pallet::error, unexpected discriminant, discriminants \
