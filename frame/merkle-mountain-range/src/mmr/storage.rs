@@ -22,7 +22,7 @@ use frame_support::log;
 use mmr_lib::helper;
 use sp_io::offchain_index;
 #[cfg(not(feature = "std"))]
-use sp_std::prelude::Vec;
+use sp_std::prelude::*;
 
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
