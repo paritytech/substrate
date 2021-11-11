@@ -235,7 +235,9 @@ where
 	});
 
 	// spawn the authorship task as an essential task.
-	task_manager.spawn_essential_handle().spawn("manual-seal", authorship_future);
+	task_manager
+		.spawn_essential_handle()
+		.spawn("manual-seal", None, authorship_future);
 
 	network_starter.start_network();
 	let rpc_handler = rpc_handlers.io_handler();

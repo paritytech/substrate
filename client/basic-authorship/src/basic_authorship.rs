@@ -270,6 +270,7 @@ where
 
 		spawn_handle.spawn_blocking(
 			"basic-authorship-proposer",
+			None,
 			Box::pin(async move {
 				// leave some time for evaluation and block finalization (33%)
 				let deadline = (self.now)() + max_duration - max_duration / 3;
