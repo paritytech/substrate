@@ -79,6 +79,10 @@ pub use task_manager::{SpawnTaskHandle, TaskManager};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
+/// Dummy RPC handler type.
+// TODO(niklasad1): replace this to do perform in-memory rpc request.
+pub type RpcHandlers = ();
+
 /// An incomplete set of chain components, but enough to run the chain ops subcommands.
 pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
 	/// A shared client instance.
