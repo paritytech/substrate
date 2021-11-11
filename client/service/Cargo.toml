@@ -74,7 +74,7 @@ sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
-parity-util-mem = { version = "0.10.0", default-features = false, features = [
+parity-util-mem = { version = "0.10.2", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.50"
