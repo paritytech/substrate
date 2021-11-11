@@ -18,7 +18,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
-thiserror = { version = "1.0.21", optional = true }
+thiserror = { version = "1.0.30", optional = true }
 log = { version = "0.4.8", optional = true }
 futures-timer = { version = "3.0.2", optional = true }
 async-trait = { version = "0.1.50", optional = true }
