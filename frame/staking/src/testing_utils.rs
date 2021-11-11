@@ -37,11 +37,11 @@ const SEED: u32 = 0;
 /// This function removes all validators and nominators from storage.
 pub fn clear_validators_and_nominators<T: Config>() {
 	Validators::<T>::remove_all(None);
-	CounterForValidators::<T>::kill();
+	CounterForValidators::<T>::remove_all();
 
 	// whenever we touch nominators counter we should update `T::SortedListProvider` as well.
 	Nominators::<T>::remove_all(None);
-	CounterForNominators::<T>::kill();
+	CounterForNominators::<T>::remove_all();
 	let _ = T::SortedListProvider::clear(None);
 }
 

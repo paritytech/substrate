@@ -72,8 +72,8 @@ pub mod v7 {
 	use super::*;
 
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-		assert!(CounterForValidators::<T>::get().is_zero(), "CounterForValidators already set.");
-		assert!(CounterForNominators::<T>::get().is_zero(), "CounterForNominators already set.");
+		assert!(CounterForValidators::<T>::count().is_zero(), "CounterForValidators already set.");
+		assert!(CounterForNominators::<T>::count().is_zero(), "CounterForNominators already set.");
 		assert!(StorageVersion::<T>::get() == Releases::V6_0_0);
 		Ok(())
 	}
@@ -83,8 +83,10 @@ pub mod v7 {
 		let validator_count = Validators::<T>::iter().count() as u32;
 		let nominator_count = Nominators::<T>::iter().count() as u32;
 
-		CounterForValidators::<T>::put(validator_count);
-		CounterForNominators::<T>::put(nominator_count);
+		let counter_for_validators = CounterForValidators::<T>::count();
+		CounterForValidators::<T>::insert(counter_for_validators,validator_count);
+		let counter_for_nominators = CounterForNominators::<T>::count();
+		CounterForNominators::<T>::insert(counter_for_nominators,nominator_count);
 
 		StorageVersion::<T>::put(Releases::V7_0_0);
 		log!(info, "Completed staking migration to Releases::V7_0_0");

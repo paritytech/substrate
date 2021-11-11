@@ -665,8 +665,8 @@ impl<T: Config> Pallet<T> {
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let max_allowed_len = {
-			let nominator_count = CounterForNominators::<T>::get() as usize;
-			let validator_count = CounterForValidators::<T>::get() as usize;
+			let nominator_count = CounterForNominators::<T>::count() as usize;
+			let validator_count = CounterForValidators::<T>::count() as usize;
 			let all_voter_count = validator_count.saturating_add(nominator_count);
 			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
 		};
@@ -774,8 +774,9 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
+			let count = CounterForNominators::<T>::count();
 			// maybe update the counter.
-			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
+			CounterForNominators::<T>::insert(count, count);
 
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
@@ -800,10 +801,11 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
+			let count = CounterForNominators::<T>::count();
+			CounterForNominators::<T>::insert(count, count);
 			T::SortedListProvider::on_remove(who);
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
-			debug_assert_eq!(CounterForNominators::<T>::get(), T::SortedListProvider::count());
+			debug_assert_eq!(CounterForNominators::<T>::count(), T::SortedListProvider::count());
 			true
 		} else {
 			false
@@ -820,7 +822,8 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
-			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
+			let count = CounterForValidators::<T>::count();
+			CounterForValidators::<T>::insert(count, count)
 		}
 		Validators::<T>::insert(who, prefs);
 	}
@@ -836,7 +839,8 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
+			let count = CounterForValidators::<T>::count();
+			CounterForValidators::<T>::insert(count, count);
 			true
 		} else {
 			false
@@ -865,10 +869,10 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
-		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
+		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::count());
+		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::count());
 		debug_assert_eq!(
-			CounterForNominators::<T>::get(),
+			CounterForNominators::<T>::count(),
 			T::SortedListProvider::count(),
 			"voter_count must be accurate",
 		);
@@ -881,7 +885,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	}
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = CounterForValidators::<T>::get();
+		let target_count = CounterForValidators::<T>::count();
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
@@ -969,8 +973,8 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Ledger<T>>::remove_all(None);
 		<Validators<T>>::remove_all(None);
 		<Nominators<T>>::remove_all(None);
-		<CounterForNominators<T>>::kill();
-		<CounterForValidators<T>>::kill();
+		<CounterForNominators<T>>::remove_all();
+		<CounterForValidators<T>>::remove_all();
 		let _ = T::SortedListProvider::clear(None);
 	}
 
@@ -1282,7 +1286,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
 	}
 	fn count() -> u32 {
-		CounterForNominators::<T>::get()
+		CounterForNominators::<T>::count()
 	}
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id)
@@ -1310,10 +1314,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn clear(maybe_count: Option<u32>) -> u32 {
 		Nominators::<T>::remove_all(maybe_count);
 		if let Some(count) = maybe_count {
-			CounterForNominators::<T>::mutate(|noms| *noms - count);
+			let nominator_count = CounterForNominators::<T>::count();
+			CounterForNominators::<T>::insert(nominator_count, nominator_count - count);
 			count
 		} else {
-			CounterForNominators::<T>::take()
+			CounterForNominators::<T>::take(CounterForNominators::<T>::count()).unwrap()
 		}
 	}
 }

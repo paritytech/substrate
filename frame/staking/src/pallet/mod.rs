@@ -229,9 +229,8 @@ pub mod pallet {
 	pub type Validators<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
 
-	/// A tracker to keep count of the number of items in the `Validators` map.
 	#[pallet::storage]
-	pub type CounterForValidators<T> = StorageValue<_, u32, ValueQuery>;
+	pub type CounterForValidators<T> = CountedStorageMap<Hasher = Twox64Concat, Key = u32, Value = u32>;
 
 	/// The maximum validator count before we stop allowing new validators to join.
 	///
@@ -247,9 +246,8 @@ pub mod pallet {
 	pub type Nominators<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
 
-	/// A tracker to keep count of the number of items in the `Nominators` map.
 	#[pallet::storage]
-	pub type CounterForNominators<T> = StorageValue<_, u32, ValueQuery>;
+	pub type CounterForNominators<T> = CountedStorageMap<Hasher = Twox64Concat, Key = u32, Value = u32>;
 
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
@@ -548,7 +546,7 @@ pub mod pallet {
 			// all voters are reported to the `SortedListProvider`.
 			assert_eq!(
 				T::SortedListProvider::count(),
-				CounterForNominators::<T>::get(),
+				CounterForNominators::<T>::count(),
 				"not all genesis stakers were inserted into sorted list provider, something is wrong."
 			);
 		}
@@ -957,7 +955,7 @@ pub mod pallet {
 				// the runtime.
 				if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
 					ensure!(
-						CounterForValidators::<T>::get() < max_validators,
+						CounterForValidators::<T>::count() < max_validators,
 						Error::<T>::TooManyValidators
 					);
 				}
@@ -997,7 +995,7 @@ pub mod pallet {
 				// the runtime.
 				if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
 					ensure!(
-						CounterForNominators::<T>::get() < max_nominators,
+						CounterForNominators::<T>::count() < max_nominators,
 						Error::<T>::TooManyNominators
 					);
 				}
@@ -1570,7 +1568,7 @@ pub mod pallet {
 				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
 					let max_nominator_count =
 						MaxNominatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-					let current_nominator_count = CounterForNominators::<T>::get();
+					let current_nominator_count = CounterForNominators::<T>::count();
 					ensure!(
 						threshold * max_nominator_count < current_nominator_count,
 						Error::<T>::CannotChillOther
@@ -1579,7 +1577,7 @@ pub mod pallet {
 				} else if Validators::<T>::contains_key(&stash) {
 					let max_validator_count =
 						MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-					let current_validator_count = CounterForValidators::<T>::get();
+					let current_validator_count = CounterForValidators::<T>::count();
 					ensure!(
 						threshold * max_validator_count < current_validator_count,
 						Error::<T>::CannotChillOther
