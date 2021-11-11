@@ -40,8 +40,6 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
 		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
 		.inject_hashed_prefix(&<pallet_staking::Validators<Runtime>>::prefix_hash())
 		.inject_hashed_prefix(&<pallet_staking::Nominators<Runtime>>::prefix_hash())
-		.inject_hashed_key(&<pallet_staking::CounterForNominators<Runtime>>::hashed_key())
-		.inject_hashed_key(&<pallet_staking::CounterForValidators<Runtime>>::hashed_key())
 		.build()
 		.await
 		.unwrap();
