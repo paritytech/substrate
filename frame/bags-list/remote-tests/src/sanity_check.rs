@@ -22,11 +22,11 @@ use frame_support::{
 	traits::{Get, PalletInfoAccess},
 };
 use remote_externalities::{Builder, Mode, OnlineConfig};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 use sp_std::prelude::*;
 
 /// Execute the sanity check of the bags-list.
-pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT>(
+pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
 	currency_unit: u64,
 	currency_name: &'static str,
 	ws_url: String,

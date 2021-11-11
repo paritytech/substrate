@@ -21,7 +21,16 @@
 //! based chain, or a local state snapshot file.
 
 use codec::{Decode, Encode};
-use jsonrpsee_ws_client::{types::v2::params::JsonRpcParams, WsClient, WsClientBuilder};
+
+use jsonrpsee::{
+	proc_macros::rpc,
+	rpc_params,
+	types::{traits::Client, Error as RpcError},
+	ws_client::{WsClient, WsClientBuilder},
+};
+
+use log::*;
+use serde::de::DeserializeOwned;
 use sp_core::{
 	hashing::twox_128,
 	hexdisplay::HexDisplay,
@@ -39,23 +48,25 @@ pub mod rpc_api;
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
-const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
+const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
 const BATCH_SIZE: usize = 1000;
 
-jsonrpsee_proc_macros::rpc_client_api! {
-	RpcApi<B: BlockT> {
-		#[rpc(method = "state_getStorage", positional_params)]
-		fn get_storage(prefix: StorageKey, hash: Option<B::Hash>) -> StorageData;
-		#[rpc(method = "state_getKeysPaged", positional_params)]
-		fn get_keys_paged(
-			prefix: Option<StorageKey>,
-			count: u32,
-			start_key: Option<StorageKey>,
-			hash: Option<B::Hash>,
-		) -> Vec<StorageKey>;
-		#[rpc(method = "chain_getFinalizedHead", positional_params)]
-		fn finalized_head() -> B::Hash;
-	}
+#[rpc(client)]
+pub trait RpcApi<Hash> {
+	#[method(name = "state_getStorage")]
+	fn get_storage(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<StorageData, RpcError>;
+
+	#[method(name = "state_getKeysPaged")]
+	fn get_keys_paged(
+		&self,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		hash: Option<Hash>,
+	) -> Result<Vec<StorageKey>, RpcError>;
+
+	#[method(name = "chain_getFinalizedHead")]
+	fn finalized_head(&self) -> Result<Hash, RpcError>;
 }
 
 /// The execution mode.
@@ -183,7 +194,7 @@ pub struct Builder<B: BlockT> {
 
 // NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
 // that.
-impl<B: BlockT> Default for Builder<B> {
+impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
 	fn default() -> Self {
 		Self {
 			mode: Default::default(),
@@ -196,7 +207,7 @@ impl<B: BlockT> Default for Builder<B> {
 }
 
 // Mode methods
-impl<B: BlockT> Builder<B> {
+impl<B: BlockT + DeserializeOwned> Builder<B> {
 	fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
 			Mode::Online(config) => &config,
@@ -215,25 +226,23 @@ impl<B: BlockT> Builder<B> {
 }
 
 // RPC methods
-impl<B: BlockT> Builder<B> {
+impl<B: BlockT + DeserializeOwned> Builder<B> {
 	async fn rpc_get_storage(
 		&self,
 		key: StorageKey,
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
-		log::trace!(target: LOG_TARGET, "rpc: get_storage");
-		RpcApi::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at)
-			.await
-			.map_err(|e| {
-				log::error!(target: LOG_TARGET, "Error = {:?}", e);
-				"rpc get_storage failed."
-			})
+		trace!(target: LOG_TARGET, "rpc: get_storage");
+		self.as_online().rpc_client().get_storage(key, maybe_at).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc get_storage failed."
+		})
 	}
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
-		log::trace!(target: LOG_TARGET, "rpc: finalized_head");
-		RpcApi::<B>::finalized_head(self.as_online().rpc_client()).await.map_err(|e| {
-			log::error!(target: LOG_TARGET, "Error = {:?}", e);
+		trace!(target: LOG_TARGET, "rpc: finalized_head");
+		self.as_online().rpc_client().finalized_head().await.map_err(|e| {
+			error!("Error = {:?}", e);
 			"rpc finalized_head failed."
 		})
 	}
@@ -248,18 +257,15 @@ impl<B: BlockT> Builder<B> {
 		let mut last_key: Option<StorageKey> = None;
 		let mut all_keys: Vec<StorageKey> = vec![];
 		let keys = loop {
-			let page = RpcApi::<B>::get_keys_paged(
-				self.as_online().rpc_client(),
-				Some(prefix.clone()),
-				PAGE,
-				last_key.clone(),
-				Some(at),
-			)
-			.await
-			.map_err(|e| {
-				log::error!(target: LOG_TARGET, "Error = {:?}", e);
-				"rpc get_keys failed"
-			})?;
+			let page = self
+				.as_online()
+				.rpc_client()
+				.get_keys_paged(Some(prefix.clone()), PAGE, last_key.clone(), Some(at))
+				.await
+				.map_err(|e| {
+					error!(target: LOG_TARGET, "Error = {:?}", e);
+					"rpc get_keys failed"
+				})?;
 			let page_len = page.len();
 			all_keys.extend(page);
 
@@ -291,8 +297,6 @@ impl<B: BlockT> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
-		use jsonrpsee_ws_client::types::traits::Client;
-		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
 		log::debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
@@ -303,15 +307,7 @@ impl<B: BlockT> Builder<B> {
 			let batch = chunk_keys
 				.iter()
 				.cloned()
-				.map(|key| {
-					(
-						"state_getStorage",
-						JsonRpcParams::Array(vec![
-							to_value(key).expect("json serialization will work; qed."),
-							to_value(at).expect("json serialization will work; qed."),
-						]),
-					)
-				})
+				.map(|key| ("state_getStorage", rpc_params![key, at]))
 				.collect::<Vec<_>>();
 			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
 				log::error!(
@@ -348,7 +344,7 @@ impl<B: BlockT> Builder<B> {
 }
 
 // Internal methods
-impl<B: BlockT> Builder<B> {
+impl<B: BlockT + DeserializeOwned> Builder<B> {
 	/// Save the given data as state snapshot.
 	fn save_state_snapshot(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
 		log::debug!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
@@ -489,7 +485,7 @@ impl<B: BlockT> Builder<B> {
 }
 
 // Public methods
-impl<B: BlockT> Builder<B> {
+impl<B: BlockT + DeserializeOwned> Builder<B> {
 	/// Create a new builder.
 	pub fn new() -> Self {
 		Default::default()
@@ -625,7 +621,7 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-
+	use pallet_elections_phragmen::Members;
 	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
@@ -697,7 +693,6 @@ mod remote_tests {
 
 	#[tokio::test]
 	async fn sanity_check_decoding() {
-		use pallet_elections_phragmen::SeatHolder;
 		use sp_core::crypto::Ss58Codec;
 
 		type AccountId = sp_runtime::AccountId32;
@@ -722,7 +717,7 @@ mod remote_tests {
 				let gav_polkadot =
 					AccountId::from_ss58check("13RDY9nrJpyTDBSUdBw12dGwhk19sGwsrVZ2bxkzYHBSagP2")
 						.unwrap();
-				let members = Members::get().unwrap();
+				let members = Members::get();
 				assert!(members
 					.iter()
 					.map(|s| s.who.clone())
