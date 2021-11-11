@@ -1,0 +1,5 @@
+error: Invalid pallet::error, unexpected fields, must be `Unit` or contain only 1 field
+  --> $DIR/error_more_than_1_field.rs:20:8
+   |
+20 |         Tuple(u8, u8),
+   |              ^^^^^^^^

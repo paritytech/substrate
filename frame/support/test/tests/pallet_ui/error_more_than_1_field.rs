@@ -17,6 +17,7 @@ mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
+		Tuple(u8, u8),
 		U8(u8),
 	}
 }
