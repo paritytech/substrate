@@ -41,6 +41,26 @@ mod tests;
 /// Default task group name.
 pub const DEFAULT_GROUP_NAME: &'static str = "default";
 
+pub enum GroupName {
+	Default,
+	Specific(&'static str),
+}
+
+impl From<Option<&'static str>> for GroupName {
+	fn from(name: Option<&'static str>) -> Self {
+		match name {
+			Some(name) => Self::Specific(name),
+			None => Self::Specific(DEFAULT_GROUP_NAME),
+		}
+	}
+}
+
+impl From<&'static str> for GroupName {
+	fn from(name: &'static str) -> Self {
+		Self::Specific(name)
+	}
+}
+
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
@@ -63,10 +83,13 @@ impl SpawnTaskHandle {
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
-		self.spawn_inner(name, group, task, TaskType::Async)
+		match group.into() {
+			GroupName::Specific(var) => self.spawn_inner(name, Some(var), task, TaskType::Async),
+			_ => (),
+		}
 	}
 
 	/// Spawns the blocking task with the given name. See also `spawn`.
