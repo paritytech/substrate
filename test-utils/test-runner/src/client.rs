@@ -159,7 +159,6 @@ where
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
-			on_demand: None,
 			block_announce_validator_builder: None,
 			warp_sync: None,
 		};
@@ -199,10 +198,8 @@ where
 			backend: backend.clone(),
 			task_manager: &mut task_manager,
 			keystore: keystore.sync_keystore(),
-			on_demand: None,
 			transaction_pool: transaction_pool.clone(),
 			rpc_builder,
-			remote_blockchain: None,
 			network,
 			system_rpc_tx,
 			telemetry: None,

@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use self::error::Error;
-use super::{state_full::split_range, *};
+use super::*;
 use crate::testing::{timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
 use futures::executor;
@@ -25,9 +25,8 @@ use jsonrpsee::types::error::SubscriptionClosedError;
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
-use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
+use sp_core::{hash::H256, storage::ChildInfo};
 use sp_io::hashing::blake2_256;
-use sp_runtime::generic::BlockId;
 use std::sync::Arc;
 use substrate_test_runtime_client::{prelude::*, runtime};
 
@@ -314,7 +313,7 @@ async fn should_send_initial_storage_changes_and_notifications() {
 
 #[tokio::test]
 async fn should_query_storage() {
-	async fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+	async fn run_tests(mut client: Arc<TestClient>) {
 		let (api, _child) = new_full(
 			client.clone(),
 			SubscriptionTaskExecutor::new(TaskExecutor),
@@ -346,13 +345,6 @@ async fn should_query_storage() {
 		let block1_hash = add_block(0);
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
-
-		if has_changes_trie_config {
-			assert_eq!(
-				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
-				Some((0, BlockId::Hash(block1_hash))),
-			);
-		}
 
 		let mut expected = vec![
 			StorageChangeSet {
@@ -514,25 +506,8 @@ async fn should_query_storage() {
 		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()), false).await;
-	run_tests(
-		Arc::new(
-			TestClientBuilder::new()
-				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-				.build(),
-		),
-		true,
-	)
-	.await;
-}
-
-#[test]
-fn should_split_ranges() {
-	assert_eq!(split_range(1, None), (0..1, None));
-	assert_eq!(split_range(100, None), (0..100, None));
-	assert_eq!(split_range(1, Some(0)), (0..1, None));
-	assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
-	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
+	run_tests(Arc::new(substrate_test_runtime_client::new())).await;
+	run_tests(Arc::new(TestClientBuilder::new().build())).await;
 }
 
 #[tokio::test]

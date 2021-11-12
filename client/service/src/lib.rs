@@ -70,7 +70,7 @@ pub use sc_chain_spec::{
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use sc_network::config::{OnDemand, TransactionImport, TransactionImportFuture};
+pub use sc_network::config::{TransactionImport, TransactionImportFuture};
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};

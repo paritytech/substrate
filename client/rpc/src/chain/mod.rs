@@ -19,7 +19,6 @@
 //! Substrate blockchain API.
 
 mod chain_full;
-mod chain_light;
 mod helpers;
 
 #[cfg(test)]
@@ -33,10 +32,7 @@ use jsonrpsee::{
 	types::{async_trait, RpcResult},
 	SubscriptionSink,
 };
-use sc_client_api::{
-	light::{Fetcher, RemoteBlockchain},
-	BlockchainEvents,
-};
+use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
@@ -124,29 +120,6 @@ where
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain { backend: Box::new(self::chain_full::FullChain::new(client, executor)) }
-}
-
-/// Create new state API that works on light node.
-pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
-	client: Arc<Client>,
-	executor: SubscriptionTaskExecutor,
-	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-	fetcher: Arc<F>,
-) -> Chain<Block, Client>
-where
-	Block: BlockT + 'static,
-	Block::Header: Unpin,
-	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
-	F: Send + Sync + 'static,
-{
-	Chain {
-		backend: Box::new(self::chain_light::LightChain::new(
-			client,
-			remote_blockchain,
-			fetcher,
-			executor,
-		)),
-	}
 }
 
 /// Chain API with subscriptions support.

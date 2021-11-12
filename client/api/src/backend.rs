@@ -20,27 +20,22 @@
 
 use crate::{
 	blockchain::{well_known_cache_keys, Backend as BlockchainBackend},
-	light::RemoteBlockchain,
 	UsageInfo,
 };
 use parking_lot::RwLock;
 use sp_blockchain;
 use sp_consensus::BlockOrigin;
-use sp_core::{offchain::OffchainStorage, ChangesTrieConfigurationRange};
+use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, NumberFor},
 	Justification, Justifications, Storage,
 };
 use sp_state_machine::{
-	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
 	ChildStorageCollection, IndexOperation, OffchainChangesCollection, StorageCollection,
 };
-use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
-};
+use sp_storage::{ChildInfo, StorageData, StorageKey};
+use std::collections::{HashMap, HashSet};
 
 pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
 use std::marker::PhantomData;
@@ -190,12 +185,6 @@ pub trait BlockImportOperation<Block: BlockT> {
 	) -> sp_blockchain::Result<()> {
 		Ok(())
 	}
-
-	/// Inject changes trie data into the database.
-	fn update_changes_trie(
-		&mut self,
-		update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
-	) -> sp_blockchain::Result<()>;
 
 	/// Insert auxiliary keys.
 	///
@@ -418,28 +407,6 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
-
-	/// Get longest range within [first; last] that is possible to use in `key_changes`
-	/// and `key_changes_proof` calls.
-	/// Range could be shortened from the beginning if some changes tries have been pruned.
-	/// Returns Ok(None) if changes tries are not supported.
-	fn max_key_changes_range(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-	) -> sp_blockchain::Result<Option<(NumberFor<Block>, BlockId<Block>)>>;
-
-	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
-	/// Works only for runtimes that are supporting changes tries.
-	///
-	/// Changes are returned in descending order (i.e. last block comes first).
-	fn key_changes(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-		storage_key: Option<&PrefixedStorageKey>,
-		key: &StorageKey,
-	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>>;
 }
 
 /// Client backend.
@@ -504,9 +471,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns current usage statistics.
 	fn usage_info(&self) -> Option<UsageInfo>;
 
-	/// Returns reference to changes trie storage.
-	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block>>;
-
 	/// Returns a handle to offchain storage.
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 
@@ -561,72 +525,5 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn get_import_lock(&self) -> &RwLock<()>;
 }
 
-/// Changes trie storage that supports pruning.
-pub trait PrunableStateChangesTrieStorage<Block: BlockT>:
-	StateChangesTrieStorage<HashFor<Block>, NumberFor<Block>>
-{
-	/// Get reference to StateChangesTrieStorage.
-	fn storage(&self) -> &dyn StateChangesTrieStorage<HashFor<Block>, NumberFor<Block>>;
-	/// Get configuration at given block.
-	fn configuration_at(
-		&self,
-		at: &BlockId<Block>,
-	) -> sp_blockchain::Result<ChangesTrieConfigurationRange<NumberFor<Block>, Block::Hash>>;
-	/// Get end block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
-	/// It is guaranteed that we have no any changes tries before (and including) this block.
-	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if
-	/// created).
-	fn oldest_pruned_digest_range_end(&self) -> NumberFor<Block>;
-}
-
 /// Mark for all Backend implementations, that are making use of state data, stored locally.
 pub trait LocalBackend<Block: BlockT>: Backend<Block> {}
-
-/// Mark for all Backend implementations, that are fetching required state data from remote nodes.
-pub trait RemoteBackend<Block: BlockT>: Backend<Block> {
-	/// Returns true if the state for given block is available locally.
-	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool;
-
-	/// Returns reference to blockchain backend.
-	///
-	/// Returned backend either resolves blockchain data
-	/// locally, or prepares request to fetch that data from remote node.
-	fn remote_blockchain(&self) -> Arc<dyn RemoteBlockchain<Block>>;
-}
-
-/// Return changes tries state at given block.
-pub fn changes_tries_state_at_block<'a, Block: BlockT>(
-	block: &BlockId<Block>,
-	maybe_storage: Option<&'a dyn PrunableStateChangesTrieStorage<Block>>,
-) -> sp_blockchain::Result<Option<ChangesTrieState<'a, HashFor<Block>, NumberFor<Block>>>> {
-	let storage = match maybe_storage {
-		Some(storage) => storage,
-		None => return Ok(None),
-	};
-
-	let config_range = storage.configuration_at(block)?;
-	match config_range.config {
-		Some(config) =>
-			Ok(Some(ChangesTrieState::new(config, config_range.zero.0, storage.storage()))),
-		None => Ok(None),
-	}
-}
-
-/// Provide CHT roots. These are stored on a light client and generated dynamically on a full
-/// client.
-pub trait ProvideChtRoots<Block: BlockT> {
-	/// Get headers CHT root for given block. Returns None if the block is not a part of any CHT.
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>>;
-
-	/// Get changes trie CHT root for given block. Returns None if the block is not a part of any
-	/// CHT.
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>>;
-}

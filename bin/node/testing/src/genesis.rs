@@ -24,22 +24,17 @@ use node_runtime::{
 	GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig, StakerStatus,
 	StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
-use sp_core::ChangesTrieConfiguration;
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::Perbill;
 
 /// Create genesis runtime configuration for tests.
-pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig {
-	config_endowed(support_changes_trie, code, Default::default())
+pub fn config(code: Option<&[u8]>) -> GenesisConfig {
+	config_endowed(code, Default::default())
 }
 
 /// Create genesis runtime configuration for tests with some extra
 /// endowed accounts.
-pub fn config_endowed(
-	support_changes_trie: bool,
-	code: Option<&[u8]>,
-	extra_endowed: Vec<AccountId>,
-) -> GenesisConfig {
+pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> GenesisConfig {
 	let mut endowed = vec![
 		(alice(), 111 * DOLLARS),
 		(bob(), 100 * DOLLARS),
@@ -53,11 +48,6 @@ pub fn config_endowed(
 
 	GenesisConfig {
 		system: SystemConfig {
-			changes_trie_config: if support_changes_trie {
-				Some(ChangesTrieConfiguration { digest_interval: 2, digest_levels: 2 })
-			} else {
-				None
-			},
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| wasm_binary_unwrap().to_vec()),
 		},
 		indices: IndicesConfig { indices: vec![] },

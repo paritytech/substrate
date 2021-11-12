@@ -254,7 +254,7 @@ impl Config for Test {
 	type MaxAuthorities = MaxAuthorities;
 }
 
-pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
+pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {
 	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
 

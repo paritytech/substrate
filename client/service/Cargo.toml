@@ -23,10 +23,8 @@ test-helpers = []
 
 [dependencies]
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7", features = ["server"] }
-
-thiserror = "1.0.21"
-futures01 = { package = "futures", version = "0.1.29" }
-futures = { version = "0.3.4", features = ["compat"] }
+thiserror = "1.0.30"
+futures = "0.3.16"
 rand = "0.7.3"
 parking_lot = "0.11.1"
 log = "0.4.11"

@@ -17,18 +17,18 @@
 
 //! System FRAME specific RPC methods.
 
-use std::{fmt::Display, marker::PhantomData, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 
 use codec::{self, Codec, Decode, Encode};
 use jsonrpsee::{
 	proc_macros::rpc,
 	types::{async_trait, error::CallError, Error as JsonRpseeError, RpcResult},
 };
-use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
+
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_block_builder::BlockBuilder;
-use sp_blockchain::{Error as ClientError, HeaderBackend};
+use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
 use sp_runtime::{generic::BlockId, traits};
 
@@ -50,105 +50,51 @@ pub trait SystemApi<BlockHash, AccountId, Index> {
 	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> RpcResult<Bytes>;
 }
 
-/// System RPC methods.
-pub struct SystemRpc<BlockHash, AccountId, Index> {
-	backend: Box<dyn SystemRpcBackend<BlockHash, AccountId, Index>>,
+/// Error type of this RPC api.
+pub enum Error {
+	/// The transaction was not decodable.
+	DecodeError,
+	/// The call to runtime failed.
+	RuntimeError,
 }
 
-impl<BlockHash, AccountId, Index> SystemRpc<BlockHash, AccountId, Index> {
-	pub fn new(backend: Box<dyn SystemRpcBackend<BlockHash, AccountId, Index>>) -> Self {
-		Self { backend }
+impl From<Error> for i32 {
+	fn from(e: Error) -> i32 {
+		match e {
+			Error::RuntimeError => 1,
+			Error::DecodeError => 2,
+		}
 	}
 }
 
-#[async_trait]
-impl<BlockHash, AccountId, Index> SystemApiServer<BlockHash, AccountId, Index>
-	for SystemRpc<BlockHash, AccountId, Index>
-where
-	AccountId: Clone + Display + Codec + traits::MaybeSerializeDeserialize + Send + 'static,
-	BlockHash: Send + traits::MaybeSerializeDeserialize + 'static,
-	Index: Clone
-		+ Display
-		+ Codec
-		+ Send
-		+ Sync
-		+ traits::AtLeast32Bit
-		+ traits::MaybeSerialize
-		+ 'static,
-{
-	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
-		self.backend.nonce(account).await
-	}
-
-	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> RpcResult<Bytes> {
-		self.backend.dry_run(extrinsic, at).await
-	}
-}
-
-/// Blockchain backend API
-#[async_trait]
-pub trait SystemRpcBackend<BlockHash, AccountId, Index>: Send + Sync + 'static
-where
-	AccountId: Clone + Display + Codec,
-	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
-{
-	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeError>;
-	async fn dry_run(
-		&self,
-		extrinsic: Bytes,
-		at: Option<BlockHash>,
-	) -> Result<Bytes, JsonRpseeError>;
-}
-
-/// A full-client backend for [`SystemRpc`].
-pub struct SystemRpcBackendFull<Client, Pool, Block> {
-	client: Arc<Client>,
-	pool: Arc<Pool>,
+/// An implementation of System-specific RPC methods on full client.
+pub struct SystemRpc<P: TransactionPool, C, B> {
+	client: Arc<C>,
+	pool: Arc<P>,
 	deny_unsafe: DenyUnsafe,
-	_marker: PhantomData<Block>,
+	_marker: std::marker::PhantomData<B>,
 }
 
-impl<Pool: TransactionPool, Client, Block> SystemRpcBackendFull<Client, Pool, Block> {
-	/// Create new [`SystemRpcBackend`] for full clients. Implements [`SystemRpcBackend`].
-	pub fn new(client: Arc<Client>, pool: Arc<Pool>, deny_unsafe: DenyUnsafe) -> Self {
-		SystemRpcBackendFull { client, pool, deny_unsafe, _marker: Default::default() }
+impl<P: TransactionPool, C, B> SystemRpc<P, C, B> {
+	/// Create new `FullSystem` given client and transaction pool.
+	pub fn new(client: Arc<C>, pool: Arc<P>, deny_unsafe: DenyUnsafe) -> Self {
+		Self { client, pool, deny_unsafe, _marker: Default::default() }
 	}
 }
 
-/// A light-client backend for [`SystemRpc`].
-pub struct SystemRpcBackendLight<Client, Pool, Fetcher, Block> {
-	client: Arc<Client>,
-	pool: Arc<Pool>,
-	fetcher: Arc<Fetcher>,
-	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-}
-
-impl<Client, Pool, Fetcher, Block> SystemRpcBackendLight<Client, Pool, Fetcher, Block> {
-	/// Create a new [`SystemRpcBackendLight`] for light clients. Implements [`SystemRpcBackend`].
-	pub fn new(
-		client: Arc<Client>,
-		pool: Arc<Pool>,
-		fetcher: Arc<Fetcher>,
-		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-	) -> Self {
-		SystemRpcBackendLight { client, pool, fetcher, remote_blockchain }
-	}
-}
-
-#[async_trait::async_trait]
-impl<Client, Pool, Block, AccountId, Index>
-	SystemRpcBackend<<Block as traits::Block>::Hash, AccountId, Index>
-	for SystemRpcBackendFull<Client, Pool, Block>
+#[async_trait]
+impl<P, C, Block, AccountId, Index> SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index>
+	for SystemRpc<P, C, Block>
 where
-	Client: sp_api::ProvideRuntimeApi<Block>,
-	Client: HeaderBackend<Block>,
-	Client: Send + Sync + 'static,
-	Client::Api: AccountNonceApi<Block, AccountId, Index>,
-	Client::Api: BlockBuilder<Block>,
-	Pool: TransactionPool + 'static,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	C: HeaderBackend<Block>,
+	C: Send + Sync + 'static,
+	C::Api: AccountNonceApi<Block, AccountId, Index>,
+	C::Api: BlockBuilder<Block>,
+	P: TransactionPool + 'static,
 	Block: traits::Block,
-	AccountId: Clone + std::fmt::Display + Codec + Send + 'static,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
+	AccountId: Clone + Display + Codec + Send + 'static,
+	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
 	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeError> {
 		let api = self.client.runtime_api();
@@ -180,84 +126,7 @@ where
 			data: serde_json::value::to_raw_value(&e.to_string()).ok(),
 		})?;
 		Ok(Encode::encode(&result).into())
-	}
-}
-
-#[async_trait]
-impl<Client, Pool, Fetcher, Block, AccountId, Index>
-	SystemRpcBackend<<Block as traits::Block>::Hash, AccountId, Index>
-	for SystemRpcBackendLight<Client, Pool, Fetcher, Block>
-where
-	Client: Send + Sync + 'static,
-	Client: HeaderBackend<Block>,
-	Pool: TransactionPool + 'static,
-	Fetcher: light::Fetcher<Block> + 'static,
-	Block: traits::Block,
-	AccountId: Clone + Display + Codec + Send + 'static,
-	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
-{
-	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeError> {
-		let best_hash = self.client.info().best_hash;
-		let best_id = BlockId::hash(best_hash);
-		let best_header = future_header(&*self.remote_blockchain, &*self.fetcher, best_id)
-			.await
-			.map_err(|blockchain_err| CallError::from_std_error(blockchain_err))?
-			.ok_or_else(|| ClientError::UnknownBlock(format!("{}", best_hash)))
-			.map_err(|client_err| CallError::from_std_error(client_err))?;
-		let call_data = account.encode();
-		let nonce = self
-			.fetcher
-			.remote_call(RemoteCallRequest {
-				block: best_hash,
-				header: best_header,
-				method: "AccountNonceApi_account_nonce".into(),
-				call_data,
-				retry_count: None,
-			})
-			.await
-			.map_err(|blockchain_err| CallError::from_std_error(blockchain_err))?;
-
-		let nonce: Index = Decode::decode(&mut &nonce[..])
-			.map_err(|codec_err| CallError::from_std_error(codec_err))?;
-
-		Ok(adjust_nonce(&*self.pool, account, nonce))
-	}
-
-	async fn dry_run(
-		&self,
-		_extrinsic: Bytes,
-		_at: Option<<Block as traits::Block>::Hash>,
-	) -> Result<Bytes, JsonRpseeError> {
-		Err(CallError::Custom {
-			code: jsonrpsee::types::v2::error::METHOD_NOT_FOUND_CODE,
-			message: "Not implemented for light clients".into(),
-			data: None,
-		}
-		.into())
-	}
-}
-
-/// Error type of this RPC api.
-#[derive(Debug, derive_more::Display)]
-pub enum Error {
-	/// The transaction was not decodable.
-	#[display(fmt = "The transaction was not decodable.")]
-	DecodeError,
-	/// The call to runtime failed.
-	#[display(fmt = "The call to runtime failed.")]
-	RuntimeError,
-}
-
-impl std::error::Error for Error {}
-
-impl From<Error> for i32 {
-	fn from(e: Error) -> i32 {
-		match e {
-			Error::RuntimeError => 1,
-			Error::DecodeError => 2,
-		}
-	}
-}
+	}}
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.
@@ -334,7 +203,7 @@ mod tests {
 		let ext1 = new_transaction(1);
 		block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
 
-		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
+		let accounts = SystemRpc::new(client, pool, DenyUnsafe::Yes);
 
 		// when
 		let nonce = accounts.nonce(AccountKeyring::Alice.into()).await;
@@ -353,7 +222,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
+		let accounts = SystemRpc::new(client, pool, DenyUnsafe::Yes);
 
 		// when
 		let res = accounts.dry_run(vec![].into(), None).await;
@@ -372,7 +241,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
+		let accounts = SystemRpc::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -400,7 +269,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
+		let accounts = SystemRpc::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),

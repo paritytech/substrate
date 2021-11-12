@@ -40,13 +40,12 @@ where
 	P: TransactionPool + 'static,
 {
 	use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
-	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
+	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc};
 
 	let mut module = RpcModule::new(());
 	let FullDeps { client, pool, deny_unsafe } = deps;
 
-	let system_rpc_backend = SystemRpcBackendFull::new(client.clone(), pool.clone(), deny_unsafe);
-	module.merge(SystemRpc::new(Box::new(system_rpc_backend)).into_rpc())?;
+	module.merge(SystemRpc::new(client.clone(), pool.clone(), deny_unsafe).into_rpc())?;
 	module.merge(TransactionPaymentRpc::new(client.clone()).into_rpc())?;
 
 	// Extend this RPC with a custom API by using the following syntax.

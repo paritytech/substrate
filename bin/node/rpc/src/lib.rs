@@ -53,18 +53,6 @@ use sp_consensus::SelectChain;
 use sp_consensus_babe::BabeApi;
 use sp_keystore::SyncCryptoStorePtr;
 
-/// Light client extra dependencies.
-pub struct LightDeps<C, F, P> {
-	/// The client instance to use.
-	pub client: Arc<C>,
-	/// Transaction pool instance.
-	pub pool: Arc<P>,
-	/// Remote access to the blockchain (async).
-	pub remote_blockchain: Arc<dyn sc_client_api::light::RemoteBlockchain<Block>>,
-	/// Fetcher instance.
-	pub fetcher: Arc<F>,
-}
-
 /// Extra dependencies for BABE.
 pub struct BabeDeps {
 	/// BABE protocol config.
@@ -136,7 +124,7 @@ where
 	use sc_consensus_babe_rpc::BabeApiServer;
 	use sc_finality_grandpa_rpc::GrandpaApiServer;
 	use sc_sync_state_rpc::{SyncStateRpc, SyncStateRpcApiServer};
-	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendFull};
+	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc};
 
 	let mut io = RpcModule::new(());
 	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa } = deps;
@@ -150,8 +138,7 @@ where
 		finality_provider,
 	} = grandpa;
 
-	let system_backend = SystemRpcBackendFull::new(client.clone(), pool, deny_unsafe);
-	io.merge(SystemRpc::new(Box::new(system_backend)).into_rpc())?;
+	io.merge(SystemRpc::new(client.clone(), pool, deny_unsafe).into_rpc())?;
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
 	// These RPCs should use an asynchronous caller instead.
@@ -190,25 +177,6 @@ where
 		)?
 		.into_rpc(),
 	)?;
-
-	Ok(io)
-}
-
-/// Instantiate all Light RPC extensions.
-pub fn create_light<C, P, F>(
-	deps: LightDeps<C, F, P>,
-) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
-where
-	C: sp_blockchain::HeaderBackend<Block> + Send + Sync + 'static,
-	F: sc_client_api::light::Fetcher<Block> + 'static,
-	P: TransactionPool + 'static,
-{
-	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc, SystemRpcBackendLight};
-
-	let LightDeps { client, pool, remote_blockchain, fetcher } = deps;
-	let mut io = RpcModule::new(());
-	let backend = SystemRpcBackendLight::new(client, pool, fetcher, remote_blockchain);
-	io.merge(SystemRpc::<Hash, AccountId, Index>::new(Box::new(backend)).into_rpc())?;
 
 	Ok(io)
 }
