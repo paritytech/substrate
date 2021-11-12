@@ -1656,8 +1656,18 @@ fn reap_stash_works() {
 			// controller or any other account is not reapable
 			assert_noop!(Staking::reap_stash(Origin::signed(20), 10, 0), Error::<Test>::NotStash);
 
-			// slash the stash to 5
-			let _ = Balances::slash(&11, 10 * 1000 - 5);
+			// no easy way to cause an account to go below ED, we tweak their staking ledger
+			// instead.
+			Ledger::<Test>::insert(
+				10,
+				StakingLedger {
+					stash: 11,
+					total: 5,
+					active: 5,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 
 			// reap-able
 			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 0));
