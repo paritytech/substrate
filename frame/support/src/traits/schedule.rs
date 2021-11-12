@@ -52,7 +52,7 @@ pub const LOWEST_PRIORITY: Priority = 255;
 /// A type that can be used as a scheduler.
 pub trait Anon<BlockNumber, Call, Origin> {
 	/// An address which can be used for removing a scheduled task.
-	type Address: Codec + Clone + Eq + EncodeLike + Debug;
+	type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo;
 
 	/// Schedule a dispatch to happen at the beginning of some block in the future.
 	///

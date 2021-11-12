@@ -112,7 +112,7 @@ impl<Tally, Moment> PollStatus<Tally, Moment> {
 	}
 }
 
-pub trait Referenda<Tally> {
+pub trait Polls<Tally> {
 	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
 	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
 	type Moment;

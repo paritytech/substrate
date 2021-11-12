@@ -47,7 +47,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Config, Event<T>},
-		Referenda: pallet_referenda::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Referenda: pallet_referenda::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -123,13 +123,13 @@ parameter_types! {
 	pub const VotingPeriod: u64 = 2;
 	pub const FastTrackVotingPeriod: u64 = 2;
 	pub const MinimumDeposit: u64 = 1;
-	pub const AlarmInterval: u64 = 2;
 	pub const VoteLockingPeriod: u64 = 3;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
 	pub const MaxProposals: u32 = MAX_PROPOSALS;
 	pub static PreimageByteDeposit: u64 = 0;
 	pub static InstantAllowed: bool = false;
+	pub static AlarmInterval: u64 = 1;
 	pub const SubmissionDeposit: u64 = 2;
 	pub const MaxQueued: u32 = 2;
 	pub const UndecidingTimeout: u64 = 10;
@@ -163,7 +163,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 				decision_deposit: 10,
 				prepare_period: 4,
 				decision_period: 4,
-				confirm_period: 4,
+				confirm_period: 2,
 				min_enactment_period: 4,
 				min_approval: Curve::LinearDecreasing {
 					begin: Perbill::from_percent(100),
@@ -180,7 +180,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 				decision_deposit: 1,
 				prepare_period: 2,
 				decision_period: 2,
-				confirm_period: 2,
+				confirm_period: 1,
 				min_enactment_period: 2,
 				min_approval: Curve::LinearDecreasing {
 					begin: Perbill::from_percent(55),
@@ -242,6 +242,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 /// Execute the function two times, with `true` and with `false`.
+#[allow(dead_code)]
 pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) {
 	new_test_ext().execute_with(|| (execute.clone())(false));
 	new_test_ext().execute_with(|| execute(true));
@@ -277,6 +278,7 @@ pub fn set_balance_proposal_hash(value: u64) -> H256 {
 	BlakeTwo256::hash(&set_balance_proposal(value)[..])
 }
 
+#[allow(dead_code)]
 pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Referenda::submit(
 		Origin::signed(who),
@@ -291,19 +293,29 @@ pub fn next_block() {
 	Scheduler::on_initialize(System::block_number());
 }
 
-pub fn fast_forward_to(n: u64) {
+pub fn run_to(n: u64) {
 	while System::block_number() < n {
 		next_block();
 	}
 }
 
+#[allow(dead_code)]
 pub fn begin_referendum() -> ReferendumIndex {
 	System::set_block_number(0);
 	assert_ok!(propose_set_balance(1, 2, 1));
-	fast_forward_to(2);
+	run_to(2);
 	0
 }
 
+#[allow(dead_code)]
 pub fn tally(r: ReferendumIndex) -> Tally {
 	Referenda::ensure_ongoing(r).unwrap().tally
+}
+
+pub fn set_tally(index: ReferendumIndex, ayes: u32, nays: u32) {
+	<Referenda as Polls<Tally>>::access_poll(index, |status| {
+		let tally = status.ensure_ongoing().unwrap();
+		tally.ayes = ayes;
+		tally.nays = nays;
+	});
 }

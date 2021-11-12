@@ -28,9 +28,9 @@
 use codec::{Encode, Codec};
 use frame_support::{
 	ensure, BoundedVec, traits::{
-		schedule::{DispatchTime, Named as ScheduleNamed},
+		schedule::{DispatchTime, Anon as ScheduleAnon, Named as ScheduleNamed},
 		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		Referenda, VoteTally, PollStatus, OriginTrait,
+		Polls, VoteTally, PollStatus, OriginTrait,
 	},
 };
 use scale_info::TypeInfo;
@@ -47,7 +47,7 @@ pub use types::{
 	ReferendumInfo, ReferendumStatus, TrackInfo, TracksInfo, Curve, DecidingStatus, Deposit,
 	AtOrAfter, BalanceOf, NegativeImbalanceOf, CallOf, VotesOf, TallyOf, ReferendumInfoOf,
 	ReferendumStatusOf, DecidingStatusOf, TrackInfoOf, TrackIdOf, InsertSorted, ReferendumIndex,
-	PalletsOriginOf,
+	PalletsOriginOf, ScheduleAddressOf,
 };
 pub use weights::WeightInfo;
 
@@ -80,7 +80,8 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>>;
+		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>>
+			+ ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
@@ -310,6 +311,7 @@ pub mod pallet {
 				deciding: None,
 				tally: Default::default(),
 				ayes_in_queue: None,
+				alarm: None,
 			};
 			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 
@@ -353,7 +355,9 @@ pub mod pallet {
 			T::CancelOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
-			Self::cancel_referendum_alarm(index);
+			if let Some(last_alarm) = status.alarm {
+				let _ = T::Scheduler::cancel(last_alarm);
+			}
 			Self::note_one_fewer_deciding(status.track, track);
 			Self::deposit_event(Event::<T>::Cancelled { index, tally: status.tally });
 			let info = ReferendumInfo::Cancelled(
@@ -373,7 +377,9 @@ pub mod pallet {
 			T::CancelOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
-			Self::cancel_referendum_alarm(index);
+			if let Some(last_alarm) = status.alarm {
+				let _ = T::Scheduler::cancel(last_alarm);
+			}
 			Self::note_one_fewer_deciding(status.track, track);
 			Self::deposit_event(Event::<T>::Killed { index, tally: status.tally });
 			Self::slash_deposit(Some(status.submission_deposit));
@@ -408,7 +414,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Referenda<T::Tally> for Pallet<T> {
+impl<T: Config> Polls<T::Tally> for Pallet<T> {
 	type Index = ReferendumIndex;
 	type Votes = VotesOf<T>;
 	type Moment = T::BlockNumber;
@@ -486,57 +492,19 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(ok, "LOGIC ERROR: bake_referendum/schedule_named failed");
 	}
 
-	/// Sets a referendum's alarm call. Returns `true` if there was not already an alarm call in
-	/// place for the same time.
-	fn set_referendum_alarm(index: ReferendumIndex, when: T::BlockNumber) -> bool {
-		let scheduler_id = (ASSEMBLY_ID, "referendum", index).encode();
-		// NOTE: This only works because we know that that this ID will only ever be used for this
-		// call.
-		Self::set_alarm(scheduler_id, Call::nudge_referendum { index }, when)
-	}
-
-	/// Cancels a referendum's alarm call. Returns `true` if there was an alarm scheduled.
-	fn cancel_referendum_alarm(index: ReferendumIndex) -> bool {
-		let id = (ASSEMBLY_ID, "referendum", index).encode();
-		T::Scheduler::cancel_named(id).is_ok()
-	}
-
-	/// Sets a track's alarm call. Returns `true` if there was not already an alarm call in place
-	/// for the same time.
-	#[allow(dead_code)]
-	fn set_track_alarm(track: TrackIdOf<T>, when: T::BlockNumber) -> bool {
-		let scheduler_id = (ASSEMBLY_ID, "track", track).encode();
-		// NOTE: This only works because we know that that this ID will only ever be used for this
-		// call.
-		Self::set_alarm(scheduler_id, Call::nudge_track { track }, when)
-	}
-
-	/// Set or reset an alarm for a given ID. This assumes that an ID always uses the same
-	/// call. If it doesn't then this won't work!
-	///
-	/// Returns `false` if there is no change.
-	fn set_alarm(id: Vec<u8>, call: impl Into<CallOf<T>>, when: T::BlockNumber) -> bool {
-		let alarm_interval = T::AlarmInterval::get();
-		let when = (when / alarm_interval + One::one()) * alarm_interval;
-		if let Ok(t) = T::Scheduler::next_dispatch_time(id.clone()) {
-			if t == when {
-				return false
-			}
-			let ok = T::Scheduler::reschedule_named(id, DispatchTime::At(when)).is_ok();
-			debug_assert!(ok, "Unable to reschedule an extant referendum?!");
-		} else {
-			let _ = T::Scheduler::cancel_named(id.clone());
-			let ok = T::Scheduler::schedule_named(
-				id,
-				DispatchTime::At(when),
-				None,
-				128u8,
-				frame_system::RawOrigin::Root.into(),
-				call.into(),
-			).is_ok();
-			debug_assert!(ok, "Unable to schedule a new referendum?!");
-		}
-		true
+	/// Set an alarm.
+	fn set_alarm(call: impl Into<CallOf<T>>, when: T::BlockNumber) -> Option<ScheduleAddressOf<T>> {
+		let alarm_interval = T::AlarmInterval::get().max(One::one());
+		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
+		let maybe_address = T::Scheduler::schedule(
+			DispatchTime::At(when),
+			None,
+			128u8,
+			frame_system::RawOrigin::Root.into(),
+			call.into(),
+		).ok();
+		debug_assert!(maybe_address.is_some(), "Unable to schedule a new referendum at #{} (now: #{})?!", when, frame_system::Pallet::<T>::block_number());
+		maybe_address
 	}
 
 	fn ready_for_deciding(
@@ -654,6 +622,9 @@ impl<T: Config> Pallet<T> {
 		mut status: ReferendumStatusOf<T>,
 	) -> (ReferendumInfoOf<T>, bool) {
 		let mut dirty = false;
+		if let Some(last_alarm) = status.alarm.take() {
+			let _ = T::Scheduler::cancel(last_alarm);
+		}
 		// Should it begin being decided?
 		let track = match Self::track(status.track) {
 			Some(x) => x,
@@ -707,7 +678,6 @@ impl<T: Config> Pallet<T> {
 			if is_passing {
 				if deciding.confirming.map_or(false, |c| now >= c) {
 					// Passed!
-					Self::cancel_referendum_alarm(index);
 					Self::note_one_fewer_deciding(status.track, track);
 					let (desired, call_hash) = (status.enactment, status.proposal_hash);
 					Self::schedule_enactment(index, track, desired, status.origin, call_hash);
@@ -722,7 +692,6 @@ impl<T: Config> Pallet<T> {
 			} else {
 				if now >= deciding.ending {
 					// Failed!
-					Self::cancel_referendum_alarm(index);
 					Self::note_one_fewer_deciding(status.track, track);
 					Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
 					return (ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit), true)
@@ -730,16 +699,15 @@ impl<T: Config> Pallet<T> {
 				// Cannot be confirming
 				dirty = deciding.confirming.is_some();
 				deciding.confirming = None;
-				alarm = Self::decision_time(&deciding, &status.tally, track);
+				let decision_time = Self::decision_time(&deciding, &status.tally, track);
+				alarm = decision_time;
 			}
 		} else if now >= timeout {
 			// Too long without being decided - end it.
-			Self::cancel_referendum_alarm(index);
 			Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
 			return (ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit), true)
 		}
-
-		Self::set_referendum_alarm(index, alarm);
+		status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
 		(ReferendumInfo::Ongoing(status), dirty)
 	}
 
@@ -751,9 +719,10 @@ impl<T: Config> Pallet<T> {
 		// Set alarm to the point where the current voting would make it pass.
 		let approval = tally.approval();
 		let turnout = tally.turnout();
-		let until_approval = track.min_approval.delay(approval) * deciding.period;
-		let until_turnout = track.min_turnout.delay(turnout) * deciding.period;
-		deciding.ending.min(until_turnout.max(until_approval))
+		let until_approval = track.min_approval.delay(approval);
+		let until_turnout = track.min_turnout.delay(turnout);
+		let offset = until_turnout.max(until_approval);
+		deciding.ending.saturating_sub(deciding.period).saturating_add(offset * deciding.period)
 	}
 
 	/// Reserve a deposit and return the `Deposit` instance.

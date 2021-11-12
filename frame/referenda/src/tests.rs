@@ -18,7 +18,7 @@
 //! The crate's tests.
 
 use codec::Decode;
-use frame_support::traits::Contains;
+use frame_support::{assert_ok, traits::Contains, dispatch::RawOrigin};
 use super::*;
 use crate::mock::*;
 
@@ -28,6 +28,28 @@ fn params_should_work() {
 		assert_eq!(ReferendumCount::<Test>::get(), 0);
 		assert_eq!(Balances::free_balance(42), 0);
 		assert_eq!(Balances::total_issuance(), 210);
+	});
+}
+
+#[test]
+fn basic_lifecycle_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_eq!(ReferendumCount::<Test>::get(), 1);
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		run_to(6);
+		//  Vote should now be deciding.
+		assert_eq!(DecidingCount::<Test>::get(0), 1);
+		set_tally(0, 100, 0);
+		// Vote should now be confirming.
+		run_to(8);
+		// Vote should now have ended.
+		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(2), 0));
 	});
 }
 
