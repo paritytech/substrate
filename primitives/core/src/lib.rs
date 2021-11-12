@@ -58,7 +58,6 @@ pub mod hexdisplay;
 
 pub mod u32_trait;
 
-mod changes_trie;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
@@ -76,7 +75,6 @@ pub use self::{
 	hash::{convert_hash, H160, H256, H512},
 	uint::{U256, U512},
 };
-pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 

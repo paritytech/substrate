@@ -19,29 +19,26 @@
 
 use super::DigestItem;
 use crate::codec::{Decode, Encode};
-use sp_core::H256;
 
 #[test]
 fn system_digest_item_encoding() {
-	let item = DigestItem::ChangesTrieRoot::<H256>(H256::default());
+	let item = DigestItem::Consensus([1, 2, 3, 4], vec![5, 6, 7, 8]);
 	let encoded = item.encode();
 	assert_eq!(
 		encoded,
 		vec![
-			// type = DigestItemType::ChangesTrieRoot
-			2, // trie root
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0,
+			4, // type = DigestItemType::Consensus
+			1, 2, 3, 4, 16, 5, 6, 7, 8,
 		]
 	);
 
-	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
+	let decoded: DigestItem = Decode::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(item, decoded);
 }
 
 #[test]
 fn non_system_digest_item_encoding() {
-	let item = DigestItem::Other::<H256>(vec![10, 20, 30]);
+	let item = DigestItem::Other(vec![10, 20, 30]);
 	let encoded = item.encode();
 	assert_eq!(
 		encoded,
@@ -53,6 +50,6 @@ fn non_system_digest_item_encoding() {
 		]
 	);
 
-	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
+	let decoded: DigestItem = Decode::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(item, decoded);
 }

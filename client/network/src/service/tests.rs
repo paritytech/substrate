@@ -116,7 +116,6 @@ fn build_test_full_node(
 		}),
 		network_config: config,
 		chain: client.clone(),
-		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
 		protocol_id,
 		import_queue,
