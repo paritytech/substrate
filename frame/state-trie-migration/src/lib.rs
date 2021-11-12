@@ -341,18 +341,18 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
-			let last_child =
-				self.last_child.as_ref().expect("value checked to be `Some`; qed");
+			let last_child = self.last_child.as_ref().expect("value checked to be `Some`; qed");
 			let last_top = self.last_top.clone().expect("value checked to be `Some`; qed");
 
 			let child_root = Pallet::<T>::child_io_key(&last_top);
-			let added_size = if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
-				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::default_child_storage::set(child_root, last_child, &data);
-				data.len() as u32
-			} else {
-				Zero::zero()
-			};
+			let added_size =
+				if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
+					self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
+					sp_io::default_child_storage::set(child_root, last_child, &data);
+					data.len() as u32
+				} else {
+					Zero::zero()
+				};
 
 			self.dyn_child_items.saturating_inc();
 			let next_key = sp_io::default_child_storage::next_key(child_root, last_child);
@@ -760,7 +760,9 @@ pub mod pallet {
 					let mut new_task = Self::migration_process();
 					new_task.migrate_until_exhaustion(MigrationLimits {
 						size: chain_limits.size,
-						item: task.dyn_total_items().saturating_sub(T::UnsignedBackOff::get().max(1)),
+						item: task
+							.dyn_total_items()
+							.saturating_sub(T::UnsignedBackOff::get().max(1)),
 					});
 					task = new_task;
 				}
@@ -1365,27 +1367,50 @@ mod remote_tests {
 				.await
 				.unwrap();
 
-			ext.execute_with(|| {
-				// requires the block number type in our tests to be same as with mainnet, u32.
-				let mut now = frame_system::Pallet::<Test>::block_number();
-				let mut duration = 0;
+			let mut now = ext.execute_with(|| {
 				AutoLimits::<Test>::put(Some(limits));
-				loop {
+				// requires the block number type in our tests to be same as with mainnet, u32.
+				frame_system::Pallet::<Test>::block_number()
+			});
+
+			let mut duration = 0;
+
+			loop {
+				let finished = ext.execute_with(|| {
 					run_to_block(now + 1);
 					if StateTrieMigration::migration_process().finished() {
-						break
+						return true
 					}
 					duration += 1;
 					now += 1;
-				}
+					false
+				});
 
+				let (top_left, child_left) =
+					ext.as_backend().essence().check_migration_state().unwrap();
 				log::info!(
 					target: LOG_TARGET,
-					"finished on_initialize migration in {} block, final state of the task: {:?}",
-					duration,
-					StateTrieMigration::migration_process()
+					"(top_left: {}, child_left {})",
+					top_left,
+					child_left,
 				);
-			})
+
+				if finished {
+					break
+				}
+			}
+
+			log::info!(
+				target: LOG_TARGET,
+				"finished on_initialize migration in {} block, final state of the task: {:?}",
+				duration,
+				StateTrieMigration::migration_process(),
+			);
+
+			let (top_left, child_left) =
+				ext.as_backend().essence().check_migration_state().unwrap();
+			assert_eq!(top_left, 0);
+			assert_eq!(child_left, 0);
 		};
 		// item being the bottleneck
 		run_with_limits(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }).await;
