@@ -42,7 +42,7 @@ structopt = "0.3.8"
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
 serde = "1.0.126"
-thiserror = "1.0.21"
+thiserror = "1.0.30"
 rpassword = "5.0.0"
 
 [dev-dependencies]

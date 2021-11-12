@@ -508,7 +508,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
+		let log = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
