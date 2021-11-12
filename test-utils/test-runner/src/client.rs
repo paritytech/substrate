@@ -45,6 +45,7 @@ use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use std::{str::FromStr, sync::Arc};
 
 type ClientParts<T> = (
+	Arc<RpcModule<()>>,
 	TaskManager,
 	Arc<
 		TFullClient<
@@ -187,13 +188,11 @@ where
 	let rpc_sink = command_sink.clone();
 
 	let rpc_builder = Box::new(move |_, _| {
-		let seal = ManualSeal::new(rpc_sink).into_rpc();
-		let mut module = RpcModule::new(());
-		module.merge(seal).expect("only one module; qed");
-		Ok(module)
+		let seal = ManualSeal::new(rpc_sink.clone()).into_rpc();
+		Ok(seal)
 	});
 
-	let _rpc_handlers = {
+	let rpc_handlers = {
 		let params = SpawnTasksParams {
 			config,
 			client: client.clone(),
@@ -241,6 +240,7 @@ where
 		.spawn("manual-seal", None, authorship_future);
 
 	network_starter.start_network();
+	let rpc_handler = rpc_handlers.handle();
 
-	Ok((task_manager, client, transaction_pool, command_sink, backend))
+	Ok((rpc_handler, task_manager, client, transaction_pool, command_sink, backend))
 }

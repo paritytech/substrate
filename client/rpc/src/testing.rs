@@ -52,11 +52,21 @@ impl Spawn for TaskExecutor {
 	}
 }
 impl SpawnNamed for TaskExecutor {
-	fn spawn_blocking(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		EXECUTOR.spawn_ok(future);
 	}
 
-	fn spawn(&self, _name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		EXECUTOR.spawn_ok(future);
 	}
 }

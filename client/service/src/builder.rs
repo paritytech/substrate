@@ -22,7 +22,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -112,8 +112,9 @@ impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } =>
-				LocalKeystore::open(path.clone(), password.clone())?,
+			KeystoreConfig::Path { path, password } => {
+				LocalKeystore::open(path.clone(), password.clone())?
+			}
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
@@ -323,7 +324,7 @@ where
 }
 
 /// Parameters to pass into `build`.
-pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, Backend> {
+pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
 	pub config: Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
@@ -340,7 +341,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, Backend> {
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
 	pub rpc_builder:
-		Box<dyn FnOnce(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<()>, Error>>,
+		Box<dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
@@ -384,9 +385,9 @@ where
 }
 
 /// Spawn the tasks that are required to run a node.
-pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
-	params: SpawnTasksParams<TBl, TCl, TExPool, TBackend>,
-) -> Result<(), Error>
+pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
+	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
+) -> Result<RpcHandlers, Error>
 where
 	TCl: ProvideRuntimeApi<TBl>
 		+ HeaderMetadata<TBl, Error = sp_blockchain::Error>
@@ -494,11 +495,12 @@ where
 			system_rpc_tx.clone(),
 			&config,
 			backend.offchain_storage(),
-			rpc_builder,
+			&*rpc_builder,
 		)
 	};
 
 	let rpc = start_rpc_servers(&config, gen_rpc_module)?;
+	let rpc_handlers = RpcHandlers(Arc::new(gen_rpc_module(sc_rpc::DenyUnsafe::No)?.into()));
 
 	// Spawn informant task
 	spawn_handle.spawn(
@@ -514,7 +516,7 @@ where
 
 	task_manager.keep_alive((config.base_path, rpc));
 
-	Ok(())
+	Ok(rpc_handlers)
 }
 
 async fn transaction_notifications<TBl, TExPool>(
@@ -571,7 +573,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	Ok(telemetry.handle())
 }
 
-fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
+fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	deny_unsafe: DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
@@ -580,9 +582,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-	rpc_builder: Box<
-		dyn FnOnce(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<()>, Error>,
-	>,
+	rpc_builder: &(dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>),
 ) -> Result<RpcModule<()>, Error>
 where
 	TBl: BlockT,
@@ -738,8 +738,8 @@ where
 			let (handler, protocol_config) = BlockRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
 			protocol_config
@@ -755,8 +755,8 @@ where
 			let (handler, protocol_config) = StateRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
 			protocol_config
@@ -870,7 +870,7 @@ where
 			);
 			// This `return` might seem unnecessary, but we don't want to make it look like
 			// everything is working as normal even though the user is clearly misusing the API.
-			return
+			return;
 		}
 
 		future.await

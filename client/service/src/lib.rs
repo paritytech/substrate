@@ -43,6 +43,7 @@ use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 use sc_network::PeerId;
 use sc_utils::mpsc::TracingUnboundedReceiver;
+use serde::Serialize;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
@@ -79,9 +80,29 @@ pub use task_manager::{SpawnTaskHandle, TaskManager, DEFAULT_GROUP_NAME};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
-/// Dummy RPC handler type.
-// TODO(niklasad1): replace this to do perform in-memory rpc request.
-pub type RpcHandlers = ();
+/// RPC handlers that can perform RPC queries.
+#[derive(Clone)]
+pub struct RpcHandlers(Arc<RpcModule<()>>);
+
+impl RpcHandlers {
+	/// Starts an RPC query.
+	///
+	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
+	/// would for example send.
+	///
+	/// Returns a `Future` that contains the optional response.
+	///
+	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
+	/// send back spontaneous events.
+	pub async fn rpc_query<T: Serialize>(&self, method: &str, params: Vec<T>) -> Option<String> {
+		self.0.call_with(method, params).await
+	}
+
+	/// Provides access to the underlying `RpcModule`
+	pub fn handle(&self) -> Arc<RpcModule<()>> {
+		self.0.clone()
+	}
+}
 
 /// An incomplete set of chain components, but enough to run the chain ops subcommands.
 pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
@@ -380,7 +401,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return Box::pin(futures::future::ready(TransactionImport::None))
+			return Box::pin(futures::future::ready(TransactionImport::None));
 		}
 
 		let encoded = transaction.encode();
@@ -388,8 +409,8 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad))
-			},
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
+			}
 		};
 
 		let best_block_id = BlockId::hash(self.client.info().best_hash);
@@ -403,18 +424,19 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
-						TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
+						TransactionImport::KnownGood
+					}
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
-					},
+					}
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						// it is not bad at least, just some internal node logic error, so peer is
 						// innocent.
 						TransactionImport::KnownGood
-					},
+					}
 				},
 			}
 		})
