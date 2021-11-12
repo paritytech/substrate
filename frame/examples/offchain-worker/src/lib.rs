@@ -28,6 +28,8 @@
 //! - [`Call`]
 //! - [`Pallet`]
 //!
+//! **This pallet serves as an example showcasing Substrate off-chain worker and is not meant to
+//! be used in production.**
 //!
 //! ## Overview
 //!
@@ -40,6 +42,7 @@
 //! Additional logic in OCW is put in place to prevent spamming the network with both signed
 //! and unsigned transactions, and custom `UnsignedValidator` makes sure that there is only
 //! one unsigned transaction floating in the network.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};

@@ -17,7 +17,7 @@ proc-macro = true
 
 [dependencies]
 quote = "1.0.10"
-syn = { version = "1.0.80", features = ["full", "fold", "extra-traits", "visit"] }
+syn = { version = "1.0.81", features = ["full", "fold", "extra-traits", "visit"] }
 proc-macro2 = "1.0.29"
 blake2-rfc = { version = "0.2.18", default-features = false }
 proc-macro-crate = "1.0.0"
