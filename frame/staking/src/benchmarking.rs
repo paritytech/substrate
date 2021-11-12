@@ -354,17 +354,17 @@ benchmarks! {
 	kick {
 		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
 		// we'll assume that `k` is under 128 for the purposes of determining the slope.
-		// each nominator should have `T::MAX_NOMINATIONS` validators nominated, and our validator
+		// each nominator should have `T::NominationQuota::ABSOLUTE_MAXIMUM` validators nominated, and our validator
 		// should be somewhere in there.
 		let k in 1 .. 128;
 
-		// these are the other validators; there are `T::MAX_NOMINATIONS - 1` of them, so
-		// there are a total of `T::MAX_NOMINATIONS` validators in the system.
-		let rest_of_validators = create_validators_with_seed::<T>(T::MAX_NOMINATIONS - 1, 100, 415)?;
+		// these are the other validators; there are `T::NominationQuota::ABSOLUTE_MAXIMUM - 1` of them, so
+		// there are a total of `T::NominationQuota::ABSOLUTE_MAXIMUM` validators in the system.
+		let rest_of_validators = create_validators_with_seed::<T>(T::NominationQuota::ABSOLUTE_MAXIMUM - 1, 100, 415)?;
 
 		// this is the validator that will be kicking.
 		let (stash, controller) = create_stash_controller::<T>(
-			T::MAX_NOMINATIONS - 1,
+			T::NominationQuota::ABSOLUTE_MAXIMUM - 1,
 			100,
 			Default::default(),
 		)?;
@@ -379,7 +379,7 @@ benchmarks! {
 		for i in 0 .. k {
 			// create a nominator stash.
 			let (n_stash, n_controller) = create_stash_controller::<T>(
-				T::MAX_NOMINATIONS + i,
+				T::NominationQuota::ABSOLUTE_MAXIMUM + i,
 				100,
 				Default::default(),
 			)?;
@@ -414,9 +414,9 @@ benchmarks! {
 		}
 	}
 
-	// Worst case scenario, T::MAX_NOMINATIONS
+	// Worst case scenario, T::NominationQuota::ABSOLUTE_MAXIMUM
 	nominate {
-		let n in 1 .. T::MAX_NOMINATIONS;
+		let n in 1 .. T::NominationQuota::ABSOLUTE_MAXIMUM;
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -427,7 +427,7 @@ benchmarks! {
 		// we are just doing an insert into the origin position.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let (stash, controller) = create_stash_controller_with_balance::<T>(
-			SEED + T::MAX_NOMINATIONS + 1, // make sure the account does not conflict with others
+			SEED + T::NominationQuota::ABSOLUTE_MAXIMUM + 1, // make sure the account does not conflict with others
 			origin_weight,
 			Default::default(),
 		).unwrap();
@@ -714,7 +714,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MAX_NOMINATIONS as usize,
+			<T as Config>::NominationQuota::ABSOLUTE_MAXIMUM as usize,
 			false,
 			None,
 		)?;
@@ -732,7 +732,7 @@ benchmarks! {
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			<T as Config>::MAX_NOMINATIONS as usize,
+			<T as Config>::NominationQuota::ABSOLUTE_MAXIMUM as usize,
 			false,
 			None,
 		)?;
@@ -803,7 +803,7 @@ benchmarks! {
 		assert!(balance_before > balance_after);
 	}
 
-	get_npos_voters {
+	get_npos_voters_unbounded {
 		// number of validator intention.
 		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
 		// number of nominator intention.
@@ -812,7 +812,7 @@ benchmarks! {
 		let s in 1 .. 20;
 
 		let validators = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MAX_NOMINATIONS as usize, false, None
+			v, n, T::NominationQuota::ABSOLUTE_MAXIMUM as usize, false, None
 		)?
 		.into_iter()
 		.map(|v| T::Lookup::lookup(v).unwrap())
@@ -824,21 +824,56 @@ benchmarks! {
 
 		let num_voters = (v + n) as usize;
 	}: {
-		let voters = <Staking<T>>::get_npos_voters(None);
+		let voters = <Staking<T>>::get_npos_voters_unbounded();
 		assert_eq!(voters.len(), num_voters);
 	}
 
-	get_npos_targets {
+	get_npos_voters_bounded {
 		// number of validator intention.
 		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
 		// number of nominator intention.
-		let n = MAX_NOMINATORS;
+		let n in (MAX_NOMINATORS / 2) .. MAX_NOMINATORS;
+		// total number of slashing spans. Assigned to validators randomly.
+		let s in 1 .. 20;
+
+		let validators = create_validators_with_nominators_for_era::<T>(
+			v, n, T::NominationQuota::ABSOLUTE_MAXIMUM as usize, false, None
+		)?
+		.into_iter()
+		.map(|v| T::Lookup::lookup(v).unwrap())
+		.collect::<Vec<_>>();
+
+		(0..s).for_each(|index| {
+			add_slashing_spans::<T>(&validators[index as usize], 10);
+		});
+
+		let num_voters = (v + n) as usize;
+	}: {
+		let voters = <Staking<T>>::get_npos_voters_bounded(Bounded::max_value());
+		assert_eq!(voters.len(), num_voters);
+	}
+
+	get_npos_targets_unbounded {
+		// number of validator intention.
+		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
 
 		let _ = create_validators_with_nominators_for_era::<T>(
-			v, n, T::MAX_NOMINATIONS as usize, false, None
+			v, 0, 0, false, None
 		)?;
 	}: {
-		let targets = <Staking<T>>::get_npos_targets();
+		let targets = Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>();
+		assert_eq!(targets.len() as u32, v);
+	}
+
+	get_npos_targets_bounded {
+		// number of validator intention.
+		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
+
+		let _ = create_validators_with_nominators_for_era::<T>(
+			v, 0, 0, false, None
+		)?;
+	}: {
+		let targets = <Staking<T>>::get_npos_targets_bounded(Bounded::max_value());
 		assert_eq!(targets.len() as u32, v);
 	}
 
@@ -910,7 +945,8 @@ mod tests {
 			create_validators_with_nominators_for_era::<Test>(
 				v,
 				n,
-				<Test as Config>::MAX_NOMINATIONS as usize,
+				<<Test as Config>::NominationQuota as NominationQuota<BalanceOf<Test>>>::ABSOLUTE_MAXIMUM
+					as usize,
 				false,
 				None,
 			)

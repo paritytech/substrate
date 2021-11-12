@@ -43,8 +43,8 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
+	ExposureOf, Forcing, IndividualExposure, NominationQuota, Nominations, PositiveImbalanceOf,
+	RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -647,120 +647,203 @@ impl<T: Config> Pallet<T> {
 		SlashRewardFraction::<T>::put(fraction);
 	}
 
-	/// Get all of the voters that are eligible for the npos election.
+	/// Get all of the voters that are eligible for the next npos election.
 	///
-	/// `maybe_max_len` can imposes a cap on the number of voters returned; First all the validator
-	/// are included in no particular order, then remainder is taken from the nominators, as
-	/// returned by [`Config::SortedListProvider`].
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
-	/// This will use nominators, and all the validators will inject a self vote.
+	/// # Warning
+	///
+	/// This is the unbounded variant. Being called might cause a large number of storage reads. Use
+	/// [`get_npos_targets_bounded`] otherwise.
+	pub fn get_npos_voters_unbounded() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		let weight_of = Self::weight_of_fn();
+
+		let mut nominator_votes = T::SortedListProvider::iter()
+			.filter_map(|nominator| {
+				if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
+					Self::nominators(nominator.clone())
+				{
+					targets.retain(|stash| {
+						slashing_spans
+							.get(stash)
+							.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
+					});
+					if !targets.len().is_zero() {
+						let weight = weight_of(&nominator);
+						return Some((nominator, weight, targets))
+					}
+				}
+				None
+			})
+			.collect::<Vec<_>>();
+
+		let validator_votes = <Validators<T>>::iter()
+			.map(|(v, _)| (v.clone(), Self::weight_of(&v), vec![v.clone()]))
+			.collect::<Vec<_>>();
+
+		Self::register_weight(T::WeightInfo::get_npos_voters_unbounded(
+			validator_votes.len() as u32,
+			nominator_votes.len() as u32,
+			slashing_spans.len() as u32,
+		));
+		log!(
+			info,
+			"generated {} npos voters, {} from validators and {} nominators, without size limit",
+			validator_votes.len() + nominator_votes.len(),
+			validator_votes.len(),
+			nominator_votes.len(),
+		);
+
+		// NOTE: we chain the one we expect to have the smaller size (`validators_votes`) to the
+		// larger one, to minimize copying. Ideally we would collect only once, but sadly then we
+		// wouldn't have access to a cheap `.len()`, which we need for weighing. TODO: maybe
+		// `.count()` is still cheaper than the copying we do.
+		nominator_votes.extend(validator_votes);
+		nominator_votes
+	}
+
+	/// Get all of the voters that are eligible for the next npos election.
+	///
+	/// `max_size` imposes a cap on the byte-size of the entire voters returned.
+	///
+	/// As of now, first all the validator are included in no particular order, then remainder is
+	/// taken from the nominators, as returned by [`Config::SortedListProvider`].
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
 	/// ### Slashing
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
-	/// auto-chilled, but still count towards the limit imposed by `maybe_max_len`.
-	pub fn get_npos_voters(
-		maybe_max_len: Option<usize>,
+	/// auto-chilled, and they DO count towards the limit imposed by `maybe_max_size`.
+	///
+	/// In essence, this implementation ensures that no more than `max_size` bytes worth of npos
+	/// voters are READ from storage, which subsequently ensures that the returning value cannot be
+	/// more than `max_size`.
+	pub fn get_npos_voters_bounded(
+		max_size: usize,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		let max_allowed_len = {
-			let nominator_count = CounterForNominators::<T>::get() as usize;
-			let validator_count = CounterForValidators::<T>::get() as usize;
-			let all_voter_count = validator_count.saturating_add(nominator_count);
-			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
-		};
+		let mut tracker = StaticSizeTracker::<T::AccountId>::new();
+		let mut voters = Vec::<_>::with_capacity(
+			max_size /
+				StaticSizeTracker::<T::AccountId>::voter_size(
+					T::NominationQuota::ABSOLUTE_MAXIMUM as usize,
+				),
+		);
 
-		let mut all_voters = Vec::<_>::with_capacity(max_allowed_len);
-
-		// first, grab all validators in no particular order, capped by the maximum allowed length.
-		let mut validators_taken = 0u32;
-		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
+		// first, grab all validators in no particular order. In most cases, all of them should fit
+		// anyway.
+		for (validator, _) in <Validators<T>>::iter() {
 			// Append self vote.
 			let self_vote =
 				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
-			all_voters.push(self_vote);
-			validators_taken.saturating_inc();
+			tracker.register_voter(1usize);
+			if tracker.final_byte_size_of(voters.len() + 1) > max_size {
+				log!(
+					warn,
+					"stopped iterating over validators' self-vote at {} to cap the size at {}. This should probably never happen",
+					voters.len(),
+					max_size,
+				);
+				break
+			}
+			voters.push(self_vote);
 		}
+		let validators_taken = voters.len();
 
-		// .. and grab whatever we have left from nominators.
-		let nominators_quota = (max_allowed_len as u32).saturating_sub(validators_taken);
+		// cache a few items.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
-
-		// track the count of nominators added to `all_voters
-		let mut nominators_taken = 0u32;
-		// track every nominator iterated over, but not necessarily added to `all_voters`
-		let mut nominators_seen = 0u32;
-
-		// cache the total-issuance once in this function
 		let weight_of = Self::weight_of_fn();
 
-		let mut nominators_iter = T::SortedListProvider::iter();
-		while nominators_taken < nominators_quota && nominators_seen < nominators_quota * 2 {
-			let nominator = match nominators_iter.next() {
-				Some(nominator) => {
-					nominators_seen.saturating_inc();
-					nominator
-				},
-				None => break,
-			};
-
+		for nominator in T::SortedListProvider::iter() {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
-				log!(
-					trace,
-					"fetched nominator {:?} with weight {:?}",
-					nominator,
-					weight_of(&nominator)
-				);
+				// IMPORTANT: we track the size and potentially break out right here.
+				tracker.register_voter(targets.len());
+				if tracker.final_byte_size_of(voters.len() + 1) > max_size {
+					break
+				}
+
 				targets.retain(|stash| {
 					slashing_spans
 						.get(stash)
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), weight_of(&nominator), targets));
-					nominators_taken.saturating_inc();
+					voters.push((nominator.clone(), weight_of(&nominator), targets));
 				}
 			} else {
 				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
 			}
 		}
 
-		// all_voters should have not re-allocated.
-		debug_assert!(all_voters.capacity() == max_allowed_len);
-
-		Self::register_weight(T::WeightInfo::get_npos_voters(
-			validators_taken,
-			nominators_taken,
+		let nominators_taken = voters.len().saturating_sub(validators_taken);
+		Self::register_weight(T::WeightInfo::get_npos_voters_bounded(
+			validators_taken as u32,
+			nominators_taken as u32,
 			slashing_spans.len() as u32,
 		));
+		debug_assert!(voters.encoded_size() <= max_size);
 
 		log!(
 			info,
-			"generated {} npos voters, {} from validators and {} nominators",
-			all_voters.len(),
+			"generated {} npos voters, {} from validators and {} nominators, with size limit {}",
+			voters.len(),
 			validators_taken,
-			nominators_taken
+			nominators_taken,
+			max_size,
 		);
-		all_voters
+		voters
 	}
 
-	/// Get the targets for an upcoming npos election.
+	/// Get the list of targets (validators) that are eligible for the next npos election.
+	// This function is self-weighing as [`DispatchClass::Mandatory`].
+	///
+	/// # Warning
+	///
+	/// This is the unbounded variant. Being called might cause a large number of storage reads. Use
+	/// [`get_npos_targets_bounded`] otherwise.
+	pub fn get_npos_targets_unbounded() -> Vec<T::AccountId> {
+		let targets = Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>();
+		Self::register_weight(T::WeightInfo::get_npos_targets_unbounded(targets.len() as u32));
+		log!(info, "generated {} npos targets, without size limit.", targets.len());
+		targets
+	}
+
+	/// Get the list of targets (validators) that are eligible for the next npos election.
+	///
+	/// `max_size` imposes a cap on the byte-size of the entire targets returned.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets() -> Vec<T::AccountId> {
-		let mut validator_count = 0u32;
-		let targets = Validators::<T>::iter()
-			.map(|(v, _)| {
-				validator_count.saturating_inc();
-				v
-			})
-			.collect::<Vec<_>>();
+	pub fn get_npos_targets_bounded(max_size: usize) -> Vec<T::AccountId> {
+		let mut internal_size: usize = Zero::zero();
+		let mut targets: Vec<T::AccountId> =
+			Vec::with_capacity(max_size / sp_std::mem::size_of::<T::AccountId>());
 
-		Self::register_weight(T::WeightInfo::get_npos_targets(validator_count));
+		for (next, _) in Validators::<T>::iter() {
+			let new_internal_size = internal_size + sp_std::mem::size_of::<T::AccountId>();
+			let new_final_size = new_internal_size +
+				StaticSizeTracker::<T::AccountId>::length_prefix(targets.len() + 1);
+			if new_final_size > max_size {
+				// we've had enough
+				break
+			}
+			targets.push(next);
+			internal_size = new_internal_size;
 
+			debug_assert_eq!(targets.encoded_size(), new_final_size);
+		}
+
+		Self::register_weight(T::WeightInfo::get_npos_targets_bounded(targets.len() as u32));
+		debug_assert!(
+			targets.encoded_size() <= max_size,
+			"encoded size: {}, max_size: {}",
+			targets.encoded_size(),
+			max_size
+		);
+
+		log!(info, "generated {} npos targets, with size limit {}", targets.len(), max_size);
 		targets
 	}
 
@@ -855,7 +938,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
+	const MAXIMUM_VOTES_PER_VOTER: u32 = T::NominationQuota::ABSOLUTE_MAXIMUM;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
@@ -863,32 +946,39 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	}
 
 	fn voters(
-		maybe_max_len: Option<usize>,
+		maybe_max_size: Option<usize>,
 	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
-		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
-		debug_assert_eq!(
-			CounterForNominators::<T>::get(),
-			T::SortedListProvider::count(),
-			"voter_count must be accurate",
-		);
-
-		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
-		let voters = Self::get_npos_voters(maybe_max_len);
-		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
-
-		Ok(voters)
+		Ok(match maybe_max_size {
+			Some(max_size) => Self::get_npos_voters_bounded(max_size),
+			None => {
+				log!(
+					warn,
+					"iterating over an unbounded number of npos voters, this might exhaust the \
+					memory limits of the chain. Ensure proper limits are set via \
+					`MaxNominatorsCount` or `ElectionProvider`"
+				);
+				Self::get_npos_voters_unbounded()
+			},
+		})
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = CounterForValidators::<T>::get();
-
-		// We can't handle this case yet -- return an error.
-		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
-			return Err("Target snapshot too big")
-		}
-
-		Ok(Self::get_npos_targets())
+	fn targets(maybe_max_size: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+		// On any reasonable chain, the validator candidates should be small enough for this to not
+		// need to truncate. Nonetheless, if it happens, we prefer truncating for now rather than
+		// returning an error. In the future, a second instance of the `SortedListProvider` should
+		// be used to sort validators as well in a cheap way.
+		Ok(match maybe_max_size {
+			Some(max_size) => Self::get_npos_targets_bounded(max_size),
+			None => {
+				log!(
+					warn,
+					"iterating over an unbounded number of npos targets, this might exhaust the \
+					memory limits of the chain. Ensure proper limits are set via \
+					`MaxValidatorsCount` or `ElectionProvider`"
+				);
+				Self::get_npos_targets_unbounded()
+			},
+		})
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
@@ -1315,5 +1405,115 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		} else {
 			CounterForNominators::<T>::take()
 		}
+	}
+}
+
+/// A static tracker for the snapshot of all voters.
+///
+/// Computes the (SCALE) encoded byte length of a snapshot based on static rules, without any actual
+/// encoding.
+///
+/// ## Warning
+///
+/// Make sure any change to SCALE is reflected here.
+///
+/// ## Details
+///
+/// The snapshot has a the form `Vec<Voter>` where `Voter = (Account, u64, Vec<Account>)`. For each
+/// voter added to the snapshot, [`register_voter`] should be called, with the number of votes
+/// (length of the internal `Vec`).
+///
+/// Whilst doing this, [`size`] will track the entire size of the `Vec<Voter>`, except for the
+/// length prefix of the outer `Vec`. To get the final size at any point, use
+/// [`final_byte_size_of`].
+struct StaticSizeTracker<AccountId> {
+	size: usize,
+	_marker: sp_std::marker::PhantomData<AccountId>,
+}
+
+impl<AccountId> StaticSizeTracker<AccountId> {
+	fn new() -> Self {
+		Self { size: 0, _marker: Default::default() }
+	}
+
+	/// The length prefix of a vector with the given length.
+	#[inline]
+	fn length_prefix(length: usize) -> usize {
+		// TODO: scale codec could and should expose a public function for this that I can reuse.
+		match length {
+			0..=63 => 1,
+			64..=16383 => 2,
+			16384..=1073741823 => 4,
+			// this arm almost always never happens. Although, it would be good to get rid of of it,
+			// for otherwise we could make this function const, which might enable further
+			// optimizations.
+			x @ _ => codec::Compact(x as u32).encoded_size(),
+		}
+	}
+
+	/// Register a voter in `self` who has casted `votes`.
+	fn register_voter(&mut self, votes: usize) {
+		self.size = self.size.saturating_add(Self::voter_size(votes))
+	}
+
+	/// The byte size of a voter who casted `votes`.
+	fn voter_size(votes: usize) -> usize {
+		Self::length_prefix(votes)
+			// and each element
+			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
+			// 1 vote-weight
+			.saturating_add(sp_std::mem::size_of::<VoteWeight>())
+			// 1 voter account
+			.saturating_add(sp_std::mem::size_of::<AccountId>())
+	}
+
+	// Final size: size of all internal elements, plus the length prefix.
+	fn final_byte_size_of(&self, length: usize) -> usize {
+		self.size + Self::length_prefix(length)
+	}
+}
+
+#[cfg(test)]
+mod static_tracker {
+	use codec::Encode;
+
+	use super::StaticSizeTracker;
+
+	#[test]
+	fn len_prefix_works() {
+		let length_samples =
+			vec![0usize, 1, 62, 63, 64, 16383, 16384, 16385, 1073741822, 1073741823, 1073741824];
+
+		for s in length_samples {
+			// the encoded size of a vector of n bytes should be n + the length prefix
+			assert_eq!(vec![1u8; s].encoded_size(), StaticSizeTracker::<u64>::length_prefix(s) + s);
+		}
+	}
+
+	#[test]
+	fn length_tracking_works() {
+		let mut voters: Vec<(u64, u64, Vec<u64>)> = vec![];
+		let mut tracker = StaticSizeTracker::<u64>::new();
+
+		// initial state.
+		assert_eq!(voters.encoded_size(), tracker.final_byte_size_of(voters.len()));
+
+		// add a bunch of stuff.
+		voters.push((1, 10, vec![1, 2, 3]));
+		tracker.register_voter(3);
+		assert_eq!(voters.encoded_size(), tracker.final_byte_size_of(voters.len()));
+
+		voters.push((2, 20, vec![1, 3]));
+		tracker.register_voter(2);
+		assert_eq!(voters.encoded_size(), tracker.final_byte_size_of(voters.len()));
+
+		voters.push((3, 30, vec![1]));
+		tracker.register_voter(1);
+		assert_eq!(voters.encoded_size(), tracker.final_byte_size_of(voters.len()));
+
+		// unlikely to happen in reality, but anyways.
+		voters.push((4, 40, vec![]));
+		tracker.register_voter(0);
+		assert_eq!(voters.encoded_size(), tracker.final_byte_size_of(voters.len()));
 	}
 }

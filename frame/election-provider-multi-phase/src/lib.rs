@@ -248,7 +248,6 @@ use sp_npos_elections::{
 	VoteWeight,
 };
 use sp_runtime::{
-	traits::Bounded,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
@@ -641,14 +640,20 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The maximum number of voters to put in the snapshot. At the moment, snapshots are only
-		/// over a single block, but once multi-block elections are introduced they will take place
-		/// over multiple blocks.
+		/// The maximum byte-size of voters to put in the snapshot.
 		///
-		/// Also, note the data type: If the voters are represented by a `u32` in `type
-		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
+		/// At the moment, snapshots are only over a single block, but once multi-block elections
+		/// are introduced they will take place over multiple blocks.
 		#[pallet::constant]
-		type VoterSnapshotPerBlock: Get<SolutionVoterIndexOf<Self>>;
+		type VoterSnapshotSizePerBlock: Get<u32>;
+
+		/// The maximum byte size of targets to put in the snapshot.
+		///
+		/// The target snapshot is assumed to always fit in one block, and happens next to voter
+		/// snapshot. In essence, in a single block, `TargetSnapshotSize +
+		/// VoterSnapshotSizePerBlock` bytes of data are present in a snapshot.
+		#[pallet::constant]
+		type TargetSnapshotSize: Get<u32>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -772,7 +777,7 @@ pub mod pallet {
 						Self::on_initialize_open_unsigned(enabled, now);
 						T::WeightInfo::on_initialize_open_unsigned()
 					}
-				}
+				},
 				_ => T::WeightInfo::on_initialize_nothing(),
 			}
 		}
@@ -830,6 +835,13 @@ pub mod pallet {
 			assert_eq!(
 				<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MAXIMUM_VOTES_PER_VOTER,
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
+			);
+
+			// ----------------------------
+			// maximum size of a snapshot should not exceed half the size of our allocator limit.
+			assert!(
+				T::VoterSnapshotSizePerBlock::get().saturating_add(T::TargetSnapshotSize::get()) <
+					sp_core::MAX_POSSIBLE_ALLOCATION / 2 - 1
 			);
 		}
 	}
@@ -1293,19 +1305,17 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
-		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		// for now we have just a single block snapshot.
-		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
+		let target_limit = Some(T::TargetSnapshotSize::get() as usize);
+		let voter_limit = Some(T::VoterSnapshotSizePerBlock::get() as usize);
 
 		let targets =
-			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
-		let voters =
-			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
+			T::DataProvider::targets(target_limit).map_err(ElectionError::DataProvider)?;
+		let voters = T::DataProvider::voters(voter_limit).map_err(ElectionError::DataProvider)?;
 		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
 		// Defensive-only.
-		if targets.len() > target_limit || voters.len() > voter_limit {
+		if voter_limit.map_or(false, |l| voters.len() > l) {
 			debug_assert!(false, "Snapshot limit has not been respected.");
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
@@ -1710,8 +1720,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MultiPhase,
-			Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			multi_phase_events, roll_to, ExtBuilder, MockWeightInfo, MultiPhase, Runtime,
+			SignedMaxSubmissions, System,
 		},
 		Phase,
 	};
@@ -1952,70 +1962,6 @@ mod tests {
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
-		})
-	}
-
-	#[test]
-	fn snapshot_too_big_failure_onchain_fallback() {
-		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
-		ExtBuilder::default().build_and_execute(|| {
-			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
-
-			// Signed phase failed to open.
-			roll_to(15);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-
-			// Unsigned phase failed to open.
-			roll_to(25);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-
-			// On-chain backup works though.
-			roll_to(29);
-			let supports = MultiPhase::elect().unwrap();
-			assert!(supports.len() > 0);
-		});
-	}
-
-	#[test]
-	fn snapshot_too_big_failure_no_fallback() {
-		// and if the backup mode is nothing, we go into the emergency mode..
-		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
-			);
-
-			// Signed phase failed to open.
-			roll_to(15);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-
-			// Unsigned phase failed to open.
-			roll_to(25);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-
-			roll_to(29);
-			let err = MultiPhase::elect().unwrap_err();
-			assert_eq!(err, ElectionError::Fallback("NoFallback."));
-			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
-		});
-	}
-
-	#[test]
-	fn snapshot_too_big_truncate() {
-		// but if there are too many voters, we simply truncate them.
-		ExtBuilder::default().build_and_execute(|| {
-			// we have 8 voters in total.
-			assert_eq!(crate::mock::Voters::get().len(), 8);
-			// but we want to take 2.
-			crate::mock::VoterSnapshotPerBlock::set(2);
-
-			// Signed phase opens just fine.
-			roll_to(15);
-			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-
-			assert_eq!(
-				MultiPhase::snapshot_metadata().unwrap(),
-				SolutionOrSnapshotSize { voters: 2, targets: 4 }
-			);
 		})
 	}
 

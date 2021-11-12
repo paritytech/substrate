@@ -494,7 +494,7 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
-	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
+	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
@@ -508,7 +508,6 @@ impl onchain::Config for Runtime {
 }
 
 impl pallet_staking::Config for Runtime {
-	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
@@ -535,6 +534,8 @@ impl pallet_staking::Config for Runtime {
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
+	// each nominator is allowed a fix number of nomination targets.
+	type NominationQuota = pallet_staking::FixedNominationQuota<Balance, MAX_NOMINATIONS>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 
@@ -563,10 +564,9 @@ parameter_types! {
 		.max
 		.get(DispatchClass::Normal);
 
-	// BagsList allows a practically unbounded count of nominators to participate in NPoS elections.
-	// To ensure we respect memory limits when using the BagsList this must be set to a number of
-	// voters we know can fit into a single vec allocation.
-	pub const VoterSnapshotPerBlock: u32 = 10_000;
+	// Our allocator can handle up to 32 MiB, we limit everything to 8 at most to be safe.
+	pub const VoterSnapshotSizePerBlock: u32 = 8 * 1024 * 1024;
+	pub const TargetSnapshotSize: u32 = 1 * 1024 * 1024;
 }
 
 sp_npos_elections::generate_solution_type!(
@@ -647,10 +647,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
 		OffchainRandomBalancing,
 	>;
-	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
+	type VoterSnapshotSizePerBlock = VoterSnapshotSizePerBlock;
+	type TargetSnapshotSize = TargetSnapshotSize;
+	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type BenchmarkingConfig = BenchmarkConfig;
-	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 }
 
 parameter_types! {

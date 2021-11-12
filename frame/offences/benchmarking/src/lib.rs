@@ -43,7 +43,7 @@ use pallet_session::{
 	Config as SessionConfig, SessionManager,
 };
 use pallet_staking::{
-	Config as StakingConfig, Event as StakingEvent, Exposure, IndividualExposure,
+	Config as StakingConfig, Event as StakingEvent, Exposure, IndividualExposure, NominationQuota,
 	Pallet as Staking, RewardDestination, ValidatorPrefs,
 };
 
@@ -275,7 +275,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::NominationQuota::ABSOLUTE_MAXIMUM);
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -381,7 +381,7 @@ benchmarks! {
 	}
 
 	report_offence_grandpa {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::NominationQuota::ABSOLUTE_MAXIMUM);
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
@@ -416,7 +416,7 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::NominationQuota::ABSOLUTE_MAXIMUM);
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1

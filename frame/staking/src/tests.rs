@@ -1966,8 +1966,8 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 			assert_eq!(
 				supports,
 				vec![
-					(21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
-					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
+					(21, Support { total: 1800, voters: vec![(1, 400), (3, 400), (21, 1000)] }),
+					(31, Support { total: 2200, voters: vec![(1, 600), (3, 600), (31, 1000)] })
 				],
 			);
 		});
@@ -2010,8 +2010,8 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			assert_eq!(
 				supports,
 				vec![
-					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
-					(21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
+					(11, Support { total: 1500, voters: vec![(1, 500), (11, 1000)] }),
+					(21, Support { total: 2500, voters: vec![(1, 500), (3, 1000), (21, 1000)] })
 				],
 			);
 		});
@@ -3983,18 +3983,6 @@ mod election_data_provider {
 	use frame_election_provider_support::ElectionDataProvider;
 
 	#[test]
-	fn targets_2sec_block() {
-		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
-		{
-			validators += 1;
-		}
-
-		println!("Can create a snapshot of {} validators in 2sec block", validators);
-	}
-
-	#[test]
 	fn voters_2sec_block() {
 		// we assume a network only wants up to 1000 validators in most cases, thus having 2000
 		// candidates is as high as it gets.
@@ -4003,8 +3991,11 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters_bounded(
+			validators,
+			nominators,
+			slashing_spans,
+		) < 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -4070,10 +4061,20 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn respects_snapshot_len_limits() {
+	fn get_npos_voters_works() {
 		ExtBuilder::default()
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
+				let limit_for = |c| {
+					Some(
+						Staking::voters(None)
+							.unwrap()
+							.into_iter()
+							.take(c)
+							.collect::<Vec<_>>()
+							.encoded_size(),
+					)
+				};
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
 				assert_eq!(
 					<Test as Config>::SortedListProvider::count() +
@@ -4081,103 +4082,99 @@ mod election_data_provider {
 					5
 				);
 
+				// unbounded:
+				assert_eq!(
+					Staking::voters(None).unwrap(),
+					vec![
+						(101, 500, vec![11, 21]), // 8 + 8 + (8 * 2) + 1 = 33
+						(31, 500, vec![31]),      // 8 + 8 + 8 + 1 = 25
+						(41, 1000, vec![41]),
+						(21, 1000, vec![21]),
+						(11, 1000, vec![11]),
+					]
+				);
+
 				// if limits is less..
-				assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
+				// let's check one of the manually for some mental practice
+				assert_eq!(limit_for(2).unwrap(), 33 + 25 + 1);
+				assert_eq!(Staking::voters(limit_for(2)).unwrap().len(), 2);
+
+				// edge-case: we have enough size only for all validators, and none of the
+				// nominators.
+				let limit_validators = limit_for(<Validators<Test>>::iter().count());
+				assert_eq!(Staking::voters(limit_validators).unwrap().len(), 4);
 
 				// if limit is equal..
-				assert_eq!(Staking::voters(Some(5)).unwrap().len(), 5);
+				assert_eq!(Staking::voters(limit_for(5)).unwrap().len(), 5);
 
 				// if limit is more.
-				assert_eq!(Staking::voters(Some(55)).unwrap().len(), 5);
-
-				// if target limit is more..
-				assert_eq!(Staking::targets(Some(6)).unwrap().len(), 4);
-				assert_eq!(Staking::targets(Some(4)).unwrap().len(), 4);
-
-				// if target limit is less, then we return an error.
-				assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+				assert_eq!(Staking::voters(Some(limit_for(5).unwrap() * 2)).unwrap().len(), 5);
 			});
 	}
 
 	#[test]
-	fn only_iterates_max_2_times_nominators_quota() {
+	fn respects_targets_snapshot_len_limits() {
 		ExtBuilder::default()
-			.nominate(true) // add nominator 101, who nominates [11, 21]
-			// the other nominators only nominate 21
-			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(71, 70, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(81, 80, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
-				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![61, 71, 81, 101]
-				);
+				let limit_for = |c| {
+					Some(
+						Staking::targets(None)
+							.unwrap()
+							.into_iter()
+							.take(c)
+							.collect::<Vec<_>>()
+							.encoded_size(),
+					)
+				};
 
-				// and total voters
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					7
-				);
+				// all targets:
+				assert_eq!(<Validators<Test>>::iter().count() as u32, 4);
 
-				// roll to session 5
-				run_to_block(25);
+				// unbounded:
+				assert_eq!(Staking::targets(None).unwrap().len(), 4);
 
-				// slash 21, the only validator nominated by our first 3 nominators
-				add_slash(&21);
+				// if target limit is more..
+				assert_eq!(Staking::targets(limit_for(8)).unwrap().len(), 4);
+				assert_eq!(Staking::targets(limit_for(4)).unwrap().len(), 4);
 
-				// we take 4 voters: 2 validators and 2 nominators (so nominators quota = 2)
-				assert_eq!(
-					Staking::voters(Some(3))
-						.unwrap()
-						.iter()
-						.map(|(stash, _, _)| stash)
-						.copied()
-						.collect::<Vec<_>>(),
-					vec![31, 11], // 2 validators, but no nominators because we hit the quota
-				);
-			});
+				// if target limit is less..
+				assert_eq!(Staking::targets(limit_for(3)).unwrap().len(), 3);
+				assert_eq!(Staking::targets(limit_for(1)).unwrap().len(), 1);
+			})
 	}
 
-	// Even if some of the higher staked nominators are slashed, we still get up to max len voters
-	// by adding more lower staked nominators. In other words, we assert that we keep on adding
-	// valid nominators until we reach max len voters; which is opposed to simply stopping after we
-	// have iterated max len voters, but not adding all of them to voters due to some nominators not
-	// having valid targets.
+	// Even if some of the higher staked nominators are slashed, we don't get up to max len voters
+	// by adding more lower staked nominators.
 	#[test]
 	fn get_max_len_voters_even_if_some_nominators_are_slashed() {
 		ExtBuilder::default()
 			.nominate(true) // add nominator 101, who nominates [11, 21]
 			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
-			//                                 61 only nominates validator 21 ^^
 			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
-				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![101, 61, 71]
-				);
-
-				// and total voters
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					6
-				);
+				// given
+				assert_eq!(validator_ids(), vec![31, 21, 11]);
+				assert_eq!(nominator_ids(), vec![101, 71, 61]);
 
 				// we take 5 voters
+				let limit_5 = Staking::voters(None)
+					.unwrap()
+					.into_iter()
+					.take(5)
+					.collect::<Vec<_>>()
+					.encoded_size();
 				assert_eq!(
-					Staking::voters(Some(5))
+					Staking::voters(Some(limit_5))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					// then
 					vec![
-						31, 21, 11, // 3 nominators
-						101, 61 // 2 validators, and 71 is excluded
+						31, 21, 11, // all validators are included
+						// and 2 nominator, and 71 is excluded, because it has less stake.
+						101, 61,
 					],
 				);
 
@@ -4188,8 +4185,14 @@ mod election_data_provider {
 				add_slash(&21);
 
 				// we take 4 voters
+				let limit_4 = Staking::voters(None)
+					.unwrap()
+					.into_iter()
+					.take(4)
+					.collect::<Vec<_>>()
+					.encoded_size();
 				assert_eq!(
-					Staking::voters(Some(4))
+					Staking::voters(Some(limit_4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4197,7 +4200,9 @@ mod election_data_provider {
 						.collect::<Vec<_>>(),
 					vec![
 						31, 11, // 2 validators (21 was slashed)
-						101, 71 // 2 nominators, excluding 61
+						101,
+						/* 61 is skipped, since it has a slash now. 71 is not included, because
+						 * we still count that as part of the byte `size_limit`. */
 					],
 				);
 			});
@@ -4546,6 +4551,30 @@ fn capped_stakers_works() {
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
 	})
+}
+
+#[test]
+fn update_slashed_nominator_works() {
+	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		start_active_era(1);
+
+		// 101 nominates 11 by default.
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+
+		// can't update them at all.
+		assert_noop!(Staking::update_slashed_nominator(Origin::signed(31), 101), "not slashed");
+
+		// but it gets slashed.
+		add_slash(&11);
+		start_active_era(2);
+
+		// 11 is cleaned now.
+		assert_ok!(Staking::update_slashed_nominator(Origin::signed(31), 101));
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![21]);
+
+		// can't repeat either
+		assert_noop!(Staking::update_slashed_nominator(Origin::signed(31), 101), "not slashed");
+	});
 }
 
 mod sorted_list_provider {

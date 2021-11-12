@@ -40,9 +40,9 @@ pub use impls::*;
 
 use crate::{
 	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, NominationQuota, Nominations,
+	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
+	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -88,9 +88,6 @@ pub mod pallet {
 			Self::BlockNumber,
 			DataProvider = Pallet<Self>,
 		>;
-
-		/// Maximum number of nominations per nominator.
-		const MAX_NOMINATIONS: u32;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -150,16 +147,18 @@ pub mod pallet {
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
+		/// Something that can dictate the number of nominations allowed per nominator.
+		type NominationQuota: NominationQuota<BalanceOf<Self>>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
-		fn MaxNominations() -> u32 {
-			T::MAX_NOMINATIONS
+		#[pallet::constant_name(MaxNominations)]
+		fn max_nominations() -> u32 {
+			T::NominationQuota::ABSOLUTE_MAXIMUM
 		}
 	}
 
@@ -973,12 +972,6 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		///
-		/// # <weight>
-		/// - The transaction's complexity is proportional to the size of `targets` (N)
-		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
-		/// - Both the reads and writes follow a similar pattern.
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
 		pub fn nominate(
 			origin: OriginFor<T>,
@@ -1004,7 +997,14 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
+
+			ensure!(
+				targets.len() as u32 <=
+					T::NominationQuota::nomination_quota(Self::slashable_balance_of(
+						&ledger.stash
+					)),
+				Error::<T>::TooManyTargets
+			);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 
@@ -1594,6 +1594,34 @@ pub mod pallet {
 
 			Self::chill_stash(&stash);
 			Ok(())
+		}
+
+		/// Update a nominator's nomination, if some of their nomination targets have been slashed.
+		///
+		/// These votes are effectively being stripped in the election process. Removing them via
+		/// this extrinsic will be a pre-emptive cleanup that benefits the chain.
+		///
+		/// Returns the transaction fee upon successful execution.
+		#[pallet::weight(0)]
+		pub fn update_slashed_nominator(
+			origin: OriginFor<T>,
+			stash: T::AccountId,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin);
+			Nominators::<T>::try_mutate(stash, |maybe_nomination| {
+				if let Some(Nominations { targets, submitted_in, suppressed: _ }) = maybe_nomination
+				{
+					let initial_len = targets.len();
+					targets.retain(|v| {
+						SlashingSpans::<T>::get(v)
+							.map_or(true, |spans| *submitted_in >= spans.last_nonzero_slash())
+					});
+					if initial_len != targets.len() {
+						return Ok(Pays::No.into())
+					}
+				}
+				Err("not slashed".into())
+			})
 		}
 	}
 }

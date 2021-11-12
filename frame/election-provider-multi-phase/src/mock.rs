@@ -268,7 +268,17 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
-	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
+	pub static VoterSnapshotSizePerBlock: u32 = 4 * 1024 * 1024;
+	pub static TargetSnapshotSize: u32 = 1 * 1024 * 1024;
+
+	// TODO: we want a test to see:
+	// - how many nominators we can create in a normal distribution, for a runtime
+	// - what is the maximum number of nominators that we can create, for a runtime.
+	// - with this work we are potentially allowing more NUMBER of nominators, with the same amount
+	//   of byte size to enter the system. We need to make sure nothing else breaks elsewhere down
+	//   the road.
+	// - make sure both of the above run in wasm.
+	// - For all of this, we need a `pallet-election-playground`.
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChianFallback: bool = true;
@@ -402,7 +412,8 @@ impl crate::Config for Runtime {
 	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
-	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
+	type VoterSnapshotSizePerBlock = VoterSnapshotSizePerBlock;
+	type TargetSnapshotSize = TargetSnapshotSize;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -422,10 +433,10 @@ pub struct ExtBuilder {}
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn targets(maybe_max_size: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
-		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
+		if maybe_max_size.map_or(false, |max_len| targets.encoded_size() > max_len) {
 			return Err("Targets too big")
 		}
 
@@ -433,11 +444,19 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	}
 
 	fn voters(
-		maybe_max_len: Option<usize>,
+		maybe_max_size: Option<usize>,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 		let mut voters = Voters::get();
-		if let Some(max_len) = maybe_max_len {
-			voters.truncate(max_len)
+
+		if let Some(max_len) = maybe_max_size {
+			while voters.encoded_size() > max_len && !voters.is_empty() {
+				log::trace!(
+					target: crate::LOG_TARGET,
+					"staking-mock: truncating length to {}",
+					voters.len() - 1
+				);
+				let _ = voters.pop();
+			}
 		}
 
 		Ok(voters)
@@ -485,6 +504,82 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		let mut current = Voters::get();
 		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
 		Voters::set(current);
+	}
+}
+
+#[cfg(test)]
+mod staking_mock {
+	use super::*;
+
+	#[test]
+	fn snapshot_too_big_failure_onchain_fallback() {
+		// the `StakingMock` is designed such that if it has too many targets, it simply fails.
+		ExtBuilder::default().build_and_execute(|| {
+			// 1 byte won't allow for anything.
+			TargetSnapshotSize::set(1);
+
+			// Signed phase failed to open.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// Unsigned phase failed to open.
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// On-chain backup works though.
+			roll_to(29);
+			let supports = MultiPhase::elect().unwrap();
+			assert!(supports.len() > 0);
+		});
+	}
+
+	#[test]
+	fn snapshot_too_big_failure_no_fallback() {
+		// .. and if the backup mode is nothing, we go into the emergency mode..
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			TargetSnapshotSize::set(1);
+
+			// Signed phase failed to open.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// Unsigned phase failed to open.
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// emergency phase has started.
+			roll_to(29);
+			let err = MultiPhase::elect().unwrap_err();
+			assert_eq!(err, ElectionError::Fallback("NoFallback."));
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+		});
+	}
+
+	#[test]
+	fn snapshot_voter_too_big_truncate() {
+		// if there are too many voters, we simply truncate them.
+		ExtBuilder::default().build_and_execute(|| {
+			// we have 8 voters in total.
+			assert_eq!(crate::mock::Voters::get().len(), 8);
+
+			// the byte-size of taking the first two voters.
+			let limit_2 = crate::mock::Voters::get()
+				.into_iter()
+				.take(2)
+				.collect::<Vec<_>>()
+				.encoded_size() as u32;
+			crate::mock::VoterSnapshotSizePerBlock::set(limit_2);
+
+			// Signed phase opens just fine.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+			// snapshot has only two voters.
+			assert_eq!(
+				MultiPhase::snapshot_metadata().unwrap(),
+				SolutionOrSnapshotSize { voters: 2, targets: 4 }
+			);
+		})
 	}
 }
 

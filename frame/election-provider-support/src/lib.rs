@@ -180,28 +180,30 @@ pub mod data_provider {
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// Maximum number of votes per voter that this data provider is providing.
+	///
+	/// Note that this is the absolute maximum, less votes is also possible.
 	const MAXIMUM_VOTES_PER_VOTER: u32;
 
 	/// All possible targets for the election, i.e. the candidates.
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
+	/// If `maybe_max_size` is `Some(v)` then the size of the resulting vector MUST NOT be more than
+	/// `v` bytes.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>>;
+	fn targets(maybe_max_size: Option<usize>) -> data_provider::Result<Vec<AccountId>>;
 
 	/// All possible voters for the election.
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
-	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
-	/// long.
+	/// If `maybe_max_size` is `Some(v)` then the size of the resulting vector MUST NOT be more than
+	/// `v` bytes.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn voters(
-		maybe_max_len: Option<usize>,
+		maybe_max_size: Option<usize>,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>;
 
 	/// The number of targets to elect.
@@ -250,11 +252,11 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}
 	fn voters(
-		_maybe_max_len: Option<usize>,
+		_: Option<usize>,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 		Ok(Default::default())
 	}

@@ -799,3 +799,75 @@ where
 		R::is_known_offence(offenders, time_slot)
 	}
 }
+
+/// Something that can dictate the maximum number of nominations per nominator.
+pub trait NominationQuota<Balance> {
+	/// The absolute maximum number that this trait can return.
+	// NOTE: this is useful for generating the compact solution type, i.e.
+	// `sp_npos_elections::generate_solution_type`.
+	const ABSOLUTE_MAXIMUM: u32;
+
+	/// Determine the number of nominations that an account with `balance` at stake is allowed to
+	/// have.
+	fn nomination_quota(balance: Balance) -> u32;
+}
+
+/// A nomination quota descriptor that allows `MAX` for all nominators.
+pub struct FixedNominationQuota<const MAX: u32>;
+impl<Balance, const MAX: u32> NominationQuota<Balance> for FixedNominationQuota<MAX> {
+	const ABSOLUTE_MAXIMUM: u32 = MAX;
+
+	fn nomination_quota(_: Balance) -> u32 {
+		MAX
+	}
+}
+
+use sp_runtime::{
+	traits::{One, UniqueSaturatedInto},
+	SaturatedConversion,
+};
+
+/// An implementation of a linear nomination distribution.
+///
+/// TODO: ideally we want this to be a const expression all the way through, no point in
+/// re-computing this on the fly. For now we stick to a runtime placeholder.
+///
+///  Essentially, draws a line between `(MinBalance, MinQuota)` and `(MaxBalance, MaxQuota)`, Also,
+/// values less than `MinBalance` have `MinQuota` and values higher than `MaxBalance` have
+/// `MaxQuota`.
+pub struct LinearNominationQuota<MinBalance, MaxBalance, const MAX_QUOTA: u32, const MIN_QUOTA: u32>(
+	sp_std::marker::PhantomData<(MinBalance, MaxBalance)>,
+);
+impl<Balance, MinBalance, MaxBalance, const MAX_QUOTA: u32, const MIN_QUOTA: u32>
+	NominationQuota<Balance> for LinearNominationQuota<MinBalance, MaxBalance, MIN_QUOTA, MAX_QUOTA>
+where
+	MinBalance: Get<Balance>,
+	MaxBalance: Get<Balance>,
+	Balance: From<u32>
+		+ Copy
+		+ UniqueSaturatedInto<u32>
+		+ One
+		+ Ord
+		+ sp_std::ops::Sub<Balance, Output = Balance>
+		+ sp_std::ops::Div<Balance, Output = Balance>,
+{
+	const ABSOLUTE_MAXIMUM: u32 = MAX_QUOTA;
+
+	fn nomination_quota(balance: Balance) -> u32 {
+		if balance < MinBalance::get() {
+			MIN_QUOTA
+		} else if balance >= MinBalance::get() && balance < MaxBalance::get() {
+			let min_quota: Balance = MIN_QUOTA.into();
+			let max_quota: Balance = MAX_QUOTA.into();
+			// per this much balance, the quota increases per one (reverse of slope).
+			let balance_per_quota_inc =
+				(balance - MinBalance::get()) / (min_quota - max_quota).max(One::one());
+			// this many increments happens to the quota.
+			let inc_steps = (balance - MinBalance::get()) / balance_per_quota_inc.max(One::one());
+
+			MIN_QUOTA + inc_steps.saturated_into::<u32>()
+		} else {
+			MAX_QUOTA
+		}
+	}
+}

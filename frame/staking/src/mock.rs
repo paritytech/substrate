@@ -252,7 +252,6 @@ impl onchain::Config for Test {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -271,6 +270,7 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
+	type NominationQuota = FixedNominationQuota<16>;
 	type WeightInfo = ();
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
@@ -852,4 +852,12 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+pub(crate) fn validator_ids() -> Vec<AccountId> {
+	Validators::<Test>::iter().map(|(v, _)| v).collect()
+}
+
+pub(crate) fn nominator_ids() -> Vec<AccountId> {
+	Nominators::<Test>::iter().map(|(n, _)| n).collect()
 }
