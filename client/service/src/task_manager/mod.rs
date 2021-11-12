@@ -86,7 +86,7 @@ impl SpawnTaskHandle {
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
-		self.spawn_inner(name, group, task, TaskType::Blocking)
+		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
 	/// Spawns the blocking task with the given name. See also `spawn`.
