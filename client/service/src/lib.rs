@@ -313,10 +313,10 @@ fn start_rpc_servers<R>(
 	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
-	R: FnOnce(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
+	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
 {
-	fn deny_unsafe(addrs: &[SocketAddr], methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
-		let is_exposed_addr = addrs.iter().any(|addr| !addr.ip().is_loopback());
+	fn deny_unsafe(addr: SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
+		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
 			| (_, RpcMethods::Unsafe) | (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
 			_ => sc_rpc::DenyUnsafe::Yes,
@@ -326,17 +326,11 @@ where
 	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
 	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().unwrap());
 
-	// TODO(niklasad1): this force the same policy even if the one of the addresses is
-	// local only.
-	//
-	// Ideally we should have to different builders but annoying refactoring to do...
-	let module = gen_rpc_module(deny_unsafe(&[ws_addr, http_addr], &config.rpc_methods))?;
-
 	let http = sc_rpc_server::start_http(
 		http_addr,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
-		module.clone(),
+		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 	)
 	.map_err(|e| Error::Application(e.into()))?;
@@ -346,7 +340,7 @@ where
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
-		module,
+		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 	)
 	.map_err(|e| Error::Application(e.into()))?;
