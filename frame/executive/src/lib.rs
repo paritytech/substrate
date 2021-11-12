@@ -924,6 +924,7 @@ mod tests {
 					)
 					.into(),
 					digest: Digest { logs: vec![] },
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -944,6 +945,7 @@ mod tests {
 					)
 					.into(),
 					digest: Digest { logs: vec![] },
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -964,6 +966,7 @@ mod tests {
 					.into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![] },
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
