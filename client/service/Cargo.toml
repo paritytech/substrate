@@ -69,7 +69,7 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-build
 sc-informant = { version = "0.10.0-dev", path = "../informant" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 tracing = "0.1.29"
