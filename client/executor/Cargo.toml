@@ -2,7 +2,7 @@
 name = "sc-executor"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -20,8 +20,8 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-tasks = { version = "4.0.0-dev", path = "../../primitives/tasks" }
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
-sp-panic-handler = { version = "3.0.0", path = "../../primitives/panic-handler" }
-wasmi = "0.9.0"
+sp-panic-handler = { version = "4.0.0-dev", path = "../../primitives/panic-handler" }
+wasmi = "0.9.1"
 lazy_static = "1.4.0"
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-wasm-interface = { version = "4.0.0-dev", path = "../../primitives/wasm-interface" }
@@ -42,7 +42,7 @@ sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-maybe-compressed-blob = { version = "4.0.0-dev", path = "../../primitives/maybe-compressed-blob" }
+sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing = "0.1.29"
 tracing-subscriber = "0.2.19"

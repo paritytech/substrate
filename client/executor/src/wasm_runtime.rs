@@ -356,7 +356,6 @@ fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 
 fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 	use sp_api::RUNTIME_API_INFO_SIZE;
-	use std::convert::TryFrom;
 
 	apis.chunks(RUNTIME_API_INFO_SIZE)
 		.map(|chunk| {

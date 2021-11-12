@@ -18,7 +18,6 @@
 //! Tools for analyzing the benchmark results.
 
 use crate::BenchmarkResult;
-use core::convert::TryFrom;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use std::collections::BTreeMap;
 

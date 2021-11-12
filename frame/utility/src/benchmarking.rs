@@ -30,6 +30,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 benchmarks! {
+	where_clause { where <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin: Clone }
 	batch {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
@@ -63,6 +64,14 @@ benchmarks! {
 	verify {
 		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
+
+	dispatch_as {
+		let caller = account("caller", SEED, SEED);
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+		let origin: T::Origin = RawOrigin::Signed(caller).into();
+		let pallets_origin: <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();
+		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin.clone());
+	}: _(RawOrigin::Root, Box::new(pallets_origin), call)
 
 	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
 }

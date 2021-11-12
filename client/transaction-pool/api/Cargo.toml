@@ -2,7 +2,7 @@
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -12,7 +12,7 @@ description = "Transaction pool client facing API."
 futures = { version = "0.3.1"  }
 log = { version = "0.4.8" }
 serde = { version = "1.0.126", features = ["derive"] }
-thiserror = { version = "1.0.21" }
+thiserror = { version = "1.0.30" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
 derive_more = { version = "0.99.11" }

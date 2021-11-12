@@ -3,7 +3,7 @@ name = "sc-cli"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -25,7 +25,7 @@ rand = "0.7.3"
 tiny-bip39 = "0.8.2"
 serde_json = "1.0.68"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sp-panic-handler = { version = "3.0.0", path = "../../primitives/panic-handler" }
+sp-panic-handler = { version = "4.0.0-dev", path = "../../primitives/panic-handler" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
@@ -42,7 +42,7 @@ structopt = "0.3.8"
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
 serde = "1.0.126"
-thiserror = "1.0.21"
+thiserror = "1.0.30"
 rpassword = "5.0.0"
 
 [dev-dependencies]
