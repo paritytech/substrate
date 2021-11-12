@@ -8210,23 +8210,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-light"
-version = "4.0.0-dev"
-dependencies = [
- "hash-db",
- "parity-scale-codec",
- "parking_lot 0.11.1",
- "sc-client-api",
- "sc-executor",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-externalities",
- "sp-runtime",
- "sp-state-machine",
-]
-
-[[package]]
 name = "sc-network"
 version = "0.10.0-dev"
 dependencies = [
@@ -8558,7 +8541,6 @@ dependencies = [
  "sc-client-db",
  "sc-consensus",
  "sc-executor",
- "sc-light",
  "sc-network",
  "sc-service",
  "sc-transaction-pool-api",
@@ -10176,7 +10158,6 @@ dependencies = [
  "sc-client-db",
  "sc-consensus",
  "sc-executor",
- "sc-light",
  "sc-offchain",
  "sc-service",
  "serde",
@@ -10245,7 +10226,6 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
- "sc-light",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",

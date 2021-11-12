@@ -20,8 +20,8 @@
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Block as BlockT, DigestItemFor, HashFor, Header as HeaderT, NumberFor},
-	Justification, Justifications,
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	DigestItem, Justification, Justifications,
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -122,7 +122,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 /// Precomputed storage.
 pub enum StorageChanges<Block: BlockT, Transaction> {
 	/// Changes coming from block execution.
-	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
@@ -175,7 +175,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub justifications: Option<Justifications>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
-	pub post_digests: Vec<DigestItemFor<Block>>,
+	pub post_digests: Vec<DigestItem>,
 	/// The body of the block.
 	pub body: Option<Vec<Block::Extrinsic>>,
 	/// Indexed transaction body of the block.
