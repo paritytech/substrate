@@ -22,7 +22,6 @@
 
 use codec::{Decode, Encode};
 use jsonrpsee_ws_client::{types::v2::params::JsonRpcParams, WsClient, WsClientBuilder};
-use log::*;
 use sp_core::{
 	hashing::twox_128,
 	hexdisplay::HexDisplay,
@@ -82,10 +81,12 @@ jsonrpsee_proc_macros::rpc_client_api! {
 /// The execution mode.
 #[derive(Clone)]
 pub enum Mode<B: BlockT> {
-	/// Online.
+	/// Online. Potentially writes to a cache file.
 	Online(OnlineConfig<B>),
 	/// Offline. Uses a state snapshot file and needs not any client config.
 	Offline(OfflineConfig),
+	/// Prefer using a cache file if it exists, else use a remote server.
+	OfflineOrElseOnline(OfflineConfig, OnlineConfig<B>),
 }
 
 impl<B: BlockT> Default for Mode<B> {
@@ -101,6 +102,12 @@ impl<B: BlockT> Default for Mode<B> {
 pub struct OfflineConfig {
 	/// The configuration of the state snapshot file to use. It must be present.
 	pub state_snapshot: SnapshotConfig,
+}
+
+impl<P: Into<PathBuf>> From<P> for SnapshotConfig {
+	fn from(p: P) -> Self {
+		Self { path: p.into() }
+	}
 }
 
 /// Description of the transport protocol (for online execution).
@@ -231,6 +238,7 @@ impl<B: BlockT> Builder<B> {
 	fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
 			Mode::Online(config) => &config,
+			Mode::OfflineOrElseOnline(_, config) => &config,
 			_ => panic!("Unexpected mode: Online"),
 		}
 	}
@@ -238,6 +246,7 @@ impl<B: BlockT> Builder<B> {
 	fn as_online_mut(&mut self) -> &mut OnlineConfig<B> {
 		match &mut self.mode {
 			Mode::Online(config) => config,
+			Mode::OfflineOrElseOnline(_, config) => config,
 			_ => panic!("Unexpected mode: Online"),
 		}
 	}
@@ -250,19 +259,19 @@ impl<B: BlockT> Builder<B> {
 		key: StorageKey,
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
-		trace!(target: LOG_TARGET, "rpc: get_storage");
+		log::trace!(target: LOG_TARGET, "rpc: get_storage");
 		RpcApi::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at)
 			.await
 			.map_err(|e| {
-				error!(target: LOG_TARGET, "Error = {:?}", e);
+				log::error!(target: LOG_TARGET, "Error = {:?}", e);
 				"rpc get_storage failed."
 			})
 	}
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
-		trace!(target: LOG_TARGET, "rpc: finalized_head");
+		log::trace!(target: LOG_TARGET, "rpc: finalized_head");
 		RpcApi::<B>::finalized_head(self.as_online().rpc_client()).await.map_err(|e| {
-			error!(target: LOG_TARGET, "Error = {:?}", e);
+			log::error!(target: LOG_TARGET, "Error = {:?}", e);
 			"rpc finalized_head failed."
 		})
 	}
@@ -285,7 +294,7 @@ impl<B: BlockT> Builder<B> {
 			)
 			.await
 			.map_err(|e| {
-				error!(target: LOG_TARGET, "Error = {:?}", e);
+				log::error!(target: LOG_TARGET, "Error = {:?}", e);
 				"rpc get_keys failed"
 			})?;
 			let page_len = page.len();
@@ -293,12 +302,12 @@ impl<B: BlockT> Builder<B> {
 			all_keys.extend(page);
 
 			if page_len < PAGE as usize {
-				debug!(target: LOG_TARGET, "last page received: {}", page_len);
+				log::debug!(target: LOG_TARGET, "last page received: {}", page_len);
 				break all_keys
 			} else {
 				let new_last_key =
 					all_keys.last().expect("all_keys is populated; has .last(); qed");
-				debug!(
+				log::debug!(
 					target: LOG_TARGET,
 					"new total = {}, full page received: {:?}",
 					all_keys.len(),
@@ -324,7 +333,11 @@ impl<B: BlockT> Builder<B> {
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
+<<<<<<< HEAD
 		debug!(target: LOG_TARGET, "Querying a total of {} top keys", keys.len());
+=======
+		log::debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
+>>>>>>> ecr-state-update-host
 
 		let mut key_values: Vec<KeyPair> = vec![];
 		let client = self.as_online().rpc_client();
@@ -364,7 +377,7 @@ impl<B: BlockT> Builder<B> {
 				key_values.push((key.clone(), value));
 				if key_values.len() % (10 * BATCH_SIZE) == 0 {
 					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
-					debug!(
+					log::debug!(
 						target: LOG_TARGET,
 						"progress = {:.2} [{} / {}]",
 						ratio,
@@ -381,15 +394,22 @@ impl<B: BlockT> Builder<B> {
 
 // Internal methods
 impl<B: BlockT> Builder<B> {
+<<<<<<< HEAD
 	/// Save the given data to the top keys snapshot.
 	fn save_top_snapshot(&self, data: &[KeyPair], path: &PathBuf) -> Result<(), &'static str> {
 		let mut path = path.clone();
 		path.set_extension("top");
 		debug!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
+=======
+	/// Save the given data as state snapshot.
+	fn save_state_snapshot(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
+		log::debug!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
+>>>>>>> ecr-state-update-host
 		fs::write(path, data.encode()).map_err(|_| "fs::write failed.")?;
 		Ok(())
 	}
 
+<<<<<<< HEAD
 	/// Save the given data to the child keys snapshot.
 	fn save_child_snapshot(
 		&self,
@@ -415,6 +435,11 @@ impl<B: BlockT> Builder<B> {
 		let mut path = path.clone();
 		path.set_extension("child");
 		info!(target: LOG_TARGET, "loading child key-pairs from snapshot {:?}", path);
+=======
+	/// initialize `Self` from state snapshot. Panics if the file does not exist.
+	fn load_state_snapshot(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
+		log::info!(target: LOG_TARGET, "scraping key-pairs from state snapshot {:?}", path);
+>>>>>>> ecr-state-update-host
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
@@ -497,14 +522,14 @@ impl<B: BlockT> Builder<B> {
 			.at
 			.expect("online config must be initialized by this point; qed.")
 			.clone();
-		info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
+		log::info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
 
 		let mut keys_and_values = if config.pallets.len() > 0 {
 			let mut filtered_kv = vec![];
 			for f in config.pallets.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
 				let module_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
-				info!(
+				log::info!(
 					target: LOG_TARGET,
 					"downloaded data for module {} (count: {} / prefix: {:?}).",
 					f,
@@ -515,12 +540,12 @@ impl<B: BlockT> Builder<B> {
 			}
 			filtered_kv
 		} else {
-			info!(target: LOG_TARGET, "downloading data for all pallets.");
+			log::info!(target: LOG_TARGET, "downloading data for all pallets.");
 			self.rpc_get_pairs_paged(StorageKey(vec![]), at).await?
 		};
 
 		for prefix in &self.hashed_prefixes {
-			info!(
+			log::info!(
 				target: LOG_TARGET,
 				"adding data for hashed prefix: {:?}",
 				HexDisplay::from(prefix)
@@ -532,7 +557,11 @@ impl<B: BlockT> Builder<B> {
 
 		for key in &self.hashed_keys {
 			let key = StorageKey(key.to_vec());
-			info!(target: LOG_TARGET, "adding data for hashed key: {:?}", HexDisplay::from(&key));
+			log::info!(
+				target: LOG_TARGET,
+				"adding data for hashed key: {:?}",
+				HexDisplay::from(&key)
+			);
 			let value = self.rpc_get_storage(key.clone(), Some(at)).await?;
 			keys_and_values.push((key, value));
 		}
@@ -542,7 +571,7 @@ impl<B: BlockT> Builder<B> {
 
 	pub(crate) async fn init_remote_client(&mut self) -> Result<(), &'static str> {
 		let mut online = self.as_online_mut();
-		debug!(target: LOG_TARGET, "initializing remote client to {:?}", online.transport.uri);
+		log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", online.transport.uri);
 
 		// First, initialize the ws client.
 		let ws_client = WsClientBuilder::default()
@@ -575,11 +604,23 @@ impl<B: BlockT> Builder<B> {
 				}
 				top_kp
 			},
+			Mode::OfflineOrElseOnline(offline_config, online_config) => {
+				if let Ok(kv) = self.load_state_snapshot(&offline_config.state_snapshot.path) {
+					kv
+				} else {
+					self.init_remote_client().await?;
+					let kp = self.load_remote().await?;
+					if let Some(c) = online_config.state_snapshot {
+						self.save_state_snapshot(&kp, &c.path)?;
+					}
+					kp
+				}
+			},
 		};
 
 		// inject manual key values.
 		if !self.hashed_key_values.is_empty() {
-			debug!(
+			log::debug!(
 				target: LOG_TARGET,
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
@@ -589,7 +630,7 @@ impl<B: BlockT> Builder<B> {
 
 		// exclude manual key values.
 		if !self.hashed_blacklist.is_empty() {
-			debug!(
+			log::debug!(
 				target: LOG_TARGET,
 				"excluding externalities from {} keys",
 				self.hashed_blacklist.len()
@@ -677,6 +718,7 @@ impl<B: BlockT> Builder<B> {
 
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
+<<<<<<< HEAD
 		let state_version = self.state_version.clone();
 		let (top_kv, child_kv) = self.pre_build().await?;
 		let mut ext = TestExternalities::new_with_code_and_state(
@@ -692,6 +734,16 @@ impl<B: BlockT> Builder<B> {
 				continue
 			}
 			ext.insert(k.0, v.0);
+=======
+		let kv = self.pre_build().await?;
+		let mut ext = TestExternalities::new_empty();
+
+		log::info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
+		for (k, v) in kv {
+			let (k, v) = (k.0, v.0);
+			// Insert the key,value pair into the test trie backend
+			ext.insert(k, v);
+>>>>>>> ecr-state-update-host
 		}
 
 		info!(
@@ -788,11 +840,54 @@ mod remote_tests {
 	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
+<<<<<<< HEAD
 	async fn can_build_one_big_pallet() {
+=======
+	async fn offline_else_online_works() {
+		init_logger();
+		// this shows that in the second run, we use the remote and create a cache.
+		Builder::<Block>::new()
+			.mode(Mode::OfflineOrElseOnline(
+				OfflineConfig {
+					state_snapshot: SnapshotConfig::new("test_snapshot_to_remove.bin"),
+				},
+				OnlineConfig {
+					pallets: vec!["Proxy".to_owned()],
+					state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
+					..Default::default()
+				},
+			))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+		// this shows that in the second run, we are not using the remote
+		Builder::<Block>::new()
+			.mode(Mode::OfflineOrElseOnline(
+				OfflineConfig {
+					state_snapshot: SnapshotConfig::new("test_snapshot_to_remove.bin"),
+				},
+				OnlineConfig {
+					pallets: vec!["Proxy".to_owned()],
+					state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
+					transport: "ws://non-existent:666".to_owned().into(),
+					..Default::default()
+				},
+			))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+	}
+
+	#[tokio::test]
+	async fn can_build_one_pallet() {
+>>>>>>> ecr-state-update-host
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["System".to_owned()],
+				pallets: vec!["Proxy".to_owned()],
 				..Default::default()
 			}))
 			.build()
@@ -806,6 +901,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
+<<<<<<< HEAD
 				transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
 				pallets: vec!["Council".to_owned()],
 				..Default::default()
@@ -819,6 +915,9 @@ mod remote_tests {
 			.mode(Mode::Online(OnlineConfig {
 				transport: "wss://rpc.polkadot.io".to_owned().into(),
 				pallets: vec!["Council".to_owned()],
+=======
+				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
+>>>>>>> ecr-state-update-host
 				..Default::default()
 			}))
 			.build()
@@ -828,7 +927,22 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
+<<<<<<< HEAD
 	async fn can_build_few_pallet() {
+=======
+	async fn sanity_check_decoding() {
+		use pallet_elections_phragmen::SeatHolder;
+		use sp_core::crypto::Ss58Codec;
+
+		type AccountId = sp_runtime::AccountId32;
+		type Balance = u128;
+		frame_support::generate_storage_alias!(
+			PhragmenElection,
+			Members =>
+			Value<Vec<SeatHolder<AccountId, Balance>>>
+		);
+
+>>>>>>> ecr-state-update-host
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
@@ -859,7 +973,7 @@ mod remote_tests {
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
 				state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
-				pallets: vec!["Balances".to_owned()],
+				pallets: vec!["Proxy".to_owned()],
 				..Default::default()
 			}))
 			.build()
@@ -867,7 +981,7 @@ mod remote_tests {
 			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
 
-		let to_delete = std::fs::read_dir(SnapshotConfig::default().path)
+		let to_delete = std::fs::read_dir(Path::new("."))
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
@@ -882,6 +996,7 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
+	#[ignore = "takes too much time on average."]
 	async fn can_fetch_all() {
 		init_logger();
 		Builder::<Block>::new()

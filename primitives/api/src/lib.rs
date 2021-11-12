@@ -646,8 +646,6 @@ pub const fn serialize_runtime_api_info(id: [u8; 8], version: u32) -> [u8; RUNTI
 
 /// Deserialize the runtime API info serialized by [`serialize_runtime_api_info`].
 pub fn deserialize_runtime_api_info(bytes: [u8; RUNTIME_API_INFO_SIZE]) -> ([u8; 8], u32) {
-	use sp_std::convert::TryInto;
-
 	let id: [u8; 8] = bytes[0..8]
 		.try_into()
 		.expect("the source slice size is equal to the dest array length; qed");
@@ -698,10 +696,36 @@ impl From<RuntimeVersion> for OldRuntimeVersion {
 	}
 }
 
+#[cfg(not(feature = "old_state"))]
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
 	#[api_version(4)]
+	pub trait Core {
+		/// Returns the version of the runtime.
+		fn version() -> RuntimeVersion;
+		/// Returns the version of the runtime.
+		#[changed_in(3)]
+		fn version() -> OldRuntimeVersion;
+		/// Execute the given block.
+		fn execute_block(block: Block);
+		/// Initialize a block with the given header.
+		#[renamed("initialise_block", 2)]
+		fn initialize_block(header: &<Block as BlockT>::Header);
+	}
+
+	/// The `Metadata` api trait that returns metadata for the runtime.
+	pub trait Metadata {
+		/// Returns the metadata of a runtime.
+		fn metadata() -> OpaqueMetadata;
+	}
+}
+
+#[cfg(feature = "old_state")]
+decl_runtime_apis! {
+	/// The `Core` runtime api that every Substrate runtime needs to implement.
+	#[core_trait]
+	#[api_version(3)]
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
