@@ -231,7 +231,7 @@ pub fn finalize_block() -> Header {
 		));
 	}
 
-	Header { number, extrinsics_root, state_root: storage_root, parent_hash, digest }
+	Header { number, extrinsics_root, state_root: storage_root, parent_hash, digest, seed: Default::default() }
 }
 
 #[inline(always)]

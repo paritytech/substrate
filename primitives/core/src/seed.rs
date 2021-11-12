@@ -5,7 +5,9 @@ use crate::hash::{H256, H512};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq, Default)]
+use scale_info::TypeInfo;
+
+#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq, Default, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 /// stores information needed to verify if 
 /// shuffling seed was generated properly

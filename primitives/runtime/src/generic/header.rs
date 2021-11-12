@@ -28,7 +28,7 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_core::U256;
+use sp_core::{U256, ShufflingSeed};
 use sp_std::{convert::TryFrom, fmt::Debug};
 
 /// Abstraction over a block header for a substrate chain.
@@ -52,6 +52,8 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub extrinsics_root: Hash::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<Hash::Output>,
+	/// Previous block extrinsics shuffling seed
+	pub seed: ShufflingSeed,
 }
 
 #[cfg(feature = "std")]
@@ -66,7 +68,8 @@ where
 			self.number.size_of(ops) +
 			self.state_root.size_of(ops) +
 			self.extrinsics_root.size_of(ops) +
-			self.digest.size_of(ops)
+			self.digest.size_of(ops) +
+			self.seed.size_of(ops)
 	}
 }
 
@@ -160,6 +163,12 @@ where
 		&mut self.digest
 	}
 
+	fn seed(&self) -> &ShufflingSeed{ &self.seed }
+
+	fn set_seed(& mut self,seed: ShufflingSeed){
+	    self.seed = seed;
+	}
+
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
@@ -167,7 +176,7 @@ where
 		parent_hash: Self::Hash,
 		digest: Digest<Self::Hash>,
 	) -> Self {
-		Self { number, extrinsics_root, state_root, parent_hash, digest }
+		Self { number, extrinsics_root, state_root, parent_hash, digest, seed: Default::default() }
 	}
 }
 
