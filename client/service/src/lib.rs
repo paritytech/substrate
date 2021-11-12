@@ -91,9 +91,8 @@ impl RpcHandlers {
 	/// would for example send.
 	///
 	/// Returns a `Future` that contains the optional response.
-	///
-	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
-	/// send back spontaneous events.
+	//
+	// TODO(niklasad1): support subscriptions?!.
 	pub async fn rpc_query<T: Serialize>(&self, method: &str, params: Vec<T>) -> Option<String> {
 		self.0.call_with(method, params).await
 	}
@@ -401,7 +400,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return Box::pin(futures::future::ready(TransactionImport::None))
+			return Box::pin(futures::future::ready(TransactionImport::None));
 		}
 
 		let encoded = transaction.encode();
@@ -409,8 +408,8 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad))
-			},
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
+			}
 		};
 
 		let best_block_id = BlockId::hash(self.client.info().best_hash);
@@ -424,18 +423,19 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
-						TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
+						TransactionImport::KnownGood
+					}
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
-					},
+					}
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						// it is not bad at least, just some internal node logic error, so peer is
 						// innocent.
 						TransactionImport::KnownGood
-					},
+					}
 				},
 			}
 		})
