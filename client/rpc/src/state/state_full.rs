@@ -437,9 +437,8 @@ where
 						(key, v)
 					})
 					.collect();
-				vec![StorageChangeSet { block, changes }]
+				StorageChangeSet { block, changes }
 			})
-			.unwrap_or_default(),
 		);
 
 		let fut = async move {
