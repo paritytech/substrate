@@ -32,7 +32,7 @@ use sp_consensus_babe::{
 };
 use sp_consensus_slots::Slot;
 use sp_core::{Pair, Public};
-use sp_runtime::traits::{DigestItemFor, Header};
+use sp_runtime::{traits::Header, DigestItem};
 
 /// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
@@ -61,10 +61,7 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 /// with each having different validation logic.
 pub(super) fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
-) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>>
-where
-	DigestItemFor<B>: CompatibleDigestItem,
-{
+) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
 	let VerificationParams { mut header, pre_digest, slot_now, epoch } = params;
 
 	let authorities = &epoch.authorities;
@@ -137,9 +134,9 @@ where
 	Ok(CheckedHeader::Checked(header, info))
 }
 
-pub(super) struct VerifiedHeaderInfo<B: BlockT> {
-	pub(super) pre_digest: DigestItemFor<B>,
-	pub(super) seal: DigestItemFor<B>,
+pub(super) struct VerifiedHeaderInfo {
+	pub(super) pre_digest: DigestItem,
+	pub(super) seal: DigestItem,
 	pub(super) author: AuthorityId,
 }
 
