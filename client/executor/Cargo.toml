@@ -37,7 +37,7 @@ sp-core-hashing-proc-macro = { version = "4.0.0-dev", path = "../../primitives/c
 
 [dev-dependencies]
 wat = "1.0"
-hex-literal = "0.3.3"
+hex-literal = "0.3.4"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
