@@ -971,7 +971,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Nominators<T>>::remove_all(None);
 		<CounterForNominators<T>>::kill();
 		<CounterForValidators<T>>::kill();
-		let _ = T::SortedListProvider::clear(None);
+		T::SortedListProvider::clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1307,13 +1307,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-	fn clear(maybe_count: Option<u32>) -> u32 {
-		Nominators::<T>::remove_all(maybe_count);
-		if let Some(count) = maybe_count {
-			CounterForNominators::<T>::mutate(|noms| *noms - count);
-			count
-		} else {
-			CounterForNominators::<T>::take()
-		}
+	fn clear() {
+		Nominators::<T>::remove_all(None);
+		CounterForNominators::<T>::take();
 	}
 }
