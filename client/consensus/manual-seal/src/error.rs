@@ -84,50 +84,42 @@ impl From<Error> for JsonRpseeError {
 				code: codes::BLOCK_IMPORT_FAILED,
 				message: format!("{:?}", e),
 				data: None,
-			}
-			.into(),
+			},
 			BlockNotFound(e) => CallError::Custom {
 				code: codes::BLOCK_NOT_FOUND,
 				message: format!("{:?}", e),
 				data: None,
-			}
-			.into(),
+			},
 			EmptyTransactionPool => CallError::Custom {
 				code: codes::EMPTY_TRANSACTION_POOL,
 				message: "Empty transaction pool".to_string(),
 				data: None,
-			}
-			.into(),
+			},
 			ConsensusError(e) => CallError::Custom {
 				code: codes::CONSENSUS_ERROR,
 				message: format!("{:?}", e),
 				data: None,
-			}
-			.into(),
+			},
 			InherentError(e) => CallError::Custom {
 				code: codes::INHERENTS_ERROR,
 				message: format!("{:?}", e),
 				data: None,
-			}
-			.into(),
+			},
 			BlockchainError(e) => CallError::Custom {
 				code: codes::BLOCKCHAIN_ERROR,
 				message: format!("{:?}", e),
 				data: None,
-			}
-			.into(),
+			},
 			SendError(_) | Canceled(_) => CallError::Custom {
 				code: codes::SERVER_SHUTTING_DOWN,
 				message: "Server is shutting down".to_string(),
 				data: None,
-			}
-			.into(),
+			},
 			_ => CallError::Custom {
 				code: codes::UNKNOWN_ERROR,
 				message: "Unknown error".to_string(),
 				data: None,
-			}
-			.into(),
-		}
+			},
+		}.into()
 	}
 }
