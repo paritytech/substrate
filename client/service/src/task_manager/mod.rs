@@ -50,7 +50,7 @@ impl From<Option<&'static str>> for GroupName {
 	fn from(name: Option<&'static str>) -> Self {
 		match name {
 			Some(name) => Self::Specific(name),
-			None => Self::Specific(DEFAULT_GROUP_NAME),
+			None => Self::Default,
 		}
 	}
 }
@@ -71,10 +71,10 @@ pub struct SpawnTaskHandle {
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name and an optional group name.
+	/// Spawns the given task with the given name and a GroupName enum.
 	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
-	/// Note that the `name`/`group` is a `&'static str`. The reason for this choice is that
+	/// Note that the `name` is a `&'static str`. The reason for this choice is that
 	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
 	/// that therefore the set of possible task names must be bounded.
 	///
@@ -86,17 +86,14 @@ impl SpawnTaskHandle {
 		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
-		match group.into() {
-			GroupName::Specific(var) => self.spawn_inner(name, Some(var), task, TaskType::Async),
-			_ => (),
-		}
+		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
 	/// Spawns the blocking task with the given name. See also `spawn`.
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -106,7 +103,7 @@ impl SpawnTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
@@ -117,23 +114,29 @@ impl SpawnTaskHandle {
 
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
-		// If no group is specified use default.
-		let group = group.unwrap_or(DEFAULT_GROUP_NAME);
+
+		let group_name;
+		match group.into() {
+			GroupName::Specific(var) => group_name = var,
+			// If no group is specified use default.
+			GroupName::Default => group_name = DEFAULT_GROUP_NAME,
+		}
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
 		if let Some(metrics) = &self.metrics {
-			metrics.tasks_spawned.with_label_values(&[name, group]).inc();
+			metrics.tasks_spawned.with_label_values(&[name, group_name]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
-			metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc_by(0);
+			metrics.tasks_ended.with_label_values(&[name, "finished", group_name]).inc_by(0);
 		}
 
 		let future = async move {
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
-					let poll_duration = metrics.poll_duration.with_label_values(&[name, group]);
-					let poll_start = metrics.poll_start.with_label_values(&[name, group]);
+					let poll_duration =
+						metrics.poll_duration.with_label_values(&[name, group_name]);
+					let poll_start = metrics.poll_start.with_label_values(&[name, group_name]);
 					let inner =
 						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
@@ -144,15 +147,21 @@ impl SpawnTaskHandle {
 
 				match select(on_exit, task).await {
 					Either::Right((Err(payload), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "panic", group]).inc();
+						metrics.tasks_ended.with_label_values(&[name, "panic", group_name]).inc();
 						panic::resume_unwind(payload)
 					},
 					Either::Right((Ok(()), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc();
+						metrics
+							.tasks_ended
+							.with_label_values(&[name, "finished", group_name])
+							.inc();
 					},
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
-						metrics.tasks_ended.with_label_values(&[name, "interrupted", group]).inc();
+						metrics
+							.tasks_ended
+							.with_label_values(&[name, "interrupted", group_name])
+							.inc();
 					},
 				}
 			} else {
@@ -221,7 +230,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
@@ -233,7 +242,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -242,7 +251,7 @@ impl SpawnEssentialTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
