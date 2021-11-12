@@ -71,7 +71,7 @@ pub struct SpawnTaskHandle {
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name and a GroupName enum.
+	/// Spawns the given task with the given name and a `GroupName` enum.
 	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
 	/// Note that the `name` is a `&'static str`. The reason for this choice is that
