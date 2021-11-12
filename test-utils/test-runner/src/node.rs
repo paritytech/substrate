@@ -23,6 +23,7 @@ use futures::{
 	channel::{mpsc, oneshot},
 	FutureExt, SinkExt,
 };
+use jsonrpsee::RpcModule;
 use manual_seal::EngineCommand;
 use sc_client_api::{
 	backend::{self, Backend},
@@ -46,6 +47,8 @@ use sp_state_machine::Ext;
 /// the node process is dropped when this struct is dropped
 /// also holds logs from the process.
 pub struct Node<T: ChainInfo> {
+	/// rpc handler for communicating with the node over rpc.
+	rpc_handler: Arc<RpcModule<()>>,
 	/// handle to the running node.
 	task_manager: Option<TaskManager>,
 	/// client instance
@@ -82,6 +85,7 @@ where
 {
 	/// Creates a new node.
 	pub fn new(
+		rpc_handler: Arc<RpcModule<()>>,
 		task_manager: TaskManager,
 		client: Arc<
 			TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>,
@@ -101,6 +105,7 @@ where
 		backend: Arc<TFullBackend<T::Block>>,
 	) -> Self {
 		Self {
+			rpc_handler,
 			task_manager: Some(task_manager),
 			client: client.clone(),
 			pool,
@@ -108,6 +113,16 @@ where
 			manual_seal_command_sink: command_sink,
 			initial_block_number: client.info().best_number,
 		}
+	}
+
+	/// Returns a reference to the rpc handlers, use this to send rpc requests.
+	/// eg
+	/// ```ignore
+	/// 		let response = node.rpc_handler()
+	/// 		.call_with(""engine_createBlock", vec![true, true]);
+	/// ```
+	pub fn rpc_handler(&self) -> Arc<RpcModule<()>> {
+		self.rpc_handler.clone()
 	}
 
 	/// Return a reference to the Client
