@@ -41,8 +41,13 @@ mod tests;
 /// Default task group name.
 pub const DEFAULT_GROUP_NAME: &'static str = "default";
 
-/// The group name type that is to be spawned.
-/// If the actual group name is not specified, the default group name will be used
+/// The group name of a task to be spawned.
+/// If the actual group name is not specified, the default group name will be used.
+///
+/// This is useful for tracking overall Prometheus metrics such as CPU usage of
+/// some subsystems that spawn multiple tasks.
+///
+/// An example would be "block-authoring" or "networking".
 pub enum GroupName {
 	Default,
 	Specific(&'static str),
