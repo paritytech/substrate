@@ -55,7 +55,7 @@ use sc_consensus::{
 };
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};
+use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend};
 use sp_consensus::{
 	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
@@ -240,7 +240,7 @@ where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
-	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
@@ -319,7 +319,7 @@ where
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	S: SelectChain<B>,
-	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
 	Algorithm::Difficulty: 'static + Send,
@@ -425,10 +425,7 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 		Self { algorithm, _marker: PhantomData }
 	}
 
-	fn check_header(
-		&self,
-		mut header: B::Header,
-	) -> Result<(B::Header, DigestItem<B::Hash>), Error<B>>
+	fn check_header(&self, mut header: B::Header) -> Result<(B::Header, DigestItem), Error<B>>
 	where
 		Algorithm: PowAlgorithm<B>,
 	{
@@ -630,7 +627,7 @@ where
 				},
 			};
 
-			let mut inherent_digest = Digest::<Block::Hash>::default();
+			let mut inherent_digest = Digest::default();
 			if let Some(pre_runtime) = &pre_runtime {
 				inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, pre_runtime.to_vec()));
 			}
@@ -702,10 +699,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 }
 
 /// Fetch PoW seal.
-fn fetch_seal<B: BlockT>(
-	digest: Option<&DigestItem<B::Hash>>,
-	hash: B::Hash,
-) -> Result<Vec<u8>, Error<B>> {
+fn fetch_seal<B: BlockT>(digest: Option<&DigestItem>, hash: B::Hash) -> Result<Vec<u8>, Error<B>> {
 	match digest {
 		Some(DigestItem::Seal(id, seal)) =>
 			if id == &POW_ENGINE_ID {

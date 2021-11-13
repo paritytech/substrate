@@ -41,7 +41,8 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
+	Digest,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -261,7 +262,7 @@ where
 	fn propose(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		max_duration: time::Duration,
 		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
@@ -310,7 +311,7 @@ where
 	async fn propose_with(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
@@ -690,13 +691,8 @@ mod tests {
 		api.execute_block(&block_id, proposal.block).unwrap();
 
 		let state = backend.state_at(block_id).unwrap();
-		let changes_trie_state =
-			backend::changes_tries_state_at_block(&block_id, backend.changes_trie_storage())
-				.unwrap();
 
-		let storage_changes = api
-			.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
-			.unwrap();
+		let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,

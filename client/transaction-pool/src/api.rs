@@ -18,7 +18,7 @@
 
 //! Chain api required for the transaction pool.
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use futures::{
 	channel::{mpsc, oneshot},
 	future::{ready, Future, FutureExt, Ready},
@@ -28,16 +28,12 @@ use futures::{
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use sc_client_api::{
-	blockchain::HeaderBackend,
-	light::{Fetcher, RemoteBodyRequest, RemoteCallRequest},
-	BlockBackend,
-};
+use sc_client_api::{blockchain::HeaderBackend, BlockBackend};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{self, Block as BlockT, BlockIdTo, Hash as HashT, Header as HeaderT},
+	traits::{self, Block as BlockT, BlockIdTo},
 	transaction_validity::{TransactionSource, TransactionValidity},
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
@@ -288,129 +284,5 @@ where
 		uxt: graph::ExtrinsicFor<Self>,
 	) -> error::Result<TransactionValidity> {
 		validate_transaction_blocking(&*self.client, at, source, uxt)
-	}
-}
-
-/// The transaction pool logic for light client.
-pub struct LightChainApi<Client, F, Block> {
-	client: Arc<Client>,
-	fetcher: Arc<F>,
-	_phantom: PhantomData<Block>,
-}
-
-impl<Client, F, Block> LightChainApi<Client, F, Block> {
-	/// Create new transaction pool logic.
-	pub fn new(client: Arc<Client>, fetcher: Arc<F>) -> Self {
-		LightChainApi { client, fetcher, _phantom: Default::default() }
-	}
-}
-
-impl<Client, F, Block> graph::ChainApi for LightChainApi<Client, F, Block>
-where
-	Block: BlockT,
-	Client: HeaderBackend<Block> + 'static,
-	F: Fetcher<Block> + 'static,
-{
-	type Block = Block;
-	type Error = error::Error;
-	type ValidationFuture =
-		Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
-	type BodyFuture = Pin<
-		Box<
-			dyn Future<Output = error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>
-				+ Send,
-		>,
-	>;
-
-	fn validate_transaction(
-		&self,
-		at: &BlockId<Self::Block>,
-		source: TransactionSource,
-		uxt: graph::ExtrinsicFor<Self>,
-	) -> Self::ValidationFuture {
-		let header_hash = self.client.expect_block_hash_from_id(at);
-		let header_and_hash = header_hash.and_then(|header_hash| {
-			self.client
-				.expect_header(BlockId::Hash(header_hash))
-				.map(|header| (header_hash, header))
-		});
-		let (block, header) = match header_and_hash {
-			Ok((header_hash, header)) => (header_hash, header),
-			Err(err) => return Box::new(ready(Err(err.into()))),
-		};
-		let remote_validation_request = self.fetcher.remote_call(RemoteCallRequest {
-			block,
-			header,
-			method: "TaggedTransactionQueue_validate_transaction".into(),
-			call_data: (source, uxt, block).encode(),
-			retry_count: None,
-		});
-		let remote_validation_request = remote_validation_request.then(move |result| {
-			let result: error::Result<TransactionValidity> =
-				result.map_err(Into::into).and_then(|result| {
-					Decode::decode(&mut &result[..]).map_err(|e| {
-						Error::RuntimeApi(format!("Error decoding tx validation result: {:?}", e))
-					})
-				});
-			ready(result)
-		});
-
-		Box::new(remote_validation_request)
-	}
-
-	fn block_id_to_number(
-		&self,
-		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<graph::NumberFor<Self>>> {
-		Ok(self.client.block_number_from_id(at)?)
-	}
-
-	fn block_id_to_hash(
-		&self,
-		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<graph::BlockHash<Self>>> {
-		Ok(self.client.block_hash_from_id(at)?)
-	}
-
-	fn hash_and_length(
-		&self,
-		ex: &graph::ExtrinsicFor<Self>,
-	) -> (graph::ExtrinsicHash<Self>, usize) {
-		ex.using_encoded(|x| (<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len()))
-	}
-
-	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		let header = self
-			.client
-			.header(*id)
-			.and_then(|h| h.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id))));
-		let header = match header {
-			Ok(header) => header,
-			Err(err) => {
-				log::warn!(target: "txpool", "Failed to query header: {:?}", err);
-				return Box::pin(ready(Ok(None)))
-			},
-		};
-
-		let fetcher = self.fetcher.clone();
-		async move {
-			let transactions = fetcher
-				.remote_body(RemoteBodyRequest { header, retry_count: None })
-				.await
-				.unwrap_or_else(|e| {
-					log::warn!(target: "txpool", "Failed to fetch block body: {:?}", e);
-					Vec::new()
-				});
-
-			Ok(Some(transactions))
-		}
-		.boxed()
-	}
-
-	fn block_header(
-		&self,
-		at: &BlockId<Self::Block>,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		self.client.header(*at).map_err(Into::into)
 	}
 }

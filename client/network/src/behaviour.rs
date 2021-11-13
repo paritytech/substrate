@@ -20,14 +20,14 @@ use crate::{
 	bitswap::Bitswap,
 	config::ProtocolId,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
-	light_client_requests, peer_info,
+	peer_info,
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
 	request_responses, DhtEvent, ObservedRole,
 };
 
 use bytes::Bytes;
 use codec::Encode;
-use futures::{channel::oneshot, stream::StreamExt};
+use futures::channel::oneshot;
 use libp2p::{
 	core::{Multiaddr, PeerId, PublicKey},
 	identify::IdentifyInfo,
@@ -75,10 +75,6 @@ pub struct Behaviour<B: BlockT> {
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
 	events: VecDeque<BehaviourOut<B>>,
-
-	/// Light client request handling.
-	#[behaviour(ignore)]
-	light_client_request_sender: light_client_requests::sender::LightClientRequestSender<B>,
 
 	/// Protocol name used to send out block requests via
 	/// [`request_responses::RequestResponsesBehaviour`].
@@ -198,7 +194,6 @@ impl<B: BlockT> Behaviour<B> {
 		substrate: Protocol<B>,
 		user_agent: String,
 		local_public_key: PublicKey,
-		light_client_request_sender: light_client_requests::sender::LightClientRequestSender<B>,
 		disco_config: DiscoveryConfig,
 		block_request_protocol_config: request_responses::ProtocolConfig,
 		state_request_protocol_config: request_responses::ProtocolConfig,
@@ -233,7 +228,6 @@ impl<B: BlockT> Behaviour<B> {
 				request_response_protocols.into_iter(),
 				peerset,
 			)?,
-			light_client_request_sender,
 			events: VecDeque::new(),
 			block_request_protocol_name,
 			state_request_protocol_name,
@@ -315,14 +309,6 @@ impl<B: BlockT> Behaviour<B> {
 	/// `ValuePutFailed` event.
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
-	}
-
-	/// Issue a light client request.
-	pub fn light_client_request(
-		&mut self,
-		r: light_client_requests::sender::Request<B>,
-	) -> Result<(), light_client_requests::sender::SendRequestError> {
-		self.light_client_request_sender.request(r)
 	}
 }
 
@@ -436,17 +422,11 @@ impl<B: BlockT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behavi
 			CustomMessageOutcome::NotificationsReceived { remote, messages } => {
 				self.events.push_back(BehaviourOut::NotificationsReceived { remote, messages });
 			},
-			CustomMessageOutcome::PeerNewBest(peer_id, number) => {
-				self.light_client_request_sender.update_best_block(&peer_id, number);
-			},
-			CustomMessageOutcome::SyncConnected(peer_id) => {
-				self.light_client_request_sender.inject_connected(peer_id);
-				self.events.push_back(BehaviourOut::SyncConnected(peer_id))
-			},
-			CustomMessageOutcome::SyncDisconnected(peer_id) => {
-				self.light_client_request_sender.inject_disconnected(peer_id);
-				self.events.push_back(BehaviourOut::SyncDisconnected(peer_id))
-			},
+			CustomMessageOutcome::PeerNewBest(_peer_id, _number) => {},
+			CustomMessageOutcome::SyncConnected(peer_id) =>
+				self.events.push_back(BehaviourOut::SyncConnected(peer_id)),
+			CustomMessageOutcome::SyncDisconnected(peer_id) =>
+				self.events.push_back(BehaviourOut::SyncDisconnected(peer_id)),
 			CustomMessageOutcome::None => {},
 		}
 	}
@@ -534,23 +514,9 @@ impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B> {
 impl<B: BlockT> Behaviour<B> {
 	fn poll<TEv>(
 		&mut self,
-		cx: &mut Context,
+		_cx: &mut Context,
 		_: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
-		use light_client_requests::sender::OutEvent;
-		while let Poll::Ready(Some(event)) = self.light_client_request_sender.poll_next_unpin(cx) {
-			match event {
-				OutEvent::SendRequest { target, request, pending_response, protocol_name } =>
-					self.request_responses.send_request(
-						&target,
-						&protocol_name,
-						request,
-						pending_response,
-						IfDisconnected::ImmediateError,
-					),
-			}
-		}
-
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
 		}
