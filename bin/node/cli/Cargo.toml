@@ -37,10 +37,10 @@ crate-type = ["cdylib", "rlib"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde = { version = "1.0.126", features = ["derive"] }
 futures = "0.3.16"
-hex-literal = "0.3.3"
+hex-literal = "0.3.4"
 log = "0.4.8"
 rand = "0.7.2"
-structopt = { version = "0.3.8", optional = true }
+structopt = { version = "0.3.25", optional = true }
 
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
@@ -136,7 +136,7 @@ remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 
 [build-dependencies]
-structopt = { version = "0.3.8", optional = true }
+structopt = { version = "0.3.25", optional = true }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "3.0.0", optional = true, path = "../../../utils/build-script-utils" }
