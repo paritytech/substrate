@@ -405,7 +405,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
 			<Proxy<T>>::insert(&rescuer, &lost);
-			Self::deposit_event(Event::<T>::AccountRecovered { lost, rescuer });
+			Self::deposit_event(Event::<T>::AccountRecovered { lost: lost, rescuer: rescuer });
 			Ok(())
 		}
 
@@ -564,7 +564,7 @@ pub mod pallet {
 			}
 			// Update storage with the latest details
 			<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
-			Self::deposit_event(Event::<T>::RecoveryVouched { lost, rescuer, sender: who });
+			Self::deposit_event(Event::<T>::RecoveryVouched { lost: lost, rescuer: rescuer, sender: who });
 			Ok(())
 		}
 
@@ -652,7 +652,7 @@ pub mod pallet {
 				BalanceStatus::Free,
 			);
 			debug_assert!(res.is_ok());
-			Self::deposit_event(Event::<T>::RecoveryClosed { lost: who, rescuer });
+			Self::deposit_event(Event::<T>::RecoveryClosed { lost: who, rescuer: rescuer });
 			Ok(())
 		}
 

@@ -702,7 +702,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedChanged<T>>::put(next_changed);
 
 		// Record that this happened.
-		Self::deposit_event(Event::NewSession { session_index });
+		Self::deposit_event(Event::NewSession { session_index: session_index });
 
 		// Tell everyone about the new session keys.
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
