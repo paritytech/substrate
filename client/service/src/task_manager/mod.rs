@@ -50,6 +50,7 @@ pub const DEFAULT_GROUP_NAME: &'static str = "default";
 /// An example would be "block-authoring" or "networking".
 pub enum GroupName {
 	Default,
+	/// Use the specifically given name as group name.
 	Specific(&'static str),
 }
 
