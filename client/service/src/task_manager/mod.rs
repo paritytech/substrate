@@ -41,15 +41,16 @@ mod tests;
 /// Default task group name.
 pub const DEFAULT_GROUP_NAME: &'static str = "default";
 
+/// An Enum that holds the group type that is to be spawned
 pub enum GroupName {
 	Default,
-	Specific(&'static str),
+	Actual(&'static str),
 }
 
 impl From<Option<&'static str>> for GroupName {
 	fn from(name: Option<&'static str>) -> Self {
 		match name {
-			Some(name) => Self::Specific(name),
+			Some(name) => Self::Actual(name),
 			None => Self::Default,
 		}
 	}
@@ -57,7 +58,7 @@ impl From<Option<&'static str>> for GroupName {
 
 impl From<&'static str> for GroupName {
 	fn from(name: &'static str) -> Self {
-		Self::Specific(name)
+		Self::Actual(name)
 	}
 }
 
@@ -117,7 +118,7 @@ impl SpawnTaskHandle {
 
 		let group_name;
 		match group.into() {
-			GroupName::Specific(var) => group_name = var,
+			GroupName::Actual(var) => group_name = var,
 			// If no group is specified use default.
 			GroupName::Default => group_name = DEFAULT_GROUP_NAME,
 		}
