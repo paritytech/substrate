@@ -73,8 +73,8 @@ pub struct SpawnTaskHandle {
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name and a `GroupName` type which can be an
-	/// actual(specified) group name. If group is not specified `DEFAULT_GROUP_NAME` will be used.
+	/// Spawns the given task with the given name and a group name.
+	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
 	/// Note that the `name` is a `&'static str`. The reason for this choice is that
 	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
