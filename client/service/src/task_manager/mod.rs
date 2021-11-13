@@ -41,7 +41,8 @@ mod tests;
 /// Default task group name.
 pub const DEFAULT_GROUP_NAME: &'static str = "default";
 
-/// An Enum that holds the group type that is to be spawned
+/// The group name type that is to be spawned.
+/// If the actual group name is not specified, the default group name will be used
 pub enum GroupName {
 	Default,
 	Actual(&'static str),
@@ -72,8 +73,8 @@ pub struct SpawnTaskHandle {
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name and a `GroupName` enum.
-	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
+	/// Spawns the given task with the given name and a `GroupName` type which can be an
+	/// actual(specified) group name. If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
 	/// Note that the `name` is a `&'static str`. The reason for this choice is that
 	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
@@ -117,7 +118,7 @@ impl SpawnTaskHandle {
 		let metrics = self.metrics.clone();
 
 		let group = match group.into() {
-			GroupName::Specific(var) => var,
+			GroupName::Actual(var) => var,
 			// If no group is specified use default.
 			GroupName::Default => DEFAULT_GROUP_NAME,
 		};
@@ -125,18 +126,17 @@ impl SpawnTaskHandle {
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
 		if let Some(metrics) = &self.metrics {
-			metrics.tasks_spawned.with_label_values(&[name, group_name]).inc();
+			metrics.tasks_spawned.with_label_values(&[name, group]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
-			metrics.tasks_ended.with_label_values(&[name, "finished", group_name]).inc_by(0);
+			metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc_by(0);
 		}
 
 		let future = async move {
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
-					let poll_duration =
-						metrics.poll_duration.with_label_values(&[name, group_name]);
-					let poll_start = metrics.poll_start.with_label_values(&[name, group_name]);
+					let poll_duration = metrics.poll_duration.with_label_values(&[name, group]);
+					let poll_start = metrics.poll_start.with_label_values(&[name, group]);
 					let inner =
 						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
@@ -147,21 +147,15 @@ impl SpawnTaskHandle {
 
 				match select(on_exit, task).await {
 					Either::Right((Err(payload), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "panic", group_name]).inc();
+						metrics.tasks_ended.with_label_values(&[name, "panic", group]).inc();
 						panic::resume_unwind(payload)
 					},
 					Either::Right((Ok(()), _)) => {
-						metrics
-							.tasks_ended
-							.with_label_values(&[name, "finished", group_name])
-							.inc();
+						metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc();
 					},
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
-						metrics
-							.tasks_ended
-							.with_label_values(&[name, "interrupted", group_name])
-							.inc();
+						metrics.tasks_ended.with_label_values(&[name, "interrupted", group]).inc();
 					},
 				}
 			} else {
