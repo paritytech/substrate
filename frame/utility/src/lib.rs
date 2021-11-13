@@ -96,6 +96,11 @@ pub mod pallet {
 			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::Call>;
 
+		/// The caller origin, overarching type of all pallets origins.
+		type PalletsOrigin: Parameter +
+			Into<<Self as frame_system::Config>::Origin> +
+			IsType<<<Self as frame_system::Config>::Origin as frame_support::traits::OriginTrait>::PalletsOrigin>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -110,18 +115,39 @@ pub mod pallet {
 		BatchCompleted,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
+		/// A call was dispatched. \[result\]
+		DispatchedAs(DispatchResult),
 	}
+
+	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
+	// the `size_of` of the `Call` can be different. To ensure that this don't leads to
+	// mismatches between native/wasm or to different metadata for the same runtime, we
+	// algin the call size. The value is choosen big enough to hopefully never reach it.
+	const CALL_ALIGN: u32 = 1024;
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
 		/// The limit on the number of batched calls.
 		fn batched_calls_limit() -> u32 {
 			let allocator_limit = sp_core::MAX_POSSIBLE_ALLOCATION;
-			let call_size = core::mem::size_of::<<T as Config>::Call>() as u32;
+			let call_size = ((sp_std::mem::size_of::<<T as Config>::Call>() as u32 + CALL_ALIGN -
+				1) / CALL_ALIGN) * CALL_ALIGN;
 			// The margin to take into account vec doubling capacity.
 			let margin_factor = 3;
 
 			allocator_limit / margin_factor / call_size
+		}
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			// If you hit this error, you need to try to `Box` big dispatchable parameters.
+			assert!(
+				sp_std::mem::size_of::<<T as Config>::Call>() as u32 <= CALL_ALIGN,
+				"Call enum size should be smaller than {} bytes.",
+				CALL_ALIGN,
+			);
 		}
 	}
 
@@ -322,6 +348,37 @@ pub mod pallet {
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch_all(calls_len as u32);
 			Ok(Some(base_weight + weight).into())
+		}
+
+		/// Dispatches a function call with a provided origin.
+		///
+		/// The dispatch origin for this call must be _Root_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB write (event).
+		/// - Weight of derivative `call` execution + T::WeightInfo::dispatch_as().
+		/// # </weight>
+		#[pallet::weight({
+			let dispatch_info = call.get_dispatch_info();
+			(
+				T::WeightInfo::dispatch_as()
+					.saturating_add(dispatch_info.weight),
+				dispatch_info.class,
+			)
+		})]
+		pub fn dispatch_as(
+			origin: OriginFor<T>,
+			as_origin: Box<T::PalletsOrigin>,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let res = call.dispatch_bypass_filter((*as_origin).into());
+
+			Self::deposit_event(Event::DispatchedAs(res.map(|_| ()).map_err(|e| e.error)));
+			Ok(())
 		}
 	}
 }

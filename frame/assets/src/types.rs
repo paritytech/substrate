@@ -18,10 +18,10 @@
 //! Various basic types for use in the assets pallet.
 
 use super::*;
-use frame_support::pallet_prelude::*;
-use scale_info::TypeInfo;
-
-use frame_support::traits::{fungible, tokens::BalanceConversion};
+use frame_support::{
+	pallet_prelude::*,
+	traits::{fungible, tokens::BalanceConversion},
+};
 use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128};
 
 pub(super) type DepositBalanceOf<T, I = ()> =
