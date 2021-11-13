@@ -36,7 +36,6 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-lru = "0.7.0"
 
 [dev-dependencies]
 quickcheck = "1.0.3"

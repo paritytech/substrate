@@ -376,9 +376,7 @@ where
 			.filter(|id| !local_keys.contains(id.as_ref()))
 			.collect::<Vec<_>>();
 
-		// Inform the address cache about the new maximum number of
-		// addresses to cache.
-		self.addr_cache.set_max_authority_ids(authorities.len());
+		self.addr_cache.retain_ids(&authorities);
 
 		authorities.shuffle(&mut thread_rng());
 		self.pending_lookups = authorities;
@@ -697,7 +695,6 @@ impl Metrics {
 #[cfg(test)]
 impl<Block, Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream> {
 	pub(crate) fn inject_addresses(&mut self, authority: AuthorityId, addresses: Vec<Multiaddr>) {
-		self.addr_cache.set_max_authority_ids(self.addr_cache.num_authority_ids() + 1);
 		self.addr_cache.insert(authority, addresses);
 	}
 }
