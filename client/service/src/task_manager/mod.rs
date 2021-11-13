@@ -45,13 +45,13 @@ pub const DEFAULT_GROUP_NAME: &'static str = "default";
 /// If the actual group name is not specified, the default group name will be used
 pub enum GroupName {
 	Default,
-	Actual(&'static str),
+	Specific(&'static str),
 }
 
 impl From<Option<&'static str>> for GroupName {
 	fn from(name: Option<&'static str>) -> Self {
 		match name {
-			Some(name) => Self::Actual(name),
+			Some(name) => Self::Specific(name),
 			None => Self::Default,
 		}
 	}
@@ -59,7 +59,7 @@ impl From<Option<&'static str>> for GroupName {
 
 impl From<&'static str> for GroupName {
 	fn from(name: &'static str) -> Self {
-		Self::Actual(name)
+		Self::Specific(name)
 	}
 }
 
@@ -118,7 +118,7 @@ impl SpawnTaskHandle {
 		let metrics = self.metrics.clone();
 
 		let group = match group.into() {
-			GroupName::Actual(var) => var,
+			GroupName::Specific(var) => var,
 			// If no group is specified use default.
 			GroupName::Default => DEFAULT_GROUP_NAME,
 		};
