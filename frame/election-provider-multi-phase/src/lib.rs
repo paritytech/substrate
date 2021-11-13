@@ -772,7 +772,7 @@ pub mod pallet {
 						Self::on_initialize_open_unsigned(enabled, now);
 						T::WeightInfo::on_initialize_open_unsigned()
 					}
-				}
+				},
 				_ => T::WeightInfo::on_initialize_nothing(),
 			}
 		}

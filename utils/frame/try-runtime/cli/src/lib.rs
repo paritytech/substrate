@@ -680,9 +680,8 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 	extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	let mut changes = Default::default();
-	let encoded_results = StateMachine::<_, _, NumberFor<Block>, _>::new(
+	let encoded_results = StateMachine::new(
 		&ext.backend,
-		None,
 		&mut changes,
 		executor,
 		method,

@@ -152,12 +152,7 @@ where
 			.map_err(|e| format!("failed to decode output: {:?}", e))?;
 
 		let storage_changes = changes
-			.drain_storage_changes::<_, _, NumberFor<Block>>(
-				&state_ext.backend,
-				None,
-				Default::default(),
-				&mut Default::default(),
-			)
+			.drain_storage_changes(&state_ext.backend, Default::default(), &mut Default::default())
 			.unwrap();
 		state_ext.backend.apply_transaction(
 			storage_changes.transaction_storage_root,

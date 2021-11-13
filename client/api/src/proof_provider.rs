@@ -17,10 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Proof utilities
-use crate::{ChangesProof, CompactProof, StorageProof};
+use crate::{CompactProof, StorageProof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{KeyValueStates, KeyValueStorageLevel};
-use sp_storage::{ChildInfo, PrefixedStorageKey, StorageKey};
+use sp_storage::ChildInfo;
 
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT> {
@@ -50,27 +50,6 @@ pub trait ProofProvider<Block: BlockT> {
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)>;
-	/// Reads given header and generates CHT-based header proof.
-	fn header_proof(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<(Block::Header, StorageProof)>;
-
-	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given
-	/// blocks range. `min` is the hash of the first block, which changes trie root is known to the
-	/// requester - when we're using changes tries from ascendants of this block, we should provide
-	/// proofs for changes tries roots `max` is the hash of the last block known to the requester -
-	/// we can't use changes tries from descendants of this block.
-	/// Works only for runtimes that are supporting changes tries.
-	fn key_changes_proof(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		min: Block::Hash,
-		max: Block::Hash,
-		storage_key: Option<&PrefixedStorageKey>,
-		key: &StorageKey,
-	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_keys`.
 	/// Last `start_keys` element contains last accessed key value.
