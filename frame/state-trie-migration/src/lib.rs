@@ -1346,7 +1346,7 @@ mod remote_tests {
 
 	use super::{mock::*, *};
 	use mock::run_to_block_and_drain_pool;
-	use remote_externalities::{Mode, OnlineConfig};
+	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
 	use sp_runtime::traits::Bounded;
 
 	// we only use the hash type from this (I hope).
@@ -1357,11 +1357,19 @@ mod remote_tests {
 		sp_tracing::try_init_simple();
 		let run_with_limits = |limits| async move {
 			let mut ext = remote_externalities::Builder::<Block>::new()
-				.mode(Mode::Online(OnlineConfig {
-					transport: std::env!("WS_API").to_owned().into(),
-					scrape_children: true,
-					..Default::default()
-				}))
+				.mode(Mode::OfflineOrElseOnline(
+					OfflineConfig {
+						state_snapshot: "/home/kianenigma/remote-builds/state".to_owned().into(),
+					},
+					OnlineConfig {
+						transport: std::env!("WS_API").to_owned().into(),
+						scrape_children: true,
+						state_snapshot: Some(
+							"/home/kianenigma/remote-builds/state".to_owned().into(),
+						),
+						..Default::default()
+					},
+				))
 				.state_version(sp_core::StateVersion::V0)
 				.build()
 				.await
@@ -1423,14 +1431,19 @@ mod remote_tests {
 		sp_tracing::try_init_simple();
 		let run_with_limits = |limits| async move {
 			let mut ext = remote_externalities::Builder::<Block>::new()
-				.mode(Mode::Online(OnlineConfig {
-					transport: std::env!("WS_API").to_owned().into(),
-					scrape_children: true,
-					state_snapshot: Some(
-						"/home/kianenigma/remote-builds/ksm-state".to_owned().into(),
-					),
-					..Default::default()
-				}))
+				.mode(Mode::OfflineOrElseOnline(
+					OfflineConfig {
+						state_snapshot: "/home/kianenigma/remote-builds/state".to_owned().into(),
+					},
+					OnlineConfig {
+						transport: std::env!("WS_API").to_owned().into(),
+						scrape_children: true,
+						state_snapshot: Some(
+							"/home/kianenigma/remote-builds/state".to_owned().into(),
+						),
+						..Default::default()
+					},
+				))
 				.state_version(sp_core::StateVersion::V0)
 				.build()
 				.await
