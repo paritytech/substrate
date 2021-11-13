@@ -116,12 +116,11 @@ impl SpawnTaskHandle {
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
 
-		let group_name;
-		match group.into() {
-			GroupName::Actual(var) => group_name = var,
+		let group = match group.into() {
+			GroupName::Specific(var) => var,
 			// If no group is specified use default.
-			GroupName::Default => group_name = DEFAULT_GROUP_NAME,
-		}
+			GroupName::Default => DEFAULT_GROUP_NAME,
+		};
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
