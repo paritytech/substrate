@@ -262,21 +262,17 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A recovery process has been set up for an \[account\].
+		/// A recovery process has been set up for an account.
 		RecoveryCreated { account: T::AccountId },
 		/// A recovery process has been initiated for lost account by rescuer account.
-		/// \[lost, rescuer\]
 		RecoveryInitiated { lost: T::AccountId, rescuer: T::AccountId },
 		/// A recovery process for lost account by rescuer account has been vouched for by sender.
-		/// \[lost, rescuer, sender\]
 		RecoveryVouched { lost: T::AccountId, rescuer: T::AccountId, sender: T::AccountId },
 		/// A recovery process for lost account by rescuer account has been closed.
-		/// \[lost, rescuer\]
 		RecoveryClosed { lost: T::AccountId, rescuer: T::AccountId },
 		/// Lost account has been successfully recovered by rescuer account.
-		/// \[lost, rescuer\]
 		AccountRecovered { lost: T::AccountId, rescuer: T::AccountId },
-		/// A recovery process has been removed for an \[account\].
+		/// A recovery process has been removed for an account.
 		RecoveryRemoved { account: T::AccountId },
 	}
 

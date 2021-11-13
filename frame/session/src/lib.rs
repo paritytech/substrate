@@ -531,7 +531,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
-		/// New session has happened. Note that the argument is the \[session_index\], not the
+		/// New session has happened. Note that the argument is the session_index, not the
 		/// block number as the type might suggest.
 		NewSession { session_index: SessionIndex },
 	}
