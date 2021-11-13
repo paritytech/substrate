@@ -261,7 +261,7 @@ where
 			},
 			ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
 				let _ = sender
-					.send(self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone));
+					.send(self.addr_cache.get_authority_ids_by_peer_id(&peer_id).map(Clone::clone));
 			},
 		}
 	}
@@ -374,9 +374,11 @@ where
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.filter(|id| !local_keys.contains(id.as_ref()))
-			.collect();
+			.collect::<Vec<_>>();
 
-		self.addr_cache.retain_ids(&authorities);
+		// Inform the address cache about the new maximum number of
+		// addresses to cache.
+		self.addr_cache.set_max_authority_ids(authorities.len());
 
 		authorities.shuffle(&mut thread_rng());
 		self.pending_lookups = authorities;
@@ -548,7 +550,7 @@ where
 			if let Some(metrics) = &self.metrics {
 				metrics
 					.known_authorities_count
-					.set(self.addr_cache.num_ids().try_into().unwrap_or(std::u64::MAX));
+					.set(self.addr_cache.num_authority_ids().try_into().unwrap_or(std::u64::MAX));
 			}
 		}
 		Ok(())
@@ -695,6 +697,7 @@ impl Metrics {
 #[cfg(test)]
 impl<Block, Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream> {
 	pub(crate) fn inject_addresses(&mut self, authority: AuthorityId, addresses: Vec<Multiaddr>) {
+		self.addr_cache.set_max_authority_ids(self.addr_cache.num_authority_ids() + 1);
 		self.addr_cache.insert(authority, addresses);
 	}
 }

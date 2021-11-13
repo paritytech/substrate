@@ -17,79 +17,89 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
-use std::collections::HashMap;
 
+use lru::LruCache;
 use sc_network::PeerId;
 use sp_authority_discovery::AuthorityId;
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 /// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
 pub(super) struct AddrCache {
-	// The addresses found in `authority_id_to_addresses` are guaranteed to always match
-	// the peerids found in `peer_id_to_authority_id`. In other words, these two hashmaps
-	// are similar to a bi-directional map.
-	authority_id_to_addresses: HashMap<AuthorityId, Vec<Multiaddr>>,
-	peer_id_to_authority_id: HashMap<PeerId, AuthorityId>,
+	/// The addresses found in `authority_id_to_addresses` are guaranteed to always match
+	/// the peerids found in `peer_id_to_authority_id`. In other words, these two maps
+	/// are similar to a bi-directional map. As both are lru maps, we ensure that only inserts
+	/// update the position in the lru and any other access doesn't update the position of a
+	/// requested item.
+	authority_id_to_addresses: LruCache<AuthorityId, HashSet<Multiaddr>>,
+	peer_id_to_authority_id: HashMap<PeerId, HashSet<AuthorityId>>,
+	/// The maximum number of authority ids that should be cached.
+	max_authority_ids: usize,
 }
 
 impl AddrCache {
 	pub fn new() -> Self {
 		AddrCache {
-			authority_id_to_addresses: HashMap::new(),
-			peer_id_to_authority_id: HashMap::new(),
+			authority_id_to_addresses: LruCache::unbounded(),
+			peer_id_to_authority_id: HashMap::default(),
+			max_authority_ids: 0,
 		}
 	}
 
 	/// Inserts the given [`AuthorityId`] and [`Vec<Multiaddr>`] pair for future lookups by
 	/// [`AuthorityId`] or [`PeerId`].
-	pub fn insert(&mut self, authority_id: AuthorityId, mut addresses: Vec<Multiaddr>) {
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+	pub fn insert(&mut self, authority_id: AuthorityId, addresses: Vec<Multiaddr>) {
+		let addresses = addresses.into_iter().collect::<HashSet<_>>();
+		let peer_ids = addresses_to_peer_ids(&addresses);
 
-		// Insert into `self.peer_id_to_authority_id`.
-		let peer_ids = addresses
-			.iter()
-			.map(|a| peer_id_from_multiaddr(a))
-			.filter_map(|peer_id| peer_id);
-		for peer_id in peer_ids.clone() {
-			let former_auth =
-				match self.peer_id_to_authority_id.insert(peer_id, authority_id.clone()) {
-					Some(a) if a != authority_id => a,
-					_ => continue,
-				};
+		let old_addresses = self.authority_id_to_addresses.put(authority_id.clone(), addresses);
+		let old_peer_ids = addresses_to_peer_ids(&old_addresses.unwrap_or_default());
 
-			// PeerId was associated to a different authority id before.
-			// Remove corresponding authority from `self.authority_id_to_addresses`.
-			let former_auth_addrs = match self.authority_id_to_addresses.get_mut(&former_auth) {
-				Some(a) => a,
-				None => {
-					debug_assert!(false);
-					continue
+		// Add the new peer ids
+		peer_ids.difference(&old_peer_ids).for_each(|new_peer_id| {
+			self.peer_id_to_authority_id
+				.entry(*new_peer_id)
+				.or_default()
+				.insert(authority_id.clone());
+		});
+
+		// Remove the old peer ids
+		self.remove_authority_id_from_peer_ids(&authority_id, old_peer_ids.difference(&peer_ids));
+
+		while self.authority_id_to_addresses.len() > self.max_authority_ids {
+			match self.authority_id_to_addresses.pop_lru() {
+				Some((authority_id, addresses)) => {
+					self.remove_authority_id_from_peer_ids(
+						&authority_id,
+						addresses_to_peer_ids(&addresses).iter(),
+					);
 				},
-			};
-			former_auth_addrs.retain(|a| peer_id_from_multiaddr(a).map_or(true, |p| p != peer_id));
-		}
-
-		// Insert into `self.authority_id_to_addresses`.
-		for former_addr in self
-			.authority_id_to_addresses
-			.insert(authority_id.clone(), addresses.clone())
-			.unwrap_or_default()
-		{
-			// Must remove from `self.peer_id_to_authority_id` any PeerId formerly associated
-			// to that authority but that can't be found in its new addresses.
-
-			let peer_id = match peer_id_from_multiaddr(&former_addr) {
-				Some(p) => p,
-				None => continue,
-			};
-
-			if !peer_ids.clone().any(|p| p == peer_id) {
-				self.peer_id_to_authority_id.remove(&peer_id);
+				None => break,
 			}
 		}
 	}
 
+	/// Remove the given `authority_id` from the `peer_id` to `authority_ids` mapping.
+	///
+	/// If a `peer_id` doesn't have any `authority_id` assigned anymore, it is removed.
+	fn remove_authority_id_from_peer_ids<'a>(
+		&mut self,
+		authority_id: &AuthorityId,
+		peer_ids: impl Iterator<Item = &'a PeerId>,
+	) {
+		peer_ids.for_each(|peer_id| {
+			if let Entry::Occupied(mut e) = self.peer_id_to_authority_id.entry(*peer_id) {
+				e.get_mut().remove(authority_id);
+
+				// If there are no more entries, remove the peer id.
+				if e.get().is_empty() {
+					e.remove();
+				}
+			}
+		})
+	}
+
 	/// Returns the number of authority IDs in the cache.
-	pub fn num_ids(&self) -> usize {
+	pub fn num_authority_ids(&self) -> usize {
 		self.authority_id_to_addresses.len()
 	}
 
@@ -97,43 +107,23 @@ impl AddrCache {
 	pub fn get_addresses_by_authority_id(
 		&self,
 		authority_id: &AuthorityId,
-	) -> Option<&Vec<Multiaddr>> {
-		self.authority_id_to_addresses.get(&authority_id)
+	) -> Option<&HashSet<Multiaddr>> {
+		self.authority_id_to_addresses.peek(authority_id)
 	}
 
-	/// Returns the [`AuthorityId`] for the given [`PeerId`].
-	pub fn get_authority_id_by_peer_id(&self, peer_id: &PeerId) -> Option<&AuthorityId> {
+	/// Returns the [`AuthorityId`]s for the given [`PeerId`].
+	///
+	/// As the authority id can change between sessions, one [`PeerId`] can be mapped to
+	/// multiple authority ids.
+	pub fn get_authority_ids_by_peer_id(&self, peer_id: &PeerId) -> Option<&HashSet<AuthorityId>> {
 		self.peer_id_to_authority_id.get(peer_id)
 	}
 
-	/// Removes all [`PeerId`]s and [`Multiaddr`]s from the cache that are not related to the given
-	/// [`AuthorityId`]s.
-	pub fn retain_ids(&mut self, authority_ids: &Vec<AuthorityId>) {
-		// The below logic could be replaced by `BtreeMap::drain_filter` once it stabilized.
-		let authority_ids_to_remove = self
-			.authority_id_to_addresses
-			.iter()
-			.filter(|(id, _addresses)| !authority_ids.contains(id))
-			.map(|entry| entry.0)
-			.cloned()
-			.collect::<Vec<AuthorityId>>();
-
-		for authority_id_to_remove in authority_ids_to_remove {
-			// Remove other entries from `self.authority_id_to_addresses`.
-			let addresses = self.authority_id_to_addresses.remove(&authority_id_to_remove);
-
-			// Remove other entries from `self.peer_id_to_authority_id`.
-			let peer_ids = addresses
-				.iter()
-				.flatten()
-				.map(|a| peer_id_from_multiaddr(a))
-				.filter_map(|peer_id| peer_id);
-			for peer_id in peer_ids {
-				if let Some(id) = self.peer_id_to_authority_id.remove(&peer_id) {
-					debug_assert_eq!(authority_id_to_remove, id);
-				}
-			}
-		}
+	/// Set the maximum number of [`AuthorityId`]s to cache.
+	///
+	/// The new maximum will be taken in account the next time [`Self::insert`] is called.
+	pub fn set_max_authority_ids(&mut self, max: usize) {
+		self.max_authority_ids = max;
 	}
 }
 
@@ -145,6 +135,13 @@ fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
 			None
 		}
 	})
+}
+
+fn addresses_to_peer_ids(addresses: &HashSet<Multiaddr>) -> HashSet<PeerId> {
+	addresses
+		.iter()
+		.filter_map(|a| peer_id_from_multiaddr(a))
+		.collect::<HashSet<_>>()
 }
 
 #[cfg(test)]
@@ -209,7 +206,7 @@ mod tests {
 	}
 
 	#[test]
-	fn retains_only_entries_of_provided_authority_ids() {
+	fn last_inserted_authority_id_is_purged() {
 		fn property(
 			first: (TestAuthorityId, TestMultiaddr),
 			second: (TestAuthorityId, TestMultiaddr),
@@ -221,32 +218,32 @@ mod tests {
 
 			let mut cache = AddrCache::new();
 
+			cache.set_max_authority_ids(2);
 			cache.insert(first.0.clone(), vec![first.1.clone()]);
 			cache.insert(second.0.clone(), vec![second.1.clone()]);
+
+			assert_eq!(
+				Some(&HashSet::from([first.1.clone()])),
+				cache.get_addresses_by_authority_id(&first.0),
+				"Expect `get_addresses_by_authority_id` to return addresses of first authority."
+			);
+			assert_eq!(
+				Some(&HashSet::from([first.0.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&first.1).unwrap()),
+				"Expect `get_authority_id_by_peer_id` to return `AuthorityId` of first authority."
+			);
+
 			cache.insert(third.0.clone(), vec![third.1.clone()]);
 
 			assert_eq!(
-				Some(&vec![third.1.clone()]),
-				cache.get_addresses_by_authority_id(&third.0),
-				"Expect `get_addresses_by_authority_id` to return addresses of third authority."
-			);
-			assert_eq!(
-				Some(&third.0),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
-				"Expect `get_authority_id_by_peer_id` to return `AuthorityId` of third authority."
-			);
-
-			cache.retain_ids(&vec![first.0, second.0]);
-
-			assert_eq!(
 				None,
-				cache.get_addresses_by_authority_id(&third.0),
-				"Expect `get_addresses_by_authority_id` to not return `None` for third authority."
+				cache.get_addresses_by_authority_id(&first.0),
+				"Expect `get_addresses_by_authority_id` to not return `None` for first authority."
 			);
 			assert_eq!(
 				None,
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&third.1).unwrap()),
-				"Expect `get_authority_id_by_peer_id` to return `None` for third authority."
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&first.1).unwrap()),
+				"Expect `get_authority_id_by_peer_id` to return `None` for first authority."
 			);
 
 			TestResult::passed()
@@ -258,7 +255,7 @@ mod tests {
 	}
 
 	#[test]
-	fn keeps_consistency_between_authority_id_and_peer_id() {
+	fn purges_authority_id_cache_properly() {
 		fn property(
 			authority1: TestAuthorityId,
 			authority2: TestAuthorityId,
@@ -273,6 +270,8 @@ mod tests {
 			let TestMultiaddrsSamePeerCombo(multiaddr3, multiaddr4) = multiaddr3;
 
 			let mut cache = AddrCache::new();
+			// Only allow one authority id to be stored.
+			cache.set_max_authority_ids(2);
 
 			cache.insert(authority1.clone(), vec![multiaddr1.clone()]);
 			cache.insert(
@@ -282,44 +281,47 @@ mod tests {
 
 			assert_eq!(
 				None,
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr1).unwrap())
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr1).unwrap())
 			);
 			assert_eq!(
-				Some(&authority1),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
+				Some(&HashSet::from([authority1.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
 			);
 			assert_eq!(
-				Some(&authority1),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
+				Some(&HashSet::from([authority1.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
 			);
 			assert_eq!(
-				Some(&authority1),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr4).unwrap())
+				Some(&HashSet::from([authority1.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr4).unwrap())
 			);
 
 			cache.insert(authority2.clone(), vec![multiaddr2.clone()]);
 
 			assert_eq!(
-				Some(&authority2),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
+				Some(&HashSet::from([authority2.clone(), authority1.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
 			);
 			assert_eq!(
-				Some(&authority1),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
+				Some(&HashSet::from([authority1.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
 			);
-			assert_eq!(cache.get_addresses_by_authority_id(&authority1).unwrap().len(), 2);
+			assert_eq!(cache.get_addresses_by_authority_id(&authority1).unwrap().len(), 3);
 
 			cache.insert(authority2.clone(), vec![multiaddr2.clone(), multiaddr3.clone()]);
 
 			assert_eq!(
-				Some(&authority2),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
+				Some(&HashSet::from([authority2.clone(), authority1.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
 			);
 			assert_eq!(
-				Some(&authority2),
-				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
+				Some(&HashSet::from([authority2.clone(), authority1.clone()])),
+				cache.get_authority_ids_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
 			);
-			assert!(cache.get_addresses_by_authority_id(&authority1).unwrap().is_empty());
+			assert_eq!(
+				&HashSet::from([multiaddr2.clone(), multiaddr3.clone(), multiaddr4.clone()]),
+				cache.get_addresses_by_authority_id(&authority1).unwrap(),
+			);
 
 			TestResult::passed()
 		}
@@ -327,5 +329,33 @@ mod tests {
 		QuickCheck::new()
 			.max_tests(10)
 			.quickcheck(property as fn(_, _, _, _, _) -> TestResult)
+	}
+
+	/// As the runtime gives us the current + next authority ids, it can happen that some
+	/// authority changed its session keys. Changing the sessions keys leads to having two
+	/// authority ids that map to the same `PeerId` & addresses.
+	#[test]
+	fn adding_two_authority_ids_for_the_same_peer_id() {
+		let mut addr_cache = AddrCache::new();
+		addr_cache.set_max_authority_ids(10);
+
+		let peer_id = PeerId::random();
+		let addr = Multiaddr::empty().with(Protocol::P2p(peer_id.into()));
+
+		let authority_id0 = AuthorityPair::generate().0.public();
+		let authority_id1 = AuthorityPair::generate().0.public();
+
+		addr_cache.insert(authority_id0.clone(), vec![addr.clone()]);
+		addr_cache.insert(authority_id1.clone(), vec![addr.clone()]);
+
+		assert_eq!(2, addr_cache.num_authority_ids());
+		assert_eq!(
+			&HashSet::from([addr.clone()]),
+			addr_cache.get_addresses_by_authority_id(&authority_id0).unwrap()
+		);
+		assert_eq!(
+			&HashSet::from([addr]),
+			addr_cache.get_addresses_by_authority_id(&authority_id1).unwrap()
+		);
 	}
 }
