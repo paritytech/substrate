@@ -46,6 +46,7 @@ pub const DEFAULT_GROUP_NAME: &'static str = "default";
 /// This name is passed belong-side the task name to the prometheus metrics and can be used
 /// to group tasks.  
 pub enum GroupName {
+	/// Sets the group name to `default`.
 	Default,
 	/// Use the specifically given name as group name.
 	Specific(&'static str),
