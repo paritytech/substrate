@@ -1425,33 +1425,37 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Remove all data structure concerning a staker/stash once its balance is at the minimum.
-		/// This is essentially equivalent to `withdraw_unbonded` except it can be called by anyone
-		/// and the target `stash` must have no funds left beyond the ED.
+		/// Remove all data structures concerning a staker/stash once it is at a state where it can
+		/// be considered `dust` in the staking system. The requirements are:
 		///
-		/// This can be called from any origin.
+		/// 1. the `total_balance` of the stash is below existential deposit.
+		/// 2. or, the `ledger.total` of the stash is below existential deposit.
 		///
-		/// - `stash`: The stash account to reap. Its balance must be zero.
+		/// The former can happen in cases like a slash; the latter when a fully unbonded account
+		/// is still receiving staking rewards in `RewardDestination::Staked`.
 		///
-		/// # <weight>
-		/// Complexity: O(S) where S is the number of slashing spans on the account.
-		/// DB Weight:
-		/// - Reads: Stash Account, Bonded, Slashing Spans, Locks
-		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators,
-		///   Stash Account, Locks
-		/// - Writes Each: SpanSlash * S
-		/// # </weight>
+		/// It can be called by anyone, as long as `stash` meets the above requirements.
+		///
+		/// Refunds the transaction fees upon successful execution.
 		#[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
 		pub fn reap_stash(
-			_origin: OriginFor<T>,
+			origin: OriginFor<T>,
 			stash: T::AccountId,
 			num_slashing_spans: u32,
-		) -> DispatchResult {
-			let at_minimum = T::Currency::total_balance(&stash) == T::Currency::minimum_balance();
-			ensure!(at_minimum, Error::<T>::FundedTarget);
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+
+			let ed = T::Currency::minimum_balance();
+			let reapable = T::Currency::total_balance(&stash) < ed ||
+				Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
+					.map(|l| l.total)
+					.unwrap_or_default() < ed;
+			ensure!(reapable, Error::<T>::FundedTarget);
+
 			Self::kill_stash(&stash, num_slashing_spans)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
-			Ok(())
+
+			Ok(Pays::No.into())
 		}
 
 		/// Remove the given nominations from the calling validator.
