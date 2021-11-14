@@ -29,7 +29,7 @@ pub(super) struct AddrCache {
 	/// are similar to a bi-directional map.
 	///
 	/// NB: since we may store the mapping across several sessions, a single
-	/// `PeerId` might correspond to multiple `AuthorityId`s. However, 
+	/// `PeerId` might correspond to multiple `AuthorityId`s. However,
 	/// it's not expected that a single `AuthorityId` can have multiple `PeerId`s.
 	/// This is ensured in [`AddrCache::insert`].
 	authority_id_to_addresses: HashMap<AuthorityId, HashSet<Multiaddr>>,
@@ -49,6 +49,17 @@ impl AddrCache {
 	pub fn insert(&mut self, authority_id: AuthorityId, addresses: Vec<Multiaddr>) {
 		let addresses = addresses.into_iter().collect::<HashSet<_>>();
 		let peer_ids = addresses_to_peer_ids(&addresses);
+
+		if peer_ids.is_empty() {
+			log::debug!(
+				target: super::LOG_TARGET,
+				"Authority({:?}) provides no addresses or addresses without peer ids. Adresses: {:?}",
+				authority_id,
+				addresses,
+			);
+
+			return
+		}
 
 		let old_addresses = self.authority_id_to_addresses.insert(authority_id.clone(), addresses);
 		let old_peer_ids = addresses_to_peer_ids(&old_addresses.unwrap_or_default());
