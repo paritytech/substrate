@@ -33,5 +33,5 @@ remote-externalities = { path = "../../../utils/frame/remote-externalities", ver
 # others
 tokio = { version = "1", features = ["macros"] }
 log = "0.4.14"
-structopt = "0.3.23"
+structopt = "0.3.25"
 clap = "2.33.3"
