@@ -1394,6 +1394,7 @@ mod remote_tests {
 					false
 				});
 
+				ext.commit_all().unwrap();
 				let (top_left, child_left) =
 					ext.as_backend().essence().check_migration_state().unwrap();
 				log::info!(
@@ -1420,8 +1421,9 @@ mod remote_tests {
 			assert_eq!(top_left, 0);
 			assert_eq!(child_left, 0);
 		};
+
 		// item being the bottleneck
-		run_with_limits(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }).await;
+		run_with_limits(MigrationLimits { item: 16 * 1024, size: 128 * 1024 * 1024 }).await;
 		// size being the bottleneck
 		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 4 * 1024 }).await;
 	}
