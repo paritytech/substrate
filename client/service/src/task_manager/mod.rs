@@ -38,6 +38,9 @@ mod prometheus_future;
 #[cfg(test)]
 mod tests;
 
+/// Default task group name.
+pub const DEFAULT_GROUP_NAME: &'static str = "default";
+
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
@@ -48,31 +51,39 @@ pub struct SpawnTaskHandle {
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name.
+	/// Spawns the given task with the given name and an optional group name.
+	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
-	/// Note that the `name` is a `&'static str`. The reason for this choice is that statistics
-	/// about this task are getting reported to the Prometheus endpoint (if enabled), and that
-	/// therefore the set of possible task names must be bounded.
+	/// Note that the `name`/`group` is a `&'static str`. The reason for this choice is that
+	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
+	/// that therefore the set of possible task names must be bounded.
 	///
 	/// In other words, it would be a bad idea for someone to do for example
 	/// `spawn(format!("{:?}", some_public_key))`.
-	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_inner(name, task, TaskType::Async)
+	pub fn spawn(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
 	/// Spawns the blocking task with the given name. See also `spawn`.
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
-		self.spawn_inner(name, task, TaskType::Blocking)
+		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
 	/// Helper function that implements the spawning logic. See `spawn` and `spawn_blocking`.
 	fn spawn_inner(
 		&self,
 		name: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
@@ -83,21 +94,23 @@ impl SpawnTaskHandle {
 
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
+		// If no group is specified use default.
+		let group = group.unwrap_or(DEFAULT_GROUP_NAME);
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
 		if let Some(metrics) = &self.metrics {
-			metrics.tasks_spawned.with_label_values(&[name]).inc();
+			metrics.tasks_spawned.with_label_values(&[name, group]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
-			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
+			metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc_by(0);
 		}
 
 		let future = async move {
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
-					let poll_duration = metrics.poll_duration.with_label_values(&[name]);
-					let poll_start = metrics.poll_start.with_label_values(&[name]);
+					let poll_duration = metrics.poll_duration.with_label_values(&[name, group]);
+					let poll_start = metrics.poll_start.with_label_values(&[name, group]);
 					let inner =
 						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
@@ -108,15 +121,15 @@ impl SpawnTaskHandle {
 
 				match select(on_exit, task).await {
 					Either::Right((Err(payload), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "panic"]).inc();
+						metrics.tasks_ended.with_label_values(&[name, "panic", group]).inc();
 						panic::resume_unwind(payload)
 					},
 					Either::Right((Ok(()), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "finished"]).inc();
+						metrics.tasks_ended.with_label_values(&[name, "finished", group]).inc();
 					},
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
-						metrics.tasks_ended.with_label_values(&[name, "interrupted"]).inc();
+						metrics.tasks_ended.with_label_values(&[name, "interrupted", group]).inc();
 					},
 				}
 			} else {
@@ -141,12 +154,22 @@ impl SpawnTaskHandle {
 }
 
 impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
-	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn_blocking(name, future);
+	fn spawn_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn_inner(name, group, future, TaskType::Blocking)
 	}
 
-	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn(name, future);
+	fn spawn(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn_inner(name, group, future, TaskType::Async)
 	}
 }
 
@@ -172,8 +195,13 @@ impl SpawnEssentialTaskHandle {
 	/// Spawns the given task with the given name.
 	///
 	/// See also [`SpawnTaskHandle::spawn`].
-	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_inner(name, task, TaskType::Async)
+	pub fn spawn(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, group, task, TaskType::Async)
 	}
 
 	/// Spawns the blocking task with the given name.
@@ -182,14 +210,16 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
-		self.spawn_inner(name, task, TaskType::Blocking)
+		self.spawn_inner(name, group, task, TaskType::Blocking)
 	}
 
 	fn spawn_inner(
 		&self,
 		name: &'static str,
+		group: Option<&'static str>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
@@ -199,17 +229,27 @@ impl SpawnEssentialTaskHandle {
 			let _ = essential_failed.close_channel();
 		});
 
-		let _ = self.inner.spawn_inner(name, essential_task, task_type);
+		let _ = self.inner.spawn_inner(name, group, essential_task, task_type);
 	}
 }
 
 impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
-	fn spawn_essential_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn_blocking(name, future);
+	fn spawn_essential_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn_blocking(name, group, future);
 	}
 
-	fn spawn_essential(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn(name, future);
+	fn spawn_essential(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: BoxFuture<'static, ()>,
+	) {
+		self.spawn(name, group, future);
 	}
 }
 
@@ -396,28 +436,28 @@ impl Metrics {
 					buckets: exponential_buckets(0.001, 4.0, 9)
 						.expect("function parameters are constant and always valid; qed"),
 				},
-				&["task_name"]
+				&["task_name", "task_group"]
 			)?, registry)?,
 			poll_start: register(CounterVec::new(
 				Opts::new(
 					"tasks_polling_started_total",
 					"Total number of times we started invoking Future::poll"
 				),
-				&["task_name"]
+				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_spawned: register(CounterVec::new(
 				Opts::new(
 					"tasks_spawned_total",
 					"Total number of tasks that have been spawned on the Service"
 				),
-				&["task_name"]
+				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_ended: register(CounterVec::new(
 				Opts::new(
 					"tasks_ended_total",
 					"Total number of tasks for which Future::poll has returned Ready(()) or panicked"
 				),
-				&["task_name", "reason"]
+				&["task_name", "reason", "task_group"]
 			)?, registry)?,
 		})
 	}

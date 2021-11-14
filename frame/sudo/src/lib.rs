@@ -150,7 +150,7 @@ pub mod pallet {
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -176,7 +176,7 @@ pub mod pallet {
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -201,7 +201,7 @@ pub mod pallet {
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
-			Self::deposit_event(Event::KeyChanged(Self::key()));
+			Self::deposit_event(Event::KeyChanged { new_sudoer: Self::key() });
 			<Key<T>>::put(new);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
@@ -241,7 +241,9 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into());
 
-			Self::deposit_event(Event::SudoAsDone(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::SudoAsDone {
+				sudo_result: res.map(|_| ()).map_err(|e| e.error),
+			});
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -251,11 +253,11 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A sudo just took place. \[result\]
-		Sudid(DispatchResult),
+		Sudid { sudo_result: DispatchResult },
 		/// The \[sudoer\] just switched identity; the old key is supplied.
-		KeyChanged(T::AccountId),
+		KeyChanged { new_sudoer: T::AccountId },
 		/// A sudo just took place. \[result\]
-		SudoAsDone(DispatchResult),
+		SudoAsDone { sudo_result: DispatchResult },
 	}
 
 	#[pallet::error]

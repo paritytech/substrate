@@ -20,7 +20,6 @@ use super::*;
 use futures::{executor::block_on, Future};
 use sp_consensus::{block_validation::Validation, BlockOrigin};
 use sp_runtime::Justifications;
-use std::time::Duration;
 use substrate_test_runtime::Header;
 
 fn test_ancestor_search_when_common_is(n: usize) {
@@ -392,35 +391,6 @@ fn own_blocks_are_announced() {
 }
 
 #[test]
-fn blocks_are_not_announced_by_light_nodes() {
-	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
-
-	// full peer0 is connected to light peer
-	// light peer1 is connected to full peer2
-	net.add_full_peer();
-	net.add_light_peer();
-
-	// Sync between 0 and 1.
-	net.peer(0).push_blocks(1, false);
-	assert_eq!(net.peer(0).client.info().best_number, 1);
-	net.block_until_sync();
-	assert_eq!(net.peer(1).client.info().best_number, 1);
-
-	// Add another node and remove node 0.
-	net.add_full_peer();
-	net.peers.remove(0);
-
-	// Poll for a few seconds and make sure 1 and 2 (now 0 and 1) don't sync together.
-	let mut delay = futures_timer::Delay::new(Duration::from_secs(5));
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		Pin::new(&mut delay).poll(cx)
-	}));
-	assert_eq!(net.peer(1).client.info().best_number, 0);
-}
-
-#[test]
 fn can_sync_small_non_best_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
@@ -481,72 +451,6 @@ fn can_sync_small_non_best_forks() {
 		}
 		Poll::Ready(())
 	}));
-}
-
-#[test]
-fn can_not_sync_from_light_peer() {
-	sp_tracing::try_init_simple();
-
-	// given the network with 1 full nodes (#0) and 1 light node (#1)
-	let mut net = TestNet::new(1);
-	net.add_light_peer();
-
-	// generate some blocks on #0
-	net.peer(0).push_blocks(1, false);
-
-	// and let the light client sync from this node
-	net.block_until_sync();
-
-	// ensure #0 && #1 have the same best block
-	let full0_info = net.peer(0).client.info();
-	let light_info = net.peer(1).client.info();
-	assert_eq!(full0_info.best_number, 1);
-	assert_eq!(light_info.best_number, 1);
-	assert_eq!(light_info.best_hash, full0_info.best_hash);
-
-	// add new full client (#2) && remove #0
-	net.add_full_peer();
-	net.peers.remove(0);
-
-	// ensure that the #2 (now #1) fails to sync block #1 even after 5 seconds
-	let mut test_finished = futures_timer::Delay::new(Duration::from_secs(5));
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		Pin::new(&mut test_finished).poll(cx)
-	}));
-}
-
-#[test]
-fn light_peer_imports_header_from_announce() {
-	sp_tracing::try_init_simple();
-
-	fn import_with_announce(net: &mut TestNet, hash: H256) {
-		net.peer(0).announce_block(hash, None);
-
-		block_on(futures::future::poll_fn::<(), _>(|cx| {
-			net.poll(cx);
-			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
-				Poll::Ready(())
-			} else {
-				Poll::Pending
-			}
-		}));
-	}
-
-	// given the network with 1 full nodes (#0) and 1 light node (#1)
-	let mut net = TestNet::new(1);
-	net.add_light_peer();
-
-	// let them connect to each other
-	net.block_until_sync();
-
-	// check that NEW block is imported from announce message
-	let new_hash = net.peer(0).push_blocks(1, false);
-	import_with_announce(&mut net, new_hash);
-
-	// check that KNOWN STALE block is imported from announce message
-	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
-	import_with_announce(&mut net, known_stale_hash);
 }
 
 #[test]
@@ -1210,16 +1114,14 @@ fn syncs_indexed_blocks() {
 	assert!(net
 		.peer(0)
 		.client()
-		.as_full()
-		.unwrap()
+		.as_client()
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_some());
 	assert!(net
 		.peer(1)
 		.client()
-		.as_full()
-		.unwrap()
+		.as_client()
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_none());
@@ -1228,8 +1130,7 @@ fn syncs_indexed_blocks() {
 	assert!(net
 		.peer(1)
 		.client()
-		.as_full()
-		.unwrap()
+		.as_client()
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_some());
