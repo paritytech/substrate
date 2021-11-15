@@ -20,6 +20,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -57,6 +58,7 @@ std = [
 	"scale-info/std",
 	"sp-std/std",
 	"sp-io/std",
+	"sp-core/std",
 	"frame-support/std",
 	"sp-runtime/std",
 	"sp-staking/std",

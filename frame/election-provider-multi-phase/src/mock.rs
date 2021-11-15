@@ -18,7 +18,7 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
+	data_provider, onchain, ElectionDataProvider, SequentialPhragmen, SnapshotBounds,
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
@@ -37,7 +37,7 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, Bounded, IdentityLookup},
 	PerU16,
 };
 use std::sync::Arc;
@@ -268,8 +268,8 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
-	pub static VoterSnapshotSizePerBlock: u32 = 4 * 1024 * 1024;
-	pub static TargetSnapshotSize: u32 = 1 * 1024 * 1024;
+	pub static VoterSnapshotBounds: SnapshotBounds = SnapshotBounds::new_unbounded();
+	pub static TargetSnapshotBounds: SnapshotBounds = SnapshotBounds::new_unbounded();
 
 	// TODO: we want a test to see:
 	// - how many nominators we can create in a normal distribution, for a runtime
@@ -412,8 +412,8 @@ impl crate::Config for Runtime {
 	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
-	type VoterSnapshotSizePerBlock = VoterSnapshotSizePerBlock;
-	type TargetSnapshotSize = TargetSnapshotSize;
+	type VoterSnapshotBounds = VoterSnapshotBounds;
+	type TargetSnapshotBounds = TargetSnapshotBounds;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -433,10 +433,12 @@ pub struct ExtBuilder {}
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
-	fn targets(maybe_max_size: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn targets(bounds: SnapshotBounds) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
-		if maybe_max_size.map_or(false, |max_len| targets.encoded_size() > max_len) {
+		if bounds.size_exhausted(|| targets.encoded_size() as u32) ||
+			bounds.count_exhausted(|| targets.len() as u32)
+		{
 			return Err("Targets too big")
 		}
 
@@ -444,19 +446,17 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	}
 
 	fn voters(
-		maybe_max_size: Option<usize>,
+		bounds: SnapshotBounds,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 		let mut voters = Voters::get();
 
-		if let Some(max_len) = maybe_max_size {
-			while voters.encoded_size() > max_len && !voters.is_empty() {
-				log::trace!(
-					target: crate::LOG_TARGET,
-					"staking-mock: truncating length to {}",
-					voters.len() - 1
-				);
-				let _ = voters.pop();
-			}
+		while bounds.size_exhausted(|| voters.encoded_size() as u32) && !voters.is_empty() {
+			let _ = voters.pop();
+		}
+		if bounds.count_exhausted(|| voters.len() as u32) {
+			voters.truncate(
+				bounds.count_bound().map(|b| b as usize).unwrap_or_else(Bounded::max_value),
+			);
 		}
 
 		Ok(voters)
@@ -516,7 +516,7 @@ mod staking_mock {
 		// the `StakingMock` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
 			// 1 byte won't allow for anything.
-			TargetSnapshotSize::set(1);
+			TargetSnapshotBounds::set(SnapshotBounds::new_count(1));
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -537,7 +537,7 @@ mod staking_mock {
 	fn snapshot_too_big_failure_no_fallback() {
 		// .. and if the backup mode is nothing, we go into the emergency mode..
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			TargetSnapshotSize::set(1);
+			TargetSnapshotBounds::set(SnapshotBounds::new_count(1));
 
 			// Signed phase failed to open.
 			roll_to(15);
@@ -563,12 +563,12 @@ mod staking_mock {
 			assert_eq!(crate::mock::Voters::get().len(), 8);
 
 			// the byte-size of taking the first two voters.
-			let limit_2 = crate::mock::Voters::get()
+			let size_limit_2 = crate::mock::Voters::get()
 				.into_iter()
 				.take(2)
 				.collect::<Vec<_>>()
 				.encoded_size() as u32;
-			crate::mock::VoterSnapshotSizePerBlock::set(limit_2);
+			VoterSnapshotBounds::set(SnapshotBounds::new_size(size_limit_2));
 
 			// Signed phase opens just fine.
 			roll_to(15);

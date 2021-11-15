@@ -103,12 +103,12 @@
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn voters(maybe_max_len: Option<usize>)
+//!         fn voters(_bounds: SnapshotBounds)
 //!         -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+//!         fn targets(_bounds: SnapshotBounds) -> data_provider::Result<Vec<AccountId>> {
 //!             Ok(vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -132,7 +132,7 @@
 //!         type DataProvider = T::DataProvider;
 //!
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
-//!             Self::DataProvider::targets(None)
+//!             Self::DataProvider::targets(SnapshotBounds::new_unbounded())
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| vec![(t[0], Support::default())])
 //!         }
@@ -161,7 +161,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::traits::Get;
+use codec::{Decode, Encode};
+use frame_support::{traits::Get, RuntimeDebug};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
@@ -191,7 +192,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn targets(maybe_max_size: Option<usize>) -> data_provider::Result<Vec<AccountId>>;
+	fn targets(bounds: SnapshotBounds) -> data_provider::Result<Vec<AccountId>>;
 
 	/// All possible voters for the election.
 	///
@@ -203,7 +204,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn voters(
-		maybe_max_size: Option<usize>,
+		bounds: SnapshotBounds,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>;
 
 	/// The number of targets to elect.
@@ -252,11 +253,11 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
-	fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn targets(_: SnapshotBounds) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}
 	fn voters(
-		_: Option<usize>,
+		_: SnapshotBounds,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 		Ok(Default::default())
 	}
@@ -431,5 +432,73 @@ impl<
 		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+	}
+}
+
+/// The limits imposed on a snapshot, either voters or targets.
+#[derive(Clone, Copy, RuntimeDebug, scale_info::TypeInfo, Encode, Decode)]
+pub struct SnapshotBounds {
+	size: Option<u32>,
+	count: Option<u32>,
+}
+
+impl SnapshotBounds {
+	pub fn new_size(size: u32) -> Self {
+		Self { size: Some(size), count: None }
+	}
+
+	pub fn new_count(count: u32) -> Self {
+		Self { count: Some(count), size: None }
+	}
+
+	pub fn new(count: u32, size: u32) -> Self {
+		Self { count: Some(count), size: Some(size) }
+	}
+
+	pub fn new_unbounded() -> Self {
+		Self { size: None, count: None }
+	}
+
+	pub fn size_exhausted(&self, given_size: impl FnOnce() -> u32) -> bool {
+		self.size.map_or(false, |size| given_size() > size)
+	}
+
+	pub fn count_exhausted(&self, given_count: impl FnOnce() -> u32) -> bool {
+		self.count.map_or(false, |count| given_count() > count)
+	}
+
+	// TODO: don't like the signature, don't like the u32 a raw type that can get confused. Luckily
+	// it is not used all that much.
+	pub fn exhausted(
+		&self,
+		given_size: impl FnOnce() -> u32,
+		given_count: impl FnOnce() -> u32,
+	) -> bool {
+		self.count_exhausted(given_count) || self.size_exhausted(given_size)
+	}
+
+	pub fn size_bound(&self) -> Option<usize> {
+		self.size.map(|b| b as usize)
+	}
+
+	pub fn count_bound(&self) -> Option<usize> {
+		self.count.map(|b| b as usize)
+	}
+
+	pub fn is_unbounded(&self) -> bool {
+		self.size.is_none() && self.count.is_none()
+	}
+
+	pub fn is_bounded(&self) -> bool {
+		!self.is_unbounded()
+	}
+
+	pub fn predict_capacity(&self, item_size: usize) -> Option<usize> {
+		match (self.size.map(|x| x as usize), self.count.map(|x| x as usize)) {
+			(Some(max_size), Some(max_count)) => Some(max_count.min(max_size / item_size.max(1))),
+			(Some(max_size), None) => Some(max_size / item_size.max(1)),
+			(None, Some(max_count)) => Some(max_count),
+			(None, None) => None,
+		}
 	}
 }

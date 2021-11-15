@@ -230,7 +230,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_election_provider_support::{ElectionDataProvider, ElectionProvider};
+use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, SnapshotBounds};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -640,20 +640,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The maximum byte-size of voters to put in the snapshot.
-		///
-		/// At the moment, snapshots are only over a single block, but once multi-block elections
-		/// are introduced they will take place over multiple blocks.
+		/// The bound on the amount of voters to put in the snapshot, per block.
 		#[pallet::constant]
-		type VoterSnapshotSizePerBlock: Get<u32>;
+		type VoterSnapshotBounds: Get<SnapshotBounds>;
 
-		/// The maximum byte size of targets to put in the snapshot.
+		/// The bound on the amount of targets to put in the snapshot, per block.
 		///
-		/// The target snapshot is assumed to always fit in one block, and happens next to voter
-		/// snapshot. In essence, in a single block, `TargetSnapshotSize +
-		/// VoterSnapshotSizePerBlock` bytes of data are present in a snapshot.
+		/// Note that the target snapshot happens next to voter snapshot. In essence, in a single
+		/// block, `TargetSnapshotSize + VoterSnapshotBounds` must not exhaust.
 		#[pallet::constant]
-		type TargetSnapshotSize: Get<u32>;
+		type TargetSnapshotBounds: Get<SnapshotBounds>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -840,8 +836,9 @@ pub mod pallet {
 			// ----------------------------
 			// maximum size of a snapshot should not exceed half the size of our allocator limit.
 			assert!(
-				T::VoterSnapshotSizePerBlock::get().saturating_add(T::TargetSnapshotSize::get()) <
-					sp_core::MAX_POSSIBLE_ALLOCATION / 2 - 1
+				T::VoterSnapshotBounds::get().count_bound().unwrap_or_default().saturating_add(
+					T::TargetSnapshotBounds::get().count_bound().unwrap_or_default()
+				) < sp_core::MAX_POSSIBLE_ALLOCATION as usize / 2 - 1
 			);
 		}
 	}
@@ -1305,20 +1302,22 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
-		let target_limit = Some(T::TargetSnapshotSize::get() as usize);
-		let voter_limit = Some(T::VoterSnapshotSizePerBlock::get() as usize);
+		let target_bound = T::TargetSnapshotBounds::get();
+		let voter_bound = T::VoterSnapshotBounds::get();
 
 		let targets =
-			T::DataProvider::targets(target_limit).map_err(ElectionError::DataProvider)?;
-		let voters = T::DataProvider::voters(voter_limit).map_err(ElectionError::DataProvider)?;
+			T::DataProvider::targets(target_bound).map_err(ElectionError::DataProvider)?;
+		let voters = T::DataProvider::voters(voter_bound).map_err(ElectionError::DataProvider)?;
 		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
 		// Defensive-only.
-		if voter_limit.map_or(false, |l| voters.len() > l) {
-			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
-		}
+		debug_assert!(
+			!voter_bound.exhausted(|| voters.encoded_size() as u32, || voters.len() as u32)
+		);
+		debug_assert!(
+			!target_bound.exhausted(|| targets.encoded_size() as u32, || targets.len() as u32)
+		);
 
 		Ok((targets, voters, desired_targets))
 	}

@@ -3980,7 +3980,7 @@ fn on_finalize_weight_is_nonzero() {
 
 mod election_data_provider {
 	use super::*;
-	use frame_election_provider_support::ElectionDataProvider;
+	use frame_election_provider_support::{ElectionDataProvider, SnapshotBounds};
 
 	#[test]
 	fn voters_2sec_block() {
@@ -4022,12 +4022,14 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
-					.unwrap()
-					.iter()
-					.find(|x| x.0 == 101)
-					.unwrap()
-					.2,
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+					SnapshotBounds::new_unbounded()
+				)
+				.unwrap()
+				.iter()
+				.find(|x| x.0 == 101)
+				.unwrap()
+				.2,
 				vec![11, 21]
 			);
 
@@ -4037,24 +4039,28 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
-					.unwrap()
-					.iter()
-					.find(|x| x.0 == 101)
-					.unwrap()
-					.2,
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+					SnapshotBounds::new_unbounded()
+				)
+				.unwrap()
+				.iter()
+				.find(|x| x.0 == 101)
+				.unwrap()
+				.2,
 				vec![21]
 			);
 
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
-					.unwrap()
-					.iter()
-					.find(|x| x.0 == 101)
-					.unwrap()
-					.2,
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+					SnapshotBounds::new_unbounded()
+				)
+				.unwrap()
+				.iter()
+				.find(|x| x.0 == 101)
+				.unwrap()
+				.2,
 				vec![11, 21]
 			);
 		})
@@ -4067,7 +4073,7 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				let limit_for = |c| {
 					Some(
-						Staking::voters(None)
+						Staking::voters(SnapshotBounds::new_unbounded())
 							.unwrap()
 							.into_iter()
 							.take(c)

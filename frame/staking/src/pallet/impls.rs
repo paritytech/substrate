@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
-	VoteWeight, VoteWeightProvider,
+	data_provider, ElectionDataProvider, ElectionProvider, SnapshotBounds, SortedListProvider,
+	Supports, VoteWeight, VoteWeightProvider,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -705,7 +705,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Get all of the voters that are eligible for the next npos election.
 	///
-	/// `max_size` imposes a cap on the byte-size of the entire voters returned.
+	/// `bounds` imposes a cap on the count and byte-size of the entire voters returned.
 	///
 	/// As of now, first all the validator are included in no particular order, then remainder is
 	/// taken from the nominators, as returned by [`Config::SortedListProvider`].
@@ -715,35 +715,58 @@ impl<T: Config> Pallet<T> {
 	/// ### Slashing
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
-	/// auto-chilled, and they DO count towards the limit imposed by `maybe_max_size`.
-	///
-	/// In essence, this implementation ensures that no more than `max_size` bytes worth of npos
-	/// voters are READ from storage, which subsequently ensures that the returning value cannot be
-	/// more than `max_size`.
+	/// auto-chilled, and they **DO** count towards the limit imposed by `bounds`. To prevent this
+	/// from getting in the way, [`update_slashed_nominator`] can be used to clean these stale
+	/// nominations.
 	pub fn get_npos_voters_bounded(
-		max_size: usize,
+		bounds: SnapshotBounds,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let mut tracker = StaticSizeTracker::<T::AccountId>::new();
-		let mut voters = Vec::<_>::with_capacity(
-			max_size /
-				StaticSizeTracker::<T::AccountId>::voter_size(
-					T::NominationQuota::ABSOLUTE_MAXIMUM as usize,
-				),
-		);
+		let mut voters = if let Some(capacity) =
+			bounds.predict_capacity(StaticSizeTracker::<T::AccountId>::voter_size(
+				T::NominationQuota::ABSOLUTE_MAXIMUM as usize,
+			)) {
+			Vec::with_capacity(capacity.min(sp_core::MAX_POSSIBLE_ALLOCATION as usize / 2))
+		} else {
+			Vec::new()
+		};
+
+		// register a voter with `votes` with regards to bounds.
+		let add_voter = |tracker_ref: &mut StaticSizeTracker<T::AccountId>, votes: usize| {
+			if let Some(_) = bounds.size_bound() {
+				tracker_ref.register_voter(votes)
+			} else if let Some(_) = bounds.count_bound() {
+				// nothing needed, voters.len() is itself a representation.
+			}
+		};
+
+		// check if adding one more voter will exhaust any of the bounds.
+		let next_will_exhaust = |tracker_ref: &StaticSizeTracker<T::AccountId>,
+		                         voters_ref: &Vec<_>| match (
+			bounds.size_bound(),
+			bounds.count_bound(),
+		) {
+			(Some(max_size), Some(max_count)) =>
+				tracker_ref.final_byte_size_of(voters_ref.len() + 1) > max_size ||
+					voters_ref.len() + 1 > max_count,
+			(Some(max_size), None) =>
+				tracker_ref.final_byte_size_of(voters_ref.len() + 1) > max_size,
+			(None, Some(max_count)) => voters_ref.len() + 1 > max_count,
+			(None, None) => false,
+		};
 
 		// first, grab all validators in no particular order. In most cases, all of them should fit
 		// anyway.
 		for (validator, _) in <Validators<T>>::iter() {
-			// Append self vote.
 			let self_vote =
 				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
-			tracker.register_voter(1usize);
-			if tracker.final_byte_size_of(voters.len() + 1) > max_size {
+			add_voter(&mut tracker, 1);
+			if next_will_exhaust(&tracker, &voters) {
 				log!(
 					warn,
-					"stopped iterating over validators' self-vote at {} to cap the size at {}. This should probably never happen",
+					"stopped iterating over validators' self-vote at {} due to bound {:?}",
 					voters.len(),
-					max_size,
+					bounds,
 				);
 				break
 			}
@@ -759,9 +782,11 @@ impl<T: Config> Pallet<T> {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
-				// IMPORTANT: we track the size and potentially break out right here.
-				tracker.register_voter(targets.len());
-				if tracker.final_byte_size_of(voters.len() + 1) > max_size {
+				// IMPORTANT: we track the size and potentially break out right here. This ensures
+				// that votes that are invalid will also affect the snapshot bounds. Chain operators
+				// should ensure `update_slashed_nominator` is used to eliminate the need for this.
+				add_voter(&mut tracker, targets.len());
+				if next_will_exhaust(&tracker, &voters) {
 					break
 				}
 
@@ -784,21 +809,22 @@ impl<T: Config> Pallet<T> {
 			nominators_taken as u32,
 			slashing_spans.len() as u32,
 		));
-		debug_assert!(voters.encoded_size() <= max_size);
+		debug_assert!(!bounds.exhausted(|| voters.encoded_size() as u32, || voters.len() as u32));
 
 		log!(
 			info,
-			"generated {} npos voters, {} from validators and {} nominators, with size limit {}",
+			"generated {} npos voters, {} from validators and {} nominators, with bound {:?}",
 			voters.len(),
 			validators_taken,
 			nominators_taken,
-			max_size,
+			bounds,
 		);
 		voters
 	}
 
 	/// Get the list of targets (validators) that are eligible for the next npos election.
-	// This function is self-weighing as [`DispatchClass::Mandatory`].
+	///
+	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
 	/// # Warning
 	///
@@ -813,19 +839,35 @@ impl<T: Config> Pallet<T> {
 
 	/// Get the list of targets (validators) that are eligible for the next npos election.
 	///
-	/// `max_size` imposes a cap on the byte-size of the entire targets returned.
+	/// `bounds` imposes a cap on the count and byte-size of the entire targets returned.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets_bounded(max_size: usize) -> Vec<T::AccountId> {
+	pub fn get_npos_targets_bounded(bounds: SnapshotBounds) -> Vec<T::AccountId> {
 		let mut internal_size: usize = Zero::zero();
-		let mut targets: Vec<T::AccountId> =
-			Vec::with_capacity(max_size / sp_std::mem::size_of::<T::AccountId>());
+		let mut targets: Vec<T::AccountId> = if let Some(capacity) =
+			bounds.predict_capacity(sp_std::mem::size_of::<T::AccountId>())
+		{
+			Vec::with_capacity(capacity.min(sp_core::MAX_POSSIBLE_ALLOCATION as usize / 2))
+		} else {
+			Vec::new()
+		};
+
+		let next_will_exhaust =
+			|new_final_size, new_count| match (bounds.size_bound(), bounds.count_bound()) {
+				(Some(max_size), Some(max_count)) =>
+					new_final_size > max_size || new_count > max_count,
+				(Some(max_size), None) => new_final_size > max_size,
+				(None, Some(max_count)) => new_count > max_count,
+				(None, None) => false,
+			};
 
 		for (next, _) in Validators::<T>::iter() {
+			// TODO: rather sub-optimal, we should not need to track size if it is not bounded.
 			let new_internal_size = internal_size + sp_std::mem::size_of::<T::AccountId>();
 			let new_final_size = new_internal_size +
 				StaticSizeTracker::<T::AccountId>::length_prefix(targets.len() + 1);
-			if new_final_size > max_size {
+			let new_count = targets.len() + 1;
+			if next_will_exhaust(new_final_size, new_count) {
 				// we've had enough
 				break
 			}
@@ -836,14 +878,9 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Self::register_weight(T::WeightInfo::get_npos_targets_bounded(targets.len() as u32));
-		debug_assert!(
-			targets.encoded_size() <= max_size,
-			"encoded size: {}, max_size: {}",
-			targets.encoded_size(),
-			max_size
-		);
+		debug_assert!(!bounds.exhausted(|| targets.encoded_size() as u32, || targets.len() as u32));
 
-		log!(info, "generated {} npos targets, with size limit {}", targets.len(), max_size);
+		log!(info, "generated {} npos targets, with bounds limit {:?}", targets.len(), bounds);
 		targets
 	}
 
@@ -946,38 +983,32 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	}
 
 	fn voters(
-		maybe_max_size: Option<usize>,
+		bounds: SnapshotBounds,
 	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-		Ok(match maybe_max_size {
-			Some(max_size) => Self::get_npos_voters_bounded(max_size),
-			None => {
-				log!(
-					warn,
-					"iterating over an unbounded number of npos voters, this might exhaust the \
-					memory limits of the chain. Ensure proper limits are set via \
-					`MaxNominatorsCount` or `ElectionProvider`"
-				);
-				Self::get_npos_voters_unbounded()
-			},
+		Ok(if bounds.is_unbounded() {
+			log!(
+				warn,
+				"iterating over an unbounded number of npos voters, this might exhaust the \
+				memory limits of the chain. Ensure proper limits are set via \
+				`MaxNominatorsCount` or `ElectionProvider`"
+			);
+			Self::get_npos_voters_unbounded()
+		} else {
+			Self::get_npos_voters_bounded(bounds)
 		})
 	}
 
-	fn targets(maybe_max_size: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		// On any reasonable chain, the validator candidates should be small enough for this to not
-		// need to truncate. Nonetheless, if it happens, we prefer truncating for now rather than
-		// returning an error. In the future, a second instance of the `SortedListProvider` should
-		// be used to sort validators as well in a cheap way.
-		Ok(match maybe_max_size {
-			Some(max_size) => Self::get_npos_targets_bounded(max_size),
-			None => {
-				log!(
-					warn,
-					"iterating over an unbounded number of npos targets, this might exhaust the \
+	fn targets(bounds: SnapshotBounds) -> data_provider::Result<Vec<T::AccountId>> {
+		Ok(if bounds.is_unbounded() {
+			log!(
+				warn,
+				"iterating over an unbounded number of npos targets, this might exhaust the \
 					memory limits of the chain. Ensure proper limits are set via \
 					`MaxValidatorsCount` or `ElectionProvider`"
-				);
-				Self::get_npos_targets_unbounded()
-			},
+			);
+			Self::get_npos_targets_unbounded()
+		} else {
+			Self::get_npos_targets_bounded(bounds)
 		})
 	}
 

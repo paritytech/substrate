@@ -17,7 +17,7 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{ElectionDataProvider, ElectionProvider};
+use crate::{ElectionDataProvider, ElectionProvider, SnapshotBounds};
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -70,8 +70,10 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		let voters = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
-		let targets = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
+		let voters = Self::DataProvider::voters(SnapshotBounds::new_unbounded())
+			.map_err(Error::DataProvider)?;
+		let targets = Self::DataProvider::targets(SnapshotBounds::new_unbounded())
+			.map_err(Error::DataProvider)?;
 		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
@@ -156,18 +158,18 @@ mod tests {
 
 	mod mock_data_provider {
 		use super::*;
-		use crate::data_provider;
+		use crate::{data_provider, SnapshotBounds};
 
 		pub struct DataProvider;
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
 			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
 			fn voters(
-				_: Option<usize>,
+				_: SnapshotBounds,
 			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])])
 			}
 
-			fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+			fn targets(_: SnapshotBounds) -> data_provider::Result<Vec<AccountId>> {
 				Ok(vec![10, 20, 30])
 			}
 
