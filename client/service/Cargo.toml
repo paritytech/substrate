@@ -78,7 +78,7 @@ parity-util-mem = { version = "0.10.2", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.50"
-tokio = { version = "1.10", features = ["time", "rt-multi-thread"] }
+tokio = { version = "1.13", features = ["time", "rt-multi-thread"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
 
