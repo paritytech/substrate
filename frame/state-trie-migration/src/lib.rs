@@ -1349,6 +1349,7 @@ mod remote_tests {
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
 	use sp_runtime::traits::Bounded;
 
+	// TODO: show PoV size per block?
 	// we only use the hash type from this, so using the mock should be fine.
 	type Block = sp_runtime::testing::Block<Extrinsic>;
 
@@ -1505,7 +1506,7 @@ mod remote_tests {
 			assert_eq!(child_left, 0);
 		};
 		// item being the bottleneck
-		run_with_limits(MigrationLimits { item: 1000, size: 4 * 1024 * 1024 }).await;
+		run_with_limits(MigrationLimits { item: 16 * 1024, size: 4 * 1024 * 1024 }).await;
 		// size being the bottleneck
 		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 2 * 1024 * 1024 })
 			.await;
