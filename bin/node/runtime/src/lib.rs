@@ -836,6 +836,8 @@ parameter_types! {
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
 	pub const MaxApprovals: u32 = 100;
+	pub const MaxActiveChildBountyCount: u32 = 50;
+	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
 }
 
 impl pallet_treasury::Config for Runtime {
@@ -873,6 +875,13 @@ impl pallet_bounties::Config for Runtime {
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
 	type WeightInfo = pallet_bounties::weights::SubstrateWeight<Runtime>;
+	type ChildBountyManager = ChildBounties;
+}
+
+impl pallet_child_bounties::Config for Runtime {
+	type Event = Event;
+	type MaxActiveChildBountyCount = MaxActiveChildBountyCount;
+	type ChildBountyValueMinimum = ChildBountyValueMinimum;
 }
 
 impl pallet_tips::Config for Runtime {
@@ -1290,6 +1299,7 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
 		BagsList: pallet_bags_list,
+		ChildBounties: pallet_child_bounties,
 	}
 );
 
