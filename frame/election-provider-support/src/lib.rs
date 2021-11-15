@@ -315,7 +315,7 @@ pub trait SortedListProvider<AccountId> {
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 
-	/// The current count of ids in the list.
+	/// The curr ent count of ids in the list.
 	fn count() -> u32;
 
 	/// Return true if the list already contains `id`.
