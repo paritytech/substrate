@@ -73,9 +73,7 @@ impl Parse for Options {
 				let _ = input.parse::<Token![,]>();
 				let func_version = match input.parse::<syn::ExprLit>()? {
 					syn::ExprLit { lit: syn::Lit::Int(lit), .. } => lit.base10_parse::<u32>()?,
-					_ => {
-						return Err(Error::new(input.span(), "Expected u32 integer as version."))
-					},
+					_ => return Err(Error::new(input.span(), "Expected u32 integer as version.")),
 				};
 				let patch = (feature_name.to_string(), func_name.to_string(), func_version);
 				res.feature_force_version.push(patch);

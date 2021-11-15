@@ -508,12 +508,7 @@ impl OverlayedChanges {
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		self.drain_storage_changes(
-			backend,
-			parent_hash,
-			&mut cache,
-			state_version,
-		)
+		self.drain_storage_changes(backend, parent_hash, &mut cache, state_version)
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
