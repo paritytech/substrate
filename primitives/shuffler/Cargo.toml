@@ -1,0 +1,38 @@
+[package]
+name = "extrinsic-shuffler"
+version = "0.10.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Substrate block builder"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+
+[dependencies]
+log = "0.4.8"
+sp-runtime = {default-features = false, version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-api = { default-features = false, version = "4.0.0-dev" , path = "../../primitives/api"}
+sp-core = { default-features = false, version = "4.0.0-dev" , path = "../../primitives/core"}
+sp-std = { default-features = false, version = '4.0.0-dev' , path = "../../primitives/std"}
+sp-block-builder = { default-features=false, version = "4.0.0-dev" , path = "../../primitives/block-builder"}
+extrinsic-info-runtime-api = { default-features=false, version='4.0.0-dev', path='../../primitives/extrinsic-info-runtime-api'}
+sp-ver = { default-features=false, path='../../primitives/ver', version='0.10.0-dev' }
+derive_more = "0.99.2"
+
+
+[features]
+default = ['std']
+std = [
+    'sp-api/std',
+    'sp-std/std',
+    'sp-core/std',
+    'sp-runtime/std',
+    'sp-block-builder/std',
+    'sp-ver/std',
+    'extrinsic-info-runtime-api/std',
+]
