@@ -22,7 +22,7 @@ use sc_network::PeerId;
 use sp_authority_discovery::AuthorityId;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
-/// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
+/// Cache for [`AuthorityId`] -> [`HashSet<Multiaddr>`] and [`PeerId`] -> [`HashSet<AuthorityId>`] mappings.
 pub(super) struct AddrCache {
 	/// The addresses found in `authority_id_to_addresses` are guaranteed to always match
 	/// the peerids found in `peer_id_to_authority_ids`. In other words, these two hashmaps
