@@ -36,7 +36,8 @@ use crate::utils::{
 };
 
 use syn::{
-	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, TraitItemMethod,
+	parse_quote, spanned::Spanned, Error, FnArg, Ident, ItemTrait, Result, Signature,
+	TraitItemMethod,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -90,12 +91,17 @@ pub fn generate(
 		token_stream?,
 		|mut t, (feature, method, force_version)| {
 			// lookup method
-			let (_, full_method) = runtime_interface
-				.all_versions()
-				.find(|(version, full_method)| {
+			let full_method = if let Some((_, full_method)) =
+				runtime_interface.all_versions().find(|(version, full_method)| {
 					version == force_version && &full_method.sig.ident.to_string() == method
-				})
-				.expect("Force version not found");
+				}) {
+				full_method
+			} else {
+				return Err(Error::new(
+					t.span(),
+					format!("Missing host function {:?} for version {}.", method, force_version),
+				))
+			};
 
 			let feature_check = quote!(#[cfg(feature=#feature)]);
 			t.extend(function_for_method(

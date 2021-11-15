@@ -29,7 +29,7 @@
 
 use syn::{
 	parse::{Parse, ParseStream},
-	parse_macro_input, DeriveInput, ItemTrait, Result, Token,
+	parse_macro_input, DeriveInput, Error, ItemTrait, Result, Token,
 };
 
 mod pass_by;
@@ -69,13 +69,15 @@ impl Parse for Options {
 				let _ = input.parse::<Token![=]>();
 				let feature_name = input.parse::<syn::Ident>()?;
 				let _ = input.parse::<Token![,]>();
-				let fonc_name = input.parse::<syn::Ident>()?;
+				let func_name = input.parse::<syn::Ident>()?;
 				let _ = input.parse::<Token![,]>();
-				let fonc_version = match input.parse::<syn::ExprLit>()? {
+				let func_version = match input.parse::<syn::ExprLit>()? {
 					syn::ExprLit { lit: syn::Lit::Int(lit), .. } => lit.base10_parse::<u32>()?,
-					_ => return Err(lookahead.error()),
+					_ => {
+						return Err(Error::new(input.span(), "Expected u32 integer as version."))
+					},
 				};
-				let patch = (feature_name.to_string(), fonc_name.to_string(), fonc_version);
+				let patch = (feature_name.to_string(), func_name.to_string(), func_version);
 				res.feature_force_version.push(patch);
 			} else if lookahead.peek(Token![,]) {
 				let _ = input.parse::<Token![,]>();
