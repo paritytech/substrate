@@ -60,6 +60,13 @@ impl AddrCache {
 			);
 
 			return
+		} else if peer_ids.len() > 1 {
+			log::warn!(
+				target: super::LOG_TARGET,
+				"Authority({:?}) can be reached through multiple peer ids: {:?}",
+				authority_id,
+				peer_ids
+			);
 		}
 
 		let old_addresses = self.authority_id_to_addresses.insert(authority_id.clone(), addresses);
