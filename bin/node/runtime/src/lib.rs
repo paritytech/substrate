@@ -836,7 +836,7 @@ parameter_types! {
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
 	pub const MaxApprovals: u32 = 100;
-	pub const MaxActiveChildBountyCount: u32 = 50;
+	pub const MaxActiveChildBountyCount: u32 = 5;
 	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
 }
 

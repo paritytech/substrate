@@ -19,7 +19,7 @@
 //!
 //! ## Child Bounty
 //!
-//! > NOTE: This pallet is loosely coupled with pallet-treasury and pallet-bounties.
+//! > NOTE: This pallet is tightly coupled with pallet-treasury and pallet-bounties.
 //!
 //! A Child Bounty is a smaller piece of work, extracted from a parent bounty,
 //! that needs to be executed for a predefined Treasury amount to be paid out.
@@ -40,12 +40,15 @@
 //! - `unassign_curator` - Unassign an accepted curator from a specific child-bounty.
 //! - `close_child_bounty` - Cancel the child-bounty for a specific treasury amount and close the bounty.
 
-// Most of the business logic in this pallet has been originally contributed by "https://github.com/shamb0",
+// Most of the business logic in this pallet has been 
+// originally contributed by "https://github.com/shamb0",
 // as part of the PR - https://github.com/paritytech/substrate/pull/7965.
 // The code has been moved here and then refactored in order to 
-// extract child-bounties as a separate pallet, and remove tight coupling with pallet-bounties.
+// extract child-bounties as a separate pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+mod tests;
 
 use sp_std::prelude::*;
 
@@ -190,7 +193,7 @@ pub mod pallet {
 
 	/// The description of each child-bounty.
 	#[pallet::storage]
-	#[pallet::getter(fn bounty_descriptions)]
+	#[pallet::getter(fn child_bounty_descriptions)]
 	pub type ChildBountyDescriptions<T: Config> = StorageMap<_, Twox64Concat, BountyIndex, Vec<u8>>;
 
 	/// The cumulative child-bounty curator fee for each parent bounty.
@@ -581,7 +584,7 @@ pub mod pallet {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			// Ensure parent bounty exists, and is active.
-			let (parent_curator, update_due) = Self::ensure_bounty_active(parent_bounty_id)?;
+			let (parent_curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
 
 			ChildBounties::<T>::try_mutate_exists(
 				parent_bounty_id,
