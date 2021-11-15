@@ -111,7 +111,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 			);
 
 			check_secondary_plain_header::<B>(pre_hash, secondary, sig, &epoch)?;
-		}
+		},
 		PreDigest::SecondaryVRF(secondary)
 			if epoch.config.allowed_slots.is_secondary_vrf_slots_allowed() =>
 		{
@@ -122,7 +122,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 			);
 
 			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, &epoch)?;
-		}
+		},
 		_ => return Err(babe_err(Error::SecondarySlotAssignmentsDisabled)),
 	}
 

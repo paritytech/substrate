@@ -529,7 +529,7 @@ fn fallback_name_working() {
 				{
 					assert_eq!(negotiated_fallback, Some(PROTOCOL_NAME));
 					break
-				}
+				},
 				_ => {},
 			};
 		}
