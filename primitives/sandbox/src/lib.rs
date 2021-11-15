@@ -52,10 +52,10 @@ pub mod embedded_executor;
 #[cfg(not(feature = "std"))]
 pub mod host_executor;
 
-#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
+#[cfg(not(feature = "std"))]
 pub use host_executor as default_executor;
 
-#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
+#[cfg(feature = "std")]
 pub use embedded_executor as default_executor;
 
 /// Error that can occur while using this crate.
