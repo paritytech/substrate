@@ -43,6 +43,10 @@ use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
 use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
+use sp_keystore::{vrf, SyncCryptoStorePtr, SyncCryptoStore};
+use sp_core::{sr25519, ShufflingSeed, crypto::{Public, key_types::AURA}};
+use sp_ver::RandomSeedInherentDataProvider;
+use sp_inherents::InherentDataProvider;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
@@ -76,6 +80,41 @@ pub trait SlotWorker<B: BlockT, Proof> {
 	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfully built in
 	/// the slot. Otherwise `None` is returned.
 	async fn on_slot(&mut self, slot_info: SlotInfo<B>) -> Option<SlotResult<B, Proof>>;
+}
+
+fn create_shuffling_seed_input_data<'a>(prev_seed: &'a ShufflingSeed) -> vrf::VRFTranscriptData {
+	vrf::VRFTranscriptData {
+		label: b"shuffling_seed",
+		items: vec![("prev_seed", vrf::VRFTranscriptValue::Bytes(prev_seed.seed.as_bytes().iter().cloned().collect()))],
+	}
+}
+
+fn inject_inherents<'a, B: BlockT>(
+	keystore: SyncCryptoStorePtr,
+	public: &'a sr25519::Public,
+	slot_info: &'a mut SlotInfo<B>,
+) -> Result<(), sp_consensus::Error> {
+    let prev_seed = slot_info.chain_head.seed();
+	let transcript_data = create_shuffling_seed_input_data(&prev_seed);
+
+
+    if let Ok(Some(signature)) = SyncCryptoStore::sr25519_vrf_sign(&(*keystore), AURA, public, transcript_data) {
+        RandomSeedInherentDataProvider(ShufflingSeed {
+            seed: signature.output.to_bytes().into(),
+            proof: signature.proof.to_bytes().into(),
+        })
+        .provide_inherent_data(&mut slot_info.inherent_data)
+        .map_err(|_| sp_consensus::Error::StateUnavailable(String::from("cannot inject RandomSeed inherent data")))?;
+
+    }else{
+        return Err(sp_consensus::Error::StateUnavailable(String::from("signing seed failure")));
+    };
+
+    // let signature = 
+	// 	.map_err(|_| sp_consensus::Error::StateUnavailable(String::from("signing seed failure")))?;
+    //
+
+	Ok(())
 }
 
 /// A skeleton implementation for `SlotWorker` which tries to claim a slot at
@@ -135,6 +174,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		slot: Slot,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim>;
+
+    /// reads key required for signing shuffling seed
+    fn get_key(&self, claim: &Self::Claim) -> sr25519::Public;
 
 	/// Notifies the given slot. Similar to `claim_slot`, but will be called no matter whether we
 	/// need to author blocks or not.
@@ -199,11 +241,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Implements [`SlotWorker::on_slot`].
 	async fn on_slot(
 		&mut self,
-		slot_info: SlotInfo<B>,
+		mut slot_info: SlotInfo<B>,
 	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>>
 	where
 		Self: Sync,
 	{
+        let keystore = self.keystore().clone();
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
@@ -263,6 +306,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		}
 
 		let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data).await?;
+        let key = self.get_key(&claim);
+        inject_inherents(keystore, &key ,  & mut slot_info).ok()?;
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None
@@ -415,6 +460,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		Some(SlotResult { block: B::new(header, body), storage_proof })
 	}
+
+    /// keystore handle
+    fn keystore(&self) -> SyncCryptoStorePtr;
+
 }
 
 #[async_trait::async_trait]

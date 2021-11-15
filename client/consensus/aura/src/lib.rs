@@ -490,6 +490,14 @@ where
 			self.logging_target(),
 		)
 	}
+
+    fn keystore(&self) -> SyncCryptoStorePtr{
+        self.keystore.clone()
+    }
+
+    fn get_key(&self, claim: &Self::Claim) -> sp_core::sr25519::Public{
+        claim.as_slice().try_into().unwrap()
+    }
 }
 
 fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
