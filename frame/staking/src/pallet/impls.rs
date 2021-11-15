@@ -855,14 +855,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-		debug_assert!(<Nominators<T>>::iter().count() as u32 == Nominators::<T>::count());
-		debug_assert!(<Validators<T>>::iter().count() as u32 == Validators::<T>::count());
-		debug_assert_eq!(
-			Nominators::<T>::count(),
-			T::SortedListProvider::count(),
-			"voter_count must be accurate",
-		);
-
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
