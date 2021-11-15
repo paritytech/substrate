@@ -12,7 +12,7 @@ description = "Transaction pool client facing API."
 futures = { version = "0.3.1"  }
 log = { version = "0.4.8" }
 serde = { version = "1.0.126", features = ["derive"] }
-thiserror = { version = "1.0.21" }
+thiserror = { version = "1.0.30" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
 derive_more = { version = "0.99.11" }

@@ -262,21 +262,23 @@ bitflags::bitflags! {
 	/// Execution context extra capabilities.
 	pub struct Capabilities: u32 {
 		/// Access to transaction pool.
-		const TRANSACTION_POOL = 0b0000_0001;
+		const TRANSACTION_POOL = 0b0000_0000_0001;
 		/// External http calls.
-		const HTTP = 0b0000_0010;
+		const HTTP = 0b0000_0000_0010;
 		/// Keystore access.
-		const KEYSTORE = 0b0000_0100;
+		const KEYSTORE = 0b0000_0000_0100;
 		/// Randomness source.
-		const RANDOMNESS = 0b0000_1000;
+		const RANDOMNESS = 0b0000_0000_1000;
 		/// Access to opaque network state.
-		const NETWORK_STATE = 0b0001_0000;
+		const NETWORK_STATE = 0b0000_0001_0000;
 		/// Access to offchain worker DB (read only).
-		const OFFCHAIN_DB_READ = 0b0010_0000;
+		const OFFCHAIN_DB_READ = 0b0000_0010_0000;
 		/// Access to offchain worker DB (writes).
-		const OFFCHAIN_DB_WRITE = 0b0100_0000;
+		const OFFCHAIN_DB_WRITE = 0b0000_0100_0000;
 		/// Manage the authorized nodes
-		const NODE_AUTHORIZATION = 0b1000_0000;
+		const NODE_AUTHORIZATION = 0b0000_1000_0000;
+		/// Access time related functionality
+		const TIME = 0b0001_0000_0000;
 	}
 }
 
@@ -541,12 +543,12 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		self.check(Capabilities::HTTP, "timestamp");
+		self.check(Capabilities::TIME, "timestamp");
 		self.externalities.timestamp()
 	}
 
 	fn sleep_until(&mut self, deadline: Timestamp) {
-		self.check(Capabilities::HTTP, "sleep_until");
+		self.check(Capabilities::TIME, "sleep_until");
 		self.externalities.sleep_until(deadline)
 	}
 

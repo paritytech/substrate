@@ -28,7 +28,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-hex-literal = "0.3.3"
+hex-literal = "0.3.4"
 
 [features]
 default = ["std"]

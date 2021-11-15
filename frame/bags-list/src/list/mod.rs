@@ -18,7 +18,7 @@
 //! Implementation of a "bags list": a semi-sorted list where ordering granularity is dictated by
 //! configurable thresholds that delineate the boundaries of bags. It uses a pattern of composite
 //! data structures, where multiple storage items are masked by one outer API. See [`ListNodes`],
-//! [`CounterForListNodes`] and [`ListBags`] for more information.
+//! [`ListBags`] for more information.
 //!
 //! The outer API of this module is the [`List`] struct. It wraps all acceptable operations on top
 //! of the aggregate linked list. All operations with the bags list should happen through this
@@ -77,17 +77,18 @@ pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
 	/// Remove all data associated with the list from storage. Parameter `items` is the number of
-	/// items to clear from the list. WARNING: `None` will clear all items and should generally not
-	/// be used in production as it could lead to an infinite number of storage accesses.
+	/// items to clear from the list.
+	///
+	/// ## WARNING
+	///
+	/// `None` will clear all items and should generally not be used in production as it could lead
+	/// to a very large number of storage accesses.
 	pub(crate) fn clear(maybe_count: Option<u32>) -> u32 {
 		crate::ListBags::<T>::remove_all(maybe_count);
+		let pre = crate::ListNodes::<T>::count();
 		crate::ListNodes::<T>::remove_all(maybe_count);
-		if let Some(count) = maybe_count {
-			crate::CounterForListNodes::<T>::mutate(|items| *items - count);
-			count
-		} else {
-			crate::CounterForListNodes::<T>::take()
-		}
+		let post = crate::ListNodes::<T>::count();
+		pre.saturating_sub(post)
 	}
 
 	/// Regenerate all of the data from the given ids.
@@ -274,17 +275,13 @@ impl<T: Config> List<T> {
 		// new inserts are always the tail, so we must write the bag.
 		bag.put();
 
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_add(1)
-		});
-
 		crate::log!(
 			debug,
 			"inserted {:?} with weight {} into bag {:?}, new count is {}",
 			id,
 			weight,
 			bag_weight,
-			crate::CounterForListNodes::<T>::get(),
+			crate::ListNodes::<T>::count(),
 		);
 
 		Ok(())
@@ -330,10 +327,6 @@ impl<T: Config> List<T> {
 		for (_, bag) in bags {
 			bag.put();
 		}
-
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_sub(count)
-		});
 
 		count
 	}
@@ -390,7 +383,7 @@ impl<T: Config> List<T> {
 	/// is being used, after all other staking data (such as counter) has been updated. It checks:
 	///
 	/// * there are no duplicate ids,
-	/// * length of this list is in sync with `CounterForListNodes`,
+	/// * length of this list is in sync with `ListNodes::count()`,
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(feature = "std")]
@@ -403,7 +396,7 @@ impl<T: Config> List<T> {
 		);
 
 		let iter_count = Self::iter().count() as u32;
-		let stored_count = crate::CounterForListNodes::<T>::get();
+		let stored_count = crate::ListNodes::<T>::count();
 		let nodes_count = crate::ListNodes::<T>::iter().count() as u32;
 		ensure!(iter_count == stored_count, "iter_count != stored_count");
 		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
