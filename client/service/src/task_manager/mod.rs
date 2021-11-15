@@ -41,6 +41,32 @@ mod tests;
 /// Default task group name.
 pub const DEFAULT_GROUP_NAME: &'static str = "default";
 
+/// The name of a group a task belongs to.
+///
+/// This name is passed belong-side the task name to the prometheus metrics and can be used
+/// to group tasks.  
+pub enum GroupName {
+	/// Sets the group name to `default`.
+	Default,
+	/// Use the specifically given name as group name.
+	Specific(&'static str),
+}
+
+impl From<Option<&'static str>> for GroupName {
+	fn from(name: Option<&'static str>) -> Self {
+		match name {
+			Some(name) => Self::Specific(name),
+			None => Self::Default,
+		}
+	}
+}
+
+impl From<&'static str> for GroupName {
+	fn from(name: &'static str) -> Self {
+		Self::Specific(name)
+	}
+}
+
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
@@ -51,10 +77,10 @@ pub struct SpawnTaskHandle {
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name and an optional group name.
+	/// Spawns the given task with the given name and a group name.
 	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
-	/// Note that the `name`/`group` is a `&'static str`. The reason for this choice is that
+	/// Note that the `name` is a `&'static str`. The reason for this choice is that
 	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
 	/// that therefore the set of possible task names must be bounded.
 	///
@@ -63,7 +89,7 @@ impl SpawnTaskHandle {
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
@@ -73,7 +99,7 @@ impl SpawnTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -83,7 +109,7 @@ impl SpawnTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
@@ -94,8 +120,12 @@ impl SpawnTaskHandle {
 
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
-		// If no group is specified use default.
-		let group = group.unwrap_or(DEFAULT_GROUP_NAME);
+
+		let group = match group.into() {
+			GroupName::Specific(var) => var,
+			// If no group is specified use default.
+			GroupName::Default => DEFAULT_GROUP_NAME,
+		};
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
@@ -198,7 +228,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
@@ -210,7 +240,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -219,7 +249,7 @@ impl SpawnEssentialTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
