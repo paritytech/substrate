@@ -28,7 +28,7 @@ pub(super) struct AddrCache {
 	/// the peerids found in `peer_id_to_authority_ids`. In other words, these two hashmaps
 	/// are similar to a bi-directional map.
 	///
-	/// NB: since we may store the mapping across several sessions, a single
+	/// Since we may store the mapping across several sessions, a single
 	/// `PeerId` might correspond to multiple `AuthorityId`s. However,
 	/// it's not expected that a single `AuthorityId` can have multiple `PeerId`s.
 	/// This is ensured in [`AddrCache::insert`].
