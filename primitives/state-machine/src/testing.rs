@@ -23,21 +23,15 @@ use std::{
 };
 
 use crate::{
-	backend::Backend,
-	changes_trie::{
-		BlockNumber as ChangesTrieBlockNumber, Configuration as ChangesTrieConfiguration,
-		InMemoryStorage as ChangesTrieInMemoryStorage, State as ChangesTrieState,
-	},
-	ext::Ext,
-	InMemoryBackend, OverlayedChanges, StorageKey, StorageTransactionCache, StorageValue,
+	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
+	StorageTransactionCache, StorageValue,
 };
 
-use codec::Decode;
 use hash_db::Hasher;
 use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
-		well_known_keys::{is_child_storage_key, CHANGES_TRIE_CONFIG, CODE},
+		well_known_keys::{is_child_storage_key, CODE},
 		Storage,
 	},
 	testing::TaskExecutor,
@@ -47,7 +41,7 @@ use sp_core::{
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
+pub struct TestExternalities<H: Hasher>
 where
 	H::Out: codec::Codec + Ord,
 {
@@ -55,35 +49,25 @@ where
 	overlay: OverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache:
-		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H, N>,
+		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,
 	/// Storage backend.
 	pub backend: InMemoryBackend<H>,
-	changes_trie_config: Option<ChangesTrieConfiguration>,
-	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	/// Extensions.
 	pub extensions: Extensions,
 	/// State version to use during tests.
 	pub state_version: StateVersion,
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
+impl<H: Hasher> TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// Get externalities implementation.
-	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>> {
+	pub fn ext(&mut self) -> Ext<H, InMemoryBackend<H>> {
 		Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
 			&self.backend,
-			match self.changes_trie_config.clone() {
-				Some(config) => Some(ChangesTrieState {
-					config,
-					zero: 0.into(),
-					storage: &self.changes_trie_storage,
-				}),
-				None => None,
-			},
 			Some(&mut self.extensions),
 		)
 	}
@@ -115,13 +99,6 @@ where
 		mut storage: Storage,
 		state_version: StateVersion,
 	) -> Self {
-		let mut overlay = OverlayedChanges::default();
-		let changes_trie_config = storage
-			.top
-			.get(CHANGES_TRIE_CONFIG)
-			.and_then(|v| Decode::decode(&mut &v[..]).ok());
-		overlay.set_collect_extrinsics(changes_trie_config.is_some());
-
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
@@ -135,11 +112,9 @@ where
 		let backend = (storage, state_version).into();
 
 		TestExternalities {
-			overlay,
+			overlay: OverlayedChanges::default(),
 			offchain_db,
-			changes_trie_config,
 			extensions,
-			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend,
 			storage_transaction_cache: Default::default(),
 			state_version,
@@ -171,11 +146,6 @@ where
 		self.extensions.register(ext);
 	}
 
-	/// Get mutable reference to changes trie storage.
-	pub fn changes_trie_storage(&mut self) -> &mut ChangesTrieInMemoryStorage<H, N> {
-		&mut self.changes_trie_storage
-	}
-
 	/// Return a new backend with all pending changes.
 	///
 	/// In contrast to [`commit_all`](Self::commit_all) this will not panic if there are open
@@ -201,9 +171,8 @@ where
 	///
 	/// This will panic if there are still open transactions.
 	pub fn commit_all(&mut self) -> Result<(), String> {
-		let changes = self.overlay.drain_storage_changes::<_, _, N>(
+		let changes = self.overlay.drain_storage_changes::<_, _>(
 			&self.backend,
-			None,
 			Default::default(),
 			&mut Default::default(),
 			self.state_version,
@@ -238,7 +207,7 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N>
+impl<H: Hasher> std::fmt::Debug for TestExternalities<H>
 where
 	H::Out: Ord + codec::Codec,
 {
@@ -247,18 +216,18 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
+impl<H: Hasher> PartialEq for TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
-	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
+	fn eq(&self, other: &TestExternalities<H>) -> bool {
 		self.as_backend().eq(&other.as_backend())
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
+impl<H: Hasher> Default for TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -268,7 +237,7 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N>
+impl<H: Hasher> From<Storage> for TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -277,7 +246,7 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<(Storage, StateVersion)> for TestExternalities<H, N>
+impl<H: Hasher> From<(Storage, StateVersion)> for TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -286,11 +255,10 @@ where
 	}
 }
 
-impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N>
+impl<H> sp_externalities::ExtensionStore for TestExternalities<H>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
-	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(type_id)
@@ -316,11 +284,10 @@ where
 	}
 }
 
-impl<H, N> sp_externalities::ExternalitiesExt for TestExternalities<H, N>
+impl<H> sp_externalities::ExternalitiesExt for TestExternalities<H>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
-	N: ChangesTrieBlockNumber,
 {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
 		self.extension_by_type_id(TypeId::of::<T>()).and_then(<dyn Any>::downcast_mut)
@@ -345,7 +312,7 @@ mod tests {
 	#[test]
 	fn commit_should_work() {
 		let storage = Storage::default(); // avoid adding the trie threshold.
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::from((storage, Default::default()));
+		let mut ext = TestExternalities::<BlakeTwo256>::from((storage, Default::default()));
 		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
@@ -357,7 +324,7 @@ mod tests {
 
 	#[test]
 	fn set_and_retrieve_code() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		let mut ext = ext.ext();
 
 		let code = vec![1, 2, 3];
@@ -369,12 +336,12 @@ mod tests {
 	#[test]
 	fn check_send() {
 		fn assert_send<T: Send>() {}
-		assert_send::<TestExternalities<BlakeTwo256, u64>>();
+		assert_send::<TestExternalities<BlakeTwo256>>();
 	}
 
 	#[test]
 	fn commit_all_and_kill_child_storage() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		let child_info = ChildInfo::new_default(&b"test_child"[..]);
 
 		{
@@ -399,7 +366,7 @@ mod tests {
 
 	#[test]
 	fn as_backend_generates_same_backend_as_commit_all() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		{
 			let mut ext = ext.ext();
 			ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());

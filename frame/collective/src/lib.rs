@@ -345,6 +345,13 @@ pub mod pallet {
 		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
 		///
+		/// # WARNING:
+		///
+		/// The `pallet-collective` can also be managed by logic outside of the pallet through the
+		/// implementation of the trait [`ChangeMembers`].
+		/// Any call to `set_members` must be careful that the member set doesn't get out of sync
+		/// with other logic managing the member set.
+		///
 		/// # <weight>
 		/// ## Weight
 		/// - `O(MP + N)` where:

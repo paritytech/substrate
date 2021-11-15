@@ -1633,115 +1633,49 @@ fn reward_to_stake_works() {
 }
 
 #[test]
-fn on_free_balance_zero_stash_removes_validator() {
-	// Tests that validator storage items are cleaned up when stash is empty
-	// Tests that storage items are untouched when controller is empty
+fn reap_stash_works() {
 	ExtBuilder::default()
 		.existential_deposit(10)
 		.balance_factor(10)
 		.build_and_execute(|| {
-			// Check the balance of the validator account
+			// given
 			assert_eq!(Balances::free_balance(10), 10);
-			// Check the balance of the stash account
 			assert_eq!(Balances::free_balance(11), 10 * 1000);
-			// Check these two accounts are bonded
 			assert_eq!(Staking::bonded(&11), Some(10));
 
-			// Set payee information
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
-
-			// Check storage items that should be cleaned up
 			assert!(<Ledger<Test>>::contains_key(&10));
 			assert!(<Bonded<Test>>::contains_key(&11));
 			assert!(<Validators<Test>>::contains_key(&11));
 			assert!(<Payee<Test>>::contains_key(&11));
 
-			// Reduce free_balance of controller to 0
-			let _ = Balances::slash(&10, Balance::max_value());
+			// stash is not reapable
+			assert_noop!(
+				Staking::reap_stash(Origin::signed(20), 11, 0),
+				Error::<Test>::FundedTarget
+			);
+			// controller or any other account is not reapable
+			assert_noop!(Staking::reap_stash(Origin::signed(20), 10, 0), Error::<Test>::NotStash);
 
-			// Check the balance of the stash account has not been touched
-			assert_eq!(Balances::free_balance(11), 10 * 1000);
-			// Check these two accounts are still bonded
-			assert_eq!(Staking::bonded(&11), Some(10));
+			// no easy way to cause an account to go below ED, we tweak their staking ledger
+			// instead.
+			Ledger::<Test>::insert(
+				10,
+				StakingLedger {
+					stash: 11,
+					total: 5,
+					active: 5,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 
-			// Check storage items have not changed
-			assert!(<Ledger<Test>>::contains_key(&10));
-			assert!(<Bonded<Test>>::contains_key(&11));
-			assert!(<Validators<Test>>::contains_key(&11));
-			assert!(<Payee<Test>>::contains_key(&11));
+			// reap-able
+			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 0));
 
-			// Reduce free_balance of stash to 0
-			let _ = Balances::slash(&11, Balance::max_value());
-			// Check total balance of stash
-			assert_eq!(Balances::total_balance(&11), 10);
-
-			// Reap the stash
-			assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
-
-			// Check storage items do not exist
+			// then
 			assert!(!<Ledger<Test>>::contains_key(&10));
 			assert!(!<Bonded<Test>>::contains_key(&11));
 			assert!(!<Validators<Test>>::contains_key(&11));
-			assert!(!<Nominators<Test>>::contains_key(&11));
-			assert!(!<Payee<Test>>::contains_key(&11));
-		});
-}
-
-#[test]
-fn on_free_balance_zero_stash_removes_nominator() {
-	// Tests that nominator storage items are cleaned up when stash is empty
-	// Tests that storage items are untouched when controller is empty
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.balance_factor(10)
-		.build_and_execute(|| {
-			// Make 10 a nominator
-			assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
-			// Check that account 10 is a nominator
-			assert!(<Nominators<Test>>::contains_key(11));
-			// Check the balance of the nominator account
-			assert_eq!(Balances::free_balance(10), 10);
-			// Check the balance of the stash account
-			assert_eq!(Balances::free_balance(11), 10_000);
-
-			// Set payee information
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
-
-			// Check storage items that should be cleaned up
-			assert!(<Ledger<Test>>::contains_key(&10));
-			assert!(<Bonded<Test>>::contains_key(&11));
-			assert!(<Nominators<Test>>::contains_key(&11));
-			assert!(<Payee<Test>>::contains_key(&11));
-
-			// Reduce free_balance of controller to 0
-			let _ = Balances::slash(&10, Balance::max_value());
-			// Check total balance of account 10
-			assert_eq!(Balances::total_balance(&10), 0);
-
-			// Check the balance of the stash account has not been touched
-			assert_eq!(Balances::free_balance(11), 10_000);
-			// Check these two accounts are still bonded
-			assert_eq!(Staking::bonded(&11), Some(10));
-
-			// Check storage items have not changed
-			assert!(<Ledger<Test>>::contains_key(&10));
-			assert!(<Bonded<Test>>::contains_key(&11));
-			assert!(<Nominators<Test>>::contains_key(&11));
-			assert!(<Payee<Test>>::contains_key(&11));
-
-			// Reduce free_balance of stash to 0
-			let _ = Balances::slash(&11, Balance::max_value());
-			// Check total balance of stash
-			assert_eq!(Balances::total_balance(&11), 10);
-
-			// Reap the stash
-			assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
-
-			// Check storage items do not exist
-			assert!(!<Ledger<Test>>::contains_key(&10));
-			assert!(!<Bonded<Test>>::contains_key(&11));
-			assert!(!<Validators<Test>>::contains_key(&11));
-			assert!(!<Nominators<Test>>::contains_key(&11));
 			assert!(!<Payee<Test>>::contains_key(&11));
 		});
 }
@@ -2556,10 +2490,10 @@ fn garbage_collection_after_slashing() {
 
 			// reap_stash respects num_slashing_spans so that weight is accurate
 			assert_noop!(
-				Staking::reap_stash(Origin::none(), 11, 0),
+				Staking::reap_stash(Origin::signed(20), 11, 0),
 				Error::<Test>::IncorrectSlashingSpans
 			);
-			assert_ok!(Staking::reap_stash(Origin::none(), 11, 2));
+			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 2));
 
 			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);

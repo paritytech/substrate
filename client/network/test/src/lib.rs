@@ -48,13 +48,13 @@ use sc_consensus::{
 };
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
-	block_request_handler::{self, BlockRequestHandler},
+	block_request_handler::BlockRequestHandler,
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode,
 		ProtocolConfig, ProtocolId, Role, SyncMode, TransportConfig,
 	},
-	light_client_requests::{self, handler::LightClientRequestHandler},
-	state_request_handler::{self, StateRequestHandler},
+	light_client_requests::handler::LightClientRequestHandler,
+	state_request_handler::StateRequestHandler,
 	warp_request_handler, Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_service::client::Client;
@@ -133,25 +133,20 @@ pub type PeersFullClient = Client<
 	Block,
 	substrate_test_runtime_client::runtime::RuntimeApi,
 >;
-pub type PeersLightClient = Client<
-	substrate_test_runtime_client::LightBackend,
-	substrate_test_runtime_client::LightExecutor,
-	Block,
-	substrate_test_runtime_client::runtime::RuntimeApi,
->;
 
 #[derive(Clone)]
-pub enum PeersClient {
-	Full(Arc<PeersFullClient>, Arc<substrate_test_runtime_client::Backend>),
-	Light(Arc<PeersLightClient>, Arc<substrate_test_runtime_client::LightBackend>),
+pub struct PeersClient {
+	client: Arc<PeersFullClient>,
+	backend: Arc<substrate_test_runtime_client::Backend>,
 }
 
 impl PeersClient {
-	pub fn as_full(&self) -> Option<Arc<PeersFullClient>> {
-		match *self {
-			PeersClient::Full(ref client, _) => Some(client.clone()),
-			_ => None,
-		}
+	pub fn as_client(&self) -> Arc<PeersFullClient> {
+		self.client.clone()
+	}
+
+	pub fn as_backend(&self) -> Arc<substrate_test_runtime_client::Backend> {
+		self.backend.clone()
 	}
 
 	pub fn as_block_import(&self) -> BlockImportAdapter<Self> {
@@ -159,27 +154,18 @@ impl PeersClient {
 	}
 
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		match *self {
-			PeersClient::Full(ref client, _) => client.get_aux(key),
-			PeersClient::Light(ref client, _) => client.get_aux(key),
-		}
+		self.client.get_aux(key)
 	}
 
 	pub fn info(&self) -> BlockchainInfo<Block> {
-		match *self {
-			PeersClient::Full(ref client, _) => client.chain_info(),
-			PeersClient::Light(ref client, _) => client.chain_info(),
-		}
+		self.client.info()
 	}
 
 	pub fn header(
 		&self,
 		block: &BlockId<Block>,
 	) -> ClientResult<Option<<Block as BlockT>::Header>> {
-		match *self {
-			PeersClient::Full(ref client, _) => client.header(block),
-			PeersClient::Light(ref client, _) => client.header(block),
-		}
+		self.client.header(block)
 	}
 
 	pub fn has_state_at(&self, block: &BlockId<Block>) -> bool {
@@ -187,33 +173,19 @@ impl PeersClient {
 			Some(header) => header,
 			None => return false,
 		};
-		match self {
-			PeersClient::Full(_client, backend) =>
-				backend.have_state_at(&header.hash(), *header.number()),
-			PeersClient::Light(_client, backend) =>
-				backend.have_state_at(&header.hash(), *header.number()),
-		}
+		self.backend.have_state_at(&header.hash(), *header.number())
 	}
 
 	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
-		match *self {
-			PeersClient::Full(ref client, _) => client.justifications(block),
-			PeersClient::Light(ref client, _) => client.justifications(block),
-		}
+		self.client.justifications(block)
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		match *self {
-			PeersClient::Full(ref client, _) => client.finality_notification_stream(),
-			PeersClient::Light(ref client, _) => client.finality_notification_stream(),
-		}
+		self.client.finality_notification_stream()
 	}
 
 	pub fn import_notification_stream(&self) -> ImportNotifications<Block> {
-		match *self {
-			PeersClient::Full(ref client, _) => client.import_notification_stream(),
-			PeersClient::Light(ref client, _) => client.import_notification_stream(),
-		}
+		self.client.import_notification_stream()
 	}
 
 	pub fn finalize_block(
@@ -222,12 +194,7 @@ impl PeersClient {
 		justification: Option<Justification>,
 		notify: bool,
 	) -> ClientResult<()> {
-		match *self {
-			PeersClient::Full(ref client, ref _backend) =>
-				client.finalize_block(id, justification, notify),
-			PeersClient::Light(ref client, ref _backend) =>
-				client.finalize_block(id, justification, notify),
-		}
+		self.client.finalize_block(id, justification, notify)
 	}
 }
 
@@ -240,10 +207,7 @@ impl BlockImport<Block> for PeersClient {
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		match self {
-			PeersClient::Full(client, _) => client.check_block(block).await,
-			PeersClient::Light(client, _) => client.check_block(block).await,
-		}
+		self.client.check_block(block).await
 	}
 
 	async fn import_block(
@@ -251,12 +215,7 @@ impl BlockImport<Block> for PeersClient {
 		block: BlockImportParams<Block, ()>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		match self {
-			PeersClient::Full(client, _) =>
-				client.import_block(block.clear_storage_changes_and_mutate(), cache).await,
-			PeersClient::Light(client, _) =>
-				client.import_block(block.clear_storage_changes_and_mutate(), cache).await,
-		}
+		self.client.import_block(block.clear_storage_changes_and_mutate(), cache).await
 	}
 }
 
@@ -370,8 +329,7 @@ where
 			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
 		) -> Block,
 	{
-		let full_client =
-			self.client.as_full().expect("blocks could only be generated by full clients");
+		let full_client = self.client.as_client();
 		let mut at = full_client.header(&at).unwrap().unwrap().hash();
 		for _ in 0..count {
 			let builder =
@@ -779,11 +737,11 @@ where
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
 
-		let (block_import, justification_import, data) =
-			self.make_block_import(PeersClient::Full(client.clone(), backend.clone()));
+		let (block_import, justification_import, data) = self
+			.make_block_import(PeersClient { client: client.clone(), backend: backend.clone() });
 
 		let verifier = self.make_verifier(
-			PeersClient::Full(client.clone(), backend.clone()),
+			PeersClient { client: client.clone(), backend: backend.clone() },
 			&Default::default(),
 			&data,
 		);
@@ -868,7 +826,6 @@ where
 			}),
 			network_config,
 			chain: client.clone(),
-			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
 			import_queue,
@@ -899,101 +856,13 @@ where
 
 			peers.push(Peer {
 				data,
-				client: PeersClient::Full(client.clone(), backend.clone()),
+				client: PeersClient { client: client.clone(), backend: backend.clone() },
 				select_chain: Some(longest_chain),
 				backend: Some(backend),
 				imported_blocks_stream,
 				finality_notification_stream,
 				block_import,
 				verifier,
-				network,
-				listen_addr,
-			});
-		});
-	}
-
-	/// Add a light peer.
-	fn add_light_peer(&mut self) {
-		let (c, backend) = substrate_test_runtime_client::new_light();
-		let client = Arc::new(c);
-		let (block_import, justification_import, data) =
-			self.make_block_import(PeersClient::Light(client.clone(), backend.clone()));
-
-		let verifier = self.make_verifier(
-			PeersClient::Light(client.clone(), backend.clone()),
-			&Default::default(),
-			&data,
-		);
-		let verifier = VerifierAdapter::new(verifier);
-
-		let import_queue = Box::new(BasicQueue::new(
-			verifier.clone(),
-			Box::new(block_import.clone()),
-			justification_import,
-			&sp_core::testing::TaskExecutor::new(),
-			None,
-		));
-
-		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
-
-		let mut network_config =
-			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
-		network_config.transport = TransportConfig::MemoryOnly;
-		network_config.listen_addresses = vec![listen_addr.clone()];
-		network_config.allow_non_globals_in_dht = true;
-
-		let protocol_id = ProtocolId::from("test-protocol-name");
-
-		let block_request_protocol_config =
-			block_request_handler::generate_protocol_config(&protocol_id);
-		let state_request_protocol_config =
-			state_request_handler::generate_protocol_config(&protocol_id);
-
-		let light_client_request_protocol_config =
-			light_client_requests::generate_protocol_config(&protocol_id);
-
-		let network = NetworkWorker::new(sc_network::config::Params {
-			role: Role::Light,
-			executor: None,
-			transactions_handler_executor: Box::new(|task| {
-				async_std::task::spawn(task);
-			}),
-			network_config,
-			chain: client.clone(),
-			on_demand: None,
-			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id,
-			import_queue,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
-			metrics_registry: None,
-			block_request_protocol_config,
-			state_request_protocol_config,
-			light_client_request_protocol_config,
-			warp_sync: None,
-		})
-		.unwrap();
-
-		self.mut_peers(|peers| {
-			for peer in peers.iter_mut() {
-				peer.network.add_known_address(
-					network.service().local_peer_id().clone(),
-					listen_addr.clone(),
-				);
-			}
-
-			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
-			let finality_notification_stream =
-				Box::pin(client.finality_notification_stream().fuse());
-
-			peers.push(Peer {
-				data,
-				verifier,
-				select_chain: None,
-				backend: None,
-				block_import,
-				client: PeersClient::Light(client, backend),
-				imported_blocks_stream,
-				finality_notification_stream,
 				network,
 				listen_addr,
 			});

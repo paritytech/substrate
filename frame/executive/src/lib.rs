@@ -125,7 +125,6 @@ use frame_support::{
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
-use frame_system::DigestOf;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -281,8 +280,8 @@ where
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
 	}
 
-	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
-		let mut digest = <DigestOf<System>>::default();
+	fn extract_pre_digest(header: &System::Header) -> Digest {
+		let mut digest = <Digest>::default();
 		header.digest().logs().iter().for_each(|d| {
 			if d.as_pre_runtime().is_some() {
 				digest.push(d.clone())
@@ -294,7 +293,7 @@ where
 	fn initialize_block_impl(
 		block_number: &System::BlockNumber,
 		parent_hash: &System::Hash,
-		digest: &Digest<System::Hash>,
+		digest: &Digest,
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {

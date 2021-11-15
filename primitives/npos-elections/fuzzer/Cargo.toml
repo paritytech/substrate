@@ -20,7 +20,7 @@ honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
 sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
-structopt = "0.3.21"
+structopt = "0.3.25"
 
 [[bin]]
 name = "reduce"

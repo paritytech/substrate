@@ -303,32 +303,6 @@ where
 	}
 }
 
-/// Insert input pairs into memory db.
-#[cfg(test)]
-pub(crate) fn insert_into_memory_db<H, I>(
-	mdb: &mut sp_trie::MemoryDB<H>,
-	input: I,
-) -> Option<H::Out>
-where
-	H: Hasher,
-	I: IntoIterator<Item = (StorageKey, StorageValue)>,
-{
-	use sp_trie::{trie_types::TrieDBMutV1, TrieMut};
-
-	let mut root = <H as Hasher>::Out::default();
-	{
-		let mut trie = TrieDBMutV1::<H>::new(mdb, &mut root);
-		for (key, value) in input {
-			if let Err(e) = trie.insert(&key, &value) {
-				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None
-			}
-		}
-	}
-
-	Some(root)
-}
-
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
 #[cfg(feature = "std")]
 pub struct BackendRuntimeCode<'a, B, H> {
