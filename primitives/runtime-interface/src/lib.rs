@@ -304,7 +304,7 @@ pub use sp_std;
 /// Syntax is:
 ///
 /// ```
-/// #[runtime_interface(feature_force_version=old_state,root,1)]
+/// #[sp_runtime_interface::runtime_interface(feature_force_version=old_state,root,1)]
 /// trait RuntimeInterface { }
 /// ```
 ///
