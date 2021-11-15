@@ -953,6 +953,28 @@ impl<
 	}
 }
 
+/// The "AND gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` and `R` origin check passes. `L` is tested first.
+pub struct EnsureBothOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
+impl<
+		AccountId,
+		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + Clone,
+		L: EnsureOrigin<O>,
+		R: EnsureOrigin<O>,
+	> EnsureOrigin<O> for EnsureBothOf<AccountId, L, R>
+{
+	type Success = (L::Success, R::Success);
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		L::try_origin(o.clone()).map_or_else(|o| Err(o), |l| R::try_origin(o).map(|r| (l, r)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		L::successful_origin()
+	}
+}
+
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, BadOrigin>

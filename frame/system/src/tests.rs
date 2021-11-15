@@ -476,6 +476,25 @@ fn ensure_one_of_works() {
 }
 
 #[test]
+fn ensure_both_of_works() {
+	fn ensure_root_and_signed<L: EnsureOrigin<Origin>, R: EnsureOrigin<Origin>>(
+		o: RawOrigin<u64>,
+	) -> Result<(L::Success, R::Success), Origin> {
+		EnsureBothOf::<u64, L, R>::try_origin(o.into())
+	}
+
+	assert!(ensure_root_and_signed::<EnsureRoot<u64>, EnsureSigned<u64>>(RawOrigin::Root).is_err());
+	assert!(
+		ensure_root_and_signed::<EnsureRoot<u64>, EnsureSigned<u64>>(RawOrigin::Signed(0)).is_err()
+	);
+	assert!(ensure_root_and_signed::<EnsureRoot<u64>, EnsureSigned<u64>>(RawOrigin::None).is_err());
+	assert_eq!(
+		ensure_root_and_signed::<EnsureRoot<u64>, EnsureRoot<u64>>(RawOrigin::Root).unwrap(),
+		((), ())
+	);
+}
+
+#[test]
 fn extrinsics_root_is_calculated_correctly() {
 	new_test_ext().execute_with(|| {
 		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
