@@ -18,18 +18,16 @@
 
 //! State API backend for full nodes.
 
-use std::{collections::HashMap, sync::Arc, marker::PhantomData};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
-use crate::SubscriptionTaskExecutor;
 use super::{
 	client_err,
 	error::{Error, Result},
 	ChildStateBackend, StateBackend,
 };
+use crate::SubscriptionTaskExecutor;
 
-use futures::{
-	future, stream, FutureExt, StreamExt, task::Spawn
-};
+use futures::{future, stream, task::Spawn, FutureExt, StreamExt};
 use jsonrpsee::SubscriptionSink;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
@@ -427,19 +425,17 @@ where
 			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
 		// initial values
-		let initial = stream::iter(
-			keys.map(|keys| {
-				let block = self.client.info().best_hash;
-				let changes = keys
-					.into_iter()
-					.map(|key| {
-						let v = self.client.storage(&BlockId::Hash(block), &key).ok().flatten();
-						(key, v)
-					})
-					.collect();
-				StorageChangeSet { block, changes }
-			})
-		);
+		let initial = stream::iter(keys.map(|keys| {
+			let block = self.client.info().best_hash;
+			let changes = keys
+				.into_iter()
+				.map(|key| {
+					let v = self.client.storage(&BlockId::Hash(block), &key).ok().flatten();
+					(key, v)
+				})
+				.collect();
+			StorageChangeSet { block, changes }
+		}));
 
 		let fut = async move {
 			let stream = stream.map(|(block, changes)| StorageChangeSet {

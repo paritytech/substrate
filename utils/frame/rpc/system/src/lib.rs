@@ -83,8 +83,8 @@ impl<P: TransactionPool, C, B> SystemRpc<P, C, B> {
 }
 
 #[async_trait]
-impl<P, C, Block, AccountId, Index> SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index>
-	for SystemRpc<P, C, Block>
+impl<P, C, Block, AccountId, Index>
+	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index> for SystemRpc<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
@@ -126,7 +126,8 @@ where
 			data: serde_json::value::to_raw_value(&e.to_string()).ok(),
 		})?;
 		Ok(Encode::encode(&result).into())
-	}}
+	}
+}
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.

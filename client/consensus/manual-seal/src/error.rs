@@ -120,6 +120,7 @@ impl From<Error> for JsonRpseeError {
 				message: "Unknown error".to_string(),
 				data: None,
 			},
-		}.into()
+		}
+		.into()
 	}
 }
