@@ -35,19 +35,24 @@ pub enum Error {
 	MalformattedPeerArg(String),
 }
 
-/// Base code for all system errors.
+// Base code for all system errors.
 const BASE_ERROR: i32 = 2000;
+// Provided block range couldn't be resolved to a list of blocks.
+const NOT_HEALTHY_ERROR: i32 = BASE_ERROR + 1;
+// Peer argument is malformatted.
+const MALFORMATTED_PEER_ARG_ERROR: i32 = BASE_ERROR + 2;
+
 
 impl From<Error> for CallError {
 	fn from(e: Error) -> Self {
 		match e {
 			Error::NotHealthy(ref h) => Self::Custom {
-				code: BASE_ERROR + 1,
+				code: NOT_HEALTHY_ERROR,
 				message: e.to_string(),
 				data: to_json_raw_value(&h).ok(),
 			},
 			Error::MalformattedPeerArg(e) =>
-				Self::Custom { code: BASE_ERROR + 2, message: e, data: None },
+				Self::Custom { code: MALFORMATTED_PEER_ARG_ERROR + 2, message: e, data: None },
 		}
 	}
 }
