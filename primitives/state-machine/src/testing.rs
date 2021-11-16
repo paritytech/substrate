@@ -29,7 +29,8 @@ use crate::{
 		InMemoryStorage as ChangesTrieInMemoryStorage, State as ChangesTrieState,
 	},
 	ext::Ext,
-	InMemoryBackend, OverlayedChanges, StorageKey, StorageTransactionCache, StorageValue,
+	InMemoryBackend, InMemoryProvingBackend, OverlayedChanges, StorageKey,
+	StorageTransactionCache, StorageValue,
 };
 
 use codec::Decode;
@@ -45,6 +46,7 @@ use sp_core::{
 	StateVersion,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
+use sp_trie::StorageProof;
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
@@ -76,6 +78,26 @@ where
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
 			&self.backend,
+			match self.changes_trie_config.clone() {
+				Some(config) => Some(ChangesTrieState {
+					config,
+					zero: 0.into(),
+					storage: &self.changes_trie_storage,
+				}),
+				None => None,
+			},
+			Some(&mut self.extensions),
+		)
+	}
+
+	pub fn proving_ext<'a>(
+		&'a mut self,
+		proving_backend: &'a InMemoryProvingBackend<'a, H>,
+	) -> Ext<H, N, InMemoryProvingBackend<'a, H>> {
+		Ext::new(
+			&mut self.overlay,
+			&mut self.storage_transaction_cache,
+			&proving_backend,
 			match self.changes_trie_config.clone() {
 				Some(config) => Some(ChangesTrieState {
 					config,
@@ -228,6 +250,17 @@ where
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		let mut ext = self.ext();
 		sp_externalities::set_and_run_with_externalities(&mut ext, execute)
+	}
+
+	pub fn execute_and_get_proof<'a, R>(
+		&'a mut self,
+		proving_backend: &'a InMemoryProvingBackend<'a, H>,
+		execute: impl FnOnce() -> R,
+	) -> (R, StorageProof) {
+		let mut ext = self.proving_ext(proving_backend);
+		let outcome = sp_externalities::set_and_run_with_externalities(&mut ext, execute);
+		let proof = ext.backend.extract_proof();
+		(outcome, proof)
 	}
 
 	/// Execute the given closure while `self` is set as externalities.

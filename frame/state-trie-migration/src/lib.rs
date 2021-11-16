@@ -1345,9 +1345,11 @@ mod remote_tests {
 	use std::sync::Arc;
 
 	use super::{mock::*, *};
+	use codec::Encode;
 	use mock::run_to_block_and_drain_pool;
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
-	use sp_runtime::traits::Bounded;
+	use sp_io::InMemoryProvingBackend;
+	use sp_runtime::traits::{Bounded, HashFor};
 
 	// TODO: show PoV size per block?
 	// we only use the hash type from this, so using the mock should be fine.
@@ -1387,7 +1389,10 @@ mod remote_tests {
 			ext.state_version = sp_core::StateVersion::V1;
 
 			loop {
-				let finished = ext.execute_with(|| {
+				let trie_backend = ext.backend.clone();
+				let last_state_root = ext.backend.root().clone();
+				let proving_backend = InMemoryProvingBackend::new(&trie_backend);
+				let (finished, proof) = ext.execute_and_get_proof(&proving_backend, || {
 					run_to_block(now + 1);
 					if StateTrieMigration::migration_process().finished() {
 						return true
@@ -1401,7 +1406,12 @@ mod remote_tests {
 					ext.as_backend().essence().check_migration_state().unwrap();
 				log::info!(
 					target: LOG_TARGET,
-					"(top_left: {}, child_left {})",
+					"proceeded to #{}, proof size: {} (top_left: {}, child_left {})",
+					now,
+					proof
+						.into_compact_proof::<HashFor<Block>>(last_state_root)
+						.unwrap()
+						.encoded_size(),
 					top_left,
 					child_left,
 				);

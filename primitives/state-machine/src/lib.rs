@@ -211,6 +211,8 @@ mod execution {
 	/// Trie backend with in-memory storage.
 	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
 
+	pub type InMemoryProvingBackend<'a, H> = ProvingBackend<'a, MemoryDB<H>, H>;
+
 	/// Strategy for executing a call into the runtime.
 	#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 	pub enum ExecutionStrategy {
