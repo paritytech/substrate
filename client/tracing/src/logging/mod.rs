@@ -226,7 +226,7 @@ impl LoggerBuilder {
 		self
 	}
 
-	/// Wether detailed log output should be enabled.
+	/// Whether detailed log output should be enabled.
 	///
 	/// This includes showing the log target, log level and thread name.
 	///
