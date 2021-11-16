@@ -205,21 +205,30 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
-		NewMultisig(T::AccountId, T::AccountId, CallHash),
+		/// A new multisig operation has begun.
+		NewMultisig { approving: T::AccountId, multisig: T::AccountId, call_hash: CallHash },
 		/// A multisig operation has been approved by someone.
-		/// \[approving, timepoint, multisig, call_hash\]
-		MultisigApproval(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
-		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
-		MultisigExecuted(
-			T::AccountId,
-			Timepoint<T::BlockNumber>,
-			T::AccountId,
-			CallHash,
-			DispatchResult,
-		),
-		/// A multisig operation has been cancelled. \[canceling, timepoint, multisig, call_hash\]
-		MultisigCancelled(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
+		MultisigApproval {
+			approving: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+		},
+		/// A multisig operation has been executed.
+		MultisigExecuted {
+			approving: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+			result: DispatchResult,
+		},
+		/// A multisig operation has been cancelled.
+		MultisigCancelled {
+			cancelling: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+		},
 	}
 
 	#[pallet::hooks]
@@ -481,7 +490,12 @@ pub mod pallet {
 			<Multisigs<T>>::remove(&id, &call_hash);
 			Self::clear_call(&call_hash);
 
-			Self::deposit_event(Event::MultisigCancelled(who, timepoint, id, call_hash));
+			Self::deposit_event(Event::MultisigCancelled {
+				cancelling: who,
+				timepoint,
+				multisig: id,
+				call_hash,
+			});
 			Ok(())
 		}
 	}
@@ -557,13 +571,13 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(&m.depositor, m.deposit);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
-				Self::deposit_event(Event::MultisigExecuted(
-					who,
+				Self::deposit_event(Event::MultisigExecuted {
+					approving: who,
 					timepoint,
-					id,
+					multisig: id,
 					call_hash,
-					result.map(|_| ()).map_err(|e| e.error),
-				));
+					result: result.map(|_| ()).map_err(|e| e.error),
+				});
 				Ok(get_result_weight(result)
 					.map(|actual_weight| {
 						T::WeightInfo::as_multi_complete(
@@ -594,7 +608,12 @@ impl<T: Config> Pallet<T> {
 					// Record approval.
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(Event::MultisigApproval(who, timepoint, id, call_hash));
+					Self::deposit_event(Event::MultisigApproval {
+						approving: who,
+						timepoint,
+						multisig: id,
+						call_hash,
+					});
 				} else {
 					// If we already approved and didn't store the Call, then this was useless and
 					// we report an error.
@@ -638,7 +657,7 @@ impl<T: Config> Pallet<T> {
 					approvals: vec![who.clone()],
 				},
 			);
-			Self::deposit_event(Event::NewMultisig(who, id, call_hash));
+			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
 
 			let final_weight = if stored {
 				T::WeightInfo::as_multi_create_store(other_signatories_len as u32, call_len as u32)
