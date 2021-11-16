@@ -123,6 +123,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	status: BountyStatus<AccountId, BlockNumber>,
 }
 
+// Getter for bounty status, to be used for child bounties.
 impl<
 	AccountId: PartialEq + Clone + Ord + Default,
 	Balance, 
@@ -534,6 +535,11 @@ pub mod pallet {
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+
+				// Ensure no active child-bounties before processing the call.
+				ensure!(T::ChildBountyManager::child_bounties_count(bounty_id) == 0, 
+					Error::<T>::RequireNoActiveChildBounty);
+
 				match &bounty.status {
 					BountyStatus::Active { curator, .. } => {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
@@ -843,5 +849,16 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Pallet<T> {
 		});
 
 		*total_weight += <T as Config>::WeightInfo::spend_funds(bounties_len);
+	}
+}
+
+// Default impl for when ChildBounties is not being used in the runtime.
+impl<Balance: Zero> ChildBountyManager<Balance> for () {
+	fn child_bounties_count(_bounty_id: BountyIndex) -> BountyIndex {
+		Default::default()
+	}
+
+	fn children_curator_fees(_bounty_id: BountyIndex) -> Balance {
+		Zero::zero()
 	}
 }

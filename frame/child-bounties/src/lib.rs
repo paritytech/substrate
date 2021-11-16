@@ -21,11 +21,12 @@
 //!
 //! > NOTE: This pallet is tightly coupled with pallet-treasury and pallet-bounties.
 //!
-//! A Child Bounty is a smaller piece of work, extracted from a parent bounty,
-//! that needs to be executed for a predefined Treasury amount to be paid out.
+//! With child bounties, a large bounty proposal can be divided into smaller chunks, 
+//! for parallel execution, and for efficient governance and tracking of spent funds.
+//! A child-bounty is a smaller piece of work, extracted from a parent bounty. 
 //! A curator is assigned after the child-bounty is created by the parent bounty curator, 
-//! to be delegated with the responsibility of assigning a payout address 
-//! once the specified set of tasks is completed.
+//! to be delegated with the responsibility of assigning a payout address once the specified 
+//! set of tasks is completed.
 //!
 //! ## Interface
 //!
@@ -198,8 +199,8 @@ pub mod pallet {
 
 	/// The cumulative child-bounty curator fee for each parent bounty.
 	#[pallet::storage]
-	#[pallet::getter(fn child_curator_fees)]
-	pub type ChildCuratorFees<T: Config> = StorageMap<_, Twox64Concat, BountyIndex, BalanceOf<T>, ValueQuery>;
+	#[pallet::getter(fn children_curator_fees)]
+	pub type ChildrenCuratorFees<T: Config> = StorageMap<_, Twox64Concat, BountyIndex, BalanceOf<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -334,7 +335,7 @@ pub mod pallet {
 
 					// Add child-bounty curator fee to the cumulative sum.
 					// To be subtracted from the parent bounty curator when claiming bounty.
-					ChildCuratorFees::<T>::mutate(
+					ChildrenCuratorFees::<T>::mutate(
 						parent_bounty_id,
 						|value| *value = value.saturating_add(fee));
 
@@ -468,14 +469,11 @@ pub mod pallet {
 						.as_mut()
 						.ok_or(BountiesError::<T>::InvalidIndex)?;
 
-					let slash_curator = | arg_curator: &T::AccountId, curator_deposit: &mut BalanceOf<T>| {
-							let imbalance = T::Currency::slash_reserved(
-								arg_curator,
-								*curator_deposit,
-							).0;
-							T::OnSlash::on_unbalanced(imbalance);
-							*curator_deposit = Zero::zero();
-						};
+					let slash_curator = |curator: &T::AccountId, curator_deposit: &mut BalanceOf<T>| {
+						let imbalance = T::Currency::slash_reserved(curator, *curator_deposit).0;
+						T::OnSlash::on_unbalanced(imbalance);
+						*curator_deposit = Zero::zero();
+					};
 
 					match child_bounty.status {
 						ChildBountyStatus::Added => {
@@ -512,6 +510,8 @@ pub mod pallet {
 											&curator,
 											child_bounty.curator_deposit,
 										);
+										// Reset curator deposit.
+										child_bounty.curator_deposit = Zero::zero();
 										// Continue to change bounty status below...
 									} else if parent_curator == sender
 									{
@@ -832,7 +832,7 @@ impl<T: Config> Pallet<T> {
 
 				// Revert the subcurator fee back to master curator &
 				// reduce the active child-bounty count.
-				ChildCuratorFees::<T>::mutate(
+				ChildrenCuratorFees::<T>::mutate(
 					parent_bounty_id,
 					|value| *value = value.saturating_sub(child_bounty.fee));
 				<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| *count = count.saturating_sub(1));
@@ -862,6 +862,10 @@ impl<T: Config> pallet_bounties::ChildBountyManager<BalanceOf<T>> for Pallet<T> 
     }
 
     fn children_curator_fees(bounty_id: pallet_bounties::BountyIndex) -> BalanceOf<T> {
-        Self::child_curator_fees(bounty_id)
+		// This is asked for when the parent bounty is being claimed.
+		// No use of keeping it in state after that. Hence removing.
+		let children_fee_total = Self::children_curator_fees(bounty_id);
+		<ChildrenCuratorFees<T>>::remove(bounty_id);
+        children_fee_total
     }
 }
