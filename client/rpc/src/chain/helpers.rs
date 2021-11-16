@@ -30,6 +30,10 @@ pub async fn subscribe_headers<Client, Block>(
 		return
 	};
 
+	// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
+	// that the stream has a hole in it. The alternative would be to look up the best block *after*
+	// we set up the stream and chain it to the stream. Consuming code would need to handle
+	// duplicates at the beginning of the stream though.
 	let stream = client.import_notification_stream();
 	stream
 		.take_while(|import| {
@@ -72,6 +76,10 @@ pub async fn subscribe_finalized_headers<Client, Block>(
 		return
 	};
 
+	// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
+	// that the stream has a hole in it. The alternative would be to look up the best block *after*
+	// we set up the stream and chain it to the stream. Consuming code would need to handle
+	// duplicates at the beginning of the stream though.
 	let stream = client.finality_notification_stream();
 	stream
 		.take_while(|import| {
