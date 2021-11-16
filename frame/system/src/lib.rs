@@ -95,7 +95,7 @@ use frame_support::{
 	Parameter,
 };
 use scale_info::TypeInfo;
-use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
+use sp_core::storage::well_known_keys;
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -405,37 +405,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Set the new changes trie configuration.
-		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage write or delete (codec `O(1)`).
-		/// - 1 call to `deposit_log`: Uses `append` API, so O(1)
-		/// - Base Weight: 7.218 µs
-		/// - DB Weight:
-		///     - Writes: Changes Trie, System Digest
-		/// # </weight>
-		#[pallet::weight((T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational))]
-		pub fn set_changes_trie_config(
-			origin: OriginFor<T>,
-			changes_trie_config: Option<ChangesTrieConfiguration>,
-		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			match changes_trie_config.clone() {
-				Some(changes_trie_config) => storage::unhashed::put_raw(
-					well_known_keys::CHANGES_TRIE_CONFIG,
-					&changes_trie_config.encode(),
-				),
-				None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
-			}
-
-			let log = generic::DigestItem::ChangesTrieSignal(
-				generic::ChangesTrieSignal::NewConfiguration(changes_trie_config),
-			);
-			Self::deposit_log(log.into());
-			Ok(().into())
-		}
-
 		/// Set some items of storage.
 		///
 		/// # <weight>
@@ -617,7 +586,7 @@ pub mod pallet {
 	/// Digest of the current block, also part of the block header.
 	#[pallet::storage]
 	#[pallet::getter(fn digest)]
-	pub(super) type Digest<T: Config> = StorageValue<_, DigestOf<T>, ValueQuery>;
+	pub(super) type Digest<T: Config> = StorageValue<_, generic::Digest, ValueQuery>;
 
 	/// Events deposited for the current block.
 	///
@@ -666,7 +635,6 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub changes_trie_config: Option<ChangesTrieConfiguration>,
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
@@ -674,7 +642,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self { changes_trie_config: Default::default(), code: Default::default() }
+			Self { code: Default::default() }
 		}
 	}
 
@@ -689,12 +657,6 @@ pub mod pallet {
 
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
-			if let Some(ref changes_trie_config) = self.changes_trie_config {
-				sp_io::storage::set(
-					well_known_keys::CHANGES_TRIE_CONFIG,
-					&changes_trie_config.encode(),
-				);
-			}
 		}
 	}
 }
@@ -758,9 +720,6 @@ impl GenesisConfig {
 		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
 	}
 }
-
-pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
-pub type DigestItemOf<T> = generic::DigestItem<<T as Config>::Hash>;
 
 pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
@@ -1369,7 +1328,7 @@ impl<T: Config> Pallet<T> {
 	pub fn initialize(
 		number: &T::BlockNumber,
 		parent_hash: &T::Hash,
-		digest: &DigestOf<T>,
+		digest: &generic::Digest,
 		kind: InitKind,
 	) {
 		// populate environment
@@ -1409,7 +1368,7 @@ impl<T: Config> Pallet<T> {
 		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 		let number = <Number<T>>::get();
 		let parent_hash = <ParentHash<T>>::get();
-		let mut digest = <Digest<T>>::get();
+		let digest = <Digest<T>>::get();
 
 		let extrinsics = (0..ExtrinsicCount::<T>::take().unwrap_or_default())
 			.map(ExtrinsicData::<T>::take)
@@ -1427,17 +1386,6 @@ impl<T: Config> Pallet<T> {
 
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
-		let storage_changes_root = sp_io::storage::changes_root(&parent_hash.encode());
-
-		// we can't compute changes trie root earlier && put it to the Digest
-		// because it will include all currently existing temporaries.
-		if let Some(storage_changes_root) = storage_changes_root {
-			let item = generic::DigestItem::ChangesTrieRoot(
-				T::Hash::decode(&mut &storage_changes_root[..])
-					.expect("Node is configured to use the same hash; qed"),
-			);
-			digest.push(item);
-		}
 
 		<T::Header as traits::Header>::new(
 			number,
@@ -1454,7 +1402,7 @@ impl<T: Config> Pallet<T> {
 	/// - `O(1)`
 	/// - 1 storage write (codec `O(1)`)
 	/// # </weight>
-	pub fn deposit_log(item: DigestItemOf<T>) {
+	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
 
