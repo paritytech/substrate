@@ -203,25 +203,8 @@ where
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
-		let block_id = &self.block_id;
-		let extrinsics = &mut self.extrinsics;
-
-		self.api.execute_in_transaction(|api| {
-			match api.apply_extrinsic_with_context(
-				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone(),
-			) {
-				Ok(Ok(_)) => {
-					extrinsics.push(xt);
-					TransactionOutcome::Commit(Ok(()))
-				},
-				Ok(Err(tx_validity)) => TransactionOutcome::Rollback(Err(
-					ApplyExtrinsicFailed::Validity(tx_validity).into(),
-				)),
-				Err(e) => TransactionOutcome::Rollback(Err(Error::from(e))),
-			}
-		})
+        self.extrinsics.push(xt);
+        Ok(())
 	}
 
 	/// Push onto the block's list of extrinsics.
@@ -336,7 +319,7 @@ where
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
 	pub fn build(mut self, seed: ShufflingSeed) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		if ! self.previous_block_applied {
-			// self.apply_previous_block(seed.clone())
+			self.apply_previous_block(seed.clone())
 		}
 		let mut header = self
 			.api
@@ -432,7 +415,7 @@ mod tests {
 			&*backend,
 		)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap();
 
 		let proof = block.proof.expect("Proof is build on request");

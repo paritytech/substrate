@@ -48,6 +48,7 @@ use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
+use sp_inherents::InherentDataProvider;
 
 /// Default block size limit in bytes used by [`Proposer`].
 ///
@@ -263,13 +264,19 @@ where
 
 	fn propose(
 		self,
-		inherent_data: InherentData,
+		mut inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
 		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
 		let (tx, rx) = oneshot::channel();
 		let spawn_handle = self.spawn_handle.clone();
+
+        if let Ok(None) = inherent_data.get_data::<sp_core::ShufflingSeed>(&sp_ver::RANDOM_SEED_INHERENT_IDENTIFIER){
+            sp_ver::RandomSeedInherentDataProvider(Default::default())
+                .provide_inherent_data(&mut inherent_data)
+                .unwrap();
+        }
 
 		spawn_handle.spawn_blocking(
 			"basic-authorship-proposer",
@@ -318,6 +325,7 @@ where
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
+        debug!(target: "block_builder", "PROPOSE_WITH");
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
@@ -360,6 +368,7 @@ where
 		let mut t2 =
 			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
 
+
 		let mut pending_iterator = select! {
 			res = t1 => res,
 			_ = t2 => {
@@ -386,7 +395,7 @@ where
 		while let Some(pending_tx) = pending_iterator.next() {
 			let now = (self.now)();
 			if now > deadline {
-				debug!(
+				debug!(target: "block_builder",
 					"Consensus deadline reached when pushing block transactions, \
 					proceeding with proposing."
 				);
@@ -402,21 +411,21 @@ where
 				pending_iterator.report_invalid(&pending_tx);
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
-					debug!(
+					debug!(target: "block_builder",
 						"Transaction would overflow the block size limit, \
 						 but will try {} more transactions before quitting.",
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
 					continue
 				} else if now < soft_deadline {
-					debug!(
+					debug!(target: "block_builder",
 						"Transaction would overflow the block size limit, \
 						 but we still have time before the soft deadline, so \
 						 we will try a bit more."
 					);
 					continue
 				} else {
-					debug!("Reached block size limit, proceeding with proposing.");
+					debug!(target: "block_builder","Reached block size limit, proceeding with proposing.");
 					hit_block_size_limit = true;
 					break
 				}
@@ -432,23 +441,23 @@ where
 					pending_iterator.report_invalid(&pending_tx);
 					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
-						debug!(
+						debug!(target: "block_builder",
 							"Block seems full, but will try {} more transactions before quitting.",
 							MAX_SKIPPED_TRANSACTIONS - skipped,
 						);
 					} else if (self.now)() < soft_deadline {
-						debug!(
+						debug!(target: "block_builder",
 							"Block seems full, but we still have time before the soft deadline, \
 							 so we will try a bit more before quitting."
 						);
 					} else {
-						debug!("Block is full, proceed with proposing.");
+						debug!(target: "block_builder","Block is full, proceed with proposing.");
 						break
 					}
 				},
 				Err(e) if skipped > 0 => {
 					pending_iterator.report_invalid(&pending_tx);
-					trace!(
+					trace!(target: "block_builder",
 						"[{:?}] Ignoring invalid transaction when skipping: {}",
 						pending_tx_hash,
 						e
@@ -456,7 +465,7 @@ where
 				},
 				Err(e) => {
 					pending_iterator.report_invalid(&pending_tx);
-					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
+					debug!(target: "block_builder","[{:?}] Invalid transaction: {}", pending_tx_hash, e);
 					unqueue_invalid.push(pending_tx_hash);
 				},
 			}
@@ -532,7 +541,7 @@ mod tests {
 	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		runtime::{Block, Extrinsic, Transfer},
 		TestClientBuilder, TestClientBuilderExt,
 	};
 
@@ -663,6 +672,7 @@ mod tests {
 
 	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
+        env_logger::try_init();
 		let (client, backend) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -704,7 +714,10 @@ mod tests {
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
 		let api = client.runtime_api();
-		api.execute_block(&block_id, proposal.block).unwrap();
+		let mut header = proposal.block.header.clone();
+		let prev_header = backend.blockchain().header(BlockId::Hash(genesis_hash)).unwrap().unwrap();
+		header.set_extrinsics_root(*prev_header.extrinsics_root());
+		api.execute_block(&block_id, <Block as BlockT>::new(header, vec![])).unwrap();
 
 		let state = backend.state_at(block_id).unwrap();
 		let changes_trie_state =
@@ -723,6 +736,7 @@ mod tests {
 
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
+        env_logger::try_init();
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
@@ -779,8 +793,8 @@ mod tests {
 
 			// then
 			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(txpool.ready().count(), expected_pool_transactions);
 			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
+			assert_eq!(txpool.ready().count(), expected_pool_transactions);
 
 			block
 		};
@@ -797,8 +811,8 @@ mod tests {
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
+		let block_hash = block.header().hash();
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-
 		block_on(
 			txpool.maintain(chain_event(
 				client
@@ -809,9 +823,31 @@ mod tests {
 		);
 		assert_eq!(txpool.ready().count(), 5);
 
+		// push one extra block - extrinsics in the pool makred as 'exhausted_resources'
+		// to succeed needs to be executed as first in the processed block. Due to
+		// modifications in block_builder all extrinsics from previous block are applied
+		// beofre trying to validate extrinsics from the tx pool. Once we include empty
+		// block in between 'exhausted_resources' extrinsic from the pool is exeucted as
+		// the first one and the origin test logic is maintained
+		let block = client.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
+			.unwrap()
+			.build(Default::default())
+			.unwrap();
+		block_on(client.import(BlockOrigin::Own, block.block)).unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(2))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), 5);
+
 		// now let's make sure that we can still make some progress
-		let block = propose_block(&client, 1, 2, 5);
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
+		let block = propose_block(&client, 2, 2, 5);
+		// block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	#[test]

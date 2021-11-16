@@ -7056,6 +7056,7 @@ dependencies = [
 name = "sc-basic-authorship"
 version = "0.10.0-dev"
 dependencies = [
+ "env_logger 0.9.0",
  "extrinsic-info-runtime-api",
  "futures 0.3.16",
  "futures-timer 3.0.2",
