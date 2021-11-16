@@ -113,8 +113,6 @@ pub struct LightSyncState<Block: BlockT> {
 #[rpc(client, server, namespace = "sync_state")]
 pub trait SyncStateRpcApi {
 	/// Returns the JSON serialized chainspec running the node, with a sync state.
-	// NOTE(niklasad1): I changed to `JsonValue` -> `String` as the chainspec
-	// already returns a JSON String.
 	#[method(name = "genSyncSpec")]
 	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String>;
 }

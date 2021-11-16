@@ -24,7 +24,6 @@ pub async fn subscribe_headers<Client, Block>(
 		},
 	};
 
-	// NOTE(niklasad1): this will only fail when the subscriber is offline or serialize fails.
 	if let Err(e) = sink.send(&best_head) {
 		log_err(method, e);
 		return
@@ -50,9 +49,6 @@ pub async fn subscribe_headers<Client, Block>(
 }
 
 /// Helper to create subscriptions for `finalizedHeads`.
-// NOTE(niklasad1): almost identical to `subscribe_headers` but requires different stream and
-// finalized head
-// (could work with generic stream and block_hash but would require cloning extra Arc's)
 pub async fn subscribe_finalized_headers<Client, Block>(
 	client: Arc<Client>,
 	mut sink: SubscriptionSink,
@@ -70,7 +66,6 @@ pub async fn subscribe_finalized_headers<Client, Block>(
 		},
 	};
 
-	// NOTE(niklasad1): this will only fail when the subscriber is offline or serialize fails.
 	if let Err(err) = sink.send(&best_head) {
 		log_err(method, err);
 		return
