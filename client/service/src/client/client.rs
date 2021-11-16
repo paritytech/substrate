@@ -91,6 +91,7 @@ use std::{
 	result,
 	sync::Arc,
 };
+use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 
 #[cfg(feature = "test-helpers")]
 use {
@@ -932,7 +933,8 @@ where
 	where
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api:
-			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>
+			+ ExtrinsicInfoRuntimeApi<Block>,
 	{
 		let parent_hash = import_block.header.parent_hash();
 		let at = BlockId::Hash(*parent_hash);
@@ -1413,7 +1415,8 @@ where
 	Block: BlockT,
 	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>
+			+ ExtrinsicInfoRuntimeApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
@@ -1867,7 +1870,8 @@ where
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>
+		+ ExtrinsicInfoRuntimeApi<Block>,
 	RA: Sync + Send,
 	backend::TransactionFor<B, Block>: Send + 'static,
 {
@@ -1982,7 +1986,8 @@ where
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
+		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>
+		+ ExtrinsicInfoRuntimeApi<Block>,
 	RA: Sync + Send,
 	backend::TransactionFor<B, Block>: Send + 'static,
 {
