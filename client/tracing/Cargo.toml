@@ -24,7 +24,7 @@ parking_lot = "0.11.1"
 regex = "1.5.4"
 rustc-hash = "1.1.0"
 serde = "1.0.126"
-thiserror = "1.0.21"
+thiserror = "1.0.30"
 tracing = "0.1.29"
 tracing-log = "0.1.2"
 tracing-subscriber = { version = "0.2.25", features = ["parking_lot"] }

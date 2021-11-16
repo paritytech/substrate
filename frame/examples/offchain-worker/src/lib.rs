@@ -28,6 +28,8 @@
 //! - [`Call`]
 //! - [`Pallet`]
 //!
+//! **This pallet serves as an example showcasing Substrate off-chain worker and is not meant to
+//! be used in production.**
 //!
 //! ## Overview
 //!
@@ -40,6 +42,7 @@
 //! Additional logic in OCW is put in place to prevent spamming the network with both signed
 //! and unsigned transactions, and custom `UnsignedValidator` makes sure that there is only
 //! one unsigned transaction floating in the network.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
@@ -288,8 +291,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		/// \[price, who\]
-		NewPrice(u32, T::AccountId),
+		NewPrice { price: u32, who: T::AccountId },
 	}
 
 	#[pallet::validate_unsigned]
@@ -655,7 +657,7 @@ impl<T: Config> Pallet<T> {
 			.expect("The average is not empty, because it was just mutated; qed");
 		log::info!("Current average price is: {}", average);
 		// here we are raising the NewPrice event
-		Self::deposit_event(Event::NewPrice(price, who));
+		Self::deposit_event(Event::NewPrice { price, who });
 	}
 
 	/// Calculate current average price.
