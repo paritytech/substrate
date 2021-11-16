@@ -19,7 +19,6 @@
 //! Substrate blockchain API.
 
 mod chain_full;
-mod helpers;
 
 #[cfg(test)]
 mod tests;

@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use crate::testing::{deser_call, timeout_secs, TaskExecutor};
+use crate::testing::{deser_call, TaskExecutor};
 use assert_matches::assert_matches;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
@@ -226,63 +226,56 @@ async fn should_return_finalized_hash() {
 
 #[tokio::test]
 async fn should_notify_about_latest_block() {
-	let mut sub = {
-		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
+	let mut sub = api.test_subscription("chain_subscribeAllHeads", Vec::<()>::new()).await;
 
-		let sub = api.test_subscription("chain_subscribeAllHeads", Vec::<()>::new()).await;
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).await.unwrap();
-		sub
-	};
+	let _h1 = sub.next::<Header>().await;
+	let _h2 = sub.next::<Header>().await;
 
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
-
-	// TODO(niklasad1): assert that the subscription was closed.
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Err(_));
+	sub.close();
+	// TODO: this will panic https://github.com/paritytech/jsonrpsee/pull/566
+	let _h3 = sub.next::<Header>().await;
 }
 
 #[tokio::test]
 async fn should_notify_about_best_block() {
-	let mut sub = {
-		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
 
-		let sub = api.test_subscription("chain_subscribeNewHeads", Vec::<()>::new()).await;
+	let mut sub = api.test_subscription("chain_subscribeNewHeads", Vec::<()>::new()).await;
 
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).await.unwrap();
-		sub
-	};
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// Check for the correct number of notifications
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
+	let _h1 = sub.next::<Header>().await;
+	let _h2 = sub.next::<Header>().await;
 
-	// TODO(niklasad1): assert that the subscription was closed.
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Err(_));
+	sub.close();
+	// TODO: this will panic https://github.com/paritytech/jsonrpsee/pull/566
+	let _h3 = sub.next::<Header>().await;
 }
 
 #[tokio::test]
 async fn should_notify_about_finalized_block() {
-	let mut sub = {
-		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
 
-		let sub = api.test_subscription("chain_subscribeFinalizedHeads", Vec::<()>::new()).await;
+	let mut sub = api.test_subscription("chain_subscribeFinalizedHeads", Vec::<()>::new()).await;
 
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).await.unwrap();
-		client.finalize_block(BlockId::number(1), None).unwrap();
-		sub
-	};
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block).await.unwrap();
+	client.finalize_block(BlockId::number(1), None).unwrap();
 
 	// Check for the correct number of notifications
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
+	let _h1 = sub.next::<Header>().await;
+	let _h2 = sub.next::<Header>().await;
 
-	// TODO(niklasad1): assert that the subscription was closed.
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Err(_));
+	sub.close();
+	// TODO: this will panic https://github.com/paritytech/jsonrpsee/pull/566
+	let _h3 = sub.next::<Header>().await;
 }
