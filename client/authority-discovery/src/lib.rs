@@ -160,6 +160,6 @@ where
 pub(crate) enum ServicetoWorkerMsg {
 	/// See [`Service::get_addresses_by_authority_id`].
 	GetAddressesByAuthorityId(AuthorityId, oneshot::Sender<Option<HashSet<Multiaddr>>>),
-	/// See [`Service::get_authority_id_by_peer_id`].
-	GetAuthorityIdByPeerId(PeerId, oneshot::Sender<Option<HashSet<AuthorityId>>>),
+	/// See [`Service::get_authority_ids_by_peer_id`].
+	GetAuthorityIdsByPeerId(PeerId, oneshot::Sender<Option<HashSet<AuthorityId>>>),
 }

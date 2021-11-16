@@ -259,7 +259,7 @@ where
 					self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
 				);
 			},
-			ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
+			ServicetoWorkerMsg::GetAuthorityIdsByPeerId(peer_id, sender) => {
 				let _ = sender
 					.send(self.addr_cache.get_authority_ids_by_peer_id(&peer_id).map(Clone::clone));
 			},

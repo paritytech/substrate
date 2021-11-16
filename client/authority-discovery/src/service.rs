@@ -78,14 +78,14 @@ impl Service {
 	///
 	/// Returns `None` if no entry was present or connection to the
 	/// [`crate::Worker`] failed.
-	pub async fn get_authority_id_by_peer_id(
+	pub async fn get_authority_ids_by_peer_id(
 		&mut self,
 		peer_id: PeerId,
 	) -> Option<HashSet<AuthorityId>> {
 		let (tx, rx) = oneshot::channel();
 
 		self.to_worker
-			.send(ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, tx))
+			.send(ServicetoWorkerMsg::GetAuthorityIdsByPeerId(peer_id, tx))
 			.await
 			.ok()?;
 

@@ -78,7 +78,7 @@ fn get_addresses_and_authority_id() {
 		);
 		assert_eq!(
 			Some(HashSet::from([remote_authority_id])),
-			service.get_authority_id_by_peer_id(remote_peer_id).await,
+			service.get_authority_ids_by_peer_id(remote_peer_id).await,
 		);
 	});
 }
