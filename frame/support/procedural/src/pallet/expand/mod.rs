@@ -18,6 +18,7 @@
 mod call;
 mod config;
 mod constants;
+mod constants_must;
 mod error;
 mod event;
 mod genesis_build;
@@ -53,6 +54,7 @@ pub fn merge_where_clauses(clauses: &[&Option<syn::WhereClause>]) -> Option<syn:
 /// * impl stuff on them.
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let constants = constants::expand_constants(&mut def);
+    let constants_must = constants_must::expand_constants(&mut def);
 	let pallet_struct = pallet_struct::expand_pallet_struct(&mut def);
 	let config = config::expand_config(&mut def);
 	let call = call::expand_call(&mut def);
@@ -83,6 +85,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 
 	let new_items = quote::quote!(
 		#constants
+        #constants_must
 		#pallet_struct
 		#config
 		#call
