@@ -32,7 +32,6 @@ pub(super) struct AddrCache {
 	/// Since we may store the mapping across several sessions, a single
 	/// `PeerId` might correspond to multiple `AuthorityId`s. However,
 	/// it's not expected that a single `AuthorityId` can have multiple `PeerId`s.
-	/// This is ensured in [`AddrCache::insert`].
 	authority_id_to_addresses: HashMap<AuthorityId, HashSet<Multiaddr>>,
 	peer_id_to_authority_ids: HashMap<PeerId, HashSet<AuthorityId>>,
 }
