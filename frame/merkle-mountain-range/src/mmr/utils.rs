@@ -17,16 +17,16 @@
 
 //! Merkle Mountain Range utilities.
 
-use crate::primitives::NodeIndex;
+use crate::primitives::{NodeIndex, LeafIndex};
 
 /// MMR nodes & size -related utilities.
 pub struct NodesUtils {
-	no_of_leaves: NodeIndex,
+	no_of_leaves: LeafIndex,
 }
 
 impl NodesUtils {
 	/// Create new instance of MMR nodes utilities for given number of leaves.
-	pub fn new(no_of_leaves: NodeIndex) -> Self {
+	pub fn new(no_of_leaves: LeafIndex) -> Self {
 		Self { no_of_leaves }
 	}
 
@@ -36,7 +36,7 @@ impl NodesUtils {
 	}
 
 	/// Return the number of leaves in the MMR.
-	pub fn number_of_leaves(&self) -> NodeIndex {
+	pub fn number_of_leaves(&self) -> LeafIndex {
 		self.no_of_leaves
 	}
 
