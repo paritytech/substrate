@@ -375,7 +375,7 @@ where
 	pub fn create_inherents(
 		&mut self,
 		inherent_data: sp_inherents::InherentData,
-	) -> Result<Vec<Block::Extrinsic>, Error> {
+	) -> Result<(ShufflingSeed, Vec<Block::Extrinsic>), Error> {
 		let block_id = self.block_id;
 		let seed = sp_ver::extract_inherent_data(&inherent_data)
 			.map_err(|_| sp_blockchain::Error::Backend(String::from("cannot read random seed from inherents data")))?;
@@ -390,6 +390,7 @@ where
 					inherent_data,
 				))
 			})
+			.map(|inherents| (ShufflingSeed{seed: seed.seed.into(), proof: seed.proof.into()}, inherents))
 			.map_err(|e| Error::Application(Box::new(e)))
 	}
 

@@ -32,11 +32,12 @@ use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_client_api::backend;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::{ApiExt, ProvideRuntimeApi, TransactionOutcome};
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
 use sp_consensus::{
 	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
 };
+use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
@@ -204,7 +205,8 @@ where
 		+ Sync
 		+ 'static,
 	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>
+        + ExtrinsicInfoRuntimeApi<Block>,
 	PR: ProofRecording,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
@@ -244,7 +246,8 @@ where
 		+ Sync
 		+ 'static,
 	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>
+        + ExtrinsicInfoRuntimeApi<Block>,
 	PR: ProofRecording,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
@@ -303,7 +306,8 @@ where
 		+ Sync
 		+ 'static,
 	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>
+			+ ExtrinsicInfoRuntimeApi<Block>,
 	PR: ProofRecording,
 {
 	async fn propose_with(
@@ -317,8 +321,11 @@ where
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
-		for inherent in block_builder.create_inherents(inherent_data)? {
-			match block_builder.push(inherent) {
+		let (seed, inherents) = block_builder.create_inherents(inherent_data.clone())?;
+        debug!(target:"block_builder", "found {} inherents", inherents.len());
+		for inherent in inherents {
+			debug!(target:"block_builder", "processing inherent");
+			match block_builder.record_without_commiting_changes(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
 				},
@@ -331,7 +338,9 @@ where
 				Err(e) => {
 					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
 				},
-				Ok(_) => {},
+				Ok(_) => {
+					trace!(target:"block_builder", "inherent pushed into the block");
+                },
 			}
 		}
 
@@ -342,6 +351,10 @@ where
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
+        block_builder.apply_previous_block(seed.clone());
+
+        let api = self.client.runtime_api();
+
 
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
 		let mut t2 =
@@ -366,6 +379,10 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
+		// after previous block is applied it is possible to prevalidate incomming transaction
+		// but eventually changess needs to be rolled back, as those can be executed
+		// only in the following(future) block
+		api.execute_in_transaction(|api| {
 		while let Some(pending_tx) = pending_iterator.next() {
 			let now = (self.now)();
 			if now > deadline {
@@ -406,7 +423,7 @@ where
 			}
 
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match sc_block_builder::BlockBuilder::push_with_api(&mut block_builder, api, pending_tx_data) {
 				Ok(()) => {
 					transaction_pushed = true;
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
@@ -444,6 +461,8 @@ where
 				},
 			}
 		}
+        TransactionOutcome::Rollback(())
+        });
 
 		if hit_block_size_limit && !transaction_pushed {
 			warn!(
@@ -454,7 +473,7 @@ where
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
+		let (block, storage_changes, proof) = block_builder.build(seed)?.into_inner();
 
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
