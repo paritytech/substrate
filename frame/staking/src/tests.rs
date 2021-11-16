@@ -2469,7 +2469,7 @@ fn garbage_collection_after_slashing() {
 
 			assert_eq!(Balances::free_balance(11), 2000 - 200);
 			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_some());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &200);
+			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &200);
 
 			on_offence_now(
 				&[OffenceDetails {
@@ -2496,7 +2496,7 @@ fn garbage_collection_after_slashing() {
 			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 2));
 
 			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);
+			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &0);
 		})
 }
 
