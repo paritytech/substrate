@@ -154,7 +154,6 @@ fn format_allowed_hosts(port: u16) -> [String; 2] {
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
 	let mut available_methods = rpc_api.method_names().collect::<Vec<_>>();
-	// NOTE(niklasad1): substrate master doesn't have this.
 	available_methods.push("rpc_methods");
 	available_methods.sort_unstable();
 
