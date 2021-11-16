@@ -228,20 +228,20 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// New bounty proposal. \[index\]
-		BountyProposed(BountyIndex),
-		/// A bounty proposal was rejected; funds were slashed. \[index, bond\]
-		BountyRejected(BountyIndex, BalanceOf<T>),
-		/// A bounty proposal is funded and became active. \[index\]
-		BountyBecameActive(BountyIndex),
-		/// A bounty is awarded to a beneficiary. \[index, beneficiary\]
-		BountyAwarded(BountyIndex, T::AccountId),
-		/// A bounty is claimed by beneficiary. \[index, payout, beneficiary\]
-		BountyClaimed(BountyIndex, BalanceOf<T>, T::AccountId),
-		/// A bounty is cancelled. \[index\]
-		BountyCanceled(BountyIndex),
-		/// A bounty expiry is extended. \[index\]
-		BountyExtended(BountyIndex),
+		/// New bounty proposal.
+		BountyProposed { index: BountyIndex },
+		/// A bounty proposal was rejected; funds were slashed.
+		BountyRejected { index: BountyIndex, bond: BalanceOf<T> },
+		/// A bounty proposal is funded and became active.
+		BountyBecameActive { index: BountyIndex },
+		/// A bounty is awarded to a beneficiary.
+		BountyAwarded { index: BountyIndex, beneficiary: T::AccountId },
+		/// A bounty is claimed by beneficiary.
+		BountyClaimed { index: BountyIndex, payout: BalanceOf<T>, beneficiary: T::AccountId },
+		/// A bounty is cancelled.
+		BountyCanceled { index: BountyIndex },
+		/// A bounty expiry is extended.
+		BountyExtended { index: BountyIndex },
 	}
 
 	/// Number of bounty proposals that have been made.
@@ -526,7 +526,7 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T>::BountyAwarded(bounty_id, beneficiary));
+			Self::deposit_event(Event::<T>::BountyAwarded { index: bounty_id, beneficiary });
 			Ok(())
 		}
 
@@ -571,7 +571,11 @@ pub mod pallet {
 
 					BountyDescriptions::<T>::remove(bounty_id);
 
-					Self::deposit_event(Event::<T>::BountyClaimed(bounty_id, payout, beneficiary));
+					Self::deposit_event(Event::<T>::BountyClaimed {
+						index: bounty_id,
+						payout,
+						beneficiary,
+					});
 					Ok(())
 				} else {
 					Err(Error::<T>::UnexpectedStatus.into())
@@ -612,7 +616,10 @@ pub mod pallet {
 							T::OnSlash::on_unbalanced(imbalance);
 							*maybe_bounty = None;
 
-							Self::deposit_event(Event::<T>::BountyRejected(bounty_id, value));
+							Self::deposit_event(Event::<T>::BountyRejected {
+								index: bounty_id,
+								bond: value,
+							});
 							// Return early, nothing else to do.
 							return Ok(
 								Some(<T as Config>::WeightInfo::close_bounty_proposed()).into()
@@ -656,7 +663,7 @@ pub mod pallet {
 					debug_assert!(res.is_ok());
 					*maybe_bounty = None;
 
-					Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
+					Self::deposit_event(Event::<T>::BountyCanceled { index: bounty_id });
 					Ok(Some(<T as Config>::WeightInfo::close_bounty_active()).into())
 				},
 			)
@@ -696,7 +703,7 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
+			Self::deposit_event(Event::<T>::BountyExtended { index: bounty_id });
 			Ok(())
 		}
 	}
@@ -753,7 +760,7 @@ impl<T: Config> Pallet<T> {
 		Bounties::<T>::insert(index, &bounty);
 		BountyDescriptions::<T>::insert(index, description);
 
-		Self::deposit_event(Event::<T>::BountyProposed(index));
+		Self::deposit_event(Event::<T>::BountyProposed { index });
 
 		Ok(())
 	}
@@ -787,7 +794,7 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Pallet<T> {
 								bounty.value,
 							));
 
-							Self::deposit_event(Event::<T>::BountyBecameActive(index));
+							Self::deposit_event(Event::<T>::BountyBecameActive { index });
 							false
 						} else {
 							*missed_any = true;

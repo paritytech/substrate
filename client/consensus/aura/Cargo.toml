@@ -33,7 +33,7 @@ sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 async-trait = "0.1.50"
 # We enable it only for web-wasm check
 # See https://docs.rs/getrandom/0.2.1/getrandom/#webassembly-support

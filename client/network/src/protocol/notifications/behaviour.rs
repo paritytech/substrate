@@ -716,7 +716,7 @@ impl Notifications {
 					timer: delay_id,
 					timer_deadline: *backoff,
 				};
-			}
+			},
 
 			// Disabled => Enabled
 			PeerState::Disabled { mut connections, backoff_until } => {
@@ -2098,7 +2098,7 @@ impl NetworkBehaviour for Notifications {
 							.boxed(),
 						);
 					}
-				}
+				},
 
 				// We intentionally never remove elements from `delays`, and it may
 				// thus contain obsolete entries. This is a normal situation.

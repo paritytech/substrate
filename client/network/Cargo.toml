@@ -40,7 +40,7 @@ lru = "0.7.0"
 log = "0.4.8"
 parking_lot = "0.11.1"
 pin-project = "1.0.8"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 prost = "0.8"
 rand = "0.7.2"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }

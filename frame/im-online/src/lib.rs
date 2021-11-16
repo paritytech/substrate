@@ -374,12 +374,12 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new heartbeat was received from `AuthorityId` \[authority_id\]
-		HeartbeatReceived(T::AuthorityId),
+		/// A new heartbeat was received from `AuthorityId`.
+		HeartbeatReceived { authority_id: T::AuthorityId },
 		/// At the end of the session, no offence was committed.
 		AllGood,
-		/// At the end of the session, at least one validator was found to be \[offline\].
-		SomeOffline(Vec<IdentificationTuple<T>>),
+		/// At the end of the session, at least one validator was found to be offline.
+		SomeOffline { offline: Vec<IdentificationTuple<T>> },
 	}
 
 	#[pallet::error]
@@ -495,7 +495,7 @@ pub mod pallet {
 			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (false, Some(public)) = (exists, public) {
-				Self::deposit_event(Event::<T>::HeartbeatReceived(public.clone()));
+				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
 
 				let network_state_bounded = BoundedOpaqueNetworkState::<
 					T::MaxPeerDataEncodingSize,
@@ -908,7 +908,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if offenders.is_empty() {
 			Self::deposit_event(Event::<T>::AllGood);
 		} else {
-			Self::deposit_event(Event::<T>::SomeOffline(offenders.clone()));
+			Self::deposit_event(Event::<T>::SomeOffline { offline: offenders.clone() });
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
