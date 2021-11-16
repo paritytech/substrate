@@ -151,7 +151,7 @@ impl<T: Config> Pallet<T> {
 	fn change_authorities(new: WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+		let log = DigestItem::Consensus(
 			AURA_ENGINE_ID,
 			ConsensusLog::AuthoritiesChange(new.into_inner()).encode(),
 		);
@@ -222,7 +222,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	}
 
 	fn on_disabled(i: u32) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+		let log = DigestItem::Consensus(
 			AURA_ENGINE_ID,
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
