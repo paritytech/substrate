@@ -70,7 +70,7 @@ pub(crate) mod v1 {
 
 		for (_key, schedules) in Vesting::<T>::iter() {
 			assert!(
-				schedules.len() == 1,
+				schedules.len() >= 1,
 				"A bounded vec with incorrect count of items was created."
 			);
 

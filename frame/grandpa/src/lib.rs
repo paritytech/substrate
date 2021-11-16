@@ -154,9 +154,9 @@ pub mod pallet {
 				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Self::set_grandpa_authorities(&pending_change.next_authorities);
-					Self::deposit_event(Event::NewAuthorities(
-						pending_change.next_authorities.to_vec(),
-					));
+					Self::deposit_event(Event::NewAuthorities {
+						authority_set: pending_change.next_authorities.to_vec(),
+					});
 					<PendingChange<T>>::kill();
 				}
 			}
@@ -255,8 +255,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
-		/// New authority set has been applied. \[authority_set\]
-		NewAuthorities(AuthorityList),
+		/// New authority set has been applied.
+		NewAuthorities { authority_set: AuthorityList },
 		/// Current authority set has been paused.
 		Paused,
 		/// Current authority set has been resumed.
