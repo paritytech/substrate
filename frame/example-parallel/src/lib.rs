@@ -105,7 +105,6 @@ impl EnlistedParticipant {
 	fn verify(&self, event_id: &[u8]) -> bool {
 		use sp_core::Public;
 		use sp_runtime::traits::Verify;
-		use std::convert::TryFrom;
 
 		match sp_core::sr25519::Signature::try_from(&self.signature[..]) {
 			Ok(signature) => {
