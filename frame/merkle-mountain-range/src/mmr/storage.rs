@@ -23,10 +23,11 @@ use mmr_lib::helper;
 use sp_io::offchain_index;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
+use sp_std::iter::Peekable;
 
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
-	primitives::{self, DataOrHash, NodeIndex},
+	primitives::{self, NodeIndex},
 	Config, Nodes, NumberOfLeaves, Pallet,
 };
 
@@ -102,116 +103,70 @@ where
 			return Err(mmr_lib::Error::InconsistentStore)
 		}
 
-		let elems = elems
-			.into_iter()
-			.enumerate()
-			.map(|(i, elem)| (size + i as NodeIndex, elem))
-			.collect::<Vec<_>>();
-		let leaves = elems.iter().fold(leaves, |acc, (pos, elem)| {
-			// Indexing API is used to store the full leaf content.
+		let new_size = size + elems.len() as NodeIndex;
+
+		// A sorted (ascending) iterator over peak indices to prune and persist.
+		let (peaks_to_prune, mut peaks_to_store) = peaks_to_prune_and_store(size, new_size);
+
+		// Now we are going to iterate over elements to insert
+		// and keep track of the current `node_index` and `leaf_index`.
+		let mut leaf_index = leaves;
+		let mut node_index = size;
+
+		for elem in elems {
+			// Indexing API is used to store the full node content (both leaf and inner).
 			elem.using_encoded(|elem| {
-				offchain_index::set(&Pallet::<T, I>::offchain_key(*pos), elem)
+				offchain_index::set(&Pallet::<T, I>::offchain_key(node_index), elem)
 			});
 
+			// On-chain we are going to only store new peaks.
+			if peaks_to_store.next_if_eq(&node_index).is_some() {
+				<Nodes<T, I>>::insert(node_index, elem.hash());
+			}
+
+			// Increase the indices.
 			if let Node::Data(..) = elem {
-				acc + 1
-			} else {
-				acc
+				leaf_index += 1;
 			}
-		});
-
-		NumberOfLeaves::<T, I>::put(leaves);
-
-		let peaks_before = if size == 0 { vec![] } else { helper::get_peaks(size) };
-		let peaks_after = helper::get_peaks(size + elems.len() as NodeIndex);
-
-		sp_std::if_std! {
-			log::trace!("peaks_before: {:?}", peaks_before);
-			log::trace!("peaks_after: {:?}", peaks_after);
+			node_index += 1;
 		}
 
-		let store = |peaks_to_store: &[_], elems: Vec<(_, DataOrHash<_, _>)>| {
-			let mut peak_to_store =
-				peaks_to_store.get(0).expect("`peaks_to_store` can not be empty; qed");
-			let mut i = 1;
+		// Update current number of leaves.
+		NumberOfLeaves::<T, I>::put(leaf_index);
 
-			for (pos, elem) in elems {
-				if &pos == peak_to_store {
-					i += 1;
-
-					<Nodes<T, I>>::insert(peak_to_store, elem.hash());
-
-					if let Some(next_peak_to_store) = peaks_to_store.get(i) {
-						peak_to_store = next_peak_to_store;
-					} else {
-						// No more peaks to store.
-						break
-					}
-				}
-			}
-		};
-
-		// A new tree to build, no need to prune.
-		if peaks_before.is_empty() {
-			store(&peaks_after, elems);
-
-			return Ok(())
-		}
-
-		let mut pivot = None;
-
-		// `peaks_before` and `peaks_after` have a common prefix.
-		for i in 0.. {
-			if let Some(peak_before) = peaks_before.get(i) {
-				if let Some(peak_after) = peaks_after.get(i) {
-					if peak_before == peak_after {
-						pivot = Some(i);
-					} else {
-						break
-					}
-				} else {
-					break
-				}
-			} else {
-				break
-			}
-		}
-
-		sp_std::if_std! {
-			log::trace!("pivot: {:?}", pivot);
-		}
-
-		// According to the MMR specification
-		// `nodes_to_prune` might be empty
-		// `peaks_to_store` must not be empty
-		let mut nodes_to_prune = &[][..];
-		let mut peaks_to_store = &[][..];
-
-		if let Some(pivot) = pivot {
-			let pivot = pivot + 1;
-
-			if pivot < peaks_before.len() {
-				nodes_to_prune = &peaks_before[pivot..];
-			}
-			if pivot < peaks_after.len() {
-				peaks_to_store = &peaks_after[pivot..];
-			}
-		} else {
-			nodes_to_prune = &peaks_before;
-			peaks_to_store = &peaks_after;
-		};
-
-		sp_std::if_std! {
-			log::trace!("nodes_to_prune: {:?}", nodes_to_prune.to_vec());
-			log::trace!("peaks_to_store: {:?}", peaks_to_store.to_vec());
-		}
-
-		store(peaks_to_store, elems);
-
-		for pos in nodes_to_prune {
+		// And remove all remaining items from `peaks_before` collection.
+		for pos in peaks_to_prune {
 			<Nodes<T, I>>::remove(pos);
 		}
 
 		Ok(())
 	}
+}
+
+fn peaks_to_prune_and_store(old_size: NodeIndex, new_size: NodeIndex) -> (
+	impl Iterator<Item = NodeIndex>,
+	Peekable<impl Iterator<Item = NodeIndex>>,
+) {
+	// A sorted (ascending) collection of peak indices before and after insertion.
+	// both collections may share a common prefix.
+	let peaks_before = if old_size == 0 { vec![] } else { helper::get_peaks(old_size) };
+	let peaks_after = helper::get_peaks(new_size);
+	sp_std::if_std! {
+		log::trace!("peaks_before: {:?}", peaks_before);
+		log::trace!("peaks_after: {:?}", peaks_after);
+	}
+	let mut peaks_before = peaks_before.into_iter().peekable();
+	let mut peaks_after = peaks_after.into_iter().peekable();
+
+	// Consume a common prefix between `peaks_before` and `peaks_after`,
+	// since that's something we will not be touching anyway.
+	while peaks_before.peek() == peaks_after.peek() {
+		peaks_before.next();
+		peaks_after.next();
+	}
+
+	// what's left in both collections is:
+	// 1. Old peaks to remove from storage
+	// 2. New peaks to persist in storage
+	(peaks_before, peaks_after)
 }
