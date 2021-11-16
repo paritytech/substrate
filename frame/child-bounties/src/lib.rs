@@ -57,7 +57,7 @@ use frame_support::traits::{
 };
 
 use sp_runtime::{
-	traits::{BadOrigin, Saturating, StaticLookup, Zero},
+	traits::{BadOrigin, Saturating, StaticLookup, Zero, AccountIdConversion},
 	DispatchResult, RuntimeDebug,
 };
 
@@ -263,7 +263,7 @@ pub mod pallet {
 			let child_bounty_id = Self::child_bounty_count();
 
 			// Transfer fund from parent bounty to child-bounty.
-			let child_bounty_account = pallet_bounties::Pallet::<T>::bounty_account_id(child_bounty_id);
+			let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 			T::Currency::transfer(
 				&parent_bounty_account,
 				&child_bounty_account,
@@ -328,7 +328,7 @@ pub mod pallet {
 					);
 
 					// Ensure child-bounty curator fee is less than child-bounty value.
-					let child_bounty_account = pallet_bounties::Pallet::<T>::bounty_account_id(child_bounty_id);
+					let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 					let child_bounty_value = T::Currency::free_balance(&child_bounty_account);
 					ensure!(fee < child_bounty_value, BountiesError::<T>::InvalidFee);
 
@@ -670,7 +670,7 @@ pub mod pallet {
 						);
 
 						// Make curator fee payment.
-						let child_bounty_account = pallet_bounties::Pallet::<T>::bounty_account_id(child_bounty_id);
+						let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 						let balance = T::Currency::free_balance(&child_bounty_account);
 						let fee = child_bounty.fee.min(balance);
 						let payout = balance.saturating_sub(fee);
@@ -774,6 +774,13 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// The account ID of a child-bounty account.
+	pub fn child_bounty_account_id(id: BountyIndex) -> T::AccountId {
+		// only use two byte prefix to support 16 byte account id (used by test)
+		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for bounty index
+		T::PalletId::get().into_sub_account(("cb", id))
+	}
+
 	fn create_child_bounty(parent_bounty_id: BountyIndex, child_bounty_id: BountyIndex, description: Vec<u8>) {
 		let child_bounty = ChildBounty {
 			parent_bounty: parent_bounty_id,
@@ -832,7 +839,7 @@ impl<T: Config> Pallet<T> {
 
 				// Transfer fund from child-bounty to parent bounty.
 				let parent_bounty_account = pallet_bounties::Pallet::<T>::bounty_account_id(parent_bounty_id);
-				let child_bounty_account = pallet_bounties::Pallet::<T>::bounty_account_id(child_bounty_id);
+				let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 				let balance = T::Currency::free_balance(&child_bounty_account);
 				let _ =
 					T::Currency::transfer(&child_bounty_account, &parent_bounty_account, balance, AllowDeath);
