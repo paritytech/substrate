@@ -75,11 +75,13 @@ use frame_support::{
 	print,
 	traits::{
 		Currency, ExistenceRequirement::KeepAlive, Get, Imbalance, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons,
+		ReservableCurrency, WithdrawReasons, Instance, TryDrop
 	},
 	weights::Weight,
 	PalletId,
 };
+
+use orml_tokens::{MultiTokenNegativeImbalance, MultiTokenCurrency, MultiTokenCurrencyAdapter};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -500,4 +502,29 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
 
 		Self::deposit_event(Event::Deposit(numeric_amount));
 	}
+}
+
+pub struct MultiOnUnbalancedWrapper<Pallet>{
+    _marker: sp_std::marker::PhantomData<Pallet>,
+}
+
+impl<T,I,Tokens> OnUnbalanced<MultiTokenNegativeImbalance<Tokens>> for MultiOnUnbalancedWrapper<Pallet<T,I>> where
+	T: Config<I>,
+	I: Instance, 
+	Tokens: orml_tokens::Config,
+	Tokens::AccountId: From<T::AccountId>,
+    <T::Currency as Currency<T::AccountId>>::Balance : From<u128>,
+	MultiTokenNegativeImbalance<Tokens>: TryDrop + Imbalance<BalanceOf<T, I>>
+{
+
+	fn on_nonzero_unbalanced(amount: MultiTokenNegativeImbalance<Tokens>) {
+		let numeric_amount = amount.peek().into();
+		let currency_id = amount.0;
+
+		// Must resolve into existing but better to be safe.
+		let _ = MultiTokenCurrencyAdapter::<Tokens>::resolve_creating(currency_id, &Pallet::<T,I>::account_id().into(), amount);
+
+		Pallet::<T,I>::deposit_event(Event::Deposit(numeric_amount));
+	}
+
 }
