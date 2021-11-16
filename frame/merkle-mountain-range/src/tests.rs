@@ -298,11 +298,7 @@ fn should_verify() {
 		crate::Pallet::<Test>::generate_proof(5).unwrap()
 	});
 
-	// Now to verify the proof, we really shouldn't require offchain storage or extension.
-	// Hence we initialize the storage once again, using different externalities and then
-	// verify.
-	let mut ext2 = new_test_ext();
-	ext2.execute_with(|| {
+	ext.execute_with(|| {
 		init_chain(7);
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));

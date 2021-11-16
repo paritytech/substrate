@@ -263,7 +263,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.log_debug("The proof has incorrect number of leaves or proof items."))
 		}
 
-		let mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(proof.leaf_count);
+		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(proof.leaf_count);
 		let is_valid = mmr.verify_leaf_proof(leaf, proof)?;
 		if is_valid {
 			Ok(())
