@@ -36,7 +36,7 @@ impl RoundTracker {
 	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
 		// this needs to handle equivocations in the future
 		if self.votes.contains(&vote) {
-			return false
+			return false;
 		}
 
 		self.votes.push(vote);
@@ -82,7 +82,10 @@ where
 	}
 
 	pub(crate) fn add_vote(&mut self, round: (H, N), vote: (Public, Signature)) -> bool {
-		self.rounds.entry(round).or_default().add_vote(vote)
+		if let Some(_) = self.validator_set.validators.iter().find(|id| vote.0 == **id) {
+			return self.rounds.entry(round).or_default().add_vote(vote);
+		}
+		false
 	}
 
 	pub(crate) fn is_done(&self, round: &(H, N)) -> bool {
