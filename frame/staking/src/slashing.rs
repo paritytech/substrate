@@ -190,7 +190,7 @@ pub(crate) struct SpanRecord<Balance> {
 impl<Balance> SpanRecord<Balance> {
 	/// The value of stash balance slashed in this span.
 	#[cfg(test)]
-	pub(crate) fn amount_slashed(&self) -> &Balance {
+	pub(crate) fn amount(&self) -> &Balance {
 		&self.slashed
 	}
 }
