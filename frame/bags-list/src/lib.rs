@@ -26,7 +26,7 @@
 //! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
-//! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
+//! the `SortedListProvider` (e.g. `on_insert`, or `unsafe_regenerate`) at their genesis.
 //!
 //! # Goals
 //!
@@ -255,11 +255,14 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::remove(id)
 	}
 
-	fn regenerate(
+	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
-		List::<T>::regenerate(all, weight_of)
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		List::<T>::unsafe_regenerate(all, weight_of)
 	}
 
 	#[cfg(feature = "std")]
@@ -272,8 +275,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		Ok(())
 	}
 
-	fn clear() {
-		List::<T>::clear()
+	fn unsafe_clear() {
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		List::<T>::unsafe_clear()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

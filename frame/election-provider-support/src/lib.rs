@@ -333,7 +333,12 @@ pub trait SortedListProvider<AccountId> {
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///
 	/// This should typically only be used at a runtime upgrade.
-	fn regenerate(
+	///
+	/// ## WARNING
+	///
+	/// This function should be called with care, regenerate will remove the current list write the
+	/// new list, which can lead to too many storage accesses, exhausting the block weight.
+	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = AccountId>,
 		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
 	) -> u32;
@@ -344,7 +349,7 @@ pub trait SortedListProvider<AccountId> {
 	///
 	/// This function should never be called in production settings because it can lead to an
 	/// unbounded amount of storage accesses.
-	fn clear();
+	fn unsafe_clear();
 
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;

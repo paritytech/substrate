@@ -1297,7 +1297,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn on_remove(_: &T::AccountId) {
 		// nothing to do on remove.
 	}
-	fn regenerate(
+	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
 		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
@@ -1307,7 +1307,9 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-	fn clear() {
+	fn unsafe_clear() {
+		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
+		// condition of SortedListProvider::unsafe_clear.
 		Nominators::<T>::remove_all(None);
 		CounterForNominators::<T>::take();
 	}

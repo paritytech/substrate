@@ -82,7 +82,7 @@ impl<T: Config> List<T> {
 	///
 	/// this function should generally not be used in production as it could lead to a very large
 	/// number of storage accesses.
-	pub(crate) fn clear() {
+	pub(crate) fn unsafe_clear() {
 		crate::ListBags::<T>::remove_all(None);
 		crate::ListNodes::<T>::remove_all();
 	}
@@ -96,11 +96,14 @@ impl<T: Config> List<T> {
 	/// pallet using this `List`.
 	///
 	/// Returns the number of ids migrated.
-	pub fn regenerate(
+	pub fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
-		Self::clear();
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		Self::unsafe_clear();
 		Self::insert_many(all, weight_of)
 	}
 
