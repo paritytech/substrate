@@ -40,6 +40,9 @@ pub use pallet_mmr_primitives::MmrApi as MmrRuntimeApi;
 
 const RUNTIME_ERROR: i32 = 8000;
 const MMR_ERROR: i32 = 8010;
+const LEAF_NOT_FOUND_ERROR: i32 = MMR_ERROR + 1;
+const GENERATE_PROOF_ERROR: i32 = MMR_ERROR + 2;
+
 
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -128,21 +131,22 @@ where
 
 /// Converts a mmr-specific error into a [`CallError`].
 fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
+	let data = to_raw_value(&format!("{:?}", err)).ok();
 	match err {
 		MmrError::LeafNotFound => CallError::Custom {
-			code: MMR_ERROR + 1,
+			code: LEAF_NOT_FOUND_ERROR,
 			message: "Leaf was not found".into(),
-			data: to_raw_value(&format!("{:?}", err)).ok(),
+			data,
 		},
 		MmrError::GenerateProof => CallError::Custom {
-			code: MMR_ERROR + 2,
+			code: GENERATE_PROOF_ERROR,
 			message: "Error while generating the proof".into(),
-			data: to_raw_value(&format!("{:?}", err)).ok(),
+			data,
 		},
 		_ => CallError::Custom {
 			code: MMR_ERROR,
 			message: "Unexpected MMR error".into(),
-			data: to_raw_value(&format!("{:?}", err)).ok(),
+			data,
 		},
 	}
 }

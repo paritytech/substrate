@@ -42,7 +42,6 @@ const NOT_HEALTHY_ERROR: i32 = BASE_ERROR + 1;
 // Peer argument is malformatted.
 const MALFORMATTED_PEER_ARG_ERROR: i32 = BASE_ERROR + 2;
 
-
 impl From<Error> for CallError {
 	fn from(e: Error) -> Self {
 		match e {

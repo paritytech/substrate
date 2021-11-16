@@ -598,11 +598,12 @@ where
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 	) -> std::result::Result<Vec<Option<StorageData>>, Error> {
-		let child_info = match ChildType::from_prefixed_key(&storage_key) {
-			Some((ChildType::ParentKeyId, storage_key)) =>
-				Arc::new(ChildInfo::new_default(storage_key)),
-			None => return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey)),
-		};
+		let child_info =
+			if let Some((ChildType::ParentKeyId, storage_key)) = ChildType::from_prefixed_key(&storage_key) {
+				Arc::new(ChildInfo::new_default(storage_key))
+			} else {
+				return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey))
+			};
 		let block = self.block_or_best(block).map_err(client_err)?;
 		let client = self.client.clone();
 		future::try_join_all(keys.into_iter().map(move |key| {
