@@ -608,7 +608,9 @@ pub mod pallet {
 		DuplicateIndex,
 		/// Slash record index out of bounds.
 		InvalidSlashIndex,
-		/// Can not bond with value less than minimum required.
+		/// Cannot have a validator or nominator role, with value less than the minimum defined by
+		/// governance (see `MinValidatorBond` and `MinNominatorBond`). If unbonding is the
+		/// intention, `chill` first to remove one's role as validator/nominator.
 		InsufficientBond,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
