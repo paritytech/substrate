@@ -19,6 +19,7 @@ sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+#frame-executive = { version = "3.0.0", default-features = false, path = "../../frame/executive" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "4.0.0-dev", optional = true, path = "../../primitives/keyring" }
 memory-db = { version = "0.27.0", default-features = false }
@@ -44,6 +45,8 @@ parity-util-mem = { version = "0.10.0", default-features = false, features = ["p
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.10.0-dev", default-features = false, path = "../../primitives/externalities" }
+extrinsic-info-runtime-api = { path = '../../primitives/extrinsic-info-runtime-api', default-features = false, version = '4.0.0-dev' }
+sp-ver = {path = '../../primitives/ver', default-features = false, version = '0.10.0-dev' }
 
 # 3rd party
 cfg-if = "1.0"
@@ -98,6 +101,8 @@ std = [
 	"sp-trie/std",
 	"sp-transaction-pool/std",
 	"trie-db/std",
+    "extrinsic-info-runtime-api/std",
+    "sp-ver/std",
 ]
 # Special feature to disable logging
 disable-logging = [ "sp-api/disable-logging" ]

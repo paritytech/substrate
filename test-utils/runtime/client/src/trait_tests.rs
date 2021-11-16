@@ -54,7 +54,7 @@ where
 	assert_eq!(blockchain.leaves().unwrap(), vec![genesis_hash]);
 
 	// G -> A1
-	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let a1 = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 	assert_eq!(blockchain.leaves().unwrap(), vec![a1.hash()]);
 
@@ -62,7 +62,7 @@ where
 	let a2 = client
 		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
@@ -73,7 +73,7 @@ where
 	let a3 = client
 		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
@@ -84,7 +84,7 @@ where
 	let a4 = client
 		.new_block_at(&BlockId::Hash(a3.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
@@ -94,7 +94,7 @@ where
 	let a5 = client
 		.new_block_at(&BlockId::Hash(a4.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 
@@ -115,7 +115,7 @@ where
 			nonce: 0,
 		})
 		.unwrap();
-	let b2 = builder.build().unwrap().block;
+	let b2 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b2.hash()]);
 
@@ -123,7 +123,7 @@ where
 	let b3 = client
 		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 
@@ -134,7 +134,7 @@ where
 	let b4 = client
 		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b4.clone())).unwrap();
@@ -153,7 +153,7 @@ where
 			nonce: 1,
 		})
 		.unwrap();
-	let c3 = builder.build().unwrap().block;
+	let c3 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, c3.clone())).unwrap();
 	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash(), c3.hash()]);
 
@@ -170,7 +170,7 @@ where
 			nonce: 0,
 		})
 		.unwrap();
-	let d2 = builder.build().unwrap().block;
+	let d2 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, d2.clone())).unwrap();
 	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()]);
 }
@@ -190,14 +190,14 @@ where
 	let blockchain = backend.blockchain();
 
 	// G -> A1
-	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let a1 = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	// A1 -> A2
 	let a2 = client
 		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
@@ -206,7 +206,7 @@ where
 	let a3 = client
 		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
@@ -215,7 +215,7 @@ where
 	let a4 = client
 		.new_block_at(&BlockId::Hash(a3.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
@@ -224,7 +224,7 @@ where
 	let a5 = client
 		.new_block_at(&BlockId::Hash(a4.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
@@ -242,14 +242,14 @@ where
 			nonce: 0,
 		})
 		.unwrap();
-	let b2 = builder.build().unwrap().block;
+	let b2 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
 	// B2 -> B3
 	let b3 = client
 		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
@@ -258,7 +258,7 @@ where
 	let b4 = client
 		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b4)).unwrap();
@@ -276,7 +276,7 @@ where
 			nonce: 1,
 		})
 		.unwrap();
-	let c3 = builder.build().unwrap().block;
+	let c3 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, c3.clone())).unwrap();
 
 	// A1 -> D2
@@ -292,7 +292,7 @@ where
 			nonce: 0,
 		})
 		.unwrap();
-	let d2 = builder.build().unwrap().block;
+	let d2 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, d2.clone())).unwrap();
 
 	let genesis_hash = client.chain_info().genesis_hash;
@@ -323,14 +323,14 @@ where
 	let blockchain = backend.blockchain();
 
 	// G -> A1
-	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let a1 = client.new_block(Default::default()).unwrap().build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	// A1 -> A2
 	let a2 = client
 		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
@@ -339,7 +339,7 @@ where
 	let a3 = client
 		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
@@ -348,7 +348,7 @@ where
 	let a4 = client
 		.new_block_at(&BlockId::Hash(a3.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
@@ -357,7 +357,7 @@ where
 	let a5 = client
 		.new_block_at(&BlockId::Hash(a4.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
@@ -375,14 +375,14 @@ where
 			nonce: 0,
 		})
 		.unwrap();
-	let b2 = builder.build().unwrap().block;
+	let b2 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
 	// B2 -> B3
 	let b3 = client
 		.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
@@ -391,7 +391,7 @@ where
 	let b4 = client
 		.new_block_at(&BlockId::Hash(b3.hash()), Default::default(), false)
 		.unwrap()
-		.build()
+		.build(Default::default())
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b4)).unwrap();
@@ -409,7 +409,7 @@ where
 			nonce: 1,
 		})
 		.unwrap();
-	let c3 = builder.build().unwrap().block;
+	let c3 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, c3)).unwrap();
 
 	// A1 -> D2
@@ -425,7 +425,7 @@ where
 			nonce: 0,
 		})
 		.unwrap();
-	let d2 = builder.build().unwrap().block;
+	let d2 = builder.build(Default::default()).unwrap().block;
 	block_on(client.import(BlockOrigin::Own, d2)).unwrap();
 
 	let genesis_hash = client.chain_info().genesis_hash;
