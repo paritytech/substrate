@@ -52,6 +52,21 @@ impl<T: Default> Get<T> for () {
 	}
 }
 
+/// A trait for querying a single value from a type.
+///
+/// It is required that the value is constant.
+pub trait ConstGet<T> {
+    /// Return the current value.
+    fn const_get() -> T;
+}
+
+impl<T: Default> ConstGet<T> for () {
+    fn const_get() -> T {
+        T::default()
+    }
+}
+
+
 /// Implement Get by returning Default for any type that implements Default.
 pub struct GetDefault;
 impl<T: Default> Get<T> for GetDefault {
