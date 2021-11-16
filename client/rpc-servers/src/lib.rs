@@ -20,6 +20,8 @@
 
 #![warn(missing_docs)]
 
+use std::net::SocketAddrV4;
+
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
 	ws_server::{WsServerBuilder, WsServerHandle},
@@ -93,17 +95,15 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 	let mut acl = AccessControlBuilder::new();
 
-	log::info!("Starting JSONRPC HTTP server: addr={}, allowed origins={:?}", addr, cors);
+	log::info!("Starting JSON-RPC HTTP server: addr={}, allowed origins={:?}", addr, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		acl = acl.set_allowed_hosts([
-			format!("localhost:{}", addr.port()),
-			format!("127.0.0.1:{}", addr.port()),
-		])?;
-
-		let origins: Vec<String> = cors.iter().map(Into::into).collect();
-		acl = acl.set_allowed_origins(origins)?;
+		acl = acl.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
+		// let origins: Vec<String> = cors.iter().map(Into::into).collect();
+		acl = acl.set_allowed_origins(cors)?;
+		// let origins: Vec<String> = cors.iter().map(Into::into).collect();
+		// acl = acl.set_allowed_origins(origins)?;
 	};
 
 	let server = HttpServerBuilder::default()
@@ -137,15 +137,11 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		.max_connections(max_connections as u64)
 		.custom_tokio_runtime(rt.clone());
 
-	log::info!("Starting JSONRPC WS server: addr={}, allowed origins={:?}", addr, cors);
+	log::info!("Starting JSON-RPC WS server: addr={}, allowed origins={:?}", addr, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		builder = builder.set_allowed_hosts([
-			format!("localhost:{}", addr.port()),
-			format!("127.0.0.1:{}", addr.port()),
-		])?;
-
+		builder = builder.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
 		// Set allowed origins.
 		builder = builder.set_allowed_origins(cors)?;
 	}
@@ -156,6 +152,10 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	let handle = server.start(rpc_api)?;
 
 	Ok(handle)
+}
+
+fn format_allowed_hosts(port: u16) -> [String; 2] {
+	[format!("localhost:{}", port), format!("127.0.0.1:{}", port)]
 }
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
