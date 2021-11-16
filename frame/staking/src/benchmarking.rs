@@ -28,7 +28,7 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{StaticLookup, Zero},
+	traits::{Bounded, One, StaticLookup, Zero},
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
@@ -38,7 +38,6 @@ pub use frame_benchmarking::{
 	account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::{Bounded, One};
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
@@ -695,7 +694,7 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 
 		add_slashing_spans::<T>(&stash, s);
-		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
+		Ledger::<T>::insert(&controller, StakingLedger { active: T::Currency::minimum_balance() - One::one(), total: T::Currency::minimum_balance() - One::one(), ..Default::default() });
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));

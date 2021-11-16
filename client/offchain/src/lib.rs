@@ -226,6 +226,7 @@ pub async fn notification_future<Client, Block, Spawner>(
 			if n.is_new_best {
 				spawner.spawn(
 					"offchain-on-block",
+					Some("offchain-worker"),
 					offchain
 						.on_block_imported(&n.header, network_provider.clone(), is_validator)
 						.boxed(),
