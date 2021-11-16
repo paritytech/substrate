@@ -4108,7 +4108,6 @@ dependencies = [
 [[package]]
 name = "mangata-primitives"
 version = "0.1.0"
-source = "git+https://github.com/mangata-finance/mangata-node?branch=mangata-dev-v4#9b6ac52ebe473eb91723f51f825577d9bca968e7"
 
 [[package]]
 name = "maplit"

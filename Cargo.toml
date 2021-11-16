@@ -275,3 +275,6 @@ panic = "unwind"
 
 [patch."https://github.com/mangata-finance/open-runtime-module-library"]
 orml-tokens = { path = "../open-runtime-module-library/tokens" }
+
+[patch."https://github.com/mangata-finance/mangata-node"]
+mangata-primitives = { path = "../mangata-node/primitives/mangata" }
