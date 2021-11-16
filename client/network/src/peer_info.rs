@@ -186,6 +186,17 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		list
 	}
 
+	fn inject_address_change(
+		&mut self,
+		_: &PeerId,
+		_: &ConnectionId,
+		_: &ConnectedPoint,
+		_: &ConnectedPoint,
+	) {
+		// NetworkBehaviour::inject_address_change on Ping does nothing.
+		// NetworkBehaviour::inject_address_change on Identify does nothing.
+	}
+
 	fn inject_connected(&mut self, peer_id: &PeerId) {
 		self.ping.inject_connected(peer_id);
 		self.identify.inject_connected(peer_id);
@@ -296,6 +307,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
 		self.ping.inject_expired_external_addr(addr);
 		self.identify.inject_expired_external_addr(addr);
+	}
+
+	fn inject_listen_failure(&mut self, _: &Multiaddr, _: &Multiaddr, _: Self::ProtocolsHandler) {
+		// NetworkBehaviour::inject_listen_failure on Ping does nothing.
+		// NetworkBehaviour::inject_listen_failure on Identify does nothing.
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {

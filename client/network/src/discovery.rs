@@ -550,6 +550,18 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		list
 	}
 
+	fn inject_address_change(
+		&mut self,
+		peer_id: &PeerId,
+		connection_id: &ConnectionId,
+		old: &ConnectedPoint,
+		new: &ConnectedPoint,
+	) {
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_address_change(k, peer_id, connection_id, old, new);
+		}
+	}
+
 	fn inject_connection_established(
 		&mut self,
 		peer_id: &PeerId,
@@ -675,6 +687,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_new_listen_addr(k, id, addr)
 		}
+	}
+
+	fn inject_listen_failure(&mut self, _: &Multiaddr, _: &Multiaddr, _: Self::ProtocolsHandler) {
+		// NetworkBehaviour::inject_listen_failure on Kademlia<MemoryStore> does nothing.
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
