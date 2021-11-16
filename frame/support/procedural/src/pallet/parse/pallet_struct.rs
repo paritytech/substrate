@@ -130,12 +130,12 @@ impl PalletStructDef {
 					if generate_storage_info.is_none() =>
 				{
 					generate_storage_info = Some(span);
-				}
+				},
 				PalletStructAttr::StorageVersion { storage_version, .. }
 					if storage_version_found.is_none() =>
 				{
 					storage_version_found = Some(storage_version);
-				}
+				},
 				attr => {
 					let msg = "Unexpected duplicated attribute";
 					return Err(syn::Error::new(attr.span(), msg))

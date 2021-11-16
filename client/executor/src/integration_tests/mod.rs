@@ -40,7 +40,7 @@ use tracing_subscriber::layer::SubscriberExt;
 
 use crate::WasmExecutionMethod;
 
-pub type TestExternalities = CoreTestExternalities<BlakeTwo256, u64>;
+pub type TestExternalities = CoreTestExternalities<BlakeTwo256>;
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 /// Simple macro that runs a given method as test with the available wasm execution methods.
@@ -66,6 +66,53 @@ macro_rules! test_wasm_execution {
 			#[test]
 			fn [<$method_name _interpreted>]() {
 				$method_name(WasmExecutionMethod::Interpreted);
+			}
+		}
+	};
+}
+
+/// A macro to run a given test for each available WASM execution method *and* for each
+/// sandbox execution method.
+#[macro_export]
+macro_rules! test_wasm_execution_sandbox {
+	($method_name:ident) => {
+		paste::item! {
+			#[test]
+			fn [<$method_name _interpreted_host_executor>]() {
+				$method_name(WasmExecutionMethod::Interpreted, "_host");
+			}
+
+			#[test]
+			fn [<$method_name _interpreted_embedded_executor>]() {
+				$method_name(WasmExecutionMethod::Interpreted, "_embedded");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_host_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled, "_host");
+			}
+
+			#[test]
+			#[cfg(feature = "wasmtime")]
+			fn [<$method_name _compiled_embedded_executor>]() {
+				$method_name(WasmExecutionMethod::Compiled, "_embedded");
+			}
+		}
+	};
+
+	(interpreted_only $method_name:ident) => {
+		paste::item! {
+			#[test]
+			fn [<$method_name _interpreted_host_executor>]() {
+				$method_name(WasmExecutionMethod::Interpreted, "_host");
+			}
+		}
+
+		paste::item! {
+			#[test]
+			fn [<$method_name _interpreted_embedded_executor>]() {
+				$method_name(WasmExecutionMethod::Interpreted, "_embedded");
 			}
 		}
 	};
