@@ -20,8 +20,6 @@
 
 #![warn(missing_docs)]
 
-use std::net::SocketAddrV4;
-
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
 	ws_server::{WsServerBuilder, WsServerHandle},
@@ -100,10 +98,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 	if let Some(cors) = cors {
 		// Whitelist listening address.
 		acl = acl.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
-		// let origins: Vec<String> = cors.iter().map(Into::into).collect();
 		acl = acl.set_allowed_origins(cors)?;
-		// let origins: Vec<String> = cors.iter().map(Into::into).collect();
-		// acl = acl.set_allowed_origins(origins)?;
 	};
 
 	let server = HttpServerBuilder::default()
@@ -142,7 +137,6 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	if let Some(cors) = cors {
 		// Whitelist listening address.
 		builder = builder.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
-		// Set allowed origins.
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
