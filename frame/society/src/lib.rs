@@ -849,7 +849,11 @@ pub mod pallet {
 
 			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
 			Self::put_bid(bids, &who, value.clone(), BidKind::Vouch(voucher.clone(), tip));
-			Self::deposit_event(Event::<T, I>::Vouch { candidate_id: who, offer: value, vouching: voucher });
+			Self::deposit_event(Event::<T, I>::Vouch {
+				candidate_id: who,
+				offer: value,
+				vouching: voucher,
+			});
 			Ok(())
 		}
 
@@ -1039,7 +1043,7 @@ pub mod pallet {
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
 			Rules::<T, I>::put(T::Hashing::hash(&rules));
-			Self::deposit_event(Event::<T, I>::Founded { founder: founder });
+			Self::deposit_event(Event::<T, I>::Founded { founder });
 			Ok(())
 		}
 
