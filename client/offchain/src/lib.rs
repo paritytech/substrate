@@ -323,6 +323,10 @@ mod tests {
 			.unwrap();
 
 		let block = block_builder.build().unwrap().block;
+		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+
+		let block_builder = client.new_block_at(&BlockId::Hash(block.header.hash()), Default::default(), false).unwrap();
+		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
@@ -334,6 +338,10 @@ mod tests {
 			))
 			.unwrap();
 
+		let block = block_builder.build().unwrap().block;
+		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+
+		let block_builder = client.new_block_at(&BlockId::Hash(block.header.hash()), Default::default(), false).unwrap();
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 

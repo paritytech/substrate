@@ -46,7 +46,7 @@ sc-service = { version = "0.10.0-dev", default-features = false, optional = true
 sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.10.0-dev", default-features = false, path = "../../primitives/externalities" }
 extrinsic-info-runtime-api = { path = '../../primitives/extrinsic-info-runtime-api', default-features = false, version = '4.0.0-dev' }
-sp-ver = {path = '../../primitives/ver', default-features = false, version = '0.10.0-dev' }
+sp-ver = {path = '../../primitives/ver', default-features = false, version = '4.0.0-dev' }
 
 # 3rd party
 cfg-if = "1.0"

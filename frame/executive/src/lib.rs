@@ -934,7 +934,7 @@ mod tests {
                     seed: Default::default(),
 				},
 				extrinsics: vec![],
-			});
+			},vec![]);
 		});
 	}
 
@@ -955,7 +955,7 @@ mod tests {
                     seed: Default::default(),
 				},
 				extrinsics: vec![],
-			});
+			},vec![]);
 		});
 	}
 
@@ -976,7 +976,7 @@ mod tests {
                     seed: Default::default(),
 				},
 				extrinsics: vec![],
-			});
+			}, vec![]);
 		});
 	}
 
@@ -1344,7 +1344,7 @@ mod tests {
 					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
-			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
+			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]), vec![None]);
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
@@ -1432,7 +1432,7 @@ mod tests {
 		});
 
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block::new(header, vec![xt]));
+			Executive::execute_block(Block::new(header, vec![xt]), vec![None]);
 		});
 	}
 
@@ -1462,7 +1462,7 @@ mod tests {
 		});
 
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]), vec![None,None]);
 		});
 	}
 
@@ -1488,7 +1488,7 @@ mod tests {
 		});
 
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]), vec![None, None]);
 		});
 	}
 }

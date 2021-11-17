@@ -28,10 +28,8 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
-	time::Duration,
 };
 
-use async_std::future::timeout;
 use futures::{future::BoxFuture, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
@@ -55,7 +53,7 @@ use sc_network::{
 	},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
-	warp_request_handler, Multiaddr, NetworkService, NetworkWorker,
+	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_service::client::Client;
 use sp_blockchain::{
@@ -68,7 +66,6 @@ use sp_consensus::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	codec::{Decode, Encode},
 	generic::{BlockId, OpaqueDigestItemId},
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	Justification, Justifications,
@@ -479,7 +476,7 @@ where
 					};
 					builder.push(transfer.into_signed_tx()).unwrap();
 					nonce = nonce + 1;
-					builder.build(Default::default()).unwrap().block
+					builder.build().unwrap().block
 				},
 				headers_only,
 				inform_sync_about_new_best_block,
@@ -490,7 +487,7 @@ where
 				at,
 				count,
 				BlockOrigin::File,
-				|builder| builder.build(Default::default()).unwrap().block,
+				|builder| builder.build().unwrap().block,
 				headers_only,
 				inform_sync_about_new_best_block,
 				announce_block,
@@ -501,7 +498,7 @@ where
 	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
-			builder.build(Default::default()).unwrap().block
+			builder.build().unwrap().block
 		})
 	}
 
@@ -653,33 +650,6 @@ impl<B: BlockT> VerifierAdapter<B> {
 	}
 }
 
-struct TestWarpSyncProvider<B: BlockT>(Arc<dyn HeaderBackend<B>>);
-
-impl<B: BlockT> warp_request_handler::WarpSyncProvider<B> for TestWarpSyncProvider<B> {
-	fn generate(
-		&self,
-		_start: B::Hash,
-	) -> Result<warp_request_handler::EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
-		let info = self.0.info();
-		let best_header = self.0.header(BlockId::hash(info.best_hash)).unwrap().unwrap();
-		Ok(warp_request_handler::EncodedProof(best_header.encode()))
-	}
-	fn verify(
-		&self,
-		proof: &warp_request_handler::EncodedProof,
-		_set_id: warp_request_handler::SetId,
-		_authorities: warp_request_handler::AuthorityList,
-	) -> Result<warp_request_handler::VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>
-	{
-		let warp_request_handler::EncodedProof(encoded) = proof;
-		let header = B::Header::decode(&mut encoded.as_slice()).unwrap();
-		Ok(warp_request_handler::VerificationResult::Complete(0, Default::default(), header))
-	}
-	fn current_authorities(&self) -> warp_request_handler::AuthorityList {
-		Default::default()
-	}
-}
-
 /// Configuration for a full peer.
 #[derive(Default)]
 pub struct FullPeerConfig {
@@ -765,7 +735,7 @@ where
 			(Some(keep_blocks), false) => TestClientBuilder::with_pruning_window(keep_blocks),
 			(None, false) => TestClientBuilder::with_default_backend(),
 		};
-		if matches!(config.sync_mode, SyncMode::Fast { .. } | SyncMode::Warp) {
+		if matches!(config.sync_mode, SyncMode::Fast { .. }) {
 			test_client_builder = test_client_builder.set_no_genesis();
 		}
 		let backend = test_client_builder.backend();
@@ -844,15 +814,6 @@ where
 			protocol_config
 		};
 
-		let warp_sync = Arc::new(TestWarpSyncProvider(client.clone()));
-
-		let warp_protocol_config = {
-			let (handler, protocol_config) =
-				warp_request_handler::RequestHandler::new(protocol_id.clone(), warp_sync.clone());
-			self.spawn_task(handler.run().boxed());
-			protocol_config
-		};
-
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
@@ -872,7 +833,7 @@ where
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
-			warp_sync: Some((warp_sync, warp_protocol_config)),
+			warp_sync: None,
 		})
 		.unwrap();
 
@@ -1056,13 +1017,10 @@ where
 	/// Blocks the current thread until we are sync'ed.
 	///
 	/// Calls `poll_until_sync` repeatedly.
-	/// (If we've not synced within 10 mins then panic rather than hang.)
 	fn block_until_sync(&mut self) {
-		futures::executor::block_on(timeout(
-			Duration::from_secs(10 * 60),
-			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
-		))
-		.expect("sync didn't happen within 10 mins");
+		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| {
+			self.poll_until_sync(cx)
+		}));
 	}
 
 	/// Blocks the current thread until there are no pending packets.

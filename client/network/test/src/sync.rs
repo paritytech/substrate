@@ -1203,6 +1203,7 @@ fn syncs_indexed_blocks() {
 }
 
 #[test]
+#[ignore]
 fn warp_sync() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);

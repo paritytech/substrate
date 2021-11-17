@@ -1329,6 +1329,14 @@ mod tests {
 
 		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
+		let (new_block_id, block) = {
+			let builder = client.new_block_at(&new_block_id, Default::default(), false).unwrap();
+			let block = builder.build().unwrap().block;
+			let hash = block.header.hash();
+			(BlockId::Hash(hash), block)
+		};
+		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+
 		// Allocation of 1024k while having ~2048k should succeed.
 		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);
 		assert!(ret.is_ok());

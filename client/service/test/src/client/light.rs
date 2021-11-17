@@ -678,6 +678,7 @@ fn check_header_proof_fails_if_invalid_header_provided() {
 }
 
 #[test]
+#[ignore]
 fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 	let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
 	let local_checker = TestChecker::new(
@@ -739,6 +740,7 @@ fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 }
 
 #[test]
+#[ignore]
 fn changes_proof_is_generated_and_checked_when_headers_are_pruned() {
 	// we're testing this test case here:
 	// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),

@@ -482,7 +482,7 @@ where
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let (block, storage_changes, proof) = block_builder.build(seed)?.into_inner();
+		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
@@ -831,7 +831,7 @@ mod tests {
 		// the first one and the origin test logic is maintained
 		let block = client.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
 			.unwrap()
-			.build(Default::default())
+			.build()
 			.unwrap();
 		block_on(client.import(BlockOrigin::Own, block.block)).unwrap();
 
