@@ -494,9 +494,9 @@ pub mod pallet {
 	/// Event for the System pallet.
 	#[pallet::event]
 	pub enum Event<T: Config> {
-		/// An extrinsic completed successfully. 
+		/// An extrinsic completed successfully.
 		ExtrinsicSuccess { extrinsic_info: DispatchInfo },
-		/// An extrinsic failed. 
+		/// An extrinsic failed.
 		ExtrinsicFailed { extrinsic_error: DispatchError, extrinsic_info: DispatchInfo },
 		/// `:code` was updated.
 		CodeUpdated,
@@ -504,7 +504,7 @@ pub mod pallet {
 		NewAccount { new_account: T::AccountId },
 		/// An account was reaped.
 		KilledAccount { reaped_account: T::AccountId },
-		/// On on-chain remark happened. 
+		/// On on-chain remark happened.
 		Remarked { origin: T::AccountId, remarked_hash: T::Hash },
 	}
 
