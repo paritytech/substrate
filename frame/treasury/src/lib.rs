@@ -360,7 +360,10 @@ pub mod pallet {
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::OnSlash::on_unbalanced(imbalance);
 
-			Self::deposit_event(Event::<T, I>::Rejected { proposal_index: proposal_id, slashed: value });
+			Self::deposit_event(Event::<T, I>::Rejected {
+				proposal_index: proposal_id,
+				slashed: value,
+			});
 			Ok(())
 		}
 
@@ -431,7 +434,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// provide the allocation.
 						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));
 
-						Self::deposit_event(Event::Awarded { proposal_index: index, funds: p.value, account: p.beneficiary });
+						Self::deposit_event(Event::Awarded {
+							proposal_index: index,
+							funds: p.value,
+							account: p.beneficiary,
+						});
 						false
 					} else {
 						missed_any = true;
