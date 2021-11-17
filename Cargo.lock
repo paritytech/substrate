@@ -482,7 +482,7 @@ dependencies = [
  "beefy-gadget",
  "beefy-primitives",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "log",
  "parity-scale-codec",
  "sc-rpc",
@@ -2673,7 +2673,6 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.22.0",
  "webpki 0.21.4",
- "webpki-roots 0.21.0",
 ]
 
 [[package]]
@@ -2880,47 +2879,27 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2#e2d4722c25bec808e24d53605e4b87a7323afac2"
 dependencies = [
- "jsonrpsee-http-client",
  "jsonrpsee-http-server",
- "jsonrpsee-proc-macros 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
- "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
- "jsonrpsee-utils 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
- "jsonrpsee-ws-client 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee-proc-macros 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
+ "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
+ "jsonrpsee-utils 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
+ "jsonrpsee-ws-client 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "jsonrpsee-ws-server",
-]
-
-[[package]]
-name = "jsonrpsee-http-client"
-version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
-dependencies = [
- "async-trait",
- "fnv",
- "hyper",
- "hyper-rustls",
- "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
- "jsonrpsee-utils 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2#e2d4722c25bec808e24d53605e4b87a7323afac2"
 dependencies = [
  "futures-channel",
  "futures-util",
  "globset",
  "hyper",
- "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
- "jsonrpsee-utils 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
+ "jsonrpsee-utils 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "lazy_static",
  "serde_json",
  "socket2 0.4.0",
@@ -2945,7 +2924,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2#e2d4722c25bec808e24d53605e4b87a7323afac2"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2975,7 +2954,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2#e2d4722c25bec808e24d53605e4b87a7323afac2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3004,14 +2983,14 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2#e2d4722c25bec808e24d53605e4b87a7323afac2"
 dependencies = [
  "arrayvec 0.7.1",
  "beef",
  "futures-channel",
  "futures-util",
  "hyper",
- "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "parking_lot",
  "rand 0.8.4",
  "rustc-hash",
@@ -3049,13 +3028,13 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2#e2d4722c25bec808e24d53605e4b87a7323afac2"
 dependencies = [
  "async-trait",
  "fnv",
  "futures 0.3.16",
  "http",
- "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "pin-project 1.0.8",
  "rustls-native-certs 0.6.1",
  "serde",
@@ -3072,12 +3051,12 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7#aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2#e2d4722c25bec808e24d53605e4b87a7323afac2"
 dependencies = [
  "futures-channel",
  "futures-util",
- "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
- "jsonrpsee-utils 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee-types 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
+ "jsonrpsee-utils 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "serde_json",
  "soketto 0.7.1",
  "tokio",
@@ -4287,7 +4266,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "futures 0.3.16",
  "hex-literal",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "jsonrpsee-ws-client 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "nix",
@@ -4426,7 +4405,7 @@ dependencies = [
 name = "node-rpc"
 version = "3.0.0-dev"
 dependencies = [
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "node-primitives",
  "pallet-contracts-rpc",
  "pallet-mmr-rpc",
@@ -4549,7 +4528,7 @@ version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "node-template-runtime",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -5160,7 +5139,7 @@ name = "pallet-contracts-rpc"
 version = "4.0.0-dev"
 dependencies = [
  "anyhow",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "pallet-contracts-primitives",
  "pallet-contracts-rpc-runtime-api",
  "parity-scale-codec",
@@ -5485,7 +5464,7 @@ dependencies = [
 name = "pallet-mmr-rpc"
 version = "3.0.0"
 dependencies = [
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "pallet-mmr-primitives",
  "parity-scale-codec",
  "serde",
@@ -5863,7 +5842,7 @@ name = "pallet-transaction-payment-rpc"
 version = "4.0.0-dev"
 dependencies = [
  "anyhow",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
  "sp-api",
@@ -7041,9 +7020,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b5ac6078ca424dc1d3ae2328526a76787fecc7f8011f520e3276730e711fc95"
+checksum = "dac4581f0fc0e0efd529d069e8189ec7b90b8e7680e21beb35141bdc45f36040"
 dependencies = [
  "log",
  "ring",
@@ -7454,7 +7433,7 @@ version = "0.10.0-dev"
 dependencies = [
  "derive_more",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
@@ -7496,7 +7475,7 @@ dependencies = [
  "async-trait",
  "derive_more",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "log",
  "parity-scale-codec",
  "sc-basic-authorship",
@@ -7726,7 +7705,7 @@ dependencies = [
  "derive_more",
  "finality-grandpa",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "log",
  "parity-scale-codec",
  "sc-block-builder",
@@ -7945,7 +7924,7 @@ dependencies = [
  "env_logger 0.9.0",
  "futures 0.3.16",
  "hash-db",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "lazy_static",
  "log",
  "parity-scale-codec",
@@ -7982,7 +7961,7 @@ version = "0.10.0-dev"
 dependencies = [
  "anyhow",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "parity-scale-codec",
  "parking_lot",
  "sc-chain-spec",
@@ -8003,7 +7982,7 @@ name = "sc-rpc-server"
 version = "4.0.0-dev"
 dependencies = [
  "anyhow",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "log",
  "serde_json",
  "substrate-prometheus-endpoint",
@@ -8035,7 +8014,7 @@ dependencies = [
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "hash-db",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "log",
  "parity-scale-codec",
  "parity-util-mem",
@@ -8143,7 +8122,7 @@ name = "sc-sync-state-rpc"
 version = "0.10.0-dev"
 dependencies = [
  "anyhow",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "parity-scale-codec",
  "sc-chain-spec",
  "sc-client-api",
@@ -9660,7 +9639,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "parity-scale-codec",
  "sc-rpc-api",
  "scale-info",
@@ -9678,7 +9657,7 @@ dependencies = [
  "derive_more",
  "frame-system-rpc-runtime-api",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "log",
  "parity-scale-codec",
  "sc-client-api",
@@ -9934,7 +9913,7 @@ version = "0.9.0"
 dependencies = [
  "frame-system",
  "futures 0.3.16",
- "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7)",
+ "jsonrpsee 0.4.1 (git+https://github.com/paritytech/jsonrpsee?rev=e2d4722c25bec808e24d53605e4b87a7323afac2)",
  "log",
  "num-traits",
  "sc-basic-authorship",
@@ -10153,7 +10132,7 @@ version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4baa378e417d780beff82bf54ceb0d195193ea6a00c14e22359e7f39456b5689"
 dependencies = [
- "rustls 0.20.0",
+ "rustls 0.20.1",
  "tokio",
  "webpki 0.22.0",
 ]
@@ -10427,8 +10406,8 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.7.3",
+ "cfg-if 1.0.0",
+ "rand 0.8.4",
  "static_assertions",
 ]
 

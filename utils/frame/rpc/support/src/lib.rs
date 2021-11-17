@@ -31,21 +31,18 @@ use sp_storage::{StorageData, StorageKey};
 /// A typed query on chain state usable from an RPC client.
 ///
 /// ```no_run
-/// # use jsonrpc_client_transports::RpcError;
-/// # use jsonrpc_client_transports::transports::http;
+/// # use jsonrpsee::types::Error as RpcError;
+/// # use jsonrpsee::ws_client::WsClientBuilder;
 /// # use codec::Encode;
 /// # use frame_support::{decl_storage, decl_module};
 /// # use substrate_frame_rpc_support::StorageQuery;
 /// # use frame_system::Config;
-/// # use sc_rpc_api::state::StateClient;
+/// # use sc_rpc_api::state::StateApiClient;
 /// #
 /// # // Hash would normally be <TestRuntime as frame_system::Config>::Hash, but we don't have
 /// # // frame_system::Config implemented for TestRuntime. Here we just pretend.
 /// # type Hash = ();
 /// #
-/// # fn main() -> Result<(), RpcError> {
-/// #     tokio::runtime::Runtime::new().unwrap().block_on(test())
-/// # }
 /// #
 /// # struct TestRuntime;
 /// #
@@ -66,24 +63,25 @@ use sp_storage::{StorageData, StorageKey};
 ///     }
 /// }
 ///
-/// # async fn test() -> Result<(), RpcError> {
-/// let conn = http::connect("http://[::1]:9933").await?;
-/// let cl = StateClient::<Hash>::new(conn);
+/// #[tokio::main]
+/// async fn main() -> Result<(), RpcError> {
+///     let cl = WsClientBuilder::default().build("ws://[::1]:9933").await?;
 ///
-/// let q = StorageQuery::value::<LastActionId>();
-/// let _: Option<u64> = q.get(&cl, None).await?;
+///     let q = StorageQuery::value::<LastActionId>();
+///     let hash = None::<Hash>;
+///     let _: Option<u64> = q.get(&cl, hash).await?;
 ///
-/// let q = StorageQuery::map::<Voxels, _>((0, 0, 0));
-/// let _: Option<Block> = q.get(&cl, None).await?;
+///     let q = StorageQuery::map::<Voxels, _>((0, 0, 0));
+///     let _: Option<Block> = q.get(&cl, hash).await?;
 ///
-/// let q = StorageQuery::map::<Actions, _>(12);
-/// let _: Option<Loc> = q.get(&cl, None).await?;
+///     let q = StorageQuery::map::<Actions, _>(12);
+///     let _: Option<Loc> = q.get(&cl, hash).await?;
 ///
-/// let q = StorageQuery::double_map::<Prefab, _, _>(3, (0, 0, 0));
-/// let _: Option<Block> = q.get(&cl, None).await?;
-/// #
-/// # Ok(())
-/// # }
+///     let q = StorageQuery::double_map::<Prefab, _, _>(3, (0, 0, 0));
+///     let _: Option<Block> = q.get(&cl, hash).await?;
+///
+///     Ok(())
+/// }
 /// ```
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct StorageQuery<V> {

@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7" }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "e2d4722c25bec808e24d53605e4b87a7323afac2" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 pallet-contracts-rpc = { version = "4.0.0-dev", path = "../../../frame/contracts/rpc/" }
 pallet-mmr-rpc = { version = "3.0.0", path = "../../../frame/merkle-mountain-range/rpc/" }

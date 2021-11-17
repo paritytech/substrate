@@ -43,7 +43,6 @@ const MMR_ERROR: i32 = 8010;
 const LEAF_NOT_FOUND_ERROR: i32 = MMR_ERROR + 1;
 const GENERATE_PROOF_ERROR: i32 = MMR_ERROR + 2;
 
-
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -143,11 +142,7 @@ fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
 			message: "Error while generating the proof".into(),
 			data,
 		},
-		_ => CallError::Custom {
-			code: MMR_ERROR,
-			message: "Unexpected MMR error".into(),
-			data,
-		},
+		_ => CallError::Custom { code: MMR_ERROR, message: "Unexpected MMR error".into(), data },
 	}
 }
 
