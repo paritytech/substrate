@@ -211,7 +211,7 @@ fn add_child_bounty() {
 		// 5, Observe fund transaction moment between Bounty, Child-bounty,
 		//    Curator, child-bounty curator & beneficiary.
 
-		// Pre-steps :: Make the bounty or parent bounty
+		// Make the parent bounty.
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
@@ -231,7 +231,7 @@ fn add_child_bounty() {
 		assert_eq!(Balances::free_balance(&4), 8);
 		assert_eq!(Balances::reserved_balance(&4), 2);
 
-		// Pre-steps :: Add child-bounty
+		// Add child-bounty.
 		// Acc-4 is the master curator.
 		// Call from invalid origin & check for error "RequireCurator".
 		assert_noop!(
@@ -273,10 +273,7 @@ fn add_child_bounty() {
 		);
 
 		// Check the child-bounty count.
-		assert_eq!(
-			ChildBounties::parent_child_bounties(0),
-			1
-		);
+		assert_eq!(ChildBounties::parent_child_bounties(0), 1);
 
 		// Check the child-bounty description status.
 		assert_eq!(ChildBounties::child_bounty_descriptions(0).unwrap(), b"12345-p1".to_vec(),);
@@ -291,7 +288,7 @@ fn child_bounty_assign_curator() {
 		// 2, Master-curator adds child-bounty child-bounty-1, moves to "Active" state.
 		// 3, Test for DB state of `ChildBounties`.
 
-		// Pre-steps :: Make the parent bounty
+		// Make the parent bounty.
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		Balances::make_free_balance_be(&4, 101);
@@ -313,12 +310,11 @@ fn child_bounty_assign_curator() {
 		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 0);
 
 		// Check the balance of master curator.
-		// Curator deposit is reserved for
-		// master curator on parent bounty.
+		// Curator deposit is reserved for master curator on parent bounty.
 		assert_eq!(Balances::free_balance(4), 99);
 		assert_eq!(Balances::reserved_balance(4), 2);
 
-		// Add child-bounty
+		// Add child-bounty.
 		// Acc-4 is the master curator & make sure enough deposit.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
@@ -415,7 +411,7 @@ fn award_claim_child_bounty() {
 		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
 		assert_ok!(ChildBounties::accept_curator(Origin::signed(8), 0, 0));
 
-		// Award child-bounty
+		// Award child-bounty.
 		// Test for non child-bounty curator.
 		assert_noop!(
 			ChildBounties::award_child_bounty(Origin::signed(3), 0, 0, 7),
@@ -436,7 +432,8 @@ fn award_claim_child_bounty() {
 
 		// Claim child-bounty.
 		// Test for Premature condition.
-		assert_noop!(ChildBounties::claim_child_bounty(Origin::signed(7), 0, 0), BountiesError::Premature);
+		assert_noop!(ChildBounties::claim_child_bounty(Origin::signed(7), 0, 0), 
+			BountiesError::Premature);
 
 		System::set_block_number(9);
 
@@ -741,9 +738,8 @@ fn child_bounty_active_unassign_curator() {
 
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
-		// Child-bounty create.
+		// Create Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
-
 		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
 
 		System::set_block_number(3);
@@ -948,7 +944,7 @@ fn close_parent_with_child_bounty() {
 
 #[test]
 fn children_curator_fee_calculation_test() {
-	// Tests the calculation of subtraction child-bounty curator fee 
+	// Tests the calculation of subtracting child-bounty curator fee 
 	// from parent bounty fee when claiming bounties.
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
