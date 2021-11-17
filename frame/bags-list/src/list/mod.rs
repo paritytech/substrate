@@ -452,11 +452,6 @@ impl<T: Config> List<T> {
 		// write the updated nodes to storage.
 		at.put();
 		node.put();
-
-		// account for `node` being added to the list.
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_add(1)
-		});
 	}
 
 	/// Sanity check the list.
