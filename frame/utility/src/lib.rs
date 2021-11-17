@@ -380,7 +380,9 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter((*as_origin).into());
 
-			Self::deposit_event(Event::DispatchedAs { result: res.map(|_| ()).map_err(|e| e.error) });
+			Self::deposit_event(Event::DispatchedAs {
+				result: res.map(|_| ()).map_err(|e| e.error),
+			});
 			Ok(())
 		}
 	}
