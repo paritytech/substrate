@@ -2940,6 +2940,40 @@ fn non_slashable_offence_doesnt_disable_validator() {
 }
 
 #[test]
+fn slashing_independent_of_disabling_validator() {
+	ExtBuilder::default().build_and_execute(|| {
+		mock::start_active_era(1);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
+
+		let now = Staking::active_era().unwrap().index;
+
+		// offence with no slash associated, BUT disabling
+		on_offence_in_era(
+			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+			&[Perbill::zero()],
+			now,
+			DisableStrategy::Always,
+		);
+
+		// offence that slashes 25% of the bond, BUT not disabling
+		on_offence_in_era(
+			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+			&[Perbill::from_percent(25)],
+			now,
+			DisableStrategy::Never,
+		);
+
+		// the offence for validator 10 was explicitly disabled
+		assert!(is_disabled(10));
+		// whereas validator 20 is explicitly not disabled
+		assert!(!is_disabled(20));
+	});
+}
+
+#[test]
 fn offence_threshold_triggers_new_era() {
 	ExtBuilder::default()
 		.validator_count(4)
