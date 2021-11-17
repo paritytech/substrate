@@ -208,7 +208,11 @@ pub mod pallet {
 		/// Canceled some task. \[when, index\]
 		Canceled { when: T::BlockNumber, index: u32 },
 		/// Dispatched some task. \[task, id, result\]
-		Dispatched { task: TaskAddress<T::BlockNumber>, id: Option<Vec<u8>>, result: DispatchResult },
+		Dispatched {
+			task: TaskAddress<T::BlockNumber>,
+			id: Option<Vec<u8>>,
+			result: DispatchResult,
+		},
 	}
 
 	#[pallet::error]
@@ -329,7 +333,7 @@ pub mod pallet {
 								Lookup::<T>::remove(id);
 							}
 						}
-						Self::deposit_event(Event::Dispatched{
+						Self::deposit_event(Event::Dispatched {
 							task: (now, index),
 							id: maybe_id,
 							result: r.map(|_| ()).map_err(|e| e.error),
