@@ -70,6 +70,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
 	let event_impl_gen = &event.gen_kind.type_impl_gen(event.attr_span);
+	let serde_crate = format!("{}::serde", frame_support);
 
 	let event_item = {
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[event.index];
@@ -117,7 +118,13 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 	));
 	event_item.attrs.push(syn::parse_quote!(
-        #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg(feature = "std")]
+	));
+	event_item.attrs.push(syn::parse_quote!(
+        #[derive(#frame_support::Serialize, #frame_support::Deserialize)]
+	));
+	event_item.attrs.push(syn::parse_quote!(
+        #[serde(crate = #serde_crate)]
 	));
 
 	// skip requirement for type params to implement `TypeInfo`, and require docs capture

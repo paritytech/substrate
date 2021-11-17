@@ -29,6 +29,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	let type_impl_gen = &def.type_impl_generics(error.attr_span);
 	let type_use_gen = &def.type_use_generics(error.attr_span);
 	let config_where_clause = &def.config.where_clause;
+	let serde_crate = format!("{}::serde", frame_support);
 
 	let phantom_variant: syn::Variant = syn::parse_quote!(
 		#[doc(hidden)]
@@ -63,7 +64,13 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		.attrs
 		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
 	error_item.attrs.push(syn::parse_quote!(
-        #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg(feature = "std")]
+	));
+	error_item.attrs.push(syn::parse_quote!(
+        #[derive(#frame_support::Serialize, #frame_support::Deserialize)]
+	));
+	error_item.attrs.push(syn::parse_quote!(
+        #[serde(crate = #serde_crate)]
 	));
 	error_item.attrs.push(syn::parse_quote!(
 		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
