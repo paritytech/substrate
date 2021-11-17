@@ -1343,16 +1343,14 @@ mod test {
 
 #[cfg(all(test, feature = "remote-tests"))]
 mod remote_tests {
-	use std::sync::Arc;
-
 	use super::{mock::*, *};
 	use codec::Encode;
 	use mock::run_to_block_and_drain_pool;
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
 	use sp_io::InMemoryProvingBackend;
 	use sp_runtime::traits::{Bounded, HashFor};
+	use std::sync::Arc;
 
-	// TODO: show PoV size per block?
 	// we only use the hash type from this, so using the mock should be fine.
 	type Block = sp_runtime::testing::Block<Extrinsic>;
 
@@ -1416,6 +1414,8 @@ mod remote_tests {
 					top_left,
 					child_left,
 				);
+				proving_backend.clear_recorder();
+				ext.commit_all().unwrap();
 
 				if finished {
 					break

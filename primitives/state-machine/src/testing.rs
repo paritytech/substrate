@@ -258,16 +258,19 @@ where
 	/// Execute the given closure while `self`, with `proving_backend` as backend, is set as
 	/// externalities.
 	///
+	/// Based on where `proving_backend` comes from, this may or may bot affect `self.ext`.
+	///
 	/// Returns the result of the given closure, and the storage proof.
 	pub fn execute_and_get_proof<'a, R>(
 		&'a mut self,
 		proving_backend: &'a InMemoryProvingBackend<'a, H>,
 		execute: impl FnOnce() -> R,
 	) -> (R, StorageProof) {
-		let mut ext = self.proving_ext(proving_backend);
-		let outcome = sp_externalities::set_and_run_with_externalities(&mut ext, execute);
-		let proof = ext.backend.extract_proof();
-		ext.backend.clear_recorder();
+		use codec::Encode;
+		let mut proving_ext = self.proving_ext(proving_backend);
+		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
+		let proof = proving_ext.backend.extract_proof();
+		proving_ext.backend.clear_recorder();
 		(outcome, proof)
 	}
 
