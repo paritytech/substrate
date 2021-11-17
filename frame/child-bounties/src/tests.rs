@@ -51,7 +51,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
 		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
-        ChildBounties: pallet_child_bounties::{Pallet, Call, Storage, Event<T>},
+		ChildBounties: pallet_child_bounties::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -148,14 +148,14 @@ impl pallet_bounties::Config for Test {
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
 	type WeightInfo = ();
-    type ChildBountyManager = ChildBounties;
+	type ChildBountyManager = ChildBounties;
 }
 parameter_types! {
-    pub const MaxActiveChildBountyCount: u32 = 2;
+	pub const MaxActiveChildBountyCount: u32 = 2;
 	pub const ChildBountyValueMinimum: u64 = 1;
 }
 impl pallet_child_bounties::Config for Test {
-    type Event = Event;
+	type Event = Event;
 	type MaxActiveChildBountyCount = MaxActiveChildBountyCount;
 	type ChildBountyValueMinimum = ChildBountyValueMinimum;
 }
@@ -426,14 +426,20 @@ fn award_claim_child_bounty() {
 				parent_bounty: 0,
 				fee: 2,
 				curator_deposit: 1,
-				status: ChildBountyStatus::PendingPayout { curator: 8, beneficiary: 7, unlock_at: 5 },
+				status: ChildBountyStatus::PendingPayout {
+					curator: 8,
+					beneficiary: 7,
+					unlock_at: 5
+				},
 			}
 		);
 
 		// Claim child-bounty.
 		// Test for Premature condition.
-		assert_noop!(ChildBounties::claim_child_bounty(Origin::signed(7), 0, 0), 
-			BountiesError::Premature);
+		assert_noop!(
+			ChildBounties::claim_child_bounty(Origin::signed(7), 0, 0),
+			BountiesError::Premature
+		);
 
 		System::set_block_number(9);
 
@@ -597,12 +603,14 @@ fn close_child_bounty_pending() {
 		assert_ok!(ChildBounties::award_child_bounty(Origin::signed(8), 0, 0, 7));
 
 		// Close child-bounty in pending_payout state.
-		assert_noop!(ChildBounties::close_child_bounty(Origin::signed(4), 0, 0), 
-			BountiesError::PendingPayout);
+		assert_noop!(
+			ChildBounties::close_child_bounty(Origin::signed(4), 0, 0),
+			BountiesError::PendingPayout
+		);
 
 		// Check the child-bounty count.
 		assert_eq!(ChildBounties::parent_child_bounties(0), 1);
-		
+
 		// Ensure no changes in child-bounty curator balance.
 		assert_eq!(Balances::free_balance(8), 100);
 		assert_eq!(Balances::reserved_balance(8), 1);
@@ -643,8 +651,10 @@ fn child_bounty_added_unassign_curator() {
 		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
 
 		// Unassign curator in added state.
-		assert_noop!(ChildBounties::unassign_curator(Origin::signed(4), 0, 0), 
-			BountiesError::UnexpectedStatus);
+		assert_noop!(
+			ChildBounties::unassign_curator(Origin::signed(4), 0, 0),
+			BountiesError::UnexpectedStatus
+		);
 	});
 }
 
@@ -711,9 +721,10 @@ fn child_bounty_active_unassign_curator() {
 	// Covers all scenarios with all origin types.
 	// Step 1: Setup bounty, child bounty.
 	// Step 2: Assign, accept curator for child bounty. Unassign from reject origin. Should slash.
-	// Step 3: Assign, accept another curator for child bounty. Unassign from parent-bounty curator. Should slash.
-	// Step 4: Assign, accept another curator for child bounty. Unassign from child-bounty curator. Should NOT slash.
-	// Step 5: Assign, accept another curator for child bounty. Unassign from random account. Should slash.
+	// Step 3: Assign, accept another curator for child bounty. Unassign from parent-bounty curator.
+	// Should slash. Step 4: Assign, accept another curator for child bounty. Unassign from
+	// child-bounty curator. Should NOT slash. Step 5: Assign, accept another curator for child
+	// bounty. Unassign from random account. Should slash.
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
 		System::set_block_number(1);
@@ -869,7 +880,10 @@ fn child_bounty_active_unassign_curator() {
 
 		// Unassign curator again - from non curator; non reject origin; some random guy.
 		// Bounty update period is not yet complete.
-		assert_noop!(ChildBounties::unassign_curator(Origin::signed(3), 0, 0), BountiesError::Premature);
+		assert_noop!(
+			ChildBounties::unassign_curator(Origin::signed(3), 0, 0),
+			BountiesError::Premature
+		);
 
 		System::set_block_number(20);
 		<Treasury as OnInitialize<u64>>::on_initialize(20);
@@ -910,6 +924,13 @@ fn close_parent_with_child_bounty() {
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
+		// Try add child-bounty.
+		// Should fail, parent bounty not active yet.
+		assert_noop!(
+			ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()),
+			Error::<Test>::ParentBountyNotActive
+		);
+
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
@@ -925,8 +946,10 @@ fn close_parent_with_child_bounty() {
 
 		// Try close parent-bounty.
 		// Child bounty active, can't close parent.
-		assert_noop!(Bounties::close_bounty(Origin::root(), 0), 
-			BountiesError::RequireNoActiveChildBounty);
+		assert_noop!(
+			Bounties::close_bounty(Origin::root(), 0),
+			BountiesError::RequireNoActiveChildBounty
+		);
 
 		System::set_block_number(2);
 
@@ -944,7 +967,7 @@ fn close_parent_with_child_bounty() {
 
 #[test]
 fn children_curator_fee_calculation_test() {
-	// Tests the calculation of subtracting child-bounty curator fee 
+	// Tests the calculation of subtracting child-bounty curator fee
 	// from parent bounty fee when claiming bounties.
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
@@ -991,7 +1014,11 @@ fn children_curator_fee_calculation_test() {
 				parent_bounty: 0,
 				fee: 2,
 				curator_deposit: 1,
-				status: ChildBountyStatus::PendingPayout { curator: 8, beneficiary: 7, unlock_at: 7 },
+				status: ChildBountyStatus::PendingPayout {
+					curator: 8,
+					beneficiary: 7,
+					unlock_at: 7
+				},
 			}
 		);
 
