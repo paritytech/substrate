@@ -25,10 +25,7 @@ use futures::{
 };
 use jsonrpc_core::MetaIoHandler;
 use manual_seal::EngineCommand;
-use sc_client_api::{
-	backend::{self, Backend},
-	CallExecutor, ExecutorProvider,
-};
+use sc_client_api::{backend::Backend, CallExecutor, ExecutorProvider};
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
 use sc_transaction_pool_api::TransactionPool;
@@ -160,9 +157,6 @@ where
 	{
 		let id = BlockId::Hash(self.client.info().best_hash);
 		let mut overlay = OverlayedChanges::default();
-		let changes_trie =
-			backend::changes_tries_state_at_block(&id, self.backend.changes_trie_storage())
-				.unwrap();
 		let mut cache = StorageTransactionCache::<
 			T::Block,
 			<TFullBackend<T::Block> as Backend<T::Block>>::State,
@@ -176,13 +170,7 @@ where
 			.state_at(id.clone())
 			.expect(&format!("State at block {} not found", id));
 
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&state_backend,
-			changes_trie.clone(),
-			Some(&mut extensions),
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &state_backend, Some(&mut extensions));
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)
 	}
 

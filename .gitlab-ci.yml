@@ -40,8 +40,8 @@ variables:                         &default-vars
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.13"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example-* subkey chain-spec-builder"
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
@@ -455,20 +455,20 @@ test-linux-stable:                 &test-linux
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
-#unleash-check:
-  #stage:                           test
-  #<<:                              *docker-env
-  #<<:                              *test-refs-no-trigger
-  #script:
-    #- cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    #- cargo unleash de-dev-deps
+unleash-check:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger
+  script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash de-dev-deps
     # Reuse build artifacts when running checks (cuts down check time by 3x)
     # TODO: Implement this optimization in cargo-unleash rather than here
-    #- mkdir -p target/unleash
-    #- export CARGO_TARGET_DIR=target/unleash
-    #- cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+    - mkdir -p target/unleash
+    - export CARGO_TARGET_DIR=target/unleash
+    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
   # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
-  #allow_failure:                   true
+  allow_failure:                   true
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -482,9 +482,9 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
-    - cd frame/example-offchain-worker/
+    - cd frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
-    - cd ../example
+    - cd ../basic
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 
@@ -661,8 +661,7 @@ build-rustdoc:
     - ./crate-docs/
   script:
     # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
-    - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
-        time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
@@ -873,9 +872,7 @@ unleash-to-crates-io:
   <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    # FIXME: wait until https://github.com/paritytech/cargo-unleash/issues/50 is fixed, also
-    # remove allow_failure: true on the check job
-    # - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
