@@ -263,7 +263,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A recovery process has been set up for an account.
-		RecoveryCreated { lost_account: T::AccountId },
+		RecoveryCreated { account: T::AccountId },
 		/// A recovery process has been initiated for lost account by rescuer account.
 		RecoveryInitiated { lost_account: T::AccountId, rescuer_account: T::AccountId },
 		/// A recovery process for lost account by rescuer account has been vouched for by sender.
@@ -475,7 +475,7 @@ pub mod pallet {
 			// Create the recovery configuration storage item
 			<Recoverable<T>>::insert(&who, recovery_config);
 
-			Self::deposit_event(Event::<T>::RecoveryCreated { lost_account: who });
+			Self::deposit_event(Event::<T>::RecoveryCreated { account: who });
 			Ok(())
 		}
 
