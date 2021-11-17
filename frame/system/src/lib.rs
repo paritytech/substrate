@@ -353,10 +353,8 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - `O(1)`
-		/// - 1 storage write.
-		/// - Base Weight: 1.405 µs
 		/// - 1 write to HEAP_PAGES
-		/// - 1 digest item
+		/// - 1 read and 1 write to `Digest` storage
 		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
