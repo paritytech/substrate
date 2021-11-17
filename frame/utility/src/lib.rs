@@ -116,7 +116,7 @@ pub mod pallet {
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
 		/// A call was dispatched. \[result\]
-		DispatchedAs(DispatchResult),
+		DispatchedAs { result: DispatchResult },
 	}
 
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
@@ -380,7 +380,7 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter((*as_origin).into());
 
-			Self::deposit_event(Event::DispatchedAs(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::DispatchedAs { result: res.map(|_| ()).map_err(|e| e.error) });
 			Ok(())
 		}
 	}
