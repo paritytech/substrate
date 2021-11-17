@@ -188,13 +188,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 
 	fn inject_address_change(
 		&mut self,
-		_: &PeerId,
-		_: &ConnectionId,
-		_: &ConnectedPoint,
-		_: &ConnectedPoint,
+		peer_id: &PeerId,
+		conn: &ConnectionId,
+		old: &ConnectedPoint,
+		new: &ConnectedPoint,
 	) {
-		// NetworkBehaviour::inject_address_change on Ping does nothing.
-		// NetworkBehaviour::inject_address_change on Identify does nothing.
+		self.ping.inject_address_change(peer_id, conn, old, new);
+		self.identify.inject_address_change(peer_id, conn, old, new);
 	}
 
 	fn inject_connected(&mut self, peer_id: &PeerId) {
@@ -309,9 +309,16 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		self.identify.inject_expired_external_addr(addr);
 	}
 
-	fn inject_listen_failure(&mut self, _: &Multiaddr, _: &Multiaddr, _: Self::ProtocolsHandler) {
-		// NetworkBehaviour::inject_listen_failure on Ping does nothing.
-		// NetworkBehaviour::inject_listen_failure on Identify does nothing.
+	fn inject_listen_failure(
+		&mut self,
+		local_addr: &Multiaddr,
+		send_back_addr: &Multiaddr,
+		handler: Self::ProtocolsHandler,
+	) {
+		let (ping_handler, identity_handler) = handler.into_inner();
+		self.identify
+			.inject_listen_failure(local_addr, send_back_addr, identity_handler);
+		self.ping.inject_listen_failure(local_addr, send_back_addr, ping_handler);
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {

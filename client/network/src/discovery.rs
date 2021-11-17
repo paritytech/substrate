@@ -772,7 +772,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						},
 						KademliaEvent::InboundPutRecordRequest { .. } |
 						KademliaEvent::InboundAddProviderRequest { .. } => {
-							unreachable!("We don't use kad filtering at the moment");
+							debug_assert!(false, "We don't use kad filtering at the moment");
 						},
 						KademliaEvent::PendingRoutablePeer { .. } |
 						KademliaEvent::InboundRequestServed { .. } => {
