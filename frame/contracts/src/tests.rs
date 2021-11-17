@@ -455,7 +455,9 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount { new_account: ALICE.clone() }),
+					event: Event::System(frame_system::Event::NewAccount {
+						new_account: ALICE.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -468,7 +470,9 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount { new_account: addr.clone() }),
+					event: Event::System(frame_system::Event::NewAccount {
+						new_account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -767,7 +771,9 @@ fn self_destruct_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::KilledAccount { reaped_account: addr.clone() }),
+					event: Event::System(frame_system::Event::KilledAccount {
+						reaped_account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
