@@ -20,6 +20,7 @@
 
 #![warn(missing_docs)]
 
+use std::net::SocketAddr;
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
 	ws_server::{WsServerBuilder, WsServerHandle},
@@ -81,7 +82,7 @@ pub type WsServer = WsServerHandle;
 
 /// Start HTTP server listening on given address.
 pub fn start_http<M: Send + Sync + 'static>(
-	addr: std::net::SocketAddr,
+	addrs: [SocketAddr; 2],
 	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
 	module: RpcModule<M>,
@@ -93,11 +94,13 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 	let mut acl = AccessControlBuilder::new();
 
-	log::info!("Starting JSON-RPC HTTP server: addr={}, allowed origins={:?}", addr, cors);
+	log::info!("Starting JSON-RPC HTTP server: addr={:?}, allowed origins={:?}", addrs, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		acl = acl.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
+		// TODO(niklasad1): this is bad we don't know which port that actually was used..
+		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs[0].port()))?;
+		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs[1].port()))?;
 		acl = acl.set_allowed_origins(cors)?;
 	};
 
@@ -105,7 +108,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
 		.custom_tokio_runtime(rt)
-		.build(addr)?;
+		.build(&addrs as &[SocketAddr])?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
@@ -115,7 +118,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 /// Start WS server listening on given address.
 pub fn start_ws<M: Send + Sync + 'static>(
-	addr: std::net::SocketAddr,
+	addrs: [SocketAddr; 2],
 	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
@@ -132,15 +135,17 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		.max_connections(max_connections as u64)
 		.custom_tokio_runtime(rt.clone());
 
-	log::info!("Starting JSON-RPC WS server: addr={}, allowed origins={:?}", addr, cors);
+	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		builder = builder.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
+		// TODO(niklasad1): this is bad we don't know which port that actually was used..
+		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs[0].port()))?;
+		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs[1].port()))?;
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
-	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addr)))?;
+	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(&addrs as &[SocketAddr])))?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
