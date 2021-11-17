@@ -85,10 +85,11 @@ To create a Polkadot companion PR:
 . Wait for reviews on both the Substrate and the Polkadot PRs.
 . Once the Substrate PR runs green, a member of the `parity` github group can comment on the Substrate PR with `bot merge` which will:
     - Merge the Substrate PR.
-    - The bot will push a commit to the Polkadot PR updating its Substrate reference.
+    - The bot will push a commit to the Polkadot PR updating its Substrate reference. (effecively doing `cargo update -p sp-io`)
     - If the polkadot PR origins from a fork then a project member may need to press `approve run` on the polkadot PR.
     - The bot will merge the Polkadot PR once all its CI `{"build_allow_failure":false}` checks are green.
     Note: The merge-bot currently doesn't work with forks on org accounts, only individual accounts.
+	(Hint: it's recommended to use `bot merge` to merge all substrate PRs, not just ones with a polkadot companion.)
 
 If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/A7-needspolkadotpr[`A7-needspolkadotpr`] to prevent it from getting automatically merged.
 

@@ -29,6 +29,7 @@ mod origin;
 mod pallet_struct;
 mod storage;
 mod store_trait;
+mod tt_default_parts;
 mod type_value;
 mod validate_unsigned;
 
@@ -67,14 +68,15 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let type_values = type_value::expand_type_values(&mut def);
 	let origins = origin::expand_origins(&mut def);
 	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
+	let tt_default_parts = tt_default_parts::expand_tt_default_parts(&mut def);
 
 	if get_doc_literals(&def.item.attrs).is_empty() {
 		def.item.attrs.push(syn::parse_quote!(
 			#[doc = r"
 			The module that hosts all the
-			[FRAME](https://substrate.dev/docs/en/knowledgebase/runtime/frame)
+			[FRAME](https://docs.substrate.io/v3/runtime/frame)
 			types needed to add this pallet to a
-			[runtime](https://substrate.dev/docs/en/knowledgebase/runtime/).
+			runtime.
 			"]
 		));
 	}
@@ -96,6 +98,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		#type_values
 		#origins
 		#validate_unsigned
+		#tt_default_parts
 	);
 
 	def.item

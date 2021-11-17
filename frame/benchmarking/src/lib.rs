@@ -27,6 +27,8 @@ mod tests;
 mod tests_instance;
 mod utils;
 
+pub mod baseline;
+
 #[cfg(feature = "std")]
 pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector, RegressionModel};
 #[doc(hidden)]
@@ -1215,7 +1217,7 @@ macro_rules! impl_benchmark_test {
 
 /// This creates a test suite which runs the module's benchmarks.
 ///
-/// When called in `pallet_example` as
+/// When called in `pallet_example_basic` as
 ///
 /// ```rust,ignore
 /// impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
@@ -1241,7 +1243,7 @@ macro_rules! impl_benchmark_test {
 /// }
 /// ```
 ///
-/// When called inside the `benchmarks` macro of the `pallet_example` as
+/// When called inside the `benchmarks` macro of the `pallet_example_basic` as
 ///
 /// ```rust,ignore
 /// benchmarks! {

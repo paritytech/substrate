@@ -44,7 +44,7 @@ use sp_runtime::{
 	traits::{Bounded, Hash},
 	Perbill,
 };
-use sp_std::{convert::TryInto, default::Default, vec, vec::Vec};
+use sp_std::prelude::*;
 
 /// How many batches we do per API benchmark.
 const API_BENCHMARK_BATCHES: u32 = 20;
@@ -1425,7 +1425,7 @@ benchmarks! {
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
-				use secp256k1::{SecretKey, Message, sign};
+				use libsecp256k1::{SecretKey, Message, sign};
 
 				let private_key = SecretKey::random(&mut rng);
 				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);

@@ -2,9 +2,9 @@
 name = "sc-finality-grandpa"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Integration of the GRANDPA finality gadget into substrate."
 documentation = "https://docs.rs/sc-finality-grandpa"
@@ -23,7 +23,7 @@ futures-timer = "3.0.1"
 log = "0.4.8"
 parking_lot = "0.11.1"
 rand = "0.8.4"
-parity-scale-codec = { version = "2.0.0", features = ["derive"] }
+parity-scale-codec = { version = "2.3.1", features = ["derive"] }
 sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
@@ -41,7 +41,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 finality-grandpa = { version = "0.14.4", features = ["derive-codec"] }
 async-trait = "0.1.50"
@@ -57,5 +57,5 @@ sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-tokio = "1.10"
+tokio = "1.13"
 tempfile = "3.1.0"

@@ -3,7 +3,7 @@ name = "node-bench"
 version = "0.9.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node integration benchmarks."
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -35,7 +35,7 @@ fs_extra = "1"
 hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-util-mem = { version = "0.10.0", default-features = false, features = [
+parity-util-mem = { version = "0.10.2", default-features = false, features = [
     "primitive-types",
 ] }
 parity-db = { version = "0.3" }
