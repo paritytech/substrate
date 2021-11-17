@@ -168,8 +168,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Moved an account from one bag to another. \[who, from, to\].
-		Rebagged(T::AccountId, VoteWeight, VoteWeight),
+		/// Moved an account from one bag to another.
+		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
 	}
 
 	#[pallet::call]
@@ -216,7 +216,7 @@ impl<T: Config> Pallet<T> {
 		let maybe_movement = list::Node::<T>::get(&account)
 			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
+			Self::deposit_event(Event::<T>::Rebagged { who: account.clone(), from, to });
 		};
 		maybe_movement
 	}
