@@ -136,6 +136,9 @@ use sp_runtime::{
 	ApplyExtrinsicResult,
 };
 use sp_std::{marker::PhantomData, prelude::*};
+use sp_runtime::AccountId32;
+use frame_system::extrinsics_root;
+
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
@@ -176,7 +179,7 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
-	fn execute_block(block: Block) {
+	fn execute_block(block: Block, info: Vec<Option<AccountId32>>) {
 		Executive::<
 			System,
 			Block,
@@ -184,7 +187,7 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block(block);
+		>::execute_block(block, info);
 	}
 }
 
@@ -354,10 +357,15 @@ where
 		if let Err(i) = System::ensure_inherents_are_first(block) {
 			panic!("Invalid inherent position for extrinsic at index {}", i);
 		}
+
+		// Check that transaction trie root represents the transactions.
+		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		header.extrinsics_root().check_equal(&xts_root);
+		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block(block: Block) {
+	pub fn execute_block(block: Block, info: Vec<Option<AccountId32>>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -371,7 +379,10 @@ where
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
-			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+
+			let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
+			let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed::<Block::Extrinsic>(extrinsics_with_author, &header.seed().seed);
+			Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -502,10 +513,6 @@ where
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 
-		assert!(
-			header.extrinsics_root() == new_header.extrinsics_root(),
-			"Transaction trie root must be valid.",
-		);
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any

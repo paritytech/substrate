@@ -77,6 +77,7 @@ pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, Trans
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 pub use task_manager::{SpawnTaskHandle, TaskManager};
+use sp_runtime::AccountId32;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 

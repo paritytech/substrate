@@ -27,7 +27,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", features = [
     "derive",
 ] }
 extrinsic-info-runtime-api = { path='../../primitives/extrinsic-info-runtime-api', version='4.0.0-dev' }
-extrinsic-shuffler = { path='../../primitives/shuffler', version='0.10.0-dev' }
+extrinsic-shuffler = { path='../../primitives/shuffler', version='4.0.0-dev' }
 sp-ver = { path='../../primitives/ver', version='0.10.0-dev' }
 
 [dev-dependencies]
