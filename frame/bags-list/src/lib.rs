@@ -68,7 +68,12 @@ pub mod weights;
 
 pub use list::{notional_bag_for, Bag, Error, List, Node};
 pub use pallet::*;
-pub use weights::WeightInfo;
+
+pub trait WeightInfo {
+	fn rebag_non_terminal() -> Weight;
+	fn rebag_terminal() -> Weight;
+	fn put_in_front_of() -> Weight;
+}
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
 
