@@ -1521,6 +1521,8 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 #[cfg(feature = "std")]
 pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
 
+/// A backend capable of generating storage proofs, with hash types aligned with
+/// [`TestExternalities`].
 #[cfg(feature = "std")]
 pub type InMemoryProvingBackend<'a> =
 	sp_state_machine::InMemoryProvingBackend<'a, sp_core::Blake2Hasher>;

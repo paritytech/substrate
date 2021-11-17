@@ -29,8 +29,8 @@ use crate::{
 		InMemoryStorage as ChangesTrieInMemoryStorage, State as ChangesTrieState,
 	},
 	ext::Ext,
-	InMemoryBackend, InMemoryProvingBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue,
+	InMemoryBackend, InMemoryProvingBackend, OverlayedChanges, StorageKey, StorageTransactionCache,
+	StorageValue,
 };
 
 use codec::Decode;
@@ -90,6 +90,9 @@ where
 		)
 	}
 
+	/// Get an externalities implementation, using the given `proving_backend`.
+	///
+	/// This will be capable of computing the PoV. See [`execute_and_get_proof`].
 	pub fn proving_ext<'a>(
 		&'a mut self,
 		proving_backend: &'a InMemoryProvingBackend<'a, H>,
@@ -252,6 +255,10 @@ where
 		sp_externalities::set_and_run_with_externalities(&mut ext, execute)
 	}
 
+	/// Execute the given closure while `self`, with `proving_backend` as backend, is set as
+	/// externalities.
+	///
+	/// Returns the result of the given closure, and the storage proof.
 	pub fn execute_and_get_proof<'a, R>(
 		&'a mut self,
 		proving_backend: &'a InMemoryProvingBackend<'a, H>,
@@ -260,6 +267,7 @@ where
 		let mut ext = self.proving_ext(proving_backend);
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut ext, execute);
 		let proof = ext.backend.extract_proof();
+		ext.backend.clear_recorder();
 		(outcome, proof)
 	}
 

@@ -222,6 +222,11 @@ where
 	pub fn estimate_encoded_size(&self) -> usize {
 		self.0.essence().backend_storage().proof_recorder.estimate_encoded_size()
 	}
+
+	/// Clear the proof recorded data.
+	pub fn clear_recorder(&self) {
+		self.0.essence().backend_storage().proof_recorder.reset()
+	}
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>

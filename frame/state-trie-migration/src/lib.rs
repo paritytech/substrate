@@ -1138,6 +1138,7 @@ mod mock {
 
 	pub fn run_to_block(n: u32) -> H256 {
 		let mut root = Default::default();
+		log::debug!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
 			System::on_initialize(System::block_number());
@@ -1390,7 +1391,7 @@ mod remote_tests {
 
 			loop {
 				let trie_backend = ext.backend.clone();
-				let last_state_root = ext.backend.root().clone();
+				let last_state_root = trie_backend.root().clone();
 				let proving_backend = InMemoryProvingBackend::new(&trie_backend);
 				let (finished, proof) = ext.execute_and_get_proof(&proving_backend, || {
 					run_to_block(now + 1);
