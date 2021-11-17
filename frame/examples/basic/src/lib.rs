@@ -525,7 +525,7 @@ pub mod pallet {
 			});
 
 			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::AccumulateDummy(increase_by));
+			Self::deposit_event(Event::AccumulateDummy { balance: increase_by });
 
 			// All good, no refund.
 			Ok(())
@@ -557,7 +557,7 @@ pub mod pallet {
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
 
-			Self::deposit_event(Event::SetDummy(new_value));
+			Self::deposit_event(Event::SetDummy { balance: new_value });
 
 			// All good, no refund.
 			Ok(())
@@ -574,9 +574,16 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
-		AccumulateDummy(BalanceOf<T>),
-		SetDummy(BalanceOf<T>),
-		SetBar(T::AccountId, BalanceOf<T>),
+		AccumulateDummy {
+			balance: BalanceOf<T>,
+		},
+		SetDummy {
+			balance: BalanceOf<T>,
+		},
+		SetBar {
+			account: T::AccountId,
+			balance: BalanceOf<T>,
+		},
 	}
 
 	// pallet::storage attributes allow for type-safe usage of the Substrate storage database,

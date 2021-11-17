@@ -339,8 +339,11 @@ fn batch_with_signed_filters() {
 			vec![Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })]
 		),);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
-				.into(),
+			utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
 		);
 	});
 }
@@ -411,7 +414,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
@@ -426,7 +429,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
@@ -439,7 +442,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted(1, DispatchError::Other("")).into(),
+			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(
 			extract_actual_weight(&result, &info),
@@ -587,8 +590,11 @@ fn batch_all_does_not_nest() {
 		// and balances.
 		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
 		System::assert_has_event(
-			utility::Event::BatchInterrupted(0, frame_system::Error::<Test>::CallFiltered.into())
-				.into(),
+			utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
 		);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);

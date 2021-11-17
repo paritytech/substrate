@@ -706,7 +706,14 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
 		System::assert_last_event(
-			pallet_multisig::Event::MultisigExecuted(3, now(), multi, hash, Err(err)).into(),
+			pallet_multisig::Event::MultisigExecuted {
+				approving: 3,
+				timepoint: now(),
+				multisig: multi,
+				call_hash: hash,
+				result: Err(err),
+			}
+			.into(),
 		);
 	});
 }
