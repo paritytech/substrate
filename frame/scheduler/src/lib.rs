@@ -203,11 +203,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Scheduled some task. \[when, index\]
+		/// Scheduled some task.
 		Scheduled { when: T::BlockNumber, index: u32 },
-		/// Canceled some task. \[when, index\]
+		/// Canceled some task.
 		Canceled { when: T::BlockNumber, index: u32 },
-		/// Dispatched some task. \[task, id, result\]
+		/// Dispatched some task.
 		Dispatched {
 			task: TaskAddress<T::BlockNumber>,
 			id: Option<Vec<u8>>,
