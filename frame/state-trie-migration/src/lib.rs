@@ -95,9 +95,7 @@ pub mod pallet {
 		offchain::{SendTransactionTypes, SubmitTransaction},
 		pallet_prelude::*,
 	};
-	use sp_core::{
-		hexdisplay::HexDisplay, storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
-	};
+	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
 	use sp_runtime::{
 		offchain::storage::{MutateStorageError, StorageValueRef},
 		traits::{Saturating, Zero},
@@ -132,14 +130,14 @@ pub mod pallet {
 		/// The top key that we currently have to iterate.
 		///
 		/// If it does not exist, it means that the migration is done and no further keys exist.
-		pub(crate) last_top: Option<Vec<u8>>,
+		pub(crate) current_top: Option<Vec<u8>>,
 		/// The last child key that we have processed.
 		///
 		/// This is a child key under the current `self.last_top`.
 		///
 		/// If this is set, no further top keys are processed until the child key migration is
 		/// complete.
-		pub(crate) last_child: Option<Vec<u8>>,
+		pub(crate) current_child: Option<Vec<u8>>,
 
 		/// A marker to indicate if the previous tick was a child tree migration or not.
 		pub(crate) prev_tick_child: bool,
@@ -187,11 +185,11 @@ pub mod pallet {
 			f.debug_struct("MigrationTask")
 				.field(
 					"top",
-					&self.last_top.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
+					&self.current_top.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
 				)
 				.field(
 					"child",
-					&self.last_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
+					&self.current_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
 				)
 				.field("prev_tick_child", &self.prev_tick_child)
 				.field("dyn_top_items", &self.dyn_top_items)
@@ -207,8 +205,8 @@ pub mod pallet {
 	impl<T: Config> Default for MigrationTask<T> {
 		fn default() -> Self {
 			Self {
-				last_top: Some(Default::default()),
-				last_child: Default::default(),
+				current_top: Some(Default::default()),
+				current_child: Default::default(),
 				dyn_child_items: Default::default(),
 				dyn_top_items: Default::default(),
 				dyn_size: Default::default(),
@@ -224,7 +222,7 @@ pub mod pallet {
 	impl<T: Config> MigrationTask<T> {
 		/// Return true if the task is finished.
 		pub(crate) fn finished(&self) -> bool {
-			self.last_top.is_none() && self.last_child.is_none()
+			self.current_top.is_none() && self.current_child.is_none()
 		}
 
 		/// Returns `true` if the task fully complies with the given limits.
@@ -234,7 +232,7 @@ pub mod pallet {
 
 		/// Check if there's any work left, or if we have exhausted the limits already.
 		fn exhausted(&self, limits: MigrationLimits) -> bool {
-			self.last_top.is_none() ||
+			self.current_top.is_none() ||
 				self.dyn_total_items() >= limits.item ||
 				self.dyn_size >= limits.size
 		}
@@ -247,7 +245,7 @@ pub mod pallet {
 		/// Migrate keys until either of the given limits are exhausted, or if no more top keys
 		/// exist.
 		///
-		/// Note that this returns after the **first** migration tick that causes exhaustion. In
+		/// Note that this can return after the **first** migration tick that causes exhaustion. In
 		/// other words, this should not be used in any environment where resources are strictly
 		/// bounded (e.g. a parachain), but it is acceptable otherwise (relay chain, offchain
 		/// workers).
@@ -278,7 +276,7 @@ pub mod pallet {
 		///
 		/// This function is the core of this entire pallet.
 		fn migrate_tick(&mut self) {
-			match (self.last_top.as_ref(), self.last_child.as_ref()) {
+			match (self.current_top.as_ref(), self.current_child.as_ref()) {
 				(Some(_), Some(_)) => {
 					// we're in the middle of doing work on a child tree.
 					self.migrate_child();
@@ -302,17 +300,24 @@ pub mod pallet {
 							self.migrate_top();
 						},
 						(true, false) => {
-							// start going into a child key.
+							// start going into a child key. In the first iteration, we always
 							let maybe_first_child_key = {
-								let child_top_key = Pallet::<T>::child_io_key(top_key);
+								// just in case there's some data in `&[]`, read it. Since we can't
+								// check this without reading the actual key, and given that this
+								// function should always read at most one key, we return after
+								// this. The rest of the migration should happen in the next tick.
+								let child_top_key = Pallet::<T>::child_io_key_or_halt(top_key);
+								let _ = sp_io::default_child_storage::get(child_top_key, &vec![]);
 								sp_io::default_child_storage::next_key(child_top_key, &vec![])
 							};
 							if let Some(first_child_key) = maybe_first_child_key {
-								self.last_child = Some(first_child_key);
+								self.current_child = Some(first_child_key);
 								self.prev_tick_child = true;
-								self.migrate_child();
 							} else {
-								self.migrate_top();
+								// we have already done a (pretty useless) child key migration, just
+								// set the flag. Since we don't set the `self.current_child`, next
+								// tick will move forward to the next top key.
+								self.prev_tick_child = true;
 							}
 						},
 						(true, true) => {
@@ -341,10 +346,10 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
-			let last_child = self.last_child.as_ref().expect("value checked to be `Some`; qed");
-			let last_top = self.last_top.clone().expect("value checked to be `Some`; qed");
+			let last_child = self.current_child.as_ref().expect("value checked to be `Some`; qed");
+			let last_top = self.current_top.clone().expect("value checked to be `Some`; qed");
 
-			let child_root = Pallet::<T>::child_io_key(&last_top);
+			let child_root = Pallet::<T>::child_io_key_or_halt(&last_top);
 			let added_size =
 				if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
 					self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
@@ -356,15 +361,15 @@ pub mod pallet {
 
 			self.dyn_child_items.saturating_inc();
 			let next_key = sp_io::default_child_storage::next_key(child_root, last_child);
-			self.last_child = next_key;
-			log!(trace, "migrated a child key with size: {:?}, next task: {:?}", self, added_size);
+			self.current_child = next_key;
+			log!(trace, "migrated a child key with size: {:?}, next task: {:?}", added_size, self,);
 		}
 
 		/// Migrate the current top key, setting it to its new value, if one exists.
 		///
 		/// It updates the dynamic counters.
 		fn migrate_top(&mut self) {
-			let last_top = self.last_top.as_ref().expect("value checked to be `Some`; qed");
+			let last_top = self.current_top.as_ref().expect("value checked to be `Some`; qed");
 			let added_size = if let Some(data) = sp_io::storage::get(&last_top) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
 				sp_io::storage::set(last_top, &data);
@@ -375,7 +380,7 @@ pub mod pallet {
 
 			self.dyn_top_items.saturating_inc();
 			let next_key = sp_io::storage::next_key(last_top);
-			self.last_top = next_key;
+			self.current_top = next_key;
 			log!(trace, "migrated a top key with size {}, next_task = {:?}", added_size, self);
 		}
 	}
@@ -443,7 +448,13 @@ pub mod pallet {
 		/// The number of items that offchain worker will subtract from the first item count that
 		/// causes an over-consumption.
 		///
-		/// A value around 5-10 is reasonable.
+		/// This is a safety feature to assist the offchain worker submitted transactions and help
+		/// them not exceed the byte limit of the task. Nonetheless, the fundamental problem is that
+		/// if a transaction is ensured to not exceed any limit at block `t` when it is generated,
+		/// there is no guarantee that the same assumption holds at block `t + x`, when this
+		/// transaction is actually executed. This is where this value comes into play, and by
+		/// reducing the number of keys that will be migrated, further reduces the chance of byte
+		/// limit being exceeded.
 		type UnsignedBackOff: Get<u32>;
 
 		/// The repeat frequency of offchain workers.
@@ -553,6 +564,7 @@ pub mod pallet {
 				task.dyn_child_items,
 				MigrationCompute::Unsigned,
 			));
+
 			MigrationProcess::<T>::put(task);
 
 			Ok(().into())
@@ -598,7 +610,7 @@ pub mod pallet {
 				// let the imbalance burn.
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
-				return Err("Wrong witness data".into())
+				return Err("wrong witness data".into())
 			}
 
 			Self::deposit_event(Event::<T>::Migrated(
@@ -635,6 +647,7 @@ pub mod pallet {
 				}
 			}
 
+			dbg!(dyn_size, total_size);
 			if dyn_size != total_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
@@ -671,12 +684,13 @@ pub mod pallet {
 
 			let mut dyn_size = 0u32;
 			for child_key in &child_keys {
-				if let Some(data) =
-					sp_io::default_child_storage::get(Self::child_io_key(&top_key), &child_key)
-				{
+				if let Some(data) = sp_io::default_child_storage::get(
+					Self::child_io_key(&top_key).ok_or("bad child key")?,
+					&child_key,
+				) {
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
 					sp_io::default_child_storage::set(
-						Self::child_io_key(&top_key),
+						Self::child_io_key(&top_key).ok_or("bad child key")?,
 						&child_key,
 						&data,
 					);
@@ -739,7 +753,7 @@ pub mod pallet {
 			if let Some(chain_limits) = Self::unsigned_limits() {
 				let mut task = Self::migration_process();
 				if task.finished() {
-					log!(warn, "task is finished, remove `unsigned_limits`.");
+					log!(debug, "task is finished, remove `unsigned_limits`.");
 					return
 				}
 
@@ -860,21 +874,24 @@ pub mod pallet {
 		}
 
 		/// Convert a child root key, aka. "Child-bearing top key" into the proper format.
-		fn child_io_key(root: &Vec<u8>) -> &[u8] {
+		fn child_io_key(root: &Vec<u8>) -> Option<&[u8]> {
 			use sp_core::storage::{ChildType, PrefixedStorageKey};
 			match ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(root)) {
-				Some((ChildType::ParentKeyId, root)) => root,
-				None => {
-					log!(
-						warn,
-						"some data seems to be stored under key {:?}, which is a non-default \
-						child-trie. This is a logical error and shall not happen.",
-						HexDisplay::from(root),
-					);
-					Self::halt();
-					Default::default()
-				},
+				Some((ChildType::ParentKeyId, root)) => Some(root),
+				_ => None,
 			}
+		}
+
+		/// Same as [`child_io_key`], and it halts the auto/unsigned migrations if a bad child root
+		/// is used.
+		///
+		/// This should be used when we are sure that `root` is a correct default child root.
+		fn child_io_key_or_halt(root: &Vec<u8>) -> &[u8] {
+			let key = Self::child_io_key(root);
+			if key.is_none() {
+				Self::halt();
+			}
+			key.unwrap_or_default()
 		}
 
 		/// Checks if an execution of the offchain worker is permitted at the given block number, or
@@ -1058,18 +1075,19 @@ mod mock {
 	pub fn new_test_ext(version: StateVersion, with_pallets: bool) -> sp_io::TestExternalities {
 		use sp_core::storage::ChildInfo;
 
+		let minimum_size = sp_core::storage::DEFAULT_MAX_INLINE_VALUE as usize + 1;
 		let mut custom_storage = sp_core::storage::Storage {
 			top: vec![
-				(b"key1".to_vec(), vec![1u8; 10]),  // 6b657931
-				(b"key2".to_vec(), vec![1u8; 20]),  // 6b657931
-				(b"key3".to_vec(), vec![1u8; 30]),  // 6b657931
-				(b"key4".to_vec(), vec![1u8; 40]),  // 6b657931
-				(b"key5".to_vec(), vec![2u8; 50]),  // 6b657932
-				(b"key6".to_vec(), vec![3u8; 50]),  // 6b657934
-				(b"key7".to_vec(), vec![4u8; 50]),  // 6b657934
-				(b"key8".to_vec(), vec![4u8; 50]),  // 6b657934
-				(b"key9".to_vec(), vec![4u8; 50]),  // 6b657934
-				(b"CODE".to_vec(), vec![1u8; 100]), // 434f4445
+				(b"key1".to_vec(), vec![1u8; minimum_size + 1]), // 6b657931
+				(b"key2".to_vec(), vec![1u8; minimum_size + 2]), // 6b657931
+				(b"key3".to_vec(), vec![1u8; minimum_size + 3]), // 6b657931
+				(b"key4".to_vec(), vec![1u8; minimum_size + 4]), // 6b657931
+				(b"key5".to_vec(), vec![1u8; minimum_size + 5]), // 6b657932
+				(b"key6".to_vec(), vec![1u8; minimum_size + 6]), // 6b657934
+				(b"key7".to_vec(), vec![1u8; minimum_size + 7]), // 6b657934
+				(b"key8".to_vec(), vec![1u8; minimum_size + 8]), // 6b657934
+				(b"key9".to_vec(), vec![1u8; minimum_size + 9]), // 6b657934
+				(b"CODE".to_vec(), vec![1u8; minimum_size + 100]), // 434f4445
 			]
 			.into_iter()
 			.collect(),
@@ -1078,8 +1096,8 @@ mod mock {
 					b"chk1".to_vec(), // 63686b31
 					sp_core::storage::StorageChild {
 						data: vec![
-							(b"key1".to_vec(), vec![1u8; 10]),
-							(b"key2".to_vec(), vec![2u8; 20]),
+							(b"key1".to_vec(), vec![1u8; 55]),
+							(b"key2".to_vec(), vec![2u8; 66]),
 						]
 						.into_iter()
 						.collect(),
@@ -1090,8 +1108,8 @@ mod mock {
 					b"chk2".to_vec(),
 					sp_core::storage::StorageChild {
 						data: vec![
-							(b"key1".to_vec(), vec![1u8; 10]),
-							(b"key2".to_vec(), vec![2u8; 20]),
+							(b"key1".to_vec(), vec![1u8; 54]),
+							(b"key2".to_vec(), vec![2u8; 64]),
 						]
 						.into_iter()
 						.collect(),
@@ -1138,7 +1156,7 @@ mod mock {
 
 	pub fn run_to_block(n: u32) -> H256 {
 		let mut root = Default::default();
-		log::debug!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
+		log::trace!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
 			System::on_initialize(System::block_number());
@@ -1187,6 +1205,48 @@ mod test {
 	use std::sync::Arc;
 
 	#[test]
+	fn fails_if_no_migration() {
+		let mut ext = new_test_ext(StateVersion::V0, false);
+		let root1 = ext.execute_with(|| run_to_block(30));
+
+		let mut ext2 = new_test_ext(StateVersion::V1, false);
+		let root2 = ext2.execute_with(|| run_to_block(30));
+
+		// these two roots should not be the same.
+		assert_ne!(root1, root2);
+	}
+
+	#[test]
+	fn detects_first_child_key() {
+		use frame_support::storage::child;
+		let limit = MigrationLimits { item: 1, size: 1000 };
+		let mut ext = new_test_ext(StateVersion::V0, false);
+
+		let root_upgraded = ext.execute_with(|| {
+			child::put(&child::ChildInfo::new_default(b"chk1"), &[], &vec![66u8; 77]);
+
+			AutoLimits::<Test>::put(Some(limit));
+			let root = run_to_block(30);
+
+			// eventually everything is over.
+			assert!(matches!(
+				StateTrieMigration::migration_process(),
+				MigrationTask { current_child: None, current_top: None, .. }
+			));
+			root
+		});
+
+		let mut ext2 = new_test_ext(StateVersion::V1, false);
+		let root = ext2.execute_with(|| {
+			child::put(&child::ChildInfo::new_default(b"chk1"), &[], &vec![66u8; 77]);
+			AutoLimits::<Test>::put(Some(limit));
+			run_to_block(30)
+		});
+
+		assert_eq!(root, root_upgraded);
+	}
+
+	#[test]
 	fn auto_migrate_works() {
 		let run_with_limits = |limit, from, until| {
 			let mut ext = new_test_ext(StateVersion::V0, false);
@@ -1206,7 +1266,7 @@ mod test {
 				// eventually everything is over.
 				assert!(matches!(
 					StateTrieMigration::migration_process(),
-					MigrationTask { last_child: None, last_top: None, .. }
+					MigrationTask { current_child: None, current_top: None, .. }
 				));
 				root
 			});
@@ -1268,7 +1328,7 @@ mod test {
 		// multi-item
 		run_with_limits(MigrationLimits { item: 5, size: 1000 }, 10, 100);
 		// multi-item, based on size
-		run_with_limits(MigrationLimits { item: 1000, size: 128 }, 10, 100);
+		run_with_limits(MigrationLimits { item: 1000, size: 512 }, 10, 100);
 		// unbounded
 		run_with_limits(
 			MigrationLimits { item: Bounded::max_value(), size: Bounded::max_value() },
@@ -1327,12 +1387,12 @@ mod test {
 	}
 
 	#[test]
-	fn custom_migrate_works() {
+	fn custom_migrate_top_works() {
 		new_test_ext(StateVersion::V0, true).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
 				Origin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
-				10 + 20 + 30,
+				3 + sp_core::storage::DEFAULT_MAX_INLINE_VALUE * 3 + 1 + 2 + 3,
 			));
 
 			// no funds should remain reserved.
@@ -1365,7 +1425,6 @@ mod remote_tests {
 					},
 					OnlineConfig {
 						transport: std::env!("WS_API").to_owned().into(),
-						scrape_children: true,
 						state_snapshot: Some(
 							"/home/kianenigma/remote-builds/state".to_owned().into(),
 						),
@@ -1403,14 +1462,15 @@ mod remote_tests {
 
 				let (top_left, child_left) =
 					ext.as_backend().essence().check_migration_state().unwrap();
+				let compact_proof =
+					proof.clone().into_compact_proof::<HashFor<Block>>(last_state_root).unwrap();
 				log::info!(
 					target: LOG_TARGET,
-					"proceeded to #{}, proof size: {} (top_left: {}, child_left {})",
+					"proceeded to #{}, original proof: {}, compact proof size: {}, compact zstd compressed: {} // top_left: {}, child_left: {}",
 					now,
-					proof
-						.into_compact_proof::<HashFor<Block>>(last_state_root)
-						.unwrap()
-						.encoded_size(),
+					proof.encoded_size(),
+					compact_proof.encoded_size(),
+					zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap().len(),
 					top_left,
 					child_left,
 				);
@@ -1454,7 +1514,6 @@ mod remote_tests {
 					},
 					OnlineConfig {
 						transport: std::env!("WS_API").to_owned().into(),
-						scrape_children: true,
 						state_snapshot: Some(
 							"/home/kianenigma/remote-builds/state".to_owned().into(),
 						),

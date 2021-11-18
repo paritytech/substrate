@@ -266,7 +266,6 @@ where
 		proving_backend: &'a InMemoryProvingBackend<'a, H>,
 		execute: impl FnOnce() -> R,
 	) -> (R, StorageProof) {
-		use codec::Encode;
 		let mut proving_ext = self.proving_ext(proving_backend);
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
 		let proof = proving_ext.backend.extract_proof();

@@ -445,7 +445,7 @@ where
 	/// migration did finished as it is only an utility.
 	// original author: @cheme
 	pub fn check_migration_state(&self) -> Result<(u64, u64)> {
-		let threshold: u32 = 33;
+		let threshold: u32 = sp_core::storage::DEFAULT_MAX_INLINE_VALUE;
 		let mut nb_to_migrate = 0;
 		let mut nb_to_migrate_child = 0;
 

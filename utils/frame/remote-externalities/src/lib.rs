@@ -156,7 +156,7 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
 			transport: Transport { uri: DEFAULT_TARGET.to_owned(), client: None },
-			scrape_children: false,
+			scrape_children: true,
 			at: None,
 			state_snapshot: None,
 			pallets: vec![],
