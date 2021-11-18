@@ -58,7 +58,7 @@ fn create_check_toolchain_project(project_dir: &Path) {
 			[package]
 			name = "wasm-test"
 			version = "1.0.0"
-			edition = "2018"
+			edition = "2021"
 			build = "build.rs"
 
 			[lib]

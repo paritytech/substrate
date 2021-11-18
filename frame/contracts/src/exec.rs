@@ -2157,10 +2157,10 @@ mod tests {
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted(
-							1,
-							frame_system::Error::<Test>::CallFiltered.into()
-						),),
+						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted {
+							index: 1,
+							error: frame_system::Error::<Test>::CallFiltered.into()
+						},),
 						topics: vec![],
 					},
 				]

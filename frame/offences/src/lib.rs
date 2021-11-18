@@ -108,7 +108,7 @@ pub mod pallet {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
 		/// \[kind, timeslot\].
-		Offence(Kind, OpaqueTimeSlot),
+		Offence { kind: Kind, timeslot: OpaqueTimeSlot },
 	}
 
 	#[pallet::hooks]
@@ -150,10 +150,11 @@ where
 			&concurrent_offenders,
 			&slash_perbill,
 			offence.session_index(),
+			offence.disable_strategy(),
 		);
 
 		// Deposit the event.
-		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
+		Self::deposit_event(Event::Offence { kind: O::ID, timeslot: time_slot.encode() });
 
 		Ok(())
 	}
