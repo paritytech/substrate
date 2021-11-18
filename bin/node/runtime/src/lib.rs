@@ -23,6 +23,8 @@
 #![recursion_limit = "256"]
 
 use codec::{Decode, Encode, MaxEncodedLen};
+#[cfg(feature = "std")]
+use frame_support::serde::{Deserialize, Serialize};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
@@ -35,8 +37,6 @@ use frame_support::{
 	},
 	PalletId, RuntimeDebug,
 };
-#[cfg(feature = "std")]
-use frame_support::serde::{Serialize, Deserialize};
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
 	EnsureOneOf, EnsureRoot,
@@ -65,7 +65,7 @@ use sp_runtime::{
 	generic, impl_opaque_keys,
 	traits::{
 		self, BlakeTwo256, Block as BlockT, ConvertInto, NumberFor, OpaqueKeys,
-        SaturatedConversion, StaticLookup,
+		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, FixedPointNumber, Perbill, Percent, Permill, Perquintill,
