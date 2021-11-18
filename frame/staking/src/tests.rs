@@ -4009,11 +4009,13 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
-				.unwrap()
-				.into_iter()
-				.find(|(w, _, t)| { v == *w && t[0] == *w })
-				.is_some()))
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(
+				SnapshotBounds::new_unbounded()
+			)
+			.unwrap()
+			.into_iter()
+			.find(|(w, _, t)| { v == *w && t[0] == *w })
+			.is_some()))
 		})
 	}
 
@@ -4072,13 +4074,13 @@ mod election_data_provider {
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
 				let limit_for = |c| {
-					Some(
+					SnapshotBounds::new_size(
 						Staking::voters(SnapshotBounds::new_unbounded())
 							.unwrap()
 							.into_iter()
 							.take(c)
 							.collect::<Vec<_>>()
-							.encoded_size(),
+							.encoded_size() as u32,
 					)
 				};
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
@@ -4090,7 +4092,7 @@ mod election_data_provider {
 
 				// unbounded:
 				assert_eq!(
-					Staking::voters(None).unwrap(),
+					Staking::voters(SnapshotBounds::new_unbounded()).unwrap(),
 					vec![
 						(101, 500, vec![11, 21]), // 8 + 8 + (8 * 2) + 1 = 33
 						(31, 500, vec![31]),      // 8 + 8 + 8 + 1 = 25
@@ -4102,7 +4104,7 @@ mod election_data_provider {
 
 				// if limits is less..
 				// let's check one of the manually for some mental practice
-				assert_eq!(limit_for(2).unwrap(), 33 + 25 + 1);
+				assert_eq!(limit_for(2).size_bound().unwrap(), 33 + 25 + 1);
 				assert_eq!(Staking::voters(limit_for(2)).unwrap().len(), 2);
 
 				// edge-case: we have enough size only for all validators, and none of the
@@ -4114,7 +4116,14 @@ mod election_data_provider {
 				assert_eq!(Staking::voters(limit_for(5)).unwrap().len(), 5);
 
 				// if limit is more.
-				assert_eq!(Staking::voters(Some(limit_for(5).unwrap() * 2)).unwrap().len(), 5);
+				assert_eq!(
+					Staking::voters(SnapshotBounds::new_size(
+						(limit_for(5).size_bound().unwrap() * 2) as u32
+					))
+					.unwrap()
+					.len(),
+					5
+				);
 			});
 	}
 
@@ -4124,13 +4133,13 @@ mod election_data_provider {
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
 				let limit_for = |c| {
-					Some(
-						Staking::targets(None)
+					SnapshotBounds::new_size(
+						Staking::targets(SnapshotBounds::new_unbounded())
 							.unwrap()
 							.into_iter()
 							.take(c)
 							.collect::<Vec<_>>()
-							.encoded_size(),
+							.encoded_size() as u32,
 					)
 				};
 
@@ -4138,7 +4147,7 @@ mod election_data_provider {
 				assert_eq!(<Validators<Test>>::iter().count() as u32, 4);
 
 				// unbounded:
-				assert_eq!(Staking::targets(None).unwrap().len(), 4);
+				assert_eq!(Staking::targets(SnapshotBounds::new_unbounded()).unwrap().len(), 4);
 
 				// if target limit is more..
 				assert_eq!(Staking::targets(limit_for(8)).unwrap().len(), 4);
@@ -4164,14 +4173,16 @@ mod election_data_provider {
 				assert_eq!(nominator_ids(), vec![101, 71, 61]);
 
 				// we take 5 voters
-				let limit_5 = Staking::voters(None)
-					.unwrap()
-					.into_iter()
-					.take(5)
-					.collect::<Vec<_>>()
-					.encoded_size();
+				let limit_5 = SnapshotBounds::new_size(
+					Staking::voters(SnapshotBounds::new_unbounded())
+						.unwrap()
+						.into_iter()
+						.take(5)
+						.collect::<Vec<_>>()
+						.encoded_size() as u32,
+				);
 				assert_eq!(
-					Staking::voters(Some(limit_5))
+					Staking::voters(limit_5)
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4191,14 +4202,16 @@ mod election_data_provider {
 				add_slash(&21);
 
 				// we take 4 voters
-				let limit_4 = Staking::voters(None)
-					.unwrap()
-					.into_iter()
-					.take(4)
-					.collect::<Vec<_>>()
-					.encoded_size();
+				let limit_4 = SnapshotBounds::new_size(
+					Staking::voters(SnapshotBounds::new_unbounded())
+						.unwrap()
+						.into_iter()
+						.take(4)
+						.collect::<Vec<_>>()
+						.encoded_size() as u32,
+				);
 				assert_eq!(
-					Staking::voters(Some(limit_4))
+					Staking::voters(limit_4)
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
