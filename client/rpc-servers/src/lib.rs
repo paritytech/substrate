@@ -98,7 +98,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		// TODO(niklasad1): this is bad we don't know which port that actually was used..
+		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
 		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs[0].port()))?;
 		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs[1].port()))?;
 		acl = acl.set_allowed_origins(cors)?;
@@ -139,7 +139,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		// TODO(niklasad1): this is bad we don't know which port that actually was used..
+		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
 		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs[0].port()))?;
 		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs[1].port()))?;
 		builder = builder.set_allowed_origins(cors)?;
@@ -159,7 +159,6 @@ fn format_allowed_hosts(port: u16) -> [String; 2] {
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
 	let mut available_methods = rpc_api.method_names().collect::<Vec<_>>();
-	available_methods.push("rpc_methods");
 	available_methods.sort_unstable();
 
 	rpc_api
