@@ -337,10 +337,7 @@ fn expand_origin_pallet_conversions(
 		None => quote!(#path::Origin),
 	};
 
-	let doc_string = format!(
-		" Convert to runtime origin using [`{}::Config::BaseCallFilter`].",
-		path.module_name()
-	);
+	let doc_string = get_intra_doc_string(" Convert to runtime origin using", &path.module_name());
 
 	quote! {
 		impl From<#pallet_origin> for OriginCaller {
