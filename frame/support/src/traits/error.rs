@@ -27,7 +27,9 @@ pub trait CompactPalletError: TypeInfo {
 	///
 	/// It is up to the implementing type to prove that it is maximally compact, thus this
 	/// function defaults to false.
-	fn check_compactness() -> bool { false }
+	fn check_compactness() -> bool {
+		false
+	}
 }
 
 macro_rules! impl_for_types {
