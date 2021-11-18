@@ -54,6 +54,7 @@
 
 mod benchmarking;
 mod tests;
+pub mod weights;
 
 use sp_std::prelude::*;
 
@@ -70,11 +71,11 @@ use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use pallet_bounties::BountyStatus;
 use scale_info::TypeInfo;
+pub use weights::WeightInfo;
 
 pub use pallet::*;
 
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
-
 type BountiesError<T> = pallet_bounties::Error<T>;
 
 /// An index of a bounty. Just a `u32`.
@@ -143,8 +144,8 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		// /// Weight information for extrinsics in this pallet.
-		// type WeightInfo: WeightInfo;
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -226,7 +227,7 @@ pub mod pallet {
 		/// - `bounty_id`: Bounty ID for which child-bounty to be added.
 		/// - `value`: Value for executing the proposal.
 		/// - `description`: Text description for the child-bounty.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::add_child_bounty(description.len() as u32))]
 		pub fn add_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -300,7 +301,7 @@ pub mod pallet {
 		/// - `child_bounty_id`: Index of child bounty.
 		/// - `curator`: Address of child-bounty curator.
 		/// - `fee`: payment fee to child-bounty curator for execution.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::propose_curator())]
 		pub fn propose_curator(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -372,7 +373,7 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::accept_curator())]
 		pub fn accept_curator(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -446,7 +447,7 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::unassign_curator())]
 		pub fn unassign_curator(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -570,7 +571,7 @@ pub mod pallet {
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
 		/// - `beneficiary`: Beneficiary account.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::award_child_bounty())]
 		pub fn award_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -636,7 +637,7 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::claim_child_bounty())]
 		pub fn claim_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
@@ -736,7 +737,8 @@ pub mod pallet {
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::close_child_bounty_added()
+			.max(<T as Config>::WeightInfo::close_child_bounty_active()))]
 		pub fn close_child_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
