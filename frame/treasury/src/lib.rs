@@ -255,20 +255,19 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// New proposal. \[proposal_index\]
+		/// New proposal.
 		Proposed { proposal_index: ProposalIndex },
-		/// We have ended a spend period and will now allocate funds. \[budget_remaining\]
+		/// We have ended a spend period and will now allocate funds.
 		Spending { funds: BalanceOf<T, I> },
-		/// Some funds have been allocated. \[proposal_index, award, beneficiary\]
+		/// Some funds have been allocated.
 		Awarded { proposal_index: ProposalIndex, funds: BalanceOf<T, I>, account: T::AccountId },
-		/// A proposal was rejected; funds were slashed. \[proposal_index, slashed\]
+		/// A proposal was rejected; funds were slashed.
 		Rejected { proposal_index: ProposalIndex, slashed: BalanceOf<T, I> },
-		/// Some of our funds have been burnt. \[burn\]
+		/// Some of our funds have been burnt.
 		Burnt { burnt_funds: BalanceOf<T, I> },
 		/// Spending has finished; this is the amount that rolls over until next spend.
-		/// \[budget_remaining\]
 		Rollover { rollover_balance: BalanceOf<T, I> },
-		/// Some funds have been deposited. \[deposit\]
+		/// Some funds have been deposited.
 		Deposit { value: BalanceOf<T, I> },
 	}
 
