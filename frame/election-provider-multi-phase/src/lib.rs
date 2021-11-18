@@ -231,14 +231,14 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{ElectionDataProvider, ElectionProvider};
+#[cfg(feature = "std")]
+use frame_support::serde::{Deserialize, Serialize};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
 };
-#[cfg(feature = "std")]
-use frame_support::serde::{Serialize, Deserialize};
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{

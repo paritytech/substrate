@@ -118,10 +118,10 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 	));
 	event_item.attrs.push(syn::parse_quote!(
-        #[cfg_attr(feature = "std", derive(#frame_support::Serialize, #frame_support::Deserialize))]
+		#[cfg_attr(feature = "std", derive(#frame_support::Serialize, #frame_support::Deserialize))]
 	));
 	event_item.attrs.push(syn::parse_quote!(
-        #[cfg_attr(feature = "std", serde(crate = #serde_crate))]
+		#[cfg_attr(feature = "std", serde(crate = #serde_crate))]
 	));
 
 	// skip requirement for type params to implement `TypeInfo`, and require docs capture

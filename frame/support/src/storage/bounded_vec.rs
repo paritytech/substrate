@@ -29,7 +29,7 @@ use core::{
 	slice::SliceIndex,
 };
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use frame_support::serde::{Deserialize, Serialize};
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A bounded vector.

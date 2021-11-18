@@ -43,18 +43,17 @@
 mod tests;
 
 use codec::{Decode, Encode};
+#[cfg(feature = "std")]
+use frame_support::serde::{Serialize, Deserialize};
 use frame_support::{
 	dispatch::DispatchResult,
 	traits::{BalanceStatus, Currency, Get, ReservableCurrency},
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
-#[cfg(feature = "std")]
-use frame_support::serde::{Serialize, Deserialize};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
-use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::MaybeSerializeDeserialize;
+use sp_runtime::{traits::MaybeSerializeDeserialize, RuntimeDebug};
 use sp_std::{
 	marker::PhantomData,
 	ops::{Deref, DerefMut},

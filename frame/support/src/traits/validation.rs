@@ -20,13 +20,9 @@
 use crate::{dispatch::Parameter, weights::Weight};
 use codec::{Codec, Decode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{Convert, Zero},
+	traits::{Convert, MaybeSerializeDeserialize, Zero},
 	BoundToRuntimeAppPublic, ConsensusEngineId, Permill, RuntimeAppPublic,
 };
-#[cfg(feature = "std")]
-use serde::Serialize;
-#[cfg(feature = "std")]
-use serde::de::DeserializeOwned;
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
@@ -35,9 +31,9 @@ use sp_std::prelude::*;
 /// Something that can give information about the current validator set.
 pub trait ValidatorSet<AccountId> {
 	/// Type for representing validator id in a session.
-    #[cfg(feature = "std")]
-	type ValidatorId: Parameter + MaxEncodedLen + Serialize + DeserializeOwned;
-    #[cfg(not(feature = "std"))]
+	#[cfg(feature = "std")]
+	type ValidatorId: Parameter + MaxEncodedLen + MaybeSerializeDeserialize;
+	#[cfg(not(feature = "std"))]
 	type ValidatorId: Parameter + MaxEncodedLen;
 	/// A type for converting `AccountId` to `ValidatorId`.
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
@@ -52,9 +48,9 @@ pub trait ValidatorSet<AccountId> {
 /// [`ValidatorSet`] combined with an identification.
 pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
 	/// Full identification of `ValidatorId`.
-    #[cfg(feature = "std")]
+	#[cfg(feature = "std")]
 	type Identification: Parameter + Serialize + DeserializeOwned;
-    #[cfg(not(feature = "std"))]
+	#[cfg(not(feature = "std"))]
 	type Identification: Parameter;
 	/// A type for converting `ValidatorId` to `Identification`.
 	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;

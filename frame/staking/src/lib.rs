@@ -292,12 +292,12 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
+#[cfg(feature = "std")]
+use frame_support::serde::{Deserialize, Serialize};
 use frame_support::{
 	traits::{Currency, Get},
 	weights::Weight,
 };
-#[cfg(feature = "std")]
-use frame_support::serde::{Serialize, Deserialize};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,

@@ -1163,8 +1163,8 @@ impl pallet_lottery::Config for Runtime {
 parameter_types! {
 	pub const AssetDeposit: Balance = 100 * DOLLARS;
 	pub const ApprovalDeposit: Balance = 1 * DOLLARS;
-    #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-    #[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 	pub const StringLimit: u32 = 50;
 	pub const MetadataDepositBase: Balance = 10 * DOLLARS;
 	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
@@ -1218,11 +1218,11 @@ impl pallet_gilt::Config for Runtime {
 parameter_types! {
 	pub const ClassDeposit: Balance = 100 * DOLLARS;
 	pub const InstanceDeposit: Balance = 1 * DOLLARS;
-    #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-    #[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 	pub const KeyLimit: u32 = 32;
-    #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-    #[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 	pub const ValueLimit: u32 = 256;
 }
 

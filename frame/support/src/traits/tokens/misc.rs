@@ -19,7 +19,7 @@
 
 use codec::{Decode, Encode, FullCodec};
 #[cfg(feature = "std")]
-use frame_support::serde::{Serialize, Deserialize};
+use frame_support::serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
 use sp_runtime::{ArithmeticError, DispatchError, TokenError};

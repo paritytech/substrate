@@ -51,6 +51,8 @@ mod tests;
 pub mod weights;
 
 use codec::{Decode, Encode};
+#[cfg(feature = "std")]
+use frame_support::serde::{Deserialize, Serialize};
 use frame_support::{
 	dispatch::{
 		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo,
@@ -60,8 +62,6 @@ use frame_support::{
 	weights::{GetDispatchInfo, Weight},
 	RuntimeDebug,
 };
-#[cfg(feature = "std")]
-use frame_support::serde::{Serialize, Deserialize};
 use frame_system::{self as system, RawOrigin};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
