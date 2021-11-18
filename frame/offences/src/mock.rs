@@ -36,7 +36,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{self, Kind, OffenceDetails},
+	offence::{self, DisableStrategy, Kind, OffenceDetails},
 	SessionIndex,
 };
 use std::cell::RefCell;
@@ -55,6 +55,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
+		_disable_strategy: DisableStrategy,
 	) -> Weight {
 		ON_OFFENCE_PERBILL.with(|f| {
 			*f.borrow_mut() = slash_fraction.to_vec();
