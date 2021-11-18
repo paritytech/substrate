@@ -42,6 +42,12 @@
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
+pub trait WeightInfo {
+	fn rebag_non_terminal() -> Weight;
+	fn rebag_terminal() -> Weight;
+	fn put_in_front_of() -> Weight;
+}
+
 /// Weights for pallet_bags_list using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
