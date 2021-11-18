@@ -32,7 +32,7 @@ mod shared;
 
 use codec::{Decode, Encode};
 use sp_runtime::{
-	traits::{Convert, OpaqueKeys},
+	traits::{Convert, MaybeSerializeDeserialize, OpaqueKeys},
 	KeyTypeId,
 };
 use sp_session::{MembershipProof, ValidatorCount};
@@ -70,7 +70,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: pallet_session::Config + frame_system::Config {
 		/// Full identification of the validator.
-		type FullIdentification: Parameter;
+		type FullIdentification: Parameter + MaybeSerializeDeserialize;
 
 		/// A conversion from validator ID to full identification.
 		///

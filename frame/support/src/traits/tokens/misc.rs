@@ -18,6 +18,8 @@
 //! Miscellaneous types.
 
 use codec::{Decode, Encode, FullCodec};
+#[cfg(feature = "std")]
+use frame_support::serde::{Serialize, Deserialize};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
 use sp_runtime::{ArithmeticError, DispatchError, TokenError};
@@ -117,6 +119,7 @@ pub enum ExistenceRequirement {
 
 /// Status of funds.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,

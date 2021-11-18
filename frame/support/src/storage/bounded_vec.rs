@@ -28,6 +28,8 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A bounded vector.
@@ -39,6 +41,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// this bound is respected.
 #[derive(Encode, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(S))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
 /// A bounded slice.

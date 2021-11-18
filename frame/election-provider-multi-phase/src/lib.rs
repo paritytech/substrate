@@ -237,6 +237,8 @@ use frame_support::{
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
 };
+#[cfg(feature = "std")]
+use frame_support::serde::{Serialize, Deserialize};
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
@@ -396,6 +398,8 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 
 /// The type of `Computation` that provided this election data.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,

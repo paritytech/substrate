@@ -60,6 +60,8 @@ use frame_support::{
 	weights::{GetDispatchInfo, Weight},
 	RuntimeDebug,
 };
+#[cfg(feature = "std")]
+use frame_support::serde::{Serialize, Deserialize};
 use frame_system::{self as system, RawOrigin};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
@@ -79,6 +81,8 @@ type BalanceOf<T> =
 /// block's height. This allows a transaction in which a multisig operation of a particular
 /// composite was created to be uniquely identified.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 pub struct Timepoint<BlockNumber> {
 	/// The height of the chain at the point in time.
 	height: BlockNumber,

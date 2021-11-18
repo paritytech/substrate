@@ -44,7 +44,7 @@ use codec::{Decode, Encode, HasCompact};
 use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
-	traits::{Saturating, StaticLookup, Zero},
+	traits::{MaybeSerializeDeserialize, Saturating, StaticLookup, Zero},
 	ArithmeticError, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -104,15 +104,15 @@ pub mod pallet {
 
 		/// The maximum length of data stored on-chain.
 		#[pallet::constant]
-		type StringLimit: Get<u32>;
+		type StringLimit: Get<u32> + MaybeSerializeDeserialize;
 
 		/// The maximum length of an attribute key.
 		#[pallet::constant]
-		type KeyLimit: Get<u32>;
+		type KeyLimit: Get<u32> + MaybeSerializeDeserialize;
 
 		/// The maximum length of an attribute value.
 		#[pallet::constant]
-		type ValueLimit: Get<u32>;
+		type ValueLimit: Get<u32> + MaybeSerializeDeserialize;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;

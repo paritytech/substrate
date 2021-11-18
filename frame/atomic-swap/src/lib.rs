@@ -49,9 +49,12 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
+#[cfg(feature = "std")]
+use frame_support::serde::{Serialize, Deserialize};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeDebug;
+use sp_runtime::traits::MaybeSerializeDeserialize;
 use sp_std::{
 	marker::PhantomData,
 	ops::{Deref, DerefMut},
@@ -61,6 +64,8 @@ use sp_std::{
 /// Pending atomic swap operation.
 #[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 pub struct PendingSwap<T: Config> {
 	/// Source of the swap.
 	pub source: T::AccountId,
@@ -95,6 +100,8 @@ pub trait SwapAction<AccountId, T: Config> {
 /// A swap action that only allows transferring balances.
 #[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(C))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 pub struct BalanceSwapAction<AccountId, C: ReservableCurrency<AccountId>> {
 	value: <C as Currency<AccountId>>::Balance,
 	_marker: PhantomData<C>,
@@ -165,7 +172,7 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Swap action.
-		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
+		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter + MaybeSerializeDeserialize;
 		/// Limit of proof size.
 		///
 		/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the

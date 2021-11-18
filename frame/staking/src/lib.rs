@@ -296,6 +296,8 @@ use frame_support::{
 	traits::{Currency, Get},
 	weights::Weight,
 };
+#[cfg(feature = "std")]
+use frame_support::serde::{Serialize, Deserialize};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -576,6 +578,8 @@ pub struct Nominations<AccountId> {
 
 /// The amount of exposure (to slashing) than an individual nominator has.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
 	pub who: AccountId,
@@ -588,6 +592,8 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 #[derive(
 	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, RuntimeDebug, TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(crate = "frame_support::serde"))]
 pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
