@@ -126,6 +126,12 @@ use frame_support::{
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
 use frame_system::{extrinsics_root, DigestOf};
+use schnorrkel::{
+	vrf::{VRFOutput, VRFProof},
+	SignatureError,
+};
+use sp_core::ShufflingSeed;
+use sp_keystore::vrf;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -185,6 +191,16 @@ where
 			AllPallets,
 			COnRuntimeUpgrade,
 		>::execute_block(block, info);
+	}
+}
+
+fn create_shuffling_seed_input_data(prev_seed: &ShufflingSeed) -> vrf::VRFTranscriptData {
+	vrf::VRFTranscriptData {
+		label: b"shuffling_seed",
+		items: vec![(
+			"prev_seed",
+			vrf::VRFTranscriptValue::Bytes(prev_seed.seed.as_bytes().to_vec()),
+		)],
 	}
 }
 
@@ -339,7 +355,27 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
+		let seed: ShufflingSeed = Default::default();
+		let prev_seed: ShufflingSeed = Default::default();
+
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
+
+		let output = VRFOutput::from_bytes(&seed.seed.as_bytes()).unwrap();
+		// .map_err(|_| Error::InvalidSeed)?;
+		//
+		let proof = VRFProof::from_bytes(&seed.proof.as_bytes())
+			// .map_err(|_| Error::InvalidSeed)?;
+			.unwrap();
+
+		let input = vrf::make_transcript(create_shuffling_seed_input_data(&prev_seed));
+
+		// schnorrkel::PublicKey::from_bytes(public_key)
+		schnorrkel::PublicKey::from_bytes(&[])
+			.and_then(|p| p.vrf_verify(input, &output, &proof))
+			// .map_err(|_| Error::<Block>::InvalidSeed)?;
+			.unwrap();
+		//
+
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
@@ -914,24 +950,25 @@ mod tests {
 	#[test]
 	fn block_import_works() {
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block {
-				header: Header {
-					parent_hash: [69u8; 32].into(),
-					number: 1,
-					state_root: hex!(
-						"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
-					)
-					.into(),
-					extrinsics_root: hex!(
-						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
-					)
-					.into(),
-					digest: Digest { logs: vec![] },
-                    seed: Default::default(),
+			Executive::execute_block(
+				Block {
+					header: Header {
+						parent_hash: [69u8; 32].into(),
+						number: 1,
+						state_root: hex!(
+							"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
+						)
+						.into(),
+						extrinsics_root: hex!(
+							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+						)
+						.into(),
+						digest: Digest { logs: vec![] },
+						seed: Default::default(),
+					},
+					extrinsics: vec![],
 				},
-				extrinsics: vec![],
-            },
-            vec![],
+				vec![],
 			);
 		});
 	}
@@ -940,19 +977,20 @@ mod tests {
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block {
-				header: Header {
-					parent_hash: [69u8; 32].into(),
-					number: 1,
-					state_root: [0u8; 32].into(),
-					extrinsics_root: hex!(
-						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
-					)
-					.into(),
-					digest: Digest { logs: vec![] },
-                    seed: Default::default(),
+			Executive::execute_block(
+				Block {
+					header: Header {
+						parent_hash: [69u8; 32].into(),
+						number: 1,
+						state_root: [0u8; 32].into(),
+						extrinsics_root: hex!(
+							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+						)
+						.into(),
+						digest: Digest { logs: vec![] },
+						seed: Default::default(),
 					},
-                extrinsics: vec![],
+					extrinsics: vec![],
 				},
 				vec![],
 			);
@@ -963,23 +1001,24 @@ mod tests {
 	#[should_panic]
 	fn block_import_of_bad_extrinsic_root_fails() {
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block {
-				header: Header {
-					parent_hash: [69u8; 32].into(),
-					number: 1,
-					state_root: hex!(
-						"49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
-					)
-					.into(),
-					extrinsics_root: [0u8; 32].into(),
-					digest: Digest { logs: vec![] },
-                    seed: Default::default(),
-				},
-				extrinsics: vec![],
+			Executive::execute_block(
+				Block {
+					header: Header {
+						parent_hash: [69u8; 32].into(),
+						number: 1,
+						state_root: hex!(
+							"49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
+						)
+						.into(),
+						extrinsics_root: [0u8; 32].into(),
+						digest: Digest { logs: vec![] },
+						seed: Default::default(),
+					},
+					extrinsics: vec![],
 				},
 				vec![],
-            )
-        });
+			)
+		});
 	}
 
 	#[test]
