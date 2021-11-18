@@ -107,7 +107,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
 		.custom_tokio_runtime(rt)
-		.build(&addrs[..])?;
+		.build(addrs)?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
@@ -143,7 +143,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
-	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(&addrs[..])))?;
+	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
