@@ -27,6 +27,10 @@ use beefy_primitives::{
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_runtime::traits::MaybeDisplay;
 
+#[cfg(test)]
+#[path = "round_tests.rs"]
+mod tests;
+
 #[derive(Default)]
 struct RoundTracker {
 	votes: Vec<(Public, Signature)>,
@@ -36,7 +40,7 @@ impl RoundTracker {
 	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
 		// this needs to handle equivocations in the future
 		if self.votes.contains(&vote) {
-			return false
+			return false;
 		}
 
 		self.votes.push(vote);
