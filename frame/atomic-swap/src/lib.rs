@@ -44,7 +44,7 @@ mod tests;
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use frame_support::serde::{Serialize, Deserialize};
+use frame_support::serde::{Deserialize, Serialize};
 use frame_support::{
 	dispatch::DispatchResult,
 	traits::{BalanceStatus, Currency, Get, ReservableCurrency},
