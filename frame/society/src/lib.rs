@@ -475,41 +475,40 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// The society is founded by the given identity. \[founder\]
+		/// The society is founded by the given identity.
 		Founded { founder: T::AccountId },
 		/// A membership bid just happened. The given account is the candidate's ID and their offer
-		/// is the second. \[candidate_id, offer\]
+		/// is the second.
 		Bid { candidate_id: T::AccountId, offer: BalanceOf<T, I> },
 		/// A membership bid just happened by vouching. The given account is the candidate's ID and
-		/// their offer is the second. The vouching party is the third. \[candidate_id, offer,
-		/// vouching\]
+		/// their offer is the second. The vouching party is the third.
 		Vouch { candidate_id: T::AccountId, offer: BalanceOf<T, I>, vouching: T::AccountId },
-		/// A \[candidate\] was dropped (due to an excess of bids in the system).
+		/// A candidate was dropped (due to an excess of bids in the system).
 		AutoUnbid { candidate: T::AccountId },
-		/// A \[candidate\] was dropped (by their request).
+		/// A candidate was dropped (by their request).
 		Unbid { candidate: T::AccountId },
-		/// A \[candidate\] was dropped (by request of who vouched for them).
+		/// A candidate was dropped (by request of who vouched for them).
 		Unvouch { candidate: T::AccountId },
 		/// A group of candidates have been inducted. The batch's primary is the first value, the
-		/// batch in full is the second. \[primary, candidates\]
+		/// batch in full is the second.
 		Inducted { primary: T::AccountId, candidates: Vec<T::AccountId> },
-		/// A suspended member has been judged. \[who, judged\]
+		/// A suspended member has been judged.
 		SuspendedMemberJudgement { who: T::AccountId, judged: bool },
-		/// A \[candidate\] has been suspended
+		/// A candidate has been suspended
 		CandidateSuspended { candidate: T::AccountId },
-		/// A \[member\] has been suspended
+		/// A member has been suspended
 		MemberSuspended { member: T::AccountId },
-		/// A \[member\] has been challenged
+		/// A member has been challenged
 		Challenged { member: T::AccountId },
-		/// A vote has been placed \[candidate, voter, vote\]
+		/// A vote has been placed
 		Vote { candidate: T::AccountId, voter: T::AccountId, vote: bool },
-		/// A vote has been placed for a defending member \[voter, vote\]
+		/// A vote has been placed for a defending member
 		DefenderVote { voter: T::AccountId, vote: bool },
 		/// A new \[max\] member count has been set
 		NewMaxMembers { max: u32 },
-		/// Society is unfounded. \[founder\]
+		/// Society is unfounded.
 		Unfounded { founder: T::AccountId },
-		/// Some funds were deposited into the society account. \[value\]
+		/// Some funds were deposited into the society account.
 		Deposit { value: BalanceOf<T, I> },
 	}
 
