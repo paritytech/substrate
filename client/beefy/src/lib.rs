@@ -40,6 +40,15 @@ mod worker;
 
 pub mod notification;
 
+/// Id of different payloads in the [`Commitment`] data
+pub type BeefyPayloadId = [u8; 2];
+
+/// payload type.
+pub type Payload = Vec<(BeefyPayloadId, Vec<u8>)>;
+
+/// Id of the mmr root hash in the [`Commitment`] payload
+pub const MMR_ROOT_ID: BeefyPayloadId = *b"mh";
+
 pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
 
 /// Returns the configuration value to put in

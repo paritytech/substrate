@@ -22,10 +22,11 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_runtime::traits::{Block, NumberFor};
 
 use parking_lot::Mutex;
+use crate::Payload;
 
 /// Stream of signed commitments returned when subscribing.
 pub type SignedCommitment<Block> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::MmrRootHash>;
+	beefy_primitives::SignedCommitment<NumberFor<Block>, Payload>;
 
 /// Stream of signed commitments returned when subscribing.
 type SignedCommitmentStream<Block> = TracingUnboundedReceiver<SignedCommitment<Block>>;
