@@ -150,7 +150,7 @@ mod test {
 			state_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: DigestTest { logs: vec![] },
-            seed: Default::default(),
+			seed: Default::default(),
 		};
 
 		header

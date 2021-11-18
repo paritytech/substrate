@@ -325,7 +325,9 @@ mod tests {
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let block_builder = client.new_block_at(&BlockId::Hash(block.header.hash()), Default::default(), false).unwrap();
+		let block_builder = client
+			.new_block_at(&BlockId::Hash(block.header.hash()), Default::default(), false)
+			.unwrap();
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
@@ -341,7 +343,9 @@ mod tests {
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let block_builder = client.new_block_at(&BlockId::Hash(block.header.hash()), Default::default(), false).unwrap();
+		let block_builder = client
+			.new_block_at(&BlockId::Hash(block.header.hash()), Default::default(), false)
+			.unwrap();
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 

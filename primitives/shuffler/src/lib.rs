@@ -1,15 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use sp_api::Encode;
-use sp_api::HashT;
+use sp_api::{Encode, HashT};
 
-use sp_runtime::traits::{BlakeTwo256, Block as BlockT};
-use sp_runtime::AccountId32;
-use sp_std::collections::btree_map::BTreeMap;
-use sp_std::convert::TryInto;
+use sp_runtime::{
+	traits::{BlakeTwo256, Block as BlockT},
+	AccountId32,
+};
+use sp_std::{collections::btree_map::BTreeMap, convert::TryInto};
 
-use sp_std::collections::vec_deque::VecDeque;
-use sp_std::vec::Vec;
 use sp_core::H256;
+use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 #[cfg(feature = "std")]
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
@@ -69,7 +68,6 @@ impl Xoshiro256PlusPlus {
 /// for i from n−1 downto 1 do
 ///     j ← random integer such that 0 ≤ j ≤ i
 ///     exchange a[j] and a[i]
-///
 fn fisher_yates<T>(data: &mut Vec<T>, seed: [u8; 32]) {
 	let mut s = Xoshiro256PlusPlus::from_seed(seed);
 	for i in (1..(data.len())).rev() {
@@ -84,7 +82,7 @@ pub fn shuffle_using_seed<E: Encode>(
 ) -> Vec<E> {
 	log::debug!(target: "block_shuffler", "shuffling extrinsics with seed: {:2X?}", seed.as_bytes());
 	log::debug!(target: "block_shuffler", "origin order: [");
-	for (_,tx) in extrinsics.iter() {
+	for (_, tx) in extrinsics.iter() {
 		log::debug!(target: "block_shuffler", "{:?}", BlakeTwo256::hash(&tx.encode()));
 	}
 	log::debug!(target: "block_shuffler", "]");
@@ -94,13 +92,9 @@ pub fn shuffle_using_seed<E: Encode>(
 	let mut slots: Vec<Option<AccountId32>> =
 		extrinsics.iter().map(|(who, _)| who).cloned().collect();
 
-	let mut grouped_extrinsics: BTreeMap<Option<AccountId32>, VecDeque<_>> = extrinsics
-		.into_iter()
-		.fold(BTreeMap::new(), |mut groups, (who, tx)| {
-			groups
-				.entry(who)
-				.or_insert_with(VecDeque::new)
-				.push_back(tx);
+	let mut grouped_extrinsics: BTreeMap<Option<AccountId32>, VecDeque<_>> =
+		extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
+			groups.entry(who).or_insert_with(VecDeque::new).push_back(tx);
 			groups
 		});
 
@@ -113,14 +107,8 @@ pub fn shuffle_using_seed<E: Encode>(
 	// [ AliceExtrinsic1, BobExtrinsic1, ... , AliceExtrinsicN, BobExtrinsicN ]
 	let shuffled_extrinsics: Vec<_> = slots
 		.into_iter()
-		.map(|who| {
-			grouped_extrinsics
-				.get_mut(&who)
-				.unwrap()
-				.pop_front()
-				.unwrap()
-		})
-	.collect();
+		.map(|who| grouped_extrinsics.get_mut(&who).unwrap().pop_front().unwrap())
+		.collect();
 
 	log::debug!(target: "block_shuffler", "shuffled order:[");
 	for tx in shuffled_extrinsics.iter() {
@@ -146,7 +134,6 @@ where
 	Api: ProvideRuntimeApi<Block> + 'a,
 	Api::Api: ExtrinsicInfoRuntimeApi<Block>,
 {
-
 	let extrinsics: Vec<(Option<AccountId32>, Block::Extrinsic)> = extrinsics
 		.into_iter()
 		.map(|tx| {

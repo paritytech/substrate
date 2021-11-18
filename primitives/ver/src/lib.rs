@@ -40,18 +40,12 @@ pub struct RandomSeedInherentDataProvider(pub ShufflingSeed);
 #[cfg(feature = "std")]
 #[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for RandomSeedInherentDataProvider {
-
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 		inherent_data.put_data(RANDOM_SEED_INHERENT_IDENTIFIER, &self.0)
 	}
 
-	async fn try_handle_error(
-		&self,
-		_: &InherentIdentifier,
-		_: &[u8],
-	) -> Option<Result<(), sp_inherents::Error>> {
+	async fn try_handle_error(&self, _: &InherentIdentifier, _: &[u8]) -> Option<Result<(), sp_inherents::Error>> {
 		// There is no error anymore
 		None
 	}
 }
-

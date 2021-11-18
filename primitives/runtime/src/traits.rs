@@ -36,7 +36,7 @@ pub use sp_arithmetic::traits::{
 	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
-use sp_core::{self, Hasher, RuntimeDebug, TypeId, ShufflingSeed};
+use sp_core::{self, Hasher, RuntimeDebug, ShufflingSeed, TypeId};
 use sp_std::{
 	self,
 	convert::{TryFrom, TryInto},
@@ -679,7 +679,7 @@ pub trait Header:
 	fn seed(&self) -> &ShufflingSeed;
 
 	/// Returns seed used for shuffling
-	fn set_seed(& mut self, seed: ShufflingSeed);
+	fn set_seed(&mut self, seed: ShufflingSeed);
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for

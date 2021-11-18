@@ -182,7 +182,7 @@ fn construct_block(
 		state_root,
 		extrinsics_root,
 		digest: Digest { logs: vec![] },
-        seed: Default::default(),
+		seed: Default::default(),
 	};
 	let hash = header.hash();
 	let mut overlay = OverlayedChanges::default();
@@ -412,7 +412,9 @@ fn block_builder_works_with_transactions() {
 	block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 	assert_eq!(client.chain_info().best_number, 1);
 
-	let builder = client.new_block_at(&BlockId::Hash(block.header().hash()),Default::default(), false).unwrap();
+	let builder = client
+		.new_block_at(&BlockId::Hash(block.header().hash()), Default::default(), false)
+		.unwrap();
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 

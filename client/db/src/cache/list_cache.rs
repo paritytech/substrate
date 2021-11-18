@@ -942,7 +942,7 @@ mod tests {
 				state_root: H256::from_low_u64_be(1 + fork_nonce),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
-			seed: Default::default(),
+				seed: Default::default(),
 			}
 		}
 	}

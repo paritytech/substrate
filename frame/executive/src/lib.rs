@@ -125,7 +125,7 @@ use frame_support::{
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
-use frame_system::DigestOf;
+use frame_system::{extrinsics_root, DigestOf};
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -133,12 +133,9 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	AccountId32, ApplyExtrinsicResult,
 };
 use sp_std::{marker::PhantomData, prelude::*};
-use sp_runtime::AccountId32;
-use frame_system::extrinsics_root;
-
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
@@ -512,7 +509,6 @@ where
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
-
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
@@ -934,7 +930,9 @@ mod tests {
                     seed: Default::default(),
 				},
 				extrinsics: vec![],
-			},vec![]);
+            },
+            vec![],
+			);
 		});
 	}
 
@@ -953,9 +951,11 @@ mod tests {
 					.into(),
 					digest: Digest { logs: vec![] },
                     seed: Default::default(),
+					},
+                extrinsics: vec![],
 				},
-				extrinsics: vec![],
-			},vec![]);
+				vec![],
+			);
 		});
 	}
 
@@ -976,8 +976,10 @@ mod tests {
                     seed: Default::default(),
 				},
 				extrinsics: vec![],
-			}, vec![]);
-		});
+				},
+				vec![],
+            )
+        });
 	}
 
 	#[test]
@@ -1344,7 +1346,10 @@ mod tests {
 					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
-			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]), vec![None]);
+			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(
+				Block::new(header, vec![xt]),
+				vec![None],
+			);
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
@@ -1462,7 +1467,7 @@ mod tests {
 		});
 
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block::new(header, vec![xt1, xt2]), vec![None,None]);
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]), vec![None, None]);
 		});
 	}
 

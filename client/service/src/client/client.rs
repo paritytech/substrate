@@ -61,6 +61,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
+use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	convert_hash,
@@ -91,7 +92,6 @@ use std::{
 	result,
 	sync::Arc,
 };
-use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 
 #[cfg(feature = "test-helpers")]
 use {
@@ -932,8 +932,8 @@ where
 	) -> sp_blockchain::Result<PrepareStorageChangesResult<B, Block>>
 	where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api:
-			CoreApi<Block> + ApiExt<Block, StateBackend = B::State>
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>
+			+ ApiExt<Block, StateBackend = B::State>
 			+ ExtrinsicInfoRuntimeApi<Block>,
 	{
 		let parent_hash = import_block.header.parent_hash();
@@ -970,20 +970,21 @@ where
 					Some(previous_block_extrinsics) => {
 						//TODO include serialize/deserialize seed field in header
 						//and use received seed instead
-						let prev_header = self.backend.blockchain().header(BlockId::Hash(*parent_hash)).unwrap().unwrap();
+						let prev_header = self
+							.backend
+							.blockchain()
+							.header(BlockId::Hash(*parent_hash))
+							.unwrap()
+							.unwrap();
 						let mut header = import_block.header.clone();
 						header.set_extrinsics_root(*prev_header.extrinsics_root());
 						let block = Block::new(header.clone(), previous_block_extrinsics);
 
-						runtime_api.execute_block_with_context(
-							&at,
-							execution_context,
-							block,
-						)?;
-					}
+						runtime_api.execute_block_with_context(&at, execution_context, block)?;
+					},
 					None => {
 						info!("previous block is empty");
-					}
+					},
 				}
 
 				let state = self.backend.state_at(at)?;
@@ -1427,9 +1428,9 @@ where
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT,
 	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>
-			+ ExtrinsicInfoRuntimeApi<Block>,
+	<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+		+ BlockBuilderApi<Block>
+		+ ExtrinsicInfoRuntimeApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
@@ -1883,8 +1884,7 @@ where
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>
-		+ ExtrinsicInfoRuntimeApi<Block>,
+		CoreApi<Block> + ApiExt<Block, StateBackend = B::State> + ExtrinsicInfoRuntimeApi<Block>,
 	RA: Sync + Send,
 	backend::TransactionFor<B, Block>: Send + 'static,
 {
@@ -1999,8 +1999,7 @@ where
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>
-		+ ExtrinsicInfoRuntimeApi<Block>,
+		CoreApi<Block> + ApiExt<Block, StateBackend = B::State> + ExtrinsicInfoRuntimeApi<Block>,
 	RA: Sync + Send,
 	backend::TransactionFor<B, Block>: Send + 'static,
 {
