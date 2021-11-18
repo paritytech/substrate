@@ -14,7 +14,6 @@
 // limitations under the License.
 
 ///! Traits and default implementation for paying transaction fees in assets.
-
 use super::*;
 use crate::Config;
 
