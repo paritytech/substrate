@@ -295,10 +295,7 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
-		system: SystemConfig {
-			code: wasm_binary_unwrap().to_vec(),
-			changes_trie_config: Default::default(),
-		},
+		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
 		},
@@ -364,6 +361,8 @@ pub fn testnet_genesis(
 		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
+		scheduler: Default::default(),
+		transaction_payment: Default::default(),
 	}
 }
 

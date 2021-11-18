@@ -176,9 +176,9 @@ pub mod pallet {
 		/// A new set of calls have been set!
 		CallsUpdated,
 		/// A winner has been chosen!
-		Winner(T::AccountId, BalanceOf<T>),
+		Winner { winner: T::AccountId, lottery_balance: BalanceOf<T> },
 		/// A ticket has been bought!
-		TicketBought(T::AccountId, CallIndex),
+		TicketBought { who: T::AccountId, call_index: CallIndex },
 	}
 
 	#[pallet::error]
@@ -250,7 +250,7 @@ pub mod pallet {
 						);
 						debug_assert!(res.is_ok());
 
-						Self::deposit_event(Event::<T>::Winner(winner, lottery_balance));
+						Self::deposit_event(Event::<T>::Winner { winner, lottery_balance });
 
 						TicketsCount::<T>::kill();
 
@@ -452,7 +452,7 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		Self::deposit_event(Event::<T>::TicketBought(caller.clone(), call_index));
+		Self::deposit_event(Event::<T>::TicketBought { who: caller.clone(), call_index });
 
 		Ok(())
 	}
