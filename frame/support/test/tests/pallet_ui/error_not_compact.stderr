@@ -1,0 +1,12 @@
+error[E0277]: the trait bound `MyError: CompactPalletError` is not satisfied
+  --> $DIR/error_not_compact.rs:1:1
+   |
+1  | #[frame_support::pallet]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `CompactPalletError` is not implemented for `MyError`
+   |
+note: required by `check_compactness`
+  --> $DIR/error.rs:30:2
+   |
+30 |     fn check_compactness() -> bool { false }
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `frame_support::pallet` (in Nightly builds, run with -Z macro-backtrace for more info)

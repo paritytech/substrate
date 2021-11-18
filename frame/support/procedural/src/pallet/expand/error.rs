@@ -39,13 +39,21 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	);
 
-	let as_u8_matches = error.variants.iter().enumerate().map(
-		|(i, (variant, _))| quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,),
-	);
+	let as_u8_matches = error.variants.iter().enumerate().map(|(i, (variant, field_ty, _))| {
+		if field_ty.is_some() {
+			quote::quote_spanned!(error.attr_span => Self::#variant(..) => #i as u8,)
+		} else {
+			quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,)
+		}
+	});
 
-	let as_str_matches = error.variants.iter().map(|(variant, _)| {
+	let as_str_matches = error.variants.iter().map(|(variant, field_ty, _)| {
 		let variant_str = format!("{}", variant);
-		quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+		if field_ty.is_some() {
+			quote::quote_spanned!(error.attr_span => Self::#variant(..) => #variant_str,)
+		} else {
+			quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+		}
 	});
 
 	let error_item = {
@@ -74,6 +82,20 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			"]
 		));
 	}
+
+	let field_tys = error
+		.variants
+		.iter()
+		.filter_map(|(_, field_ty, _)| field_ty.as_ref())
+		.collect::<Vec<_>>();
+
+	let compactness_check = if field_tys.is_empty() {
+		quote::quote!(true)
+	} else {
+		quote::quote! {
+			#( <#field_tys as #frame_support::traits::CompactPalletError>::check_compactness() )&&*
+		}
+	};
 
 	quote::quote_spanned!(error.attr_span =>
 		impl<#type_impl_gen> #frame_support::sp_std::fmt::Debug for #error_ident<#type_use_gen>
@@ -127,6 +149,13 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 					message: Some(err.as_str()),
 				}
 			}
+		}
+
+		impl<#type_impl_gen> #frame_support::traits::CompactPalletError
+			for #error_ident<#type_use_gen>
+			#config_where_clause
+		{
+			fn check_compactness() -> bool { #compactness_check }
 		}
 	)
 }

@@ -30,8 +30,8 @@ mod keyword {
 pub struct ErrorDef {
 	/// The index of error item in pallet module.
 	pub index: usize,
-	/// Variants ident and doc literals (ordered as declaration order)
-	pub variants: Vec<(syn::Ident, Vec<syn::Lit>)>,
+	/// Variants ident, optional field and doc literals (ordered as declaration order)
+	pub variants: Vec<(syn::Ident, Option<syn::Type>, Vec<syn::Lit>)>,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The keyword error used (contains span).
@@ -70,16 +70,18 @@ impl ErrorDef {
 			.variants
 			.iter()
 			.map(|variant| {
-				match &variant.fields {
-					Fields::Unit => {},
-					Fields::Named(f) if f.named.len() < 2 => {},
-					Fields::Unnamed(u) if u.unnamed.len() < 2 => {},
+				let field_ty = match &variant.fields {
+					Fields::Unit => None,
+					Fields::Named(f) if f.named.len() == 1 =>
+						Some(f.named.first().unwrap().ty.clone()),
+					Fields::Unnamed(u) if u.unnamed.len() == 1 =>
+						Some(u.unnamed.first().unwrap().ty.clone()),
 					_ => {
 						let msg = "Invalid pallet::error, unexpected fields, must be `Unit` or \
 							contain only 1 field";
 						return Err(syn::Error::new(variant.fields.span(), msg))
 					},
-				}
+				};
 				if variant.discriminant.is_some() {
 					let msg = "Invalid pallet::error, unexpected discriminant, discriminants \
 						are not supported";
@@ -87,7 +89,7 @@ impl ErrorDef {
 					return Err(syn::Error::new(span, msg))
 				}
 
-				Ok((variant.ident.clone(), get_doc_literals(&variant.attrs)))
+				Ok((variant.ident.clone(), field_ty, get_doc_literals(&variant.attrs)))
 			})
 			.collect::<Result<_, _>>()?;
 

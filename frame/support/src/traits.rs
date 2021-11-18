@@ -45,6 +45,9 @@ pub use validation::{
 	ValidatorSetWithIdentification, VerifySeal,
 };
 
+mod error;
+pub use error::CompactPalletError;
+
 mod filter;
 pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
 
