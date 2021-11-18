@@ -82,7 +82,7 @@ pub type WsServer = WsServerHandle;
 
 /// Start HTTP server listening on given address.
 pub fn start_http<M: Send + Sync + 'static>(
-	addrs: [SocketAddr; 2],
+	addrs: &[SocketAddr],
 	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
 	module: RpcModule<M>,
@@ -99,8 +99,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 	if let Some(cors) = cors {
 		// Whitelist listening address.
 		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
-		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs[0].port()))?;
-		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs[1].port()))?;
+		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs))?;
 		acl = acl.set_allowed_origins(cors)?;
 	};
 
@@ -118,7 +117,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 /// Start WS server listening on given address.
 pub fn start_ws<M: Send + Sync + 'static>(
-	addrs: [SocketAddr; 2],
+	addrs: &[SocketAddr],
 	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
@@ -140,8 +139,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	if let Some(cors) = cors {
 		// Whitelist listening address.
 		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
-		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs[0].port()))?;
-		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs[1].port()))?;
+		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs))?;
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
@@ -153,8 +151,13 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	Ok(handle)
 }
 
-fn format_allowed_hosts(port: u16) -> [String; 2] {
-	[format!("localhost:{}", port), format!("127.0.0.1:{}", port)]
+fn format_allowed_hosts(addrs: &[SocketAddr]) -> Vec<String> {
+	let mut hosts = Vec::with_capacity(addrs.len() * 2);
+	for addr in addrs {
+		hosts.push(format!("localhost:{}", addr.port()));
+		hosts.push(format!("127.0.0.1:{}", addr.port()));
+	}
+	hosts
 }
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
