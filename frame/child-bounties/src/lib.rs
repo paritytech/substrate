@@ -241,7 +241,7 @@ pub mod pallet {
 				description.len() <= T::MaximumReasonLength::get() as usize,
 				BountiesError::<T>::ReasonTooBig,
 			);
-			ensure!(value >= T::ChildBountyValueMinimum::get(), BountiesError::<T>::InvalidValue,);
+			ensure!(value >= T::ChildBountyValueMinimum::get(), BountiesError::<T>::InvalidValue);
 			ensure!(
 				Self::parent_child_bounties(parent_bounty_id) <=
 					T::MaxActiveChildBountyCount::get() as u32,
@@ -751,7 +751,7 @@ pub mod pallet {
 			// Ensure parent bounty exist, get parent curator.
 			let (parent_curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
 
-			ensure!(maybe_sender.map_or(true, |sender| parent_curator == sender), BadOrigin,);
+			ensure!(maybe_sender.map_or(true, |sender| parent_curator == sender), BadOrigin);
 
 			Self::impl_close_child_bounty(parent_bounty_id, child_bounty_id)?;
 			Ok(())
