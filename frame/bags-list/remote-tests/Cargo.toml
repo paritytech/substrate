@@ -2,7 +2,7 @@
 name = "pallet-bags-list-remote-tests"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -33,5 +33,5 @@ remote-externalities = { path = "../../../utils/frame/remote-externalities", ver
 # others
 tokio = { version = "1", features = ["macros"] }
 log = "0.4.14"
-structopt = "0.3.23"
+structopt = "0.3.25"
 clap = "2.33.3"

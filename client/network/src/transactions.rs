@@ -336,13 +336,13 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 					},
 				);
 				debug_assert!(_was_in.is_none());
-			}
+			},
 			Event::NotificationStreamClosed { remote, protocol }
 				if protocol == self.protocol_name =>
 			{
 				let _peer = self.peers.remove(&remote);
 				debug_assert!(_peer.is_some());
-			}
+			},
 
 			Event::NotificationsReceived { remote, messages } => {
 				for (protocol, message) in messages {

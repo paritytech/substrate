@@ -27,35 +27,33 @@ use sc_client_db::{
 use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
 };
-use sc_service::client::{self, new_in_mem, Client, LocalCallExecutor};
+use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
-use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
+use sp_core::{testing::TaskExecutor, H256};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
-	ConsensusEngineId, DigestItem, Justifications,
+	ConsensusEngineId, Justifications,
 };
 use sp_state_machine::{
 	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
 };
 use sp_storage::{ChildInfo, StorageKey};
 use sp_trie::{trie_types::Layout, TrieConfiguration};
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{
-		self,
 		genesismap::{insert_genesis_block, GenesisConfig},
 		Block, BlockNumber, Digest, Hash, Header, RuntimeApi, Transfer,
 	},
 	AccountKeyring, BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
 	Sr25519Keyring, TestClientBuilder, TestClientBuilderExt,
 };
+
+mod db;
 
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
@@ -75,86 +73,6 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
 	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
-}
-
-pub fn prepare_client_with_key_changes() -> (
-	client::Client<
-		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::ExecutorDispatch,
-		Block,
-		RuntimeApi,
-	>,
-	Vec<H256>,
-	Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
-) {
-	// prepare block structure
-	let blocks_transfers = vec![
-		vec![
-			(AccountKeyring::Alice, AccountKeyring::Dave),
-			(AccountKeyring::Bob, AccountKeyring::Dave),
-		],
-		vec![(AccountKeyring::Charlie, AccountKeyring::Eve)],
-		vec![],
-		vec![(AccountKeyring::Alice, AccountKeyring::Dave)],
-	];
-
-	// prepare client ang import blocks
-	let mut local_roots = Vec::new();
-	let config = Some(ChangesTrieConfiguration::new(4, 2));
-	let mut remote_client = TestClientBuilder::new().changes_trie_config(config).build();
-	let mut nonces: HashMap<_, u64> = Default::default();
-	for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
-		let mut builder = remote_client.new_block(Default::default()).unwrap();
-		for (from, to) in block_transfers {
-			builder
-				.push_transfer(Transfer {
-					from: from.into(),
-					to: to.into(),
-					amount: 1,
-					nonce: *nonces.entry(from).and_modify(|n| *n = *n + 1).or_default(),
-				})
-				.unwrap();
-		}
-		let block = builder.build().unwrap().block;
-		block_on(remote_client.import(BlockOrigin::Own, block)).unwrap();
-
-		let header = remote_client.header(&BlockId::Number(i as u64 + 1)).unwrap().unwrap();
-		let trie_root = header
-			.digest()
-			.log(DigestItem::as_changes_trie_root)
-			.map(|root| H256::from_slice(root.as_ref()))
-			.unwrap();
-		local_roots.push(trie_root);
-	}
-
-	// prepare test cases
-	let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
-	let bob = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
-	let charlie =
-		blake2_256(&runtime::system::balance_of_key(AccountKeyring::Charlie.into())).to_vec();
-	let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
-	let eve = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
-	let ferdie =
-		blake2_256(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
-	let test_cases = vec![
-		(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
-		(1, 3, alice.clone(), vec![(1, 0)]),
-		(2, 4, alice.clone(), vec![(4, 0)]),
-		(2, 3, alice.clone(), vec![]),
-		(1, 4, bob.clone(), vec![(1, 1)]),
-		(1, 1, bob.clone(), vec![(1, 1)]),
-		(2, 4, bob.clone(), vec![]),
-		(1, 4, charlie.clone(), vec![(2, 0)]),
-		(1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
-		(1, 1, dave.clone(), vec![(1, 1), (1, 0)]),
-		(3, 4, dave.clone(), vec![(4, 0)]),
-		(1, 4, eve.clone(), vec![(2, 0)]),
-		(1, 1, eve.clone(), vec![]),
-		(3, 4, eve.clone(), vec![]),
-		(1, 4, ferdie.clone(), vec![]),
-	];
-
-	(remote_client, local_roots, test_cases)
 }
 
 fn construct_block(
@@ -184,7 +102,6 @@ fn construct_block(
 
 	StateMachine::new(
 		backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_initialize_block",
@@ -199,7 +116,6 @@ fn construct_block(
 	for tx in transactions.iter() {
 		StateMachine::new(
 			backend,
-			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_apply_extrinsic",
@@ -214,7 +130,6 @@ fn construct_block(
 
 	let ret_data = StateMachine::new(
 		backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"BlockBuilder_finalize_block",
@@ -248,7 +163,6 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 #[test]
 fn construct_genesis_should_work_with_native() {
 	let mut storage = GenesisConfig::new(
-		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000,
@@ -267,7 +181,6 @@ fn construct_genesis_should_work_with_native() {
 
 	let _ = StateMachine::new(
 		&backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_execute_block",
@@ -283,7 +196,6 @@ fn construct_genesis_should_work_with_native() {
 #[test]
 fn construct_genesis_should_work_with_wasm() {
 	let mut storage = GenesisConfig::new(
-		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000,
@@ -302,7 +214,6 @@ fn construct_genesis_should_work_with_wasm() {
 
 	let _ = StateMachine::new(
 		&backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_execute_block",
@@ -318,7 +229,6 @@ fn construct_genesis_should_work_with_wasm() {
 #[test]
 fn construct_genesis_with_bad_transaction_should_panic() {
 	let mut storage = GenesisConfig::new(
-		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		68,
@@ -337,7 +247,6 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 
 	let r = StateMachine::new(
 		&backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_execute_block",
@@ -907,23 +816,6 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 }
 
 #[test]
-fn key_changes_works() {
-	let (client, _, test_cases) = prepare_client_with_key_changes();
-
-	for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
-		let end = client.block_hash(end).unwrap().unwrap();
-		let actual_result =
-			client.key_changes(begin, BlockId::Hash(end), None, &StorageKey(key)).unwrap();
-		if actual_result != expected_result {
-			panic!(
-				"Failed test {}: actual = {:?}, expected = {:?}",
-				index, actual_result, expected_result,
-			);
-		}
-	}
-}
-
-#[test]
 fn import_with_justification() {
 	let mut client = substrate_test_runtime_client::new();
 
@@ -1229,12 +1121,8 @@ fn doesnt_import_blocks_that_revert_finality() {
 	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 	let import_err = block_on(client.import(BlockOrigin::Own, b3)).err().unwrap();
-	let expected_err = ConsensusError::ClientImport(
-		sp_blockchain::Error::RuntimeApiError(sp_api::ApiError::Application(Box::new(
-			sp_blockchain::Error::NotInFinalizedChain,
-		)))
-		.to_string(),
-	);
+	let expected_err =
+		ConsensusError::ClientImport(sp_blockchain::Error::NotInFinalizedChain.to_string());
 
 	assert_eq!(import_err.to_string(), expected_err.to_string());
 
@@ -1533,152 +1421,6 @@ fn returns_status_for_pruned_blocks() {
 	assert_eq!(
 		block_on(client.check_block(check_block_b1.clone())).unwrap(),
 		ImportResult::UnknownParent,
-	);
-}
-
-#[test]
-fn imports_blocks_with_changes_tries_config_change() {
-	// create client with initial 4^2 configuration
-	let mut client = TestClientBuilder::with_default_backend()
-		.changes_trie_config(Some(ChangesTrieConfiguration {
-			digest_interval: 4,
-			digest_levels: 2,
-		}))
-		.build();
-
-	// ===================================================================
-	// blocks 1,2,3,4,5,6,7,8,9,10 are empty
-	// block 11 changes the key
-	// block 12 is the L1 digest that covers this change
-	// blocks 13,14,15,16,17,18,19,20,21,22 are empty
-	// block 23 changes the configuration to 5^1 AND is skewed digest
-	// ===================================================================
-	// blocks 24,25 are changing the key
-	// block 26 is empty
-	// block 27 changes the key
-	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to
-	// `3^1`
-	// ===================================================================
-	// block 29 is empty
-	// block 30 changes the key
-	// block 31 is L1 digest that covers this change
-	// ===================================================================
-	(1..11).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(11..12).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(12..23).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(23..24).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_changes_trie_configuration_update(Some(ChangesTrieConfiguration {
-				digest_interval: 5,
-				digest_levels: 1,
-			}))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(24..26).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(26..27).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(27..28).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(28..29).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_changes_trie_configuration_update(Some(ChangesTrieConfiguration {
-				digest_interval: 3,
-				digest_levels: 1,
-			}))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(29..30).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(30..31).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(31..32).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-
-	// now check that configuration cache works
-	assert_eq!(
-		client.key_changes(1, BlockId::Number(31), None, &StorageKey(vec![42])).unwrap(),
-		vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
 	);
 }
 

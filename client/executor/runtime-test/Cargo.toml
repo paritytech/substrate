@@ -2,7 +2,7 @@
 name = "sc-runtime-test"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 publish = false
@@ -19,6 +19,7 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../..
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
 sp-tasks = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/tasks" }
+paste = "1.0.4"
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }

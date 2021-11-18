@@ -166,25 +166,25 @@ pub mod pallet {
 		T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
 			10
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(20));
 		}
 		fn on_runtime_upgrade() -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
 			30
 		}
 		fn integrity_test() {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 		}
 	}
 
@@ -200,8 +200,8 @@ pub mod pallet {
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
 		) -> DispatchResultWithPostInfo {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType3); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType3); // Test for where clause
 			let _ = origin;
 			Self::deposit_event(Event::Something(3));
 			Ok(().into())
@@ -268,7 +268,7 @@ pub mod pallet {
 	where
 		T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1,
 	{
-		T::AccountId::from(SomeType7); // Test where clause works
+		let _ = T::AccountId::from(SomeType7); // Test where clause works
 		4u16
 	}
 
@@ -352,8 +352,8 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>,
 	{
 		fn build(&self) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType4); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType4); // Test for where clause
 		}
 	}
 
@@ -370,8 +370,8 @@ pub mod pallet {
 	{
 		type Call = Call<T>;
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType5); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_transactional { .. }) {
 				return Ok(ValidTransaction::default())
 			}
@@ -390,8 +390,8 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType6); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType6); // Test for where clause
 			Some(Call::foo_no_post_info {})
 		}
 
