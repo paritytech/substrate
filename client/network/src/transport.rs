@@ -25,10 +25,8 @@ use libp2p::{
 		transport::{Boxed, OptionalTransport},
 		upgrade,
 	},
-	identity, mplex, noise, wasm_ext, PeerId, Transport,
+	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport,
 };
-#[cfg(not(target_os = "unknown"))]
-use libp2p::{dns, tcp, websocket};
 use std::{sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -51,36 +49,25 @@ pub use self::bandwidth::BandwidthSinks;
 pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
-	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	yamux_window_size: Option<u32>,
 	yamux_maximum_buffer_size: usize,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
-	let transport = if let Some(t) = wasm_external_transport {
-		OptionalTransport::some(t)
-	} else {
-		OptionalTransport::none()
-	};
-	#[cfg(not(target_os = "unknown"))]
-	let transport = transport.or_transport(if !memory_only {
+	let transport = if !memory_only {
 		let desktop_trans = tcp::TcpConfig::new().nodelay(true);
 		let desktop_trans =
 			websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
 		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans.clone()));
-		OptionalTransport::some(if let Ok(dns) = dns_init {
+		EitherTransport::Left(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
 		} else {
 			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
 		})
 	} else {
-		OptionalTransport::none()
-	});
-
-	let transport = transport.or_transport(if memory_only {
-		OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
-	} else {
-		OptionalTransport::none()
-	});
+		EitherTransport::Right(OptionalTransport::some(
+			libp2p::core::transport::MemoryTransport::default(),
+		))
+	};
 
 	let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
 

@@ -56,7 +56,7 @@ impl<T, C: Contains<T>> Filter<T> for C {
 	}
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 impl<T> Contains<T> for Tuple {
 	fn contains(t: &T) -> bool {
 		for_tuples!( #(
@@ -70,7 +70,7 @@ impl<T> Contains<T> for Tuple {
 /// to `matches!`.
 #[macro_export]
 macro_rules! match_type {
-	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
+	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat_param $( | $ptail:pat )* } ; ) => {
 		pub struct $n;
 		impl $crate::traits::Contains<$t> for $n {
 			fn contains(l: &$t) -> bool {

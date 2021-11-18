@@ -155,6 +155,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion};
 use sp_std::prelude::*;
 
@@ -176,7 +177,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// An active recovery process.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 	/// The block number when the recovery process started.
 	created: BlockNumber,
@@ -188,7 +189,7 @@ pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 }
 
 /// Configuration for recovering an account.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 	/// The minimum number of blocks since the start of the recovery process before the account
 	/// can be recovered.
@@ -260,7 +261,6 @@ pub mod pallet {
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// A recovery process has been set up for an \[account\].
 		RecoveryCreated(T::AccountId),

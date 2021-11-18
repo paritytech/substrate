@@ -19,8 +19,9 @@
 
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
+use sp_std::prelude::*;
 
-/// Provides information about the pallet setup in the runtime.
+/// Provides information about the pallet itself and its setup in the runtime.
 ///
 /// An implementor should be able to provide information about each pallet that
 /// is configured in `construct_runtime!`.
@@ -29,16 +30,81 @@ pub trait PalletInfo {
 	fn index<P: 'static>() -> Option<usize>;
 	/// Convert the given pallet `P` into its name as configured in the runtime.
 	fn name<P: 'static>() -> Option<&'static str>;
+	/// Convert the given pallet `P` into its Rust module name as used in `construct_runtime!`.
+	fn module_name<P: 'static>() -> Option<&'static str>;
+	/// Convert the given pallet `P` into its containing crate version.
+	fn crate_version<P: 'static>() -> Option<CrateVersion>;
 }
 
-/// Provides information about the pallet setup in the runtime.
+/// Information regarding an instance of a pallet.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug)]
+pub struct PalletInfoData {
+	/// Index of the pallet as configured in the runtime.
+	pub index: usize,
+	/// Name of the pallet as configured in the runtime.
+	pub name: &'static str,
+	/// Name of the Rust module containing the pallet.
+	pub module_name: &'static str,
+	/// Version of the crate containing the pallet.
+	pub crate_version: CrateVersion,
+}
+
+/// Provides information about the pallet itself and its setup in the runtime.
 ///
-/// Access the information provided by [`PalletInfo`] for a specific pallet.
+/// Declare some information and access the information provided by [`PalletInfo`] for a specific
+/// pallet.
 pub trait PalletInfoAccess {
 	/// Index of the pallet as configured in the runtime.
 	fn index() -> usize;
 	/// Name of the pallet as configured in the runtime.
 	fn name() -> &'static str;
+	/// Name of the Rust module containing the pallet.
+	fn module_name() -> &'static str;
+	/// Version of the crate containing the pallet.
+	fn crate_version() -> CrateVersion;
+}
+
+/// Provide information about a bunch of pallets.
+pub trait PalletsInfoAccess {
+	/// The number of pallets' information that this type represents.
+	///
+	/// You probably don't want this function but `infos()` instead.
+	fn count() -> usize {
+		0
+	}
+
+	/// Extend the given vector by all of the pallets' information that this type represents.
+	///
+	/// You probably don't want this function but `infos()` instead.
+	fn accumulate(_accumulator: &mut Vec<PalletInfoData>) {}
+
+	/// All of the pallets' information that this type represents.
+	fn infos() -> Vec<PalletInfoData> {
+		let mut result = Vec::with_capacity(Self::count());
+		Self::accumulate(&mut result);
+		result
+	}
+}
+
+impl PalletsInfoAccess for () {}
+impl<T: PalletsInfoAccess> PalletsInfoAccess for (T,) {
+	fn count() -> usize {
+		T::count()
+	}
+	fn accumulate(acc: &mut Vec<PalletInfoData>) {
+		T::accumulate(acc)
+	}
+}
+
+impl<T1: PalletsInfoAccess, T2: PalletsInfoAccess> PalletsInfoAccess for (T1, T2) {
+	fn count() -> usize {
+		T1::count() + T2::count()
+	}
+	fn accumulate(acc: &mut Vec<PalletInfoData>) {
+		// The AllPallets type tuplises the pallets in reverse order, so we unreverse them here.
+		T2::accumulate(acc);
+		T1::accumulate(acc);
+	}
 }
 
 /// The function and pallet name of the Call.
@@ -68,6 +134,37 @@ pub trait GetCallMetadata {
 	fn get_call_metadata(&self) -> CallMetadata;
 }
 
+/// The version of a crate.
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Clone, Copy, Default)]
+pub struct CrateVersion {
+	/// The major version of the crate.
+	pub major: u16,
+	/// The minor version of the crate.
+	pub minor: u8,
+	/// The patch version of the crate.
+	pub patch: u8,
+}
+
+impl CrateVersion {
+	pub const fn new(major: u16, minor: u8, patch: u8) -> Self {
+		Self { major, minor, patch }
+	}
+}
+
+impl sp_std::cmp::Ord for CrateVersion {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.major
+			.cmp(&other.major)
+			.then_with(|| self.minor.cmp(&other.minor).then_with(|| self.patch.cmp(&other.patch)))
+	}
+}
+
+impl sp_std::cmp::PartialOrd for CrateVersion {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		Some(<Self as Ord>::cmp(&self, other))
+	}
+}
+
 /// The storage key postfix that is used to store the [`StorageVersion`] per pallet.
 ///
 /// The full storage key is built by using:
@@ -92,15 +189,7 @@ impl StorageVersion {
 	/// See [`STORAGE_VERSION_STORAGE_KEY_POSTFIX`] on how this key is built.
 	pub fn storage_key<P: PalletInfoAccess>() -> [u8; 32] {
 		let pallet_name = P::name();
-
-		let pallet_name = sp_io::hashing::twox_128(pallet_name.as_bytes());
-		let postfix = sp_io::hashing::twox_128(STORAGE_VERSION_STORAGE_KEY_POSTFIX);
-
-		let mut final_key = [0u8; 32];
-		final_key[..16].copy_from_slice(&pallet_name);
-		final_key[16..].copy_from_slice(&postfix);
-
-		final_key
+		crate::storage::storage_prefix(pallet_name.as_bytes(), STORAGE_VERSION_STORAGE_KEY_POSTFIX)
 	}
 
 	/// Put this storage version for the given pallet into the storage.
@@ -173,6 +262,37 @@ pub trait GetStorageVersion {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	struct Pallet1;
+	impl PalletInfoAccess for Pallet1 {
+		fn index() -> usize {
+			1
+		}
+		fn name() -> &'static str {
+			"Pallet1"
+		}
+		fn module_name() -> &'static str {
+			"pallet1"
+		}
+		fn crate_version() -> CrateVersion {
+			CrateVersion::new(1, 0, 0)
+		}
+	}
+	struct Pallet2;
+	impl PalletInfoAccess for Pallet2 {
+		fn index() -> usize {
+			2
+		}
+		fn name() -> &'static str {
+			"Pallet2"
+		}
+		fn module_name() -> &'static str {
+			"pallet2"
+		}
+		fn crate_version() -> CrateVersion {
+			CrateVersion::new(1, 0, 0)
+		}
+	}
 
 	#[test]
 	fn check_storage_version_ordering() {

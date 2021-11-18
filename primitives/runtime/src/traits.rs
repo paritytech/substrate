@@ -19,7 +19,8 @@
 
 use crate::{
 	codec::{Codec, Decode, Encode, MaxEncodedLen},
-	generic::{Digest, DigestItem},
+	generic::Digest,
+	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
 		TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
 		ValidTransaction,
@@ -210,7 +211,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + Debug;
+	type Source: Codec + Clone + PartialEq + Debug + TypeInfo;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -222,7 +223,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + Debug> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug + TypeInfo> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> {
@@ -247,7 +248,7 @@ impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, Accoun
 where
 	AccountId: Codec + Clone + PartialEq + Debug,
 	AccountIndex: Codec + Clone + PartialEq + Debug,
-	crate::MultiAddress<AccountId, AccountIndex>: Codec,
+	crate::MultiAddress<AccountId, AccountIndex>: Codec + StaticTypeInfo,
 {
 	type Source = crate::MultiAddress<AccountId, AccountIndex>;
 	type Target = AccountId;
@@ -444,7 +445,8 @@ pub trait Hash:
 		+ Default
 		+ Encode
 		+ Decode
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ TypeInfo;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -464,7 +466,7 @@ pub trait Hash:
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
@@ -491,7 +493,7 @@ impl Hash for BlakeTwo256 {
 }
 
 /// Keccak-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Keccak256;
 
@@ -546,10 +548,7 @@ impl CheckEqual for sp_core::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H>
-where
-	H: Encode,
-{
+impl CheckEqual for super::generic::DigestItem {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -629,7 +628,8 @@ pub trait Header:
 		+ Codec
 		+ AsRef<[u8]>
 		+ AsMut<[u8]>
-		+ MaybeMallocSizeOf;
+		+ MaybeMallocSizeOf
+		+ TypeInfo;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -639,7 +639,7 @@ pub trait Header:
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Digest<Self::Hash>,
+		digest: Digest,
 	) -> Self;
 
 	/// Returns a reference to the header number.
@@ -663,9 +663,9 @@ pub trait Header:
 	fn set_parent_hash(&mut self, hash: Self::Hash);
 
 	/// Returns a reference to the digest.
-	fn digest(&self) -> &Digest<Self::Hash>;
+	fn digest(&self) -> &Digest;
 	/// Get a mutable reference to the digest.
-	fn digest_mut(&mut self) -> &mut Digest<Self::Hash>;
+	fn digest_mut(&mut self) -> &mut Digest;
 
 	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
@@ -697,7 +697,8 @@ pub trait Block:
 		+ Codec
 		+ AsRef<[u8]>
 		+ AsMut<[u8]>
-		+ MaybeMallocSizeOf;
+		+ MaybeMallocSizeOf
+		+ TypeInfo;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -759,9 +760,6 @@ pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
-pub type DigestFor<B> = Digest<<<B as Block>::Header as Header>::Hash>;
-/// Extract the digest item type for a block.
-pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -833,7 +831,9 @@ impl Dispatchable for () {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
+pub trait SignedExtension:
+	Codec + Debug + Sync + Send + Clone + Eq + PartialEq + StaticTypeInfo
+{
 	/// Unique identifier of this signed extension.
 	///
 	/// This will be exposed in the metadata to identify the signed extension used
@@ -848,7 +848,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
-	type AdditionalSigned: Encode;
+	type AdditionalSigned: Encode + TypeInfo;
 
 	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
 	type Pre: Default;
@@ -953,16 +953,31 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		Ok(())
 	}
 
-	/// Returns the list of unique identifier for this signed extension.
+	/// Returns the metadata for this signed extension.
 	///
 	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]s we need to return a `Vec`
-	/// that holds all the unique identifiers. Each individual `SignedExtension` must return
-	/// *exactly* one identifier.
+	/// that holds the metadata of each one. Each individual `SignedExtension` must return
+	/// *exactly* one [`SignedExtensionMetadata`].
 	///
-	/// This method provides a default implementation that returns `vec![SELF::IDENTIFIER]`.
-	fn identifier() -> Vec<&'static str> {
-		sp_std::vec![Self::IDENTIFIER]
+	/// This method provides a default implementation that returns a vec containing a single
+	/// [`SignedExtensionMetadata`].
+	fn metadata() -> Vec<SignedExtensionMetadata> {
+		sp_std::vec![SignedExtensionMetadata {
+			identifier: Self::IDENTIFIER,
+			ty: scale_info::meta_type::<Self>(),
+			additional_signed: scale_info::meta_type::<Self::AdditionalSigned>()
+		}]
 	}
+}
+
+/// Information about a [`SignedExtension`] for the runtime metadata.
+pub struct SignedExtensionMetadata {
+	/// The unique identifier of the [`SignedExtension`].
+	pub identifier: &'static str,
+	/// The type of the [`SignedExtension`].
+	pub ty: MetaType,
+	/// The type of the [`SignedExtension`] additional signed data for the payload.
+	pub additional_signed: MetaType,
 }
 
 #[impl_for_tuples(1, 12)]
@@ -1029,9 +1044,9 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		Ok(())
 	}
 
-	fn identifier() -> Vec<&'static str> {
+	fn metadata() -> Vec<SignedExtensionMetadata> {
 		let mut ids = Vec::new();
-		for_tuples!( #( ids.extend(Tuple::identifier()); )* );
+		for_tuples!( #( ids.extend(Tuple::metadata()); )* );
 		ids
 	}
 }
@@ -1305,6 +1320,7 @@ macro_rules! impl_opaque_keys_inner {
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
+			$crate::scale_info::TypeInfo,
 			$crate::RuntimeDebug,
 		)]
 		pub struct $name {
@@ -1452,6 +1468,7 @@ macro_rules! impl_opaque_keys {
 
 #[macro_export]
 #[cfg(not(feature = "std"))]
+#[doc(hidden)]
 macro_rules! impl_opaque_keys {
 	{
 		$( #[ $attr:meta ] )*
@@ -1585,6 +1602,14 @@ pub trait BlockNumberProvider {
 	/// ```
 	/// .
 	fn current_block_number() -> Self::BlockNumber;
+
+	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
+	/// else a noop.
+	///
+	/// It allows for setting the block number that will later be fetched
+	/// This is useful in case the block number provider is different than System
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_block_number(_block: Self::BlockNumber) {}
 }
 
 #[cfg(test)]

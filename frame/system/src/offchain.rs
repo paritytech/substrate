@@ -62,11 +62,7 @@ use sp_runtime::{
 	app_crypto::RuntimeAppPublic,
 	traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One},
 };
-use sp_std::{
-	collections::btree_set::BTreeSet,
-	convert::{TryFrom, TryInto},
-	prelude::{Box, Vec},
-};
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}
@@ -453,10 +449,11 @@ pub trait SigningTypes: crate::Config {
 		+ IdentifyAccount<AccountId = Self::AccountId>
 		+ core::fmt::Debug
 		+ codec::Codec
-		+ Ord;
+		+ Ord
+		+ scale_info::TypeInfo;
 
 	/// A matching `Signature` type.
-	type Signature: Clone + PartialEq + core::fmt::Debug + codec::Codec;
+	type Signature: Clone + PartialEq + core::fmt::Debug + codec::Codec + scale_info::TypeInfo;
 }
 
 /// A definition of types required to submit transactions from within the runtime.

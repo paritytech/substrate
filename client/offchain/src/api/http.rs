@@ -28,14 +28,15 @@
 //! actively calling any function.
 
 use crate::api::timestamp;
-use bytes::buf::ext::{BufExt, Reader};
+use bytes::buf::{Buf, Reader};
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, future, prelude::*};
 use hyper::{client, Body, Client as HyperClient};
 use hyper_rustls::HttpsConnector;
 use log::error;
+use once_cell::sync::Lazy;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	convert::TryFrom,
 	fmt,
@@ -47,11 +48,13 @@ use std::{
 
 /// Wrapper struct used for keeping the hyper_rustls client running.
 #[derive(Clone)]
-pub struct SharedClient(Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>);
+pub struct SharedClient(Arc<Lazy<HyperClient<HttpsConnector<client::HttpConnector>, Body>>>);
 
 impl SharedClient {
 	pub fn new() -> Self {
-		Self(Arc::new(HyperClient::builder().build(HttpsConnector::new())))
+		Self(Arc::new(Lazy::new(|| {
+			HyperClient::builder().build(HttpsConnector::with_native_roots())
+		})))
 	}
 }
 
@@ -219,7 +222,7 @@ impl HttpApi {
 					HttpApiRequest::Dispatched(Some(sender))
 				},
 
-				HttpApiRequest::Dispatched(Some(mut sender)) =>
+				HttpApiRequest::Dispatched(Some(mut sender)) => {
 					if !chunk.is_empty() {
 						match poll_sender(&mut sender) {
 							Err(HttpError::IoError) => return Err(HttpError::IoError),
@@ -234,11 +237,12 @@ impl HttpApi {
 						// the sender.
 						self.requests.insert(request_id, HttpApiRequest::Dispatched(None));
 						return Ok(())
-					},
+					}
+				},
 
 				HttpApiRequest::Response(
 					mut response @ HttpApiRequestRp { sending_body: Some(_), .. },
-				) =>
+				) => {
 					if !chunk.is_empty() {
 						match poll_sender(
 							response
@@ -264,7 +268,8 @@ impl HttpApi {
 							}),
 						);
 						return Ok(())
-					},
+					}
+				},
 
 				HttpApiRequest::Fail(_) =>
 				// If the request has already failed, return without putting back the request
@@ -368,7 +373,7 @@ impl HttpApi {
 
 			// Update internal state based on received message.
 			match next_message {
-				Some(WorkerToApi::Response { id, status_code, headers, body }) =>
+				Some(WorkerToApi::Response { id, status_code, headers, body }) => {
 					match self.requests.remove(&id) {
 						Some(HttpApiRequest::Dispatched(sending_body)) => {
 							self.requests.insert(
@@ -384,7 +389,8 @@ impl HttpApi {
 						},
 						None => {}, // can happen if we detected an IO error when sending the body
 						_ => error!("State mismatch between the API and worker"),
-					},
+					}
+				},
 
 				Some(WorkerToApi::Fail { id, error }) => match self.requests.remove(&id) {
 					Some(HttpApiRequest::Dispatched(_)) => {
@@ -564,7 +570,7 @@ pub struct HttpWorker {
 	/// Used to receive messages from the `HttpApi`.
 	from_api: TracingUnboundedReceiver<ApiToWorker>,
 	/// The engine that runs HTTP requests.
-	http_client: Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>,
+	http_client: Arc<Lazy<HyperClient<HttpsConnector<client::HttpConnector>, Body>>>,
 	/// HTTP requests that are being worked on by the engine.
 	requests: Vec<(HttpRequestId, HttpWorkerRequest)>,
 }
@@ -694,12 +700,15 @@ impl fmt::Debug for HttpWorkerRequest {
 
 #[cfg(test)]
 mod tests {
-	use super::{http, SharedClient};
+	use super::{
+		super::{tests::TestNetwork, AsyncApi},
+		*,
+	};
 	use crate::api::timestamp;
 	use core::convert::Infallible;
-	use futures::future;
+	use futures::{future, StreamExt};
 	use lazy_static::lazy_static;
-	use sp_core::offchain::{Duration, HttpError, HttpRequestId, HttpRequestStatus};
+	use sp_core::offchain::{Duration, Externalities, HttpError, HttpRequestId, HttpRequestStatus};
 
 	// Using lazy_static to avoid spawning lots of different SharedClients,
 	// as spawning a SharedClient is CPU-intensive and opens lots of fds.
@@ -716,13 +725,17 @@ mod tests {
 
 			let (addr_tx, addr_rx) = std::sync::mpsc::channel();
 			std::thread::spawn(move || {
-				let mut rt = tokio::runtime::Runtime::new().unwrap();
+				let rt = tokio::runtime::Runtime::new().unwrap();
 				let worker = rt.spawn(worker);
 				let server = rt.spawn(async move {
 					let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap()).serve(
 						hyper::service::make_service_fn(|_| async move {
 							Ok::<_, Infallible>(hyper::service::service_fn(
-								move |_req| async move {
+								move |req: hyper::Request<hyper::Body>| async move {
+									// Wait until the complete request was received and processed,
+									// otherwise the tests are flaky.
+									let _ = req.into_body().collect::<Vec<_>>().await;
+
 									Ok::<_, Infallible>(hyper::Response::new(hyper::Body::from(
 										"Hello World!",
 									)))
@@ -998,5 +1011,38 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	fn shared_http_client_is_only_initialized_on_access() {
+		let shared_client = SharedClient::new();
+
+		{
+			let mock = Arc::new(TestNetwork());
+			let (mut api, async_api) = AsyncApi::new(mock, false, shared_client.clone());
+			api.timestamp();
+
+			futures::executor::block_on(async move {
+				assert!(futures::poll!(async_api.process()).is_pending());
+			});
+		}
+
+		// Check that the http client wasn't initialized, because it wasn't used.
+		assert!(Lazy::into_value(Arc::try_unwrap(shared_client.0).unwrap()).is_err());
+
+		let shared_client = SharedClient::new();
+
+		{
+			let mock = Arc::new(TestNetwork());
+			let (mut api, async_api) = AsyncApi::new(mock, false, shared_client.clone());
+			let id = api.http_request_start("lol", "nope", &[]).unwrap();
+			api.http_request_write_body(id, &[], None).unwrap();
+			futures::executor::block_on(async move {
+				assert!(futures::poll!(async_api.process()).is_pending());
+			});
+		}
+
+		// Check that the http client initialized, because it was used.
+		assert!(Lazy::into_value(Arc::try_unwrap(shared_client.0).unwrap()).is_ok());
 	}
 }

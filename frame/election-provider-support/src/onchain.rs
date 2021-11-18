@@ -18,7 +18,7 @@
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
 use crate::{ElectionDataProvider, ElectionProvider};
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -54,13 +54,11 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 /// Configuration trait of [`OnChainSequentialPhragmen`].
 ///
 /// Note that this is similar to a pallet traits, but [`OnChainSequentialPhragmen`] is not a pallet.
-pub trait Config {
-	/// The block limits.
-	type BlockWeights: Get<frame_system::limits::BlockWeights>;
-	/// The account identifier type.
-	type AccountId: IdentifierT;
-	/// The block number type.
-	type BlockNumber;
+///
+/// WARNING: the user of this pallet must ensure that the `Accuracy` type will work nicely with the
+/// normalization operation done inside `seq_phragmen`. See
+/// [`sp_npos_elections::assignment::try_normalize`] for more info.
+pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
 	/// Something that provides the data for election.
@@ -71,48 +69,85 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
-		let (voters, _) = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
-		let (targets, _) = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
-		let (desired_targets, _) =
-			Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+		let voters = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
+		let targets = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
+		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
-		let mut stake_map: BTreeMap<T::AccountId, VoteWeight> = BTreeMap::new();
-
-		voters.iter().for_each(|(v, s, _)| {
-			stake_map.insert(v.clone(), *s);
-		});
+		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
+			.iter()
+			.map(|(validator, vote_weight, _)| (validator.clone(), *vote_weight))
+			.collect();
 
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners, assignments } =
+		let ElectionResult { winners: _, assignments } =
 			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
 				.map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
-		let winners = to_without_backing(winners);
 
-		to_supports(&winners, &staked)
-			.map_err(Error::from)
-			.map(|s| (s, T::BlockWeights::get().max_block))
+		let weight = T::BlockWeights::get().max_block;
+		frame_system::Pallet::<T>::register_extra_weight_unchecked(
+			weight,
+			DispatchClass::Mandatory,
+		);
+
+		Ok(to_supports(&staked))
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::weights::Weight;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 
 	type AccountId = u64;
-	type BlockNumber = u32;
-	struct Runtime;
-	impl Config for Runtime {
-		type BlockWeights = ();
-		type AccountId = AccountId;
+	type BlockNumber = u64;
+
+	pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
+	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, (), (), ()>;
+	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+
+	frame_support::construct_runtime!(
+		pub enum Runtime where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic
+		{
+			System: frame_system::{Pallet, Call, Event<T>},
+		}
+	);
+
+	impl frame_system::Config for Runtime {
+		type SS58Prefix = ();
+		type BaseCallFilter = frame_support::traits::Everything;
+		type Origin = Origin;
+		type Index = AccountId;
 		type BlockNumber = BlockNumber;
+		type Call = Call;
+		type Hash = sp_core::H256;
+		type Hashing = sp_runtime::traits::BlakeTwo256;
+		type AccountId = AccountId;
+		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
+		type Header = sp_runtime::testing::Header;
+		type Event = ();
+		type BlockHashCount = ();
+		type DbWeight = ();
+		type BlockLength = ();
+		type BlockWeights = ();
+		type Version = ();
+		type PalletInfo = PalletInfo;
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
+		type OnSetCode = ();
+	}
+
+	impl Config for Runtime {
 		type Accuracy = Perbill;
 		type DataProvider = mock_data_provider::DataProvider;
 	}
@@ -124,21 +159,20 @@ mod tests {
 		use crate::data_provider;
 
 		pub struct DataProvider;
-
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
 			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
 			fn voters(
 				_: Option<usize>,
-			) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
-				Ok((vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])], 0))
+			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
+				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])])
 			}
 
-			fn targets(_: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
-				Ok((vec![10, 20, 30], 0))
+			fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+				Ok(vec![10, 20, 30])
 			}
 
-			fn desired_targets() -> data_provider::Result<(u32, Weight)> {
-				Ok((2, 0))
+			fn desired_targets() -> data_provider::Result<u32> {
+				Ok(2)
 			}
 
 			fn next_election_prediction(_: BlockNumber) -> BlockNumber {
@@ -149,12 +183,14 @@ mod tests {
 
 	#[test]
 	fn onchain_seq_phragmen_works() {
-		assert_eq!(
-			OnChainPhragmen::elect().unwrap().0,
-			vec![
-				(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
-				(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
-			]
-		);
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(
+				OnChainPhragmen::elect().unwrap(),
+				vec![
+					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
+					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
+				]
+			);
+		})
 	}
 }

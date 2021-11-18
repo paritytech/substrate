@@ -23,13 +23,12 @@
 
 pub use crate::{
 	chain::Client,
-	on_demand_layer::{AlwaysBadChecker, OnDemand},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
 	warp_request_handler::WarpSyncProvider,
 };
-pub use libp2p::{build_multiaddr, core::PublicKey, identity, wasm_ext::ExtTransport};
+pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.
@@ -42,7 +41,7 @@ use core::{fmt, iter};
 use futures::future;
 use libp2p::{
 	identity::{ed25519, Keypair},
-	multiaddr, wasm_ext, Multiaddr, PeerId,
+	multiaddr, Multiaddr, PeerId,
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
@@ -82,11 +81,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
-
-	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
-	/// If `Some`, the network worker will process these requests and answer them.
-	/// Normally used only for light clients.
-	pub on_demand: Option<Arc<OnDemand<B>>>,
 
 	/// Pool of transactions.
 	///
@@ -155,23 +149,23 @@ pub enum Role {
 }
 
 impl Role {
-	/// True for `Role::Authority`
+	/// True for [`Role::Authority`].
 	pub fn is_authority(&self) -> bool {
-		matches!(self, Role::Authority { .. })
+		matches!(self, Self::Authority { .. })
 	}
 
-	/// True for `Role::Light`
+	/// True for [`Role::Light`].
 	pub fn is_light(&self) -> bool {
-		matches!(self, Role::Light { .. })
+		matches!(self, Self::Light { .. })
 	}
 }
 
 impl fmt::Display for Role {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Role::Full => write!(f, "FULL"),
-			Role::Light => write!(f, "LIGHT"),
-			Role::Authority { .. } => write!(f, "AUTHORITY"),
+			Self::Full => write!(f, "FULL"),
+			Self::Light => write!(f, "LIGHT"),
+			Self::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}
 }
@@ -242,7 +236,7 @@ pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
 impl<'a> From<&'a str> for ProtocolId {
 	fn from(bytes: &'a str) -> ProtocolId {
-		ProtocolId(bytes.as_bytes().into())
+		Self(bytes.as_bytes().into())
 	}
 }
 
@@ -313,7 +307,7 @@ pub struct MultiaddrWithPeerId {
 impl MultiaddrWithPeerId {
 	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
 	pub fn concat(&self) -> Multiaddr {
-		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id.clone()));
+		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id));
 		self.multiaddr.clone().with(proto)
 	}
 }
@@ -329,7 +323,7 @@ impl FromStr for MultiaddrWithPeerId {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let (peer_id, multiaddr) = parse_str_addr(s)?;
-		Ok(MultiaddrWithPeerId { peer_id, multiaddr })
+		Ok(Self { peer_id, multiaddr })
 	}
 }
 
@@ -360,9 +354,9 @@ pub enum ParseErr {
 impl fmt::Display for ParseErr {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			ParseErr::MultiaddrParse(err) => write!(f, "{}", err),
-			ParseErr::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
-			ParseErr::PeerIdMissing => write!(f, "Peer id is missing from the address"),
+			Self::MultiaddrParse(err) => write!(f, "{}", err),
+			Self::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
+			Self::PeerIdMissing => write!(f, "Peer id is missing from the address"),
 		}
 	}
 }
@@ -370,16 +364,16 @@ impl fmt::Display for ParseErr {
 impl std::error::Error for ParseErr {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			ParseErr::MultiaddrParse(err) => Some(err),
-			ParseErr::InvalidPeerId => None,
-			ParseErr::PeerIdMissing => None,
+			Self::MultiaddrParse(err) => Some(err),
+			Self::InvalidPeerId => None,
+			Self::PeerIdMissing => None,
 		}
 	}
 }
 
 impl From<multiaddr::Error> for ParseErr {
 	fn from(err: multiaddr::Error) -> ParseErr {
-		ParseErr::MultiaddrParse(err)
+		Self::MultiaddrParse(err)
 	}
 }
 
@@ -401,7 +395,7 @@ pub enum SyncMode {
 
 impl Default for SyncMode {
 	fn default() -> Self {
-		SyncMode::Full
+		Self::Full
 	}
 }
 
@@ -479,7 +473,7 @@ impl NetworkConfiguration {
 		node_key: NodeKeyConfig,
 		net_config_path: Option<PathBuf>,
 	) -> Self {
-		NetworkConfiguration {
+		Self {
 			net_config_path,
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
@@ -490,11 +484,7 @@ impl NetworkConfiguration {
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
-			transport: TransportConfig::Normal {
-				enable_mdns: false,
-				allow_private_ipv4: true,
-				wasm_external_transport: None,
-			},
+			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true },
 			max_parallel_downloads: 5,
 			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,
@@ -552,7 +542,7 @@ pub struct SetConfig {
 
 impl Default for SetConfig {
 	fn default() -> Self {
-		SetConfig {
+		Self {
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -589,7 +579,7 @@ pub struct NonDefaultSetConfig {
 impl NonDefaultSetConfig {
 	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
 	pub fn new(notifications_protocol: Cow<'static, str>, max_notification_size: u64) -> Self {
-		NonDefaultSetConfig {
+		Self {
 			notifications_protocol,
 			max_notification_size,
 			fallback_names: Vec::new(),
@@ -628,14 +618,6 @@ pub enum TransportConfig {
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
 		/// been passed in [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
-
-		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
-		/// need some binding between the networking provided by the operating system or
-		/// environment and libp2p.
-		///
-		/// This parameter exists whatever the target platform is, but it is expected to be set to
-		/// `Some` only when compiling for WASM.
-		wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	},
 
 	/// Only allow connections within the same process.
@@ -656,8 +638,8 @@ impl NonReservedPeerMode {
 	/// Attempt to parse the peer mode from a string.
 	pub fn parse(s: &str) -> Option<Self> {
 		match s {
-			"accept" => Some(NonReservedPeerMode::Accept),
-			"deny" => Some(NonReservedPeerMode::Deny),
+			"accept" => Some(Self::Accept),
+			"deny" => Some(Self::Deny),
 			_ => None,
 		}
 	}
@@ -674,7 +656,7 @@ pub enum NodeKeyConfig {
 
 impl Default for NodeKeyConfig {
 	fn default() -> NodeKeyConfig {
-		NodeKeyConfig::Ed25519(Secret::New)
+		Self::Ed25519(Secret::New)
 	}
 }
 
@@ -699,9 +681,9 @@ pub enum Secret<K> {
 impl<K> fmt::Debug for Secret<K> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Secret::Input(_) => f.debug_tuple("Secret::Input").finish(),
-			Secret::File(path) => f.debug_tuple("Secret::File").field(path).finish(),
-			Secret::New => f.debug_tuple("Secret::New").finish(),
+			Self::Input(_) => f.debug_tuple("Secret::Input").finish(),
+			Self::File(path) => f.debug_tuple("Secret::File").field(path).finish(),
+			Self::New => f.debug_tuple("Secret::New").finish(),
 		}
 	}
 }

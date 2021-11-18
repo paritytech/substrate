@@ -103,9 +103,7 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE}
 use sp_api::{ApiExt, NumberFor, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{
-	Error as ClientError, HeaderBackend, HeaderMetadata, ProvideCache, Result as ClientResult,
-};
+use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain, SlotData,
@@ -117,7 +115,8 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, DigestItemFor, Header, Zero},
+	traits::{Block as BlockT, Header, Zero},
+	DigestItem,
 };
 
 pub use sc_consensus_slots::SlotProportion;
@@ -465,7 +464,6 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
-		+ ProvideCache<B>
 		+ ProvideUncles<B>
 		+ BlockchainEvents<B>
 		+ HeaderBackend<B>
@@ -485,7 +483,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
@@ -539,7 +537,6 @@ async fn answer_requests<B: BlockT, C>(
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 ) where
 	C: ProvideRuntimeApi<B>
-		+ ProvideCache<B>
 		+ ProvideUncles<B>
 		+ BlockchainEvents<B>
 		+ HeaderBackend<B>
@@ -672,21 +669,19 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	telemetry: Option<TelemetryHandle>,
 }
 
+#[async_trait::async_trait]
 impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B>
-		+ ProvideCache<B>
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = ClientError>,
+	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
-	E: Environment<B, Error = Error>,
+	E: Environment<B, Error = Error> + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	SO: SyncOracle + Send + Clone,
+	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Sync,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
@@ -730,7 +725,7 @@ where
 			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
-	fn claim_slot(
+	async fn claim_slot(
 		&self,
 		_parent_header: &B::Header,
 		slot: Slot,
@@ -773,12 +768,8 @@ where
 		});
 	}
 
-	fn pre_digest_data(
-		&self,
-		_slot: Slot,
-		claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
-		vec![<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone())]
+	fn pre_digest_data(&self, _slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
+		vec![<DigestItem as CompatibleDigestItem>::babe_pre_digest(claim.0.clone())]
 	}
 
 	fn block_import_params(
@@ -819,8 +810,7 @@ where
 					.clone()
 					.try_into()
 					.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-				let digest_item =
-					<DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature.into());
+				let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
 
 				let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 				import_block.post_digests.push(digest_item);
@@ -920,10 +910,7 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 /// Extract the BABE epoch change digest from the given header, if it exists.
 fn find_next_epoch_digest<B: BlockT>(
 	header: &B::Header,
-) -> Result<Option<NextEpochDescriptor>, Error<B>>
-where
-	DigestItemFor<B>: CompatibleDigestItem,
-{
+) -> Result<Option<NextEpochDescriptor>, Error<B>> {
 	let mut epoch_digest: Option<_> = None;
 	for log in header.digest().logs() {
 		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
@@ -942,10 +929,7 @@ where
 /// Extract the BABE config change digest from the given header, if it exists.
 fn find_next_config_digest<B: BlockT>(
 	header: &B::Header,
-) -> Result<Option<NextConfigDescriptor>, Error<B>>
-where
-	DigestItemFor<B>: CompatibleDigestItem,
-{
+) -> Result<Option<NextConfigDescriptor>, Error<B>> {
 	let mut config_digest: Option<_> = None;
 	for log in header.digest().logs() {
 		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
@@ -1131,8 +1115,7 @@ where
 		+ ProvideRuntimeApi<Block>
 		+ Send
 		+ Sync
-		+ AuxStore
-		+ ProvideCache<Block>,
+		+ AuxStore,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
@@ -1331,7 +1314,6 @@ where
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ AuxStore
 		+ ProvideRuntimeApi<Block>
-		+ ProvideCache<Block>
 		+ Send
 		+ Sync,
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
@@ -1398,7 +1380,6 @@ where
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ AuxStore
 		+ ProvideRuntimeApi<Block>
-		+ ProvideCache<Block>
 		+ Send
 		+ Sync,
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
@@ -1577,8 +1558,12 @@ where
 							*block.header.parent_hash(),
 							next_epoch,
 						)
-						.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
-
+						.map_err(|e| {
+							ConsensusError::ClientImport(format!(
+								"Error importing epoch changes: {:?}",
+								e
+							))
+						})?;
 					Ok(())
 				};
 
@@ -1666,6 +1651,9 @@ where
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	let info = client.info();
+	if info.block_gap.is_none() {
+		epoch_changes.clear_gap();
+	}
 
 	let finalized_slot = {
 		let finalized_header = client
@@ -1748,7 +1736,6 @@ where
 		+ Sync
 		+ 'static,
 	Client: ProvideRuntimeApi<Block>
-		+ ProvideCache<Block>
 		+ HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ AuxStore

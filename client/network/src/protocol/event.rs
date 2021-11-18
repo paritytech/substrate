@@ -117,6 +117,6 @@ pub enum ObservedRole {
 impl ObservedRole {
 	/// Returns `true` for `ObservedRole::Light`.
 	pub fn is_light(&self) -> bool {
-		matches!(self, ObservedRole::Light)
+		matches!(self, Self::Light)
 	}
 }

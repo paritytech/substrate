@@ -26,7 +26,8 @@ use crate::{
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
 };
-use codec::{Decode, Encode, EncodeLike, Error, Input};
+use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
+use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo, TypeParameter};
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
@@ -46,6 +47,40 @@ where
 	pub signature: Option<(Address, Signature, Extra)>,
 	/// The function that should be called.
 	pub function: Call,
+}
+
+/// Manual [`TypeInfo`] implementation because of custom encoding. The data is a valid encoded
+/// `Vec<u8>`, but requires some logic to extract the signature and payload.
+///
+/// See [`UncheckedExtrinsic::encode`] and [`UncheckedExtrinsic::decode`].
+impl<Address, Call, Signature, Extra> TypeInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Address: StaticTypeInfo,
+	Call: StaticTypeInfo,
+	Signature: StaticTypeInfo,
+	Extra: SignedExtension + StaticTypeInfo,
+{
+	type Identity = UncheckedExtrinsic<Address, Call, Signature, Extra>;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("UncheckedExtrinsic", module_path!()))
+			// Include the type parameter types, even though they are not used directly in any of
+			// the described fields. These type definitions can be used by downstream consumers
+			// to help construct the custom decoding from the opaque bytes (see below).
+			.type_params(vec![
+				TypeParameter::new("Address", Some(meta_type::<Address>())),
+				TypeParameter::new("Call", Some(meta_type::<Call>())),
+				TypeParameter::new("Signature", Some(meta_type::<Signature>())),
+				TypeParameter::new("Extra", Some(meta_type::<Extra>())),
+			])
+			.docs(&["UncheckedExtrinsic raw bytes, requires custom decoding routine"])
+			// Because of the custom encoding, we can only accurately describe the encoding as an
+			// opaque `Vec<u8>`. Downstream consumers will need to manually implement the codec to
+			// encode/decode the `signature` and `function` fields.
+			.composite(Fields::unnamed().field(|f| f.ty::<Vec<u8>>()))
+	}
 }
 
 #[cfg(feature = "std")]
@@ -203,7 +238,7 @@ where
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of vector length (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
+		let _length_do_not_remove_me_see_above: Compact<u32> = Decode::decode(input)?;
 
 		let version = input.read_byte()?;
 
@@ -340,7 +375,7 @@ mod tests {
 	const TEST_ACCOUNT: TestAccountId = 0;
 
 	// NOTE: this is demonstration. One can simply use `()` for testing.
-	#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
+	#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, TypeInfo)]
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		const IDENTIFIER: &'static str = "TestExtra";
@@ -445,5 +480,14 @@ mod tests {
 		let opaque: OpaqueExtrinsic = ux.into();
 		let opaque_encoded = opaque.encode();
 		assert_eq!(opaque_encoded, encoded);
+	}
+
+	#[test]
+	fn large_bad_prefix_should_work() {
+		let encoded = Compact::<u32>::from(u32::MAX).encode();
+		assert_eq!(
+			Ex::decode(&mut &encoded[..]),
+			Err(Error::from("Not enough data to fill buffer"))
+		);
 	}
 }

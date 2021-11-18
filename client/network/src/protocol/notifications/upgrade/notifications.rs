@@ -38,7 +38,7 @@ use asynchronous_codec::Framed;
 use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
-use log::error;
+use log::{error, warn};
 use std::{
 	borrow::Cow,
 	convert::{Infallible, TryFrom as _},
@@ -121,7 +121,7 @@ impl NotificationsIn {
 		let mut protocol_names = fallback_names;
 		protocol_names.insert(0, main_protocol_name.into());
 
-		NotificationsIn { protocol_names, max_notification_size }
+		Self { protocol_names, max_notification_size }
 	}
 }
 
@@ -218,7 +218,7 @@ where
 
 		loop {
 			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
-				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+				NotificationsInSubstreamHandshake::PendingSend(msg) => {
 					match Sink::poll_ready(this.socket.as_mut(), cx) {
 						Poll::Ready(_) => {
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
@@ -231,8 +231,9 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg);
 							return Poll::Pending
 						},
-					},
-				NotificationsInSubstreamHandshake::Flush =>
+					}
+				},
+				NotificationsInSubstreamHandshake::Flush => {
 					match Sink::poll_flush(this.socket.as_mut(), cx)? {
 						Poll::Ready(()) =>
 							*this.handshake = NotificationsInSubstreamHandshake::Sent,
@@ -240,7 +241,8 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
 							return Poll::Pending
 						},
-					},
+					}
+				},
 
 				st @ NotificationsInSubstreamHandshake::NotSent |
 				st @ NotificationsInSubstreamHandshake::Sent |
@@ -270,7 +272,7 @@ where
 					*this.handshake = NotificationsInSubstreamHandshake::NotSent;
 					return Poll::Pending
 				},
-				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+				NotificationsInSubstreamHandshake::PendingSend(msg) => {
 					match Sink::poll_ready(this.socket.as_mut(), cx) {
 						Poll::Ready(_) => {
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
@@ -283,8 +285,9 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg);
 							return Poll::Pending
 						},
-					},
-				NotificationsInSubstreamHandshake::Flush =>
+					}
+				},
+				NotificationsInSubstreamHandshake::Flush => {
 					match Sink::poll_flush(this.socket.as_mut(), cx)? {
 						Poll::Ready(()) =>
 							*this.handshake = NotificationsInSubstreamHandshake::Sent,
@@ -292,7 +295,8 @@ where
 							*this.handshake = NotificationsInSubstreamHandshake::Flush;
 							return Poll::Pending
 						},
-					},
+					}
+				},
 
 				NotificationsInSubstreamHandshake::Sent => {
 					match Stream::poll_next(this.socket.as_mut(), cx) {
@@ -343,7 +347,7 @@ impl NotificationsOut {
 		let mut protocol_names = fallback_names;
 		protocol_names.insert(0, main_protocol_name.into());
 
-		NotificationsOut { protocol_names, initial_message, max_notification_size }
+		Self { protocol_names, initial_message, max_notification_size }
 	}
 }
 
@@ -381,7 +385,7 @@ where
 
 	fn upgrade_outbound(self, mut socket: TSubstream, negotiated_name: Self::Info) -> Self::Future {
 		Box::pin(async move {
-			upgrade::write_with_len_prefix(&mut socket, &self.initial_message).await?;
+			upgrade::write_length_prefixed(&mut socket, &self.initial_message).await?;
 
 			// Reading handshake.
 			let handshake_len = unsigned_varint::aio::read_usize(&mut socket).await?;
@@ -474,12 +478,11 @@ pub enum NotificationsHandshakeError {
 impl From<unsigned_varint::io::ReadError> for NotificationsHandshakeError {
 	fn from(err: unsigned_varint::io::ReadError) -> Self {
 		match err {
-			unsigned_varint::io::ReadError::Io(err) => NotificationsHandshakeError::Io(err),
-			unsigned_varint::io::ReadError::Decode(err) =>
-				NotificationsHandshakeError::VarintDecode(err),
+			unsigned_varint::io::ReadError::Io(err) => Self::Io(err),
+			unsigned_varint::io::ReadError::Decode(err) => Self::VarintDecode(err),
 			_ => {
-				log::warn!("Unrecognized varint decoding error");
-				NotificationsHandshakeError::Io(From::from(io::ErrorKind::InvalidData))
+				warn!("Unrecognized varint decoding error");
+				Self::Io(From::from(io::ErrorKind::InvalidData))
 			},
 		}
 	}

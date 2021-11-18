@@ -164,7 +164,7 @@ impl TimestampInherentData for InherentData {
 /// This timestamp is the time since the UNIX epoch.
 #[cfg(feature = "std")]
 fn current_timestamp() -> std::time::Duration {
-	use wasm_timer::SystemTime;
+	use std::time::SystemTime;
 
 	let now = SystemTime::now();
 	now.duration_since(SystemTime::UNIX_EPOCH)

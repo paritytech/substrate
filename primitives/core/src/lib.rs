@@ -33,6 +33,7 @@ macro_rules! map {
 
 #[doc(hidden)]
 pub use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 pub use serde;
 #[cfg(feature = "std")]
@@ -57,7 +58,6 @@ pub mod hexdisplay;
 
 pub mod u32_trait;
 
-mod changes_trie;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
@@ -75,7 +75,6 @@ pub use self::{
 	hash::{convert_hash, H160, H256, H512},
 	uint::{U256, U512},
 };
-pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 
@@ -117,15 +116,13 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction => offchain::Capabilities::none(),
+			Importing | Syncing | BlockConstruction => offchain::Capabilities::empty(),
 			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
 			// calls.
-			OffchainCall(None) => [
-				offchain::Capability::Keystore,
-				offchain::Capability::OffchainDbRead,
-				offchain::Capability::TransactionPool,
-			][..]
-				.into(),
+			OffchainCall(None) =>
+				offchain::Capabilities::KEYSTORE |
+					offchain::Capabilities::OFFCHAIN_DB_READ |
+					offchain::Capabilities::TRANSACTION_POOL,
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
@@ -191,7 +188,17 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 
 /// Simple blob to hold a `PeerId` without committing to its format.
 #[derive(
-	Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner,
+	Default,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	PassByInner,
+	TypeInfo,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OpaquePeerId(pub Vec<u8>);
@@ -414,7 +421,7 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Void {}
 
 /// Macro for creating `Maybe*` marker traits.

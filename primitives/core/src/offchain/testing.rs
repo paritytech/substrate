@@ -300,8 +300,9 @@ impl offchain::Externalities for TestOffchainExt {
 
 		ids.iter()
 			.map(|id| match state.requests.get(id) {
-				Some(req) if req.response.is_none() =>
-					panic!("No `response` provided for request with id: {:?}", id),
+				Some(req) if req.response.is_none() => {
+					panic!("No `response` provided for request with id: {:?}", id)
+				},
 				None => RequestStatus::Invalid,
 				_ => RequestStatus::Finished(200),
 			})
@@ -340,7 +341,7 @@ impl offchain::Externalities for TestOffchainExt {
 				Ok(0)
 			} else {
 				let read = std::cmp::min(buffer.len(), response[req.read..].len());
-				buffer[0..read].copy_from_slice(&response[req.read..read]);
+				buffer[0..read].copy_from_slice(&response[req.read..req.read + read]);
 				req.read += read;
 				Ok(read)
 			}

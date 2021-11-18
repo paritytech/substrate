@@ -115,7 +115,7 @@ where
 	}
 }
 
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
 #[cfg_attr(any(feature = "std", test), derive(PartialEq))]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
@@ -238,7 +238,7 @@ pub mod pallet {
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 			let uncles = data.uncles().unwrap_or_default();
-			let mut set_uncles = Vec::new();
+			let mut new_uncles = Vec::new();
 
 			if !uncles.is_empty() {
 				let prev_uncles = <Uncles<T>>::get();
@@ -257,10 +257,10 @@ pub mod pallet {
 					match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
 						Ok(_) => {
 							let hash = uncle.hash();
-							set_uncles.push(uncle);
+							new_uncles.push(uncle);
 							existing_hashes.push(hash);
 
-							if set_uncles.len() == MAX_UNCLES {
+							if new_uncles.len() == MAX_UNCLES {
 								break
 							}
 						},
@@ -271,10 +271,10 @@ pub mod pallet {
 				}
 			}
 
-			if set_uncles.is_empty() {
+			if new_uncles.is_empty() {
 				None
 			} else {
-				Some(Call::set_uncles(set_uncles))
+				Some(Call::set_uncles { new_uncles })
 			}
 		}
 
@@ -283,14 +283,14 @@ pub mod pallet {
 			_data: &InherentData,
 		) -> result::Result<(), Self::Error> {
 			match call {
-				Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES =>
+				Call::set_uncles { ref new_uncles } if new_uncles.len() > MAX_UNCLES =>
 					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into())),
 				_ => Ok(()),
 			}
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::set_uncles(_))
+			matches!(call, Call::set_uncles { .. })
 		}
 	}
 }

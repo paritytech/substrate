@@ -18,8 +18,8 @@
 
 //! RPC api for babe.
 
-use futures::{FutureExt as _, TryFutureExt as _};
-use jsonrpc_core::{futures::future as rpc_future, Error as RpcError};
+use futures::{FutureExt, TryFutureExt};
+use jsonrpc_core::Error as RpcError;
 use jsonrpc_derive::rpc;
 use sc_consensus_babe::{authorship, Config, Epoch};
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
@@ -35,7 +35,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{collections::HashMap, sync::Arc};
 
-type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
+type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, RpcError>>;
 
 /// Provides rpc methods for interacting with Babe.
 #[rpc]
@@ -88,7 +88,7 @@ where
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(rpc_future::err(err.into()))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		let (babe_config, keystore, shared_epoch, client, select_chain) = (
@@ -98,7 +98,8 @@ where
 			self.client.clone(),
 			self.select_chain.clone(),
 		);
-		let future = async move {
+
+		async move {
 			let header = select_chain.best_chain().map_err(Error::Consensus).await?;
 			let epoch_start = client
 				.runtime_api()
@@ -149,9 +150,7 @@ where
 
 			Ok(claims)
 		}
-		.boxed();
-
-		Box::new(future.compat())
+		.boxed()
 	}
 }
 

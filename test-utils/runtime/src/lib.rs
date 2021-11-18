@@ -24,10 +24,11 @@ pub mod genesismap;
 pub mod system;
 
 use codec::{Decode, Encode, Error, Input};
+use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
-use sp_core::{offchain::KeyTypeId, ChangesTrieConfiguration, OpaqueMetadata, RuntimeDebug};
+use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
 	trie_types::{TrieDB, TrieDBMut},
 	PrefixedMemoryDB, StorageProof,
@@ -35,7 +36,11 @@ use sp_trie::{
 use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
-use frame_support::{parameter_types, traits::KeyOwnerProofSystem, weights::RuntimeDbWeight};
+use frame_support::{
+	parameter_types,
+	traits::{CrateVersion, KeyOwnerProofSystem},
+	weights::RuntimeDbWeight,
+};
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
@@ -156,7 +161,6 @@ pub enum Extrinsic {
 	},
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
-	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 	OffchainIndexSet(Vec<u8>, Vec<u8>),
 	OffchainIndexClear(Vec<u8>),
 	Store(Vec<u8>),
@@ -192,8 +196,6 @@ impl BlindCheckable for Extrinsic {
 				},
 			Extrinsic::IncludeData(v) => Ok(Extrinsic::IncludeData(v)),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
-			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
-				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
 			Extrinsic::OffchainIndexSet(key, value) => Ok(Extrinsic::OffchainIndexSet(key, value)),
 			Extrinsic::OffchainIndexClear(key) => Ok(Extrinsic::OffchainIndexClear(key)),
 			Extrinsic::Store(data) => Ok(Extrinsic::Store(data)),
@@ -260,9 +262,9 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = sp_runtime::generic::DigestItem<H256>;
+pub type DigestItem = sp_runtime::generic::DigestItem;
 /// The digest of a block.
-pub type Digest = sp_runtime::generic::Digest<H256>;
+pub type Digest = sp_runtime::generic::Digest;
 /// A test block.
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
@@ -415,7 +417,7 @@ cfg_if! {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, TypeInfo)]
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -483,7 +485,7 @@ impl frame_support::traits::OriginTrait for Origin {
 	}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct Event;
 
 impl From<frame_system::Event<Runtime>> for Event {
@@ -517,6 +519,35 @@ impl frame_support::traits::PalletInfo for Runtime {
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
+		}
+
+		None
+	}
+	fn module_name<P: 'static>() -> Option<&'static str> {
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
+			return Some("system")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
+			return Some("pallet_timestamp")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
+			return Some("pallet_babe")
+		}
+
+		None
+	}
+	fn crate_version<P: 'static>() -> Option<CrateVersion> {
+		use frame_support::traits::PalletInfoAccess as _;
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
+			return Some(system::Pallet::<Runtime>::crate_version())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
+			return Some(pallet_timestamp::Pallet::<Runtime>::crate_version())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
+			return Some(pallet_babe::Pallet::<Runtime>::crate_version())
 		}
 
 		None
@@ -573,6 +604,7 @@ impl pallet_timestamp::Config for Runtime {
 parameter_types! {
 	pub const EpochDuration: u64 = 6;
 	pub const ExpectedBlockTime: u64 = 10_000;
+	pub const MaxAuthorities: u32 = 10;
 }
 
 impl pallet_babe::Config for Runtime {
@@ -595,8 +627,9 @@ impl pallet_babe::Config for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = ();
-
 	type WeightInfo = ();
+
+	type MaxAuthorities = MaxAuthorities;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -1228,13 +1261,11 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
 	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(db, root);
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
-	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
+	let mut cache = sp_state_machine::StorageTransactionCache::<_, _>::default();
 	let mut ext = sp_state_machine::Ext::new(
 		&mut overlay,
 		&mut cache,
 		&backend,
-		#[cfg(feature = "std")]
-		None,
 		#[cfg(feature = "std")]
 		None,
 	);

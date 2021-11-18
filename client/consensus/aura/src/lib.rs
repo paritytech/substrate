@@ -52,7 +52,7 @@ use sc_consensus_slots::{
 use sc_telemetry::TelemetryHandle;
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppKey, AppPublic};
-use sp_blockchain::{HeaderBackend, ProvideCache, Result as CResult};
+use sp_blockchain::{HeaderBackend, Result as CResult};
 use sp_consensus::{
 	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
 };
@@ -62,7 +62,8 @@ use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, DigestItemFor, Header, Member, NumberFor, Zero},
+	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
+	DigestItem,
 };
 
 mod import_queue;
@@ -178,7 +179,7 @@ where
 	P::Public: AppPublic + Hash + Member + Encode + Decode,
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -188,7 +189,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	CAW: CanAuthorWith<B> + Send,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
@@ -267,7 +268,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 ) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -278,7 +279,7 @@ where
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 {
 	AuraWorker {
 		client,
@@ -311,21 +312,22 @@ struct AuraWorker<C, E, I, P, SO, L, BS> {
 	_key_type: PhantomData<P>,
 }
 
+#[async_trait::async_trait]
 impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 	for AuraWorker<C, E, I, P, SO, L, BS>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + HeaderBackend<B> + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + HeaderBackend<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
-	E: Environment<B, Error = Error>,
+	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
-	SO: SyncOracle + Send + Clone,
+	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	type BlockImport = I;
@@ -357,7 +359,7 @@ where
 		Some(epoch_data.len())
 	}
 
-	fn claim_slot(
+	async fn claim_slot(
 		&self,
 		_header: &B::Header,
 		slot: Slot,
@@ -376,12 +378,8 @@ where
 		})
 	}
 
-	fn pre_digest_data(
-		&self,
-		slot: Slot,
-		_claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
-		vec![<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot)]
+	fn pre_digest_data(&self, slot: Slot, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
+		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot)]
 	}
 
 	fn block_import_params(
@@ -425,7 +423,7 @@ where
 				.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 
 			let signature_digest_item =
-				<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+				<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
 
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(signature_digest_item);
@@ -544,7 +542,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 where
 	A: Codec + Debug,
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
+	C: ProvideRuntimeApi<B> + BlockOf,
 	C::Api: AuraApi<B, A>,
 {
 	client
@@ -557,6 +555,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::executor;
 	use parking_lot::Mutex;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::BlockchainEvents;
@@ -572,7 +571,10 @@ mod tests {
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
 	use sp_keyring::sr25519::Keyring;
-	use sp_runtime::traits::{Block as BlockT, DigestFor, Header as _};
+	use sp_runtime::{
+		traits::{Block as BlockT, Header as _},
+		Digest,
+	};
 	use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 	use std::{
 		task::Poll,
@@ -609,7 +611,7 @@ mod tests {
 		fn propose(
 			self,
 			_: InherentData,
-			digests: DigestFor<TestBlock>,
+			digests: Digest,
 			_: Duration,
 			_: Option<usize>,
 		) -> Self::Proposal {
@@ -659,29 +661,25 @@ mod tests {
 			_cfg: &ProtocolConfig,
 			_peer_data: &(),
 		) -> Self::Verifier {
-			match client {
-				PeersClient::Full(client, _) => {
-					let slot_duration = slot_duration(&*client).expect("slot duration available");
+			let client = client.as_client();
+			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-					assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
-					import_queue::AuraVerifier::new(
-						client,
-						Box::new(|_, _| async {
-							let timestamp = TimestampInherentDataProvider::from_system_time();
-							let slot = InherentDataProvider::from_timestamp_and_duration(
-								*timestamp,
-								Duration::from_secs(6),
-							);
+			assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
+			import_queue::AuraVerifier::new(
+				client,
+				Box::new(|_, _| async {
+					let timestamp = TimestampInherentDataProvider::from_system_time();
+					let slot = InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						Duration::from_secs(6),
+					);
 
-							Ok((timestamp, slot))
-						}),
-						AlwaysCanAuthor,
-						CheckForEquivocation::Yes,
-						None,
-					)
-				},
-				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
-			}
+					Ok((timestamp, slot))
+				}),
+				AlwaysCanAuthor,
+				CheckForEquivocation::Yes,
+				None,
+			)
 		}
 
 		fn make_block_import(
@@ -722,7 +720,7 @@ mod tests {
 		for (peer_id, key) in peers {
 			let mut net = net.lock();
 			let peer = net.peer(*peer_id);
-			let client = peer.client().as_full().expect("full clients are created").clone();
+			let client = peer.client().as_client();
 			let select_chain = peer.select_chain().expect("full client has a select chain");
 			let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 			let keystore = Arc::new(
@@ -777,7 +775,7 @@ mod tests {
 			);
 		}
 
-		futures::executor::block_on(future::select(
+		executor::block_on(future::select(
 			future::poll_fn(move |cx| {
 				net.lock().poll(cx);
 				Poll::<()>::Pending
@@ -821,7 +819,7 @@ mod tests {
 
 		let mut net = net.lock();
 		let peer = net.peer(3);
-		let client = peer.client().as_full().expect("full clients are created").clone();
+		let client = peer.client().as_client();
 		let environ = DummyFactory(client.clone());
 
 		let worker = AuraWorker {
@@ -846,14 +844,14 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		);
-		assert!(worker.claim_slot(&head, 0.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 1.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 2.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 3.into(), &authorities).is_some());
-		assert!(worker.claim_slot(&head, 4.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 5.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 6.into(), &authorities).is_none());
-		assert!(worker.claim_slot(&head, 7.into(), &authorities).is_some());
+		assert!(executor::block_on(worker.claim_slot(&head, 0.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 1.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 2.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 3.into(), &authorities)).is_some());
+		assert!(executor::block_on(worker.claim_slot(&head, 4.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 5.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 6.into(), &authorities)).is_none());
+		assert!(executor::block_on(worker.claim_slot(&head, 7.into(), &authorities)).is_some());
 	}
 
 	#[test]
@@ -873,7 +871,7 @@ mod tests {
 
 		let mut net = net.lock();
 		let peer = net.peer(3);
-		let client = peer.client().as_full().expect("full clients are created").clone();
+		let client = peer.client().as_client();
 		let environ = DummyFactory(client.clone());
 
 		let mut worker = AuraWorker {
@@ -893,7 +891,7 @@ mod tests {
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
 
-		let res = futures::executor::block_on(worker.on_slot(SlotInfo {
+		let res = executor::block_on(worker.on_slot(SlotInfo {
 			slot: 0.into(),
 			timestamp: 0.into(),
 			ends_at: Instant::now() + Duration::from_secs(100),

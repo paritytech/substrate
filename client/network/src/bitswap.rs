@@ -94,7 +94,7 @@ where
 
 	fn upgrade_inbound(self, mut socket: TSocket, _info: Self::Info) -> Self::Future {
 		Box::pin(async move {
-			let packet = upgrade::read_one(&mut socket, MAX_PACKET_SIZE).await?;
+			let packet = upgrade::read_length_prefixed(&mut socket, MAX_PACKET_SIZE).await?;
 			let message: BitswapMessage = Message::decode(packet.as_slice())?;
 			Ok(message)
 		})
@@ -122,7 +122,7 @@ where
 		Box::pin(async move {
 			let mut data = Vec::with_capacity(self.encoded_len());
 			self.encode(&mut data)?;
-			upgrade::write_one(&mut socket, data).await
+			upgrade::write_length_prefixed(&mut socket, data).await
 		})
 	}
 }
@@ -190,7 +190,7 @@ pub struct Bitswap<B> {
 impl<B: BlockT> Bitswap<B> {
 	/// Create a new instance of the bitswap protocol handler.
 	pub fn new(client: Arc<dyn Client<B>>) -> Self {
-		Bitswap { client, ready_blocks: Default::default() }
+		Self { client, ready_blocks: Default::default() }
 	}
 }
 
@@ -305,7 +305,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 	>{
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-				peer_id: peer_id.clone(),
+				peer_id,
 				handler: NotifyHandler::Any,
 				event: message,
 			})
@@ -328,7 +328,7 @@ pub enum BitswapError {
 	/// Error parsing CID
 	BadCid(cid::Error),
 	/// Packet read error.
-	Read(upgrade::ReadOneError),
+	Read(io::Error),
 	/// Error sending response.
 	#[display(fmt = "Failed to send response.")]
 	SendResponse,

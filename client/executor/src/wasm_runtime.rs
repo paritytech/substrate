@@ -76,7 +76,7 @@ impl VersionedRuntime {
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,
-			&dyn WasmInstance,
+			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
 		) -> Result<R, Error>,
@@ -90,12 +90,12 @@ impl VersionedRuntime {
 
 		match instance {
 			Some((index, mut locked)) => {
-				let (instance, new_inst) = locked
+				let (mut instance, new_inst) = locked
 					.take()
 					.map(|r| Ok((r, false)))
 					.unwrap_or_else(|| self.module.new_instance().map(|i| (i, true)))?;
 
-				let result = f(&self.module, &*instance, self.version.as_ref(), ext);
+				let result = f(&self.module, &mut *instance, self.version.as_ref(), ext);
 				if let Err(e) = &result {
 					if new_inst {
 						log::warn!(
@@ -129,9 +129,9 @@ impl VersionedRuntime {
 				log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
 
 				// Allocate a new instance
-				let instance = self.module.new_instance()?;
+				let mut instance = self.module.new_instance()?;
 
-				f(&self.module, &*instance, self.version.as_ref(), ext)
+				f(&self.module, &mut *instance, self.version.as_ref(), ext)
 			},
 		}
 	}
@@ -213,7 +213,7 @@ impl RuntimeCache {
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,
-			&dyn WasmInstance,
+			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
 		) -> Result<R, Error>,
@@ -237,7 +237,6 @@ impl RuntimeCache {
 			None => {
 				let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
 
-				#[cfg(not(target_os = "unknown"))]
 				let time = std::time::Instant::now();
 
 				let result = create_versioned_wasm_runtime(
@@ -254,7 +253,6 @@ impl RuntimeCache {
 
 				match result {
 					Ok(ref result) => {
-						#[cfg(not(target_os = "unknown"))]
 						log::debug!(
 							target: "wasm-runtime",
 							"Prepared new runtime version {:?} in {} ms.",
@@ -306,7 +304,7 @@ pub fn create_wasm_runtime_with_code(
 			//
 			// We drop the cache_path here to silence warnings that cache_path is not used if
 			// compiling without the `wasmtime` flag.
-			drop(cache_path);
+			let _ = cache_path;
 
 			sc_executor_wasmi::create_runtime(
 				blob,
@@ -320,14 +318,15 @@ pub fn create_wasm_runtime_with_code(
 		WasmExecutionMethod::Compiled => sc_executor_wasmtime::create_runtime(
 			blob,
 			sc_executor_wasmtime::Config {
-				heap_pages: heap_pages as u32,
-				max_memory_pages: None,
+				heap_pages,
+				max_memory_size: None,
 				allow_missing_func_imports,
 				cache_path: cache_path.map(ToOwned::to_owned),
 				semantics: sc_executor_wasmtime::Semantics {
 					fast_instance_reuse: true,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
+					parallel_compilation: true,
 				},
 			},
 			host_functions,
@@ -345,7 +344,7 @@ fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 		})?
 		.into();
 
-	let core_api_id = sp_core::hashing::blake2_64(b"Core");
+	let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
 	if v.has_api_with(&core_api_id, |v| v >= 3) {
 		sp_api::RuntimeVersion::decode(&mut version).map_err(|_| {
 			WasmError::Instantiation("failed to decode \"Core_version\" result".into())
@@ -357,7 +356,6 @@ fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 
 fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 	use sp_api::RUNTIME_API_INFO_SIZE;
-	use std::convert::TryFrom;
 
 	apis.chunks(RUNTIME_API_INFO_SIZE)
 		.map(|chunk| {

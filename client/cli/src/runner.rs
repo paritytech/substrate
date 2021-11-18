@@ -20,8 +20,8 @@ use crate::{error::Error as CliError, CliConfiguration, Result, SubstrateCli};
 use chrono::prelude::*;
 use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;
-use sc_service::{Configuration, Error as ServiceError, TaskManager, TaskType};
-use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
+use sc_service::{Configuration, Error as ServiceError, TaskManager};
+use sc_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
 
 #[cfg(target_family = "unix")]
@@ -73,8 +73,7 @@ where
 
 /// Build a tokio runtime with all features
 pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::Error> {
-	tokio::runtime::Builder::new()
-		.threaded_scheduler()
+	tokio::runtime::Builder::new_multi_thread()
 		.on_thread_start(|| {
 			TOKIO_THREADS_ALIVE.inc();
 			TOKIO_THREADS_TOTAL.inc();
@@ -87,7 +86,7 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 }
 
 fn run_until_exit<F, E>(
-	mut tokio_runtime: tokio::runtime::Runtime,
+	tokio_runtime: tokio::runtime::Runtime,
 	future: F,
 	task_manager: TaskManager,
 ) -> std::result::Result<(), E>
@@ -117,15 +116,8 @@ impl<C: SubstrateCli> Runner<C> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
 
-		let task_executor = move |fut, task_type| match task_type {
-			TaskType::Async => runtime_handle.spawn(fut).map(drop),
-			TaskType::Blocking => runtime_handle
-				.spawn_blocking(move || futures::executor::block_on(fut))
-				.map(drop),
-		};
-
 		Ok(Runner {
-			config: command.create_configuration(cli, task_executor.into())?,
+			config: command.create_configuration(cli, runtime_handle)?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})
@@ -152,7 +144,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs a node with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
 	pub fn run_node_until_exit<F, E>(
-		mut self,
+		self,
 		initialize: impl FnOnce(Configuration) -> F,
 	) -> std::result::Result<(), E>
 	where

@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use frame_support::Hashable;
 use frame_system::offchain::AppCrypto;
-use sc_executor::{error::Result, NativeExecutor, WasmExecutionMethod};
+use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutionMethod};
 use sp_consensus_babe::{
 	digests::{PreDigest, SecondaryPlainPreDigest},
 	Slot, BABE_ENGINE_ID,
@@ -35,7 +35,7 @@ use sp_runtime::{
 };
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 
-use node_executor::Executor;
+use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
 use node_runtime::{
 	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, Runtime,
@@ -67,8 +67,7 @@ impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
 ///
 /// `compact` since it is after post-processing with wasm-gc which performs tree-shaking thus
 /// making the binary slimmer. There is a convention to use compact version of the runtime
-/// as canonical. This is why `native_executor_instance` also uses the compact version of the
-/// runtime.
+/// as canonical.
 pub fn compact_code_unwrap() -> &'static [u8] {
 	node_runtime::WASM_BINARY.expect(
 		"Development wasm binary is not available. Testing is only supported with the flag \
@@ -82,22 +81,22 @@ pub const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
 
 pub const TRANSACTION_VERSION: u32 = node_runtime::VERSION.transaction_version;
 
-pub type TestExternalities<H> = CoreTestExternalities<H, u64>;
+pub type TestExternalities<H> = CoreTestExternalities<H>;
 
 pub fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 
 pub fn default_transfer_call() -> pallet_balances::Call<Runtime> {
-	pallet_balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
+	pallet_balances::Call::<Runtime>::transfer { dest: bob().into(), value: 69 * DOLLARS }
 }
 
 pub fn from_block_number(n: u32) -> Header {
 	Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 }
 
-pub fn executor() -> NativeExecutor<Executor> {
-	NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
+	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn executor_call<
@@ -124,14 +123,11 @@ pub fn executor_call<
 	executor().call::<R, NC>(&mut t, &runtime_code, method, data, use_native, native_call)
 }
 
-pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<BlakeTwo256> {
-	let mut ext = TestExternalities::new_with_code(
+pub fn new_test_ext(code: &[u8]) -> TestExternalities<BlakeTwo256> {
+	let ext = TestExternalities::new_with_code(
 		code,
-		node_testing::genesis::config(support_changes_trie, Some(code))
-			.build_storage()
-			.unwrap(),
+		node_testing::genesis::config(Some(code)).build_storage().unwrap(),
 	);
-	ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 	ext
 }
 

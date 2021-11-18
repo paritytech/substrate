@@ -63,6 +63,7 @@ mod tests;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
 use sp_runtime::{
 	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
@@ -118,7 +119,7 @@ pub type ProposalIndex = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -253,7 +254,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T, I> = "Balance")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// New proposal. \[proposal_index\]
 		Proposed(ProposalIndex),

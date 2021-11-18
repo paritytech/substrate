@@ -18,9 +18,10 @@
 //! WS RPC API for one off RPC calls to a substrate node.
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
-use jsonrpsee_ws_client::{
-	types::{traits::Client, v2::params::JsonRpcParams},
-	WsClient, WsClientBuilder,
+use jsonrpsee::{
+	rpc_params,
+	types::traits::Client,
+	ws_client::{WsClient, WsClientBuilder},
 };
 use sp_runtime::{
 	generic::SignedBlock,
@@ -34,11 +35,10 @@ where
 	Block::Header: serde::de::DeserializeOwned,
 	S: AsRef<str>,
 {
-	let params = vec![hash_to_json::<Block>(at)?];
 	let client = build_client(from).await?;
 
 	client
-		.request::<Block::Header>("chain_getHeader", JsonRpcParams::Array(params))
+		.request::<Block::Header>("chain_getHeader", rpc_params!(at))
 		.await
 		.map_err(|e| format!("chain_getHeader request failed: {:?}", e))
 }
@@ -52,7 +52,7 @@ where
 	let client = build_client(from).await?;
 
 	client
-		.request::<Block::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams)
+		.request::<Block::Hash>("chain_getFinalizedHead", None)
 		.await
 		.map_err(|e| format!("chain_getFinalizedHead request failed: {:?}", e))
 }
@@ -64,20 +64,13 @@ where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Header: HeaderT,
 {
-	let params = vec![hash_to_json::<Block>(at)?];
 	let client = build_client(from).await?;
 	let signed_block = client
-		.request::<SignedBlock<Block>>("chain_getBlock", JsonRpcParams::Array(params))
+		.request::<SignedBlock<Block>>("chain_getBlock", rpc_params!(at))
 		.await
 		.map_err(|e| format!("chain_getBlock request failed: {:?}", e))?;
 
 	Ok(signed_block.block)
-}
-
-/// Convert a block hash to a serde json value.
-fn hash_to_json<Block: BlockT>(hash: Block::Hash) -> Result<serde_json::Value, String> {
-	serde_json::to_value(hash)
-		.map_err(|e| format!("Block hash could not be converted to JSON: {:?}", e))
 }
 
 /// Build a website client that connects to `from`.
@@ -87,4 +80,21 @@ async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
 		.build(from.as_ref())
 		.await
 		.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))
+}
+
+/// Get the runtime version of a given chain.
+pub async fn get_runtime_version<Block, S>(
+	from: S,
+	at: Option<Block::Hash>,
+) -> Result<sp_version::RuntimeVersion, String>
+where
+	S: AsRef<str>,
+	Block: BlockT + serde::de::DeserializeOwned,
+	Block::Header: HeaderT,
+{
+	let client = build_client(from).await?;
+	client
+		.request::<sp_version::RuntimeVersion>("state_getRuntimeVersion", rpc_params!(at))
+		.await
+		.map_err(|e| format!("state_getRuntimeVersion request failed: {:?}", e))
 }

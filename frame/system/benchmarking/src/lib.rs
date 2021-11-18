@@ -20,10 +20,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{storage, traits::Get, weights::DispatchClass};
-use frame_system::{Call, DigestItemOf, Pallet as System, RawOrigin};
-use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
+use frame_system::{Call, Pallet as System, RawOrigin};
+use sp_core::storage::well_known_keys;
 use sp_runtime::traits::Hash;
 use sp_std::{prelude::*, vec};
 
@@ -60,23 +60,6 @@ benchmarks! {
 	verify {
 		let current_code = storage::unhashed::get_raw(well_known_keys::CODE).ok_or("Code not stored.")?;
 		assert_eq!(current_code.len(), 4_000_000 as usize);
-	}
-
-	set_changes_trie_config {
-		let d = 1000;
-
-		let digest_item = DigestItemOf::<T>::Other(vec![]);
-
-		for i in 0 .. d {
-			System::<T>::deposit_log(digest_item.clone());
-		}
-		let changes_trie_config = ChangesTrieConfiguration {
-			digest_interval: d,
-			digest_levels: d,
-		};
-	}: _(RawOrigin::Root, Some(changes_trie_config))
-	verify {
-		assert_eq!(System::<T>::digest().logs.len(), (d + 1) as usize)
 	}
 
 	#[skip_meta]
@@ -140,6 +123,6 @@ benchmarks! {
 	verify {
 		assert_eq!(storage::unhashed::get_raw(&last_key), None);
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
+}

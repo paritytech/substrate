@@ -17,8 +17,9 @@
 
 //! Stuff to do with the runtime's storage.
 
+pub use self::types::StorageEntryMetadataBuilder;
 use crate::{
-	hash::{ReversibleStorageHasher, StorageHasher, Twox128},
+	hash::{ReversibleStorageHasher, StorageHasher},
 	storage::types::{
 		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 		ReversibleKeyGenerator, TupleToEncodedIter,
@@ -785,10 +786,12 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter;
 }
 
-/// Iterate over a prefix and decode raw_key and raw_value into `T`.
+/// Iterate or drain over a prefix and decode raw_key and raw_value into `T`.
 ///
 /// If any decoding fails it skips it and continues to the next key.
-pub struct PrefixIterator<T> {
+///
+/// If draining, then the hook `OnRemoval::on_removal` is called after each removal.
+pub struct PrefixIterator<T, OnRemoval = ()> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
@@ -796,9 +799,21 @@ pub struct PrefixIterator<T> {
 	/// Function that take `(raw_key_without_prefix, raw_value)` and decode `T`.
 	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+	phantom: core::marker::PhantomData<OnRemoval>,
 }
 
-impl<T> PrefixIterator<T> {
+/// Trait for specialising on removal logic of [`PrefixIterator`].
+pub trait PrefixIteratorOnRemoval {
+	/// This function is called whenever a key/value is removed.
+	fn on_removal(key: &[u8], value: &[u8]);
+}
+
+/// No-op implementation.
+impl PrefixIteratorOnRemoval for () {
+	fn on_removal(_key: &[u8], _value: &[u8]) {}
+}
+
+impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 	/// Creates a new `PrefixIterator`, iterating after `previous_key` and filtering out keys that
 	/// are not prefixed with `prefix`.
 	///
@@ -812,7 +827,13 @@ impl<T> PrefixIterator<T> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		PrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
+		PrefixIterator {
+			prefix,
+			previous_key,
+			drain: false,
+			closure: decode_fn,
+			phantom: Default::default(),
+		}
 	}
 
 	/// Get the last key that has been iterated upon and return it.
@@ -837,7 +858,7 @@ impl<T> PrefixIterator<T> {
 	}
 }
 
-impl<T> Iterator for PrefixIterator<T> {
+impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for PrefixIterator<T, OnRemoval> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -858,7 +879,8 @@ impl<T> Iterator for PrefixIterator<T> {
 						},
 					};
 					if self.drain {
-						unhashed::kill(&self.previous_key)
+						unhashed::kill(&self.previous_key);
+						OnRemoval::on_removal(&self.previous_key, &raw_value);
 					}
 					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
@@ -1108,10 +1130,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 	/// Final full prefix that prefixes all keys.
 	fn final_prefix() -> [u8; 32] {
-		let mut final_key = [0u8; 32];
-		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
-		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
-		final_key
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
 	/// Remove all value of the storage.
@@ -1121,7 +1140,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	fn iter_values() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
@@ -1129,6 +1148,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 			previous_key: prefix.to_vec(),
 			drain: false,
 			closure: |_raw_key, mut raw_value| Value::decode(&mut raw_value),
+			phantom: Default::default(),
 		}
 	}
 
@@ -1203,7 +1223,7 @@ mod private {
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
-	impl<Hash: Encode> Sealed for Digest<Hash> {}
+	impl Sealed for Digest {}
 	impl<T, S> Sealed for BoundedVec<T, S> {}
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
@@ -1243,7 +1263,7 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
 /// format ever changes, we need to remove this here.
-impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+impl StorageAppend<DigestItem> for Digest {}
 
 /// Marker trait that is implemented for types that support the `storage::append` api with a limit
 /// on the number of element.
@@ -1361,12 +1381,25 @@ where
 	}
 }
 
+/// Returns the storage prefix for a specific pallet name and storage name.
+///
+/// The storage prefix is `concat(twox_128(pallet_name), twox_128(storage_name))`.
+pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
+	let pallet_hash = sp_io::hashing::twox_128(pallet_name);
+	let storage_hash = sp_io::hashing::twox_128(storage_name);
+
+	let mut final_key = [0u8; 32];
+	final_key[..16].copy_from_slice(&pallet_hash);
+	final_key[16..].copy_from_slice(&storage_hash);
+
+	final_key
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, hash::Identity};
+	use crate::{assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
-	use core::convert::{TryFrom, TryInto};
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
@@ -1451,8 +1484,8 @@ mod test {
 	fn digest_storage_append_works_as_expected() {
 		TestExternalities::default().execute_with(|| {
 			struct Storage;
-			impl generator::StorageValue<Digest<u32>> for Storage {
-				type Query = Digest<u32>;
+			impl generator::StorageValue<Digest> for Storage {
+				type Query = Digest;
 
 				fn module_prefix() -> &'static [u8] {
 					b"MyModule"
@@ -1462,23 +1495,20 @@ mod test {
 					b"Storage"
 				}
 
-				fn from_optional_value_to_query(v: Option<Digest<u32>>) -> Self::Query {
+				fn from_optional_value_to_query(v: Option<Digest>) -> Self::Query {
 					v.unwrap()
 				}
 
-				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest<u32>> {
+				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest> {
 					Some(v)
 				}
 			}
 
-			Storage::append(DigestItem::ChangesTrieRoot(1));
 			Storage::append(DigestItem::Other(Vec::new()));
 
 			let value = unhashed::get_raw(&Storage::storage_value_final_key()).unwrap();
 
-			let expected = Digest {
-				logs: vec![DigestItem::ChangesTrieRoot(1), DigestItem::Other(Vec::new())],
-			};
+			let expected = Digest { logs: vec![DigestItem::Other(Vec::new())] };
 			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
 		});
 	}
@@ -1601,7 +1631,7 @@ mod test {
 
 			assert_eq!(final_vec, vec![1, 2, 3, 4, 5]);
 
-			let mut iter = PrefixIterator::new(
+			let mut iter = PrefixIterator::<_>::new(
 				iter.prefix().to_vec(),
 				stored_key,
 				|mut raw_key_without_prefix, mut raw_value| {

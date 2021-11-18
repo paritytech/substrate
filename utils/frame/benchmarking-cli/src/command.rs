@@ -19,13 +19,13 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{
 	Analysis, BenchmarkBatch, BenchmarkBatchSplitResults, BenchmarkList, BenchmarkParameter,
-	BenchmarkResults, BenchmarkSelector,
+	BenchmarkResult, BenchmarkSelector,
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
-use sc_executor::NativeExecutor;
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
@@ -33,7 +33,7 @@ use sp_core::offchain::{
 };
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
 use std::{fmt::Debug, sync::Arc, time};
 
@@ -48,7 +48,7 @@ fn combine_batches(
 	}
 
 	let mut all_benchmarks =
-		LinkedHashMap::<_, (Vec<BenchmarkResults>, Vec<BenchmarkResults>)>::new();
+		LinkedHashMap::<_, (Vec<BenchmarkResult>, Vec<BenchmarkResult>)>::new();
 
 	db_batches
 		.into_iter()
@@ -133,7 +133,7 @@ impl BenchmarkCmd {
 		)?;
 		let state_without_tracking =
 			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
-		let executor = NativeExecutor::<ExecDispatch>::new(
+		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
 			wasm_method,
 			self.heap_pages,
 			2, // The runtime instances cache size.
@@ -152,9 +152,8 @@ impl BenchmarkCmd {
 
 		// Get Benchmark List
 		let state = &state_without_tracking;
-		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+		let result = StateMachine::new(
 			state,
-			None,
 			&mut changes,
 			&executor,
 			"Benchmark_benchmark_metadata",
@@ -243,9 +242,8 @@ impl BenchmarkCmd {
 				if !self.no_verify {
 					// Dont use these results since verification code will add overhead
 					let state = &state_without_tracking;
-					let _results = StateMachine::<_, _, NumberFor<BB>, _>::new(
+					let _results = StateMachine::new(
 						state,
-						None,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
@@ -270,9 +268,8 @@ impl BenchmarkCmd {
 				// Do one loop of DB tracking.
 				{
 					let state = &state_with_tracking;
-					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+					let result = StateMachine::new(
 						state, // todo remove tracking
-						None,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
@@ -303,9 +300,8 @@ impl BenchmarkCmd {
 				// Finally run a bunch of loops to get extrinsic timing information.
 				for r in 0..self.external_repeat {
 					let state = &state_without_tracking;
-					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+					let result = StateMachine::new(
 						state, // todo remove tracking
-						None,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
@@ -407,6 +403,20 @@ impl BenchmarkCmd {
 				println!();
 			}
 
+			if !self.no_storage_info {
+				let mut comments: Vec<String> = Default::default();
+				crate::writer::add_storage_comments(
+					&mut comments,
+					&batch.db_results,
+					&storage_info,
+				);
+				println!("Raw Storage Info\n========");
+				for comment in comments {
+					println!("{}", comment);
+				}
+				println!("");
+			}
+
 			// Conduct analysis.
 			if !self.no_median_slopes {
 				println!("Median Slopes Analysis\n========");
@@ -425,6 +435,7 @@ impl BenchmarkCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
+				println!("");
 			}
 			if !self.no_min_squares {
 				println!("Min Squares Analysis\n========");
@@ -443,6 +454,7 @@ impl BenchmarkCmd {
 				{
 					println!("Writes = {:?}", analysis);
 				}
+				println!("");
 			}
 		}
 

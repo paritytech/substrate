@@ -19,6 +19,7 @@
 
 use super::*;
 use frame_support::{traits::Get, BoundedVec};
+use scale_info::TypeInfo;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
@@ -27,7 +28,7 @@ pub(super) type ClassDetailsFor<T, I> =
 pub(super) type InstanceDetailsFor<T, I> =
 	InstanceDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ClassDetails<AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
@@ -53,7 +54,7 @@ pub struct ClassDetails<AccountId, DepositBalance> {
 }
 
 /// Witness data for the destroy transactions.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct DestroyWitness {
 	/// The total number of outstanding instances of this asset class.
 	#[codec(compact)]
@@ -77,7 +78,7 @@ impl<AccountId, DepositBalance> ClassDetails<AccountId, DepositBalance> {
 }
 
 /// Information concerning the ownership of a single unique asset.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo)]
 pub struct InstanceDetails<AccountId, DepositBalance> {
 	/// The owner of this asset.
 	pub(super) owner: AccountId,
@@ -90,7 +91,8 @@ pub struct InstanceDetails<AccountId, DepositBalance> {
 	pub(super) deposit: DepositBalance,
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo)]
+#[scale_info(skip_type_params(StringLimit))]
 pub struct ClassMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
@@ -104,7 +106,8 @@ pub struct ClassMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) is_frozen: bool,
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo)]
+#[scale_info(skip_type_params(StringLimit))]
 pub struct InstanceMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///

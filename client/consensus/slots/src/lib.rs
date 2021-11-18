@@ -45,7 +45,7 @@ use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, HashFor, Header as HeaderT},
 };
 use sp_timestamp::Timestamp;
 use std::{fmt::Debug, ops::Deref, time::Duration};
@@ -54,7 +54,7 @@ use std::{fmt::Debug, ops::Deref, time::Duration};
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
@@ -108,7 +108,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Claim: Send + 'static;
 
 	/// Epoch data necessary for authoring.
-	type EpochData: Send + 'static;
+	type EpochData: Send + Sync + 'static;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -129,7 +129,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize>;
 
 	/// Tries to claim the given slot, returning an object with claim data if successful.
-	fn claim_slot(
+	async fn claim_slot(
 		&self,
 		header: &B::Header,
 		slot: Slot,
@@ -141,11 +141,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn notify_slot(&self, _header: &B::Header, _slot: Slot, _epoch_data: &Self::EpochData) {}
 
 	/// Return the pre digest data to include in a block authored with the given claim.
-	fn pre_digest_data(
-		&self,
-		slot: Slot,
-		claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem<B::Hash>>;
+	fn pre_digest_data(&self, slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem>;
 
 	/// Returns a function which produces a `BlockImportParams`.
 	fn block_import_params(
@@ -200,7 +196,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	async fn on_slot(
 		&mut self,
 		slot_info: SlotInfo<B>,
-	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>> {
+	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>>
+	where
+		Self: Sync,
+	{
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
@@ -259,7 +258,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data)?;
+		let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data).await?;
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None
@@ -415,8 +414,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Proposer<B>>::Proof>
-	for T
+impl<B: BlockT, T: SimpleSlotWorker<B> + Send + Sync>
+	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for T
 {
 	async fn on_slot(
 		&mut self,

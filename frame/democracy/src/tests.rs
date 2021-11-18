@@ -22,7 +22,7 @@ use crate as pallet_democracy;
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
+	traits::{Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers},
 	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -72,7 +72,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<Call> for BaseFilter {
 	fn contains(call: &Call) -> bool {
-		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
+		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
@@ -118,6 +118,7 @@ impl pallet_scheduler::Config for Test {
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
+	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -140,6 +141,7 @@ parameter_types! {
 	pub const FastTrackVotingPeriod: u64 = 2;
 	pub const MinimumDeposit: u64 = 1;
 	pub const EnactmentPeriod: u64 = 2;
+	pub const VoteLockingPeriod: u64 = 3;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
 	pub const MaxProposals: u32 = MAX_PROPOSALS;
@@ -170,6 +172,7 @@ impl Config for Test {
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
+	type VoteLockingPeriod = VoteLockingPeriod;
 	type FastTrackVotingPeriod = FastTrackVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
@@ -224,7 +227,8 @@ fn params_should_work() {
 }
 
 fn set_balance_proposal(value: u64) -> Vec<u8> {
-	Call::Balances(pallet_balances::Call::set_balance(42, value, 0)).encode()
+	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
+		.encode()
 }
 
 #[test]
@@ -261,7 +265,7 @@ fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchRes
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 	Scheduler::on_initialize(System::block_number());
-	assert!(Democracy::begin_block(System::block_number()).is_ok());
+	Democracy::begin_block(System::block_number());
 }
 
 fn fast_forward_to(n: u64) {

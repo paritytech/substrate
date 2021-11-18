@@ -39,7 +39,7 @@ mod wasm_runtime;
 
 pub use codec::Codec;
 pub use native_executor::{
-	with_externalities_safe, NativeExecutionDispatch, NativeExecutor, WasmExecutor,
+	with_externalities_safe, NativeElseWasmExecutor, NativeExecutionDispatch, WasmExecutor,
 };
 #[doc(hidden)]
 pub use sp_core::traits::Externalities;

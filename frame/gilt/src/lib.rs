@@ -111,7 +111,8 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ Default
-			+ From<u64>;
+			+ From<u64>
+			+ TypeInfo;
 
 		/// Origin required for setting the target proportion to be under gilt.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
@@ -126,7 +127,6 @@ pub mod pallet {
 
 		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
 		/// the issuance by which we inflate or deflate the gilt.
-		#[pallet::constant]
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
@@ -181,7 +181,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	/// A single bid on a gilt, an item of a *queue* in `Queues`.
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
+	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub struct GiltBid<Balance, AccountId> {
 		/// The amount bid.
 		pub amount: Balance,
@@ -190,7 +190,7 @@ pub mod pallet {
 	}
 
 	/// Information representing an active gilt.
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
+	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub struct ActiveGilt<Balance, AccountId, BlockNumber> {
 		/// The proportion of the effective total issuance (i.e. accounting for any eventual gilt
 		/// expansion or contraction that may eventually be claimed).
@@ -214,7 +214,7 @@ pub mod pallet {
 	/// `issuance - frozen + proportion * issuance`
 	///
 	/// where `issuance = total_issuance - IgnoredIssuance`
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
+	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
 	pub struct ActiveGiltsTotal<Balance> {
 		/// The total amount of funds held in reserve for all active gilts.
 		pub frozen: Balance,
@@ -269,21 +269,26 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A bid was successfully placed.
-		/// \[ who, amount, duration \]
-		BidPlaced(T::AccountId, BalanceOf<T>, u32),
+		BidPlaced { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
 		/// A bid was successfully removed (before being accepted as a gilt).
-		/// \[ who, amount, duration \]
-		BidRetracted(T::AccountId, BalanceOf<T>, u32),
+		BidRetracted { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
 		/// A bid was accepted as a gilt. The balance may not be released until expiry.
-		/// \[ index, expiry, who, amount \]
-		GiltIssued(ActiveIndex, T::BlockNumber, T::AccountId, BalanceOf<T>),
+		GiltIssued {
+			index: ActiveIndex,
+			expiry: T::BlockNumber,
+			who: T::AccountId,
+			amount: BalanceOf<T>,
+		},
 		/// An expired gilt has been thawed.
-		/// \[ index, who, original_amount, additional_amount \]
-		GiltThawed(ActiveIndex, T::AccountId, BalanceOf<T>, BalanceOf<T>),
+		GiltThawed {
+			index: ActiveIndex,
+			who: T::AccountId,
+			original_amount: BalanceOf<T>,
+			additional_amount: BalanceOf<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -377,7 +382,7 @@ pub mod pallet {
 				qs[queue_index].0 += net.0;
 				qs[queue_index].1 = qs[queue_index].1.saturating_add(net.1);
 			});
-			Self::deposit_event(Event::BidPlaced(who.clone(), amount, duration));
+			Self::deposit_event(Event::BidPlaced { who: who.clone(), amount, duration });
 
 			Ok(().into())
 		}
@@ -415,7 +420,7 @@ pub mod pallet {
 			});
 
 			T::Currency::unreserve(&bid.who, bid.amount);
-			Self::deposit_event(Event::BidRetracted(bid.who, bid.amount, duration));
+			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(().into())
 		}
@@ -494,7 +499,12 @@ pub mod pallet {
 					debug_assert!(err_amt.is_zero());
 				}
 
-				let e = Event::GiltThawed(index, gilt.who, gilt.amount, gilt_value);
+				let e = Event::GiltThawed {
+					index,
+					who: gilt.who,
+					original_amount: gilt.amount,
+					additional_amount: gilt_value,
+				};
 				Self::deposit_event(e);
 			});
 
@@ -604,7 +614,8 @@ pub mod pallet {
 								totals.frozen += bid.amount;
 								totals.proportion = totals.proportion.saturating_add(proportion);
 								totals.index += 1;
-								let e = Event::GiltIssued(index, expiry, who.clone(), amount);
+								let e =
+									Event::GiltIssued { index, expiry, who: who.clone(), amount };
 								Self::deposit_event(e);
 								let gilt = ActiveGilt { amount, proportion, who, expiry };
 								Active::<T>::insert(index, gilt);

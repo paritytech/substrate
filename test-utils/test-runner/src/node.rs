@@ -25,10 +25,8 @@ use futures::{
 };
 use jsonrpc_core::MetaIoHandler;
 use manual_seal::EngineCommand;
-use sc_client_api::{
-	backend::{self, Backend},
-	CallExecutor, ExecutorProvider,
-};
+use sc_client_api::{backend::Backend, CallExecutor, ExecutorProvider};
+use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{OverlayedChanges, StorageTransactionCache};
@@ -51,7 +49,7 @@ pub struct Node<T: ChainInfo> {
 	/// handle to the running node.
 	task_manager: Option<TaskManager>,
 	/// client instance
-	client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
+	client: Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>>,
 	/// transaction pool
 	pool: Arc<
 		dyn TransactionPool<
@@ -86,7 +84,9 @@ where
 	pub fn new(
 		rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
 		task_manager: TaskManager,
-		client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
+		client: Arc<
+			TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>,
+		>,
 		pool: Arc<
 			dyn TransactionPool<
 				Block = <T as ChainInfo>::Block,
@@ -126,7 +126,9 @@ where
 	}
 
 	/// Return a reference to the Client
-	pub fn client(&self) -> Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>> {
+	pub fn client(
+		&self,
+	) -> Arc<TFullClient<T::Block, T::RuntimeApi, NativeElseWasmExecutor<T::ExecutorDispatch>>> {
 		self.client.clone()
 	}
 
@@ -150,14 +152,11 @@ where
 	/// Executes closure in an externalities provided environment.
 	pub fn with_state<R>(&self, closure: impl FnOnce() -> R) -> R
 	where
-		<TFullCallExecutor<T::Block, T::Executor> as CallExecutor<T::Block>>::Error:
+		<TFullCallExecutor<T::Block, NativeElseWasmExecutor<T::ExecutorDispatch>> as CallExecutor<T::Block>>::Error:
 			std::fmt::Debug,
 	{
 		let id = BlockId::Hash(self.client.info().best_hash);
 		let mut overlay = OverlayedChanges::default();
-		let changes_trie =
-			backend::changes_tries_state_at_block(&id, self.backend.changes_trie_storage())
-				.unwrap();
 		let mut cache = StorageTransactionCache::<
 			T::Block,
 			<TFullBackend<T::Block> as Backend<T::Block>>::State,
@@ -171,13 +170,7 @@ where
 			.state_at(id.clone())
 			.expect(&format!("State at block {} not found", id));
 
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&state_backend,
-			changes_trie.clone(),
-			Some(&mut extensions),
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &state_backend, Some(&mut extensions));
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)
 	}
 
@@ -245,10 +238,12 @@ where
 			future.await.expect(ERROR);
 
 			match future_block.await.expect(ERROR) {
-				Ok(block) =>
-					log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num),
-				Err(err) =>
-					log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err),
+				Ok(block) => {
+					log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num)
+				},
+				Err(err) => {
+					log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err)
+				},
 			}
 		}
 	}

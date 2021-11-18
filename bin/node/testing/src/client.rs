@@ -24,7 +24,7 @@ use sp_runtime::BuildStorage;
 pub use substrate_test_client::*;
 
 /// Call executor for `node-runtime` `TestClient`.
-pub type Executor = sc_executor::NativeExecutor<node_executor::Executor>;
+pub type ExecutorDispatch = sc_executor::NativeElseWasmExecutor<node_executor::ExecutorDispatch>;
 
 /// Default backend type.
 pub type Backend = sc_client_db::Backend<node_primitives::Block>;
@@ -32,7 +32,7 @@ pub type Backend = sc_client_db::Backend<node_primitives::Block>;
 /// Test client type.
 pub type Client = client::Client<
 	Backend,
-	client::LocalCallExecutor<node_primitives::Block, Backend, Executor>,
+	client::LocalCallExecutor<node_primitives::Block, Backend, ExecutorDispatch>,
 	node_primitives::Block,
 	node_runtime::RuntimeApi,
 >;
@@ -42,13 +42,11 @@ pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_prim
 
 /// Genesis configuration parameters for `TestClient`.
 #[derive(Default)]
-pub struct GenesisParameters {
-	support_changes_trie: bool,
-}
+pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
+		crate::genesis::config(None).build_storage().unwrap()
 	}
 }
 
@@ -64,7 +62,7 @@ pub trait TestClientBuilderExt: Sized {
 impl TestClientBuilderExt
 	for substrate_test_client::TestClientBuilder<
 		node_primitives::Block,
-		client::LocalCallExecutor<node_primitives::Block, Backend, Executor>,
+		client::LocalCallExecutor<node_primitives::Block, Backend, ExecutorDispatch>,
 		Backend,
 		GenesisParameters,
 	>

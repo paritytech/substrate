@@ -18,7 +18,10 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
+use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
+use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
+use sp_std::{cmp::Ordering, prelude::*};
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -286,6 +289,26 @@ pub trait ExecuteBlock<Block: BlockT> {
 	fn execute_block(block: Block);
 }
 
+/// Something that can compare privileges of two origins.
+pub trait PrivilegeCmp<Origin> {
+	/// Compare the `left` to the `right` origin.
+	///
+	/// The returned ordering should be from the pov of the `left` origin.
+	///
+	/// Should return `None` when it can not compare the given origins.
+	fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering>;
+}
+
+/// Implementation of [`PrivilegeCmp`] that only checks for equal origins.
+///
+/// This means it will either return [`Origin::Equal`] or `None`.
+pub struct EqualPrivilegeOnly;
+impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
+	fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering> {
+		(left == right).then(|| Ordering::Equal)
+	}
+}
+
 /// Off-chain computation trait.
 ///
 /// Implementing this trait on a module allows you to perform long-running tasks
@@ -375,5 +398,215 @@ pub trait EstimateCallFee<Call, Balance> {
 impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for ConstU32<T> {
 	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
 		T.into()
+	}
+}
+
+/// A wrapper for any type `T` which implement encode/decode in a way compatible with `Vec<u8>`.
+///
+/// The encoding is the encoding of `T` prepended with the compact encoding of its size in bytes.
+/// Thus the encoded value can be decoded as a `Vec<u8>`.
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct WrapperOpaque<T>(pub T);
+
+impl<T: Encode> EncodeLike for WrapperOpaque<T> {}
+impl<T: Encode> EncodeLike<WrapperKeepOpaque<T>> for WrapperOpaque<T> {}
+
+impl<T: Encode> Encode for WrapperOpaque<T> {
+	fn size_hint(&self) -> usize {
+		self.0.size_hint().saturating_add(<codec::Compact<u32>>::max_encoded_len())
+	}
+
+	fn encode_to<O: codec::Output + ?Sized>(&self, dest: &mut O) {
+		self.0.encode().encode_to(dest);
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		self.0.encode().encode()
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.encode().using_encoded(f)
+	}
+}
+
+impl<T: Decode> Decode for WrapperOpaque<T> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Ok(Self(T::decode(&mut &<Vec<u8>>::decode(input)?[..])?))
+	}
+
+	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
+		<Vec<u8>>::skip(input)
+	}
+}
+
+impl<T> From<T> for WrapperOpaque<T> {
+	fn from(t: T) -> Self {
+		Self(t)
+	}
+}
+
+impl<T: MaxEncodedLen> MaxEncodedLen for WrapperOpaque<T> {
+	fn max_encoded_len() -> usize {
+		let t_max_len = T::max_encoded_len();
+
+		// See scale encoding https://docs.substrate.io/v3/advanced/scale-codec
+		if t_max_len < 64 {
+			t_max_len + 1
+		} else if t_max_len < 2usize.pow(14) {
+			t_max_len + 2
+		} else if t_max_len < 2usize.pow(30) {
+			t_max_len + 4
+		} else {
+			<codec::Compact<u32>>::max_encoded_len().saturating_add(T::max_encoded_len())
+		}
+	}
+}
+
+impl<T: TypeInfo + 'static> TypeInfo for WrapperOpaque<T> {
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("WrapperOpaque", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<T>()))])
+			.composite(
+				Fields::unnamed()
+					.field(|f| f.compact::<u32>())
+					.field(|f| f.ty::<T>().type_name("T")),
+			)
+	}
+}
+
+/// A wrapper for any type `T` which implement encode/decode in a way compatible with `Vec<u8>`.
+///
+/// This type is similar to [`WrapperOpaque`], but it differs in the way it stores the type `T`.
+/// While [`WrapperOpaque`] stores the decoded type, the [`WrapperKeepOpaque`] stores the type only
+/// in its opaque format, aka as a `Vec<u8>`. To access the real type `T` [`Self::try_decode`] needs
+/// to be used.
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
+pub struct WrapperKeepOpaque<T> {
+	data: Vec<u8>,
+	_phantom: sp_std::marker::PhantomData<T>,
+}
+
+impl<T: Decode> WrapperKeepOpaque<T> {
+	/// Try to decode the wrapped type from the inner `data`.
+	///
+	/// Returns `None` if the decoding failed.
+	pub fn try_decode(&self) -> Option<T> {
+		T::decode_all(&mut &self.data[..]).ok()
+	}
+
+	/// Returns the length of the encoded `T`.
+	pub fn encoded_len(&self) -> usize {
+		self.data.len()
+	}
+
+	/// Returns the encoded data.
+	pub fn encoded(&self) -> &[u8] {
+		&self.data
+	}
+
+	/// Create from the given encoded `data`.
+	pub fn from_encoded(data: Vec<u8>) -> Self {
+		Self { data, _phantom: sp_std::marker::PhantomData }
+	}
+}
+
+impl<T: Encode> EncodeLike for WrapperKeepOpaque<T> {}
+impl<T: Encode> EncodeLike<WrapperOpaque<T>> for WrapperKeepOpaque<T> {}
+
+impl<T: Encode> Encode for WrapperKeepOpaque<T> {
+	fn size_hint(&self) -> usize {
+		self.data.len() + codec::Compact::<u32>::compact_len(&(self.data.len() as u32))
+	}
+
+	fn encode_to<O: codec::Output + ?Sized>(&self, dest: &mut O) {
+		self.data.encode_to(dest);
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		self.data.encode()
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.data.using_encoded(f)
+	}
+}
+
+impl<T: Decode> Decode for WrapperKeepOpaque<T> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Ok(Self { data: Vec::<u8>::decode(input)?, _phantom: sp_std::marker::PhantomData })
+	}
+
+	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
+		<Vec<u8>>::skip(input)
+	}
+}
+
+impl<T: MaxEncodedLen> MaxEncodedLen for WrapperKeepOpaque<T> {
+	fn max_encoded_len() -> usize {
+		WrapperOpaque::<T>::max_encoded_len()
+	}
+}
+
+impl<T: TypeInfo + 'static> TypeInfo for WrapperKeepOpaque<T> {
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("WrapperKeepOpaque", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<T>()))])
+			.composite(
+				Fields::unnamed()
+					.field(|f| f.compact::<u32>())
+					.field(|f| f.ty::<T>().type_name("T")),
+			)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn test_opaque_wrapper() {
+		let encoded = WrapperOpaque(3u32).encode();
+		assert_eq!(encoded, [codec::Compact(4u32).encode(), 3u32.to_le_bytes().to_vec()].concat());
+		let vec_u8 = <Vec<u8>>::decode(&mut &encoded[..]).unwrap();
+		let decoded_from_vec_u8 = u32::decode(&mut &vec_u8[..]).unwrap();
+		assert_eq!(decoded_from_vec_u8, 3u32);
+		let decoded = <WrapperOpaque<u32>>::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(decoded.0, 3u32);
+
+		assert_eq!(<WrapperOpaque<[u8; 63]>>::max_encoded_len(), 63 + 1);
+		assert_eq!(
+			<WrapperOpaque<[u8; 63]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 63]).encode().len()
+		);
+
+		assert_eq!(<WrapperOpaque<[u8; 64]>>::max_encoded_len(), 64 + 2);
+		assert_eq!(
+			<WrapperOpaque<[u8; 64]>>::max_encoded_len(),
+			WrapperOpaque([0u8; 64]).encode().len()
+		);
+
+		assert_eq!(
+			<WrapperOpaque<[u8; 2usize.pow(14) - 1]>>::max_encoded_len(),
+			2usize.pow(14) - 1 + 2
+		);
+		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
+	}
+
+	#[test]
+	fn test_keep_opaque_wrapper() {
+		let data = 3u32.encode().encode();
+
+		let keep_opaque = WrapperKeepOpaque::<u32>::decode(&mut &data[..]).unwrap();
+		keep_opaque.try_decode().unwrap();
+
+		let data = WrapperOpaque(50u32).encode();
+		let decoded = WrapperKeepOpaque::<u32>::decode(&mut &data[..]).unwrap();
+		let data = decoded.encode();
+		WrapperOpaque::<u32>::decode(&mut &data[..]).unwrap();
 	}
 }
