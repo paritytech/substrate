@@ -206,8 +206,8 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{ensure, pallet_prelude::*, traits::Get, Parameter};
-	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 	use sp_runtime::ArithmeticError;
 
 	#[pallet::pallet]
