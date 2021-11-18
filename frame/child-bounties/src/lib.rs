@@ -107,12 +107,12 @@ pub enum ChildBountyStatus<AccountId, BlockNumber> {
 	},
 	/// The child-bounty is active and waiting to be awarded.
 	Active {
-		/// The subcurator of this child-bounty.
+		/// The curator of this child-bounty.
 		curator: AccountId,
 	},
 	/// The child-bounty is awarded and waiting to released after a delay.
 	PendingPayout {
-		/// The subcurator of this child-bounty.
+		/// The curator of this child-bounty.
 		curator: AccountId,
 		/// The beneficiary of the child-bounty.
 		beneficiary: AccountId,
@@ -352,7 +352,7 @@ pub mod pallet {
 			)
 		}
 
-		/// Accept the subcurator role for the child-bounty.
+		/// Accept the curator role for the child-bounty.
 		///
 		/// The dispatch origin for this call must be
 		/// the curator of this child-bounty.
@@ -482,8 +482,8 @@ pub mod pallet {
 						},
 						ChildBountyStatus::CuratorProposed { ref curator } => {
 							// A child-bounty curator has been proposed, but not accepted yet.
-							// Either `RejectOrigin`, curator or the proposed subcurator
-							// can unassign the child-bounty curator.
+							// Either `RejectOrigin`, parent-bounty curator or the proposed
+							// child-bounty curator can unassign the child-bounty curator.
 							ensure!(
 								maybe_sender.map_or(true, |sender| sender == *curator ||
 									sender == parent_curator),
@@ -513,7 +513,7 @@ pub mod pallet {
 									// Continue to change bounty status below...
 									} else if parent_curator == sender {
 										// Looks like child-bounty curator is inactive,
-										// slash the subcurator deposit.
+										// slash their deposit.
 										slash_curator(curator, &mut child_bounty.curator_deposit);
 									// Continue to change child-bounty status below...
 									} else {
@@ -672,7 +672,7 @@ pub mod pallet {
 						let fee = child_bounty.fee.min(balance);
 						let payout = balance.saturating_sub(fee);
 
-						// Unreserve the subcurator deposit.
+						// Unreserve the curator deposit.
 						let _ = T::Currency::unreserve(&curator, child_bounty.curator_deposit);
 
 						// Make payout to child-bounty curator.
@@ -820,13 +820,13 @@ impl<T: Config> Pallet<T> {
 						// Child-bounty is already in pending payout. If parent curator or
 						// Root origin wants to cancel this child-bounty,
 						// it should mean the child-bounty curator was acting maliciously.
-						// So first unassign the subcurator,
+						// So first unassign the child-bounty curator,
 						// slashing their deposit.
 						return Err(BountiesError::<T>::PendingPayout.into())
 					},
 				}
 
-				// Revert the subcurator fee back to master curator &
+				// Revert the curator fee back to parent-bounty curator &
 				// reduce the active child-bounty count.
 				ChildrenCuratorFees::<T>::mutate(parent_bounty_id, |value| {
 					*value = value.saturating_sub(child_bounty.fee)
