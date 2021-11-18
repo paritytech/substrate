@@ -48,3 +48,15 @@ fn new_rounds() {
 		rounds.validators()
 	);
 }
+
+#[test]
+fn add_vote() {
+	sp_tracing::try_init_simple();
+
+	let validators = ValidatorSet::<Public> {
+		validators: vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+		id: Default::default(),
+	};
+
+	let rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
+}
