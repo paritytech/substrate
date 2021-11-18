@@ -84,14 +84,8 @@ pub fn expand_outer_origin(
 	let doc_string_root_origin =
 		get_intra_doc_string(" Create with system root origin and", &system_path_name);
 
-	let doc_string_root_origin =
-		get_intra_doc_string(" Create with system root origin and", &system_path_name);
-
 	let doc_string_signed_origin =
 		get_intra_doc_string(" Create with system signed origin and", &system_path_name);
-
-	let doc_string_runtime_origin =
-		get_intra_doc_string(" Convert to runtime origin, using as filter and", &system_path_name);
 
 	let doc_string_runtime_origin =
 		get_intra_doc_string(" Convert to runtime origin, using as filter and", &system_path_name);
