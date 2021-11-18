@@ -403,10 +403,10 @@ impl InstanceWrapper {
 		self.memory.data_ptr(ctx)
 	}
 
-	/// Removes physical backing from the allocated linear memory. This leads to returning the
-	/// memory back to the system. While the memory is zeroed this is considered as a side-effect
-	/// and is not relied upon. Thus this function acts as a hint.
-	pub fn decommit(&self, ctx: impl AsContext) {
+	/// If possible removes physical backing from the allocated linear memory which
+	/// leads to returning the memory back to the system; this also zeroes the memory
+	/// as a side-effect.
+	pub fn decommit(&self, mut ctx: impl AsContextMut) {
 		if self.memory.data_size(&ctx) == 0 {
 			return
 		}
@@ -417,7 +417,7 @@ impl InstanceWrapper {
 
 				unsafe {
 					let ptr = self.memory.data_ptr(&ctx);
-					let len = self.memory.data_size(ctx);
+					let len = self.memory.data_size(&ctx);
 
 					// Linux handles MADV_DONTNEED reliably. The result is that the given area
 					// is unmapped and will be zeroed on the next pagefault.
@@ -429,9 +429,15 @@ impl InstanceWrapper {
 								std::io::Error::last_os_error(),
 							);
 						});
+					} else {
+						return;
 					}
 				}
 			}
 		}
+
+		// If we're on an unsupported OS or the memory couldn't have been
+		// decommited for some reason then just manually zero it out.
+		self.memory.data_mut(ctx.as_context_mut()).fill(0);
 	}
 }
