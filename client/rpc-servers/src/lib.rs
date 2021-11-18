@@ -20,12 +20,12 @@
 
 #![warn(missing_docs)]
 
-use std::net::SocketAddr;
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
 	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
+use std::net::SocketAddr;
 
 const MEGABYTE: usize = 1024 * 1024;
 

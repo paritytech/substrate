@@ -328,9 +328,13 @@ where
 		addr
 	};
 
-	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
+	let ws_addr = config
+		.rpc_ws
+		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
 	let ws_addr2 = random_port(ws_addr);
-	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
+	let http_addr = config
+		.rpc_http
+		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
 	let http_addr2 = random_port(http_addr);
 
 	let http = sc_rpc_server::start_http(
