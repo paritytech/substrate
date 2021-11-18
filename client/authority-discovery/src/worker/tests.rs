@@ -19,6 +19,7 @@
 use crate::worker::schema;
 
 use std::{
+	collections::HashSet,
 	sync::{Arc, Mutex},
 	task::Poll,
 };
@@ -469,7 +470,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 			.send(ServicetoWorkerMsg::GetAddressesByAuthorityId(remote_public_key, sender))
 			.await
 			.expect("Channel has capacity of 1.");
-		assert_eq!(Some(vec![remote_multiaddr]), addresses.await.unwrap());
+		assert_eq!(Some(HashSet::from([remote_multiaddr])), addresses.await.unwrap());
 	});
 }
 
@@ -562,7 +563,7 @@ fn do_not_cache_addresses_without_peer_id() {
 	local_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
 
 	assert_eq!(
-		Some(&vec![multiaddr_with_peer_id]),
+		Some(&HashSet::from([multiaddr_with_peer_id])),
 		local_worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()),
 		"Expect worker to only cache `Multiaddr`s with `PeerId`s.",
 	);
