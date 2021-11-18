@@ -115,7 +115,7 @@ pub mod pallet {
 		BatchCompleted,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
-		/// A call was dispatched. \[result\]
+		/// A call was dispatched.
 		DispatchedAs { result: DispatchResult },
 	}
 
