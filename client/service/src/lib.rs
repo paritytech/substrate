@@ -323,11 +323,22 @@ where
 		}
 	}
 
-	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
-	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().unwrap());
+	let random_port = |mut addr: SocketAddr| {
+		addr.set_port(0);
+		addr
+	};
+
+	let ws_addr = config
+		.rpc_ws
+		.unwrap_or_else(|| "127.0.0.1:9944".parse().expect("valid sockaddr; qed"));
+	let ws_addr2 = random_port(ws_addr);
+	let http_addr = config
+		.rpc_http
+		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
+	let http_addr2 = random_port(http_addr);
 
 	let http = sc_rpc_server::start_http(
-		http_addr,
+		&[http_addr, http_addr2],
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
@@ -336,7 +347,7 @@ where
 	.map_err(|e| Error::Application(e.into()))?;
 
 	let ws = sc_rpc_server::start_ws(
-		ws_addr,
+		&[ws_addr, ws_addr2],
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,

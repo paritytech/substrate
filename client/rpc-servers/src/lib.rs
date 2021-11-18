@@ -25,6 +25,7 @@ use jsonrpsee::{
 	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
+use std::net::SocketAddr;
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -81,7 +82,7 @@ pub type WsServer = WsServerHandle;
 
 /// Start HTTP server listening on given address.
 pub fn start_http<M: Send + Sync + 'static>(
-	addr: std::net::SocketAddr,
+	addrs: &[SocketAddr],
 	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
 	module: RpcModule<M>,
@@ -93,11 +94,12 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 	let mut acl = AccessControlBuilder::new();
 
-	log::info!("Starting JSON-RPC HTTP server: addr={}, allowed origins={:?}", addr, cors);
+	log::info!("Starting JSON-RPC HTTP server: addr={:?}, allowed origins={:?}", addrs, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		acl = acl.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
+		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
+		acl = acl.set_allowed_hosts(format_allowed_hosts(addrs))?;
 		acl = acl.set_allowed_origins(cors)?;
 	};
 
@@ -105,7 +107,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
 		.custom_tokio_runtime(rt)
-		.build(addr)?;
+		.build(addrs)?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
@@ -115,7 +117,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 
 /// Start WS server listening on given address.
 pub fn start_ws<M: Send + Sync + 'static>(
-	addr: std::net::SocketAddr,
+	addrs: &[SocketAddr],
 	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
 	maybe_max_payload_mb: Option<usize>,
@@ -132,15 +134,16 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		.max_connections(max_connections as u64)
 		.custom_tokio_runtime(rt.clone());
 
-	log::info!("Starting JSON-RPC WS server: addr={}, allowed origins={:?}", addr, cors);
+	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
-		builder = builder.set_allowed_hosts(format_allowed_hosts(addr.port()))?;
+		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
+		builder = builder.set_allowed_hosts(format_allowed_hosts(addrs))?;
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
-	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addr)))?;
+	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
@@ -148,13 +151,17 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	Ok(handle)
 }
 
-fn format_allowed_hosts(port: u16) -> [String; 2] {
-	[format!("localhost:{}", port), format!("127.0.0.1:{}", port)]
+fn format_allowed_hosts(addrs: &[SocketAddr]) -> Vec<String> {
+	let mut hosts = Vec::with_capacity(addrs.len() * 2);
+	for addr in addrs {
+		hosts.push(format!("localhost:{}", addr.port()));
+		hosts.push(format!("127.0.0.1:{}", addr.port()));
+	}
+	hosts
 }
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
 	let mut available_methods = rpc_api.method_names().collect::<Vec<_>>();
-	available_methods.push("rpc_methods");
 	available_methods.sort_unstable();
 
 	rpc_api
