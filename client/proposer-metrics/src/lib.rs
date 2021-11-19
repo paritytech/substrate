@@ -48,6 +48,7 @@ pub struct Metrics {
 	pub block_constructed: Histogram,
 	pub number_of_transactions: Gauge<U64>,
 	pub create_inherents_time: Histogram,
+	pub create_block_proposal_time: Histogram,
 }
 
 impl Metrics {
@@ -69,8 +70,15 @@ impl Metrics {
 			)?,
 			create_inherents_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"report_create_inherents_time",
-					"Time taken to execute create inherents",
+					"proposer_create_inherents_time",
+					"Histogram of time taken to execute create inherents",
+				))?,
+				registry,
+			)?,
+			create_block_proposal_time: register(
+				Histogram::with_opts(HistogramOpts::new(
+					"proposer_block_proposal_time",
+					"Histogram of time taken to construct a block and prepare it for proposal",
 				))?,
 				registry,
 			)?
