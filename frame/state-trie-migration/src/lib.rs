@@ -1654,7 +1654,7 @@ mod remote_tests {
 		};
 
 		// item being the bottleneck
-		run_with_limits(MigrationLimits { item: 32 * 1024, size: 128 * 1024 * 1024 }).await;
+		run_with_limits(MigrationLimits { item: 8 * 1024, size: 128 * 1024 * 1024 }).await;
 		// size being the bottleneck
 		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 4 * 1024 }).await;
 	}
