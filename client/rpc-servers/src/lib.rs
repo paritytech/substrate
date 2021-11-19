@@ -103,11 +103,14 @@ pub fn start_http<M: Send + Sync + 'static>(
 		acl = acl.set_allowed_origins(cors)?;
 	};
 
-	let server = HttpServerBuilder::default()
+	let builder = HttpServerBuilder::default()
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
-		.custom_tokio_runtime(rt)
-		.build(addrs)?;
+		.custom_tokio_runtime(rt.clone());
+
+	let server = tokio::task::block_in_place(|| {
+		rt.block_on(async { builder.build(addrs) })
+	})?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
