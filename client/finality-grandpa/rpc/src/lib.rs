@@ -430,8 +430,8 @@ mod tests {
 		justification_sender.notify(|| Ok(justification.clone())).unwrap();
 
 		// Inspect what we received
-		let (recv_justification, recv_sub_id): (sp_core::Bytes, SubscriptionId) = sub.next().await;
-
+		let (recv_justification, recv_sub_id): (sp_core::Bytes, SubscriptionId) =
+			sub.next().await.unwrap();
 		let recv_justification: GrandpaJustification<Block> =
 			Decode::decode(&mut &recv_justification[..]).unwrap();
 

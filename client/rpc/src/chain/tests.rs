@@ -226,22 +226,24 @@ async fn should_return_finalized_hash() {
 
 #[tokio::test]
 async fn should_notify_about_latest_block() {
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+
+	assert_eq!(Arc::strong_count(&client), 1);
+
 	let mut sub = {
-		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
-
 		let sub = api.test_subscription("chain_subscribeAllHeads", Vec::<()>::new()).await;
-
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).await.unwrap();
 		sub
 	};
 
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Ok(_));
+	assert_matches!(sub.next::<Header>().await, Some(_));
+	assert_matches!(sub.next::<Header>().await, Some(_));
 
-	// TODO(niklasad1): assert that the subscription was closed.
-	assert_matches!(timeout_secs(1, sub.next::<Header>()).await, Err(_));
+	sub.close();
+	assert_matches!(sub.next::<Header>().await, None);
+	assert_eq!(Arc::strong_count(&client), 1);
 }
 
 #[tokio::test]

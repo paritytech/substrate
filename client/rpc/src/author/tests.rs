@@ -22,7 +22,10 @@ use crate::testing::{deser_call, deser_error};
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
-	types::v2::{Response, RpcError, SubscriptionId},
+	types::{
+		error::SubscriptionClosedError,
+		v2::{Response, RpcError, SubscriptionId},
+	},
 	RpcModule,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
@@ -111,7 +114,7 @@ async fn author_should_watch_extrinsic() {
 	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
 	let mut sub = api.test_subscription("author_submitAndWatchExtrinsic", [xt]).await;
-	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await;
+	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await.unwrap();
 
 	assert_matches!(sub_data, TransactionStatus::Ready);
 	assert_matches!(sub_id, SubscriptionId::Num(id) if id == sub.subscription_id());
@@ -132,27 +135,27 @@ async fn author_should_watch_extrinsic() {
 
 	let _ = api.call_with("author_submitExtrinsic", [xt_replacement]).await.unwrap();
 
-	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await;
+	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await.unwrap();
 	assert_eq!(sub_data, TransactionStatus::Usurped(xt_hash.into()));
 	assert_matches!(sub_id, SubscriptionId::Num(id) if id == sub.subscription_id());
 }
 
 #[tokio::test]
 async fn author_should_return_watch_validation_error() {
-	const METH: &'static str = "author_submitAndWatchExtrinsic";
+	const METHOD: &'static str = "author_submitAndWatchExtrinsic";
 
 	let api = TestSetup::into_rpc();
 	let mut sub = api
-		.test_subscription(METH, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
+		.test_subscription(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
 		.await;
 
-	let (data, _) = sub.next::<String>().await;
-	assert!(data.contains("subscription useless"));
+	let (pool_error, _) = sub.next::<SubscriptionClosedError>().await.unwrap();
+	assert_eq!(pool_error.close_reason(), "Transaction pool error");
 }
 
 #[tokio::test]
 async fn author_should_return_pending_extrinsics() {
-	const METH: &'static str = "author_pendingExtrinsics";
+	const METHOD: &'static str = "author_pendingExtrinsics";
 
 	let api = TestSetup::into_rpc();
 
@@ -161,7 +164,7 @@ async fn author_should_return_pending_extrinsics() {
 		.await
 		.unwrap();
 
-	let pending = api.call(METH, None).await.unwrap();
+	let pending = api.call(METHOD, None).await.unwrap();
 	log::debug!(target: "test", "pending: {:?}", pending);
 	let pending = {
 		let r: Response<Vec<Bytes>> = serde_json::from_str(&pending).unwrap();
@@ -172,7 +175,7 @@ async fn author_should_return_pending_extrinsics() {
 
 #[tokio::test]
 async fn author_should_remove_extrinsics() {
-	const METH: &'static str = "author_removeExtrinsic";
+	const METHOD: &'static str = "author_removeExtrinsic";
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();
 
@@ -193,7 +196,7 @@ async fn author_should_remove_extrinsics() {
 	// Notice how we need an extra `Vec` wrapping the `Vec` we want to submit as params.
 	let removed: Vec<H256> = deser_call(
 		api.call_with(
-			METH,
+			METHOD,
 			vec![vec![
 				hash::ExtrinsicOrHash::Hash(xt3_hash),
 				// Removing this one will also remove xt2
