@@ -41,7 +41,6 @@ use futures::{
 	future::{ready, Future},
 	prelude::*,
 };
-use log::{debug, warn};
 use parking_lot::Mutex;
 use sc_network::{ExHashT, NetworkService, NetworkStateInfo, PeerId};
 use sp_api::{ApiExt, ProvideRuntimeApi};
@@ -56,6 +55,8 @@ mod api;
 
 pub use api::Db as OffchainDb;
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
+
+const LOG_TARGET: &str = "offchain-worker";
 
 /// NetworkProvider provides [`OffchainWorkers`] with all necessary hooks into the
 /// underlying Substrate networking.
@@ -149,15 +150,25 @@ where
 			err => {
 				let help =
 					"Consider turning off offchain workers if they are not part of your runtime.";
-				log::error!("Unsupported Offchain Worker API version: {:?}. {}.", err, help);
+				tracing::error!(
+					target: LOG_TARGET,
+					"Unsupported Offchain Worker API version: {:?}. {}.",
+					err,
+					help
+				);
 				0
 			},
 		};
-		debug!("Checking offchain workers at {:?}: version:{}", at, version);
+		tracing::debug!(
+			target: LOG_TARGET,
+			"Checking offchain workers at {:?}: version:{}",
+			at,
+			version
+		);
 		let process = (version > 0).then(|| {
 			let (api, runner) =
 				api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
-			debug!("Spawning offchain workers at {:?}", at);
+			tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {:?}", at);
 			let header = header.clone();
 			let client = self.client.clone();
 
@@ -167,7 +178,7 @@ where
 			self.spawn_worker(move || {
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
-				debug!("Running offchain workers at {:?}", at);
+				tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", at);
 
 				let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
 				let run = if version == 2 {
@@ -181,7 +192,12 @@ where
 					)
 				};
 				if let Err(e) = run {
-					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
+					tracing::error!(
+						target: LOG_TARGET,
+						"Error running offchain workers at {:?}: {:?}",
+						at,
+						e
+					);
 				}
 			});
 
@@ -232,8 +248,8 @@ pub async fn notification_future<Client, Block, Spawner>(
 						.boxed(),
 				);
 			} else {
-				log::debug!(
-					target: "sc_offchain",
+				tracing::debug!(
+					target: LOG_TARGET,
 					"Skipping offchain workers for non-canon block: {:?}",
 					n.header,
 				)
