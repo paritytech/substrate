@@ -19,7 +19,6 @@ hex = "0.4"
 fnv = "1.0.6"
 futures = "0.3.16"
 futures-timer = "3.0.2"
-log = "0.4.8"
 num_cpus = "1.10"
 parking_lot = "0.11.1"
 rand = "0.7.2"
@@ -31,9 +30,10 @@ sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 threadpool = "1.7"
-hyper = { version = "0.14.14", features = ["stream"] }
+hyper = { version = "0.14.14", features = ["stream", "http2"] }
 hyper-rustls = "0.22.1"
 once_cell = "1.8"
+tracing = "0.1.29"
 
 [dev-dependencies]
 sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }
