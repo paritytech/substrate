@@ -5352,8 +5352,8 @@ dependencies = [
  "parity-scale-codec",
  "pretty_assertions",
  "pwasm-utils",
- "rand 0.7.3",
- "rand_pcg 0.2.1",
+ "rand 0.8.4",
+ "rand_pcg 0.3.1",
  "scale-info",
  "serde",
  "smallvec 1.7.0",
@@ -7185,6 +7185,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_pcg"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
+dependencies = [
+ "rand_core 0.6.2",
 ]
 
 [[package]]
@@ -11003,7 +11012,7 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "rand 0.8.4",
  "static_assertions",
 ]
