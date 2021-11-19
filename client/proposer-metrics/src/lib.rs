@@ -81,7 +81,7 @@ impl Metrics {
 					"Histogram of time taken to construct a block and prepare it for proposal",
 				))?,
 				registry,
-			)?
+			)?,
 		})
 	}
 }

@@ -353,7 +353,9 @@ where
 		let create_inherents_timer = time::Instant::now();
 		let inherents = block_builder.create_inherents(inherent_data)?;
 		self.metrics.report(|metrics| {
-			metrics.create_inherents_time.observe(create_inherents_timer.elapsed().as_secs_f64());
+			metrics
+				.create_inherents_time
+				.observe(create_inherents_timer.elapsed().as_secs_f64());
 		});
 
 		for inherent in inherents {
@@ -538,7 +540,9 @@ where
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
 
 		self.metrics.report(|metrics| {
-			metrics.create_block_proposal_time.observe(block_proposal_timer.elapsed().as_secs_f64());
+			metrics
+				.create_block_proposal_time
+				.observe(block_proposal_timer.elapsed().as_secs_f64());
 		});
 
 		Ok(Proposal { block, proof, storage_changes })
