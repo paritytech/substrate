@@ -155,34 +155,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d6e24d2cce90c53b948c46271bfb053e4bdc2db9b5d3f65e20f8cf28a1b7fc3"
 
 [[package]]
-name = "assert_cmd"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e996dc7940838b7ef1096b882e29ec30a3149a3a443cdc8dba19ed382eca1fe2"
-dependencies = [
- "bstr",
- "doc-comment",
- "predicates",
- "predicates-core",
- "predicates-tree",
- "wait-timeout",
-]
-
-[[package]]
 name = "assert_matches"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
-
-[[package]]
-name = "async-attributes"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
-dependencies = [
- "quote",
- "syn",
-]
 
 [[package]]
 name = "async-channel"
@@ -286,7 +262,6 @@ version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8056f1455169ab86dd47b47391e4ab0cbd25410a70e9fe675544f49bafaf952"
 dependencies = [
- "async-attributes",
  "async-channel",
  "async-global-executor",
  "async-io",
@@ -902,20 +877,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chain-spec-builder"
-version = "2.0.0"
-dependencies = [
- "ansi_term 0.12.1",
- "node-cli",
- "rand 0.7.3",
- "sc-chain-spec",
- "sc-keystore",
- "sp-core 4.0.0-dev",
- "sp-keystore 0.10.0-dev",
- "structopt",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1232,7 +1193,6 @@ dependencies = [
  "clap",
  "criterion-plot",
  "csv",
- "futures 0.3.16",
  "itertools",
  "lazy_static",
  "num-traits",
@@ -1245,7 +1205,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
- "tokio",
  "walkdir",
 ]
 
@@ -1517,12 +1476,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e25ea47919b1560c4e3b7fe0aaab9becf5b84a10325ddf7db0f0ba5e1026499"
 
 [[package]]
-name = "difflib"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
-
-[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1596,12 +1549,6 @@ dependencies = [
  "byteorder",
  "quick-error 1.2.3",
 ]
-
-[[package]]
-name = "doc-comment"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "downcast-rs"
@@ -1823,6 +1770,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "extrinsic-info-runtime-api"
+version = "4.0.0-dev"
+dependencies = [
+ "derive_more",
+ "futures 0.3.16",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime 4.0.0-dev",
+]
+
+[[package]]
+name = "extrinsic-shuffler"
+version = "4.0.0-dev"
+dependencies = [
+ "derive_more",
+ "extrinsic-info-runtime-api",
+ "log 0.4.14",
+ "sp-api",
+ "sp-block-builder",
+ "sp-core 4.0.0-dev",
+ "sp-runtime 4.0.0-dev",
+ "sp-std 4.0.0-dev",
+ "sp-ver",
+]
+
+[[package]]
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2013,6 +1989,7 @@ dependencies = [
 name = "frame-executive"
 version = "4.0.0-dev"
 dependencies = [
+ "extrinsic-shuffler",
  "frame-support 4.0.0-dev",
  "frame-system 4.0.0-dev",
  "hex-literal",
@@ -2020,9 +1997,11 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "scale-info",
+ "schnorrkel",
  "sp-core 4.0.0-dev",
  "sp-inherents 4.0.0-dev",
  "sp-io 4.0.0-dev",
+ "sp-keystore 0.10.0-dev",
  "sp-runtime 4.0.0-dev",
  "sp-std 4.0.0-dev",
  "sp-tracing 4.0.0-dev",
@@ -2285,12 +2264,6 @@ dependencies = [
  "libc",
  "winapi 0.3.9",
 ]
-
-[[package]]
-name = "fs_extra"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
 name = "fuchsia-cprng"
@@ -4496,429 +4469,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nix"
-version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2ccba0cfe4fdf15982d1674c69b1fd80bad427d293849982668dfe454bd61f2"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 1.0.0",
- "libc",
-]
-
-[[package]]
-name = "node-bench"
-version = "0.9.0-dev"
-dependencies = [
- "derive_more",
- "fs_extra",
- "futures 0.3.16",
- "hash-db",
- "hex",
- "kvdb",
- "kvdb-rocksdb",
- "lazy_static",
- "log 0.4.14",
- "node-primitives",
- "node-runtime",
- "node-testing",
- "parity-db",
- "parity-util-mem",
- "rand 0.7.3",
- "sc-basic-authorship",
- "sc-client-api",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
- "serde",
- "serde_json",
- "sp-consensus",
- "sp-core 4.0.0-dev",
- "sp-inherents 4.0.0-dev",
- "sp-runtime 4.0.0-dev",
- "sp-state-machine 0.10.0-dev",
- "sp-timestamp",
- "sp-tracing 4.0.0-dev",
- "sp-trie 4.0.0-dev",
- "structopt",
- "tempfile",
-]
-
-[[package]]
-name = "node-cli"
-version = "3.0.0-dev"
-dependencies = [
- "assert_cmd",
- "async-std",
- "criterion",
- "frame-benchmarking-cli",
- "frame-system 4.0.0-dev",
- "frame-system-rpc-runtime-api",
- "futures 0.3.16",
- "hex-literal",
- "jsonrpsee-ws-client",
- "log 0.4.14",
- "nix",
- "node-executor",
- "node-inspect",
- "node-primitives",
- "node-rpc",
- "node-runtime",
- "pallet-balances",
- "pallet-im-online",
- "pallet-transaction-payment",
- "parity-scale-codec",
- "platforms",
- "rand 0.7.3",
- "regex",
- "remote-externalities",
- "sc-authority-discovery",
- "sc-basic-authorship",
- "sc-chain-spec",
- "sc-cli",
- "sc-client-api",
- "sc-client-db",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-epochs",
- "sc-consensus-slots",
- "sc-consensus-uncles",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-keystore",
- "sc-network",
- "sc-rpc",
- "sc-service",
- "sc-service-test",
- "sc-sync-state-rpc",
- "sc-telemetry",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
- "serde",
- "serde_json",
- "soketto 0.4.2",
- "sp-api",
- "sp-authority-discovery",
- "sp-authorship",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-core 4.0.0-dev",
- "sp-finality-grandpa",
- "sp-inherents 4.0.0-dev",
- "sp-keyring",
- "sp-keystore 0.10.0-dev",
- "sp-runtime 4.0.0-dev",
- "sp-timestamp",
- "sp-tracing 4.0.0-dev",
- "sp-transaction-pool",
- "sp-transaction-storage-proof",
- "sp-trie 4.0.0-dev",
- "structopt",
- "substrate-build-script-utils",
- "substrate-frame-cli",
- "tempfile",
- "tokio",
- "try-runtime-cli",
- "wait-timeout",
-]
-
-[[package]]
-name = "node-executor"
-version = "3.0.0-dev"
-dependencies = [
- "criterion",
- "frame-benchmarking",
- "frame-support 4.0.0-dev",
- "frame-system 4.0.0-dev",
- "futures 0.3.16",
- "node-primitives",
- "node-runtime",
- "node-testing",
- "pallet-balances",
- "pallet-contracts",
- "pallet-im-online",
- "pallet-timestamp",
- "pallet-treasury",
- "parity-scale-codec",
- "sc-executor",
- "scale-info",
- "sp-application-crypto 4.0.0-dev",
- "sp-consensus-babe",
- "sp-core 4.0.0-dev",
- "sp-externalities 0.10.0-dev",
- "sp-keystore 0.10.0-dev",
- "sp-runtime 4.0.0-dev",
- "sp-state-machine 0.10.0-dev",
- "sp-trie 4.0.0-dev",
- "wat",
-]
-
-[[package]]
-name = "node-inspect"
-version = "0.9.0-dev"
-dependencies = [
- "derive_more",
- "parity-scale-codec",
- "sc-cli",
- "sc-client-api",
- "sc-executor",
- "sc-service",
- "sp-blockchain",
- "sp-core 4.0.0-dev",
- "sp-runtime 4.0.0-dev",
- "structopt",
-]
-
-[[package]]
-name = "node-primitives"
-version = "2.0.0"
-dependencies = [
- "frame-system 4.0.0-dev",
- "parity-scale-codec",
- "scale-info",
- "sp-application-crypto 4.0.0-dev",
- "sp-core 4.0.0-dev",
- "sp-runtime 4.0.0-dev",
-]
-
-[[package]]
-name = "node-rpc"
-version = "3.0.0-dev"
-dependencies = [
- "jsonrpc-core",
- "node-primitives",
- "pallet-contracts-rpc",
- "pallet-mmr-rpc",
- "pallet-transaction-payment-rpc",
- "sc-chain-spec",
- "sc-client-api",
- "sc-consensus-babe",
- "sc-consensus-babe-rpc",
- "sc-consensus-epochs",
- "sc-finality-grandpa",
- "sc-finality-grandpa-rpc",
- "sc-rpc",
- "sc-rpc-api",
- "sc-sync-state-rpc",
- "sc-transaction-pool-api",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-keystore 0.10.0-dev",
- "sp-runtime 4.0.0-dev",
- "substrate-frame-rpc-system",
-]
-
-[[package]]
-name = "node-rpc-client"
-version = "2.0.0"
-dependencies = [
- "futures 0.3.16",
- "jsonrpc-core-client",
- "node-primitives",
- "sc-rpc",
- "sp-tracing 4.0.0-dev",
-]
-
-[[package]]
-name = "node-runtime"
-version = "3.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-election-provider-support",
- "frame-executive",
- "frame-support 4.0.0-dev",
- "frame-system 4.0.0-dev",
- "frame-system-benchmarking",
- "frame-system-rpc-runtime-api",
- "frame-try-runtime",
- "hex-literal",
- "log 0.4.14",
- "node-primitives",
- "pallet-assets",
- "pallet-authority-discovery",
- "pallet-authorship",
- "pallet-babe",
- "pallet-bags-list",
- "pallet-balances",
- "pallet-bounties",
- "pallet-collective",
- "pallet-contracts",
- "pallet-contracts-primitives",
- "pallet-contracts-rpc-runtime-api",
- "pallet-democracy",
- "pallet-election-provider-multi-phase",
- "pallet-elections-phragmen",
- "pallet-gilt",
- "pallet-grandpa",
- "pallet-identity",
- "pallet-im-online",
- "pallet-indices",
- "pallet-lottery",
- "pallet-membership",
- "pallet-mmr",
- "pallet-multisig",
- "pallet-offences",
- "pallet-offences-benchmarking",
- "pallet-proxy",
- "pallet-randomness-collective-flip",
- "pallet-recovery",
- "pallet-scheduler",
- "pallet-session",
- "pallet-session-benchmarking",
- "pallet-society",
- "pallet-staking",
- "pallet-staking-reward-curve",
- "pallet-sudo",
- "pallet-timestamp",
- "pallet-tips",
- "pallet-transaction-payment",
- "pallet-transaction-payment-rpc-runtime-api",
- "pallet-transaction-storage",
- "pallet-treasury",
- "pallet-uniques",
- "pallet-utility",
- "pallet-vesting",
- "parity-scale-codec",
- "scale-info",
- "sp-api",
- "sp-authority-discovery",
- "sp-block-builder",
- "sp-consensus-babe",
- "sp-core 4.0.0-dev",
- "sp-inherents 4.0.0-dev",
- "sp-io 4.0.0-dev",
- "sp-keyring",
- "sp-npos-elections",
- "sp-offchain",
- "sp-runtime 4.0.0-dev",
- "sp-session",
- "sp-staking 4.0.0-dev",
- "sp-std 4.0.0-dev",
- "sp-transaction-pool",
- "sp-version 4.0.0-dev",
- "static_assertions",
- "substrate-wasm-builder",
-]
-
-[[package]]
-name = "node-runtime-generate-bags"
-version = "3.0.0"
-dependencies = [
- "generate-bags",
- "node-runtime",
- "structopt",
-]
-
-[[package]]
-name = "node-template"
-version = "3.0.0"
-dependencies = [
- "frame-benchmarking",
- "frame-benchmarking-cli",
- "jsonrpc-core",
- "node-template-runtime",
- "pallet-transaction-payment-rpc",
- "sc-basic-authorship",
- "sc-cli",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-aura",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-keystore",
- "sc-rpc",
- "sc-rpc-api",
- "sc-service",
- "sc-telemetry",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-aura",
- "sp-core 4.0.0-dev",
- "sp-finality-grandpa",
- "sp-runtime 4.0.0-dev",
- "sp-timestamp",
- "structopt",
- "substrate-build-script-utils",
- "substrate-frame-rpc-system",
-]
-
-[[package]]
-name = "node-template-runtime"
-version = "3.0.0"
-dependencies = [
- "frame-benchmarking",
- "frame-executive",
- "frame-support 4.0.0-dev",
- "frame-system 4.0.0-dev",
- "frame-system-benchmarking",
- "frame-system-rpc-runtime-api",
- "hex-literal",
- "pallet-aura",
- "pallet-balances",
- "pallet-grandpa",
- "pallet-randomness-collective-flip",
- "pallet-sudo",
- "pallet-template",
- "pallet-timestamp",
- "pallet-transaction-payment",
- "pallet-transaction-payment-rpc-runtime-api",
- "parity-scale-codec",
- "scale-info",
- "sp-api",
- "sp-block-builder",
- "sp-consensus-aura",
- "sp-core 4.0.0-dev",
- "sp-inherents 4.0.0-dev",
- "sp-offchain",
- "sp-runtime 4.0.0-dev",
- "sp-session",
- "sp-std 4.0.0-dev",
- "sp-transaction-pool",
- "sp-version 4.0.0-dev",
- "substrate-wasm-builder",
-]
-
-[[package]]
-name = "node-testing"
-version = "3.0.0-dev"
-dependencies = [
- "frame-system 4.0.0-dev",
- "fs_extra",
- "futures 0.3.16",
- "log 0.4.14",
- "node-executor",
- "node-primitives",
- "node-runtime",
- "pallet-transaction-payment",
- "parity-scale-codec",
- "sc-block-builder",
- "sc-client-api",
- "sc-client-db",
- "sc-consensus",
- "sc-executor",
- "sc-service",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-core 4.0.0-dev",
- "sp-inherents 4.0.0-dev",
- "sp-io 4.0.0-dev",
- "sp-keyring",
- "sp-runtime 4.0.0-dev",
- "sp-timestamp",
- "substrate-test-client",
- "tempfile",
-]
-
-[[package]]
 name = "nodrop"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5865,32 +5415,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-offences-benchmarking"
-version = "4.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-election-provider-support",
- "frame-support 4.0.0-dev",
- "frame-system 4.0.0-dev",
- "pallet-babe",
- "pallet-balances",
- "pallet-grandpa",
- "pallet-im-online",
- "pallet-offences",
- "pallet-session",
- "pallet-staking",
- "pallet-staking-reward-curve",
- "pallet-timestamp",
- "parity-scale-codec",
- "scale-info",
- "sp-core 4.0.0-dev",
- "sp-io 4.0.0-dev",
- "sp-runtime 4.0.0-dev",
- "sp-staking 4.0.0-dev",
- "sp-std 4.0.0-dev",
-]
-
-[[package]]
 name = "pallet-proxy"
 version = "4.0.0-dev"
 dependencies = [
@@ -6090,20 +5614,6 @@ dependencies = [
  "sp-io 4.0.0-dev",
  "sp-runtime 4.0.0-dev",
  "sp-std 4.0.0-dev",
-]
-
-[[package]]
-name = "pallet-template"
-version = "3.0.0"
-dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev",
- "frame-system 4.0.0-dev",
- "parity-scale-codec",
- "scale-info",
- "sp-core 4.0.0-dev",
- "sp-io 4.0.0-dev",
- "sp-runtime 4.0.0-dev",
 ]
 
 [[package]]
@@ -6712,33 +6222,6 @@ name = "ppv-lite86"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac74c624d6b2d21f425f752262f42188365d7b8ff1aff74c82e45136510a4857"
-
-[[package]]
-name = "predicates"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c143348f141cc87aab5b950021bac6145d0e5ae754b0591de23244cee42c9308"
-dependencies = [
- "difflib",
- "itertools",
- "predicates-core",
-]
-
-[[package]]
-name = "predicates-core"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57e35a3326b75e49aa85f5dc6ec15b41108cf5aee58eabb1f274dd18b73c2451"
-
-[[package]]
-name = "predicates-tree"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15f553275e5721409451eb85e15fd9a860a6e5ab4496eb215987502b5f5391f2"
-dependencies = [
- "predicates-core",
- "treeline",
-]
 
 [[package]]
 name = "pretty_assertions"
@@ -7576,6 +7059,8 @@ dependencies = [
 name = "sc-basic-authorship"
 version = "0.10.0-dev"
 dependencies = [
+ "env_logger 0.9.0",
+ "extrinsic-info-runtime-api",
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "log 0.4.14",
@@ -7593,6 +7078,7 @@ dependencies = [
  "sp-core 4.0.0-dev",
  "sp-inherents 4.0.0-dev",
  "sp-runtime 4.0.0-dev",
+ "sp-ver",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
@@ -7601,6 +7087,9 @@ dependencies = [
 name = "sc-block-builder"
 version = "0.10.0-dev"
 dependencies = [
+ "extrinsic-info-runtime-api",
+ "extrinsic-shuffler",
+ "log 0.4.14",
  "parity-scale-codec",
  "sc-client-api",
  "sp-api",
@@ -7610,6 +7099,7 @@ dependencies = [
  "sp-inherents 4.0.0-dev",
  "sp-runtime 4.0.0-dev",
  "sp-state-machine 0.10.0-dev",
+ "sp-ver",
  "substrate-test-runtime-client",
 ]
 
@@ -7797,85 +7287,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-consensus-babe"
-version = "0.10.0-dev"
-dependencies = [
- "async-trait",
- "derive_more",
- "fork-tree",
- "futures 0.3.16",
- "log 0.4.14",
- "merlin",
- "num-bigint",
- "num-rational 0.2.4",
- "num-traits",
- "parity-scale-codec",
- "parking_lot 0.11.1",
- "rand 0.7.3",
- "rand_chacha 0.2.2",
- "retain_mut",
- "sc-block-builder",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-epochs",
- "sc-consensus-slots",
- "sc-keystore",
- "sc-network",
- "sc-network-test",
- "sc-telemetry",
- "schnorrkel",
- "serde",
- "sp-api",
- "sp-application-crypto 4.0.0-dev",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-consensus-slots",
- "sp-consensus-vrf",
- "sp-core 4.0.0-dev",
- "sp-inherents 4.0.0-dev",
- "sp-io 4.0.0-dev",
- "sp-keystore 0.10.0-dev",
- "sp-runtime 4.0.0-dev",
- "sp-timestamp",
- "sp-tracing 4.0.0-dev",
- "sp-version 4.0.0-dev",
- "substrate-prometheus-endpoint",
- "substrate-test-runtime-client",
- "tempfile",
-]
-
-[[package]]
-name = "sc-consensus-babe-rpc"
-version = "0.10.0-dev"
-dependencies = [
- "derive_more",
- "futures 0.3.16",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-epochs",
- "sc-keystore",
- "sc-rpc-api",
- "serde",
- "serde_json",
- "sp-api",
- "sp-application-crypto 4.0.0-dev",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-core 4.0.0-dev",
- "sp-keyring",
- "sp-keystore 0.10.0-dev",
- "sp-runtime 4.0.0-dev",
- "substrate-test-runtime-client",
- "tempfile",
-]
-
-[[package]]
 name = "sc-consensus-epochs"
 version = "0.10.0-dev"
 dependencies = [
@@ -7885,43 +7296,6 @@ dependencies = [
  "sc-consensus",
  "sp-blockchain",
  "sp-runtime 4.0.0-dev",
-]
-
-[[package]]
-name = "sc-consensus-manual-seal"
-version = "0.10.0-dev"
-dependencies = [
- "assert_matches",
- "async-trait",
- "derive_more",
- "futures 0.3.16",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "log 0.4.14",
- "parity-scale-codec",
- "sc-basic-authorship",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-epochs",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
- "serde",
- "sp-api",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-consensus-slots",
- "sp-core 4.0.0-dev",
- "sp-inherents 4.0.0-dev",
- "sp-keystore 0.10.0-dev",
- "sp-runtime 4.0.0-dev",
- "sp-timestamp",
- "substrate-prometheus-endpoint",
- "substrate-test-runtime-client",
- "substrate-test-runtime-transaction-pool",
- "tokio",
 ]
 
 [[package]]
@@ -7961,15 +7335,18 @@ dependencies = [
  "sc-consensus",
  "sc-telemetry",
  "sp-api",
+ "sp-application-crypto 4.0.0-dev",
  "sp-arithmetic 4.0.0-dev",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-slots",
  "sp-core 4.0.0-dev",
  "sp-inherents 4.0.0-dev",
+ "sp-keystore 0.10.0-dev",
  "sp-runtime 4.0.0-dev",
  "sp-state-machine 0.10.0-dev",
  "sp-timestamp",
+ "sp-ver",
  "substrate-test-runtime-client",
  "thiserror",
 ]
@@ -8119,33 +7496,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
-dependencies = [
- "derive_more",
- "finality-grandpa",
- "futures 0.3.16",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "jsonrpc-pubsub",
- "log 0.4.14",
- "parity-scale-codec",
- "sc-block-builder",
- "sc-client-api",
- "sc-finality-grandpa",
- "sc-rpc",
- "serde",
- "serde_json",
- "sp-blockchain",
- "sp-core 4.0.0-dev",
- "sp-finality-grandpa",
- "sp-keyring",
- "sp-runtime 4.0.0-dev",
- "substrate-test-runtime-client",
-]
-
-[[package]]
 name = "sc-informant"
 version = "0.10.0-dev"
 dependencies = [
@@ -8274,6 +7624,7 @@ version = "0.8.0"
 dependencies = [
  "async-std",
  "async-trait",
+ "env_logger 0.9.0",
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "libp2p",
@@ -8449,6 +7800,7 @@ dependencies = [
  "async-trait",
  "directories",
  "exit-future",
+ "extrinsic-info-runtime-api",
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "hash-db",
@@ -8556,27 +7908,6 @@ dependencies = [
  "parking_lot 0.11.1",
  "sc-client-api",
  "sp-core 4.0.0-dev",
-]
-
-[[package]]
-name = "sc-sync-state-rpc"
-version = "0.10.0-dev"
-dependencies = [
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "parity-scale-codec",
- "sc-chain-spec",
- "sc-client-api",
- "sc-consensus-babe",
- "sc-consensus-epochs",
- "sc-finality-grandpa",
- "sc-rpc-api",
- "serde",
- "serde_json",
- "sp-blockchain",
- "sp-runtime 4.0.0-dev",
- "thiserror",
 ]
 
 [[package]]
@@ -10152,6 +9483,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-ver"
+version = "4.0.0-dev"
+dependencies = [
+ "async-trait",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "serde",
+ "sp-core 4.0.0-dev",
+ "sp-inherents 4.0.0-dev",
+ "sp-runtime 4.0.0-dev",
+ "sp-std 4.0.0-dev",
+]
+
+[[package]]
 name = "sp-version"
 version = "4.0.0-dev"
 dependencies = [
@@ -10349,14 +9694,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subkey"
-version = "2.0.1"
-dependencies = [
- "sc-cli",
- "structopt",
-]
-
-[[package]]
 name = "substrate-bip39"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10472,6 +9809,7 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
  "cfg-if 1.0.0",
+ "extrinsic-info-runtime-api",
  "frame-support 4.0.0-dev",
  "frame-system 4.0.0-dev",
  "frame-system-rpc-runtime-api",
@@ -10507,6 +9845,7 @@ dependencies = [
  "sp-std 4.0.0-dev",
  "sp-transaction-pool",
  "sp-trie 4.0.0-dev",
+ "sp-ver",
  "sp-version 4.0.0-dev",
  "substrate-test-runtime-client",
  "substrate-wasm-builder",
@@ -10517,6 +9856,7 @@ dependencies = [
 name = "substrate-test-runtime-client"
 version = "2.0.0"
 dependencies = [
+ "extrinsic-info-runtime-api",
  "futures 0.3.16",
  "parity-scale-codec",
  "sc-block-builder",
@@ -10676,72 +10016,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "test-runner"
-version = "0.9.0"
-dependencies = [
- "frame-system 4.0.0-dev",
- "futures 0.3.16",
- "jsonrpc-core",
- "log 0.4.14",
- "num-traits",
- "sc-basic-authorship",
- "sc-cli",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-manual-seal",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-informant",
- "sc-network",
- "sc-rpc",
- "sc-rpc-server",
- "sc-service",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-core 4.0.0-dev",
- "sp-externalities 0.10.0-dev",
- "sp-finality-grandpa",
- "sp-inherents 4.0.0-dev",
- "sp-keyring",
- "sp-offchain",
- "sp-runtime 4.0.0-dev",
- "sp-runtime-interface 4.0.0-dev",
- "sp-session",
- "sp-state-machine 0.10.0-dev",
- "sp-transaction-pool",
- "sp-wasm-interface 4.0.0-dev",
- "tokio",
-]
-
-[[package]]
-name = "test-runner-example"
-version = "0.1.0"
-dependencies = [
- "frame-benchmarking",
- "frame-system 4.0.0-dev",
- "node-cli",
- "node-primitives",
- "node-runtime",
- "pallet-transaction-payment",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-manual-seal",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-service",
- "sp-consensus-babe",
- "sp-keyring",
- "sp-runtime 4.0.0-dev",
- "test-runner",
 ]
 
 [[package]]
@@ -11126,12 +10400,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 
 [[package]]
-name = "treeline"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
-
-[[package]]
 name = "trie-bench"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11474,15 +10742,6 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
-
-[[package]]
-name = "wait-timeout"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f200f5b12eb75f8c1ed65abd4b2db8a6e1b138a20de009dacee265a2498f3f6"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "waker-fn"
