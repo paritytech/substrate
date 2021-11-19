@@ -89,6 +89,26 @@ impl<Prefix: CountedStorageMapInstance> crate::storage::PrefixIteratorOnRemoval
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::storage::generator::CountedStorageMap<Key, Value>
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	where
+		Prefix: StorageInstance,
+		Hasher: crate::hash::StorageHasher,
+		Key: FullCodec,
+		Value: FullCodec,
+		QueryKind: QueryKindTrait<Value, OnEmpty>,
+		OnEmpty: Get<QueryKind::Query> + 'static,
+		MaxValues: Get<Option<u32>>,
+{
+	fn module_prefix() -> &'static [u8] {
+		Prefix::pallet_prefix().as_bytes()
+	}
+	fn storage_prefix() -> &'static [u8] {
+		Prefix::STORAGE_PREFIX.as_bytes()
+	}
+}
+
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: CountedStorageMapInstance,

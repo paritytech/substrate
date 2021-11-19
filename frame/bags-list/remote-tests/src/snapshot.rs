@@ -27,6 +27,8 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 	ws_url: String,
 ) {
 	use frame_support::storage::generator::StorageMap;
+	use frame_support::storage::generator::CountedStorageMap;
+
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
@@ -38,6 +40,8 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		}))
 		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
 		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
+		.inject_hashed_prefix(&<pallet_staking::Validators<Runtime>>::prefix_hash())
+		.inject_hashed_prefix(&<pallet_staking::Nominators<Runtime>>::prefix_hash())
 		.build()
 		.await
 		.unwrap();
