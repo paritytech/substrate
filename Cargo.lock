@@ -7857,6 +7857,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot",
+ "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
  "sc-network",
