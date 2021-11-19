@@ -25,13 +25,21 @@ mod keyword {
 	syn::custom_keyword!(Error);
 }
 
+/// Records information about the error enum variants.
+pub struct VariantField {
+	/// The type of the field in the variant.
+	pub ty: syn::Type,
+	/// Whether or not the field is named, i.e. whether it is a tuple variant or struct variant.
+	pub is_named: bool,
+}
+
 /// This checks error declaration as a enum declaration with only variants without fields nor
 /// discriminant.
 pub struct ErrorDef {
 	/// The index of error item in pallet module.
 	pub index: usize,
 	/// Variants ident, optional field and doc literals (ordered as declaration order)
-	pub variants: Vec<(syn::Ident, Option<syn::Type>, Vec<syn::Lit>)>,
+	pub variants: Vec<(syn::Ident, Option<VariantField>, Vec<syn::Lit>)>,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The keyword error used (contains span).
@@ -72,10 +80,14 @@ impl ErrorDef {
 			.map(|variant| {
 				let field_ty = match &variant.fields {
 					Fields::Unit => None,
-					Fields::Named(f) if f.named.len() == 1 =>
-						Some(f.named.first().unwrap().ty.clone()),
-					Fields::Unnamed(u) if u.unnamed.len() == 1 =>
-						Some(u.unnamed.first().unwrap().ty.clone()),
+					Fields::Named(f) if f.named.len() == 1 => Some(VariantField {
+						ty: f.named.first().unwrap().ty.clone(),
+						is_named: true,
+					}),
+					Fields::Unnamed(u) if u.unnamed.len() == 1 => Some(VariantField {
+						ty: u.unnamed.first().unwrap().ty.clone(),
+						is_named: false,
+					}),
 					_ => {
 						let msg = "Invalid pallet::error, unexpected fields, must be `Unit` or \
 							contain only 1 field";

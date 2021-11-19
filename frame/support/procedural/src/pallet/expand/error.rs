@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{parse::error::VariantField, Def};
 use frame_support_procedural_tools::get_doc_literals;
 
 ///
@@ -39,20 +39,35 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	);
 
-	let as_u8_matches = error.variants.iter().enumerate().map(|(i, (variant, field_ty, _))| {
-		if field_ty.is_some() {
-			quote::quote_spanned!(error.attr_span => Self::#variant(..) => #i as u8,)
-		} else {
-			quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,)
-		}
-	});
+	let as_u8_matches =
+		error
+			.variants
+			.iter()
+			.enumerate()
+			.map(|(i, (variant, field_ty, _))| match field_ty {
+				Some(VariantField { is_named: true, .. }) => {
+					quote::quote_spanned!(error.attr_span => Self::#variant { .. } => #i as u8,)
+				},
+				Some(VariantField { is_named: false, .. }) => {
+					quote::quote_spanned!(error.attr_span => Self::#variant(..) => #i as u8,)
+				},
+				None => {
+					quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,)
+				},
+			});
 
 	let as_str_matches = error.variants.iter().map(|(variant, field_ty, _)| {
 		let variant_str = format!("{}", variant);
-		if field_ty.is_some() {
-			quote::quote_spanned!(error.attr_span => Self::#variant(..) => #variant_str,)
-		} else {
-			quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+		match field_ty {
+			Some(VariantField { is_named: true, .. }) => {
+				quote::quote_spanned!(error.attr_span => Self::#variant { .. } => #variant_str,)
+			},
+			Some(VariantField { is_named: false, .. }) => {
+				quote::quote_spanned!(error.attr_span => Self::#variant(..) => #variant_str,)
+			},
+			None => {
+				quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+			},
 		}
 	});
 
@@ -86,7 +101,9 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	let field_tys = error
 		.variants
 		.iter()
-		.filter_map(|(_, field_ty, _)| field_ty.as_ref())
+		.filter_map(|(_, variant_field, _)| {
+			variant_field.as_ref().map(|VariantField { ty, .. }| ty)
+		})
 		.collect::<Vec<_>>();
 
 	let compactness_check = if field_tys.is_empty() {
