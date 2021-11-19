@@ -47,6 +47,7 @@ impl MetricsLink {
 pub struct Metrics {
 	pub block_constructed: Histogram,
 	pub number_of_transactions: Gauge<U64>,
+	pub create_inherents_time: Histogram,
 }
 
 impl Metrics {
@@ -66,6 +67,13 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
+			create_inherents_time: register(
+				Histogram::with_opts(HistogramOpts::new(
+					"report_create_inherents_time",
+					"Time taken to execute create inherents",
+				))?,
+				registry,
+			)?
 		})
 	}
 }

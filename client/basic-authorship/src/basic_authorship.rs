@@ -349,7 +349,13 @@ where
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
-		for inherent in block_builder.create_inherents(inherent_data)? {
+		let started = std::time::Instant::now();
+		let inherents = block_builder.create_inherents(inherent_data)?;
+		self.metrics.report(|metrics| {
+			metrics.create_inherents_time.observe(started.elapsed().as_secs_f64());
+		});
+
+		for inherent in inherents {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")

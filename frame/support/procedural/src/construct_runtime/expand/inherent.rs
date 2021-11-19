@@ -60,6 +60,7 @@ pub fn expand_outer_inherent(
 				let mut inherents = Vec::new();
 
 				#(
+					// TODO zeke
 					if let Some(inherent) = #pallet_names::create_inherent(self) {
 						let inherent = <#unchecked_extrinsic as #scrate::inherent::Extrinsic>::new(
 							inherent.into(),
