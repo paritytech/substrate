@@ -20,6 +20,7 @@
 #![recursion_limit = "512"]
 
 mod clone_no_bound;
+mod compact_pallet_error;
 mod construct_runtime;
 mod crate_version;
 mod debug_no_bound;
@@ -561,4 +562,9 @@ pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn match_and_insert(input: TokenStream) -> TokenStream {
 	match_and_insert::match_and_insert(input)
+}
+
+#[proc_macro_derive(CompactPalletError)]
+pub fn derive_compact_pallet_error(input: TokenStream) -> TokenStream {
+	compact_pallet_error::derive_compact_pallet_error(input)
 }
