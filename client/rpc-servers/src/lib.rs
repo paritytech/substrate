@@ -108,9 +108,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.set_access_control(acl.build())
 		.custom_tokio_runtime(rt.clone());
 
-	let server = tokio::task::block_in_place(|| {
-		rt.block_on(async { builder.build(addrs) })
-	})?;
+	let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
 
 	let rpc_api = build_rpc_api(module);
 	let handle = server.start(rpc_api)?;
