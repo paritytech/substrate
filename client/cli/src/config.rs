@@ -547,6 +547,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
+	/// Should the detailed log output be enabled.
+	fn detailed_log_output(&self) -> Result<bool> {
+		Ok(self.shared_params().detailed_log_output())
+	}
+
 	/// Is log reloading enabled?
 	fn enable_log_reloading(&self) -> Result<bool> {
 		Ok(self.shared_params().enable_log_reloading())
@@ -568,7 +573,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		let mut logger = LoggerBuilder::new(self.log_filters()?);
-		logger.with_log_reloading(self.enable_log_reloading()?);
+		logger
+			.with_log_reloading(self.enable_log_reloading()?)
+			.with_detailed_output(self.detailed_log_output()?);
 
 		if let Some(tracing_targets) = self.tracing_targets()? {
 			let tracing_receiver = self.tracing_receiver()?;
