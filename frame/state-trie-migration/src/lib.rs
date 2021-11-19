@@ -84,7 +84,7 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{
-		dispatch::TransactionPriority,
+		dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo, TransactionPriority},
 		ensure,
 		pallet_prelude::*,
 		traits::{Currency, Get},
@@ -109,6 +109,8 @@ pub mod pallet {
 	pub trait WeightInfo {
 		fn process_top_key(x: u32) -> Weight;
 		fn continue_migrate() -> Weight;
+		fn migrate_custom_top_fail() -> Weight;
+		fn migrate_custom_top_success() -> Weight;
 	}
 
 	impl WeightInfo for () {
@@ -116,6 +118,12 @@ pub mod pallet {
 			1000000
 		}
 		fn continue_migrate() -> Weight {
+			1000000
+		}
+		fn migrate_custom_top_fail() -> Weight {
+			1000000
+		}
+		fn migrate_custom_top_success() -> Weight {
 			1000000
 		}
 	}
@@ -411,7 +419,9 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Given number of `(top, child)` keys were migrated respectively, with the given
 		/// `compute`.
-		Migrated(u32, u32, MigrationCompute),
+		Migrated { top: u32, child: u32, compute: MigrationCompute },
+		/// Some account got slashed by the given amount.
+		Slashed { who: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	/// The outer Pallet struct.
@@ -435,6 +445,11 @@ pub mod pallet {
 		///
 		/// This should reflect the average storage value size in the worse case.
 		type SignedDepositPerItem: Get<BalanceOf<Self>>;
+
+		/// The base value of [`SignedDepositPerItem`].
+		///
+		/// Final deposit is `items * SignedDepositPerItem + SignedDepositBase`.
+		type SignedDepositBase: Get<BalanceOf<Self>>;
 
 		/// The maximum limits that the signed migration could use.
 		type SignedMigrationMaxLimits: Get<MigrationLimits>;
@@ -528,12 +543,20 @@ pub mod pallet {
 		/// This can only be valid if it is generated from the local node, which means only
 		/// validators can generate this call.
 		///
-		/// The `item_limit` is the maximum number of items that can be read whilst ensuring that
-		/// the migration does not go over `Self::unsigned_limits().size`.
+		/// The `item_limit` should be used as the limit on the number of items migrated, and the
+		/// submitter must guarantee that using this item limit, `size` does not go over
+		/// `Self::unsigned_limits().size`.
 		///
 		/// The `witness_size` should always be equal to `Self::unsigned_limits().size` and is only
 		/// used for weighing.
-		#[pallet::weight(Pallet::<T>::dynamic_weight(*item_limit, *witness_size))]
+		#[pallet::weight(
+			// for reading and writing `migration_process`
+			T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(
+					// for executing the migration itself.
+					Pallet::<T>::dynamic_weight(*item_limit, *witness_size)
+				)
+		)]
 		pub fn continue_migrate_unsigned(
 			origin: OriginFor<T>,
 			item_limit: u32,
@@ -559,11 +582,11 @@ pub mod pallet {
 			// limit.
 			assert!(task.fully_complies_with(chain_limits));
 
-			Self::deposit_event(Event::<T>::Migrated(
-				task.dyn_top_items,
-				task.dyn_child_items,
-				MigrationCompute::Unsigned,
-			));
+			Self::deposit_event(Event::<T>::Migrated {
+				top: task.dyn_top_items,
+				child: task.dyn_child_items,
+				compute: MigrationCompute::Unsigned,
+			});
 
 			MigrationProcess::<T>::put(task);
 
@@ -613,11 +636,11 @@ pub mod pallet {
 				return Err("wrong witness data".into())
 			}
 
-			Self::deposit_event(Event::<T>::Migrated(
-				task.dyn_top_items,
-				task.dyn_child_items,
-				MigrationCompute::Signed,
-			));
+			Self::deposit_event(Event::<T>::Migrated {
+				top: task.dyn_top_items,
+				child: task.dyn_child_items,
+				compute: MigrationCompute::Signed,
+			});
 
 			MigrationProcess::<T>::put(task);
 			Ok(Pays::No.into())
@@ -627,7 +650,13 @@ pub mod pallet {
 		///
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
-		#[pallet::weight(Pallet::<T>::dynamic_weight(keys.len() as u32, *total_size))]
+		#[pallet::weight(
+			T::WeightInfo::migrate_custom_top_success()
+				.max(T::WeightInfo::migrate_custom_top_fail())
+			.saturating_add(
+				Pallet::<T>::dynamic_weight(keys.len() as u32, *total_size)
+			)
+		)]
 		pub fn migrate_custom_top(
 			origin: OriginFor<T>,
 			keys: Vec<Vec<u8>>,
@@ -636,7 +665,9 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			// ensure they can pay more than the fee.
-			let deposit = T::SignedDepositPerItem::get().saturating_mul((keys.len() as u32).into());
+			let deposit = T::SignedDepositBase::get().saturating_add(
+				T::SignedDepositPerItem::get().saturating_mul((keys.len() as u32).into()),
+			);
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut dyn_size = 0u32;
@@ -647,18 +678,17 @@ pub mod pallet {
 				}
 			}
 
-			dbg!(dyn_size, total_size);
 			if dyn_size != total_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
 				return Err("Wrong witness data".into())
 			}
 
-			Self::deposit_event(Event::<T>::Migrated(
-				keys.len() as u32,
-				0,
-				MigrationCompute::Signed,
-			));
+			Self::deposit_event(Event::<T>::Migrated {
+				top: keys.len() as u32,
+				child: 0,
+				compute: MigrationCompute::Signed,
+			});
 			Ok(().into())
 		}
 
@@ -668,7 +698,13 @@ pub mod pallet {
 		///
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
-		#[pallet::weight(Pallet::<T>::dynamic_weight(child_keys.len() as u32, *total_size))]
+		#[pallet::weight(
+			T::WeightInfo::migrate_custom_top_success()
+				.max(T::WeightInfo::migrate_custom_top_fail())
+			.saturating_add(
+				Pallet::<T>::dynamic_weight(child_keys.len() as u32, *total_size)
+			)
+		)]
 		pub fn migrate_custom_child(
 			origin: OriginFor<T>,
 			top_key: Vec<u8>,
@@ -678,8 +714,9 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			// ensure they can pay more than the fee.
-			let deposit =
-				T::SignedDepositPerItem::get().saturating_mul((child_keys.len() as u32).into());
+			let deposit = T::SignedDepositBase::get().saturating_add(
+				T::SignedDepositPerItem::get().saturating_mul((child_keys.len() as u32).into()),
+			);
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut dyn_size = 0u32;
@@ -700,15 +737,25 @@ pub mod pallet {
 			if dyn_size != total_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
-				return Err("Wrong witness data".into())
+				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
+				Err(DispatchErrorWithPostInfo {
+					error: "bad witness".into(),
+					post_info: PostDispatchInfo {
+						actual_weight: Some(T::WeightInfo::migrate_custom_top_fail()),
+						pays_fee: Pays::Yes,
+					},
+				})
+			} else {
+				Self::deposit_event(Event::<T>::Migrated {
+					top: 0,
+					child: child_keys.len() as u32,
+					compute: MigrationCompute::Signed,
+				});
+				Ok(PostDispatchInfo {
+					actual_weight: Some(T::WeightInfo::migrate_custom_top_success()),
+					pays_fee: Pays::Yes,
+				})
 			}
-
-			Self::deposit_event(Event::<T>::Migrated(
-				0,
-				child_keys.len() as u32,
-				MigrationCompute::Signed,
-			));
-			Ok(().into())
 		}
 	}
 
@@ -731,11 +778,11 @@ pub mod pallet {
 					task.dyn_child_items,
 					task.dyn_size,
 				);
-				Self::deposit_event(Event::<T>::Migrated(
-					task.dyn_top_items as u32,
-					task.dyn_child_items as u32,
-					MigrationCompute::Auto,
-				));
+				Self::deposit_event(Event::<T>::Migrated {
+					top: task.dyn_top_items,
+					child: task.dyn_child_items,
+					compute: MigrationCompute::Auto,
+				});
 				MigrationProcess::<T>::put(task);
 
 				weight
@@ -940,7 +987,8 @@ pub mod pallet {
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarks {
-	use super::*;
+	use super::{pallet::Pallet as StateTrieMigration, *};
+	use frame_support::traits::Currency;
 
 	// The size of the key seemingly makes no difference in the read/write time, so we make it
 	// constant.
@@ -951,6 +999,41 @@ mod benchmarks {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
 		}: _(frame_system::RawOrigin::Signed(caller), null, 0)
+		verify {
+			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
+		}
+
+		migrate_custom_top_success {
+			let null = MigrationLimits::default();
+			let caller = frame_benchmarking::whitelisted_caller();
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			T::Currency::make_free_balance_be(&caller, stash);
+		}: migrate_custom_top(frame_system::RawOrigin::Signed(caller.clone()), Default::default(), 0)
+		verify {
+			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			assert_eq!(T::Currency::free_balance(&caller), stash)
+		}
+
+		migrate_custom_top_fail {
+			let null = MigrationLimits::default();
+			let caller = frame_benchmarking::whitelisted_caller();
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			T::Currency::make_free_balance_be(&caller, stash);
+		}: {
+			assert!(
+				StateTrieMigration::<T>::migrate_custom_top(
+					frame_system::RawOrigin::Signed(caller.clone()).into(),
+					Default::default(),
+					1,
+				).is_err()
+			)
+		}
+		verify {
+			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			// must have gotten slashed
+			assert!(T::Currency::free_balance(&caller) < stash)
+		}
+
 		process_top_key {
 			let v in 1 .. (4 * 1024 * 1024);
 
@@ -962,6 +1045,12 @@ mod benchmarks {
 			let _next = sp_io::storage::next_key(KEY);
 			assert_eq!(data, value);
 		}
+
+		impl_benchmark_test_suite!(
+			StateTrieMigration,
+			crate::mock::new_test_ext(sp_runtime::StateVersion::V0, true),
+			crate::mock::Test
+		);
 	}
 }
 
@@ -1035,6 +1124,7 @@ mod mock {
 		pub const ExistentialDeposit: u64 = 1;
 		pub const OffchainRepeat: u32 = 1;
 		pub const SignedDepositPerItem: u64 = 1;
+		pub const SignedDepositBase: u64 = 5;
 		pub const SignedMigrationMaxLimits: MigrationLimits = MigrationLimits { size: 1024, item: 5 };
 	}
 
@@ -1055,6 +1145,7 @@ mod mock {
 		type ControlOrigin = EnsureRoot<u64>;
 		type Currency = Balances;
 		type SignedDepositPerItem = SignedDepositPerItem;
+		type SignedDepositBase = SignedDepositBase;
 		type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
 		type WeightInfo = ();
 		type UnsignedPriority = ();
@@ -1201,6 +1292,7 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
+	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
 	use sp_runtime::{traits::Bounded, StateVersion};
 	use std::sync::Arc;
 
@@ -1397,6 +1489,70 @@ mod test {
 
 			// no funds should remain reserved.
 			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(Balances::free_balance(&1), 1000);
+		});
+
+		new_test_ext(StateVersion::V0, true).execute_with(|| {
+			assert_eq!(Balances::free_balance(&1), 1000);
+
+			// note that we don't expect this to be a noop -- we do slash.
+			frame_support::assert_err!(
+				StateTrieMigration::migrate_custom_top(
+					Origin::signed(1),
+					vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
+					69, // wrong witness
+				),
+				"Wrong witness data"
+			);
+
+			// no funds should remain reserved.
+			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(
+				Balances::free_balance(&1),
+				1000 - (3 * SignedDepositPerItem::get() + SignedDepositBase::get())
+			);
+		});
+	}
+
+	#[test]
+	fn custom_migrate_child_works() {
+		let childify = |s: &'static str| {
+			let mut string = DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
+			string.extend_from_slice(s.as_ref());
+			string
+		};
+
+		new_test_ext(StateVersion::V0, true).execute_with(|| {
+			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
+				Origin::signed(1),
+				childify("chk1"),
+				vec![b"key1".to_vec(), b"key2".to_vec()],
+				55 + 66,
+			));
+
+			// no funds should remain reserved.
+			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(Balances::free_balance(&1), 1000);
+		});
+
+		new_test_ext(StateVersion::V0, true).execute_with(|| {
+			assert_eq!(Balances::free_balance(&1), 1000);
+
+			// note that we don't expect this to be a noop -- we do slash.
+			assert!(StateTrieMigration::migrate_custom_child(
+				Origin::signed(1),
+				childify("chk1"),
+				vec![b"key1".to_vec(), b"key2".to_vec()],
+				999999, // wrong witness
+			)
+			.is_err());
+
+			// no funds should remain reserved.
+			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(
+				Balances::free_balance(&1),
+				1000 - (2 * SignedDepositPerItem::get() + SignedDepositBase::get())
+			);
 		});
 	}
 }
