@@ -17,7 +17,6 @@ anyhow = "1"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f", features = ["server"] }
-tracing = "0.1"
 
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }

@@ -19,9 +19,8 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../rpc-api" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-futures = { version = "0.3.1", features = ["compat"] }
+futures = "0.3.1"
 log = "0.4.8"
-rand = "0.8"
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 serde_json = "1.0.68"
@@ -32,7 +31,6 @@ sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
-sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 hash-db = { version = "0.15.2", default-features = false }
