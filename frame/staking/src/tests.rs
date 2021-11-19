@@ -1717,8 +1717,8 @@ fn reap_stash_works() {
 					stash: 11,
 					total: 5,
 					active: 5,
-					unlocking: vec![],
-					claimed_rewards: vec![],
+					unlocking: Default::default(),
+					claimed_rewards: Default::default(),
 				},
 			);
 
