@@ -340,7 +340,7 @@ mod sorted_list_provider {
 		let ensure_left = |id, counter| {
 			assert!(!ListNodes::<Runtime>::contains_key(id));
 			assert_eq!(BagsList::count(), counter);
-			assert_eq!(CounterForListNodes::<Runtime>::get(), counter);
+			assert_eq!(ListNodes::<Runtime>::count(), counter);
 			assert_eq!(ListNodes::<Runtime>::iter().count() as u32, counter);
 		};
 

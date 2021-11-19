@@ -82,7 +82,11 @@ where
 	}
 
 	pub(crate) fn add_vote(&mut self, round: (H, N), vote: (Public, Signature)) -> bool {
-		self.rounds.entry(round).or_default().add_vote(vote)
+		if self.validator_set.validators.iter().any(|id| vote.0 == *id) {
+			self.rounds.entry(round).or_default().add_vote(vote)
+		} else {
+			false
+		}
 	}
 
 	pub(crate) fn is_done(&self, round: &(H, N)) -> bool {

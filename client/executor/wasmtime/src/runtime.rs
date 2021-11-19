@@ -237,7 +237,7 @@ impl WasmInstance for WasmtimeInstance {
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
-				instance_wrapper.decommit(&store);
+				instance_wrapper.decommit(store);
 
 				result
 			},
@@ -415,11 +415,7 @@ pub struct Semantics {
 	///
 	/// Primarily this is achieved by not recreating the instance for each call and performing a
 	/// bare minimum clean up: reapplying the data segments and restoring the values for global
-	/// variables. The vast majority of the linear memory is not restored, meaning that effects
-	/// of previous executions on the same [`WasmInstance`] can be observed there.
-	///
-	/// This is not a problem for a standard substrate runtime execution because it's up to the
-	/// runtime itself to make sure that it doesn't involve any non-determinism.
+	/// variables.
 	///
 	/// Since this feature depends on instrumentation, it can be set only if runtime is
 	/// instantiated using the runtime blob, e.g. using [`create_runtime`].
