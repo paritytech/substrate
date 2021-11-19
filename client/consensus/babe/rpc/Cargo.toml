@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "092081a0a2b8904c6ebd2cd99e16c7bc13ffc3ae", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f", features = ["server"] }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../../primitives/consensus/babe" }

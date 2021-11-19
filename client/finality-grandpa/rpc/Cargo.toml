@@ -15,7 +15,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 finality-grandpa = { version = "0.14.4", features = ["derive-codec"] }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "092081a0a2b8904c6ebd2cd99e16c7bc13ffc3ae", features = ["server", "macros"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f", features = ["server", "macros"] }
 futures = { version = "0.3.4", features = ["compat"] }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
