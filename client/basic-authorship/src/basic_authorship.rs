@@ -357,8 +357,8 @@ where
 		self.metrics.report(|metrics| {
 			metrics
 				.create_inherents_time
-				.observe(create_inherents_start
-					.saturating_duration_since(create_inherents_end).as_secs_f64());
+				.observe(create_inherents_end
+					.saturating_duration_since(create_inherents_start).as_secs_f64());
 		});
 
 		for inherent in inherents {
