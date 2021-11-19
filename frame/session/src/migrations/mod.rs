@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,24 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// tag::description[]
-//! Generic implementations of Extrinsic/Header/Block.
-// end::description[]
-
-mod block;
-mod checked_extrinsic;
-mod digest;
-mod era;
-mod header;
-#[cfg(test)]
-mod tests;
-mod unchecked_extrinsic;
-
-pub use self::{
-	block::{Block, BlockId, SignedBlock},
-	checked_extrinsic::CheckedExtrinsic,
-	digest::{Digest, DigestItem, DigestItemRef, OpaqueDigestItemId},
-	era::{Era, Phase},
-	header::Header,
-	unchecked_extrinsic::{SignedPayload, UncheckedExtrinsic},
-};
+/// Version 1.
+///
+/// In version 0 session historical pallet uses `Session` for storage module prefix.
+/// In version 1 it uses its name as configured in `construct_runtime`.
+/// This migration moves session historical pallet storages from old prefix to new prefix.
+#[cfg(feature = "historical")]
+pub mod v1;

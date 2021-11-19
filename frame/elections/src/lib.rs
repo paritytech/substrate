@@ -465,15 +465,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Reaped \[voter, reaper\].
-		VoterReaped(T::AccountId, T::AccountId),
-		/// Slashed \[reaper\].
-		BadReaperSlashed(T::AccountId),
-		/// A tally (for approval votes of \[seats\]) has started.
-		TallyStarted(u32),
+		/// Reaped
+		VoterReaped { voter: T::AccountId, reaper: T::AccountId },
+		/// Slashed
+		BadReaperSlashed { reaper: T::AccountId },
+		/// A tally (for approval votes of seats) has started.
+		TallyStarted { seats: u32 },
 		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
-		/// \[incoming, outgoing\]
-		TallyFinalized(Vec<T::AccountId>, Vec<T::AccountId>),
+		TallyFinalized { incoming: Vec<T::AccountId>, outgoing: Vec<T::AccountId> },
 	}
 
 	#[pallet::call]
@@ -590,11 +589,11 @@ pub mod pallet {
 					T::VotingBond::get(),
 					BalanceStatus::Free,
 				)?;
-				Self::deposit_event(Event::<T>::VoterReaped(who, reporter));
+				Self::deposit_event(Event::<T>::VoterReaped { voter: who, reaper: reporter });
 			} else {
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
 				T::BadReaper::on_unbalanced(imbalance);
-				Self::deposit_event(Event::<T>::BadReaperSlashed(reporter));
+				Self::deposit_event(Event::<T>::BadReaperSlashed { reaper: reporter });
 			}
 			Ok(())
 		}
@@ -1024,7 +1023,7 @@ impl<T: Config> Pallet<T> {
 				leaderboard_size
 			]);
 
-			Self::deposit_event(Event::<T>::TallyStarted(empty_seats as u32));
+			Self::deposit_event(Event::<T>::TallyStarted { seats: empty_seats as u32 });
 		}
 	}
 
@@ -1118,7 +1117,7 @@ impl<T: Config> Pallet<T> {
 			new_candidates.truncate(last_index + 1);
 		}
 
-		Self::deposit_event(Event::<T>::TallyFinalized(incoming, outgoing));
+		Self::deposit_event(Event::<T>::TallyFinalized { incoming, outgoing });
 
 		<Candidates<T>>::put(new_candidates);
 		CandidateCount::<T>::put(count);
