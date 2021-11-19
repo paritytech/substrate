@@ -355,28 +355,27 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
-		let seed: ShufflingSeed = Default::default();
-		let prev_seed: ShufflingSeed = Default::default();
 
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
-
-		let output = VRFOutput::from_bytes(&seed.seed.as_bytes()).unwrap();
-		// .map_err(|_| Error::InvalidSeed)?;
-		//
-		let proof = VRFProof::from_bytes(&seed.proof.as_bytes())
-			// .map_err(|_| Error::InvalidSeed)?;
-			.unwrap();
-
-		let input = vrf::make_transcript(create_shuffling_seed_input_data(&prev_seed));
-
-		// schnorrkel::PublicKey::from_bytes(public_key)
-		schnorrkel::PublicKey::from_bytes(&[])
-			.and_then(|p| p.vrf_verify(input, &output, &proof))
-			// .map_err(|_| Error::<Block>::InvalidSeed)?;
-			.unwrap();
-		//
-
 		let header = block.header();
+
+        // TODO uncomment when block & header will be extended
+		// let prev_seed: ShufflingSeed = Default::default();
+		// let seed = header.seed();
+        //
+		// let new_seed = VRFOutput::from_bytes(&seed.seed.as_bytes())
+		// 	.expect("cannot parse shuffling seed");
+        //
+		// let proof = VRFProof::from_bytes(&seed.proof.as_bytes())
+		// 	.expect("cannot parse shuffling seed proof");
+        //
+		// let input = vrf::make_transcript(create_shuffling_seed_input_data(&prev_seed));
+        //
+		// schnorrkel::PublicKey::from_bytes(&[])
+		// 	.and_then(|p| p.vrf_verify(input, &new_seed, &proof))
+        //     .expect("shuffling seed validation failed")
+		// 	.unwrap();
+
 
 		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
