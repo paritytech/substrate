@@ -766,7 +766,10 @@ mod tests {
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.
 	macro_rules! build_api_server {
-		() => {{
+		() => {
+			build_api_server!(hyper::Response::new(hyper::Body::from("Hello World!")))
+		};
+		( $response:expr ) => {{
 			let hyper_client = SHARED_CLIENT.clone();
 			let (api, worker) = http(hyper_client.clone());
 
@@ -783,9 +786,7 @@ mod tests {
 									// otherwise the tests are flaky.
 									let _ = req.into_body().collect::<Vec<_>>().await;
 
-									Ok::<_, Infallible>(hyper::Response::new(hyper::Body::from(
-										"Hello World!",
-									)))
+									Ok::<_, Infallible>($response)
 								},
 							))
 						}),
@@ -806,6 +807,33 @@ mod tests {
 		// Performs an HTTP query to a background HTTP server.
 
 		let (mut api, addr) = build_api_server!();
+
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+		api.request_write_body(id, &[], Some(deadline)).unwrap();
+
+		match api.response_wait(&[id], Some(deadline))[0] {
+			HttpRequestStatus::Finished(200) => {},
+			v => panic!("Connecting to localhost failed: {:?}", v),
+		}
+
+		let headers = api.response_headers(id);
+		assert!(headers.iter().any(|(h, _)| h.eq_ignore_ascii_case(b"Date")));
+
+		let mut buf = vec![0; 2048];
+		let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
+		assert_eq!(&buf[..n], b"Hello World!");
+	}
+
+	#[test]
+	fn basic_http2_localhost() {
+		let deadline = timestamp::now().add(Duration::from_millis(10_000));
+
+		// Performs an HTTP query to a background HTTP server.
+
+		let (mut api, addr) = build_api_server!(hyper::Response::builder()
+			.version(hyper::Version::HTTP_2)
+			.body(hyper::Body::from("Hello World!"))
+			.unwrap());
 
 		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_write_body(id, &[], Some(deadline)).unwrap();
