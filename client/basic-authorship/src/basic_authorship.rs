@@ -346,16 +346,19 @@ where
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
-		let block_proposal_timer = time::Instant::now();
+		let propose_with_start = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
-		let create_inherents_timer = time::Instant::now();
+		let create_inherents_start = time::Instant::now();
 		let inherents = block_builder.create_inherents(inherent_data)?;
+		let create_inherents_end = time::Instant::now();
+
 		self.metrics.report(|metrics| {
 			metrics
 				.create_inherents_time
-				.observe(create_inherents_timer.elapsed().as_secs_f64());
+				.observe(create_inherents_start
+					.saturating_duration_since(create_inherents_end).as_secs_f64());
 		});
 
 		for inherent in inherents {
@@ -539,10 +542,11 @@ where
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
 
+		let propose_with_end = time::Instant::now();
 		self.metrics.report(|metrics| {
 			metrics
 				.create_block_proposal_time
-				.observe(block_proposal_timer.elapsed().as_secs_f64());
+				.observe(propose_with_start.saturating_duration_since(propose_with_end).as_secs_f64());
 		});
 
 		Ok(Proposal { block, proof, storage_changes })
