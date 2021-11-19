@@ -3,12 +3,13 @@ syntax = "proto3";
 package authority_discovery;
 
 // First we need to serialize the addresses in order to be able to sign them.
-message AuthorityAddresses {
+message AuthorityRecord {
 	repeated bytes addresses = 1;
 }
 
-// Then we need to serialize addresses and signature to send them over the wire.
-message SignedAuthorityAddresses {
-	bytes addresses = 1;
-	bytes signature = 2;
+// Then we need to serialize the authority record and signature to send them over the wire.
+message SignedAuthorityRecord {
+	bytes record = 1;
+	bytes auth_signature = 2;
+	repeated bytes peer_signatures = 3;
 }

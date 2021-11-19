@@ -16,8 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::worker::schema;
-
 use std::{
 	collections::HashSet,
 	sync::{Arc, Mutex},
@@ -36,7 +34,6 @@ use libp2p::{core::multiaddr, kad, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
-use sp_core::crypto::Public;
 use sp_keystore::{testing::KeyStore, CryptoStore};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use substrate_test_runtime_client::runtime::Block;
@@ -180,32 +177,15 @@ impl NetworkStateInfo for TestNetwork {
 async fn build_dht_event(
 	addresses: Vec<Multiaddr>,
 	public_key: AuthorityId,
-	key_store: &KeyStore,
-) -> (libp2p::kad::record::Key, Vec<u8>) {
-	let mut serialized_addresses = vec![];
-	schema::AuthorityAddresses { addresses: addresses.into_iter().map(|a| a.to_vec()).collect() }
-		.encode(&mut serialized_addresses)
-		.map_err(Error::EncodingProto)
-		.unwrap();
+	key_store: &dyn CryptoStore,
+) -> Vec<(libp2p::kad::record::Key, Vec<u8>)> {
+	let serialized_record = serialize_audi(serialize_addresses(addresses.into_iter())).unwrap();
 
-	let signature = key_store
-		.sign_with(
-			key_types::AUTHORITY_DISCOVERY,
-			&public_key.clone().into(),
-			serialized_addresses.as_slice(),
-		)
+	let kv_pairs = sign_audi_with_all(serialized_record, key_store, vec![public_key.into()])
 		.await
-		.unwrap()
 		.unwrap();
-
-	let mut signed_addresses = vec![];
-	schema::SignedAuthorityAddresses { addresses: serialized_addresses.clone(), signature }
-		.encode(&mut signed_addresses)
-		.unwrap();
-
-	let key = hash_authority_id(&public_key.to_raw_vec());
-	let value = signed_addresses;
-	(key, value)
+	// There is always a single item in it, because we signed it with a single key
+	kv_pairs
 }
 
 #[test]
@@ -453,13 +433,13 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 
 		// Make previously triggered lookup succeed.
 		let dht_event = {
-			let (key, value) = build_dht_event(
+			let kv_pairs = build_dht_event(
 				vec![remote_multiaddr.clone()],
 				remote_public_key.clone(),
 				&remote_key_store,
 			)
 			.await;
-			sc_network::DhtEvent::ValueFound(vec![(key, value)])
+			sc_network::DhtEvent::ValueFound(kv_pairs)
 		};
 		dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
@@ -489,7 +469,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 		})
 		.collect();
 
-	let dht_event = block_on(build_dht_event(addresses, remote_public.into(), &remote_key_store));
+	let kv_pairs = block_on(build_dht_event(addresses, remote_public.into(), &remote_key_store));
 
 	let (_dht_event_tx, dht_event_rx) = channel(1);
 
@@ -507,7 +487,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 	block_on(worker.refill_pending_lookups_queue()).unwrap();
 	worker.start_new_lookups();
 
-	worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+	worker.handle_dht_value_found_event(kv_pairs).unwrap();
 	assert_eq!(
 		MAX_ADDRESSES_PER_AUTHORITY,
 		worker
@@ -535,7 +515,7 @@ fn do_not_cache_addresses_without_peer_id() {
 	let multiaddr_without_peer_id: Multiaddr =
 		"/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-	let dht_event = block_on(build_dht_event(
+	let kv_pairs = block_on(build_dht_event(
 		vec![multiaddr_with_peer_id.clone(), multiaddr_without_peer_id],
 		remote_public.into(),
 		&remote_key_store,
@@ -560,7 +540,7 @@ fn do_not_cache_addresses_without_peer_id() {
 	block_on(local_worker.refill_pending_lookups_queue()).unwrap();
 	local_worker.start_new_lookups();
 
-	local_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+	local_worker.handle_dht_value_found_event(kv_pairs).unwrap();
 
 	assert_eq!(
 		Some(&HashSet::from([multiaddr_with_peer_id])),
@@ -697,10 +677,10 @@ fn lookup_throttling() {
 			let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
 			let remote_key: AuthorityId = remote_hash_to_key.get(&remote_hash).unwrap().clone();
 			let dht_event = {
-				let (key, value) =
+				let kv_pairs =
 					build_dht_event(vec![remote_multiaddr.clone()], remote_key, &remote_key_store)
 						.await;
-				sc_network::DhtEvent::ValueFound(vec![(key, value)])
+				sc_network::DhtEvent::ValueFound(kv_pairs)
 			};
 			dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 

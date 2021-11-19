@@ -313,7 +313,7 @@ where
 			return Ok(())
 		}
 
-		let addresses = self.addresses_to_publish().map(|a| a.to_vec()).collect::<Vec<_>>();
+		let addresses = serialize_addresses(self.addresses_to_publish());
 
 		if let Some(metrics) = &self.metrics {
 			metrics.publish.inc();
@@ -322,32 +322,14 @@ where
 				.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
 		}
 
-		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses { addresses }
-			.encode(&mut serialized_addresses)
-			.map_err(Error::EncodingProto)?;
+		let serialized_record = serialize_audi(addresses)?;
 
 		let keys_vec = keys.iter().cloned().collect::<Vec<_>>();
-		let signatures = key_store
-			.sign_with_all(
-				key_types::AUTHORITY_DISCOVERY,
-				keys_vec.clone(),
-				serialized_addresses.as_slice(),
-			)
-			.await
-			.map_err(|_| Error::Signing)?;
 
-		for (sign_result, key) in signatures.into_iter().zip(keys_vec.iter()) {
-			let mut signed_addresses = vec![];
-
-			// Verify that all signatures exist for all provided keys.
-			let signature =
-				sign_result.ok().flatten().ok_or_else(|| Error::MissingSignature(key.clone()))?;
-			schema::SignedAuthorityAddresses { addresses: serialized_addresses.clone(), signature }
-				.encode(&mut signed_addresses)
-				.map_err(Error::EncodingProto)?;
-
-			self.network.put_value(hash_authority_id(key.1.as_ref()), signed_addresses);
+		let mut kv_pairs =
+			sign_audi_with_all(serialized_record, key_store.as_ref(), keys_vec).await?;
+		for (key, value) in kv_pairs.drain(..) {
+			self.network.put_value(key, value);
 		}
 
 		self.latest_published_keys = keys;
@@ -495,18 +477,18 @@ where
 		let remote_addresses: Vec<Multiaddr> = values
 			.into_iter()
 			.map(|(_k, v)| {
-				let schema::SignedAuthorityAddresses { signature, addresses } =
-					schema::SignedAuthorityAddresses::decode(v.as_slice())
+				let schema::SignedAuthorityRecord { record, auth_signature, peer_signatures: _ } =
+					schema::SignedAuthorityRecord::decode(v.as_slice())
 						.map_err(Error::DecodingProto)?;
 
-				let signature = AuthoritySignature::decode(&mut &signature[..])
+				let signature = AuthoritySignature::decode(&mut &auth_signature[..])
 					.map_err(Error::EncodingDecodingScale)?;
 
-				if !AuthorityPair::verify(&signature, &addresses, &authority_id) {
+				if !AuthorityPair::verify(&signature, &record, &authority_id) {
 					return Err(Error::VerifyingDhtPayload)
 				}
 
-				let addresses = schema::AuthorityAddresses::decode(addresses.as_slice())
+				let addresses = schema::AuthorityRecord::decode(record.as_slice())
 					.map(|a| a.addresses)
 					.map_err(Error::DecodingProto)?
 					.into_iter()
@@ -616,6 +598,49 @@ where
 
 fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
 	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
+}
+
+fn serialize_addresses(addresses: impl Iterator<Item = Multiaddr>) -> Vec<Vec<u8>> {
+	addresses.map(|a| a.to_vec()).collect()
+}
+
+fn serialize_audi(addresses: Vec<Vec<u8>>) -> Result<Vec<u8>> {
+	let mut serialized_record = vec![];
+	schema::AuthorityRecord { addresses }
+		.encode(&mut serialized_record)
+		.map_err(Error::EncodingProto)?;
+	Ok(serialized_record)
+}
+
+async fn sign_audi_with_all(
+	serialized_record: Vec<u8>,
+	key_store: &dyn CryptoStore,
+	keys: Vec<CryptoTypePublicPair>,
+) -> Result<Vec<(libp2p::kad::record::Key, Vec<u8>)>> {
+	let signatures = key_store
+		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), serialized_record.as_slice())
+		.await
+		.map_err(|_| Error::Signing)?;
+
+	let mut result = vec![];
+	for (sign_result, key) in signatures.into_iter().zip(keys.iter()) {
+		let mut signed_record = vec![];
+
+		// Verify that all signatures exist for all provided keys.
+		let auth_signature =
+			sign_result.ok().flatten().ok_or_else(|| Error::MissingSignature(key.clone()))?;
+		schema::SignedAuthorityRecord {
+			record: serialized_record.clone(),
+			auth_signature,
+			peer_signatures: vec![],
+		}
+		.encode(&mut signed_record)
+		.map_err(Error::EncodingProto)?;
+
+		result.push((hash_authority_id(key.1.as_ref()), signed_record));
+	}
+
+	Ok(result)
 }
 
 /// Prometheus metrics for a [`Worker`].
