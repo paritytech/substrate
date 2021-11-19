@@ -31,7 +31,7 @@ mod unchecked_extrinsic;
 pub use self::{
 	block::{Block, BlockId, SignedBlock},
 	checked_extrinsic::CheckedExtrinsic,
-	digest::{ChangesTrieSignal, Digest, DigestItem, DigestItemRef, OpaqueDigestItemId},
+	digest::{Digest, DigestItem, DigestItemRef, OpaqueDigestItemId},
 	era::{Era, Phase},
 	header::Header,
 	unchecked_extrinsic::{SignedPayload, UncheckedExtrinsic},

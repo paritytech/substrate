@@ -31,7 +31,7 @@ sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
 trie-bench = "0.28.0"
 trie-standardmap = "0.15.2"
 criterion = "0.3.3"
-hex-literal = "0.3.3"
+hex-literal = "0.3.4"
 sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
 
 [features]

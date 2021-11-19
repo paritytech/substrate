@@ -345,12 +345,12 @@ fn deposits(
 		if let EventRecord {
 			phase: Phase::Initialization,
 			event:
-				Event::Balances(pallet_balances::Event::ReserveRepatriated(
-					_,
-					_,
+				Event::Balances(pallet_balances::Event::ReserveRepatriated {
+					from: _,
+					to: _,
 					amount,
-					BalanceStatus::Reserved,
-				)),
+					destination_status: BalanceStatus::Reserved,
+				}),
 			topics: _,
 		} = event
 		{
@@ -424,7 +424,10 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved(ALICE, storage_limit)),
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: storage_limit,
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -434,19 +437,19 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed(
-						addr.clone(),
-						min_balance * 100
-					)),
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: addr.clone(),
+						free_balance: min_balance * 100
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer(
-						ALICE,
-						addr.clone(),
-						min_balance * 100
-					)),
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: min_balance * 100
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -467,17 +470,20 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::ReserveRepatriated(
-						ALICE,
-						addr.clone(),
-						storage_cost,
-						BalanceStatus::Reserved,
-					)),
+					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
+						from: ALICE,
+						to: addr.clone(),
+						amount: storage_cost,
+						destination_status: BalanceStatus::Reserved,
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Unreserved(ALICE, unused)),
+					event: Event::Balances(pallet_balances::Event::Unreserved {
+						who: ALICE,
+						amount: unused,
+					}),
 					topics: vec![],
 				},
 			]
@@ -767,16 +773,19 @@ fn self_destruct_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved(ALICE, storage_limit)),
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: storage_limit,
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer(
-						addr.clone(),
-						DJANGO,
-						100_000,
-					)),
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: addr.clone(),
+						to: DJANGO,
+						amount: 100_000,
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -794,17 +803,20 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::ReserveRepatriated(
-						addr.clone(),
-						ALICE,
-						storage_refund,
-						BalanceStatus::Reserved,
-					)),
+					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
+						from: addr.clone(),
+						to: ALICE,
+						amount: storage_refund,
+						destination_status: BalanceStatus::Reserved,
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Unreserved(ALICE, unreserved)),
+					event: Event::Balances(pallet_balances::Event::Unreserved {
+						who: ALICE,
+						amount: unreserved,
+					}),
 					topics: vec![],
 				},
 			],
