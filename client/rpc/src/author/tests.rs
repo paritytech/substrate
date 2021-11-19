@@ -18,7 +18,7 @@
 
 use super::*;
 
-use crate::testing::{deser_call, deser_error};
+use crate::testing::{deser_call, deser_error, timeout_secs};
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
@@ -114,9 +114,12 @@ async fn author_should_watch_extrinsic() {
 	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
 	let mut sub = api.test_subscription("author_submitAndWatchExtrinsic", [xt]).await;
-	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await.unwrap();
+	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
+		.await
+		.unwrap()
+		.unwrap();
 
-	assert_matches!(sub_data, TransactionStatus::Ready);
+	assert_matches!(tx, TransactionStatus::Ready);
 	assert_matches!(sub_id, SubscriptionId::Num(id) if id == sub.subscription_id());
 
 	// Replace the extrinsic and observe the subscription is notified.
@@ -135,8 +138,11 @@ async fn author_should_watch_extrinsic() {
 
 	let _ = api.call_with("author_submitExtrinsic", [xt_replacement]).await.unwrap();
 
-	let (sub_data, sub_id) = sub.next::<TransactionStatus<H256, Block>>().await.unwrap();
-	assert_eq!(sub_data, TransactionStatus::Usurped(xt_hash.into()));
+	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(tx, TransactionStatus::Usurped(xt_hash.into()));
 	assert_matches!(sub_id, SubscriptionId::Num(id) if id == sub.subscription_id());
 }
 
@@ -149,7 +155,8 @@ async fn author_should_return_watch_validation_error() {
 		.test_subscription(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
 		.await;
 
-	let (pool_error, _) = sub.next::<SubscriptionClosedError>().await.unwrap();
+	let (pool_error, _) =
+		timeout_secs(10, sub.next::<SubscriptionClosedError>()).await.unwrap().unwrap();
 	assert_eq!(pool_error.close_reason(), "Transaction pool error");
 }
 

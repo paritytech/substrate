@@ -163,7 +163,7 @@ where
 				hash::ExtrinsicOrHash::Extrinsic(bytes) => {
 					let xt = Decode::decode(&mut &bytes[..])?;
 					Ok(self.pool.hash_of(&xt))
-				}
+				},
 			})
 			.collect::<Result<Vec<_>>>()?;
 
@@ -181,8 +181,8 @@ where
 			Ok(dxt) => dxt,
 			Err(e) => {
 				log::error!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
-				return Err(JsonRpseeError::to_call_error(e));
-			}
+				return Err(JsonRpseeError::to_call_error(e))
+			},
 		};
 
 		let executor = self.executor.clone();
@@ -195,8 +195,8 @@ where
 				Ok(stream) => stream,
 				Err(err) => {
 					let _ = sink.close(&err.to_string());
-					return;
-				}
+					return
+				},
 			};
 
 			stream
