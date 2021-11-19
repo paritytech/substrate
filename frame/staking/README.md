@@ -15,6 +15,7 @@ at pain of _slash_ (expropriation) should the staked maintainer be found not to 
 its duties properly.
 
 ### Terminology
+
 <!-- Original author of paragraph: @gavofyork -->
 
 - Staking: The process of locking up funds for some time, placing them at risk of slashing
@@ -30,6 +31,7 @@ its duties properly.
 - Slash: The punishment of a staker by reducing its funds.
 
 ### Goals
+
 <!-- Original author of paragraph: @gavofyork -->
 
 The staking system in Substrate NPoS is designed to make the following possible:
@@ -43,7 +45,7 @@ The staking system in Substrate NPoS is designed to make the following possible:
 #### Staking
 
 Almost any interaction with the Staking module requires a process of _**bonding**_ (also known
-as being a _staker_). To become *bonded*, a fund-holding account known as the _stash account_,
+as being a _staker_). To become _bonded_, a fund-holding account known as the _stash account_,
 which holds some or all of the funds that become frozen in place as part of the staking process,
 is paired with an active **controller** account, which issues instructions on how they shall be
 used.
@@ -74,7 +76,7 @@ An account can become a validator candidate via the
 #### Nomination
 
 A **nominator** does not take any _direct_ role in maintaining the network, instead, it votes on
-a set of validators  to be elected. Once interest in nomination is stated by an account, it
+a set of validators to be elected. Once interest in nomination is stated by an account, it
 takes effect at the next election round. The funds in the nominator's stash account indicate the
 _weight_ of its vote. Both the rewards and any punishment that a validator earns are shared
 between the validator and its nominators. This rule incentivizes the nominators to NOT vote for
@@ -133,31 +135,31 @@ The Staking module contains many public storage items and (im)mutable functions.
 ### Example: Rewarding a validator by id.
 
 ```rust
-use frame_support::pallet_prelude::*;
-use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 use pallet_staking::{self as staking};
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
-	pub struct Pallet<T>(_);
+    #[pallet::pallet]
+    #[pallet::generate_store(pub(crate) trait Store)]
+    pub struct Pallet<T>(_);
 
-  #[pallet::config]
-	pub trait Config: frame_system::Config + staking::Config {}
+    #[pallet::config]
+    pub trait Config: frame_system::Config + staking::Config {}
 
-  #[pallet::call]
-	impl<T: Config> Pallet<T> {
-    /// Reward a validator.
-    #[pallet::weight(0)]
-    pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
-      let reported = ensure_signed(origin)?;
-      <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
-      Ok(())
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        /// Reward a validator.
+        #[pallet::weight(0)]
+        pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
+            let reported = ensure_signed(origin)?;
+            <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
+            Ok(())
+        }
     }
-  }
 }
 ```
 
@@ -171,11 +173,13 @@ The era payout is computed using yearly inflation curve defined at
 ```nocompile
 staker_payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year
 ```
+
 This payout is used to reward stakers as defined in next section
 
 ```nocompile
 remaining_payout = max_yearly_inflation * total_tokens / era_per_year - staker_payout
 ```
+
 The remaining reward is send to the configurable end-point
 [`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardRemainder).
 

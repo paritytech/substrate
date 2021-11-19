@@ -398,7 +398,7 @@ fn propose_bounty_works() {
 
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 10, b"1234567890".to_vec()));
 
-		assert_eq!(last_event(), BountiesEvent::BountyProposed(0));
+		assert_eq!(last_event(), BountiesEvent::BountyProposed { index: 0 });
 
 		let deposit: u64 = 85 + 5;
 		assert_eq!(Balances::reserved_balance(0), deposit);
@@ -460,7 +460,7 @@ fn close_bounty_works() {
 
 		let deposit: u64 = 80 + 5;
 
-		assert_eq!(last_event(), BountiesEvent::BountyRejected(0, deposit));
+		assert_eq!(last_event(), BountiesEvent::BountyRejected { index: 0, bond: deposit });
 
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
@@ -692,7 +692,10 @@ fn award_and_claim_bounty_works() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		assert_eq!(last_event(), BountiesEvent::BountyClaimed(0, 56, 3));
+		assert_eq!(
+			last_event(),
+			BountiesEvent::BountyClaimed { index: 0, payout: 56, beneficiary: 3 }
+		);
 
 		assert_eq!(Balances::free_balance(4), 14); // initial 10 + fee 4
 
@@ -731,7 +734,10 @@ fn claim_handles_high_fee() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		assert_eq!(last_event(), BountiesEvent::BountyClaimed(0, 0, 3));
+		assert_eq!(
+			last_event(),
+			BountiesEvent::BountyClaimed { index: 0, payout: 0, beneficiary: 3 }
+		);
 
 		assert_eq!(Balances::free_balance(4), 70); // 30 + 50 - 10
 		assert_eq!(Balances::free_balance(3), 0);
@@ -808,7 +814,7 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
 		assert_ok!(Bounties::close_bounty(Origin::root(), 0));
 
-		assert_eq!(last_event(), BountiesEvent::BountyCanceled(0));
+		assert_eq!(last_event(), BountiesEvent::BountyCanceled { index: 0 });
 
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 

@@ -57,7 +57,10 @@ fn authorities_change_logged() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),
+				event: Event::NewAuthorities {
+					authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+				}
+				.into(),
 				topics: vec![],
 			},]
 		);
@@ -93,7 +96,10 @@ fn authorities_change_logged_after_delay() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),
+				event: Event::NewAuthorities {
+					authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
+				}
+				.into(),
 				topics: vec![],
 			},]
 		);

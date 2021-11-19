@@ -291,8 +291,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		/// \[price, who\]
-		NewPrice(u32, T::AccountId),
+		NewPrice { price: u32, who: T::AccountId },
 	}
 
 	#[pallet::validate_unsigned]
@@ -658,7 +657,7 @@ impl<T: Config> Pallet<T> {
 			.expect("The average is not empty, because it was just mutated; qed");
 		log::info!("Current average price is: {}", average);
 		// here we are raising the NewPrice event
-		Self::deposit_event(Event::NewPrice(price, who));
+		Self::deposit_event(Event::NewPrice { price, who });
 	}
 
 	/// Calculate current average price.

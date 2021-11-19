@@ -886,10 +886,10 @@ pub mod pallet {
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
 			let ejected_a_solution = <QueuedSolution<T>>::exists();
 			<QueuedSolution<T>>::put(ready);
-			Self::deposit_event(Event::SolutionStored(
-				ElectionCompute::Unsigned,
-				ejected_a_solution,
-			));
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Unsigned,
+				prev_ejected: ejected_a_solution,
+			});
 
 			Ok(None.into())
 		}
@@ -1012,7 +1012,10 @@ pub mod pallet {
 			}
 
 			signed_submissions.put();
-			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Signed,
+				prev_ejected: ejected_a_solution,
+			});
 			Ok(())
 		}
 	}
@@ -1026,18 +1029,18 @@ pub mod pallet {
 		/// solution is unsigned, this means that it has also been processed.
 		///
 		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
-		SolutionStored(ElectionCompute, bool),
+		SolutionStored { election_compute: ElectionCompute, prev_ejected: bool },
 		/// The election has been finalized, with `Some` of the given computation, or else if the
 		/// election failed, `None`.
-		ElectionFinalized(Option<ElectionCompute>),
+		ElectionFinalized { election_compute: Option<ElectionCompute> },
 		/// An account has been rewarded for their signed submission being finalized.
-		Rewarded(<T as frame_system::Config>::AccountId, BalanceOf<T>),
+		Rewarded { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// An account has been slashed for submitting an invalid signed submission.
-		Slashed(<T as frame_system::Config>::AccountId, BalanceOf<T>),
+		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// The signed phase of the given round has started.
-		SignedPhaseStarted(u32),
+		SignedPhaseStarted { round: u32 },
 		/// The unsigned phase of the given round has started.
-		UnsignedPhaseStarted(u32),
+		UnsignedPhaseStarted { round: u32 },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1245,7 +1248,7 @@ impl<T: Config> Pallet<T> {
 	pub fn on_initialize_open_signed() {
 		log!(info, "Starting signed phase round {}.", Self::round());
 		<CurrentPhase<T>>::put(Phase::Signed);
-		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
+		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
 	}
 
 	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
@@ -1253,7 +1256,7 @@ impl<T: Config> Pallet<T> {
 		let round = Self::round();
 		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
-		Self::deposit_event(Event::UnsignedPhaseStarted(round));
+		Self::deposit_event(Event::UnsignedPhaseStarted { round });
 	}
 
 	/// Parts of [`create_snapshot`] that happen inside of this pallet.
@@ -1473,14 +1476,14 @@ impl<T: Config> Pallet<T> {
 				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
-				Self::deposit_event(Event::ElectionFinalized(Some(compute)));
+				Self::deposit_event(Event::ElectionFinalized { election_compute: Some(compute) });
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
 				supports
 			})
 			.map_err(|err| {
-				Self::deposit_event(Event::ElectionFinalized(None));
+				Self::deposit_event(Event::ElectionFinalized { election_compute: None });
 				if Self::round() != 1 {
 					log!(warn, "Failed to finalize election round. reason {:?}", err);
 				}
@@ -1737,7 +1740,7 @@ mod tests {
 
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1750,7 +1753,10 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_phase_events(),
-				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 }
+				],
 			);
 			assert!(MultiPhase::snapshot().is_some());
 
@@ -1861,7 +1867,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(15);
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1873,8 +1879,8 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					Event::SignedPhaseStarted(1),
-					Event::ElectionFinalized(Some(ElectionCompute::Fallback))
+					Event::SignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
 				],
 			);
 			// All storage items must be cleared.
@@ -1896,7 +1902,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(15);
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 

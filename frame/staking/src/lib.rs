@@ -157,8 +157,6 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use frame_support::pallet_prelude::*;
-//! use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 //! use pallet_staking::{self as staking};
 //!
 //! #[frame_support::pallet]
