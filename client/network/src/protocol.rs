@@ -136,7 +136,8 @@ impl Metrics {
 				register(g, r)?
 			},
 			queued_blocks: {
-				let g = Gauge::new("substrate_sync_queued_blocks", "Number of blocks in import queue")?;
+				let g =
+					Gauge::new("substrate_sync_queued_blocks", "Number of blocks in import queue")?;
 				register(g, r)?
 			},
 			fork_targets: {
