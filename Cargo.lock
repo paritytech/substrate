@@ -4536,6 +4536,7 @@ dependencies = [
  "node-primitives",
  "node-rpc",
  "node-runtime",
+ "pallet-asset-tx-payment",
  "pallet-balances",
  "pallet-im-online",
  "pallet-timestamp",
@@ -4701,6 +4702,7 @@ dependencies = [
  "hex-literal",
  "log 0.4.14",
  "node-primitives",
+ "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
@@ -4861,6 +4863,7 @@ dependencies = [
  "node-executor",
  "node-primitives",
  "node-runtime",
+ "pallet-asset-tx-payment",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sc-block-builder",
@@ -5102,6 +5105,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ff55baddef9e4ad00f88b6c743a2a8062d4c6ade126c2a528644b8e444d52ce"
 dependencies = [
  "stable_deref_trait",
+]
+
+[[package]]
+name = "pallet-asset-tx-payment"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-authorship",
+ "pallet-balances",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "smallvec 1.7.0",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
 ]
 
 [[package]]
@@ -10420,6 +10445,7 @@ dependencies = [
  "node-cli",
  "node-primitives",
  "node-runtime",
+ "pallet-asset-tx-payment",
  "pallet-transaction-payment",
  "sc-consensus",
  "sc-consensus-babe",
