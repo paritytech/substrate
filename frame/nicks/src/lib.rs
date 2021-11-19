@@ -52,12 +52,8 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		ensure,
-		pallet_prelude::*,
-		traits::{EnsureOrigin, Get},
-	};
-	use frame_system::{ensure_signed, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
