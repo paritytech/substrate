@@ -803,7 +803,7 @@ impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
 
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
-	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
+	old_state: RefTrackingState<Block>,
 	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
@@ -884,7 +884,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 	for BlockImportOperation<Block>
 {
-	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
+	type State = RefTrackingState<Block>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -1584,8 +1584,6 @@ impl<Block: BlockT> Backend<Block> {
 			);
 
 			self.state_usage.merge_sm(operation.old_state.usage_info());
-			// release state reference so that it can be finalized
-			let cache = operation.old_state.into_cache_changes();
 
 			if finalized {
 				// TODO: ensure best chain contains this block.
@@ -1690,7 +1688,7 @@ impl<Block: BlockT> Backend<Block> {
 				is_finalized: finalized,
 				with_state: operation.commit_state,
 			});
-			Some((pending_block.header, number, hash, enacted, retracted, is_best, cache))
+			Some((pending_block.header, number, hash, enacted, retracted, is_best))
 		} else {
 			None
 		};
@@ -1730,20 +1728,11 @@ impl<Block: BlockT> Backend<Block> {
 		// Apply all in-memory state changes.
 		// Code beyond this point can't fail.
 
-		if let Some((header, number, hash, enacted, retracted, is_best, mut cache)) = imported {
+		if let Some((header, number, hash, enacted, retracted, is_best)) = imported {
 			trace!(target: "db", "DB Commit done {:?}", hash);
 			let header_metadata = CachedHeaderMetadata::from(&header);
 			self.blockchain.insert_header_metadata(header_metadata.hash, header_metadata);
 			cache_header(&mut self.blockchain.header_cache.lock(), hash, Some(header));
-			cache.sync_cache(
-				&enacted,
-				&retracted,
-				operation.storage_updates,
-				operation.child_storage_updates,
-				Some(hash),
-				Some(number),
-				is_best,
-			);
 		}
 
 		if let Some(changes_trie_build_cache_update) = operation.changes_trie_build_cache_update {
@@ -1896,17 +1885,11 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
+	fn empty_state(&self) -> ClientResult<RefTrackingState<Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
 		let db_state = DbState::<Block>::new(self.storage.clone(), root);
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
-		Ok(SyncingCachingState::new(
-			caching_state,
-			self.state_usage.clone(),
-			self.blockchain.meta.clone(),
-			self.import_lock.clone(),
-		))
+		Ok(state)
 	}
 }
 
@@ -2021,12 +2004,11 @@ where
 impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
-	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
+	type State = RefTrackingState<Block>;
 	type OffchainStorage = offchain::LocalStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		let mut old_state = self.empty_state()?;
-		old_state.disable_syncing();
 
 		Ok(BlockImportOperation {
 			pending_block: None,
@@ -2056,7 +2038,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		} else {
 			operation.old_state = self.state_at(block)?;
 		}
-		operation.old_state.disable_syncing();
 
 		operation.commit_state = true;
 		Ok(())
@@ -2373,14 +2354,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				let root = genesis_state.root.clone();
 				let db_state = DbState::<Block>::new(genesis_state.clone(), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
-				let mut state = SyncingCachingState::new(
-					caching_state,
-					self.state_usage.clone(),
-					self.blockchain.meta.clone(),
-					self.import_lock.clone(),
-				);
-				state.disable_syncing();
 				return Ok(state)
 			}
 		}
@@ -2405,14 +2378,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					let db_state = DbState::<Block>::new(self.storage.clone(), root);
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
-					let caching_state =
-						CachingState::new(state, self.shared_cache.clone(), Some(hash));
-					Ok(SyncingCachingState::new(
-						caching_state,
-						self.state_usage.clone(),
-						self.blockchain.meta.clone(),
-						self.import_lock.clone(),
-					))
+					Ok(state)
 				} else {
 					Err(sp_blockchain::Error::UnknownBlock(format!(
 						"State already discarded for {:?}",
