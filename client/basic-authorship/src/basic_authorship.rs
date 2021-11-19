@@ -355,10 +355,11 @@ where
 		let create_inherents_end = time::Instant::now();
 
 		self.metrics.report(|metrics| {
-			metrics
-				.create_inherents_time
-				.observe(create_inherents_end
-					.saturating_duration_since(create_inherents_start).as_secs_f64());
+			metrics.create_inherents_time.observe(
+				create_inherents_end
+					.saturating_duration_since(create_inherents_start)
+					.as_secs_f64(),
+			);
 		});
 
 		for inherent in inherents {
@@ -544,9 +545,9 @@ where
 
 		let propose_with_end = time::Instant::now();
 		self.metrics.report(|metrics| {
-			metrics
-				.create_block_proposal_time
-				.observe(propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64());
+			metrics.create_block_proposal_time.observe(
+				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
+			);
 		});
 
 		Ok(Proposal { block, proof, storage_changes })
