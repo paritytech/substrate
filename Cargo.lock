@@ -2930,7 +2930,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "tracing",
 ]
 
 [[package]]
