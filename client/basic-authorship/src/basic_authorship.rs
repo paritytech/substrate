@@ -546,7 +546,7 @@ where
 		self.metrics.report(|metrics| {
 			metrics
 				.create_block_proposal_time
-				.observe(propose_with_start.saturating_duration_since(propose_with_end).as_secs_f64());
+				.observe(propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64());
 		});
 
 		Ok(Proposal { block, proof, storage_changes })
