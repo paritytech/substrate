@@ -18,7 +18,7 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::DispatchResultWithPostInfo;
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{traits::BadOrigin, Either};
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -36,6 +36,55 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;
+}
+
+/// The "OR gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
+	EnsureOrigin<OuterOrigin> for EnsureOneOf<L, R>
+{
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o)
+			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		L::successful_origin()
+	}
+}
+
+/// The "AND gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` and `R` origin check passes. `L` is tested first.
+pub struct EnsureBothOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+impl<OuterOrigin: Clone, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
+	EnsureOrigin<OuterOrigin> for EnsureBothOf<L, R>
+{
+	type Success = (L::Success, R::Success);
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o.clone()).map_or_else(|o| Err(o), |l| R::try_origin(o).map(|r| (l, r)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		Self::try_origin(L::successful_origin()).map_or_else(
+			|_| L::successful_origin(),
+			|_| {
+				Self::try_origin(R::successful_origin()).map_or_else(
+					|_| R::successful_origin(),
+					|_| {
+						panic!(
+							"It is impossible to generate successful origin from the provided ones"
+						)
+					},
+				)
+			},
+		)
+	}
 }
 
 /// Type that can be dispatched with an origin but without checking the origin filter.

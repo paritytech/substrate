@@ -73,7 +73,7 @@ use sp_runtime::{
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, Either, Perbill, RuntimeDebug,
+	DispatchError, Perbill, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -927,63 +927,6 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		unimplemented!()
-	}
-}
-
-/// The "OR gate" implementation of `EnsureOrigin`.
-///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-pub struct EnsureOneOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
-impl<
-		AccountId,
-		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-		L: EnsureOrigin<O>,
-		R: EnsureOrigin<O>,
-	> EnsureOrigin<O> for EnsureOneOf<AccountId, L, R>
-{
-	type Success = Either<L::Success, R::Success>;
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		L::try_origin(o)
-			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		L::successful_origin()
-	}
-}
-
-/// The "AND gate" implementation of `EnsureOrigin`.
-///
-/// Origin check will pass if `L` and `R` origin check passes. `L` is tested first.
-pub struct EnsureBothOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
-impl<
-		AccountId,
-		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + Clone,
-		L: EnsureOrigin<O>,
-		R: EnsureOrigin<O>,
-	> EnsureOrigin<O> for EnsureBothOf<AccountId, L, R>
-{
-	type Success = (L::Success, R::Success);
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		L::try_origin(o.clone()).map_or_else(|o| Err(o), |l| R::try_origin(o).map(|r| (l, r)))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		Self::try_origin(L::successful_origin()).map_or_else(
-			|_| L::successful_origin(),
-			|_| {
-				Self::try_origin(R::successful_origin()).map_or_else(
-					|_| R::successful_origin(),
-					|_| {
-						panic!(
-							"It is impossible to generate successful origin from the provided ones"
-						)
-					},
-				)
-			},
-		)
 	}
 }
 
