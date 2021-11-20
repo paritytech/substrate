@@ -88,7 +88,7 @@ pub fn expand_outer_origin(
 		get_intra_doc_string(" Create with system signed origin and", &system_path_name);
 
 	let doc_string_runtime_origin =
-		get_intra_doc_string(" Convert to runtime origin, using as filter and", &system_path_name);
+		get_intra_doc_string(" Convert to runtime origin, using as filter:", &system_path_name);
 
 	let doc_string_runtime_origin_with_caller = get_intra_doc_string(
 		" Convert to runtime origin with caller being system signed or none and use filter",
