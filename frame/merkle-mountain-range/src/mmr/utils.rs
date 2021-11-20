@@ -17,7 +17,7 @@
 
 //! Merkle Mountain Range utilities.
 
-use crate::primitives::{NodeIndex, LeafIndex};
+use crate::primitives::{LeafIndex, NodeIndex};
 
 /// MMR nodes & size -related utilities.
 pub struct NodesUtils {

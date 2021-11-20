@@ -21,9 +21,9 @@ use codec::Encode;
 use frame_support::log;
 use mmr_lib::helper;
 use sp_io::offchain_index;
+use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
-use sp_std::iter::Peekable;
 
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
@@ -143,10 +143,10 @@ where
 	}
 }
 
-fn peaks_to_prune_and_store(old_size: NodeIndex, new_size: NodeIndex) -> (
-	impl Iterator<Item = NodeIndex>,
-	Peekable<impl Iterator<Item = NodeIndex>>,
-) {
+fn peaks_to_prune_and_store(
+	old_size: NodeIndex,
+	new_size: NodeIndex,
+) -> (impl Iterator<Item = NodeIndex>, Peekable<impl Iterator<Item = NodeIndex>>) {
 	// A sorted (ascending) collection of peak indices before and after insertion.
 	// both collections may share a common prefix.
 	let peaks_before = if old_size == 0 { vec![] } else { helper::get_peaks(old_size) };

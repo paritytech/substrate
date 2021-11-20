@@ -32,7 +32,7 @@ use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-pub use pallet_mmr_primitives::{MmrApi as MmrRuntimeApi, LeafIndex};
+pub use pallet_mmr_primitives::{LeafIndex, MmrApi as MmrRuntimeApi};
 
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
