@@ -971,7 +971,19 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		L::successful_origin()
+		Self::try_origin(L::successful_origin()).map_or_else(
+			|_| L::successful_origin(),
+			|_| {
+				Self::try_origin(R::successful_origin()).map_or_else(
+					|_| R::successful_origin(),
+					|_| {
+						panic!(
+							"It is impossible to generate successful origin from the provided ones"
+						)
+					},
+				)
+			},
+		)
 	}
 }
 
