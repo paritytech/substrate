@@ -48,7 +48,7 @@ parking_lot = "0.11.1"
 log = "0.4.8"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 rand = "0.7.2"
-merlin = "2.0"
+merlin = "3.0"
 derive_more = "0.99.16"
 retain_mut = "0.1.4"
 async-trait = "0.1.50"
