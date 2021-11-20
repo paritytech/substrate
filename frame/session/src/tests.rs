@@ -453,3 +453,30 @@ fn upgrade_keys() {
 		}
 	})
 }
+
+#[cfg(feature = "historical")]
+#[test]
+fn test_migration_v1() {
+	use crate::{
+		historical::{HistoricalSessions, StoredRange},
+		mock::Historical,
+	};
+	use frame_support::traits::PalletInfoAccess;
+
+	new_test_ext().execute_with(|| {
+		assert!(<HistoricalSessions<Test>>::iter_values().count() > 0);
+		assert!(<StoredRange<Test>>::exists());
+
+		let old_pallet = "Session";
+		let new_pallet = <Historical as PalletInfoAccess>::name();
+		frame_support::storage::migration::move_pallet(
+			new_pallet.as_bytes(),
+			old_pallet.as_bytes(),
+		);
+		StorageVersion::new(0).put::<Historical>();
+
+		crate::migrations::v1::pre_migrate::<Test, Historical>();
+		crate::migrations::v1::migrate::<Test, Historical>();
+		crate::migrations::v1::post_migrate::<Test, Historical>();
+	});
+}

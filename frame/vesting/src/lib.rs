@@ -104,9 +104,9 @@ enum VestingAction {
 	/// Do not actively remove any schedules.
 	Passive,
 	/// Remove the schedule specified by the index.
-	Remove(usize),
+	Remove { index: usize },
 	/// Remove the two schedules, specified by index, so they can be merged.
-	Merge(usize, usize),
+	Merge { index1: usize, index2: usize },
 }
 
 impl VestingAction {
@@ -114,8 +114,8 @@ impl VestingAction {
 	fn should_remove(&self, index: usize) -> bool {
 		match self {
 			Self::Passive => false,
-			Self::Remove(index1) => *index1 == index,
-			Self::Merge(index1, index2) => *index1 == index || *index2 == index,
+			Self::Remove { index: index1 } => *index1 == index,
+			Self::Merge { index1, index2 } => *index1 == index || *index2 == index,
 		}
 	}
 
@@ -279,10 +279,9 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// The amount vested has been updated. This could indicate a change in funds available.
 		/// The balance given is the amount which is left unvested (and thus locked).
-		/// \[account, unvested\]
-		VestingUpdated(T::AccountId, BalanceOf<T>),
+		VestingUpdated { account: T::AccountId, unvested: BalanceOf<T> },
 		/// An \[account\] has become fully vested.
-		VestingCompleted(T::AccountId),
+		VestingCompleted { account: T::AccountId },
 	}
 
 	/// Error for the vesting pallet.
@@ -450,7 +449,8 @@ pub mod pallet {
 			let schedule2_index = schedule2_index as usize;
 
 			let schedules = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-			let merge_action = VestingAction::Merge(schedule1_index, schedule2_index);
+			let merge_action =
+				VestingAction::Merge { index1: schedule1_index, index2: schedule2_index };
 
 			let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), merge_action)?;
 
@@ -590,11 +590,14 @@ impl<T: Config> Pallet<T> {
 	fn write_lock(who: &T::AccountId, total_locked_now: BalanceOf<T>) {
 		if total_locked_now.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, who);
-			Self::deposit_event(Event::<T>::VestingCompleted(who.clone()));
+			Self::deposit_event(Event::<T>::VestingCompleted { account: who.clone() });
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, who, total_locked_now, reasons);
-			Self::deposit_event(Event::<T>::VestingUpdated(who.clone(), total_locked_now));
+			Self::deposit_event(Event::<T>::VestingUpdated {
+				account: who.clone(),
+				unvested: total_locked_now,
+			});
 		};
 	}
 
@@ -637,7 +640,7 @@ impl<T: Config> Pallet<T> {
 		action: VestingAction,
 	) -> Result<(Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>, BalanceOf<T>), DispatchError> {
 		let (schedules, locked_now) = match action {
-			VestingAction::Merge(idx1, idx2) => {
+			VestingAction::Merge { index1: idx1, index2: idx2 } => {
 				// The schedule index is based off of the schedule ordering prior to filtering out
 				// any schedules that may be ending at this block.
 				let schedule1 = *schedules.get(idx1).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
@@ -762,7 +765,7 @@ where
 	/// Remove a vesting schedule for a given account.
 	fn remove_vesting_schedule(who: &T::AccountId, schedule_index: u32) -> DispatchResult {
 		let schedules = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
-		let remove_action = VestingAction::Remove(schedule_index as usize);
+		let remove_action = VestingAction::Remove { index: schedule_index as usize };
 
 		let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), remove_action)?;
 

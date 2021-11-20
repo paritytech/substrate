@@ -23,8 +23,6 @@
 pub mod backend;
 #[cfg(feature = "std")]
 mod basic;
-#[cfg(feature = "std")]
-mod changes_trie;
 mod error;
 mod ext;
 #[cfg(feature = "std")]
@@ -140,28 +138,10 @@ pub use crate::{
 };
 pub use error::{Error, ExecutionError};
 
-#[cfg(not(feature = "std"))]
-mod changes_trie {
-	/// Stub for change trie block number until
-	/// change trie move to no_std.
-	pub trait BlockNumber {}
-
-	impl<N> BlockNumber for N {}
-}
-
 #[cfg(feature = "std")]
 mod std_reexport {
 	pub use crate::{
 		basic::BasicExternalities,
-		changes_trie::{
-			disabled_state as disabled_changes_trie_state, key_changes, key_changes_proof,
-			key_changes_proof_check, key_changes_proof_check_with_db, prune as prune_changes_tries,
-			AnchorBlockId as ChangesTrieAnchorBlockId, BlockNumber as ChangesTrieBlockNumber,
-			BuildCache as ChangesTrieBuildCache, CacheAction as ChangesTrieCacheAction,
-			ConfigurationRange as ChangesTrieConfigurationRange,
-			InMemoryStorage as InMemoryChangesTrieStorage, RootsStorage as ChangesTrieRootsStorage,
-			State as ChangesTrieState, Storage as ChangesTrieStorage,
-		},
 		error::{Error, ExecutionError},
 		in_memory_backend::new_in_mem,
 		proving_backend::{
@@ -204,10 +184,6 @@ mod execution {
 
 	/// Default handler of the execution manager.
 	pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
-
-	/// Type of changes trie transaction.
-	pub type ChangesTrieTransaction<H, N> =
-		(MemoryDB<H>, ChangesTrieCacheAction<<H as Hasher>::Out, N>);
 
 	/// Trie backend with in-memory storage.
 	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
@@ -308,11 +284,10 @@ mod execution {
 	}
 
 	/// The substrate state machine.
-	pub struct StateMachine<'a, B, H, N, Exec>
+	pub struct StateMachine<'a, B, H, Exec>
 	where
 		H: Hasher,
 		B: Backend<H>,
-		N: ChangesTrieBlockNumber,
 	{
 		backend: &'a B,
 		exec: &'a Exec,
@@ -320,8 +295,7 @@ mod execution {
 		call_data: &'a [u8],
 		overlay: &'a mut OverlayedChanges,
 		extensions: Extensions,
-		changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
-		storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
+		storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H>>,
 		runtime_code: &'a RuntimeCode<'a>,
 		stats: StateMachineStats,
 		/// The hash of the block the state machine will be executed on.
@@ -330,29 +304,26 @@ mod execution {
 		parent_hash: Option<H::Out>,
 	}
 
-	impl<'a, B, H, N, Exec> Drop for StateMachine<'a, B, H, N, Exec>
+	impl<'a, B, H, Exec> Drop for StateMachine<'a, B, H, Exec>
 	where
 		H: Hasher,
 		B: Backend<H>,
-		N: ChangesTrieBlockNumber,
 	{
 		fn drop(&mut self) {
 			self.backend.register_overlay_stats(&self.stats);
 		}
 	}
 
-	impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec>
+	impl<'a, B, H, Exec> StateMachine<'a, B, H, Exec>
 	where
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
 		B: Backend<H>,
-		N: crate::changes_trie::BlockNumber,
 	{
 		/// Creates new substrate state machine.
 		pub fn new(
 			backend: &'a B,
-			changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 			overlay: &'a mut OverlayedChanges,
 			exec: &'a Exec,
 			method: &'a str,
@@ -371,7 +342,6 @@ mod execution {
 				call_data,
 				extensions,
 				overlay,
-				changes_trie_state,
 				storage_transaction_cache: None,
 				runtime_code,
 				stats: StateMachineStats::default(),
@@ -386,7 +356,7 @@ mod execution {
 		/// build that will be cached.
 		pub fn with_storage_transaction_cache(
 			mut self,
-			cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
+			cache: Option<&'a mut StorageTransactionCache<B::Transaction, H>>,
 		) -> Self {
 			self.storage_transaction_cache = cache;
 			self
@@ -439,13 +409,7 @@ mod execution {
 				.enter_runtime()
 				.expect("StateMachine is never called from the runtime; qed");
 
-			let mut ext = Ext::new(
-				self.overlay,
-				cache,
-				self.backend,
-				self.changes_trie_state.clone(),
-				Some(&mut self.extensions),
-			);
+			let mut ext = Ext::new(self.overlay, cache, self.backend, Some(&mut self.extensions));
 
 			let ext_id = ext.id;
 
@@ -562,9 +526,6 @@ mod execution {
 				CallResult<R, Exec::Error>,
 			) -> CallResult<R, Exec::Error>,
 		{
-			let changes_tries_enabled = self.changes_trie_state.is_some();
-			self.overlay.set_collect_extrinsics(changes_tries_enabled);
-
 			let result = {
 				match manager {
 					ExecutionManager::Both(on_consensus_failure) => self
@@ -588,7 +549,7 @@ mod execution {
 	}
 
 	/// Prove execution using the given state backend, overlayed changes, and call executor.
-	pub fn prove_execution<B, H, N, Exec, Spawn>(
+	pub fn prove_execution<B, H, Exec, Spawn>(
 		backend: &mut B,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
@@ -602,13 +563,12 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
-		N: crate::changes_trie::BlockNumber,
 		Spawn: SpawnNamed + Send + 'static,
 	{
 		let trie_backend = backend
 			.as_trie_backend()
 			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-		prove_execution_on_trie_backend::<_, _, N, _, _>(
+		prove_execution_on_trie_backend::<_, _, _, _>(
 			trie_backend,
 			overlay,
 			exec,
@@ -628,7 +588,7 @@ mod execution {
 	///
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
-	pub fn prove_execution_on_trie_backend<S, H, N, Exec, Spawn>(
+	pub fn prove_execution_on_trie_backend<S, H, Exec, Spawn>(
 		trie_backend: &TrieBackend<S, H>,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
@@ -642,13 +602,11 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + 'static + Clone,
-		N: crate::changes_trie::BlockNumber,
 		Spawn: SpawnNamed + Send + 'static,
 	{
 		let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-		let mut sm = StateMachine::<_, H, N, Exec>::new(
+		let mut sm = StateMachine::<_, H, Exec>::new(
 			&proving_backend,
-			None,
 			overlay,
 			exec,
 			method,
@@ -667,7 +625,7 @@ mod execution {
 	}
 
 	/// Check execution proof, generated by `prove_execution` call.
-	pub fn execution_proof_check<H, N, Exec, Spawn>(
+	pub fn execution_proof_check<H, Exec, Spawn>(
 		root: H::Out,
 		proof: StorageProof,
 		overlay: &mut OverlayedChanges,
@@ -681,11 +639,10 @@ mod execution {
 		H: Hasher,
 		Exec: CodeExecutor + Clone + 'static,
 		H::Out: Ord + 'static + codec::Codec,
-		N: crate::changes_trie::BlockNumber,
 		Spawn: SpawnNamed + Send + 'static,
 	{
 		let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
-		execution_proof_check_on_trie_backend::<_, N, _, _>(
+		execution_proof_check_on_trie_backend::<_, _, _>(
 			&trie_backend,
 			overlay,
 			exec,
@@ -697,7 +654,7 @@ mod execution {
 	}
 
 	/// Check execution proof on proving backend, generated by `prove_execution` call.
-	pub fn execution_proof_check_on_trie_backend<H, N, Exec, Spawn>(
+	pub fn execution_proof_check_on_trie_backend<H, Exec, Spawn>(
 		trie_backend: &TrieBackend<MemoryDB<H>, H>,
 		overlay: &mut OverlayedChanges,
 		exec: &Exec,
@@ -710,12 +667,10 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
-		N: crate::changes_trie::BlockNumber,
 		Spawn: SpawnNamed + Send + 'static,
 	{
-		let mut sm = StateMachine::<_, H, N, Exec>::new(
+		let mut sm = StateMachine::<_, H, Exec>::new(
 			trie_backend,
-			None,
 			overlay,
 			exec,
 			method,
@@ -1390,7 +1345,7 @@ mod execution {
 
 #[cfg(test)]
 mod tests {
-	use super::{changes_trie::Configuration as ChangesTrieConfig, ext::Ext, *};
+	use super::{ext::Ext, *};
 	use crate::execution::CallResult;
 	use codec::{Decode, Encode};
 	use sp_core::{
@@ -1409,7 +1364,6 @@ mod tests {
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
-		change_changes_trie_config: bool,
 		native_available: bool,
 		native_succeeds: bool,
 		fallback_succeeds: bool,
@@ -1430,13 +1384,6 @@ mod tests {
 			use_native: bool,
 			native_call: Option<NC>,
 		) -> (CallResult<R, Self::Error>, bool) {
-			if self.change_changes_trie_config {
-				ext.place_storage(
-					sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
-					Some(ChangesTrieConfig { digest_interval: 777, digest_levels: 333 }.encode()),
-				);
-			}
-
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds, native_call) {
 				(true, true, _, Some(call)) => {
@@ -1472,10 +1419,8 @@ mod tests {
 
 		let mut state_machine = StateMachine::new(
 			&backend,
-			changes_trie::disabled_state::<_, u64>(),
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: true,
@@ -1498,10 +1443,8 @@ mod tests {
 
 		let mut state_machine = StateMachine::new(
 			&backend,
-			changes_trie::disabled_state::<_, u64>(),
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: true,
@@ -1525,10 +1468,8 @@ mod tests {
 
 		let mut state_machine = StateMachine::new(
 			&backend,
-			changes_trie::disabled_state::<_, u64>(),
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: false,
@@ -1555,7 +1496,6 @@ mod tests {
 	#[test]
 	fn prove_execution_and_proof_check_works() {
 		let executor = DummyCodeExecutor {
-			change_changes_trie_config: false,
 			native_available: true,
 			native_succeeds: true,
 			fallback_succeeds: true,
@@ -1564,7 +1504,7 @@ mod tests {
 		// fetch execution proof from 'remote' full node
 		let mut remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
-		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
+		let (remote_result, remote_proof) = prove_execution(
 			&mut remote_backend,
 			&mut Default::default(),
 			&executor,
@@ -1576,7 +1516,7 @@ mod tests {
 		.unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<BlakeTwo256, u64, _, _>(
+		let local_result = execution_proof_check::<BlakeTwo256, _, _>(
 			remote_root,
 			remote_proof,
 			&mut Default::default(),
@@ -1614,13 +1554,7 @@ mod tests {
 		let overlay_limit = overlay.clone();
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			ext.clear_prefix(b"ab", None);
 		}
 		overlay.commit_transaction().unwrap();
@@ -1644,13 +1578,7 @@ mod tests {
 		let mut overlay = overlay_limit;
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!((false, 1), ext.clear_prefix(b"ab", Some(1)));
 		}
 		overlay.commit_transaction().unwrap();
@@ -1692,13 +1620,7 @@ mod tests {
 
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				&backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
 		}
 
@@ -1733,13 +1655,7 @@ mod tests {
 		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&backend,
-			changes_trie::disabled_state::<_, u64>(),
-			None,
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), (false, 0));
 		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), (false, 1));
 		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
@@ -1758,13 +1674,7 @@ mod tests {
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			backend,
-			changes_trie::disabled_state::<_, u64>(),
-			None,
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 		ext.set_child_storage(child_info, b"abc".to_vec(), b"def".to_vec());
 		assert_eq!(ext.child_storage(child_info, b"abc"), Some(b"def".to_vec()));
@@ -1781,26 +1691,14 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			ext.storage_append(key.clone(), reference_data[0].encode());
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 		overlay.start_transaction();
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			for i in reference_data.iter().skip(1) {
 				ext.storage_append(key.clone(), i.encode());
@@ -1809,13 +1707,7 @@ mod tests {
 		}
 		overlay.rollback_transaction().unwrap();
 		{
-			let ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 	}
@@ -1837,13 +1729,7 @@ mod tests {
 
 		// For example, block initialization with event.
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			ext.clear_storage(key.as_slice());
 			ext.storage_append(key.clone(), Item::InitializationItem.encode());
 		}
@@ -1851,13 +1737,7 @@ mod tests {
 
 		// For example, first transaction resulted in panic during block building
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()));
 
@@ -1872,13 +1752,7 @@ mod tests {
 
 		// Then we apply next transaction which is valid this time.
 		{
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()));
 
@@ -1893,13 +1767,7 @@ mod tests {
 
 		// Then only initlaization item and second (committed) item should persist.
 		{
-			let ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(
 				ext.storage(key.as_slice()),
 				Some(vec![Item::InitializationItem, Item::CommitedItem].encode()),
@@ -2214,13 +2082,7 @@ mod tests {
 		let mut transaction = {
 			let backend = test_trie();
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				&backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
 			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
@@ -2257,13 +2119,7 @@ mod tests {
 
 		{
 			let mut cache = StorageTransactionCache::default();
-			let mut ext = Ext::new(
-				&mut overlay,
-				&mut cache,
-				backend,
-				changes_trie::disabled_state::<_, u64>(),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 			assert_eq!(ext.storage(b"bbb"), Some(vec![]));
 			assert_eq!(ext.storage(b"ccc"), Some(vec![]));
 			ext.clear_storage(b"ccc");
@@ -2286,10 +2142,8 @@ mod tests {
 
 		let mut state_machine = StateMachine::new(
 			&backend,
-			changes_trie::disabled_state::<_, u64>(),
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
-				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: false,
@@ -2301,7 +2155,7 @@ mod tests {
 			TaskExecutor::new(),
 		);
 
-		let run_state_machine = |state_machine: &mut StateMachine<_, _, _, _>| {
+		let run_state_machine = |state_machine: &mut StateMachine<_, _, _>| {
 			state_machine
 				.execute_using_consensus_failure_handler::<fn(_, _) -> _, _, _>(
 					ExecutionManager::NativeWhenPossible,
