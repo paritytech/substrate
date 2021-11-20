@@ -70,10 +70,22 @@ pub mod v8 {
 
 pub mod v7 {
 	use super::*;
+	use frame_support::generate_storage_alias;
+
+	generate_storage_alias!(Staking, CounterForValidators => Value<u32>);
+	generate_storage_alias!(Staking, CounterForNominators => Value<u32>);
 
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-		assert!(Validators::<T>::count().is_zero(), "Counter for Validators already set.");
-		assert!(Nominators::<T>::count().is_zero(), "Counter for Nominators already set.");
+		assert!(
+			CounterForValidators::get().unwrap().is_zero(),
+			"CounterForValidators already set."
+		);
+		assert!(
+			CounterForNominators::get().unwrap().is_zero(),
+			"CounterForNominators already set."
+		);
+		assert!(Validators::<T>::count().is_zero(), "Validators already set.");
+		assert!(Nominators::<T>::count().is_zero(), "Nominators already set.");
 		assert!(StorageVersion::<T>::get() == Releases::V6_0_0);
 		Ok(())
 	}
@@ -82,6 +94,9 @@ pub mod v7 {
 		log!(info, "Migrating staking to Releases::V7_0_0");
 		let validator_count = Validators::<T>::iter().count() as u32;
 		let nominator_count = Nominators::<T>::iter().count() as u32;
+
+		CounterForValidators::put(validator_count);
+		CounterForNominators::put(nominator_count);
 
 		StorageVersion::<T>::put(Releases::V7_0_0);
 		log!(info, "Completed staking migration to Releases::V7_0_0");
