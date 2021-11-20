@@ -13,6 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [lib]
 proc-macro = true
+doctest = false
 
 [dependencies]
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }

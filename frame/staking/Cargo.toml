@@ -12,6 +12,9 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[lib]
+doctest = false
+
 [dependencies]
 serde = { version = "1.0.126", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [

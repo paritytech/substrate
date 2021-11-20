@@ -14,6 +14,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 
+[lib]
+doctest = false
+
 [dependencies]
 sp-core = { version = "4.0.0-dev", path = "../core" }
 sp-runtime = { version = "4.0.0-dev", path = "../runtime" }

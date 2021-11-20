@@ -11,6 +11,9 @@ repository = "https://github.com/paritytech/substrate/"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[lib]
+doctest = false
+
 [dependencies]
 sp-runtime-interface = { version = "4.0.0-dev", path = "../" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }

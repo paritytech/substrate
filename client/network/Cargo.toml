@@ -16,6 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [build-dependencies]
 prost-build = "0.9"
 
+[lib]
+doctest = false
+
 [dependencies]
 async-trait = "0.1"
 async-std = "1.10.0"

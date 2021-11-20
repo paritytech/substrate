@@ -10,6 +10,9 @@ description = "cli interface for FRAME"
 documentation = "https://docs.rs/substrate-frame-cli"
 readme = "README.md"
 
+[lib]
+doctest = false
+
 [dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }

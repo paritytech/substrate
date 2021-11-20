@@ -5,6 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 publish = false
 
+[lib]
+doctest = false
+
 [dependencies]
 test-runner = { path = "../../../test-utils/test-runner" }
 

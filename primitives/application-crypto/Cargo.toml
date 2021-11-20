@@ -14,6 +14,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 
+[lib]
+doctest = false
+
 [dependencies]
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }

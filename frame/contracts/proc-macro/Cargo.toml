@@ -13,6 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [lib]
 proc-macro = true
+doctest = false
 
 [dependencies]
 proc-macro2 = "1"

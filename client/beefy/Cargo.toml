@@ -7,6 +7,9 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 repository = "https://github.com/paritytech/substrate"
 description = "BEEFY Client gadget for substrate"
 
+[lib]
+doctest = false
+
 [dependencies]
 fnv = "1.0.6"
 futures = "0.3"

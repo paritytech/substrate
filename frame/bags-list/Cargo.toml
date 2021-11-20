@@ -12,6 +12,9 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[lib]
+doctest = false
+
 [dependencies]
 # parity
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
@@ -70,4 +73,3 @@ fuzz = [
 	"sp-tracing",
 ]
 try-runtime = [ "frame-support/try-runtime" ]
-

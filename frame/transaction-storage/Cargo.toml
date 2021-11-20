@@ -12,6 +12,9 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[lib]
+doctest = false
+
 [dependencies]
 serde = { version = "1.0.126", optional = true }
 hex-literal = { version = "0.3.4", optional = true }

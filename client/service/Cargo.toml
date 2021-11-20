@@ -21,6 +21,9 @@ wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []
 
+[lib]
+doctest = false
+
 [dependencies]
 thiserror = "1.0.30"
 futures = "0.3.16"

@@ -16,6 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 path = "src/main.rs"
 name = "subkey"
 
+[lib]
+doctest = false
+
 [dependencies]
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
 structopt = "0.3.25"

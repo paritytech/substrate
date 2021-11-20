@@ -9,6 +9,9 @@ repository = "https://github.com/paritytech/substrate/"
 description = "FRAME example pallet"
 readme = "README.md"
 
+[lib]
+doctest = false
+
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }

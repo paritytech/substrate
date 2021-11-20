@@ -9,6 +9,9 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Bag threshold generation script for pallet-bag-list"
 readme = "README.md"
 
+[lib]
+doctest = false
+
 [dependencies]
 # FRAME
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }

@@ -12,6 +12,9 @@ documentation = "https://docs.rs/sp-core-hashing"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[lib]
+doctest = false
+
 [dependencies]
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../std" }
 byteorder = { version = "1.3.2", default-features = false }

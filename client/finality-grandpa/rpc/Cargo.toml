@@ -8,6 +8,9 @@ edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 readme = "README.md"
 
+[lib]
+doctest = false
+
 [dependencies]
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../" }
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }

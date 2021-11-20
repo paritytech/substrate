@@ -85,6 +85,7 @@ harness = false
 
 [lib]
 bench = false
+doctest = false
 
 [features]
 default = ["std"]

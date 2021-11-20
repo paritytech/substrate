@@ -8,6 +8,9 @@ homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Transaction pool client facing API."
 
+[lib]
+doctest = false
+
 [dependencies]
 futures = { version = "0.3.1"  }
 log = { version = "0.4.8" }

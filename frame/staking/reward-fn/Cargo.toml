@@ -12,6 +12,7 @@ description = "Reward function for FRAME staking pallet"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [lib]
+doctest = false
 
 [dependencies]
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/arithmetic" }

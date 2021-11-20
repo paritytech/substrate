@@ -10,5 +10,8 @@ description = "Handling of blobs, usually Wasm code, which may be compresed"
 documentation = "https://docs.rs/sp-maybe-compressed-blob"
 readme = "README.md"
 
+[lib]
+doctest = false
+
 [dependencies]
 zstd = { version = "0.9.0", default-features = false }

@@ -7,6 +7,9 @@ license = "Apache-2.0"
 repository = "https://github.com/paritytech/substrate"
 description = "BEEFY FRAME pallet"
 
+[lib]
+doctest = false
+
 [dependencies]
 codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }

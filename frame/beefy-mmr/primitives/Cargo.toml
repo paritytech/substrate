@@ -7,6 +7,9 @@ license = "Apache-2.0"
 repository = "https://github.com/paritytech/substrate"
 description = "A no-std/Substrate compatible library to construct binary merkle tree."
 
+[lib]
+doctest = false
+
 [dependencies]
 hex = { version = "0.4", optional = true, default-features = false }
 log = { version = "0.4", optional = true, default-features = false }
