@@ -24,7 +24,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockcha
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
 futures = "0.3.16"
-derive_more = "0.99.2"
+derive_more = "0.99.16"
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../../primitives/consensus/common" }
 sp-core = { version = "4.0.0-dev", path = "../../../../primitives/core" }
