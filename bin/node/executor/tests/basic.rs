@@ -379,7 +379,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
-					extrinsic_info: DispatchInfo {
+					dispatch_info: DispatchInfo {
 						weight: timestamp_weight,
 						class: DispatchClass::Mandatory,
 						..Default::default()
@@ -420,7 +420,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
-					extrinsic_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
 				topics: vec![],
 			},
@@ -450,7 +450,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
-					extrinsic_info: DispatchInfo {
+					dispatch_info: DispatchInfo {
 						weight: timestamp_weight,
 						class: DispatchClass::Mandatory,
 						..Default::default()
@@ -491,7 +491,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
-					extrinsic_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
 				topics: vec![],
 			},
@@ -528,7 +528,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
-					extrinsic_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
 				topics: vec![],
 			},
