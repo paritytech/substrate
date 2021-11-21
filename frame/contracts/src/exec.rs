@@ -23,7 +23,6 @@ use crate::{
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
-	ensure,
 	pallet_prelude::Encode,
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
@@ -34,7 +33,7 @@ use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::crypto::UncheckedFrom;
 use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
-use sp_runtime::traits::{Convert, Saturating};
+use sp_runtime::traits::Convert;
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -834,11 +833,6 @@ where
 		let value = frame.value_transferred;
 
 		Self::transfer(ExistenceRequirement::KeepAlive, self.caller(), &frame.account_id, value)
-	}
-
-	/// Wether the caller is the initiator of the call stack.
-	fn caller_is_origin(&self) -> bool {
-		self.frames.is_empty()
 	}
 
 	/// Reference to the current (top) frame.
