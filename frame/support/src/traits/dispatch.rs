@@ -143,3 +143,41 @@ pub trait OriginTrait: Sized {
 	/// Create with system signed origin and `frame_system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	struct EnsureSuccess;
+	struct EnsureFail;
+
+	impl EnsureOrigin<()> for EnsureSuccess {
+		type Success = ();
+		fn try_origin(_: ()) -> Result<Self::Success, ()> {
+			Ok(())
+		}
+	}
+
+	impl EnsureOrigin<()> for EnsureFail {
+		type Success = ();
+		fn try_origin(_: ()) -> Result<Self::Success, ()> {
+			Err(())
+		}
+	}
+
+	#[test]
+	fn ensure_one_of_test() {
+		assert!(<EnsureOneOf<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	}
+
+	#[test]
+	fn ensure_both_of_test() {
+		assert!(<EnsureBothOf<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureBothOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_err());
+		assert!(<EnsureBothOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_err());
+		assert!(<EnsureBothOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	}
+}
