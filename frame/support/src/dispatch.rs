@@ -2035,6 +2035,10 @@ macro_rules! decl_module {
 			$( $integrity_test )*
 		}
 
+		/// Error compactness test is unsupported in declarative macros.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::ErrorCompactnessTest
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )* {}
+
 		/// Can also be called using [`Call`].
 		///
 		/// [`Call`]: enum.Call.html

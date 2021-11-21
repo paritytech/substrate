@@ -312,6 +312,11 @@ frame_support::construct_runtime!(
 );
 
 #[test]
+fn error_compactness_test() {
+	__construct_runtime_integrity_test::error_compactness_tests();
+}
+
+#[test]
 fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3 };
 	assert_eq!(

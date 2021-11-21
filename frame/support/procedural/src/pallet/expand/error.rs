@@ -21,14 +21,23 @@ use frame_support_procedural_tools::get_doc_literals;
 ///
 /// * impl various trait on Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
-	let error = if let Some(error) = &def.error { error } else { return Default::default() };
-
-	let error_ident = &error.error;
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
+	let pallet_ident = &def.pallet_struct.pallet;
+	let pallet_type_impl_gen = &def.type_impl_generics(def.pallet_struct.attr_span);
+	let pallet_type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
+	let config_where_clause = &def.config.where_clause;
+
+	let error = if let Some(error) = &def.error { error } else {
+		return quote::quote! {
+			impl<#pallet_type_impl_gen> #frame_support::traits::ErrorCompactnessTest
+				for #pallet_ident<#pallet_type_use_gen> #config_where_clause {}
+		}
+	};
+
+	let error_ident = &error.error;
 	let type_impl_gen = &def.type_impl_generics(error.attr_span);
 	let type_use_gen = &def.type_use_generics(error.attr_span);
-	let config_where_clause = &def.config.where_clause;
 
 	let phantom_variant: syn::Variant = syn::parse_quote!(
 		#[doc(hidden)]
@@ -115,6 +124,19 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	quote::quote_spanned!(error.attr_span =>
+		impl<#pallet_type_impl_gen> #frame_support::traits::ErrorCompactnessTest
+			for #pallet_ident<#pallet_type_use_gen> #config_where_clause
+		{
+			fn error_compactness_test() {
+				assert!(
+					<
+						#error_ident<#type_use_gen> as #frame_support::traits::CompactPalletError
+					>::check_compactness(),
+					"Pallet error type is not the most compact possible"
+				);
+			}
+		}
+
 		impl<#type_impl_gen> #frame_support::sp_std::fmt::Debug for #error_ident<#type_use_gen>
 			#config_where_clause
 		{

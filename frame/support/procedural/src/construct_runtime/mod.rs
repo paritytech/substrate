@@ -411,6 +411,11 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 			pub fn runtime_integrity_tests() {
 				<AllPalletsWithSystem as #scrate::traits::IntegrityTest>::integrity_test();
 			}
+
+			#[test]
+			pub fn error_compactness_tests() {
+				<AllPallets as #scrate::traits::ErrorCompactnessTest>::error_compactness_test();
+			}
 		}
 	)
 }

@@ -17,11 +17,9 @@
 
 //! Traits for describing and constraining pallet error types.
 
-use scale_info::TypeInfo;
-
 /// Trait denoting that the implementing type has the most compact encoded size that is fit to be
 /// included as a field in a variant of the `#[pallet::error]` enum type.
-pub trait CompactPalletError: TypeInfo {
+pub trait CompactPalletError {
 	/// Function that checks whether implementing types are either 1 bytes in size, or that its
 	/// nested types are 1 bytes in size, i.e. whether they are as memory efficient as possible.
 	///
@@ -43,3 +41,20 @@ macro_rules! impl_for_types {
 }
 
 impl_for_types!(u8, i8, bool, char, Option<bool>);
+
+pub trait ErrorCompactnessTest {
+	fn error_compactness_test() {}
+}
+
+impl<A: ErrorCompactnessTest> ErrorCompactnessTest for (A,) {
+	fn error_compactness_test() {
+		A::error_compactness_test();
+	}
+}
+
+impl<A: ErrorCompactnessTest, B: ErrorCompactnessTest> ErrorCompactnessTest for (A, B) {
+	fn error_compactness_test() {
+		A::error_compactness_test();
+		B::error_compactness_test();
+	}
+}

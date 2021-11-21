@@ -68,6 +68,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 					syn::Fields::Unnamed(mut f) if f.unnamed.len() == 1 =>
 						Ok(Some(f.unnamed.pop().unwrap().into_value().ty)),
 					syn::Fields::Unit => Ok(None),
+					_ if variant.ident == "__Ignore" => Ok(None),
 					_ => {
 						let msg = "Cannot derive `CompactPalletError` for enum with variants \
 						containing more than 1 field";
