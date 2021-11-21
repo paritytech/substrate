@@ -156,12 +156,20 @@ mod tests {
 		fn try_origin(_: ()) -> Result<Self::Success, ()> {
 			Ok(())
 		}
+		#[cfg(feature = "runtime-benchmarks")]
+		fn successful_origin() -> OuterOrigin {
+			()
+		}
 	}
 
 	impl EnsureOrigin<()> for EnsureFail {
 		type Success = ();
 		fn try_origin(_: ()) -> Result<Self::Success, ()> {
 			Err(())
+		}
+		#[cfg(feature = "runtime-benchmarks")]
+		fn successful_origin() -> OuterOrigin {
+			()
 		}
 	}
 
