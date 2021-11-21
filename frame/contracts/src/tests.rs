@@ -678,8 +678,14 @@ fn cannot_self_destruct_through_draning() {
 		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
 
 		// Call BOB which makes it send all funds to the zero address
-		// The contract code asserts that the correct error value is returned.
+		// The contract code asserts that the transfer was successful
 		assert_ok!(Contracts::call(Origin::signed(ALICE), addr, 0, GAS_LIMIT, None, vec![]));
+
+		// Make sure the account wasn't remove by sending all free balance away.
+		assert!(
+			<Test as Config>::Currency::total_balance(&ALICE) >=
+				<Test as Config>::Currency::minimum_balance()
+		);
 	});
 }
 

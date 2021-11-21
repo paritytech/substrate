@@ -615,6 +615,11 @@ where
 				nested_storage.charge(&storage::meter::Diff {
 					bytes_added: contract.encoded_size() as u32,
 					items_added: 1,
+					// We make sure that this deposit that is charged for every new contract
+					// is at least the existential deposit. This makes sure that the contract's
+					// account is never dusted even when all the free balance is removed. This
+					// saves us all kind of checks when dealing with balance transfers.
+					require_ed: true,
 					..Default::default()
 				})?;
 				(account_id, contract, executable, ExportedFunction::Constructor, Some(trie_seed))
@@ -812,42 +817,14 @@ where
 	}
 
 	/// Transfer some funds from `from` to `to`.
-	///
-	/// We only allow allow for draining all funds of the sender if `allow_death` is
-	/// is specified as `true`. Otherwise, any transfer that would bring the sender below the
-	/// subsistence threshold (for contracts) or the existential deposit (for plain accounts)
-	/// results in an error.
 	fn transfer(
-		sender_is_origin: bool,
-		allow_death: bool,
+		existence_requirement: ExistenceRequirement,
 		from: &T::AccountId,
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		if value == 0u32.into() {
-			return Ok(())
-		}
-
-		let existence_requirement = match (allow_death, sender_is_origin) {
-			(true, _) => ExistenceRequirement::AllowDeath,
-			(false, false) => {
-				// In case the caller is not the origin (i.e a contract) we make sure
-				// that the free balance alone keeps a contract's account alive. Otherwise
-				// it might be alive only due to some storage deposits which might remove the
-				// account when storage is removed.
-				ensure!(
-					T::Currency::free_balance(from).saturating_sub(value) >=
-						T::Currency::minimum_balance(),
-					Error::<T>::TransferFailed,
-				);
-				ExistenceRequirement::KeepAlive
-			},
-			(false, true) => ExistenceRequirement::KeepAlive,
-		};
-
 		T::Currency::transfer(from, to, value, existence_requirement)
 			.map_err(|_| Error::<T>::TransferFailed)?;
-
 		Ok(())
 	}
 
@@ -855,14 +832,8 @@ where
 	fn initial_transfer(&self) -> DispatchResult {
 		let frame = self.top_frame();
 		let value = frame.value_transferred;
-		let min_balance = T::Currency::minimum_balance();
 
-		// New contracts must receive at least the minimum balance as endowment.
-		if frame.entry_point == ExportedFunction::Constructor && value < min_balance {
-			return Err(<Error<T>>::EndowmentTooLow.into())
-		}
-
-		Self::transfer(self.caller_is_origin(), false, self.caller(), &frame.account_id, value)
+		Self::transfer(ExistenceRequirement::KeepAlive, self.caller(), &frame.account_id, value)
 	}
 
 	/// Wether the caller is the initiator of the call stack.
@@ -1002,8 +973,7 @@ where
 		frame.nested_storage.terminate(&info);
 		Storage::<T>::queue_trie_for_deletion(&info)?;
 		<Stack<'a, T, E>>::transfer(
-			false,
-			true,
+			ExistenceRequirement::AllowDeath,
 			&frame.account_id,
 			beneficiary,
 			T::Currency::free_balance(&frame.account_id),
@@ -1018,7 +988,7 @@ where
 	}
 
 	fn transfer(&mut self, to: &T::AccountId, value: BalanceOf<T>) -> DispatchResult {
-		Self::transfer(false, false, &self.top_frame().account_id, to, value)
+		Self::transfer(ExistenceRequirement::KeepAlive, &self.top_frame().account_id, to, value)
 	}
 
 	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
@@ -1359,7 +1329,7 @@ mod tests {
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
-			MockStack::transfer(true, false, &origin, &dest, 55).unwrap();
+			MockStack::transfer(ExistenceRequirement::KeepAlive, &origin, &dest, 55).unwrap();
 
 			assert_eq!(get_balance(&origin), 45);
 			assert_eq!(get_balance(&dest), 55);
@@ -1412,7 +1382,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			set_balance(&origin, 0);
 
-			let result = MockStack::transfer(true, false, &origin, &dest, 100);
+			let result = MockStack::transfer(ExistenceRequirement::KeepAlive, &origin, &dest, 100);
 
 			assert_eq!(result, Err(Error::<Test>::TransferFailed.into()));
 			assert_eq!(get_balance(&origin), 0);

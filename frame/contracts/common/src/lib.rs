@@ -161,20 +161,20 @@ pub enum Code<Hash> {
 }
 
 /// The amount of balance that was either charged or refunded in order to pay for storage.
-#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug, Clone)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub enum StorageDeposit<Balance> {
-	/// The transaction increased overall storage usage.
-	///
-	/// This means that the specified amount of balance was transferred from the call origin
-	/// to the contracts involved.
-	Charge(Balance),
 	/// The transaction reduced storage consumption.
 	///
 	/// This means that the specified amount of balance was transferred from the involved
 	/// contracts to the call origin.
 	Refund(Balance),
+	/// The transaction increased overall storage usage.
+	///
+	/// This means that the specified amount of balance was transferred from the call origin
+	/// to the contracts involved.
+	Charge(Balance),
 }
 
 impl<Balance: Zero> Default for StorageDeposit<Balance> {

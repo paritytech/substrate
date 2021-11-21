@@ -478,20 +478,8 @@ pub mod pallet {
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
 		OutputBufferTooSmall,
-		/// When creating a new contract at least the minimum balance must be provided
-		/// as endowment. If that is not the case this error is returned.
-		EndowmentTooLow,
-		/// Performing the requested transfer failed. Most probably the transfer would have
-		/// brought the contract's account below the minimum balance. Other possible reasons
-		/// are balance locks or reservations on the contract's account.
-		///
-		/// # Note
-		///
-		/// Any transfer must leave the minimum balance as **free** balance in the contract.
-		/// This is different from a usual keep alive transfer where the reserved balance
-		/// also counts into the minimum balance. This is enforced because otherwise a refund
-		/// of a storage deposit could remove a contract's account as it was only kept alive
-		/// by this deposit.
+		/// Performing the requested transfer failed. Probably because there isn't enough
+		/// free balance in the sender's account.
 		TransferFailed,
 		/// Performing a call was denied because the calling depth reached the limit
 		/// of what is specified in the schedule.

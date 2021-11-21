@@ -59,8 +59,8 @@ pub enum ReturnCode {
 	_BelowSubsistenceThreshold = 4,
 	/// See [`Error::TransferFailed`].
 	TransferFailed = 5,
-	/// See [`Error::EndowmentTooLow`].
-	EndowmentTooLow = 6,
+	/// Deprecated and no longer returned: Endowment is no longer required.
+	_EndowmentTooLow = 6,
 	/// No code could be found at the supplied code hash.
 	CodeNotFound = 7,
 	/// The contract that was called is no contract (a plain account).
@@ -606,13 +606,11 @@ where
 		use ReturnCode::*;
 
 		let transfer_failed = Error::<E::T>::TransferFailed.into();
-		let endowment_too_low = Error::<E::T>::EndowmentTooLow.into();
 		let no_code = Error::<E::T>::CodeNotFound.into();
 		let not_found = Error::<E::T>::ContractNotFound.into();
 
 		match from {
 			x if x == transfer_failed => Ok(TransferFailed),
-			x if x == endowment_too_low => Ok(EndowmentTooLow),
 			x if x == no_code => Ok(CodeNotFound),
 			x if x == not_found => Ok(NotCallable),
 			err => Err(err),

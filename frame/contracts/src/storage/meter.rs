@@ -20,7 +20,7 @@
 use crate::{storage::ContractInfo, BalanceOf, Config, Error};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
-	traits::{tokens::BalanceStatus, Get, ReservableCurrency},
+	traits::{tokens::BalanceStatus, Currency, Get, ReservableCurrency},
 	DefaultNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
@@ -123,6 +123,9 @@ pub struct Diff {
 	pub items_added: u32,
 	/// How many storage items were removed from storage.
 	pub items_removed: u32,
+	/// If set to true the derived deposit will always a `Charge` larger than the
+	/// the existential deposit.
+	pub require_ed: bool,
 }
 
 impl Diff {
@@ -150,6 +153,10 @@ impl Diff {
 			deposit = deposit.saturating_add(&Deposit::Refund(
 				per_item.saturating_mul((self.items_removed - self.items_added).into()),
 			));
+		}
+
+		if self.require_ed {
+			deposit = deposit.max(Deposit::Charge(T::Currency::minimum_balance()))
 		}
 
 		deposit
