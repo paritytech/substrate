@@ -120,6 +120,9 @@ fn check_wasm_toolchain_installed(
 	let manifest_path = temp.path().join("Cargo.toml").display().to_string();
 
 	let mut build_cmd = cargo_command.command();
+	// Chdir to temp to avoid including project's .cargo/config.toml
+	// by accident - it can happen in some CI environments.
+	build_cmd.current_dir(&temp);
 	build_cmd.args(&[
 		"build",
 		"--target=wasm32-unknown-unknown",
@@ -132,6 +135,9 @@ fn check_wasm_toolchain_installed(
 	}
 
 	let mut run_cmd = cargo_command.command();
+	// Chdir to temp to avoid including project's .cargo/config.toml
+	// by accident - it can happen in some CI environments.
+	run_cmd.current_dir(&temp);
 	run_cmd.args(&["run", "--manifest-path", &manifest_path]);
 
 	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock

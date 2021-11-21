@@ -193,11 +193,8 @@ where
 				.await
 			{
 				Ok(stream) => stream,
-				Err(e) => {
-					let _ = sink.send(&format!(
-						"txpool subscription failed: {:?}; subscription useless",
-						e
-					));
+				Err(err) => {
+					let _ = sink.close(&err.to_string());
 					return
 				},
 			};

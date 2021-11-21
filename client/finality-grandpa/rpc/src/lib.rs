@@ -338,10 +338,12 @@ mod tests {
 		);
 
 		// Unsubscribe again and fail
-		// TODO(niklasad1): fails..
 		assert_eq!(
-			rpc.call_with("grandpa_unsubscribeJustifications", [sub_id]).await,
-			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
+			rpc.call_with("grandpa_unsubscribeJustifications", [sub_id.clone()]).await,
+			Some(format!(
+				r#"{{"jsonrpc":"2.0","error":{{"code":-32002,"message":"Server error","data":"Invalid subscription ID={}"}},"id":0}}"#,
+				serde_json::to_string(&sub_id).unwrap(),
+			))
 		);
 	}
 
@@ -357,10 +359,12 @@ mod tests {
 		deser_call::<SubscriptionId>(sub_resp);
 
 		// Unsubscribe with wrong ID
-		// TODO(niklasad1): we could improve this error :)
 		assert_eq!(
-			rpc.call_with("grandpa_unsubscribeJustifications", [SubscriptionId::Str("FOO".into())]).await,
-			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-1,\"message\":\"Server error\"},\"id\":0}".into())
+			rpc.call_with("grandpa_unsubscribeJustifications", [SubscriptionId::Str("FOO".into())])
+				.await,
+			Some(
+				r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Server error","data":"Invalid subscription ID type, must be integer"},"id":0}"#.into()
+			)
 		);
 	}
 
@@ -430,8 +434,8 @@ mod tests {
 		justification_sender.notify(|| Ok(justification.clone())).unwrap();
 
 		// Inspect what we received
-		let (recv_justification, recv_sub_id): (sp_core::Bytes, SubscriptionId) = sub.next().await;
-
+		let (recv_justification, recv_sub_id): (sp_core::Bytes, SubscriptionId) =
+			sub.next().await.unwrap();
 		let recv_justification: GrandpaJustification<Block> =
 			Decode::decode(&mut &recv_justification[..]).unwrap();
 

@@ -22,7 +22,7 @@ wasmtime = ["sc-executor/wasmtime"]
 test-helpers = []
 
 [dependencies]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.16"
 rand = "0.7.3"
@@ -77,7 +77,7 @@ parity-util-mem = { version = "0.10.2", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.50"
-tokio = { version = "1.10", features = ["time", "rt-multi-thread"] }
+tokio = { version = "1.14", features = ["time", "rt-multi-thread"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
 

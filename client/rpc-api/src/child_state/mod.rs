@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Substrate child state API
 use crate::state::ReadProof;
 use jsonrpsee::{proc_macros::rpc, types::RpcResult};
 use sp_core::storage::{PrefixedStorageKey, StorageData, StorageKey};
@@ -26,9 +27,9 @@ use sp_core::storage::{PrefixedStorageKey, StorageData, StorageKey};
 /// from json and not guaranteed valid.
 #[rpc(client, server, namespace = "childstate")]
 pub trait ChildStateApi<Hash> {
-	/// DEPRECATED: Please use `getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
 	#[method(name = "getKeys")]
+	#[deprecated(since = "2.0", note = "Please use `getKeysPaged` with proper paging support")]
 	async fn storage_keys(
 		&self,
 		child_storage_key: PrefixedStorageKey,

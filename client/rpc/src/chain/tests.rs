@@ -226,56 +226,34 @@ async fn should_return_finalized_hash() {
 
 #[tokio::test]
 async fn should_notify_about_latest_block() {
-	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
-	let mut sub = api.test_subscription("chain_subscribeAllHeads", Vec::<()>::new()).await;
-
-	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, block).await.unwrap();
-
-	let _h1 = sub.next::<Header>().await;
-	let _h2 = sub.next::<Header>().await;
-
-	sub.close();
-	// TODO: this will panic https://github.com/paritytech/jsonrpsee/pull/566
-	let _h3 = sub.next::<Header>().await;
+	test_head_subscription("chain_subscribeAllHeads").await;
 }
 
 #[tokio::test]
 async fn should_notify_about_best_block() {
-	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
-
-	let mut sub = api.test_subscription("chain_subscribeNewHeads", Vec::<()>::new()).await;
-
-	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, block).await.unwrap();
-
-	// Check for the correct number of notifications
-	let _h1 = sub.next::<Header>().await;
-	let _h2 = sub.next::<Header>().await;
-
-	sub.close();
-	// TODO: this will panic https://github.com/paritytech/jsonrpsee/pull/566
-	let _h3 = sub.next::<Header>().await;
+	test_head_subscription("chain_subscribeNewHeads").await;
 }
 
 #[tokio::test]
 async fn should_notify_about_finalized_block() {
+	test_head_subscription("chain_subscribeFinalizedHeads").await;
+}
+
+async fn test_head_subscription(method: &str) {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
 
-	let mut sub = api.test_subscription("chain_subscribeFinalizedHeads", Vec::<()>::new()).await;
+	let mut sub = {
+		let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
+		let sub = api.test_subscription(method, Vec::<()>::new()).await;
+		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+		client.import(BlockOrigin::Own, block).await.unwrap();
+		client.finalize_block(BlockId::number(1), None).unwrap();
+		sub
+	};
 
-	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, block).await.unwrap();
-	client.finalize_block(BlockId::number(1), None).unwrap();
-
-	// Check for the correct number of notifications
-	let _h1 = sub.next::<Header>().await;
-	let _h2 = sub.next::<Header>().await;
+	assert_matches!(timeout_secs(10, sub.next::<Header>()).await, Ok(Some(_)));
+	assert_matches!(timeout_secs(10, sub.next::<Header>()).await, Ok(Some(_)));
 
 	sub.close();
-	// TODO: this will panic https://github.com/paritytech/jsonrpsee/pull/566
-	let _h3 = sub.next::<Header>().await;
+	assert_matches!(timeout_secs(10, sub.next::<Header>()).await, Ok(None));
 }

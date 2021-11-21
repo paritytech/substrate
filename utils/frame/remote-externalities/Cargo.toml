@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { version = "0.4.1", features = ["ws-client", "macros"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["ws-client", "macros"] }
 
 env_logger = "0.9"
 frame-support = { path = "../../../frame/support", optional = true, version = "4.0.0-dev" }
@@ -28,7 +28,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
 
 [dev-dependencies]
-tokio = { version = "1.10", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.14", features = ["macros", "rt-multi-thread"] }
 pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev" }
 frame-support = { path = "../../../frame/support", version = "4.0.0-dev" }
 

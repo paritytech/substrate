@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 futures = "0.3.16"
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7", features = ["client", "jsonrpsee-types"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["jsonrpsee-types"] }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde = "1"
 frame-support = { version = "4.0.0-dev", path = "../../../../frame/support" }
@@ -26,4 +26,5 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 [dev-dependencies]
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
 scale-info = "1.0"
-tokio = "1.10"
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["ws-client", "jsonrpsee-types"] }
+tokio = { version = "1.14", features = ["macros"] }

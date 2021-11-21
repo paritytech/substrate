@@ -547,11 +547,10 @@ async fn should_notify_on_runtime_version_initially() {
 	};
 
 	// assert initial version sent.
-	assert_matches!(timeout_secs(1, sub.next::<RuntimeVersion>()).await, Ok(_));
+	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Ok(Some(_)));
 
 	sub.close();
-	// TODO(niklasad1): panics if polled after close; needs a jsonrpsee fix
-	//assert_matches!(timeout_secs(1, sub.next::<RuntimeVersion>()).await, Ok(None));
+	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Ok(None));
 }
 
 #[test]

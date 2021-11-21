@@ -15,11 +15,10 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 finality-grandpa = { version = "0.14.4", features = ["derive-codec"] }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7", features = ["server", "macros"] }
-futures = { version = "0.3.4", features = ["compat"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["server", "macros"] }
+futures = "0.3.4"
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
-tracing = "0.1"
 log = "0.4.8"
 derive_more = "0.99.2"
 parity-scale-codec = { version = "2.0.0", features = ["derive"] }
@@ -34,4 +33,4 @@ sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-tokio = { version = "1", features = ["macros"] }
+tokio = { version = "1.14", features = ["macros"] }
