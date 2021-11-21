@@ -29,7 +29,7 @@ use sp_core::storage::{PrefixedStorageKey, StorageData, StorageKey};
 pub trait ChildStateApi<Hash> {
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
 	#[method(name = "getKeys")]
-	#[deprecated(since = "2.0", note = "Please use `getKeysPaged` with proper paging support")]
+	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
 	async fn storage_keys(
 		&self,
 		child_storage_key: PrefixedStorageKey,

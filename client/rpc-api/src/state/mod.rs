@@ -39,7 +39,7 @@ pub trait StateApi<Hash> {
 
 	/// Returns the keys with prefix, leave empty to get all the keys.
 	#[method(name = "getKeys")]
-	#[deprecated(since = "2.0", note = "Please use `getKeysPaged` with proper paging support")]
+	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
 	async fn storage_keys(
 		&self,
 		prefix: StorageKey,
