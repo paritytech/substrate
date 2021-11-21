@@ -28,7 +28,9 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
 	let config_where_clause = &def.config.where_clause;
 
-	let error = if let Some(error) = &def.error { error } else {
+	let error = if let Some(error) = &def.error {
+		error
+	} else {
 		return quote::quote! {
 			impl<#pallet_type_impl_gen> #frame_support::traits::ErrorCompactnessTest
 				for #pallet_ident<#pallet_type_use_gen> #config_where_clause {}
