@@ -535,7 +535,7 @@ enum ApiToWorker {
 	},
 }
 
-/// Message send from the API to the worker.
+/// Message send from the worker to the API.
 enum WorkerToApi {
 	/// A request has succeeded.
 	Response {
