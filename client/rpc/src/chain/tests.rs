@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use crate::testing::{deser_call, TaskExecutor};
+use crate::testing::{deser_call, timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
