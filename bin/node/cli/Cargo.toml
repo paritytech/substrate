@@ -36,7 +36,7 @@ crate-type = ["cdylib", "rlib"]
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = "0.3.16"
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["server"] }
 hex-literal = "0.3.3"
 log = "0.4.8"
 rand = "0.7.2"
@@ -139,7 +139,7 @@ async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = [ "async_tokio" ] }
 tokio = { version = "1.14", features = ["macros", "time"] }
-jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f" }
+jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da" }
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }

@@ -70,8 +70,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 	/// See [`TransactionStatus`](sc_transaction_pool_api::TransactionStatus) for details on
 	/// transaction life cycle.
 	#[subscription(
-		name = "submitAndWatchExtrinsic",
-		aliases = ["author_extrinsicUpdate"],
+		name = "submitAndWatchExtrinsic" => "extrinsicUpdate",
 		unsubscribe_aliases = ["author_unwatchExtrinsic"],
 		item = TransactionStatus<Hash, BlockHash>,
 	)]

@@ -22,7 +22,7 @@ wasmtime = ["sc-executor/wasmtime"]
 test-helpers = []
 
 [dependencies]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.16"
 rand = "0.7.3"

@@ -30,4 +30,4 @@ sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 
 serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.68"
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f", features = ["server", "macros"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["server", "macros"] }

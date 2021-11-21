@@ -2860,7 +2860,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=0e46b5cea9cd632dc438a005c77bbaa5c2af562f#0e46b5cea9cd632dc438a005c77bbaa5c2af562f"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=9a3c1e981bcdbbb558b1457bbd78277a14dca2da#9a3c1e981bcdbbb558b1457bbd78277a14dca2da"
 dependencies = [
  "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
@@ -2873,7 +2873,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=0e46b5cea9cd632dc438a005c77bbaa5c2af562f#0e46b5cea9cd632dc438a005c77bbaa5c2af562f"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=9a3c1e981bcdbbb558b1457bbd78277a14dca2da#9a3c1e981bcdbbb558b1457bbd78277a14dca2da"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2892,7 +2892,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=0e46b5cea9cd632dc438a005c77bbaa5c2af562f#0e46b5cea9cd632dc438a005c77bbaa5c2af562f"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=9a3c1e981bcdbbb558b1457bbd78277a14dca2da#9a3c1e981bcdbbb558b1457bbd78277a14dca2da"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2903,7 +2903,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=0e46b5cea9cd632dc438a005c77bbaa5c2af562f#0e46b5cea9cd632dc438a005c77bbaa5c2af562f"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=9a3c1e981bcdbbb558b1457bbd78277a14dca2da#9a3c1e981bcdbbb558b1457bbd78277a14dca2da"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2921,7 +2921,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=0e46b5cea9cd632dc438a005c77bbaa5c2af562f#0e46b5cea9cd632dc438a005c77bbaa5c2af562f"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=9a3c1e981bcdbbb558b1457bbd78277a14dca2da#9a3c1e981bcdbbb558b1457bbd78277a14dca2da"
 dependencies = [
  "arrayvec 0.7.1",
  "beef",
@@ -2942,7 +2942,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=0e46b5cea9cd632dc438a005c77bbaa5c2af562f#0e46b5cea9cd632dc438a005c77bbaa5c2af562f"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=9a3c1e981bcdbbb558b1457bbd78277a14dca2da#9a3c1e981bcdbbb558b1457bbd78277a14dca2da"
 dependencies = [
  "async-trait",
  "fnv",
@@ -2965,7 +2965,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/jsonrpsee?rev=0e46b5cea9cd632dc438a005c77bbaa5c2af562f#0e46b5cea9cd632dc438a005c77bbaa5c2af562f"
+source = "git+https://github.com/paritytech/jsonrpsee?rev=9a3c1e981bcdbbb558b1457bbd78277a14dca2da#9a3c1e981bcdbbb558b1457bbd78277a14dca2da"
 dependencies = [
  "futures-channel",
  "futures-util",

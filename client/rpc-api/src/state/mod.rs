@@ -37,9 +37,9 @@ pub trait StateApi<Hash> {
 	#[method(name = "call", aliases = ["state_callAt"])]
 	async fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> RpcResult<Bytes>;
 
-	/// DEPRECATED: Please use `getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix, leave empty to get all the keys.
 	#[method(name = "getKeys")]
+	#[deprecated(since = "2.0", note = "Please use `getKeysPaged` with proper paging support")]
 	async fn storage_keys(
 		&self,
 		prefix: StorageKey,
@@ -117,18 +117,16 @@ pub trait StateApi<Hash> {
 
 	/// New runtime version subscription
 	#[subscription(
-		name = "runtimeVersion",
-		aliases = ["state_subscribeRuntimeVersion", "chain_subscribeRuntimeVersion"],
-		unsubscribe_aliases = ["state_unsubscribeRuntimeVersion", "chain_unsubscribeRuntimeVersion"],
+		name = "subscribeRuntimeVersion" => "runtimeVersion",
+		aliases = ["chain_subscribeRuntimeVersion"],
+		unsubscribe_aliases = ["chain_unsubscribeRuntimeVersion"],
         item = RuntimeVersion,
 	)]
 	fn subscribe_runtime_version(&self) -> RpcResult<()>;
 
 	/// New storage subscription
 	#[subscription(
-        name = "storage",
-        aliases = ["state_subscribeStorage"],
-        unsubscribe_aliases = ["state_unsubscribeStorage"],
+        name = "subscribeStorage" => "storage",
         item = StorageChangeSet<Hash>,
     )]
 	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> RpcResult<()>;

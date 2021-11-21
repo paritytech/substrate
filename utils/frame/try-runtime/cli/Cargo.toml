@@ -31,4 +31,4 @@ sp-externalities = { version = "0.10.0-dev", path = "../../../../primitives/exte
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "0e46b5cea9cd632dc438a005c77bbaa5c2af562f", features = ["ws-client"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["ws-client"] }
