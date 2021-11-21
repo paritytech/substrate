@@ -1370,7 +1370,7 @@ mod tests {
 				}));
 				// Killed Event
 				System::assert_has_event(Event::System(system::Event::KilledAccount {
-					reaped_account: 2,
+					account: 2,
 				}));
 			});
 	}
