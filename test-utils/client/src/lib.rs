@@ -294,23 +294,6 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 	}
 }
 
-/// An error for when the RPC call fails.
-#[derive(Deserialize, Debug)]
-pub struct RpcTransactionError {
-	/// A Number that indicates the error type that occurred.
-	pub code: i64,
-	/// A String providing a short description of the error.
-	pub message: String,
-	/// A Primitive or Structured value that contains additional information about the error.
-	pub data: Option<serde_json::Value>,
-}
-
-impl std::fmt::Display for RpcTransactionError {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		std::fmt::Debug::fmt(self, f)
-	}
-}
-
 /// An extension trait for `BlockchainEvents`.
 pub trait BlockchainEventsExt<C, B>
 where
