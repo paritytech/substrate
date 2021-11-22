@@ -15,5 +15,5 @@ serde = { version = "1.0.126", features = ["derive"] }
 thiserror = { version = "1.0.30" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
-derive_more = { version = "0.99.11" }
+derive_more = { version = "0.99.16" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }

@@ -11,6 +11,7 @@ test-runner = { path = "../../../test-utils/test-runner" }
 frame-system = { path = "../../../frame/system" }
 frame-benchmarking = { path = "../../../frame/benchmarking" }
 pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
+pallet-asset-tx-payment = { path = "../../../frame/transaction-payment/asset-tx-payment/" }
 
 node-runtime = { path = "../runtime" }
 node-primitives = { path = "../primitives" }
