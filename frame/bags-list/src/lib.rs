@@ -21,9 +21,9 @@
 //! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
 //! signifies the chance of each id being included in the final [`SortedListProvider::iter`].
 //!
-//! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted list
-//! of accounts to another pallet. It needs some other pallet to give it some information about the
-//! weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
+//! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
+//! list of accounts to another pallet. It needs some other pallet to give it some information about
+//! the weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
 //! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
