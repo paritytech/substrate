@@ -53,8 +53,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
 	#[subscription(
-		name = "subscribeJustifications",
-		aliases = ["grandpa_justifications"],
+		name = "subscribeJustifications" => "justifications",
 		item = Notification
 	)]
 	fn subscribe_justifications(&self) -> RpcResult<()>;
