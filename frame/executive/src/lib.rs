@@ -125,7 +125,6 @@ use frame_support::{
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
-use frame_system::DigestOf;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -281,8 +280,8 @@ where
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
 	}
 
-	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
-		let mut digest = <DigestOf<System>>::default();
+	fn extract_pre_digest(header: &System::Header) -> Digest {
+		let mut digest = <Digest>::default();
 		header.digest().logs().iter().for_each(|d| {
 			if d.as_pre_runtime().is_some() {
 				digest.push(d.clone())
@@ -294,7 +293,7 @@ where
 	fn initialize_block_impl(
 		block_number: &System::BlockNumber,
 		parent_hash: &System::Hash,
-		digest: &Digest<System::Hash>,
+		digest: &Digest,
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
@@ -800,10 +799,12 @@ mod tests {
 
 	parameter_types! {
 		pub const TransactionByteFee: Balance = 0;
+		pub const OperationalFeeMultiplier: u8 = 5;
 	}
 	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
+		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
@@ -1110,8 +1111,6 @@ mod tests {
 		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned {}), None);
 		let mut t = new_test_ext(1);
 
-		let mut default_with_prio_3 = ValidTransaction::default();
-		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
 				Executive::validate_transaction(
@@ -1119,7 +1118,7 @@ mod tests {
 					valid.clone(),
 					Default::default(),
 				),
-				Ok(default_with_prio_3),
+				Ok(ValidTransaction::default()),
 			);
 			assert_eq!(
 				Executive::validate_transaction(

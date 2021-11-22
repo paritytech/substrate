@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg(unix)]
-
 use assert_cmd::cargo::cargo_bin;
 use nix::{
 	sys::signal::{
@@ -26,67 +25,43 @@ use nix::{
 	},
 	unistd::Pid,
 };
-use sc_service::Deref;
 use std::{
 	convert::TryInto,
-	ops::DerefMut,
 	process::{Child, Command},
-	thread,
-	time::Duration,
 };
 use tempfile::tempdir;
 
 pub mod common;
 
-#[test]
-fn running_the_node_works_and_can_be_interrupted() {
-	fn run_command_and_kill(signal: Signal) {
+#[tokio::test]
+async fn running_the_node_works_and_can_be_interrupted() {
+	async fn run_command_and_kill(signal: Signal) {
 		let base_path = tempdir().expect("could not create a temp dir");
-		let mut cmd = Command::new(cargo_bin("substrate"))
-			.args(&["--dev", "-d"])
-			.arg(base_path.path())
-			.spawn()
-			.unwrap();
+		let mut cmd = common::KillChildOnDrop(
+			Command::new(cargo_bin("substrate"))
+				.args(&["--dev", "-d"])
+				.arg(base_path.path())
+				.spawn()
+				.unwrap(),
+		);
 
-		thread::sleep(Duration::from_secs(20));
+		common::wait_n_finalized_blocks(3, 30).await.unwrap();
 		assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
 		kill(Pid::from_raw(cmd.id().try_into().unwrap()), signal).unwrap();
 		assert_eq!(
 			common::wait_for(&mut cmd, 30).map(|x| x.success()),
-			Some(true),
+			Ok(true),
 			"the process must exit gracefully after signal {}",
 			signal,
 		);
 	}
 
-	run_command_and_kill(SIGINT);
-	run_command_and_kill(SIGTERM);
+	run_command_and_kill(SIGINT).await;
+	run_command_and_kill(SIGTERM).await;
 }
 
-struct KillChildOnDrop(Child);
-
-impl Drop for KillChildOnDrop {
-	fn drop(&mut self) {
-		let _ = self.0.kill();
-	}
-}
-
-impl Deref for KillChildOnDrop {
-	type Target = Child;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl DerefMut for KillChildOnDrop {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-#[test]
-fn running_two_nodes_with_the_same_ws_port_should_work() {
+#[tokio::test]
+async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	fn start_node() -> Child {
 		Command::new(cargo_bin("substrate"))
 			.args(&["--dev", "--tmp", "--ws-port=45789"])
@@ -94,10 +69,10 @@ fn running_two_nodes_with_the_same_ws_port_should_work() {
 			.unwrap()
 	}
 
-	let mut first_node = KillChildOnDrop(start_node());
-	let mut second_node = KillChildOnDrop(start_node());
+	let mut first_node = common::KillChildOnDrop(start_node());
+	let mut second_node = common::KillChildOnDrop(start_node());
 
-	thread::sleep(Duration::from_secs(30));
+	let _ = common::wait_n_finalized_blocks(3, 30).await;
 
 	assert!(first_node.try_wait().unwrap().is_none(), "The first node should still be running");
 	assert!(second_node.try_wait().unwrap().is_none(), "The second node should still be running");
@@ -107,12 +82,12 @@ fn running_two_nodes_with_the_same_ws_port_should_work() {
 
 	assert_eq!(
 		common::wait_for(&mut first_node, 30).map(|x| x.success()),
-		Some(true),
+		Ok(true),
 		"The first node must exit gracefully",
 	);
 	assert_eq!(
 		common::wait_for(&mut second_node, 30).map(|x| x.success()),
-		Some(true),
+		Ok(true),
 		"The second node must exit gracefully",
 	);
 }

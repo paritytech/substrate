@@ -18,23 +18,14 @@
 use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{token, Generics, Ident};
+use syn::{Generics, Ident};
 
 pub fn expand_outer_origin(
 	runtime: &Ident,
+	system_pallet: &Pallet,
 	pallets: &[Pallet],
-	pallets_token: token::Brace,
 	scrate: &TokenStream,
 ) -> syn::Result<TokenStream> {
-	let system_pallet =
-		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
-			syn::Error::new(
-				pallets_token.span,
-				"`System` pallet declaration is missing. \
-			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
-			)
-		})?;
-
 	let mut caller_variants = TokenStream::new();
 	let mut pallet_conversions = TokenStream::new();
 	let mut query_origin_part_macros = Vec::new();
@@ -77,13 +68,39 @@ pub fn expand_outer_origin(
 	}
 
 	let system_path = &system_pallet.path;
+
 	let system_index = system_pallet.index;
+
+	let system_path_name = system_path.module_name();
+
+	let doc_string = get_intra_doc_string(
+		"Origin is always created with the base filter configured in",
+		&system_path_name,
+	);
+
+	let doc_string_none_origin =
+		get_intra_doc_string("Create with system none origin and", &system_path_name);
+
+	let doc_string_root_origin =
+		get_intra_doc_string("Create with system root origin and", &system_path_name);
+
+	let doc_string_signed_origin =
+		get_intra_doc_string("Create with system signed origin and", &system_path_name);
+
+	let doc_string_runtime_origin =
+		get_intra_doc_string("Convert to runtime origin, using as filter:", &system_path_name);
+
+	let doc_string_runtime_origin_with_caller = get_intra_doc_string(
+		"Convert to runtime origin with caller being system signed or none and use filter",
+		&system_path_name,
+	);
 
 	Ok(quote! {
 		#( #query_origin_part_macros )*
 
-		// WARNING: All instance must hold the filter `frame_system::Config::BaseCallFilter`, except
-		// when caller is system Root. One can use `OriginTrait::reset_filter` to do so.
+		/// The runtime origin type representing the origin of a call.
+		///
+		#[doc = #doc_string]
 		#[derive(Clone)]
 		pub struct Origin {
 			caller: OriginCaller,
@@ -140,7 +157,11 @@ pub fn expand_outer_origin(
 			}
 
 			fn filter_call(&self, call: &Self::Call) -> bool {
-				(self.filter)(call)
+				match self.caller {
+					// Root bypasses all filters
+					OriginCaller::system(#system_path::Origin::<#runtime>::Root) => true,
+					_ => (self.filter)(call),
+				}
 			}
 
 			fn caller(&self) -> &Self::PalletsOrigin {
@@ -157,15 +178,14 @@ pub fn expand_outer_origin(
 				}
 			}
 
-			/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 			fn none() -> Self {
 				#system_path::RawOrigin::None.into()
 			}
-			/// Create with system root origin and no filter.
+
 			fn root() -> Self {
 				#system_path::RawOrigin::Root.into()
 			}
-			/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
+
 			fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
 				#system_path::RawOrigin::Signed(by).into()
 			}
@@ -187,15 +207,18 @@ pub fn expand_outer_origin(
 		// For backwards compatibility and ease of accessing these functions.
 		#[allow(dead_code)]
 		impl Origin {
-			/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
+
+			#[doc = #doc_string_none_origin]
 			pub fn none() -> Self {
 				<Origin as #scrate::traits::OriginTrait>::none()
 			}
-			/// Create with system root origin and no filter.
+
+			#[doc = #doc_string_root_origin]
 			pub fn root() -> Self {
 				<Origin as #scrate::traits::OriginTrait>::root()
 			}
-			/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
+
+			#[doc = #doc_string_signed_origin]
 			pub fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
 				<Origin as #scrate::traits::OriginTrait>::signed(by)
 			}
@@ -221,9 +244,8 @@ pub fn expand_outer_origin(
 		}
 
 		impl From<#system_path::Origin<#runtime>> for Origin {
-			/// Convert to runtime origin:
-			/// * root origin is built with no filter
-			/// * others use `frame-system::Config::BaseCallFilter`
+
+			#[doc = #doc_string_runtime_origin]
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
 				let o: OriginCaller = x.into();
 				o.into()
@@ -237,10 +259,7 @@ pub fn expand_outer_origin(
 					filter: #scrate::sp_std::rc::Rc::new(Box::new(|_| true)),
 				};
 
-				// Root has no filter
-				if !matches!(o.caller, OriginCaller::system(#system_path::Origin::<#runtime>::Root)) {
-					#scrate::traits::OriginTrait::reset_filter(&mut o);
-				}
+				#scrate::traits::OriginTrait::reset_filter(&mut o);
 
 				o
 			}
@@ -257,8 +276,7 @@ pub fn expand_outer_origin(
 			}
 		}
 		impl From<Option<<#runtime as #system_path::Config>::AccountId>> for Origin {
-			/// Convert to runtime origin with caller being system signed or none and use filter
-			/// `frame-system::Config::BaseCallFilter`.
+			#[doc = #doc_string_runtime_origin_with_caller]
 			fn from(x: Option<<#runtime as #system_path::Config>::AccountId>) -> Self {
 				<#system_path::Origin<#runtime>>::from(x).into()
 			}
@@ -313,6 +331,8 @@ fn expand_origin_pallet_conversions(
 		None => quote!(#path::Origin),
 	};
 
+	let doc_string = get_intra_doc_string(" Convert to runtime origin using", &path.module_name());
+
 	quote! {
 		impl From<#pallet_origin> for OriginCaller {
 			fn from(x: #pallet_origin) -> Self {
@@ -321,7 +341,7 @@ fn expand_origin_pallet_conversions(
 		}
 
 		impl From<#pallet_origin> for Origin {
-			/// Convert to runtime origin using `frame-system::Config::BaseCallFilter`.
+			#[doc = #doc_string]
 			fn from(x: #pallet_origin) -> Self {
 				let x: OriginCaller = x.into();
 				x.into()
@@ -352,4 +372,9 @@ fn expand_origin_pallet_conversions(
 			}
 		}
 	}
+}
+
+// Get the actual documentation using the doc information and system path name
+fn get_intra_doc_string(doc_info: &str, system_path_name: &String) -> String {
+	format!(" {} [`{}::Config::BaseCallFilter`].", doc_info, system_path_name)
 }

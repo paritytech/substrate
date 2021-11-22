@@ -79,13 +79,13 @@ pub struct SetId(usize);
 
 impl SetId {
 	pub const fn from(id: usize) -> Self {
-		SetId(id)
+		Self(id)
 	}
 }
 
 impl From<usize> for SetId {
 	fn from(id: usize) -> Self {
-		SetId(id)
+		Self(id)
 	}
 }
 
@@ -107,12 +107,12 @@ pub struct ReputationChange {
 impl ReputationChange {
 	/// New reputation change with given delta and reason.
 	pub const fn new(value: i32, reason: &'static str) -> ReputationChange {
-		ReputationChange { value, reason }
+		Self { value, reason }
 	}
 
 	/// New reputation change that forces minimum possible reputation.
 	pub const fn new_fatal(reason: &'static str) -> ReputationChange {
-		ReputationChange { value: i32::MIN, reason }
+		Self { value: i32::MIN, reason }
 	}
 }
 
@@ -208,8 +208,8 @@ pub enum Message {
 pub struct IncomingIndex(pub u64);
 
 impl From<u64> for IncomingIndex {
-	fn from(val: u64) -> IncomingIndex {
-		IncomingIndex(val)
+	fn from(val: u64) -> Self {
+		Self(val)
 	}
 }
 
@@ -274,7 +274,7 @@ pub struct Peerset {
 
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
-	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
+	pub fn from_config(config: PeersetConfig) -> (Self, PeersetHandle) {
 		let (tx, rx) = tracing_unbounded("mpsc_peerset_messages");
 
 		let handle = PeersetHandle { tx: tx.clone() };
@@ -282,7 +282,7 @@ impl Peerset {
 		let mut peerset = {
 			let now = Instant::now();
 
-			Peerset {
+			Self {
 				data: peersstate::PeersState::new(config.sets.iter().map(|set| {
 					peersstate::SetConfig { in_peers: set.in_peers, out_peers: set.out_peers }
 				})),
@@ -322,7 +322,7 @@ impl Peerset {
 	}
 
 	fn on_add_reserved_peer(&mut self, set_id: SetId, peer_id: PeerId) {
-		let newly_inserted = self.reserved_nodes[set_id.0].0.insert(peer_id.clone());
+		let newly_inserted = self.reserved_nodes[set_id.0].0.insert(peer_id);
 		if !newly_inserted {
 			return
 		}
@@ -422,8 +422,7 @@ impl Peerset {
 
 		match self.data.peer(set_id.0, &peer_id) {
 			peersstate::Peer::Connected(peer) => {
-				self.message_queue
-					.push_back(Message::Drop { set_id, peer_id: peer.peer_id().clone() });
+				self.message_queue.push_back(Message::Drop { set_id, peer_id: *peer.peer_id() });
 				peer.disconnect().forget_peer();
 			},
 			peersstate::Peer::NotConnected(peer) => {
@@ -819,8 +818,8 @@ mod tests {
 		};
 
 		let (peerset, handle) = Peerset::from_config(config);
-		handle.add_reserved_peer(SetId::from(0), reserved_peer.clone());
-		handle.add_reserved_peer(SetId::from(0), reserved_peer2.clone());
+		handle.add_reserved_peer(SetId::from(0), reserved_peer);
+		handle.add_reserved_peer(SetId::from(0), reserved_peer2);
 
 		assert_messages(
 			peerset,
@@ -845,22 +844,22 @@ mod tests {
 			sets: vec![SetConfig {
 				in_peers: 2,
 				out_peers: 1,
-				bootnodes: vec![bootnode.clone()],
+				bootnodes: vec![bootnode],
 				reserved_nodes: Default::default(),
 				reserved_only: false,
 			}],
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.incoming(SetId::from(0), incoming.clone(), ii);
-		peerset.incoming(SetId::from(0), incoming.clone(), ii4);
-		peerset.incoming(SetId::from(0), incoming2.clone(), ii2);
-		peerset.incoming(SetId::from(0), incoming3.clone(), ii3);
+		peerset.incoming(SetId::from(0), incoming, ii);
+		peerset.incoming(SetId::from(0), incoming, ii4);
+		peerset.incoming(SetId::from(0), incoming2, ii2);
+		peerset.incoming(SetId::from(0), incoming3, ii3);
 
 		assert_messages(
 			peerset,
 			vec![
-				Message::Connect { set_id: SetId::from(0), peer_id: bootnode.clone() },
+				Message::Connect { set_id: SetId::from(0), peer_id: bootnode },
 				Message::Accept(ii),
 				Message::Accept(ii2),
 				Message::Reject(ii3),
@@ -883,7 +882,7 @@ mod tests {
 		};
 
 		let (mut peerset, _) = Peerset::from_config(config);
-		peerset.incoming(SetId::from(0), incoming.clone(), ii);
+		peerset.incoming(SetId::from(0), incoming, ii);
 
 		assert_messages(peerset, vec![Message::Reject(ii)]);
 	}
@@ -897,15 +896,15 @@ mod tests {
 			sets: vec![SetConfig {
 				in_peers: 0,
 				out_peers: 2,
-				bootnodes: vec![bootnode.clone()],
+				bootnodes: vec![bootnode],
 				reserved_nodes: Default::default(),
 				reserved_only: false,
 			}],
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.add_to_peers_set(SetId::from(0), discovered.clone());
-		peerset.add_to_peers_set(SetId::from(0), discovered.clone());
+		peerset.add_to_peers_set(SetId::from(0), discovered);
+		peerset.add_to_peers_set(SetId::from(0), discovered);
 		peerset.add_to_peers_set(SetId::from(0), discovered2);
 
 		assert_messages(
@@ -931,7 +930,7 @@ mod tests {
 
 		// We ban a node by setting its reputation under the threshold.
 		let peer_id = PeerId::random();
-		handle.report_peer(peer_id.clone(), ReputationChange::new(BANNED_THRESHOLD - 1, ""));
+		handle.report_peer(peer_id, ReputationChange::new(BANNED_THRESHOLD - 1, ""));
 
 		let fut = futures::future::poll_fn(move |cx| {
 			// We need one polling for the message to be processed.
@@ -974,7 +973,7 @@ mod tests {
 
 		// We ban a node by setting its reputation under the threshold.
 		let peer_id = PeerId::random();
-		handle.report_peer(peer_id.clone(), ReputationChange::new(BANNED_THRESHOLD - 1, ""));
+		handle.report_peer(peer_id, ReputationChange::new(BANNED_THRESHOLD - 1, ""));
 
 		let fut = futures::future::poll_fn(move |cx| {
 			// We need one polling for the message to be processed.

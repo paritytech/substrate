@@ -18,6 +18,7 @@
 //! Functions for the Assets pallet.
 
 use super::*;
+use frame_support::{traits::Get, BoundedVec};
 
 // The main implementation block for the module.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -274,7 +275,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			details.supply = details.supply.saturating_add(amount);
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Issued(id, beneficiary.clone(), amount));
+		Self::deposit_event(Event::Issued {
+			asset_id: id,
+			owner: beneficiary.clone(),
+			total_supply: amount,
+		});
 		Ok(())
 	}
 
@@ -341,7 +346,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Burned(id, target.clone(), actual));
+		Self::deposit_event(Event::Burned { asset_id: id, owner: target.clone(), balance: actual });
 		Ok(actual)
 	}
 
@@ -414,7 +419,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<T::Balance, DispatchError> {
 		// Early exist if no-op.
 		if amount.is_zero() {
-			Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), amount));
+			Self::deposit_event(Event::Transferred {
+				asset_id: id,
+				from: source.clone(),
+				to: dest.clone(),
+				amount,
+			});
 			return Ok(amount)
 		}
 
@@ -475,7 +485,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), credit));
+		Self::deposit_event(Event::Transferred {
+			asset_id: id,
+			from: source.clone(),
+			to: dest.clone(),
+			amount: credit,
+		});
 		Ok(credit)
 	}
 
@@ -513,7 +528,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				is_frozen: false,
 			},
 		);
-		Self::deposit_event(Event::ForceCreated(id, owner));
+		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
 		Ok(())
 	}
 
@@ -553,13 +568,148 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
 				T::Currency::unreserve(&owner, approval.deposit);
 			}
-			Self::deposit_event(Event::Destroyed(id));
+			Self::deposit_event(Event::Destroyed { asset_id: id });
 
 			Ok(DestroyWitness {
 				accounts: details.accounts,
 				sufficients: details.sufficients,
 				approvals: details.approvals,
 			})
+		})
+	}
+
+	/// Creates an approval from `owner` to spend `amount` of asset `id` tokens by 'delegate'
+	/// while reserving `T::ApprovalDeposit` from owner
+	///
+	/// If an approval already exists, the new amount is added to such existing approval
+	pub(super) fn do_approve_transfer(
+		id: T::AssetId,
+		owner: &T::AccountId,
+		delegate: &T::AccountId,
+		amount: T::Balance,
+	) -> DispatchResult {
+		let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(!d.is_frozen, Error::<T, I>::Frozen);
+		Approvals::<T, I>::try_mutate(
+			(id, &owner, &delegate),
+			|maybe_approved| -> DispatchResult {
+				let mut approved = match maybe_approved.take() {
+					// an approval already exists and is being updated
+					Some(a) => a,
+					// a new approval is created
+					None => {
+						d.approvals.saturating_inc();
+						Default::default()
+					},
+				};
+				let deposit_required = T::ApprovalDeposit::get();
+				if approved.deposit < deposit_required {
+					T::Currency::reserve(&owner, deposit_required - approved.deposit)?;
+					approved.deposit = deposit_required;
+				}
+				approved.amount = approved.amount.saturating_add(amount);
+				*maybe_approved = Some(approved);
+				Ok(())
+			},
+		)?;
+		Asset::<T, I>::insert(id, d);
+		Self::deposit_event(Event::ApprovedTransfer {
+			asset_id: id,
+			source: owner.clone(),
+			delegate: delegate.clone(),
+			amount,
+		});
+
+		Ok(())
+	}
+
+	/// Reduces the asset `id` balance of `owner` by some `amount` and increases the balance of
+	/// `dest` by (similar) amount, checking that 'delegate' has an existing approval from `owner`
+	/// to spend`amount`.
+	///
+	/// Will fail if `amount` is greater than the approval from `owner` to 'delegate'
+	/// Will unreserve the deposit from `owner` if the entire approved `amount` is spent by
+	/// 'delegate'
+	pub(super) fn do_transfer_approved(
+		id: T::AssetId,
+		owner: &T::AccountId,
+		delegate: &T::AccountId,
+		destination: &T::AccountId,
+		amount: T::Balance,
+	) -> DispatchResult {
+		Approvals::<T, I>::try_mutate_exists(
+			(id, &owner, delegate),
+			|maybe_approved| -> DispatchResult {
+				let mut approved = maybe_approved.take().ok_or(Error::<T, I>::Unapproved)?;
+				let remaining =
+					approved.amount.checked_sub(&amount).ok_or(Error::<T, I>::Unapproved)?;
+
+				let f = TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
+				Self::do_transfer(id, &owner, &destination, amount, None, f)?;
+
+				if remaining.is_zero() {
+					T::Currency::unreserve(&owner, approved.deposit);
+					Asset::<T, I>::mutate(id, |maybe_details| {
+						if let Some(details) = maybe_details {
+							details.approvals.saturating_dec();
+						}
+					});
+				} else {
+					approved.amount = remaining;
+					*maybe_approved = Some(approved);
+				}
+				Ok(())
+			},
+		)?;
+		Ok(())
+	}
+
+	/// Do set metadata
+	pub(super) fn do_set_metadata(
+		id: T::AssetId,
+		from: &T::AccountId,
+		name: Vec<u8>,
+		symbol: Vec<u8>,
+		decimals: u8,
+	) -> DispatchResult {
+		let bounded_name: BoundedVec<u8, T::StringLimit> =
+			name.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
+		let bounded_symbol: BoundedVec<u8, T::StringLimit> =
+			symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
+
+		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(from == &d.owner, Error::<T, I>::NoPermission);
+
+		Metadata::<T, I>::try_mutate_exists(id, |metadata| {
+			ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::NoPermission);
+
+			let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
+			let new_deposit = T::MetadataDepositPerByte::get()
+				.saturating_mul(((name.len() + symbol.len()) as u32).into())
+				.saturating_add(T::MetadataDepositBase::get());
+
+			if new_deposit > old_deposit {
+				T::Currency::reserve(from, new_deposit - old_deposit)?;
+			} else {
+				T::Currency::unreserve(from, old_deposit - new_deposit);
+			}
+
+			*metadata = Some(AssetMetadata {
+				deposit: new_deposit,
+				name: bounded_name,
+				symbol: bounded_symbol,
+				decimals,
+				is_frozen: false,
+			});
+
+			Self::deposit_event(Event::MetadataSet {
+				asset_id: id,
+				name,
+				symbol,
+				decimals,
+				is_frozen: false,
+			});
+			Ok(())
 		})
 	}
 }

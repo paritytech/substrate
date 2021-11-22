@@ -244,6 +244,7 @@ impl pallet_timestamp::Config for Test {
 impl pallet_utility::Config for Test {
 	type Event = Event;
 	type Call = Call;
+	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
 parameter_types! {
@@ -446,12 +447,23 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Deposit {
+						who: ALICE,
+						amount: 1_000_000
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed(ALICE, 1_000_000)),
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: ALICE,
+						free_balance: 1_000_000
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -461,37 +473,42 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed(
-						addr.clone(),
-						subsistence * 100
-					)),
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: addr.clone(),
+						free_balance: subsistence * 100
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer(
-						ALICE,
-						addr.clone(),
-						subsistence * 100
-					)),
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: subsistence * 100
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored(code_hash.into())),
+					event: Event::Contracts(crate::Event::CodeStored {
+						code_hash: code_hash.into()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::ContractEmitted(
-						addr.clone(),
-						vec![1, 2, 3, 4]
-					)),
+					event: Event::Contracts(crate::Event::ContractEmitted {
+						contract: addr.clone(),
+						data: vec![1, 2, 3, 4]
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Instantiated(ALICE, addr.clone())),
+					event: Event::Contracts(crate::Event::Instantiated {
+						deployer: ALICE,
+						contract: addr.clone()
+					}),
 					topics: vec![],
 				},
 			]
@@ -755,21 +772,24 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer(
-						addr.clone(),
-						DJANGO,
-						100_000,
-					)),
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: addr.clone(),
+						to: DJANGO,
+						amount: 100_000,
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeRemoved(code_hash)),
+					event: Event::Contracts(crate::Event::CodeRemoved { code_hash }),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Terminated(addr.clone(), DJANGO)),
+					event: Event::Contracts(crate::Event::Terminated {
+						contract: addr.clone(),
+						beneficiary: DJANGO
+					}),
 					topics: vec![],
 				},
 			],

@@ -58,7 +58,7 @@
 
 use futures::{prelude::*, StreamExt};
 use log::{debug, error, info};
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::Decode;
 use parking_lot::RwLock;
 use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
@@ -77,7 +77,7 @@ use sp_core::crypto::Public;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, DigestFor, NumberFor, Zero},
+	traits::{Block as BlockT, NumberFor, Zero},
 };
 
 pub use finality_grandpa::BlockNumberOps;
@@ -718,7 +718,6 @@ where
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	DigestFor<Block>: Encode,
 	C: ClientForGrandpa<Block, BE> + 'static,
 	C::Api: GrandpaApi<Block>,
 {

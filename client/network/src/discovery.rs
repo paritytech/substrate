@@ -512,14 +512,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
 
 			if !self.allow_private_ipv4 {
-				list_to_filter.retain(|addr| {
-					if let Some(Protocol::Ip4(addr)) = addr.iter().next() {
-						if addr.is_private() {
-							return false
-						}
-					}
-
-					true
+				list_to_filter.retain(|addr| match addr.iter().next() {
+					Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
+					Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
+					_ => true,
 				});
 			}
 
@@ -603,14 +599,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
 
-		// NOTE: we might re-discover the same address multiple times
-		// in which case we just want to refrain from logging.
-		if self.known_external_addresses.insert(new_addr.clone()) {
-			info!(
-				target: "sub-libp2p",
-				"🔍 Discovered new external address for our node: {}",
-				new_addr,
-			);
+		if self.can_add_to_dht(addr) {
+			// NOTE: we might re-discover the same address multiple times
+			// in which case we just want to refrain from logging.
+			if self.known_external_addresses.insert(new_addr.clone()) {
+				info!(
+					target: "sub-libp2p",
+					"🔍 Discovered new external address for our node: {}",
+					new_addr,
+				);
+			}
 		}
 
 		for k in self.kademlias.values_mut() {

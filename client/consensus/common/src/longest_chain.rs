@@ -91,11 +91,12 @@ where
 		&self,
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
-	) -> Result<Option<Block::Hash>, ConsensusError> {
+	) -> Result<Block::Hash, ConsensusError> {
 		let import_lock = self.backend.get_import_lock();
 		self.backend
 			.blockchain()
 			.best_containing(target_hash, maybe_max_number, import_lock)
+			.map(|maybe_hash| maybe_hash.unwrap_or(target_hash))
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 }

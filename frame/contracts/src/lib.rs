@@ -369,49 +369,44 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Contract deployed by address at the specified address. \[deployer, contract\]
-		Instantiated(T::AccountId, T::AccountId),
+		/// Contract deployed by address at the specified address.
+		Instantiated { deployer: T::AccountId, contract: T::AccountId },
 
 		/// Contract has been removed.
-		/// \[contract, beneficiary\]
-		///
-		/// # Params
-		///
-		/// - `contract`: The contract that was terminated.
-		/// - `beneficiary`: The account that received the contracts remaining balance.
 		///
 		/// # Note
 		///
 		/// The only way for a contract to be removed and emitting this event is by calling
 		/// `seal_terminate`.
-		Terminated(T::AccountId, T::AccountId),
+		Terminated {
+			/// The contract that was terminated.
+			contract: T::AccountId,
+			/// The account that received the contracts remaining balance
+			beneficiary: T::AccountId,
+		},
 
-		/// Code with the specified hash has been stored. \[code_hash\]
-		CodeStored(T::Hash),
+		/// Code with the specified hash has been stored.
+		CodeStored { code_hash: T::Hash },
 
 		/// Triggered when the current schedule is updated.
-		/// \[version\]
-		///
-		/// # Params
-		///
-		/// - `version`: The version of the newly set schedule.
-		ScheduleUpdated(u32),
+		ScheduleUpdated {
+			/// The version of the newly set schedule.
+			version: u32,
+		},
 
 		/// A custom event emitted by the contract.
-		/// \[contract, data\]
-		///
-		/// # Params
-		///
-		/// - `contract`: The contract that emitted the event.
-		/// - `data`: Data supplied by the contract. Metadata generated during contract compilation
-		///   is needed to decode it.
-		ContractEmitted(T::AccountId, Vec<u8>),
+		ContractEmitted {
+			/// The contract that emitted the event.
+			contract: T::AccountId,
+			/// Data supplied by the contract. Metadata generated during contract compilation
+			/// is needed to decode it.
+			data: Vec<u8>,
+		},
 
 		/// A code with the specified hash was removed.
-		/// \[code_hash\]
 		///
 		/// This happens when the last contract that uses this code hash was removed.
-		CodeRemoved(T::Hash),
+		CodeRemoved { code_hash: T::Hash },
 	}
 
 	#[pallet::error]

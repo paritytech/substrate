@@ -28,8 +28,8 @@ struct RuntimeBuilder {
 	fast_instance_reuse: bool,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
-	heap_pages: u32,
-	max_memory_pages: Option<u32>,
+	heap_pages: u64,
+	max_memory_size: Option<usize>,
 }
 
 impl RuntimeBuilder {
@@ -42,7 +42,7 @@ impl RuntimeBuilder {
 			canonicalize_nans: false,
 			deterministic_stack: false,
 			heap_pages: 1024,
-			max_memory_pages: None,
+			max_memory_size: None,
 		}
 	}
 
@@ -58,8 +58,8 @@ impl RuntimeBuilder {
 		self.deterministic_stack = deterministic_stack;
 	}
 
-	fn max_memory_pages(&mut self, max_memory_pages: Option<u32>) {
-		self.max_memory_pages = max_memory_pages;
+	fn max_memory_size(&mut self, max_memory_size: Option<usize>) {
+		self.max_memory_size = max_memory_size;
 	}
 
 	fn build(self) -> Arc<dyn WasmModule> {
@@ -82,7 +82,7 @@ impl RuntimeBuilder {
 			blob,
 			crate::Config {
 				heap_pages: self.heap_pages,
-				max_memory_pages: self.max_memory_pages,
+				max_memory_size: self.max_memory_size,
 				allow_missing_func_imports: true,
 				cache_path: None,
 				semantics: crate::Semantics {
@@ -95,6 +95,7 @@ impl RuntimeBuilder {
 						false => None,
 					},
 					canonicalize_nans: self.canonicalize_nans,
+					parallel_compilation: true,
 				},
 			},
 			{
@@ -116,7 +117,7 @@ fn test_nan_canonicalization() {
 		builder.build()
 	};
 
-	let instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	/// A NaN with canonical payload bits.
 	const CANONICAL_NAN_BITS: u32 = 0x7fc00000;
@@ -159,7 +160,7 @@ fn test_stack_depth_reaching() {
 		builder.deterministic_stack(true);
 		builder.build()
 	};
-	let instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	let err = instance.call_export("test-many-locals", &[]).unwrap_err();
 
@@ -171,19 +172,21 @@ fn test_stack_depth_reaching() {
 #[test]
 fn test_max_memory_pages() {
 	fn try_instantiate(
-		max_memory_pages: Option<u32>,
+		max_memory_size: Option<usize>,
 		wat: &'static str,
 	) -> Result<(), Box<dyn std::error::Error>> {
 		let runtime = {
 			let mut builder = RuntimeBuilder::new_on_demand();
 			builder.use_wat(wat);
-			builder.max_memory_pages(max_memory_pages);
+			builder.max_memory_size(max_memory_size);
 			builder.build()
 		};
-		let instance = runtime.new_instance()?;
+		let mut instance = runtime.new_instance()?;
 		let _ = instance.call_export("main", &[])?;
 		Ok(())
 	}
+
+	const WASM_PAGE_SIZE: usize = 65536;
 
 	// check the old behavior if preserved. That is, if no limit is set we allow 4 GiB of memory.
 	try_instantiate(
@@ -213,9 +216,9 @@ fn test_max_memory_pages() {
 
 	// max is not specified, therefore it's implied to be 65536 pages (4 GiB).
 	//
-	// max_memory_pages = 1 (initial) + 1024 (heap_pages)
+	// max_memory_size = (1 (initial) + 1024 (heap_pages)) * WASM_PAGE_SIZE
 	try_instantiate(
-		Some(1 + 1024),
+		Some((1 + 1024) * WASM_PAGE_SIZE),
 		r#"
 		(module
 
@@ -233,7 +236,7 @@ fn test_max_memory_pages() {
 
 	// max is specified explicitly to 2048 pages.
 	try_instantiate(
-		Some(1 + 1024),
+		Some((1 + 1024) * WASM_PAGE_SIZE),
 		r#"
 		(module
 
@@ -251,7 +254,7 @@ fn test_max_memory_pages() {
 
 	// memory grow should work as long as it doesn't exceed 1025 pages in total.
 	try_instantiate(
-		Some(0 + 1024 + 25),
+		Some((0 + 1024 + 25) * WASM_PAGE_SIZE),
 		r#"
 		(module
 			(import "env" "memory" (memory 0)) ;; <- zero starting pages.
@@ -280,7 +283,7 @@ fn test_max_memory_pages() {
 
 	// We start with 1025 pages and try to grow at least one.
 	try_instantiate(
-		Some(1 + 1024),
+		Some((1 + 1024) * WASM_PAGE_SIZE),
 		r#"
 		(module
 			(import "env" "memory" (memory 1))  ;; <- initial=1, meaning after heap pages mount the

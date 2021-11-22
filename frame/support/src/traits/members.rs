@@ -70,7 +70,7 @@ impl<T> Contains<T> for Tuple {
 /// to `matches!`.
 #[macro_export]
 macro_rules! match_type {
-	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
+	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat_param $( | $ptail:pat )* } ; ) => {
 		pub struct $n;
 		impl $crate::traits::Contains<$t> for $n {
 			fn contains(l: &$t) -> bool {

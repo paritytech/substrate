@@ -23,9 +23,7 @@ use crate::Pallet as Collective;
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
 
 const SEED: u32 = 0;
@@ -130,7 +128,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::MemberExecuted(proposal_hash, Err(DispatchError::BadOrigin)).into()
+			Event::MemberExecuted { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
 		);
 	}
 
@@ -161,7 +159,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::Executed(proposal_hash, Err(DispatchError::BadOrigin)).into()
+			Event::Executed { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
 		);
 	}
 
@@ -205,7 +203,7 @@ benchmarks_instance_pallet! {
 		// New proposal is recorded
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 		let proposal_hash = T::Hashing::hash_of(&proposal);
-		assert_last_event::<T, I>(Event::Proposed(caller, p - 1, proposal_hash, threshold).into());
+		assert_last_event::<T, I>(Event::Proposed { account: caller, proposal_index: p - 1, proposal_hash, threshold }.into());
 	}
 
 	vote {
@@ -361,7 +359,7 @@ benchmarks_instance_pallet! {
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
+		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
 
 	close_early_approved {
@@ -442,7 +440,7 @@ benchmarks_instance_pallet! {
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
 	}
 
 	close_disapproved {
@@ -516,7 +514,7 @@ benchmarks_instance_pallet! {
 	}: close(SystemOrigin::Signed(caller), last_hash, index, Weight::max_value(), bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
+		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
 
 	close_approved {
@@ -588,7 +586,7 @@ benchmarks_instance_pallet! {
 	}: close(SystemOrigin::Signed(caller), last_hash, p - 1, Weight::max_value(), bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
 	}
 
 	disapprove_proposal {
@@ -636,8 +634,8 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Root, last_hash)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved(last_hash).into());
+		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
-}
 
-impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);
+}

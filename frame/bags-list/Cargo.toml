@@ -2,9 +2,9 @@
 name = "pallet-bags-list"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet bags list"
 readme = "README.md"
@@ -63,4 +63,11 @@ runtime-benchmarks = [
 	"sp-tracing",
 	"frame-election-provider-support/runtime-benchmarks",
 ]
+fuzz = [
+	"sp-core",
+	"sp-io",
+	"pallet-balances",
+	"sp-tracing",
+]
+try-runtime = [ "frame-support/try-runtime" ]
 
