@@ -8,9 +8,9 @@ jobs:
     runs-on:                       self-hosted
     env:
       CARGO_INCREMENTAL:           0
-      RUSTUP_HOME:                 /usr/local/rustup
-      CARGO_HOME:                  /usr/local/cargo
-      PATH:                        /usr/local/cargo/bin:$PATH
+      # RUSTUP_HOME:                 /usr/local/rustup
+      # CARGO_HOME:                  /usr/local/cargo
+      # PATH:                        /usr/local/cargo/bin:$PATH
       CC:                          clang
       CXX:                         clang
 
@@ -22,7 +22,7 @@ jobs:
           access_token:            ${{ github.token }}
 
       - name:                      Install dependencies
-        shell:                     sh
+        # shell:                     sh
         run:                       |
           apt update
           apt install -y --no-install-recommends
@@ -33,13 +33,13 @@ jobs:
         # git pkg-config rhash ca-certificates lsof
 
       - name:                      Install Rust
-        shell:                     sh
+        # shell:                     sh
         run:                       |
           curl -L "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init" -o rustup-init
           chmod +x rustup-init
           ./rustup-init -y --no-modify-path --profile minimal --default-toolchain stable
           rm rustup-init
-          chmod -R a+w ${RUSTUP_HOME} ${CARGO_HOME}
+        # chmod -R a+w ${RUSTUP_HOME} ${CARGO_HOME}
 
       - name:                      Checkout sources
         uses:                      actions/checkout@master
