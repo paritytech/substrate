@@ -22,6 +22,7 @@ jobs:
           access_token:            ${{ github.token }}
 
       - name:                      Install dependencies
+        shell:                     sh
         run:                       |
           apt update
           apt install -y --no-install-recommends
@@ -32,6 +33,7 @@ jobs:
         # git pkg-config rhash ca-certificates lsof
 
       - name:                      Install Rust
+        shell:                     sh
         run:                       |
           curl -L "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init" -o rustup-init
           chmod +x rustup-init
