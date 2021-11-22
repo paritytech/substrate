@@ -6,10 +6,6 @@ on:
 jobs:
   bench_gh:
     runs-on:                       self-hosted
-    container:
-      image:                       paritytech/ci-linux:production
-      volumes:
-        - /cache:/cache
     env:
       RUSTC_WRAPPER:               ""
       CARGO_INCREMENTAL:           0
@@ -19,6 +15,10 @@ jobs:
         uses:                      styfle/cancel-workflow-action@0.9.1
         with:
           access_token:            ${{ github.token }}
+
+      - name:                      Install Rust
+        run:                       |
+          curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
 
       - name:                      Checkout sources
         uses:                      actions/checkout@master
