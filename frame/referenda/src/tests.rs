@@ -128,7 +128,26 @@ fn submit_errors_work() {
 	});
 }
 
+#[test]
+fn decision_deposit_errors_work() {
+	new_test_ext().execute_with(|| {
+		let e = Error::<Test>::NotOngoing;
+		assert_noop!(Referenda::place_decision_deposit(Origin::signed(2), 0), e);
 
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		let e = BalancesError::<Test>::InsufficientBalance;
+		assert_noop!(Referenda::place_decision_deposit(Origin::signed(10), 0), e);
+
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		let e = Error::<Test>::HaveDeposit;
+		assert_noop!(Referenda::place_decision_deposit(Origin::signed(2), 0), e);
+	});
+}
 
 #[test]
 fn set_balance_proposal_is_correctly_filtered_out() {
