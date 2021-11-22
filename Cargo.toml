@@ -230,6 +230,7 @@ members = [
 # probably concerns this list.
 #
 # This list is ordered alphabetically.
+# FIXME:
 [profile.dev.package]
 blake2 = { opt-level = 3 }
 blake2-rfc = { opt-level = 3 }
