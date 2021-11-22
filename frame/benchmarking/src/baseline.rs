@@ -109,12 +109,6 @@ benchmarks! {
 			assert_eq!(value, Some(hash.to_vec()));
 		});
 	}
-
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::baseline::mock::new_test_ext(),
-		crate::baseline::mock::Test,
-	);
 }
 
 #[cfg(test)]
@@ -170,4 +164,13 @@ pub mod mock {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		sp_io::TestExternalities::new(t)
 	}
+}
+
+#[cfg(test)]
+pub mod tests {
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::baseline::mock::new_test_ext(),
+		crate::baseline::mock::Test,
+	);
 }
