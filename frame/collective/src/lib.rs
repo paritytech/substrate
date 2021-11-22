@@ -19,25 +19,48 @@
 //! through dispatched calls from one of two specialized origins.
 //!
 //! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
-//! function `set_members`, or indirectly, through implementing the `ChangeMembers`.
-//! The pallet assumes that the amount of members stays at or below `MaxMembers` for its weight
-//! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
+//! function [`Call::set_members`], or indirectly, through implementing the [`ChangeMembers`].
+//! Note that both way can be incompatible and calling [`Call::set_members`] while the members are
+//! managed through [`ChangeMembers`] may result in errors in case the manager is not updated at
+//! the same time.
+//! The pallet assumes that the amount of members stays at or below [`Config::MaxMembers`] for its
+//! weight calculations, but enforces this neither in [`Call::set_members`] nor in
+//! [`ChangeMembers::change_members_sorted`].
 //!
 //! A "prime" member may be set to help determine the default vote behavior based on chain
-//! config. If `PrimeDefaultVote` is used, the prime vote acts as the default vote in case of any
-//! abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
-//! abstentions will first follow the majority of the collective voting, and then the prime
-//! member.
+//! config: [`Config::DefaultVote`]. If [`PrimeDefaultVote`] is used, the prime vote acts as the
+//! default vote in case of any abstentions after the voting period. If
+//! [`MoreThanMajorityThenPrimeDefaultVote`] is used, then abstentions will first follow the
+//! majority of the collective voting, and then the prime member. If [`DefaultVoteNo`] is used then
+//! any abstentions after the voting period is a no vote.
 //!
 //! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
 //! number of approvals required for it to pass and be called. Motions are open for members to
-//! vote on for a minimum period given by `MotionDuration`. As soon as the needed number of
-//! approvals is given, the motion is closed and executed. If the number of approvals is not reached
-//! during the voting period, then `close` may be called by any account in order to force the end
-//! the motion explicitly. If a prime member is defined then their vote is used in place of any
-//! abstentions and the proposal is executed if there are enough approvals counting the new votes.
+//! vote on for a minimum period given by [`Config::MotionDuration`].
+//! After this duration any account can call into [`Call::close`] in order to close the proposal.
+//! Abstentions vote are fixed to approvals or rejections depending on the prime vote and the
+//! [`Config::DefaultVote`] configuration. If the proposal required approvals is reached then the
+//! proposal is executed, otherwise it is dropped.
 //!
-//! If there are not, or if no prime is set, then the motion is dropped without being executed.
+//! A member can hold multiple votes, that means when they approve or reject a proposal, the
+//! proposal approvals or rejection will increase or decrease by the number of vote the member has.
+//! A member will always approve or reject  with all its vote, and can't approve or reject with a
+//! subset of its vote.
+//!
+//! A member can get a new vote per configured interval: [`Config::VoteIncreaseInterval`]. This new
+//! vote must be confirmed with the extrinsic [`Call::confirm_member_vote_increase`].
+//! The number of vote of a member can be reset with [`Call::set_member_votes`].
+//! Note: if a member can get 1 new vote, but it hasn't been confirmed, after 2 period of time, the
+//! member can get 2 new vote. The specified origin will need to confirm the increase 2 times.
+//!
+//! Additionally a payment system is set to pay members. This payment take money from a pot, the
+//! pot can be filled through the implementation of [`frame_support::traits::OnUnbalanced`] by
+//! [`Pallet`]: [`Pallet::on_unbalanced`].
+//! The payment happens every [`Config::PaymentInterval`] and it of the amount: `payment_base *
+//! √vote_count` where payment base is set in storage [`PaymentBase`], and can be set at genesis and
+//! modified with [`Call::set_payment_base`].
+//! If the pot doesn't have enough funds to pay everyone, then it is divided according to this
+//! payment amount to each members.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
@@ -45,7 +68,10 @@
 use scale_info::TypeInfo;
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
-use sp_runtime::{traits::Hash, RuntimeDebug};
+use sp_runtime::{
+	traits::{AccountIdConversion, Hash, IntegerSquareRoot, Saturating, Zero},
+	Perbill, RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*, result};
 
 use frame_support::{
@@ -53,9 +79,11 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
 	traits::{
-		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
+		Backing, ChangeMembers, Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, Get,
+		GetBacking, Imbalance, InitializeMembers, OnUnbalanced, StorageVersion, WithdrawReasons,
 	},
 	weights::{GetDispatchInfo, Weight},
+	PalletId,
 };
 
 #[cfg(test)]
@@ -73,10 +101,10 @@ pub use weights::WeightInfo;
 pub type ProposalIndex = u32;
 
 /// A number of members.
-///
-/// This also serves as a number of voting members, and since for motions, each member may
-/// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
+
+/// A number of votes. A member can have multiple votes.
+pub type VoteCount = u32;
 
 /// Default voting strategy when a member is inactive.
 pub trait DefaultVote {
@@ -88,9 +116,9 @@ pub trait DefaultVote {
 	/// - Total number of member count.
 	fn default_vote(
 		prime_vote: Option<bool>,
-		yes_votes: MemberCount,
-		no_votes: MemberCount,
-		len: MemberCount,
+		yes_votes: VoteCount,
+		no_votes: VoteCount,
+		eligible_votes: VoteCount,
 	) -> bool;
 }
 
@@ -100,9 +128,9 @@ pub struct PrimeDefaultVote;
 impl DefaultVote for PrimeDefaultVote {
 	fn default_vote(
 		prime_vote: Option<bool>,
-		_yes_votes: MemberCount,
-		_no_votes: MemberCount,
-		_len: MemberCount,
+		_yes_votes: VoteCount,
+		_no_votes: VoteCount,
+		_eligible_votes: VoteCount,
 	) -> bool {
 		prime_vote.unwrap_or(false)
 	}
@@ -115,12 +143,26 @@ pub struct MoreThanMajorityThenPrimeDefaultVote;
 impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 	fn default_vote(
 		prime_vote: Option<bool>,
-		yes_votes: MemberCount,
-		_no_votes: MemberCount,
-		len: MemberCount,
+		yes_votes: VoteCount,
+		_no_votes: VoteCount,
+		eligible_votes: VoteCount,
 	) -> bool {
-		let more_than_majority = yes_votes * 2 > len;
+		let more_than_majority = yes_votes * 2 > eligible_votes;
 		more_than_majority || prime_vote.unwrap_or(false)
+	}
+}
+
+/// Set no as the default vote.
+pub struct DefaultVoteNo;
+
+impl DefaultVote for DefaultVoteNo {
+	fn default_vote(
+		_prime_vote: Option<bool>,
+		_yes_votes: VoteCount,
+		_no_votes: VoteCount,
+		_len: VoteCount,
+	) -> bool {
+		false
 	}
 }
 
@@ -129,7 +171,7 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 #[scale_info(skip_type_params(I))]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
-	Members(MemberCount, MemberCount),
+	Members(VoteCount, VoteCount),
 	/// It has been condoned by a single member of the collective.
 	Member(AccountId),
 	/// Dummy to manage the fact we have instancing.
@@ -145,20 +187,64 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 	}
 }
 
+/// Vote information associated to a member.
+///
+/// A subset of [`MemberInfo`].
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct MemberVoteInfo<AccountId> {
+	/// Account id of the member.
+	id: AccountId,
+	/// Number of vote the member has.
+	votes: VoteCount,
+}
+
+impl<AccountId, BlockNumber> From<MemberInfo<AccountId, BlockNumber>>
+	for MemberVoteInfo<AccountId>
+{
+	fn from(x: MemberInfo<AccountId, BlockNumber>) -> Self {
+		Self { id: x.id, votes: x.votes }
+	}
+}
+
+/// All information assocaited to a member.
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct MemberInfo<AccountId, BlockNumber> {
+	/// Account id of the member.
+	id: AccountId,
+	/// Number of vote the member has.
+	votes: VoteCount,
+	/// The block number related to the last confirmed vote increase.
+	///
+	/// NOTE: It shouldn't be confused with the moment of the confirmation itself. If a member
+	/// starts at block N then at `N + vote_increase_interval`, it can get a new vote.
+	/// Once this new vote is confirmed, the member will have this field updated to
+	/// `N + vote_increase_interval` regardless of when it has been confirmed.
+	last_vote_increase: BlockNumber,
+}
+
 /// Info for keeping track of a motion being voted on.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct Votes<AccountId, BlockNumber> {
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
-	threshold: MemberCount,
+	threshold: VoteCount,
 	/// The current set of voters that approved it.
-	ayes: Vec<AccountId>,
+	ayes: Vec<MemberVoteInfo<AccountId>>,
 	/// The current set of voters that rejected it.
-	nays: Vec<AccountId>,
+	nays: Vec<MemberVoteInfo<AccountId>>,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
+
+pub type BalanceOf<T, I = ()> =
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type PositiveImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::PositiveImbalance;
+pub type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -167,7 +253,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -194,30 +280,55 @@ pub mod pallet {
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;
 
+		/// The interval in blocks after which a member can receive a new vote.
+		#[pallet::constant]
+		type VoteIncreaseInterval: Get<Self::BlockNumber>;
+
 		/// The maximum number of members supported by the pallet. Used for weight estimation.
 		///
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependents keep to the limit without enforcing it.
-		type MaxMembers: Get<MemberCount>;
+		type MaxMembers: Get<VoteCount>;
 
 		/// Default vote strategy of this collective.
+		///
+		/// Some usual implementation can be [`PrimeDefaultVote`].
 		type DefaultVote: DefaultVote;
+
+		/// Required origin for the call [`Call::confirm_member_vote_increase`].
+		type ConfirmVoteIncreaseOrigin: EnsureOrigin<<Self as frame_system::Config>::Origin>;
+
+		/// The currency for payrolls.
+		type Currency: Currency<Self::AccountId>;
+
+		/// Some interval between payrolls expressed in blocks, or `None` if no payment should
+		/// happen.
+		type PaymentInterval: Get<Option<Self::BlockNumber>>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The collective's pallet id, used for deriving its sovereign account ID.
+		#[pallet::constant]
+		type PalletId: Get<PalletId>;
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub phantom: PhantomData<I>,
 		pub members: Vec<T::AccountId>,
+		pub payment_base: BalanceOf<T, I>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { phantom: Default::default(), members: Default::default() }
+			Self {
+				phantom: Default::default(),
+				members: Default::default(),
+				payment_base: Default::default(),
+			}
 		}
 	}
 
@@ -232,7 +343,16 @@ pub mod pallet {
 				"Members cannot contain duplicate accounts."
 			);
 
-			Pallet::<T, I>::initialize_members(&self.members)
+			PaymentBase::<T, I>::put(self.payment_base);
+
+			Pallet::<T, I>::initialize_members(&self.members);
+
+			// Create collective pot account.
+			let pot_account_id = <Pallet<T, I>>::pot_account_id();
+			let min = T::Currency::minimum_balance();
+			if T::Currency::total_balance(&pot_account_id) < min {
+				let _ = T::Currency::make_free_balance_be(&pot_account_id, min);
+			}
 		}
 	}
 
@@ -263,28 +383,38 @@ pub mod pallet {
 	#[pallet::getter(fn proposal_count)]
 	pub type ProposalCount<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
 
-	/// The current members of the collective. This is stored sorted (just by value).
+	/// The current members of the collective. This is stored by account id.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, Vec<MemberInfo<T::AccountId, T::BlockNumber>>, ValueQuery>;
 
 	/// The prime member that helps determine the default vote behavior in case of absentations.
 	#[pallet::storage]
 	#[pallet::getter(fn prime)]
 	pub type Prime<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId, OptionQuery>;
 
+	/// The block number of the last payment.
+	#[pallet::storage]
+	pub type LastPayment<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	/// The block number of the last payment.
+	#[pallet::storage]
+	pub type PaymentBase<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BalanceOf<T, I>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
-		/// `MemberCount`).
+		/// `VoteCount`).
 		/// \[account, proposal_index, proposal_hash, threshold\]
-		Proposed(T::AccountId, ProposalIndex, T::Hash, MemberCount),
+		Proposed(T::AccountId, ProposalIndex, T::Hash, VoteCount),
 		/// A motion (given hash) has been voted on by given account, leaving
-		/// a tally (yes votes and no votes given respectively as `MemberCount`).
+		/// a tally (yes votes and no votes given respectively as `VoteCount`).
 		/// \[account, proposal_hash, voted, yes, no\]
-		Voted(T::AccountId, T::Hash, bool, MemberCount, MemberCount),
+		Voted(T::AccountId, T::Hash, bool, VoteCount, VoteCount),
 		/// A motion was approved by the required threshold.
 		/// \[proposal_hash\]
 		Approved(T::Hash),
@@ -299,7 +429,15 @@ pub mod pallet {
 		MemberExecuted(T::Hash, DispatchResult),
 		/// A proposal was closed because its threshold was reached or after its duration was up.
 		/// \[proposal_hash, yes, no\]
-		Closed(T::Hash, MemberCount, MemberCount),
+		Closed(T::Hash, VoteCount, VoteCount),
+		/// A member has been payed.
+		Payed { who: T::AccountId, amount: BalanceOf<T, I> },
+		/// Amount deposited into the pot.
+		DepositIntoPot { amount: BalanceOf<T, I> },
+		/// A member vote increase has been confirmed and is now effective.
+		VoteIncreaseConfirmed { who: T::AccountId, vote_count: u32 },
+		/// A member vote has been reset.
+		VoteReset { who: T::AccountId, vote_count: u32 },
 	}
 
 	/// Old name generated by `decl_event`.
@@ -316,8 +454,6 @@ pub mod pallet {
 		ProposalMissing,
 		/// Mismatched index
 		WrongIndex,
-		/// Duplicate vote ignored
-		DuplicateVote,
 		/// Members are already initialized!
 		AlreadyInitialized,
 		/// The close call was made too early, before the end of the voting.
@@ -328,6 +464,63 @@ pub mod pallet {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// The member has got a new vote confirmed but actually has no new vote to claim.
+		InvalidVoteIncreaseConfirmation,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			if let Some(payment_interval) = T::PaymentInterval::get() {
+				let last_payment = LastPayment::<T, I>::get();
+
+				if last_payment.saturating_add(payment_interval) <= n {
+					LastPayment::<T, I>::put(n);
+					let payment_base = PaymentBase::<T, I>::get();
+					let members = Members::<T, I>::get();
+
+					let mut payments = Vec::with_capacity(members.len());
+					let mut sum = BalanceOf::<T, I>::zero();
+					for member_info in members {
+						let payroll = payment_base.saturating_add(
+							member_info.votes.integer_sqrt_checked().unwrap_or(0).into(),
+						);
+						payments.push((member_info.id, payroll));
+						sum = sum.saturating_add(payroll);
+					}
+
+					let mut imbalance = PositiveImbalanceOf::<T, I>::zero();
+					let pot = Self::pot();
+					for (member_id, payroll) in payments {
+						let final_payroll = if pot >= sum {
+							payroll
+						} else {
+							let proportion = Perbill::from_rational(payroll, sum);
+							proportion * pot
+						};
+						imbalance.subsume(T::Currency::deposit_creating(&member_id, final_payroll));
+						Self::deposit_event(Event::Payed { who: member_id, amount: final_payroll });
+					}
+
+					if let Err(_) = T::Currency::settle(
+						&Self::pot_account_id(),
+						imbalance,
+						WithdrawReasons::TRANSFER,
+						KeepAlive,
+					) {
+						log::error!(
+							target: "runtime::collective",
+							"Inconsistent state - couldn't settle imbalance for funds spent by \
+							collective pot"
+						);
+					}
+
+					// TODO TODO: proper weight
+				}
+			}
+
+			0
+		}
 	}
 
 	// Note that councillor operations are assigned to the operational class.
@@ -344,6 +537,13 @@ pub mod pallet {
 		///
 		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
+		///
+		/// # WARNING:
+		///
+		/// The pallet collective can also be managed by logic outside of the pallet throught the
+		/// implementation of the trait [`ChangeMembers`].
+		/// Any call to `set_members` must be careful that member set doesn't get out of sync with
+		/// other logic managing the member set.
 		///
 		/// # <weight>
 		/// ## Weight
@@ -382,7 +582,7 @@ pub mod pallet {
 				);
 			}
 
-			let old = Members::<T, I>::get();
+			let old = Members::<T, I>::get().iter().map(|info| info.id.clone()).collect::<Vec<_>>();
 			if old.len() > old_count as usize {
 				log::warn!(
 					target: "runtime::collective",
@@ -429,7 +629,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
-			ensure!(members.contains(&who), Error::<T, I>::NotMember);
+			ensure!(members.iter().find(|info| info.id == who).is_some(), Error::<T, I>::NotMember);
 			let proposal_len = proposal.using_encoded(|x| x.len());
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
@@ -455,8 +655,8 @@ pub mod pallet {
 		///
 		/// Requires the sender to be member.
 		///
-		/// `threshold` determines whether `proposal` is executed directly (`threshold < 2`)
-		/// or put up for voting.
+		/// `threshold` determines whether `proposal` is executed directly (`threshold < caller
+		/// votes`) or put up for voting.
 		///
 		/// # <weight>
 		/// ## Weight
@@ -495,13 +695,17 @@ pub mod pallet {
 		))]
 		pub fn propose(
 			origin: OriginFor<T>,
-			#[pallet::compact] threshold: MemberCount,
+			#[pallet::compact] threshold: VoteCount,
 			proposal: Box<<T as Config<I>>::Proposal>,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
-			ensure!(members.contains(&who), Error::<T, I>::NotMember);
+			let who_votes = members
+				.iter()
+				.find(|info| info.id == who)
+				.ok_or_else(|| Error::<T, I>::NotMember)?
+				.votes;
 
 			let proposal_len = proposal.using_encoded(|x| x.len());
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
@@ -511,9 +715,11 @@ pub mod pallet {
 				Error::<T, I>::DuplicateProposal
 			);
 
-			if threshold < 2 {
-				let seats = Self::members().len() as MemberCount;
-				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
+			if threshold <= who_votes {
+				let eligible_votes =
+					Self::members().iter().fold(0u32, |acc, info| acc.saturating_add(info.votes));
+				let result =
+					proposal.dispatch(RawOrigin::Members(who_votes, eligible_votes).into());
 				Self::deposit_event(Event::Executed(
 					proposal_hash,
 					result.map(|_| ()).map_err(|e| e.error),
@@ -580,39 +786,44 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
-			ensure!(members.contains(&who), Error::<T, I>::NotMember);
+			let who_info = members
+				.iter()
+				.find(|info| info.id == who)
+				.ok_or_else(|| Error::<T, I>::NotMember)?;
 
 			let mut voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
-			let position_yes = voting.ayes.iter().position(|a| a == &who);
-			let position_no = voting.nays.iter().position(|a| a == &who);
+			let position_yes = voting.ayes.iter().position(|info| info.id == who);
+			let position_no = voting.nays.iter().position(|info| info.id == who);
 
 			// Detects first vote of the member in the motion
 			let is_account_voting_first_time = position_yes.is_none() && position_no.is_none();
 
 			if approve {
-				if position_yes.is_none() {
-					voting.ayes.push(who.clone());
+				if let Some(index) = position_yes {
+					voting.ayes[index].votes = who_info.votes;
 				} else {
-					return Err(Error::<T, I>::DuplicateVote.into())
+					voting.ayes.push(who_info.clone().into());
 				}
 				if let Some(pos) = position_no {
 					voting.nays.swap_remove(pos);
 				}
 			} else {
-				if position_no.is_none() {
-					voting.nays.push(who.clone());
+				if let Some(index) = position_no {
+					voting.nays[index].votes = who_info.votes;
 				} else {
-					return Err(Error::<T, I>::DuplicateVote.into())
+					voting.nays.push(who_info.clone().into());
 				}
 				if let Some(pos) = position_yes {
 					voting.ayes.swap_remove(pos);
 				}
 			}
 
-			let yes_votes = voting.ayes.len() as MemberCount;
-			let no_votes = voting.nays.len() as MemberCount;
+			let yes_votes =
+				voting.ayes.iter().fold(0u32, |acc, info| acc.saturating_add(info.votes));
+			let no_votes =
+				voting.nays.iter().fold(0u32, |acc, info| acc.saturating_add(info.votes));
 			Self::deposit_event(Event::Voted(who, proposal, approve, yes_votes, no_votes));
 
 			Voting::<T, I>::insert(&proposal, voting);
@@ -682,11 +893,15 @@ pub mod pallet {
 			let voting = Self::voting(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
-			let mut no_votes = voting.nays.len() as MemberCount;
-			let mut yes_votes = voting.ayes.len() as MemberCount;
-			let seats = Self::members().len() as MemberCount;
+			let mut yes_votes =
+				voting.ayes.iter().fold(0u32, |acc, info| acc.saturating_add(info.votes));
+			let mut no_votes =
+				voting.nays.iter().fold(0u32, |acc, info| acc.saturating_add(info.votes));
+			let eligible_votes =
+				Self::members().iter().fold(0u32, |acc, info| acc.saturating_add(info.votes));
+			let seats = Self::members().len() as VoteCount;
 			let approved = yes_votes >= voting.threshold;
-			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
+			let disapproved = eligible_votes.saturating_sub(no_votes) < voting.threshold;
 			// Allow (dis-)approving the proposal as soon as there are enough votes.
 			if approved {
 				let (proposal, len) = Self::validate_and_get_proposal(
@@ -696,7 +911,7 @@ pub mod pallet {
 				)?;
 				Self::deposit_event(Event::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
-					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
+					Self::do_approve_proposal(eligible_votes, yes_votes, proposal_hash, proposal);
 				return Ok((
 					Some(
 						T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
@@ -721,12 +936,13 @@ pub mod pallet {
 				Error::<T, I>::TooEarly
 			);
 
-			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
+			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|info| info.id == who));
 
 			// default voting strategy.
-			let default = T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, seats);
+			let default =
+				T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, eligible_votes);
 
-			let abstentions = seats - (yes_votes + no_votes);
+			let abstentions = eligible_votes - (yes_votes + no_votes);
 			match default {
 				true => yes_votes += abstentions,
 				false => no_votes += abstentions,
@@ -741,7 +957,7 @@ pub mod pallet {
 				)?;
 				Self::deposit_event(Event::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
-					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
+					Self::do_approve_proposal(eligible_votes, yes_votes, proposal_hash, proposal);
 				Ok((
 					Some(
 						T::WeightInfo::close_approved(len as u32, seats, proposal_count)
@@ -780,6 +996,90 @@ pub mod pallet {
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			Ok(Some(T::WeightInfo::disapprove_proposal(proposal_count)).into())
 		}
+
+		/// Confirm the increase of the number of vote of the member `beneficiary`.
+		///
+		/// Every period of time as configured in [`Config::VoteIncreaseInterval`] a member can get
+		/// a new vote, this increase is not automatic, and this extrinsic confirm and apply this
+		/// increase.
+		///
+		/// Must be called by an origin satisfying `[Config::ConfirmVoteIncreaseOrigin]`.
+		///
+		/// NOTE: This doesn't upgrade the current votes of `beneficiary`. The user can still call
+		/// [`Call::vote`] again, to update its vote on a proposal.
+		#[pallet::weight(0)]
+		pub fn confirm_member_vote_increase(
+			origin: OriginFor<T>,
+			beneficiary: T::AccountId,
+		) -> DispatchResult {
+			T::ConfirmVoteIncreaseOrigin::ensure_origin(origin)?;
+
+			let vote_count = Members::<T, I>::try_mutate::<_, Error<T, I>, _>(|members| {
+				let member = members
+					.iter_mut()
+					.find(|info| info.id == beneficiary)
+					.ok_or(Error::<T, I>::NotMember)?;
+				let current_block_number = frame_system::Pallet::<T>::block_number();
+				let vote_increase_period = T::VoteIncreaseInterval::get();
+				ensure!(
+					member.last_vote_increase + vote_increase_period <= current_block_number,
+					Error::<T, I>::InvalidVoteIncreaseConfirmation,
+				);
+
+				member.last_vote_increase = member.last_vote_increase + vote_increase_period;
+				member.votes = member.votes.saturating_add(1);
+
+				Ok(member.votes)
+			})?;
+
+			Self::deposit_event(Event::VoteReset { who: beneficiary, vote_count });
+
+			Ok(())
+		}
+
+		/// Set the number of vote token, for the member.
+		///
+		/// Must be called by the Root origin.
+		///
+		/// NOTE: This doesn't upgrade its current votes.
+		/// TODO TODO: allow to reset the last_vote_increase block number as parameter
+		#[pallet::weight(0)]
+		pub fn set_member_votes(
+			origin: OriginFor<T>,
+			member: T::AccountId,
+			votes: VoteCount,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			Members::<T, I>::try_mutate::<_, Error<T, I>, _>(|members| {
+				let member = members
+					.iter_mut()
+					.find(|info| info.id == member)
+					.ok_or(Error::<T, I>::NotMember)?;
+				member.votes = votes;
+
+				Ok(())
+			})?;
+
+			Self::deposit_event(Event::VoteReset { who: member, vote_count: votes });
+
+			Ok(())
+		}
+
+		/// Set payment base value.
+		///
+		/// Must be called by the Root origin.
+		#[pallet::weight(0)]
+		pub fn set_payment_base(
+			origin: OriginFor<T>,
+			payment_base: BalanceOf<T, I>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			PaymentBase::<T, I>::put(payment_base);
+
+			Ok(())
+		}
 	}
 }
 
@@ -798,7 +1098,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn is_member(who: &T::AccountId) -> bool {
 		// Note: The dispatchables *do not* use this to check membership so make sure
 		// to update those if this is changed.
-		Self::members().contains(who)
+		Self::members().binary_search_by_key(&who, |info| &info.id).is_ok()
 	}
 
 	/// Ensure that the right proposal bounds were passed and get the proposal from storage.
@@ -836,8 +1136,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Computation and i/o `O(P)` where:
 	/// - `P` is number of active proposals
 	fn do_approve_proposal(
-		seats: MemberCount,
-		yes_votes: MemberCount,
+		seats: VoteCount,
+		yes_votes: VoteCount,
 		proposal_hash: T::Hash,
 		proposal: <T as Config<I>>::Proposal,
 	) -> (Weight, u32) {
@@ -874,6 +1174,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		num_proposals as u32
 	}
+
+	/// The account ID of the collective pot.
+	///
+	/// This actually does computation. If you need to keep using it, then make sure you cache the
+	/// value and only call this once.
+	pub fn pot_account_id() -> T::AccountId {
+		T::PalletId::get().into_account()
+	}
+
+	/// Return the amount of money in the pot.
+	pub fn pot() -> BalanceOf<T, I> {
+		// The existential deposit is not part of the pot so account never gets deleted.
+		T::Currency::free_balance(&Self::pot_account_id())
+			.saturating_sub(T::Currency::minimum_balance())
+	}
 }
 
 impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
@@ -895,7 +1210,7 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 	///   - 1 storage write (codec `O(1)`) for deleting the old prime
 	/// # </weight>
 	fn change_members_sorted(
-		_incoming: &[T::AccountId],
+		incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
 	) {
@@ -916,18 +1231,36 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 					votes.ayes = votes
 						.ayes
 						.into_iter()
-						.filter(|i| outgoing.binary_search(i).is_err())
+						.filter(|i| outgoing.binary_search(&i.id).is_err())
 						.collect();
 					votes.nays = votes
 						.nays
 						.into_iter()
-						.filter(|i| outgoing.binary_search(i).is_err())
+						.filter(|i| outgoing.binary_search(&i.id).is_err())
 						.collect();
 					*v = Some(votes);
 				}
 			});
 		}
-		Members::<T, I>::put(new);
+		Members::<T, I>::mutate(|mutate| {
+			let current_block_number = frame_system::Pallet::<T>::block_number();
+			for incoming in incoming {
+				match mutate.binary_search_by_key(&incoming, |info| &info.id) {
+					Err(index) => mutate.insert(
+						index,
+						MemberInfo {
+							id: incoming.clone(),
+							votes: 1,
+							last_vote_increase: current_block_number,
+						},
+					),
+					_ => log::error!(
+						target: "runtime::collective",
+						"Unexpected incoming member alread exist in member set.",
+					),
+				}
+			}
+		});
 		Prime::<T, I>::kill();
 	}
 
@@ -944,7 +1277,15 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
-			<Members<T, I>>::put(members);
+			let mut members = members.to_vec();
+			members.sort();
+			// Note: this function is called at genesis by definition, so block number is 0.
+			let members = members
+				.into_iter()
+				.map(|id| MemberInfo { id, votes: 1, last_vote_increase: 0u32.into() })
+				.collect::<Vec<_>>();
+
+			Members::<T, I>::put(members);
 		}
 	}
 }
@@ -953,8 +1294,8 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 /// otherwise.
 pub fn ensure_members<OuterOrigin, AccountId, I>(
 	o: OuterOrigin,
-	n: MemberCount,
-) -> result::Result<MemberCount, &'static str>
+	n: VoteCount,
+) -> result::Result<VoteCount, &'static str>
 where
 	OuterOrigin: Into<result::Result<RawOrigin<AccountId, I>, OuterOrigin>>,
 {
@@ -993,7 +1334,7 @@ impl<
 		I,
 	> EnsureOrigin<O> for EnsureMembers<N, AccountId, I>
 {
-	type Success = (MemberCount, MemberCount);
+	type Success = (VoteCount, VoteCount);
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
@@ -1054,5 +1395,16 @@ impl<
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		O::from(RawOrigin::Members(0u32, 0u32))
+	}
+}
+
+impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Pallet<T, I> {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
+		let numeric_amount = amount.peek();
+
+		// Must resolve into existing but better to be safe.
+		let _ = T::Currency::resolve_creating(&Self::pot_account_id(), amount);
+
+		Self::deposit_event(Event::DepositIntoPot { amount: numeric_amount });
 	}
 }
