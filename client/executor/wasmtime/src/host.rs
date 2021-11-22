@@ -279,8 +279,8 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 			.take()
 			.expect("sandbox store is only empty when borrowed");
 
-		// The `catch_unwind` is probably unnecessary here, but let's do it just
-		// in case so that we can properly unborrow the sandbox store.
+		// Catch any potential panics so that we can properly restore the sandbox store
+		// which we've destructively borrowed.
 		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			store.instantiate(
 				wasm,
@@ -292,12 +292,16 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 
 		self.host_state_mut().sandbox_store.0 = Some(store);
 
-		let instance_idx_or_err_code =
-			match result.expect("instantiating the sandbox does not panic") {
-				Ok(instance) => instance.register(&mut self.sandbox_store_mut(), dispatch_thunk),
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
-			};
+		let result = match result {
+			Ok(result) => result,
+			Err(error) => std::panic::resume_unwind(error),
+		};
+
+		let instance_idx_or_err_code = match result {
+			Ok(instance) => instance.register(&mut self.sandbox_store_mut(), dispatch_thunk),
+			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+			Err(_) => sandbox_primitives::ERR_MODULE,
+		};
 
 		Ok(instance_idx_or_err_code as u32)
 	}

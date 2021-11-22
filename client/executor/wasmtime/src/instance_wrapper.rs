@@ -105,13 +105,7 @@ impl EntryPoint {
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
-
-	// The memory instance of the `instance`.
-	//
-	// It is important to make sure that we don't make any copies of this to make it easier to
-	// proof See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
-
 	store: Store,
 }
 
