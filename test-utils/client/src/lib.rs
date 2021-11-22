@@ -40,7 +40,6 @@ pub use sp_state_machine::ExecutionStrategy;
 use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
-use serde::Deserialize;
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::Block as BlockT;
 use std::{
