@@ -103,7 +103,7 @@ pub enum KillStorageResult {
 #[derive(PassByCodec, Encode, Decode)]
 pub enum KillStorageResultV2 {
 	/// No key remains in the child trie.
-	AllRemoved(u32, u32),
+	AllRemoved { backend: u32, overlay: u32 },
 
 	/// At least one key still resides in the child trie due to the supplied limit.
 	SomeRemaining(u32, u32),
