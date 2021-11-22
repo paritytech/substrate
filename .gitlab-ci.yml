@@ -228,8 +228,8 @@ default:
     GITHUB_RELEASE_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_RELEASE_TOKEN@kv
       file:                        false
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_TOKEN@kv
+    GITHUB_SSH_PRIV_KEY:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
       file:                        false
     GITHUB_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
@@ -809,12 +809,17 @@ publish-rustdoc:
     # Putting spaces at the front and back to ensure we are not matching just any substring, but the
     # whole space-separated value.
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
+    # setup ssh
+    - apt-get update && apt-get install -y ssh
+    - eval $(ssh-agent)
+    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
     - rm -rf /tmp/*
     # Set git config
-    - rm -rf .git/config
     - git config user.email "devops-team@parity.io"
     - git config user.name "${GITHUB_USER}"
-    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
+    - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
     - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     - git fetch origin gh-pages
     # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
