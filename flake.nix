@@ -10,7 +10,7 @@
       });
     shellEnv = system: let
       pkgs = import nixpkgs { overlays = [ mozillaOverlay ]; inherit system; };
-      rust-nightly = with pkgs; ((rustChannelOf { date = "2021-09-10"; channel = "nightly"; }).rust.override {
+      rust-nightly = with pkgs; ((rustChannelOf { date = "2021-09-10"; channel = "nightly"; }).default.override {
         extensions = [ "rust-src" ];
         targets = [ "wasm32-unknown-unknown" ];
       });
