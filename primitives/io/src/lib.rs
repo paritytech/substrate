@@ -189,9 +189,9 @@ pub trait Storage {
 	#[version(3)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResultV2 {
 		let (all_removed, num_removed_backend, num_removed_overlay) = Externalities::clear_prefix(*self, prefix, limit);
-		match all_removed {
-			true => KillStorageResultV2::AllRemoved(num_removed_backend, num_removed_overlay),
-			false => KillStorageResultV2::SomeRemaining(num_removed_backend, num_removed_overlay),
+		if all_removed {
+			KillStorageResultV2::AllRemoved(num_removed_backend, num_removed_overlay) } else {
+			KillStorageResultV2::SomeRemaining(num_removed_backend, num_removed_overlay)
 		}
 	}
 
