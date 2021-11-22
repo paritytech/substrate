@@ -121,7 +121,7 @@ fn drop() {
 		(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
 	);
 
-	// round 2
+	// round 3
 	rounds.add_vote(
 		(H256::from_low_u64_le(3), 3),
 		(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
