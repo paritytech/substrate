@@ -18,6 +18,8 @@
 //! A set of benchmarks which can establish a global baseline for all other
 //! benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use crate::benchmarks;
 use codec::Encode;
 use frame_system::Pallet as System;
@@ -109,6 +111,12 @@ benchmarks! {
 			assert_eq!(value, Some(hash.to_vec()));
 		});
 	}
+
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::baseline::mock::new_test_ext(),
+		crate::baseline::mock::Test,
+	);
 }
 
 #[cfg(test)]
@@ -164,13 +172,4 @@ pub mod mock {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		sp_io::TestExternalities::new(t)
 	}
-}
-
-#[cfg(test)]
-pub mod tests {
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::baseline::mock::new_test_ext(),
-		crate::baseline::mock::Test,
-	);
 }
