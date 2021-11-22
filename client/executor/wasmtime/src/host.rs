@@ -68,11 +68,17 @@ pub(crate) struct HostContext<'a, 'b> {
 
 impl<'a, 'b> HostContext<'a, 'b> {
 	fn host_state(&self) -> &HostState {
-		self.caller.data().host_state().expect("host state cannot be empty")
+		self.caller
+			.data()
+			.host_state()
+			.expect("host state is not empty when calling a function in wasm; qed")
 	}
 
 	fn host_state_mut(&mut self) -> &mut HostState {
-		self.caller.data_mut().host_state_mut().expect("host state cannot be empty")
+		self.caller
+			.data_mut()
+			.host_state_mut()
+			.expect("host state is not empty when calling a function in wasm; qed")
 	}
 
 	fn sandbox_store(&self) -> &sandbox::Store<Func> {
@@ -109,7 +115,7 @@ impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
 		let memory = self.caller.data().memory();
 		let (memory, data) = memory.data_and_store_mut(&mut self.caller);
 		data.host_state_mut()
-			.expect("host state cannot be empty")
+			.expect("host state is not empty when calling a function in wasm; qed")
 			.allocator
 			.allocate(memory, size)
 			.map_err(|e| e.to_string())
@@ -119,7 +125,7 @@ impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
 		let memory = self.caller.data().memory();
 		let (memory, data) = memory.data_and_store_mut(&mut self.caller);
 		data.host_state_mut()
-			.expect("host state cannot be empty")
+			.expect("host state is not empty when calling a function in wasm; qed")
 			.allocator
 			.deallocate(memory, ptr)
 			.map_err(|e| e.to_string())
@@ -147,7 +153,7 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = util::write_memory_from(&mut self.caller, buf_ptr, &buffer) {
+		if util::write_memory_from(&mut self.caller, buf_ptr, &buffer).is_err() {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
 
@@ -170,7 +176,7 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
+		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
 

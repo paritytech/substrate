@@ -44,12 +44,14 @@ use std::{
 use wasmtime::{Engine, Memory, StoreLimits, Table};
 
 pub(crate) struct StoreData {
-	/// The limits we aply to the store. We need to store it here to return a reference to this
+	/// The limits we apply to the store. We need to store it here to return a reference to this
 	/// object when we have the limits enabled.
 	pub(crate) limits: StoreLimits,
 	/// This will only be set when we call into the runtime.
 	pub(crate) host_state: Option<HostState>,
+	/// This will be always set once the store is initialized.
 	pub(crate) memory: Option<Memory>,
+	/// This will be set only if the runtime actually contains a table.
 	pub(crate) table: Option<Table>,
 }
 
@@ -64,12 +66,12 @@ impl StoreData {
 		self.host_state.as_mut()
 	}
 
-	/// Returns a reference to the host memory.
+	/// Returns the host memory.
 	pub fn memory(&self) -> Memory {
 		self.memory.expect("memory is always set; qed")
 	}
 
-	/// Returns a reference to the host table.
+	/// Returns the host table.
 	pub fn table(&self) -> Option<Table> {
 		self.table
 	}
