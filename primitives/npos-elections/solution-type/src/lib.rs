@@ -88,7 +88,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// ```
 ///
 /// The given struct provides function to convert from/to `Assignment` as part of
-/// [`sp_npos_elections::Solution`] trait:
+/// `sp_npos_elections::Solution` trait:
 ///
 /// - `fn from_assignment<..>(..)`
 /// - `fn into_assignment<..>(..)`
