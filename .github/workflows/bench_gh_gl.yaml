@@ -1,7 +1,6 @@
 name: bench GHA against GitLab
 on:
   pull_request:
-  push:
 
 jobs:
   bench_gh:
@@ -22,7 +21,6 @@ jobs:
           access_token:            ${{ github.token }}
 
       - name:                      Install dependencies
-        # shell:                     sh
         run:                       |
           apt update
           apt install -y --no-install-recommends time clang
@@ -32,7 +30,6 @@ jobs:
         # git pkg-config rhash ca-certificates lsof
 
       - name:                      Install Rust
-        # shell:                     sh
         run:                       |
           curl -L "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init" -o rustup-init
           chmod +x rustup-init
@@ -50,7 +47,6 @@ jobs:
       #   run:                       rustup target add wasm32-unknown-unknown --toolchain nightly-2020-12-17
 
       - name:                      bench-GHA-test-full-crypto-feature
-        if:                        github.ref == 'refs/heads/master'
         run:                       |
           unset RUSTC_WRAPPER
           START_TIME=`date '+%s'`
