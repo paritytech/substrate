@@ -91,7 +91,7 @@ pub enum EcdsaVerifyError {
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
 /// removed from the trie from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
-pub enum KillStorageResultPrev {
+enum KillStorageResultPrev {
 	/// No key remains in the child trie.
 	AllRemoved(u32),
 
@@ -391,12 +391,12 @@ pub trait DefaultChildStorage {
 	///
 	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
 	#[version(3)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResultPrev {
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult{
 		let child_info = ChildInfo::new_default(storage_key);
 		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
 		match all_removed {
-			true => KillStorageResultPrev::AllRemoved(num_removed),
-			false => KillStorageResultPrev::SomeRemaining(num_removed),
+			true => KillStorageResult::AllRemoved { backend: num_removed, overlay: 0 },
+			false => KillStorageResult::SomeRemaining{ backend: num_removed, overlay: 0 },
 		}
 	}
 
@@ -425,12 +425,12 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		prefix: &[u8],
 		limit: Option<u32>,
-	) -> KillStorageResultPrev {
+	) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
 		let (all_removed, num_removed) = self.clear_child_prefix(&child_info, prefix, limit);
 		match all_removed {
-			true => KillStorageResultPrev::AllRemoved(num_removed),
-			false => KillStorageResultPrev::SomeRemaining(num_removed),
+			true => KillStorageResult::AllRemoved { backend: num_removed, overlay: 0 },
+			false => KillStorageResult::SomeRemaining{ backend: num_removed, overlay: 0 },
 		}
 	}
 
