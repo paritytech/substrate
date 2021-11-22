@@ -202,7 +202,7 @@ where
 		unhashed::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
 
-	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResultV2
+	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: EncodeLike<K1>,
 	{

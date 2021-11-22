@@ -235,7 +235,7 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResultV2 {
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 

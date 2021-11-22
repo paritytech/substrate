@@ -179,7 +179,7 @@ where
 		unhashed::kill(&Self::storage_n_map_final_key::<K, _>(key));
 	}
 
-	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResultV2
+	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		K: HasKeyPrefix<KP>,
 	{

@@ -218,7 +218,7 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResultV2
+	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: ?Sized + EncodeLike<Key1>,
 	{
@@ -336,7 +336,7 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResultV2 {
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 

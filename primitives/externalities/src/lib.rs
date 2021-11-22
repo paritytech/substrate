@@ -52,6 +52,16 @@ pub enum Error {
 	StorageUpdateFailed(&'static str),
 }
 
+/// Clear prefix result
+pub struct ClearPrefixResult {
+	/// returns if some keys are remaining in the prefix
+	pub are_keys_remaining: bool,
+	/// returns number of keys removed from backend
+	pub num_keys_from_backend: u32,
+	/// returns number of keys removed from overlay
+	pub num_keys_from_overlay: u32,
+}
+
 /// The Substrate externalities.
 ///
 /// Provides access to the storage and to other registered extensions.
@@ -133,7 +143,7 @@ pub trait Externalities: ExtensionStore {
 	/// Clear storage entries which keys are start with the given prefix.
 	///
 	/// `limit` and result works as for `kill_child_storage`.
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32, u32);
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> ClearPrefixResult;
 
 	/// Clear child storage entries which keys are start with the given prefix.
 	///

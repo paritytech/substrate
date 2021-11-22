@@ -29,6 +29,7 @@ use std::{
 	any::{Any, TypeId},
 	marker::PhantomData,
 };
+use sp_externalities::ClearPrefixResult;
 
 /// Trait for inspecting state in any backend.
 ///
@@ -128,7 +129,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("kill_child_storage is not supported in ReadOnlyExternalities")
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32, u32) {
+	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> ClearPrefixResult {
 		unimplemented!("clear_prefix is not supported in ReadOnlyExternalities")
 	}
 

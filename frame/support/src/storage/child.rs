@@ -21,7 +21,7 @@
 // NOTE: could replace unhashed by having only one kind of storage (top trie being the child info
 // of null length parent storage key).
 
-pub use crate::sp_io::KillStorageResult;
+pub use crate::sp_io::KillStorageResultPrev;
 use crate::sp_std::prelude::*;
 use codec::{Codec, Decode, Encode};
 pub use sp_core::storage::{ChildInfo, ChildType};
@@ -136,7 +136,7 @@ pub fn exists(child_info: &ChildInfo, key: &[u8]) -> bool {
 /// not make much sense because it is not cumulative when called inside the same block.
 /// Use this function to distribute the deletion of a single child trie across multiple
 /// blocks.
-pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageResult {
+pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageResultPrev {
 	match child_info.child_type() {
 		ChildType::ParentKeyId =>
 			sp_io::default_child_storage::storage_kill(child_info.storage_key(), limit),

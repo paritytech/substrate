@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities,
 	Blake2Hasher,
 };
-use sp_externalities::{Extension, Extensions};
+use sp_externalities::{ClearPrefixResult, Extension, Extensions};
 use sp_trie::{empty_child_trie_root, trie_types::Layout, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
@@ -218,13 +218,17 @@ impl Externalities for BasicExternalities {
 		(true, num_removed as u32)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8], _limit: Option<u32>) -> (bool, u32, u32) {
+	fn clear_prefix(&mut self, prefix: &[u8], _limit: Option<u32>) -> ClearPrefixResult {
 		if is_child_storage_key(prefix) {
 			warn!(
 				target: "trie",
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
-			return (false, 0, 0)
+			return ClearPrefixResult {
+				are_keys_remaining: false,
+				num_keys_from_backend: 0,
+				num_keys_from_overlay: 0
+			}
 		}
 
 		let to_remove = self
@@ -240,7 +244,12 @@ impl Externalities for BasicExternalities {
 		for key in to_remove {
 			self.inner.top.remove(&key);
 		}
-		(true, num_removed as u32, 0)
+
+		ClearPrefixResult {
+			are_keys_remaining: true,
+			num_keys_from_backend: num_removed as u32,
+			num_keys_from_overlay: 0
+		}
 	}
 
 	fn clear_child_prefix(

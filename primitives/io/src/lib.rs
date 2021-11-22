@@ -87,10 +87,11 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
+/// This is the initial kill storage result used
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
 /// removed from the trie from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
-pub enum KillStorageResult {
+pub enum KillStorageResultPrev {
 	/// No key remains in the child trie.
 	AllRemoved(u32),
 
@@ -101,12 +102,24 @@ pub enum KillStorageResult {
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
 /// removed from the trie and also removed from overlay from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
-pub enum KillStorageResultV2 {
+pub enum KillStorageResult {
 	/// No key remains in the child trie.
-	AllRemoved { backend: u32, overlay: u32 },
+	AllRemoved {
+		/// number of keys remaining in backend
+		backend: u32,
+
+		/// number of keys remaining in overlay
+		overlay: u32
+	},
 
 	/// At least one key still resides in the child trie due to the supplied limit.
-	SomeRemaining(u32, u32),
+	SomeRemaining {
+		/// number of keys in backend
+		backend: u32,
+
+		/// number of keys in overlay
+		overlay: u32
+	},
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -178,20 +191,48 @@ pub trait Storage {
 	/// Use this function to distribute the deletion of a single child trie across multiple
 	/// blocks.
 	#[version(2)]
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let (all_removed, num_removed, _) = Externalities::clear_prefix(*self, prefix, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResultPrev {
+		let clear_prefix_result = Externalities::clear_prefix(*self, prefix, limit);
+		match clear_prefix_result.are_keys_remaining {
+			true => KillStorageResultPrev::AllRemoved(clear_prefix_result.num_keys_from_backend),
+			false => KillStorageResultPrev::SomeRemaining(clear_prefix_result.num_keys_from_backend),
 		}
 	}
 
+	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// # Limit
+	///
+	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
+	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+	///
+	/// The limit can be used to partially delete a prefix storage in case it is too large
+	/// to delete in one go (block).
+	///
+	/// It returns a boolean false iff some keys are remaining in
+	/// the prefix after the functions returns. Also returns a struct `KillStorageResult` with
+	/// the number of keys removed from the backend and the overlay.
+	///
+	/// # Note
+	///
+	/// Please note that keys that are residing in the overlay for that prefix when
+	/// issuing this call are all deleted without counting towards the `limit`. Only keys
+	/// written during the current block are part of the overlay. Deleting with a `limit`
+	/// mostly makes sense with an empty overlay for that prefix.
+	///
+	/// Calling this function multiple times per block for the same `prefix` does
+	/// not make much sense because it is not cumulative when called inside the same block.
+	/// Use this function to distribute the deletion of a single child trie across multiple
+	/// blocks.
 	#[version(3)]
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResultV2 {
-		let (all_removed, num_removed_backend, num_removed_overlay) = Externalities::clear_prefix(*self, prefix, limit);
-		if all_removed {
-			KillStorageResultV2::AllRemoved(num_removed_backend, num_removed_overlay) } else {
-			KillStorageResultV2::SomeRemaining(num_removed_backend, num_removed_overlay)
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
+		let clear_prefix_result = Externalities::clear_prefix(*self, prefix, limit);
+
+		if clear_prefix_result.are_keys_remaining {
+			KillStorageResult::AllRemoved { backend: clear_prefix_result.num_keys_from_backend, overlay: clear_prefix_result.num_keys_from_overlay }
+		}
+		else {
+			KillStorageResult::SomeRemaining{backend: clear_prefix_result.num_keys_from_backend, overlay:clear_prefix_result.num_keys_from_overlay }
 		}
 	}
 
@@ -350,12 +391,12 @@ pub trait DefaultChildStorage {
 	///
 	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
 	#[version(3)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResultPrev {
 		let child_info = ChildInfo::new_default(storage_key);
 		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
 		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
+			true => KillStorageResultPrev::AllRemoved(num_removed),
+			false => KillStorageResultPrev::SomeRemaining(num_removed),
 		}
 	}
 
@@ -384,12 +425,12 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		prefix: &[u8],
 		limit: Option<u32>,
-	) -> KillStorageResult {
+	) -> KillStorageResultPrev {
 		let child_info = ChildInfo::new_default(storage_key);
 		let (all_removed, num_removed) = self.clear_child_prefix(&child_info, prefix, limit);
 		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
+			true => KillStorageResultPrev::AllRemoved(num_removed),
+			false => KillStorageResultPrev::SomeRemaining(num_removed),
 		}
 	}
 
@@ -1603,7 +1644,7 @@ mod tests {
 		t.execute_with(|| {
 			assert!(matches!(
 				storage::clear_prefix(b":abc", None),
-				KillStorageResult::AllRemoved(2)
+				KillStorageResultPrev::AllRemoved(2)
 			));
 
 			assert!(storage::get(b":a").is_some());

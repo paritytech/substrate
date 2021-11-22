@@ -25,7 +25,7 @@ use hash_db::Hasher;
 #[cfg(feature = "std")]
 use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey};
-use sp_externalities::{Extension, ExtensionStore, Externalities};
+use sp_externalities::{ClearPrefixResult, Extension, ExtensionStore, Externalities};
 use sp_trie::{empty_child_trie_root, trie_types::Layout};
 
 #[cfg(feature = "std")]
@@ -458,7 +458,7 @@ where
 		self.limit_remove_from_backend(Some(child_info), None, limit)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32, u32) {
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> ClearPrefixResult {
 		trace!(
 			target: "state",
 			method = "ClearPrefix",
@@ -472,14 +472,22 @@ where
 				target: "trie",
 				"Refuse to directly clear prefix that is part or contains of child storage key",
 			);
-			return (false, 0, 0)
+			return ClearPrefixResult {
+				are_keys_remaining: false,
+				num_keys_from_backend: 0,
+				num_keys_from_overlay: 0
+			}
 		}
 
 		self.mark_dirty();
 		let num_keys_deleted_from_overlay = self.overlay.clear_prefix(prefix);
 		let (all_removed_from_backend, num_keys_deleted_from_backend) =  self.limit_remove_from_backend(None, Some(prefix), limit);
 
-		(all_removed_from_backend, num_keys_deleted_from_backend, num_keys_deleted_from_overlay)
+		ClearPrefixResult {
+			are_keys_remaining: all_removed_from_backend,
+			num_keys_from_backend: num_keys_deleted_from_backend,
+			num_keys_from_overlay: num_keys_deleted_from_overlay
+		}
 	}
 
 	fn clear_child_prefix(
