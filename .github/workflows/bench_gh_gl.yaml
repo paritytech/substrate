@@ -7,8 +7,6 @@ jobs:
     runs-on:                       self-hosted
     env:
       CARGO_INCREMENTAL:           0
-      RUSTUP_HOME:                 /usr/local/rustup
-      CARGO_HOME:                  /usr/local/cargo
       CC:                          clang
       CXX:                         clang
 
@@ -52,7 +50,6 @@ jobs:
       - name:                      bench-GHA-test-full-crypto-feature
       # GitHub env variables reference: https://docs.github.com/en/actions/learn-github-actions/environment-variables
         run:                       |
-          unset RUSTC_WRAPPER
           START_TIME=`date '+%s'`
           cd primitives/core/
           time cargo +nightly build --verbose --no-default-features --features full_crypto
@@ -60,4 +57,4 @@ jobs:
           time cargo +nightly build --verbose --no-default-features --features full_crypto
           END_TIME=`date '+%s'`
           TOTAL_TIME=`expr $END_TIME - $START_TIME`
-          curl -d "parity_github_job_time{project=\"$GITHUB_REPOSITORY\",job=\"$GITHUB_JOB\",runner=\"github\"} $TOTAL_TIME" -X POST http://vm-longterm.parity-build.parity.io/api/v1/import/prometheus
+          curl -d "parity_github_job_time{project=\"$GITHUB_REPOSITORY\",job=\"$GITHUB_WORKFLOW\",runner=\"github\"} $TOTAL_TIME" -X POST http://vm-longterm.parity-build.parity.io/api/v1/import/prometheus
