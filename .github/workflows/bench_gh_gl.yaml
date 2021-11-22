@@ -10,6 +10,7 @@ jobs:
       # RUSTUP_HOME:                 /usr/local/rustup
       # CARGO_HOME:                  /usr/local/cargo
       # PATH:                        /usr/local/cargo/bin:$PATH
+      PATH:                        $HOME/.cargo/bin
       CC:                          clang
       CXX:                         clang
 
@@ -22,8 +23,8 @@ jobs:
 
       - name:                      Install dependencies
         run:                       |
-          apt update
-          apt install -y --no-install-recommends time clang
+          apt-get update
+          apt-get install -y --no-install-recommends time clang
           update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
 
         # libssl-dev lld libclang-dev make cmake
