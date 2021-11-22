@@ -21,7 +21,8 @@ use crate::{crypto::Signature, ValidatorSetId};
 
 /// A commitment signed by GRANDPA validators as part of BEEFY protocol.
 ///
-/// The commitment contains a [payload] extracted from the finalized block at height [block_number].
+/// The commitment contains a [payload](Commitment::payload) extracted from the finalized block at
+/// height [block_number](Commitment::block_number).
 /// GRANDPA validators collect signatures on commitments and a stream of such signed commitments
 /// (see [SignedCommitment]) forms the BEEFY protocol.
 #[derive(Clone, Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
@@ -33,7 +34,7 @@ pub struct Commitment<TBlockNumber, TPayload> {
 	/// validator set. The protocol does not enforce any particular format of this data,
 	/// nor how often it should be present in commitments, however the light client has to be
 	/// provided with full validator set whenever it performs the transition (i.e. importing first
-	/// block with [validator_set_id] incremented).
+	/// block with [validator_set_id](Commitment::validator_set_id) incremented).
 	pub payload: TPayload,
 
 	/// Finalized block number this commitment is for.
@@ -51,8 +52,8 @@ pub struct Commitment<TBlockNumber, TPayload> {
 	///
 	/// Validator set is changing once per epoch. The Light Client must be provided by details
 	/// about the validator set whenever it's importing first commitment with a new
-	/// `validator_set_id`. Validator set data MUST be verifiable, for instance using [payload]
-	/// information.
+	/// `validator_set_id`. Validator set data MUST be verifiable, for instance using
+	/// [payload](Commitment::payload) information.
 	pub validator_set_id: ValidatorSetId,
 }
 
