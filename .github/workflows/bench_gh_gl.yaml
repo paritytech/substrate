@@ -23,9 +23,10 @@ jobs:
 
       - name:                      Install dependencies
         run:                       |
-          apt-get -y update
-          apt-get install -y --no-install-recommends
+          apt -y update
+          apt install -y --no-install-recommends
             curl time clang
+          update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
 
         # libssl-dev lld libclang-dev make cmake
         # git pkg-config rhash ca-certificates lsof
