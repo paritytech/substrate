@@ -311,8 +311,9 @@ fn test_max_memory_pages() {
 	.unwrap();
 }
 
-// This test takes quite a while to execute so it's ignored by default.
-#[ignore]
+// This test takes quite a while to execute in a debug build (over 6 minutes on a TR 3970x)
+// so it's ignored by default unless it was compiled with `--release`.
+#[cfg_attr(build_type = "debug", ignore)]
 #[test]
 fn test_instances_without_reuse_are_not_leaked() {
 	use sp_wasm_interface::HostFunctions;
