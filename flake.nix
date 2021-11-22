@@ -1,6 +1,7 @@
 {
   description = "Substrate dev environment";
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-21.05";
+  nixConfig.bash-prompt = "[nix \\e\[38;5;172msubstrate\\e\[m] ";
   outputs = { self, nixpkgs }: let
     mozillaOverlay =
       import (builtins.fetchTarball {
