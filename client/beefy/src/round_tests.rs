@@ -62,7 +62,7 @@ fn add_vote() {
 
 	assert!(rounds.add_vote(
 		(H256::from_low_u64_le(1), 1),
-		(Keyring::Alice.public(), Keyring::Alice.sign(b"I am commited"))
+		(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))
 	));
 
 	assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
@@ -70,21 +70,21 @@ fn add_vote() {
 	// invalid vote
 	assert!(!rounds.add_vote(
 		(H256::from_low_u64_le(1), 1),
-		(Keyring::Dave.public(), Keyring::Dave.sign(b"I am commited"))
+		(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed"))
 	));
 
 	assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 	assert!(rounds.add_vote(
 		(H256::from_low_u64_le(1), 1),
-		(Keyring::Bob.public(), Keyring::Bob.sign(b"I am commited"))
+		(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed"))
 	));
 
 	assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 	assert!(rounds.add_vote(
 		(H256::from_low_u64_le(1), 1),
-		(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am commited"))
+		(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed"))
 	));
 
 	assert!(rounds.is_done(&(H256::from_low_u64_le(1), 1)));
