@@ -58,5 +58,34 @@ fn add_vote() {
 		id: Default::default(),
 	};
 
-	let rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
+	let mut rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
+
+	assert!(rounds.add_vote(
+		(H256::from_low_u64_le(1), 1),
+		(Keyring::Alice.public(), Keyring::Alice.sign(b"I am commited"))
+	));
+
+	assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
+
+	// invalid vote
+	assert!(!rounds.add_vote(
+		(H256::from_low_u64_le(1), 1),
+		(Keyring::Dave.public(), Keyring::Dave.sign(b"I am commited"))
+	));
+
+	assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
+
+	assert!(rounds.add_vote(
+		(H256::from_low_u64_le(1), 1),
+		(Keyring::Bob.public(), Keyring::Bob.sign(b"I am commited"))
+	));
+
+	assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
+
+	assert!(rounds.add_vote(
+		(H256::from_low_u64_le(1), 1),
+		(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am commited"))
+	));
+
+	assert!(rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 }
