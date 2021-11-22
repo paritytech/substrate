@@ -35,8 +35,7 @@ jobs:
           ./rustup-init -y --no-modify-path --profile minimal --default-toolchain stable
           rm rustup-init
           echo "/usr/local/cargo/bin" >> $GITHUB_PATH
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          echo $HOME
+          echo "/root/.cargo/bin" >> $GITHUB_PATH
           chmod -R a+w ${RUSTUP_HOME} ${CARGO_HOME}
           rustup toolchain install nightly-2021-11-08 --profile minimal --component rustfmt clippy
           ln -s /usr/local/rustup/toolchains/nightly-2021-11-08-x86_64-unknown-linux-gnu /usr/local/rustup/toolchains/nightly-x86_64-unknown-linux-gnu
