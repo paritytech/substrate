@@ -21,12 +21,11 @@ use std::sync::Arc;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block, NumberFor};
 
-use parking_lot::Mutex;
 use crate::Payload;
+use parking_lot::Mutex;
 
 /// Stream of signed commitments returned when subscribing.
-pub type SignedCommitment<Block> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, Payload>;
+pub type SignedCommitment<Block> = beefy_primitives::SignedCommitment<NumberFor<Block>, Payload>;
 
 /// Stream of signed commitments returned when subscribing.
 type SignedCommitmentStream<Block> = TracingUnboundedReceiver<SignedCommitment<Block>>;
