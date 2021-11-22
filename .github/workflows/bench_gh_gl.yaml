@@ -7,7 +7,6 @@ jobs:
   bench_gh:
     runs-on:                       self-hosted
     env:
-      RUSTC_WRAPPER:               ""
       CARGO_INCREMENTAL:           0
       RUSTUP_HOME:                 /usr/local/rustup
       CARGO_HOME:                  /usr/local/cargo
@@ -16,13 +15,13 @@ jobs:
       CXX:                         clang
 
     steps:
+
       - name:                      Cancel Previous Runs
         uses:                      styfle/cancel-workflow-action@0.9.1
         with:
           access_token:            ${{ github.token }}
 
       - name:                      Install dependencies
-        shell:                     bash
         run:                       |
           apt update
           apt install -y --no-install-recommends
@@ -33,7 +32,6 @@ jobs:
         # git pkg-config rhash ca-certificates lsof
 
       - name:                      Install Rust
-        shell:                     bash
         run:                       |
           curl -L "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init" -o rustup-init
           chmod +x rustup-init
@@ -52,7 +50,6 @@ jobs:
 
       - name:                      bench-GHA-test-full-crypto-feature
         if:                        github.ref == 'refs/heads/master'
-        shell:                     bash
         run:                       |
           unset RUSTC_WRAPPER
           START_TIME=`date '+%s'`
