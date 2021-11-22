@@ -298,15 +298,16 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			let index = ReferendumCount::<T>::mutate(|x| { let r = *x; *x += 1; r });
 			let track = T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T>::NoTrack)?;
+			let submission_deposit = Self::take_deposit(who, T::SubmissionDeposit::get())?;
+			let index = ReferendumCount::<T>::mutate(|x| { let r = *x; *x += 1; r });
 			let status = ReferendumStatus {
 				track,
 				origin: proposal_origin,
 				proposal_hash: proposal_hash.clone(),
 				enactment: enactment_moment,
 				submitted: frame_system::Pallet::<T>::block_number(),
-				submission_deposit: Self::take_deposit(who, T::SubmissionDeposit::get())?,
+				submission_deposit,
 				decision_deposit: None,
 				deciding: None,
 				tally: Default::default(),
