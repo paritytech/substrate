@@ -198,7 +198,6 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
@@ -218,6 +217,7 @@ impl pallet_staking::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
+	type NominationQuota = pallet_staking::FixedNominationQuota<16>;
 	type WeightInfo = ();
 }
 

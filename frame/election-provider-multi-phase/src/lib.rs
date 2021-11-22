@@ -1315,12 +1315,12 @@ impl<T: Config> Pallet<T> {
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
 		// Defensive-only.
-		debug_assert!(
-			!voter_bound.exhausted(|| voters.encoded_size() as u32, || voters.len() as u32)
-		);
-		debug_assert!(
-			!target_bound.exhausted(|| targets.encoded_size() as u32, || targets.len() as u32)
-		);
+		debug_assert!(!voter_bound
+			.exhausts_size_count_non_zero(|| voters.encoded_size() as u32, || voters.len() as u32));
+		debug_assert!(!target_bound.exhausts_size_count_non_zero(
+			|| targets.encoded_size() as u32,
+			|| targets.len() as u32
+		));
 
 		Ok((targets, voters, desired_targets))
 	}

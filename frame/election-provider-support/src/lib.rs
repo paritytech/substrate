@@ -161,6 +161,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
+
 use codec::{Decode, Encode};
 use frame_support::{traits::Get, RuntimeDebug};
 use sp_std::{fmt::Debug, prelude::*};
@@ -438,63 +439,118 @@ impl<
 /// The limits imposed on a snapshot, either voters or targets.
 #[derive(Clone, Copy, RuntimeDebug, scale_info::TypeInfo, Encode, Decode)]
 pub struct SnapshotBounds {
+	/// The bound on size, in bytes. `None` means unbounded.
+	size: Option<u32>,
+	/// The bound on count. `None` means unbounded.
+	count: Option<u32>,
+}
+
+/// Utility builder for [`SnapshotBounds`].
+///
+/// The main purpose of this is to prevent mixing the order of similarly typed arguments (e.g. u32
+/// size and count).
+#[derive(Default)]
+pub struct SnapshotBoundsBuilder {
 	size: Option<u32>,
 	count: Option<u32>,
 }
 
+impl SnapshotBoundsBuilder {
+	/// Set the given size.
+	pub fn size(mut self, size: u32) -> Self {
+		self.size = Some(size);
+		self
+	}
+
+	/// Set the given count.
+	pub fn count(mut self, count: u32) -> Self {
+		self.count = Some(count);
+		self
+	}
+
+	/// Build the [`SnapshotBounds`] instance.
+	pub fn build(self) -> SnapshotBounds {
+		SnapshotBounds { size: self.size, count: self.count }
+	}
+}
+
 impl SnapshotBounds {
-	pub fn new_size(size: u32) -> Self {
+	/// Create a new instance of self, with size limit.
+	pub const fn new_size(size: u32) -> Self {
 		Self { size: Some(size), count: None }
 	}
 
-	pub fn new_count(count: u32) -> Self {
+	/// Create a new instance of self, with count limit.
+	pub const fn new_count(count: u32) -> Self {
 		Self { count: Some(count), size: None }
 	}
 
-	pub fn new(count: u32, size: u32) -> Self {
-		Self { count: Some(count), size: Some(size) }
-	}
-
-	pub fn new_unbounded() -> Self {
+	/// Create a new unbounded instance of self.
+	pub const fn new_unbounded() -> Self {
 		Self { size: None, count: None }
 	}
 
+	/// returns true if `given_size` exhausts `self.size`.
 	pub fn size_exhausted(&self, given_size: impl FnOnce() -> u32) -> bool {
 		self.size.map_or(false, |size| given_size() > size)
 	}
 
+	/// returns true if `given_count` exhausts `self.count`.
 	pub fn count_exhausted(&self, given_count: impl FnOnce() -> u32) -> bool {
 		self.count.map_or(false, |count| given_count() > count)
 	}
 
-	// TODO: don't like the signature, don't like the u32 a raw type that can get confused. Luckily
-	// it is not used all that much.
-	pub fn exhausted(
+	/// Returns true if `self` is exhausted by either of `given_size` and `given_count`.
+	///
+	/// Note that this will return `false` against an empty contains (size = 1, count = 0). Calling
+	/// [`self.size_exhausted`] alone cannot handle this edge case, since no information of the
+	/// count is available.
+	///
+	/// # Warning
+	///
+	/// The function name is hinting at the correct order of `given_size` and `given_count`. Be
+	/// aware that they have the same type, and mixing them can be catastrophic.
+	pub fn exhausts_size_count_non_zero(
 		&self,
 		given_size: impl FnOnce() -> u32,
 		given_count: impl FnOnce() -> u32,
 	) -> bool {
-		self.count_exhausted(given_count) || self.size_exhausted(given_size)
+		// take care of this pesky edge case: empty vector (size = 1, count = 0) should not exhaust
+		// anything.
+		let given_size = given_size();
+		let given_count = given_count();
+		if given_size == 1 || given_count == 0 {
+			return false
+		}
+		self.size_exhausted(|| given_size) || self.count_exhausted(|| given_count)
 	}
 
+	/// Return the size bound, if one exists.
 	pub fn size_bound(&self) -> Option<usize> {
 		self.size.map(|b| b as usize)
 	}
 
+	/// Return the count bound, if one exists.
 	pub fn count_bound(&self) -> Option<usize> {
 		self.count.map(|b| b as usize)
 	}
 
+	/// Return `true` if self is fully unbounded.
 	pub fn is_unbounded(&self) -> bool {
 		self.size.is_none() && self.count.is_none()
 	}
 
+	/// Return `true` if either of the bounds exists.
 	pub fn is_bounded(&self) -> bool {
 		!self.is_unbounded()
 	}
 
+	/// Predict the `::with_capacity` of a collection that has `self` as bounds (size and count),
+	/// when each item is `item_size` bytes on average.
+	///
+	/// Returns `None` if no capacity could be made (e.g. if `self` is unbounded).
 	pub fn predict_capacity(&self, item_size: usize) -> Option<usize> {
-		match (self.size.map(|x| x as usize), self.count.map(|x| x as usize)) {
+		match (self.size_bound(), self.count_bound()) {
 			(Some(max_size), Some(max_count)) => Some(max_count.min(max_size / item_size.max(1))),
 			(Some(max_size), None) => Some(max_size / item_size.max(1)),
 			(None, Some(max_count)) => Some(max_count),

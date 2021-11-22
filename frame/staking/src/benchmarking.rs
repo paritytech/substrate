@@ -21,7 +21,7 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SnapshotBounds, SortedListProvider};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
@@ -848,7 +848,7 @@ benchmarks! {
 
 		let num_voters = (v + n) as usize;
 	}: {
-		let voters = <Staking<T>>::get_npos_voters_bounded(Bounded::max_value());
+		let voters = <Staking<T>>::get_npos_voters_bounded(SnapshotBounds::new_unbounded());
 		assert_eq!(voters.len(), num_voters);
 	}
 
@@ -872,7 +872,7 @@ benchmarks! {
 			v, 0, 0, false, None
 		)?;
 	}: {
-		let targets = <Staking<T>>::get_npos_targets_bounded(Bounded::max_value());
+		let targets = <Staking<T>>::get_npos_targets_bounded(SnapshotBounds::new_unbounded());
 		assert_eq!(targets.len() as u32, v);
 	}
 

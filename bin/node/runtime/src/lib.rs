@@ -509,7 +509,7 @@ parameter_types! {
 	pub OffchainRepeat: BlockNumber = 5;
 }
 
-use frame_election_provider_support::onchain;
+use frame_election_provider_support::{onchain, SnapshotBoundsBuilder};
 impl onchain::Config for Runtime {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
@@ -543,10 +543,11 @@ impl pallet_staking::Config for Runtime {
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
 	// each nominator is allowed a fix number of nomination targets.
-	type NominationQuota = pallet_staking::FixedNominationQuota<Balance, MAX_NOMINATIONS>;
+	type NominationQuota = pallet_staking::FixedNominationQuota<MAX_NOMINATIONS>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 
+use frame_election_provider_support::SnapshotBounds;
 parameter_types! {
 	// phase durations. 1/4 of the last session for each.
 	pub const SignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
@@ -572,9 +573,11 @@ parameter_types! {
 		.max
 		.get(DispatchClass::Normal);
 
-	// Our allocator can handle up to 32 MiB, we limit everything to 8 at most to be safe.
-	pub const VoterSnapshotSizePerBlock: u32 = 8 * 1024 * 1024;
-	pub const TargetSnapshotSize: u32 = 1 * 1024 * 1024;
+	/// maximum of 25k nominators, or 4MB.
+	pub VoterSnapshotBounds: SnapshotBounds = SnapshotBoundsBuilder::default().size(4 * 1024 * 1024).count(25_000).build();
+	/// maximum of 1k validator candidates, with no size limit.
+	pub TargetSnapshotBounds: SnapshotBounds = SnapshotBounds::new_count(1000);
+
 }
 
 sp_npos_elections::generate_solution_type!(
@@ -656,8 +659,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 		OffchainRandomBalancing,
 	>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
-	type VoterSnapshotSizePerBlock = VoterSnapshotSizePerBlock;
-	type TargetSnapshotSize = TargetSnapshotSize;
+	type VoterSnapshotBounds = VoterSnapshotBounds;
+	type TargetSnapshotBounds = TargetSnapshotBounds;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type BenchmarkingConfig = BenchmarkConfig;
 }
@@ -1784,5 +1787,17 @@ mod tests {
 			size of Call.
 			If the limit is too strong, maybe consider increase the limit to 300.",
 		);
+	}
+
+	#[test]
+	fn snapshot_details() {
+		let (_, _, max) =
+			pallet_staking::display_bounds_limits::<Runtime>(VoterSnapshotBounds::get());
+		// example of an assertion that a runtime could have to ensure no mis-configuration happens.
+		assert!(
+			max <= 25_000,
+			"under any configuration, the maximum number of voters should be less than 25_000"
+		);
+		let _ = pallet_staking::display_bounds_limits::<Runtime>(TargetSnapshotBounds::get());
 	}
 }

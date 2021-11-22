@@ -651,6 +651,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
 	///
+	/// ### Slashing
+	///
+	/// All nominations that have been submitted before the last non-zero slash of the validator are
+	/// auto-chilled.
+	///
 	/// # Warning
 	///
 	/// This is the unbounded variant. Being called might cause a large number of storage reads. Use
@@ -664,12 +669,12 @@ impl<T: Config> Pallet<T> {
 				if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 					Self::nominators(nominator.clone())
 				{
-					targets.retain(|stash| {
+					targets.retain(|validator_stash| {
 						slashing_spans
-							.get(stash)
+							.get(validator_stash)
 							.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 					});
-					if !targets.len().is_zero() {
+					if !targets.is_empty() {
 						let weight = weight_of(&nominator);
 						return Some((nominator, weight, targets))
 					}
@@ -697,15 +702,16 @@ impl<T: Config> Pallet<T> {
 
 		// NOTE: we chain the one we expect to have the smaller size (`validators_votes`) to the
 		// larger one, to minimize copying. Ideally we would collect only once, but sadly then we
-		// wouldn't have access to a cheap `.len()`, which we need for weighing. TODO: maybe
-		// `.count()` is still cheaper than the copying we do.
+		// wouldn't have access to a cheap `.len()`, which we need for weighing. Only other option
+		// would have been using the counters, but since we entirely avoid reading them, we better
+		// stick to that.
 		nominator_votes.extend(validator_votes);
 		nominator_votes
 	}
 
 	/// Get all of the voters that are eligible for the next npos election.
 	///
-	/// `bounds` imposes a cap on the count and byte-size of the entire voters returned.
+	/// `bounds` imposes a cap on the count and byte-size of the entire vector returned.
 	///
 	/// As of now, first all the validator are included in no particular order, then remainder is
 	/// taken from the nominators, as returned by [`Config::SortedListProvider`].
@@ -731,12 +737,18 @@ impl<T: Config> Pallet<T> {
 			Vec::new()
 		};
 
+		// we create two closures to make us agnostic of the type of `bounds` that we are dealing
+		// with. This still not the optimum. The most performant option would have been having a
+		// dedicated function for each variant. For example, in the current code, if `bounds`
+		// count-bounded, the static size tracker is allocated for now reason. Nonetheless, it is
+		// not actually tracking anything if it is not needed.
+
 		// register a voter with `votes` with regards to bounds.
 		let add_voter = |tracker_ref: &mut StaticSizeTracker<T::AccountId>, votes: usize| {
 			if let Some(_) = bounds.size_bound() {
 				tracker_ref.register_voter(votes)
 			} else if let Some(_) = bounds.count_bound() {
-				// nothing needed, voters.len() is itself a representation.
+				// nothing needed, voters.len() is itself a representation of the count.
 			}
 		};
 
@@ -747,11 +759,11 @@ impl<T: Config> Pallet<T> {
 			bounds.count_bound(),
 		) {
 			(Some(max_size), Some(max_count)) =>
-				tracker_ref.final_byte_size_of(voters_ref.len() + 1) > max_size ||
-					voters_ref.len() + 1 > max_count,
+				tracker_ref.final_byte_size_of(voters_ref.len().saturating_add(1)) > max_size ||
+					voters_ref.len().saturating_add(1) > max_count,
 			(Some(max_size), None) =>
-				tracker_ref.final_byte_size_of(voters_ref.len() + 1) > max_size,
-			(None, Some(max_count)) => voters_ref.len() + 1 > max_count,
+				tracker_ref.final_byte_size_of(voters_ref.len().saturating_add(1)) > max_size,
+			(None, Some(max_count)) => voters_ref.len().saturating_add(1) > max_count,
 			(None, None) => false,
 		};
 
@@ -774,42 +786,58 @@ impl<T: Config> Pallet<T> {
 		}
 		let validators_taken = voters.len();
 
-		// cache a few items.
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
-		let weight_of = Self::weight_of_fn();
+		// only bother with reading the slashing spans et.al. if we are not exhausted.
+		let slashing_spans_read = if !next_will_exhaust(&tracker, &voters) {
+			let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+			let weight_of = Self::weight_of_fn();
 
-		for nominator in T::SortedListProvider::iter() {
-			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
-				<Nominators<T>>::get(&nominator)
-			{
-				// IMPORTANT: we track the size and potentially break out right here. This ensures
-				// that votes that are invalid will also affect the snapshot bounds. Chain operators
-				// should ensure `update_slashed_nominator` is used to eliminate the need for this.
-				add_voter(&mut tracker, targets.len());
-				if next_will_exhaust(&tracker, &voters) {
-					break
-				}
+			for nominator in T::SortedListProvider::iter() {
+				if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
+					<Nominators<T>>::get(&nominator)
+				{
+					// IMPORTANT: we track the size and potentially break out right here. This
+					// ensures that votes that are invalid will also affect the snapshot bounds.
+					// Chain operators should ensure `update_slashed_nominator` is used to eliminate
+					// the need for this.
+					add_voter(&mut tracker, targets.len());
+					if next_will_exhaust(&tracker, &voters) {
+						break
+					}
 
-				targets.retain(|stash| {
-					slashing_spans
-						.get(stash)
-						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-				});
-				if !targets.len().is_zero() {
-					voters.push((nominator.clone(), weight_of(&nominator), targets));
+					targets.retain(|stash| {
+						slashing_spans
+							.get(stash)
+							.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
+					});
+					if !targets.len().is_zero() {
+						voters.push((nominator.clone(), weight_of(&nominator), targets));
+					}
+				} else {
+					log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
 				}
-			} else {
-				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
 			}
-		}
+			slashing_spans.len() as u32
+		} else {
+			Zero::zero()
+		};
 
 		let nominators_taken = voters.len().saturating_sub(validators_taken);
 		Self::register_weight(T::WeightInfo::get_npos_voters_bounded(
 			validators_taken as u32,
 			nominators_taken as u32,
-			slashing_spans.len() as u32,
+			slashing_spans_read,
 		));
-		debug_assert!(!bounds.exhausted(|| voters.encoded_size() as u32, || voters.len() as u32));
+
+		debug_assert!(
+			!bounds.exhausts_size_count_non_zero(
+				|| voters.encoded_size() as u32,
+				|| voters.len() as u32
+			),
+			"{} voters, size {}, exhausted {:?}",
+			voters.len(),
+			voters.encoded_size(),
+			bounds,
+		);
 
 		log!(
 			info,
@@ -878,7 +906,10 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Self::register_weight(T::WeightInfo::get_npos_targets_bounded(targets.len() as u32));
-		debug_assert!(!bounds.exhausted(|| targets.encoded_size() as u32, || targets.len() as u32));
+		debug_assert!(!bounds.exhausts_size_count_non_zero(
+			|| targets.encoded_size() as u32,
+			|| targets.len() as u32
+		));
 
 		log!(info, "generated {} npos targets, with bounds limit {:?}", targets.len(), bounds);
 		targets
@@ -1459,7 +1490,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 /// Whilst doing this, [`size`] will track the entire size of the `Vec<Voter>`, except for the
 /// length prefix of the outer `Vec`. To get the final size at any point, use
 /// [`final_byte_size_of`].
-struct StaticSizeTracker<AccountId> {
+pub(crate) struct StaticSizeTracker<AccountId> {
 	size: usize,
 	_marker: sp_std::marker::PhantomData<AccountId>,
 }
@@ -1471,7 +1502,7 @@ impl<AccountId> StaticSizeTracker<AccountId> {
 
 	/// The length prefix of a vector with the given length.
 	#[inline]
-	fn length_prefix(length: usize) -> usize {
+	pub(crate) fn length_prefix(length: usize) -> usize {
 		// TODO: scale codec could and should expose a public function for this that I can reuse.
 		match length {
 			0..=63 => 1,
@@ -1485,12 +1516,12 @@ impl<AccountId> StaticSizeTracker<AccountId> {
 	}
 
 	/// Register a voter in `self` who has casted `votes`.
-	fn register_voter(&mut self, votes: usize) {
+	pub(crate) fn register_voter(&mut self, votes: usize) {
 		self.size = self.size.saturating_add(Self::voter_size(votes))
 	}
 
 	/// The byte size of a voter who casted `votes`.
-	fn voter_size(votes: usize) -> usize {
+	pub(crate) fn voter_size(votes: usize) -> usize {
 		Self::length_prefix(votes)
 			// and each element
 			.saturating_add(votes * sp_std::mem::size_of::<AccountId>())
@@ -1501,7 +1532,7 @@ impl<AccountId> StaticSizeTracker<AccountId> {
 	}
 
 	// Final size: size of all internal elements, plus the length prefix.
-	fn final_byte_size_of(&self, length: usize) -> usize {
+	pub(crate) fn final_byte_size_of(&self, length: usize) -> usize {
 		self.size + Self::length_prefix(length)
 	}
 }
@@ -1548,5 +1579,86 @@ mod static_tracker {
 		voters.push((4, 40, vec![]));
 		tracker.register_voter(0);
 		assert_eq!(voters.encoded_size(), tracker.final_byte_size_of(voters.len()));
+	}
+}
+
+/// A helper function that does nothing other than return some information about the range at which
+/// the given `bounds` works.
+///
+/// Will print and return as a tuple as `(low, mid, high)`, where:
+///
+/// - `low` is the minimum number of voters that `bounds` supports. This will be realized when all
+///   voters use [`T::NominationQuota::ABSOLUTE_MAXIMUM`] votes.
+/// - `how` is the maximum number of voters that `bounds` supports. This will be realized when all
+///   voters use `1` votes.
+/// - `mid` is the the average of the above two. This will be realized when all voters use
+///   `[`T::NominationQuota::ABSOLUTE_MAXIMUM`] / 2` votes.
+#[cfg(feature = "std")]
+pub fn display_bounds_limits<T: Config>(bounds: SnapshotBounds) -> (usize, usize, usize) {
+	match (bounds.size_bound(), bounds.count_bound()) {
+		(None, None) => {
+			println!("{:?} is unbounded", bounds);
+			(Bounded::max_value(), Bounded::max_value(), Bounded::max_value())
+		},
+		(None, Some(count)) => {
+			println!("{:?} can have exactly maximum {} voters", bounds, count);
+			(count, count, count)
+		},
+		(Some(size), Some(count)) => {
+			// maximum number of voters, it means that they all voted 1.
+			let max_voters = {
+				let voter_size = StaticSizeTracker::<T::AccountId>::voter_size(1);
+				// assuming that the length prefix is 4 bytes.
+				(size.saturating_sub(4) / voter_size).min(count)
+			};
+			// minimum number of voters, it means that they all voted maximum.
+			let min_voters = {
+				let voter_size = StaticSizeTracker::<T::AccountId>::voter_size(
+					T::NominationQuota::ABSOLUTE_MAXIMUM as usize,
+				);
+				(size.saturating_sub(4) / voter_size).min(count)
+			};
+			// average of the above two.
+			let average_voters = {
+				let voter_size = StaticSizeTracker::<T::AccountId>::voter_size(
+					T::NominationQuota::ABSOLUTE_MAXIMUM as usize / 2,
+				);
+				// assuming that the length prefix is 4 bytes.
+				(size.saturating_sub(4) / voter_size).min(count)
+			};
+			println!(
+				"{:?} will be in [low, mid, high]: [{}, {}, {}]",
+				bounds, min_voters, average_voters, max_voters
+			);
+			(min_voters, average_voters, max_voters)
+		},
+		(Some(size), None) => {
+			// maximum number of voters, it means that they all voted 1.
+			let max_voters = {
+				let voter_size = StaticSizeTracker::<T::AccountId>::voter_size(1);
+				// assuming that the length prefix is 4 bytes.
+				size.saturating_sub(4) / voter_size
+			};
+			// minimum number of voters, it means that they all voted maximum.
+			let min_voters = {
+				let voter_size = StaticSizeTracker::<T::AccountId>::voter_size(
+					T::NominationQuota::ABSOLUTE_MAXIMUM as usize,
+				);
+				size.saturating_sub(4) / voter_size
+			};
+			// average of the above two.
+			let average_voters = {
+				let voter_size = StaticSizeTracker::<T::AccountId>::voter_size(
+					T::NominationQuota::ABSOLUTE_MAXIMUM as usize / 2,
+				);
+				// assuming that the length prefix is 4 bytes.
+				size.saturating_sub(4) / voter_size
+			};
+			println!(
+				"{:?} will be in [low, mid, high]: [{}, {}, {}]",
+				bounds, min_voters, average_voters, max_voters
+			);
+			(min_voters, average_voters, max_voters)
+		},
 	}
 }

@@ -3954,7 +3954,72 @@ fn on_finalize_weight_is_nonzero() {
 
 mod election_data_provider {
 	use super::*;
-	use frame_election_provider_support::{ElectionDataProvider, SnapshotBounds};
+	use frame_election_provider_support::{
+		ElectionDataProvider, SnapshotBounds, SnapshotBoundsBuilder,
+	};
+
+	fn all_voters_count() -> u32 {
+		CounterForValidators::<Test>::get() + CounterForNominators::<Test>::get()
+	}
+
+	fn limit_for_voters(maybe_size: Option<usize>, maybe_count: Option<usize>) -> SnapshotBounds {
+		let mut builder = SnapshotBoundsBuilder::default();
+		if let Some(size) = maybe_size {
+			let all_voters = Staking::voters(SnapshotBounds::new_unbounded()).unwrap();
+			let size_bound = if size <= all_voters.len() {
+				all_voters.into_iter().take(size).collect::<Vec<_>>().encoded_size() as u32
+			} else {
+				let excess = size - all_voters.len();
+				let base = all_voters.encoded_size();
+				let per_item = base / all_voters.len();
+				(base + per_item * excess) as u32
+			};
+			builder = builder.size(size_bound)
+		}
+
+		if let Some(count) = maybe_count {
+			builder = builder.count(count as u32)
+		}
+
+		builder.build()
+	}
+
+	fn limit_for_targets(maybe_size: Option<usize>, maybe_count: Option<usize>) -> SnapshotBounds {
+		let mut builder = SnapshotBoundsBuilder::default();
+		if let Some(size) = maybe_size {
+			let all_targets = Staking::targets(SnapshotBounds::new_unbounded()).unwrap();
+			let size_bound = if size <= all_targets.len() {
+				dbg!(all_targets.iter().take(size).collect::<Vec<_>>().encoded_size() as u32)
+			} else {
+				let excess = size - all_targets.len();
+				let base = all_targets.encoded_size();
+				let per_item = base / all_targets.len();
+				(base + per_item * excess) as u32
+			};
+			builder = builder.size(size_bound)
+		}
+		if let Some(count) = maybe_count {
+			builder = builder.count(count as u32);
+		}
+
+		builder.build()
+	}
+
+	fn count_limit_for_voters(count: usize) -> SnapshotBounds {
+		limit_for_voters(None, Some(count))
+	}
+
+	fn size_limit_for_voters(size: usize) -> SnapshotBounds {
+		limit_for_voters(Some(size), None)
+	}
+
+	fn count_limit_for_targets(count: usize) -> SnapshotBounds {
+		limit_for_targets(None, Some(count))
+	}
+
+	fn size_limit_for_targets(size: usize) -> SnapshotBounds {
+		limit_for_targets(Some(size), None)
+	}
 
 	#[test]
 	fn voters_2sec_block() {
@@ -3981,156 +4046,477 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn voters_include_self_vote() {
-		ExtBuilder::default().nominate(false).build_and_execute(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(
-				SnapshotBounds::new_unbounded()
-			)
-			.unwrap()
-			.into_iter()
-			.find(|(w, _, t)| { v == *w && t[0] == *w })
-			.is_some()))
+	fn estimate_next_election_works() {
+		ExtBuilder::default().session_per_era(5).period(5).build_and_execute(|| {
+			// first session is always length 0.
+			for b in 1..20 {
+				run_to_block(b);
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 20);
+			}
+
+			// election
+			run_to_block(20);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
+			assert_eq!(staking_events().len(), 1);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+
+			for b in 21..45 {
+				run_to_block(b);
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
+			}
+
+			// election
+			run_to_block(45);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
+			assert_eq!(staking_events().len(), 3);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+
+			Staking::force_no_eras(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
+
+			Staking::force_new_era_always(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			Staking::force_new_era(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			// Do a fail election
+			MinimumValidatorCount::<Test>::put(1000);
+			run_to_block(50);
+			// Election: failed, next session is a new election
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
+			// The new era is still forced until a new era is planned.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+
+			MinimumValidatorCount::<Test>::put(2);
+			run_to_block(55);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
+			assert_eq!(staking_events().len(), 6);
+			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})
 	}
 
-	#[test]
-	fn voters_exclude_slashed() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
-			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
-					SnapshotBounds::new_unbounded()
+	mod bounded {
+		use super::*;
+
+		#[test]
+		fn voters_include_self_vote() {
+			ExtBuilder::default().nominate(false).build_and_execute(|| {
+				assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(
+					SnapshotBounds::new_count(all_voters_count())
 				)
 				.unwrap()
-				.iter()
-				.find(|x| x.0 == 101)
-				.unwrap()
-				.2,
-				vec![11, 21]
-			);
-
-			start_active_era(1);
-			add_slash(&11);
-
-			// 11 is gone.
-			start_active_era(2);
-			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
-					SnapshotBounds::new_unbounded()
-				)
-				.unwrap()
-				.iter()
-				.find(|x| x.0 == 101)
-				.unwrap()
-				.2,
-				vec![21]
-			);
-
-			// resubmit and it is back
-			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
-			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
-					SnapshotBounds::new_unbounded()
-				)
-				.unwrap()
-				.iter()
-				.find(|x| x.0 == 101)
-				.unwrap()
-				.2,
-				vec![11, 21]
-			);
-		})
-	}
-
-	#[test]
-	fn get_npos_voters_works() {
-		ExtBuilder::default()
-			.set_status(41, StakerStatus::Validator)
-			.build_and_execute(|| {
-				let limit_for = |c| {
-					SnapshotBounds::new_size(
-						Staking::voters(SnapshotBounds::new_unbounded())
-							.unwrap()
-							.into_iter()
-							.take(c)
-							.collect::<Vec<_>>()
-							.encoded_size() as u32,
-					)
-				};
-				// sum of all nominators who'd be voters (1), plus the self-votes (4).
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					5
-				);
-
-				// unbounded:
-				assert_eq!(
-					Staking::voters(SnapshotBounds::new_unbounded()).unwrap(),
-					vec![
-						(101, 500, vec![11, 21]), // 8 + 8 + (8 * 2) + 1 = 33
-						(31, 500, vec![31]),      // 8 + 8 + 8 + 1 = 25
-						(41, 1000, vec![41]),
-						(21, 1000, vec![21]),
-						(11, 1000, vec![11]),
-					]
-				);
-
-				// if limits is less..
-				// let's check one of the manually for some mental practice
-				assert_eq!(limit_for(2).size_bound().unwrap(), 33 + 25 + 1);
-				assert_eq!(Staking::voters(limit_for(2)).unwrap().len(), 2);
-
-				// edge-case: we have enough size only for all validators, and none of the
-				// nominators.
-				let limit_validators = limit_for(<Validators<Test>>::iter().count());
-				assert_eq!(Staking::voters(limit_validators).unwrap().len(), 4);
-
-				// if limit is equal..
-				assert_eq!(Staking::voters(limit_for(5)).unwrap().len(), 5);
-
-				// if limit is more.
-				assert_eq!(
-					Staking::voters(SnapshotBounds::new_size(
-						(limit_for(5).size_bound().unwrap() * 2) as u32
-					))
-					.unwrap()
-					.len(),
-					5
-				);
-			});
-	}
-
-	#[test]
-	fn respects_targets_snapshot_len_limits() {
-		ExtBuilder::default()
-			.set_status(41, StakerStatus::Validator)
-			.build_and_execute(|| {
-				let limit_for = |c| {
-					SnapshotBounds::new_size(
-						Staking::targets(SnapshotBounds::new_unbounded())
-							.unwrap()
-							.into_iter()
-							.take(c)
-							.collect::<Vec<_>>()
-							.encoded_size() as u32,
-					)
-				};
-
-				// all targets:
-				assert_eq!(<Validators<Test>>::iter().count() as u32, 4);
-
-				// unbounded:
-				assert_eq!(Staking::targets(SnapshotBounds::new_unbounded()).unwrap().len(), 4);
-
-				// if target limit is more..
-				assert_eq!(Staking::targets(limit_for(8)).unwrap().len(), 4);
-				assert_eq!(Staking::targets(limit_for(4)).unwrap().len(), 4);
-
-				// if target limit is less..
-				assert_eq!(Staking::targets(limit_for(3)).unwrap().len(), 3);
-				assert_eq!(Staking::targets(limit_for(1)).unwrap().len(), 1);
+				.into_iter()
+				.find(|(w, _, t)| { v == *w && t[0] == *w })
+				.is_some()))
 			})
+		}
+
+		#[test]
+		fn voters_exclude_slashed() {
+			ExtBuilder::default().build_and_execute(|| {
+				assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+				assert_eq!(
+					<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+						SnapshotBounds::new_count(all_voters_count())
+					)
+					.unwrap()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+					vec![11, 21]
+				);
+
+				start_active_era(1);
+				add_slash(&11);
+
+				// 11 is gone.
+				start_active_era(2);
+				assert_eq!(
+					<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+						SnapshotBounds::new_count(all_voters_count())
+					)
+					.unwrap()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+					vec![21]
+				);
+
+				// resubmit and it is back
+				assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
+				assert_eq!(
+					<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+						SnapshotBounds::new_count(all_voters_count())
+					)
+					.unwrap()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+					vec![11, 21]
+				);
+			})
+		}
+
+		#[test]
+		fn get_npos_voters_works_size_limit() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					// unbounded:
+					assert_eq!(
+						Staking::voters(SnapshotBounds::new_unbounded()).unwrap(),
+						vec![
+							(101, 500, vec![11, 21]), // 8 + 8 + (8 * 2) + 1 = 33
+							(31, 500, vec![31]),      // 8 + 8 + 8 + 1 = 25
+							(41, 1000, vec![41]),
+							(21, 1000, vec![21]),
+							(11, 1000, vec![11]),
+						]
+					);
+
+					// if limits is less..
+					assert_eq!(Staking::voters(SnapshotBounds::new_size(0)).unwrap().len(), 0);
+
+					// let's check one of the manually for some mental practice
+					assert_eq!(size_limit_for_voters(2).size_bound().unwrap(), 33 + 25 + 1);
+					assert_eq!(Staking::voters(size_limit_for_voters(2)).unwrap().len(), 2);
+
+					// edge-case: we have enough size only for all validators, and none of the
+					// nominators.
+					let limit_validators =
+						size_limit_for_voters(<Validators<Test>>::iter().count());
+					let voters = Staking::voters(limit_validators).unwrap();
+					assert_eq!(voters.len(), 4);
+					assert!(Validators::<Test>::iter()
+						.all(|(v, _)| voters.iter().filter(|x| x.0 == v).count() == 1));
+
+					// if limit is equal..
+					assert_eq!(Staking::voters(size_limit_for_voters(5)).unwrap().len(), 5);
+
+					// if limit is more.
+					assert_eq!(Staking::voters(size_limit_for_voters(10)).unwrap().len(), 5);
+				});
+		}
+
+		#[test]
+		fn get_npos_voters_works_count_limit() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					// sum of all nominators who'd be voters (1), plus the self-votes (4).
+					assert_eq!(
+						<Test as Config>::SortedListProvider::count() +
+							<Validators<Test>>::iter().count() as u32,
+						5
+					);
+
+					// unbounded:
+					assert_eq!(Staking::voters(SnapshotBounds::new_unbounded()).unwrap().len(), 5);
+
+					// if less..
+					assert_eq!(Staking::voters(count_limit_for_voters(0)).unwrap().len(), 0);
+					assert_eq!(Staking::voters(count_limit_for_voters(2)).unwrap().len(), 2);
+
+					// only validators edge case..
+					let voters = Staking::voters(count_limit_for_voters(4)).unwrap();
+					assert_eq!(voters.len(), 4);
+					assert!(Validators::<Test>::iter()
+						.all(|(v, _)| voters.iter().filter(|x| x.0 == v).count() == 1));
+
+					// equal..
+					assert_eq!(Staking::voters(count_limit_for_voters(5)).unwrap().len(), 5);
+
+					// and finally more.
+					assert_eq!(Staking::voters(count_limit_for_voters(7)).unwrap().len(), 5);
+				});
+		}
+
+		#[test]
+		fn get_npos_voters_works_hybrid_limit() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					// sum of all nominators who'd be voters (1), plus the self-votes (4).
+					assert_eq!(
+						<Test as Config>::SortedListProvider::count() +
+							<Validators<Test>>::iter().count() as u32,
+						5
+					);
+
+					// if less..
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(0), Some(0))).unwrap().len(),
+						0
+					);
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(0), Some(2))).unwrap().len(),
+						0
+					);
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(2), Some(0))).unwrap().len(),
+						0
+					);
+
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(2), Some(1))).unwrap().len(),
+						1
+					);
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(1), Some(1))).unwrap().len(),
+						1
+					);
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(1), Some(2))).unwrap().len(),
+						1
+					);
+
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(2), Some(2))).unwrap().len(),
+						2
+					);
+
+					// only validators edge case..
+					let v1 = Staking::voters(limit_for_voters(Some(4), Some(4))).unwrap();
+					let v2 = Staking::voters(limit_for_voters(Some(4), Some(5))).unwrap();
+					let v3 = Staking::voters(limit_for_voters(Some(5), Some(4))).unwrap();
+					assert_eq!(v1, v2);
+					assert_eq!(v1, v3);
+					assert_eq!(v1.len(), 4);
+					assert!(Validators::<Test>::iter()
+						.all(|(v, _)| v1.iter().filter(|x| x.0 == v).count() == 1));
+
+					// equal..
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(5), Some(5))).unwrap().len(),
+						5
+					);
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(5), Some(6))).unwrap().len(),
+						5
+					);
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(6), Some(5))).unwrap().len(),
+						5
+					);
+
+					// and finally more.
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(7), Some(7))).unwrap().len(),
+						5
+					);
+					assert_eq!(
+						Staking::voters(limit_for_voters(Some(10), Some(7))).unwrap().len(),
+						5
+					);
+				});
+		}
+
+		#[test]
+		fn get_npos_targets_works_size_limit() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					// all targets:
+					assert_eq!(<Validators<Test>>::iter().count() as u32, 4);
+
+					// if target limit is less..
+					assert_eq!(Staking::targets(size_limit_for_targets(0)).unwrap().len(), 0);
+					assert_eq!(Staking::targets(size_limit_for_targets(1)).unwrap().len(), 1);
+					assert_eq!(Staking::targets(size_limit_for_targets(3)).unwrap().len(), 3);
+
+					// if target limit is more..
+					assert_eq!(Staking::targets(size_limit_for_targets(4)).unwrap().len(), 4);
+					assert_eq!(Staking::targets(size_limit_for_targets(8)).unwrap().len(), 4);
+				})
+		}
+
+		#[test]
+		fn get_npos_targets_works_count_limit() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					// all targets:
+					assert_eq!(<Validators<Test>>::iter().count() as u32, 4);
+
+					// if target limit is less..
+					assert_eq!(Staking::targets(count_limit_for_targets(0)).unwrap().len(), 0);
+					assert_eq!(Staking::targets(count_limit_for_targets(1)).unwrap().len(), 1);
+					assert_eq!(Staking::targets(count_limit_for_targets(3)).unwrap().len(), 3);
+
+					// if target limit is more..
+					assert_eq!(Staking::targets(count_limit_for_targets(4)).unwrap().len(), 4);
+					assert_eq!(Staking::targets(count_limit_for_targets(8)).unwrap().len(), 4);
+				})
+		}
+
+		#[test]
+		fn get_npos_targets_works_hybrid_limit() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					// sum of all validators/targets.
+					assert_eq!(CounterForValidators::<Test>::get(), 4);
+
+					// if less..
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(0), Some(0))).unwrap().len(),
+						0
+					);
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(0), Some(2))).unwrap().len(),
+						0
+					);
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(2), Some(0))).unwrap().len(),
+						0
+					);
+
+					assert_eq!(
+						Staking::targets(dbg!(limit_for_targets(Some(2), Some(1)))).unwrap().len(),
+						1
+					);
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(1), Some(1))).unwrap().len(),
+						1
+					);
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(1), Some(2))).unwrap().len(),
+						1
+					);
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(2), Some(2))).unwrap().len(),
+						2
+					);
+
+					// almost equal..
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(3), Some(4))).unwrap().len(),
+						3
+					);
+					// just equal..
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(4), Some(4))).unwrap().len(),
+						4
+					);
+
+					// if more
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(5), Some(6))).unwrap().len(),
+						4
+					);
+					assert_eq!(
+						Staking::targets(limit_for_targets(Some(6), Some(5))).unwrap().len(),
+						4
+					);
+				});
+		}
+	}
+
+	mod unbounded {
+		use super::*;
+
+		#[test]
+		fn voters_include_self_vote() {
+			ExtBuilder::default().nominate(false).build_and_execute(|| {
+				assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(
+					SnapshotBounds::new_count(all_voters_count())
+				)
+				.unwrap()
+				.into_iter()
+				.find(|(w, _, t)| { v == *w && t[0] == *w })
+				.is_some()))
+			})
+		}
+
+		#[test]
+		fn voters_exclude_slashed() {
+			ExtBuilder::default().build_and_execute(|| {
+				assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+				assert_eq!(
+					<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+						SnapshotBounds::new_unbounded()
+					)
+					.unwrap()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+					vec![11, 21]
+				);
+
+				start_active_era(1);
+				add_slash(&11);
+
+				// 11 is gone.
+				start_active_era(2);
+				assert_eq!(
+					<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+						SnapshotBounds::new_unbounded()
+					)
+					.unwrap()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+					vec![21]
+				);
+
+				// resubmit and it is back
+				assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
+				assert_eq!(
+					<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(
+						SnapshotBounds::new_unbounded()
+					)
+					.unwrap()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+					vec![11, 21]
+				);
+			})
+		}
+
+		#[test]
+		fn get_npos_voters_works() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					assert_eq!(
+						CounterForNominators::<Test>::get() + CounterForValidators::<Test>::get(),
+						5
+					);
+					assert_eq!(
+						Staking::voters(SnapshotBounds::new_unbounded()).unwrap(),
+						vec![
+							(101, 500, vec![11, 21]),
+							(31, 500, vec![31]),
+							(41, 1000, vec![41]),
+							(21, 1000, vec![21]),
+							(11, 1000, vec![11]),
+						]
+					);
+				})
+		}
+
+		#[test]
+		fn get_npos_targets_works() {
+			ExtBuilder::default()
+				.set_status(41, StakerStatus::Validator)
+				.build_and_execute(|| {
+					// all targets:
+					assert_eq!(<Validators<Test>>::iter().count() as u32, 4);
+
+					// unbounded:
+					assert_eq!(Staking::targets(SnapshotBounds::new_unbounded()).unwrap().len(), 4);
+				})
+		}
 	}
 
 	// Even if some of the higher staked nominators are slashed, we don't get up to max len voters
@@ -4199,59 +4585,6 @@ mod election_data_provider {
 					],
 				);
 			});
-	}
-
-	#[test]
-	fn estimate_next_election_works() {
-		ExtBuilder::default().session_per_era(5).period(5).build_and_execute(|| {
-			// first session is always length 0.
-			for b in 1..20 {
-				run_to_block(b);
-				assert_eq!(Staking::next_election_prediction(System::block_number()), 20);
-			}
-
-			// election
-			run_to_block(20);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
-			assert_eq!(staking_events().len(), 1);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
-
-			for b in 21..45 {
-				run_to_block(b);
-				assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
-			}
-
-			// election
-			run_to_block(45);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
-			assert_eq!(staking_events().len(), 3);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
-
-			Staking::force_no_eras(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
-
-			Staking::force_new_era_always(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
-
-			Staking::force_new_era(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
-
-			// Do a fail election
-			MinimumValidatorCount::<Test>::put(1000);
-			run_to_block(50);
-			// Election: failed, next session is a new election
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
-			// The new era is still forced until a new era is planned.
-			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
-
-			MinimumValidatorCount::<Test>::put(2);
-			run_to_block(55);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
-			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
-			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
-			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
-		})
 	}
 }
 

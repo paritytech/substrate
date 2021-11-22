@@ -16,6 +16,7 @@
 
 //! Test to execute the snapshot using the voter bag.
 
+use frame_election_provider_support::SnapshotBounds;
 use frame_support::traits::PalletInfoAccess;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
@@ -57,7 +58,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		let voters = <pallet_staking::Pallet<Runtime> as ElectionDataProvider<
 			Runtime::AccountId,
 			Runtime::BlockNumber,
-		>>::voters(voter_limit)
+		>>::voters(SnapshotBounds::new_unbounded())
 		.unwrap();
 
 		let mut voters_nominator_only = voters

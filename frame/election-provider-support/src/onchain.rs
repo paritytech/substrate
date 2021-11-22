@@ -48,7 +48,7 @@ impl From<sp_npos_elections::Error> for Error {
 /// how much weight was consumed.
 ///
 /// Finally, this implementation does not impose any limits on the number of voters and targets that
-/// are provided.
+/// are provided. Only use with a strictly bounded number of nominator/validator candidates.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
