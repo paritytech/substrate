@@ -405,16 +405,19 @@ impl OverlayedChangeSet {
 	}
 
 	/// Set all values to deleted which are matched by the predicate.
-	///
+	/// The function returns the number of keys cleared
 	/// Can be rolled back or committed when called inside a transaction.
 	pub fn clear_where(
 		&mut self,
 		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
 		at_extrinsic: Option<u32>,
-	) {
+	) -> u32 {
+		let mut count = 0u32;
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
 			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
+			count += 1;
 		}
+		count
 	}
 
 	/// Get the iterator over all changes that follow the supplied `key`.

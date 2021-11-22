@@ -109,7 +109,7 @@ impl Externalities for AsyncExternalities {
 		panic!("`kill_child_storage`: should not be used in async externalities!")
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32) {
+	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32, u32) {
 		panic!("`clear_prefix`: should not be used in async externalities!")
 	}
 

@@ -174,7 +174,7 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
+	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResultV2
 	where
 		Key: HasKeyPrefix<KP>,
 	{
@@ -276,7 +276,7 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResultV2 {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 

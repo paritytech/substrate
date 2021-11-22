@@ -92,7 +92,7 @@ pub fn kill(key: &[u8]) {
 }
 
 /// Ensure keys with the given `prefix` have no entries in storage.
-pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResult {
+pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResultV2 {
 	sp_io::storage::clear_prefix(prefix, limit)
 }
 

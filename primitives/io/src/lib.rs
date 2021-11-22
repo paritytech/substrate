@@ -93,8 +93,20 @@ pub enum EcdsaVerifyError {
 pub enum KillStorageResult {
 	/// No key remains in the child trie.
 	AllRemoved(u32),
+
 	/// At least one key still resides in the child trie due to the supplied limit.
 	SomeRemaining(u32),
+}
+
+/// The outcome of calling `storage_kill`. Returned value is the number of storage items
+/// removed from the trie and also removed from overlay from making the `storage_kill` call.
+#[derive(PassByCodec, Encode, Decode)]
+pub enum KillStorageResultV2 {
+	/// No key remains in the child trie.
+	AllRemoved(u32, u32),
+
+	/// At least one key still resides in the child trie due to the supplied limit.
+	SomeRemaining(u32, u32),
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -167,10 +179,19 @@ pub trait Storage {
 	/// blocks.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);
+		let (all_removed, num_removed, _) = Externalities::clear_prefix(*self, prefix, limit);
 		match all_removed {
 			true => KillStorageResult::AllRemoved(num_removed),
 			false => KillStorageResult::SomeRemaining(num_removed),
+		}
+	}
+
+	#[version(3)]
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResultV2 {
+		let (all_removed, num_removed_backend, num_removed_overlay) = Externalities::clear_prefix(*self, prefix, limit);
+		match all_removed {
+			true => KillStorageResultV2::AllRemoved(num_removed_backend, num_removed_overlay),
+			false => KillStorageResultV2::SomeRemaining(num_removed_backend, num_removed_overlay),
 		}
 	}
 

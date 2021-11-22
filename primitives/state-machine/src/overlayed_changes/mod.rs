@@ -357,8 +357,9 @@ impl OverlayedChanges {
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
+	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) -> u32 {
+		let num_keys_deleted_from_overlay = self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
+		num_keys_deleted_from_overlay
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.

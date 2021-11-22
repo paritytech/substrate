@@ -577,7 +577,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>;
 
 	/// Remove all values under the first key.
-	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResultV2
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
 
@@ -705,7 +705,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	fn remove<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg);
 
 	/// Remove all values under the partial prefix key.
-	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
+	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResultV2
 	where
 		K: HasKeyPrefix<KP>;
 
@@ -1134,7 +1134,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 
 	/// Remove all value of the storage.
-	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResultV2 {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
 
