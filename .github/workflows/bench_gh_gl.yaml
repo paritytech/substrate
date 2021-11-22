@@ -1,0 +1,44 @@
+name: bench GHA against GitLab
+on:
+  pull_request:
+  push:
+
+jobs:
+  bench_gh:
+    runs-on:                       self-hosted
+    container:
+      image:                       paritytech/ci-linux:production
+      volumes:
+        - /cache:/cache
+    env:
+      RUSTC_WRAPPER:               ""
+      CARGO_INCREMENTAL:           0
+
+    steps:
+      - name:                      Cancel Previous Runs
+        uses:                      styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token:            ${{ github.token }}
+
+      - name:                      Checkout sources
+        uses:                      actions/checkout@master
+
+      # - name:                      Install Toolchain
+      #   run:                       rustup toolchain add nightly-2020-12-17
+      
+      # - name:                      Add WASM Utilities
+      #   run:                       rustup target add wasm32-unknown-unknown --toolchain nightly-2020-12-17
+
+      - name:                      bench-GHA-test-full-crypto-feature
+        if:                        github.ref == 'refs/heads/master'
+        shell:                     bash
+        run:                       |
+          unset RUSTC_WRAPPER
+          START_TIME=`date '+%s'`
+          cd primitives/core/
+          time cargo +nightly build --verbose --no-default-features --features full_crypto
+          cd ../application-crypto
+          time cargo +nightly build --verbose --no-default-features --features full_crypto
+          END_TIME=`date '+%s'`
+          TOTAL_TIME=`expr $END_TIME - $START_TIME`
+          curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
