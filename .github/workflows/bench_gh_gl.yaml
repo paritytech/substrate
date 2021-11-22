@@ -24,7 +24,7 @@ jobs:
       - name:                      Install dependencies
         shell:                     bash
         run:                       |
-          apt -y update
+          apt update
           apt install -y --no-install-recommends
             curl time clang
           update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
