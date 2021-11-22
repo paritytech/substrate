@@ -19,7 +19,7 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::runtime::StoreData;
+use crate::{runtime::StoreData, util};
 use codec::{Decode, Encode};
 use log::trace;
 use sc_allocator::FreeingBumpHeapAllocator;
@@ -98,13 +98,11 @@ impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		crate::instance_wrapper::read_memory_into(&self.caller, address, dest)
-			.map_err(|e| e.to_string())
+		util::read_memory_into(&self.caller, address, dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		crate::instance_wrapper::write_memory_from(&mut self.caller, address, data)
-			.map_err(|e| e.to_string())
+		util::write_memory_from(&mut self.caller, address, data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
@@ -149,9 +147,7 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) =
-			crate::instance_wrapper::write_memory_from(&mut self.caller, buf_ptr, &buffer)
-		{
+		if let Err(_) = util::write_memory_from(&mut self.caller, buf_ptr, &buffer) {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
 
@@ -169,7 +165,7 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 
 		let len = val_len as usize;
 
-		let buffer = match crate::instance_wrapper::read_memory(&self.caller, val_ptr, len) {
+		let buffer = match util::read_memory(&self.caller, val_ptr, len) {
 			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};

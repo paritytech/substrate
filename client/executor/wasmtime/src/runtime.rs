@@ -205,7 +205,7 @@ impl WasmInstance for WasmtimeInstance {
 				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
 				data_segments_snapshot.apply(|offset, contents| {
-					crate::instance_wrapper::write_memory_from(
+					util::write_memory_from(
 						instance_wrapper.store_mut(),
 						Pointer::new(offset),
 						contents,
@@ -635,7 +635,7 @@ fn inject_input_data(
 	let memory = memory.data_mut(&mut ctx);
 	let data_len = data.len() as WordSize;
 	let data_ptr = allocator.allocate(memory, data_len)?;
-	crate::instance_wrapper::write_memory_from(instance.store_mut(), data_ptr, data)?;
+	util::write_memory_from(instance.store_mut(), data_ptr, data)?;
 	Ok((data_ptr, data_len))
 }
 
@@ -645,10 +645,6 @@ fn extract_output_data(
 	output_len: u32,
 ) -> Result<Vec<u8>> {
 	let mut output = vec![0; output_len as usize];
-	crate::instance_wrapper::read_memory_into(
-		instance.store(),
-		Pointer::new(output_ptr),
-		&mut output,
-	)?;
+	util::read_memory_into(instance.store(), Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }
