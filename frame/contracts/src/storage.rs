@@ -183,8 +183,8 @@ where
 				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
 				// This should not happen as our budget was large enough to remove all keys.
-				KillStorageResult::SomeRemaining{backend: count, overlay:0} => count,
-				KillStorageResult::AllRemoved{backend: count, overlay:0} => {
+				KillStorageResult::SomeRemaining { backend: count, overlay: 0 } => count,
+				KillStorageResult::AllRemoved { backend: count, overlay: 0 } => {
 					// We do not care to preserve order. The contract is deleted already and
 					// noone waits for the trie to be deleted.
 					queue.swap_remove(0);

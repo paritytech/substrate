@@ -481,7 +481,8 @@ where
 
 		self.mark_dirty();
 		let num_keys_deleted_from_overlay = self.overlay.clear_prefix(prefix);
-		let (all_removed_from_backend, num_keys_deleted_from_backend) =  self.limit_remove_from_backend(None, Some(prefix), limit);
+		let (all_removed_from_backend, num_keys_deleted_from_backend) =
+			self.limit_remove_from_backend(None, Some(prefix), limit);
 
 		ClearPrefixResult {
 			are_keys_remaining: all_removed_from_backend,

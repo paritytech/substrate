@@ -25,11 +25,11 @@ use sp_core::{
 	traits::Externalities,
 	Blake2Hasher,
 };
+use sp_externalities::ClearPrefixResult;
 use std::{
 	any::{Any, TypeId},
 	marker::PhantomData,
 };
-use sp_externalities::ClearPrefixResult;
 
 /// Trait for inspecting state in any backend.
 ///

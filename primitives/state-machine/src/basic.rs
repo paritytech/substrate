@@ -248,7 +248,7 @@ impl Externalities for BasicExternalities {
 		ClearPrefixResult {
 			are_keys_remaining: true,
 			num_keys_from_backend: num_removed as u32,
-			num_keys_from_overlay: 0
+			num_keys_from_overlay: 0,
 		}
 	}
 

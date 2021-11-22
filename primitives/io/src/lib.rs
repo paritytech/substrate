@@ -195,7 +195,8 @@ pub trait Storage {
 		let clear_prefix_result = Externalities::clear_prefix(*self, prefix, limit);
 		match clear_prefix_result.are_keys_remaining {
 			true => KillStorageResultPrev::AllRemoved(clear_prefix_result.num_keys_from_backend),
-			false => KillStorageResultPrev::SomeRemaining(clear_prefix_result.num_keys_from_backend),
+			false =>
+				KillStorageResultPrev::SomeRemaining(clear_prefix_result.num_keys_from_backend),
 		}
 	}
 
@@ -229,10 +230,15 @@ pub trait Storage {
 		let clear_prefix_result = Externalities::clear_prefix(*self, prefix, limit);
 
 		if clear_prefix_result.are_keys_remaining {
-			KillStorageResult::AllRemoved { backend: clear_prefix_result.num_keys_from_backend, overlay: clear_prefix_result.num_keys_from_overlay }
-		}
-		else {
-			KillStorageResult::SomeRemaining{backend: clear_prefix_result.num_keys_from_backend, overlay:clear_prefix_result.num_keys_from_overlay }
+			KillStorageResult::AllRemoved {
+				backend: clear_prefix_result.num_keys_from_backend,
+				overlay: clear_prefix_result.num_keys_from_overlay,
+			}
+		} else {
+			KillStorageResult::SomeRemaining {
+				backend: clear_prefix_result.num_keys_from_backend,
+				overlay: clear_prefix_result.num_keys_from_overlay,
+			}
 		}
 	}
 
@@ -391,12 +397,12 @@ pub trait DefaultChildStorage {
 	///
 	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
 	#[version(3)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult{
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
 		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
 		match all_removed {
 			true => KillStorageResult::AllRemoved { backend: num_removed, overlay: 0 },
-			false => KillStorageResult::SomeRemaining{ backend: num_removed, overlay: 0 },
+			false => KillStorageResult::SomeRemaining { backend: num_removed, overlay: 0 },
 		}
 	}
 
@@ -430,7 +436,7 @@ pub trait DefaultChildStorage {
 		let (all_removed, num_removed) = self.clear_child_prefix(&child_info, prefix, limit);
 		match all_removed {
 			true => KillStorageResult::AllRemoved { backend: num_removed, overlay: 0 },
-			false => KillStorageResult::SomeRemaining{ backend: num_removed, overlay: 0 },
+			false => KillStorageResult::SomeRemaining { backend: num_removed, overlay: 0 },
 		}
 	}
 
