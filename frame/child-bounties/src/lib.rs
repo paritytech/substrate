@@ -162,15 +162,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A child-bounty is added. \[index, child-bounty index\]
-		ChildBountyAdded(BountyIndex, BountyIndex),
-		/// A child-bounty is awarded to a beneficiary. \[index, child-bounty index, beneficiary\]
-		ChildBountyAwarded(BountyIndex, BountyIndex, T::AccountId),
-		/// A child-bounty is claimed by beneficiary. \[index, child-bounty index, payout,
-		/// beneficiary\]
-		ChildBountyClaimed(BountyIndex, BountyIndex, BalanceOf<T>, T::AccountId),
-		/// A child-bounty is cancelled. \[index, child-bounty index,\]
-		ChildBountyCanceled(BountyIndex, BountyIndex),
+		/// A child-bounty is added.
+		ChildBountyAdded { index: BountyIndex, child_index: BountyIndex },
+		/// A child-bounty is awarded to a beneficiary.
+		ChildBountyAwarded { index: BountyIndex, child_index: BountyIndex, beneficiary: T::AccountId },
+		/// A child-bounty is claimed by beneficiary.
+		ChildBountyClaimed { index: BountyIndex, child_index: BountyIndex, payout: BalanceOf<T>, beneficiary: T::AccountId },
+		/// A child-bounty is cancelled.
+		ChildBountyCanceled { index: BountyIndex, child_index: BountyIndex },
 	}
 
 	/// Number of total child bounties.
@@ -612,11 +611,11 @@ pub mod pallet {
 			)?;
 
 			// Trigger the event ChildBountyAwarded
-			Self::deposit_event(Event::<T>::ChildBountyAwarded(
-				parent_bounty_id,
-				child_bounty_id,
+			Self::deposit_event(Event::<T>::ChildBountyAwarded {
+				index: parent_bounty_id,
+				child_index: child_bounty_id,
 				beneficiary,
-			));
+			});
 
 			Ok(())
 		}
@@ -688,12 +687,12 @@ pub mod pallet {
 						);
 
 						// Trigger the ChildBountyClaimed event.
-						Self::deposit_event(Event::<T>::ChildBountyClaimed(
-							parent_bounty_id,
-							child_bounty_id,
+						Self::deposit_event(Event::<T>::ChildBountyClaimed {
+							index: parent_bounty_id,
+							child_index: child_bounty_id,
 							payout,
-							beneficiary.clone(),
-						));
+							beneficiary: beneficiary.clone(),
+						});
 
 						// Update the active child-bounty tracking count.
 						<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| {
@@ -780,7 +779,7 @@ impl<T: Config> Pallet<T> {
 		};
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(Event::ChildBountyAdded(parent_bounty_id, child_bounty_id));
+		Self::deposit_event(Event::ChildBountyAdded { index: parent_bounty_id, child_index: child_bounty_id} );
 	}
 
 	fn ensure_bounty_active(
@@ -852,10 +851,10 @@ impl<T: Config> Pallet<T> {
 
 				*maybe_child_bounty = None;
 
-				Self::deposit_event(Event::<T>::ChildBountyCanceled(
-					parent_bounty_id,
-					child_bounty_id,
-				));
+				Self::deposit_event(Event::<T>::ChildBountyCanceled {
+					index: parent_bounty_id,
+					child_index: child_bounty_id,
+				});
 				Ok(())
 			},
 		)

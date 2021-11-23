@@ -256,7 +256,7 @@ fn add_child_bounty() {
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
 		// Check for the event child-bounty added.
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0});
 
 		assert_eq!(Balances::free_balance(4), 101);
 		assert_eq!(Balances::reserved_balance(4), 2);
@@ -319,7 +319,7 @@ fn child_bounty_assign_curator() {
 		// Acc-4 is the master curator & make sure enough deposit.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		// Bounty account status after adding child-bounty.
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 40);
@@ -406,7 +406,7 @@ fn award_claim_child_bounty() {
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		// Propose and accept curator for child-bounty.
 		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
@@ -490,7 +490,7 @@ fn close_child_bounty_added() {
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		System::set_block_number(4);
 
@@ -542,7 +542,7 @@ fn close_child_bounty_active() {
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		// Propose and accept curator for child-bounty.
 		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
@@ -595,7 +595,7 @@ fn close_child_bounty_pending() {
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		// Propose and accept curator for child-bounty.
 		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
@@ -649,7 +649,7 @@ fn child_bounty_added_unassign_curator() {
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		// Unassign curator in added state.
 		assert_noop!(
@@ -686,7 +686,7 @@ fn child_bounty_curator_proposed_unassign_curator() {
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		// Propose curator for child-bounty.
 		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
@@ -752,7 +752,7 @@ fn child_bounty_active_unassign_curator() {
 
 		// Create Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		System::set_block_number(3);
 		<Treasury as OnInitialize<u64>>::on_initialize(3);
@@ -940,7 +940,7 @@ fn close_parent_with_child_bounty() {
 
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		System::set_block_number(4);
 		<Treasury as OnInitialize<u64>>::on_initialize(4);
@@ -992,7 +992,7 @@ fn children_curator_fee_calculation_test() {
 
 		// Child-bounty.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded(0, 0));
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		System::set_block_number(4);
 		<Treasury as OnInitialize<u64>>::on_initialize(4);
