@@ -4350,7 +4350,15 @@ fn chill_other_works() {
 			);
 
 			// Change the minimum bond... but no limits.
-			assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
+			assert_ok!(Staking::set_staking_limits(
+				Origin::root(),
+				1_500,
+				2_000,
+				None,
+				None,
+				None,
+				Zero::zero()
+			));
 
 			// Still can't chill these users
 			assert_noop!(
@@ -4369,7 +4377,8 @@ fn chill_other_works() {
 				2_000,
 				Some(10),
 				Some(10),
-				None
+				None,
+				Zero::zero()
 			));
 
 			// Still can't chill these users
@@ -4389,7 +4398,8 @@ fn chill_other_works() {
 				2_000,
 				None,
 				None,
-				Some(Percent::from_percent(0))
+				Some(Percent::from_percent(0)),
+				Zero::zero()
 			));
 
 			// Still can't chill these users
@@ -4409,7 +4419,8 @@ fn chill_other_works() {
 				2_000,
 				Some(10),
 				Some(10),
-				Some(Percent::from_percent(75))
+				Some(Percent::from_percent(75)),
+				Zero::zero()
 			));
 
 			// 16 people total because tests start with 2 active one
@@ -4453,7 +4464,8 @@ fn capped_stakers_works() {
 			10,
 			Some(max),
 			Some(max),
-			Some(Percent::from_percent(0))
+			Some(Percent::from_percent(0)),
+			Zero::zero(),
 		));
 
 		// can create `max - validator_count` validators
@@ -4516,9 +4528,57 @@ fn capped_stakers_works() {
 		));
 
 		// No problem when we set to `None` again
-		assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
+		assert_ok!(Staking::set_staking_limits(
+			Origin::root(),
+			10,
+			10,
+			None,
+			None,
+			None,
+			Zero::zero(),
+		));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
+	})
+}
+
+#[test]
+fn min_commission_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+		));
+
+		assert_ok!(Staking::set_staking_limits(
+			Origin::root(),
+			0,
+			0,
+			None,
+			None,
+			None,
+			Perbill::from_percent(10),
+		));
+
+		// can't make it less than 10 now
+		assert_noop!(
+			Staking::validate(
+				Origin::signed(10),
+				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			),
+			Error::<Test>::CommissionTooLow
+		);
+
+		// can only change to higher.
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(10), blocked: false }
+		));
+
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
+		));
 	})
 }
 
