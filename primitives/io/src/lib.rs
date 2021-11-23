@@ -107,8 +107,7 @@ pub enum KillStorageResult {
 	AllRemoved {
 		/// number of keys removed in backend
 		backend: u32,
-
-		/// number of keys remaining in overlay
+		/// number of keys removed in overlay
 		overlay: u32
 	},
 
