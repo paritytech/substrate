@@ -105,7 +105,7 @@ enum KillStorageResultPrev {
 pub enum KillStorageResult {
  	/// No key remains in the child trie or at the top trie prefix.
 	AllRemoved {
-		/// number of keys remaining in backend
+		/// number of keys removed in backend
 		backend: u32,
 
 		/// number of keys remaining in overlay
