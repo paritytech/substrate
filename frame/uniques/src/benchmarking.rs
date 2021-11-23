@@ -141,7 +141,7 @@ benchmarks_instance_pallet! {
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::Created(Default::default(), caller.clone(), caller).into());
+		assert_last_event::<T, I>(Event::Created { class: Default::default(), creator: caller.clone(), owner: caller }.into());
 	}
 
 	force_create {
@@ -149,7 +149,7 @@ benchmarks_instance_pallet! {
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true)
 	verify {
-		assert_last_event::<T, I>(Event::ForceCreated(Default::default(), caller).into());
+		assert_last_event::<T, I>(Event::ForceCreated { class: Default::default(), owner: caller }.into());
 	}
 
 	destroy {
@@ -171,7 +171,7 @@ benchmarks_instance_pallet! {
 		let witness = Class::<T, I>::get(class).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), class, witness)
 	verify {
-		assert_last_event::<T, I>(Event::Destroyed(class).into());
+		assert_last_event::<T, I>(Event::Destroyed { class: class }.into());
 	}
 
 	mint {
@@ -179,7 +179,7 @@ benchmarks_instance_pallet! {
 		let instance = Default::default();
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, caller_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::Issued(class, instance, caller).into());
+		assert_last_event::<T, I>(Event::Issued { class, instance, owner: caller }.into());
 	}
 
 	burn {
@@ -187,7 +187,7 @@ benchmarks_instance_pallet! {
 		let (instance, ..) = mint_instance::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, Some(caller_lookup))
 	verify {
-		assert_last_event::<T, I>(Event::Burned(class, instance, caller).into());
+		assert_last_event::<T, I>(Event::Burned { class, instance, owner: caller }.into());
 	}
 
 	transfer {
@@ -198,7 +198,7 @@ benchmarks_instance_pallet! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, target_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::Transferred(class, instance, caller, target).into());
+		assert_last_event::<T, I>(Event::Transferred { class, instance, from: caller, to: target }.into());
 	}
 
 	redeposit {
@@ -217,7 +217,7 @@ benchmarks_instance_pallet! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), class, instances.clone())
 	verify {
-		assert_last_event::<T, I>(Event::Redeposited(class, instances).into());
+		assert_last_event::<T, I>(Event::Redeposited { class, successful_instances: instances }.into());
 	}
 
 	freeze {
@@ -225,7 +225,7 @@ benchmarks_instance_pallet! {
 		let (instance, ..) = mint_instance::<T, I>(Default::default());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), Default::default())
 	verify {
-		assert_last_event::<T, I>(Event::Frozen(Default::default(), Default::default()).into());
+		assert_last_event::<T, I>(Event::Frozen { class: Default::default(), instance: Default::default() }.into());
 	}
 
 	thaw {
@@ -238,14 +238,14 @@ benchmarks_instance_pallet! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance)
 	verify {
-		assert_last_event::<T, I>(Event::Thawed(class, instance).into());
+		assert_last_event::<T, I>(Event::Thawed { class, instance }.into());
 	}
 
 	freeze_class {
 		let (class, caller, caller_lookup) = create_class::<T, I>();
 	}: _(SystemOrigin::Signed(caller.clone()), class)
 	verify {
-		assert_last_event::<T, I>(Event::ClassFrozen(class).into());
+		assert_last_event::<T, I>(Event::ClassFrozen { class }.into());
 	}
 
 	thaw_class {
@@ -254,7 +254,7 @@ benchmarks_instance_pallet! {
 		Uniques::<T, I>::freeze_class(origin, class)?;
 	}: _(SystemOrigin::Signed(caller.clone()), class)
 	verify {
-		assert_last_event::<T, I>(Event::ClassThawed(class).into());
+		assert_last_event::<T, I>(Event::ClassThawed { class }.into());
 	}
 
 	transfer_ownership {
@@ -264,7 +264,7 @@ benchmarks_instance_pallet! {
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 	}: _(SystemOrigin::Signed(caller), class, target_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::OwnerChanged(class, target).into());
+		assert_last_event::<T, I>(Event::OwnerChanged { class, new_owner: target }.into());
 	}
 
 	set_team {
@@ -274,12 +274,12 @@ benchmarks_instance_pallet! {
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
 	}: _(SystemOrigin::Signed(caller), Default::default(), target0.clone(), target1.clone(), target2.clone())
 	verify {
-		assert_last_event::<T, I>(Event::TeamChanged(
+		assert_last_event::<T, I>(Event::TeamChanged{
 			class,
-			account("target", 0, SEED),
-			account("target", 1, SEED),
-			account("target", 2, SEED),
-		).into());
+			issuer: account("target", 0, SEED),
+			admin: account("target", 1, SEED),
+			freezer: account("target", 2, SEED),
+		}.into());
 	}
 
 	force_asset_status {
@@ -296,7 +296,7 @@ benchmarks_instance_pallet! {
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::AssetStatusChanged(class).into());
+		assert_last_event::<T, I>(Event::AssetStatusChanged { class }.into());
 	}
 
 	set_attribute {
@@ -308,7 +308,7 @@ benchmarks_instance_pallet! {
 		add_instance_metadata::<T, I>(instance);
 	}: _(SystemOrigin::Signed(caller), class, Some(instance), key.clone(), value.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeSet(class, Some(instance), key, value).into());
+		assert_last_event::<T, I>(Event::AttributeSet { class, maybe_instance: Some(instance), key, value }.into());
 	}
 
 	clear_attribute {
@@ -318,7 +318,7 @@ benchmarks_instance_pallet! {
 		let (key, ..) = add_instance_attribute::<T, I>(instance);
 	}: _(SystemOrigin::Signed(caller), class, Some(instance), key.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeCleared(class, Some(instance), key).into());
+		assert_last_event::<T, I>(Event::AttributeCleared { class, maybe_instance: Some(instance), key }.into());
 	}
 
 	set_metadata {
@@ -328,7 +328,7 @@ benchmarks_instance_pallet! {
 		let (instance, ..) = mint_instance::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller), class, instance, data.clone(), false)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataSet(class, instance, data, false).into());
+		assert_last_event::<T, I>(Event::MetadataSet { class, instance, data, is_frozen: false }.into());
 	}
 
 	clear_metadata {
@@ -337,7 +337,7 @@ benchmarks_instance_pallet! {
 		add_instance_metadata::<T, I>(instance);
 	}: _(SystemOrigin::Signed(caller), class, instance)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataCleared(class, instance).into());
+		assert_last_event::<T, I>(Event::MetadataCleared { class, instance }.into());
 	}
 
 	set_class_metadata {
@@ -346,7 +346,7 @@ benchmarks_instance_pallet! {
 		let (class, caller, _) = create_class::<T, I>();
 	}: _(SystemOrigin::Signed(caller), class, data.clone(), false)
 	verify {
-		assert_last_event::<T, I>(Event::ClassMetadataSet(class, data, false).into());
+		assert_last_event::<T, I>(Event::ClassMetadataSet { class, data, is_frozen: false }.into());
 	}
 
 	clear_class_metadata {
@@ -354,7 +354,7 @@ benchmarks_instance_pallet! {
 		add_class_metadata::<T, I>();
 	}: _(SystemOrigin::Signed(caller), class)
 	verify {
-		assert_last_event::<T, I>(Event::ClassMetadataCleared(class).into());
+		assert_last_event::<T, I>(Event::ClassMetadataCleared { class }.into());
 	}
 
 	approve_transfer {
@@ -364,7 +364,7 @@ benchmarks_instance_pallet! {
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, delegate_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::ApprovedTransfer(class, instance, caller, delegate).into());
+		assert_last_event::<T, I>(Event::ApprovedTransfer { class, instance, owner: caller, delegate }.into());
 	}
 
 	cancel_approval {
@@ -376,7 +376,7 @@ benchmarks_instance_pallet! {
 		Uniques::<T, I>::approve_transfer(origin, class, instance, delegate_lookup.clone())?;
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, Some(delegate_lookup))
 	verify {
-		assert_last_event::<T, I>(Event::ApprovalCancelled(class, instance, caller, delegate).into());
+		assert_last_event::<T, I>(Event::ApprovalCancelled { class, instance, owner: caller, delegate }.into());
 	}
 
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);

@@ -341,7 +341,7 @@ impl offchain::Externalities for TestOffchainExt {
 				Ok(0)
 			} else {
 				let read = std::cmp::min(buffer.len(), response[req.read..].len());
-				buffer[0..read].copy_from_slice(&response[req.read..read]);
+				buffer[0..read].copy_from_slice(&response[req.read..req.read + read]);
 				req.read += read;
 				Ok(read)
 			}
