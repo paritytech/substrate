@@ -208,14 +208,19 @@ impl Externalities for BasicExternalities {
 		}
 	}
 
-	fn kill_child_storage(&mut self, child_info: &ChildInfo, _limit: Option<u32>) -> (bool, u32) {
+	fn kill_child_storage(&mut self, child_info: &ChildInfo, _limit: Option<u32>) -> ClearPrefixResult {
 		let num_removed = self
 			.inner
 			.children_default
 			.remove(child_info.storage_key())
 			.map(|c| c.data.len())
 			.unwrap_or(0);
-		(true, num_removed as u32)
+
+		ClearPrefixResult {
+			are_keys_remaining: true,
+			num_keys_from_backend: num_removed as u32,
+			num_keys_from_overlay: 0
+		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8], _limit: Option<u32>) -> ClearPrefixResult {

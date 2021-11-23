@@ -445,7 +445,7 @@ where
 		self.overlay.set_child_storage(child_info, key, value);
 	}
 
-	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> (bool, u32) {
+	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> ClearPrefixResult {
 		trace!(
 			target: "state",
 			method = "ChildKill",
@@ -454,8 +454,15 @@ where
 		);
 		let _guard = guard();
 		self.mark_dirty();
-		self.overlay.clear_child_storage(child_info);
-		self.limit_remove_from_backend(Some(child_info), None, limit)
+
+		let num_keys_deleted_from_overlay = self.overlay.clear_child_storage(child_info);
+		let (all_removed_from_backend, num_keys_deleted_from_backend) = self.limit_remove_from_backend(Some(child_info), None, limit);
+
+		ClearPrefixResult {
+			are_keys_remaining: all_removed_from_backend,
+			num_keys_from_backend: num_keys_deleted_from_backend,
+			num_keys_from_overlay: num_keys_deleted_from_overlay
+		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> ClearPrefixResult {

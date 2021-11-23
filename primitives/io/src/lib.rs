@@ -386,8 +386,8 @@ pub trait DefaultChildStorage {
 	#[version(2)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, _num_removed) = self.kill_child_storage(&child_info, limit);
-		all_removed
+		let clear_prefix_result = self.kill_child_storage(&child_info, limit);
+		clear_prefix_result.are_keys_remaining
 	}
 
 	/// Clear a child storage key.
@@ -396,10 +396,17 @@ pub trait DefaultChildStorage {
 	#[version(3)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved { backend: num_removed, overlay: 0 },
-			false => KillStorageResult::SomeRemaining { backend: num_removed, overlay: 0 },
+		let clear_prefix_result  = self.kill_child_storage(&child_info, limit);
+		if clear_prefix_result.are_keys_remaining {
+			KillStorageResult::AllRemoved {
+				backend: clear_prefix_result.num_keys_from_backend,
+				overlay: clear_prefix_result.num_keys_from_overlay,
+			}
+		} else {
+			KillStorageResult::SomeRemaining {
+				backend: clear_prefix_result.num_keys_from_backend,
+				overlay: clear_prefix_result.num_keys_from_overlay,
+			}
 		}
 	}
 

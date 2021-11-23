@@ -138,7 +138,7 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// An implementation is free to delete more keys than the specified limit as long as
 	/// it is able to do that in constant time.
-	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> (bool, u32);
+	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> ClearPrefixResult;
 
 	/// Clear storage entries which keys are start with the given prefix.
 	///
