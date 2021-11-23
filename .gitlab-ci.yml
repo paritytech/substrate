@@ -204,6 +204,9 @@ default:
     GITHUB_PR_TOKEN:
       vault:                       cicd/gitlab/parity/GITHUB_PR_TOKEN@kv
       file:                        false
+    GITHUB_TOKEN:
+      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
+      file:                        false
     AWS_ACCESS_KEY_ID:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_ACCESS_KEY_ID@kv
       file:                        false
