@@ -994,6 +994,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1476,12 +1482,14 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "0.99.11"
+version = "0.99.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41cb0e6161ad61ed084a36ba71fbba9e3ac5aee3606fb607fe08da6acbcf3d8c"
+checksum = "40eebddd2156ce1bb37b20bbe5151340a31828b1f2d22ba4141f3531710e38df"
 dependencies = [
+ "convert_case",
  "proc-macro2",
  "quote",
+ "rustc_version 0.3.3",
  "syn",
 ]
 
@@ -1939,7 +1947,7 @@ dependencies = [
  "linregress",
  "log 0.4.14",
  "parity-scale-codec",
- "paste 1.0.4",
+ "paste 1.0.6",
  "scale-info",
  "sp-api",
  "sp-io",
@@ -2036,7 +2044,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "parity-util-mem",
- "paste 1.0.4",
+ "paste 1.0.6",
  "pretty_assertions",
  "scale-info",
  "serde",
@@ -2522,6 +2530,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fd819562fcebdac5afc5c113c3ec36f902840b70fd4fc458799c8ce4607ae55"
+dependencies = [
+ "bytes 1.0.1",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "http",
+ "indexmap",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "half"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2738,6 +2765,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
+ "h2",
  "http",
  "http-body",
  "httparse",
@@ -3825,25 +3853,6 @@ dependencies = [
 
 [[package]]
 name = "libsecp256k1"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9d220bc1feda2ac231cb78c3d26f27676b8cf82c96971f7aeef3d0cf2797c73"
-dependencies = [
- "arrayref",
- "base64 0.12.3",
- "digest 0.9.0",
- "hmac-drbg",
- "libsecp256k1-core 0.2.2",
- "libsecp256k1-gen-ecmult 0.2.1",
- "libsecp256k1-gen-genmult 0.2.1",
- "rand 0.7.3",
- "serde",
- "sha2 0.9.8",
- "typenum",
-]
-
-[[package]]
-name = "libsecp256k1"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0452aac8bab02242429380e9b2f94ea20cea2b37e2c1777a1358799bbe97f37"
@@ -3851,12 +3860,14 @@ dependencies = [
  "arrayref",
  "base64 0.13.0",
  "digest 0.9.0",
+ "hmac-drbg",
  "libsecp256k1-core 0.3.0",
  "libsecp256k1-gen-ecmult 0.3.0",
  "libsecp256k1-gen-genmult 0.3.0",
  "rand 0.8.4",
  "serde",
  "sha2 0.9.8",
+ "typenum",
 ]
 
 [[package]]
@@ -4536,6 +4547,7 @@ dependencies = [
  "node-primitives",
  "node-rpc",
  "node-runtime",
+ "pallet-asset-tx-payment",
  "pallet-balances",
  "pallet-im-online",
  "pallet-timestamp",
@@ -4701,6 +4713,7 @@ dependencies = [
  "hex-literal",
  "log 0.4.14",
  "node-primitives",
+ "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
@@ -4861,6 +4874,7 @@ dependencies = [
  "node-executor",
  "node-primitives",
  "node-runtime",
+ "pallet-asset-tx-payment",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sc-block-builder",
@@ -5102,6 +5116,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ff55baddef9e4ad00f88b6c743a2a8062d4c6ade126c2a528644b8e444d52ce"
 dependencies = [
  "stable_deref_trait",
+]
+
+[[package]]
+name = "pallet-asset-tx-payment"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-authorship",
+ "pallet-balances",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "smallvec 1.7.0",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
 ]
 
 [[package]]
@@ -5369,7 +5405,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
- "libsecp256k1 0.6.0",
+ "libsecp256k1 0.7.0",
  "log 0.4.14",
  "pallet-balances",
  "pallet-contracts-primitives",
@@ -5380,8 +5416,8 @@ dependencies = [
  "parity-scale-codec",
  "pretty_assertions",
  "pwasm-utils",
- "rand 0.7.3",
- "rand_pcg 0.2.1",
+ "rand 0.8.4",
+ "rand_pcg 0.3.1",
  "scale-info",
  "serde",
  "smallvec 1.7.0",
@@ -6429,9 +6465,9 @@ dependencies = [
 
 [[package]]
 name = "paste"
-version = "1.0.4"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5d65c4d95931acda4498f675e332fcbdc9a06705cd07086c510e9b6009cd1c1"
+checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
 
 [[package]]
 name = "paste-impl"
@@ -6607,9 +6643,9 @@ checksum = "3831453b3449ceb48b6d9c7ad7c96d5ea673e9b470a1dc578c2ce6521230884c"
 
 [[package]]
 name = "platforms"
-version = "1.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "989d43012e2ca1c4a02507c67282691a0a3207f9dc67cec596b43fe925b3d325"
+checksum = "e8d0eef3571242013a0d5dc84861c3ae4a652e56e12adf8bdc26ff5f8cb34c94"
 
 [[package]]
 name = "plotters"
@@ -7189,6 +7225,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_pcg"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
+dependencies = [
+ "rand_core 0.6.2",
+]
+
+[[package]]
 name = "rand_xorshift"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7587,7 +7632,7 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "parity-scale-codec",
- "prost 0.8.0",
+ "prost 0.9.0",
  "prost-build 0.9.0",
  "quickcheck",
  "rand 0.7.3",
@@ -8023,11 +8068,11 @@ version = "0.10.0-dev"
 dependencies = [
  "hex-literal",
  "lazy_static",
- "libsecp256k1 0.6.0",
+ "libsecp256k1 0.7.0",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "paste 1.0.4",
+ "paste 1.0.6",
  "regex",
  "sc-executor-common",
  "sc-executor-wasmi",
@@ -8237,7 +8282,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "pin-project 1.0.8",
- "prost 0.8.0",
+ "prost 0.9.0",
  "prost-build 0.9.0",
  "quickcheck",
  "rand 0.7.3",
@@ -8324,7 +8369,6 @@ dependencies = [
  "hyper 0.14.14",
  "hyper-rustls",
  "lazy_static",
- "log 0.4.14",
  "num_cpus",
  "once_cell",
  "parity-scale-codec",
@@ -8346,6 +8390,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "threadpool",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -8450,7 +8495,7 @@ dependencies = [
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
- "paste 1.0.4",
+ "paste 1.0.6",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -8911,9 +8956,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.68"
+version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
+checksum = "063bf466a64011ac24040a49009724ee60a57da1b437617ceb32e53ad61bfb19"
 dependencies = [
  "itoa",
  "ryu",
@@ -9037,7 +9082,7 @@ dependencies = [
  "approx",
  "num-complex",
  "num-traits",
- "paste 1.0.4",
+ "paste 1.0.6",
 ]
 
 [[package]]
@@ -9397,7 +9442,7 @@ dependencies = [
  "hex-literal",
  "impl-serde",
  "lazy_static",
- "libsecp256k1 0.6.0",
+ "libsecp256k1 0.7.0",
  "log 0.4.14",
  "merlin",
  "num-traits",
@@ -9517,7 +9562,7 @@ version = "4.0.0-dev"
 dependencies = [
  "futures 0.3.16",
  "hash-db",
- "libsecp256k1 0.6.0",
+ "libsecp256k1 0.7.0",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -9651,7 +9696,7 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "parity-util-mem",
- "paste 1.0.4",
+ "paste 1.0.6",
  "rand 0.7.3",
  "scale-info",
  "serde",
@@ -10420,6 +10465,7 @@ dependencies = [
  "node-cli",
  "node-primitives",
  "node-runtime",
+ "pallet-asset-tx-payment",
  "pallet-transaction-payment",
  "sc-consensus",
  "sc-consensus-babe",
@@ -11558,7 +11604,7 @@ dependencies = [
  "libc",
  "log 0.4.14",
  "object 0.27.1",
- "paste 1.0.4",
+ "paste 1.0.6",
  "psm",
  "rayon",
  "region",

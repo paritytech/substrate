@@ -81,6 +81,7 @@ sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
 # node-specific dependencies
@@ -125,7 +126,7 @@ assert_cmd = "2.0.2"
 nix = "0.23"
 serde_json = "1.0"
 regex = "1"
-platforms = "1.1"
+platforms = "2.0"
 async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = [ "async_tokio" ] }

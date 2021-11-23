@@ -240,16 +240,9 @@ enum Releases {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
-	use frame_support::{
-		dispatch::DispatchResultWithPostInfo,
-		pallet_prelude::*,
-		traits::EnsureOrigin,
-		weights::{DispatchClass, Pays},
-		Parameter,
-	};
-	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-	use sp_runtime::DispatchResult;
+	use super::{DispatchResult, *};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
