@@ -103,7 +103,7 @@ enum KillStorageResultPrev {
 /// removed from the trie and also removed from overlay from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
 pub enum KillStorageResult {
-	/// No key remains in the child trie.
+ 	/// No key remains in the child trie or at the top trie prefix.
 	AllRemoved {
 		/// number of keys remaining in backend
 		backend: u32,
