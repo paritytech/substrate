@@ -153,7 +153,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn unnote_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
-			Self::unnote_preimage(hash, maybe_sender)
+			Self::do_unnote_preimage(&hash, maybe_sender)
 		}
 
 		/// Request a preimage be uploaded to the chain without paying any fees or deposits.
@@ -163,7 +163,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn request_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
-			Self::do_request_preimage(hash);
+			Self::do_request_preimage(&hash);
 			Ok(())
 		}
 
@@ -173,7 +173,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn clear_request(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
-			Self::do_clear_request(hash)
+			Self::do_clear_request(&hash)
 		}
 	}
 }
@@ -227,7 +227,7 @@ impl<T: Config> Pallet<T> {
 	//
 	// If the preimage already exists before the request is made, the deposit for the preimage is
 	// returned to the user, and removed from their management.
-	fn do_request_preimage(hash: T::Hash) {
+	fn do_request_preimage(hash: &T::Hash) {
 		let count = StatusFor::<T>::get(hash).map_or(1, |x| match x {
 			RequestStatus::Requested(mut count) => {
 				count.saturating_inc();
@@ -240,9 +240,9 @@ impl<T: Config> Pallet<T> {
 				1
 			},
 		});
-		StatusFor::<T>::insert(&hash, RequestStatus::Requested(count));
+		StatusFor::<T>::insert(hash, RequestStatus::Requested(count));
 		if count == 1 {
-			Self::deposit_event(Event::Requested { hash });
+			Self::deposit_event(Event::Requested { hash: hash.clone() });
 		}
 	}
 
@@ -252,8 +252,11 @@ impl<T: Config> Pallet<T> {
 	// data.
 	//
 	// If `maybe_owner` is not provided, this function cannot return an error.
-	fn unnote_preimage(hash: T::Hash, maybe_check_owner: Option<T::AccountId>) -> DispatchResult {
-		match StatusFor::<T>::get(&hash).ok_or(Error::<T>::NotNoted)? {
+	fn do_unnote_preimage(
+		hash: &T::Hash,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> DispatchResult {
+		match StatusFor::<T>::get(hash).ok_or(Error::<T>::NotNoted)? {
 			RequestStatus::Unrequested(Some((owner, deposit))) => {
 				ensure!(
 					maybe_check_owner.map_or(true, |c| &c == &owner),
@@ -266,24 +269,24 @@ impl<T: Config> Pallet<T> {
 			},
 			RequestStatus::Requested(_) => Err(Error::<T>::Requested)?,
 		}
-		StatusFor::<T>::remove(&hash);
-		PreimageFor::<T>::remove(&hash);
-		Self::deposit_event(Event::Cleared { hash });
+		StatusFor::<T>::remove(hash);
+		PreimageFor::<T>::remove(hash);
+		Self::deposit_event(Event::Cleared { hash: hash.clone() });
 		Ok(())
 	}
 
 	/// Clear a preimage request.
-	fn do_clear_request(hash: T::Hash) -> DispatchResult {
+	fn do_clear_request(hash: &T::Hash) -> DispatchResult {
 		match StatusFor::<T>::get(hash).ok_or(Error::<T>::NotRequested)? {
 			RequestStatus::Requested(mut count) if count > 1 => {
 				count.saturating_dec();
-				StatusFor::<T>::insert(&hash, RequestStatus::Requested(count));
+				StatusFor::<T>::insert(hash, RequestStatus::Requested(count));
 			},
 			RequestStatus::Requested(count) => {
 				debug_assert!(count == 1, "preimage request counter at zero?");
-				PreimageFor::<T>::remove(&hash);
-				StatusFor::<T>::remove(&hash);
-				Self::deposit_event(Event::Cleared { hash });
+				PreimageFor::<T>::remove(hash);
+				StatusFor::<T>::remove(hash);
+				Self::deposit_event(Event::Cleared { hash: hash.clone() });
 			},
 			RequestStatus::Unrequested(_) => Err(Error::<T>::NotRequested)?,
 		}
@@ -292,23 +295,23 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
-	fn preimage_exists(hash: T::Hash) -> bool {
+	fn preimage_exists(hash: &T::Hash) -> bool {
 		PreimageFor::<T>::contains_key(hash)
 	}
 
-	fn preimage_requested(hash: T::Hash) -> bool {
+	fn preimage_requested(hash: &T::Hash) -> bool {
 		matches!(StatusFor::<T>::get(hash), Some(RequestStatus::Requested(..)))
 	}
 
-	fn get_preimage(hash: T::Hash) -> Option<Vec<u8>> {
+	fn get_preimage(hash: &T::Hash) -> Option<Vec<u8>> {
 		PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec())
 	}
 
-	fn request_preimage(hash: T::Hash) {
+	fn request_preimage(hash: &T::Hash) {
 		Self::do_request_preimage(hash)
 	}
 
-	fn clear_request(hash: T::Hash) {
+	fn clear_request(hash: &T::Hash) {
 		let res = Self::do_clear_request(hash);
 		debug_assert!(res.is_ok(), "do_clear_request failed - counter underflow?");
 	}
@@ -323,9 +326,9 @@ impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
 		let _ = Self::note_bytes(bytes, None);
 	}
 
-	fn unnote_preimage(hash: T::Hash) {
+	fn unnote_preimage(hash: &T::Hash) {
 		// Should never fail if authorization check is skipped.
-		let res = Self::unnote_preimage(hash, None);
+		let res = Self::do_unnote_preimage(hash, None);
 		debug_assert!(res.is_ok(), "unnote_preimage failed - request outstanding?");
 	}
 }

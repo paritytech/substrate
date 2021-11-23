@@ -24,6 +24,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
+pallet-preimage = { version = "4.0.0-dev", default-features = false, path = "../preimage" }
 
 [features]
 default = ["std"]
@@ -34,6 +35,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-preimage/std",
 	"sp-io/std",
 	"sp-std/std",
 	"log/std",

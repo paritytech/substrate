@@ -81,6 +81,10 @@ pub trait TryDrop: Sized {
 	fn try_drop(self) -> Result<(), Self>;
 }
 
+impl TryDrop for () {
+	fn try_drop(self) -> Result<(), Self> { Ok(()) }
+}
+
 /// Return type used when we need to return one of two items, each of the opposite direction or
 /// sign, with one (`Same`) being of the same type as the `self` or primary argument of the function
 /// that returned it.
@@ -569,20 +573,20 @@ pub trait PreimageProvider<Hash> {
 	/// Returns whether a preimage exists for a given hash.
 	///
 	/// A value of `true` implies that `get_preimage` is `Some`.
-	fn preimage_exists(hash: Hash) -> bool;
+	fn preimage_exists(hash: &Hash) -> bool;
 
 	/// Returns the preimage for a given hash.
-	fn get_preimage(hash: Hash) -> Option<Vec<u8>>;
+	fn get_preimage(hash: &Hash) -> Option<Vec<u8>>;
 
 	/// Returns whether a preimage request exists for a given hash.
-	fn preimage_requested(hash: Hash) -> bool;
+	fn preimage_requested(hash: &Hash) -> bool;
 
 	/// Request that someone report a preimage. Providers use this to optimise the economics for
 	/// preimage reporting.
-	fn request_preimage(hash: Hash);
+	fn request_preimage(hash: &Hash);
 
 	/// Clear a preimage request.
-	fn clear_request(hash: Hash);
+	fn clear_request(hash: &Hash);
 }
 
 /// A interface for managing preimages to hashes on chain.
@@ -600,7 +604,7 @@ pub trait PreimageRecipient<Hash> {
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a
 	/// hint - if it was not previously noted or if it is now requested, then this will not do
 	/// anything.
-	fn unnote_preimage(hash: Hash);
+	fn unnote_preimage(hash: &Hash);
 }
 
 #[cfg(test)]
