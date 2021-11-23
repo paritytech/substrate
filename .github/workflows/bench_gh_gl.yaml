@@ -20,10 +20,11 @@ jobs:
           access_token:            ${{ github.token }}
 
       - name:                      Install dependencies
-        run:                       |
+        run:                       >
           apt-get update
           # and then she said
           apt-get install -y --no-install-recommends time clang
+          # use suitable notation https://stackoverflow.com/a/21699210/5991289
           update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
 
       - name:                      Install Rust
