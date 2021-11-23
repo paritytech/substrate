@@ -20,7 +20,6 @@
 
 use crate::{
 	host::HostState,
-	imports::{resolve_imports, Imports},
 	instance_wrapper::{EntryPoint, InstanceWrapper},
 	util,
 };
@@ -37,26 +36,44 @@ use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, Value, WordSize};
 use std::{
 	path::{Path, PathBuf},
-	rc::Rc,
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
 	},
 };
-use wasmtime::{AsContext, AsContextMut, Engine, StoreLimits};
+use wasmtime::{Engine, Memory, StoreLimits, Table};
 
 pub(crate) struct StoreData {
-	/// The limits we aply to the store. We need to store it here to return a reference to this
+	/// The limits we apply to the store. We need to store it here to return a reference to this
 	/// object when we have the limits enabled.
-	limits: StoreLimits,
+	pub(crate) limits: StoreLimits,
 	/// This will only be set when we call into the runtime.
-	host_state: Option<Rc<HostState>>,
+	pub(crate) host_state: Option<HostState>,
+	/// This will be always set once the store is initialized.
+	pub(crate) memory: Option<Memory>,
+	/// This will be set only if the runtime actually contains a table.
+	pub(crate) table: Option<Table>,
 }
 
 impl StoreData {
 	/// Returns a reference to the host state.
-	pub fn host_state(&self) -> Option<&Rc<HostState>> {
+	pub fn host_state(&self) -> Option<&HostState> {
 		self.host_state.as_ref()
+	}
+
+	/// Returns a mutable reference to the host state.
+	pub fn host_state_mut(&mut self) -> Option<&mut HostState> {
+		self.host_state.as_mut()
+	}
+
+	/// Returns the host memory.
+	pub fn memory(&self) -> Memory {
+		self.memory.expect("memory is always set; qed")
+	}
+
+	/// Returns the host table.
+	pub fn table(&self) -> Option<Table> {
+		self.table
 	}
 }
 
@@ -64,48 +81,53 @@ pub(crate) type Store = wasmtime::Store<StoreData>;
 
 enum Strategy {
 	FastInstanceReuse {
-		instance_wrapper: Rc<InstanceWrapper>,
+		instance_wrapper: InstanceWrapper,
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
 		heap_base: u32,
-		store: Store,
 	},
 	RecreateInstance(InstanceCreator),
 }
 
 struct InstanceCreator {
-	store: Store,
 	module: Arc<wasmtime::Module>,
-	imports: Arc<Imports>,
+	host_functions: Vec<&'static dyn Function>,
 	heap_pages: u64,
+	allow_missing_func_imports: bool,
+	max_memory_size: Option<usize>,
 }
 
 impl InstanceCreator {
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&*self.module, &*self.imports, self.heap_pages, &mut self.store)
+		InstanceWrapper::new(
+			&*self.module,
+			&self.host_functions,
+			self.heap_pages,
+			self.allow_missing_func_imports,
+			self.max_memory_size,
+		)
 	}
 }
 
-struct InstanceGlobals<'a, C> {
-	ctx: &'a mut C,
-	instance: &'a InstanceWrapper,
+struct InstanceGlobals<'a> {
+	instance: &'a mut InstanceWrapper,
 }
 
-impl<'a, C: AsContextMut> runtime_blob::InstanceGlobals for InstanceGlobals<'a, C> {
+impl<'a> runtime_blob::InstanceGlobals for InstanceGlobals<'a> {
 	type Global = wasmtime::Global;
 
 	fn get_global(&mut self, export_name: &str) -> Self::Global {
 		self.instance
-			.get_global(&mut self.ctx, export_name)
+			.get_global(export_name)
 			.expect("get_global is guaranteed to be called with an export name of a global; qed")
 	}
 
 	fn get_global_value(&mut self, global: &Self::Global) -> Value {
-		util::from_wasmtime_val(global.get(&mut self.ctx))
+		util::from_wasmtime_val(global.get(&mut self.instance.store_mut()))
 	}
 
 	fn set_global_value(&mut self, global: &Self::Global, value: Value) {
-		global.set(&mut self.ctx, util::into_wasmtime_val(value)).expect(
+		global.set(&mut self.instance.store_mut(), util::into_wasmtime_val(value)).expect(
 			"the value is guaranteed to be of the same value; the global is guaranteed to be mutable; qed",
 		);
 	}
@@ -124,50 +146,19 @@ pub struct WasmtimeRuntime {
 	snapshot_data: Option<InstanceSnapshotData>,
 	config: Config,
 	host_functions: Vec<&'static dyn Function>,
-	engine: Engine,
-}
-
-impl WasmtimeRuntime {
-	/// Creates the store respecting the set limits.
-	fn new_store(&self) -> Store {
-		let limits = if let Some(max_memory_size) = self.config.max_memory_size {
-			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
-		} else {
-			Default::default()
-		};
-
-		let mut store = Store::new(&self.engine, StoreData { limits, host_state: None });
-
-		if self.config.max_memory_size.is_some() {
-			store.limiter(|s| &mut s.limits);
-		}
-
-		store
-	}
 }
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
-		let mut store = self.new_store();
-
-		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
-		// and results.
-		//
-		// NOTE: Attentive reader may notice that this could've been moved in `WasmModule` creation.
-		//       However, I am not sure if that's a good idea since it would be pushing our luck
-		// further       by assuming that `Store` not only `Send` but also `Sync`.
-		let imports = resolve_imports(
-			&mut store,
-			&self.module,
-			&self.host_functions,
-			self.config.heap_pages,
-			self.config.allow_missing_func_imports,
-		)?;
-
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
-			let instance_wrapper =
-				InstanceWrapper::new(&self.module, &imports, self.config.heap_pages, &mut store)?;
-			let heap_base = instance_wrapper.extract_heap_base(&mut store)?;
+			let mut instance_wrapper = InstanceWrapper::new(
+				&self.module,
+				&self.host_functions,
+				self.config.heap_pages,
+				self.config.allow_missing_func_imports,
+				self.config.max_memory_size,
+			)?;
+			let heap_base = instance_wrapper.extract_heap_base()?;
 
 			// This function panics if the instance was created from a runtime blob different from
 			// which the mutable globals were collected. Here, it is easy to see that there is only
@@ -175,22 +166,22 @@ impl WasmModule for WasmtimeRuntime {
 			// instance and collecting the mutable globals.
 			let globals_snapshot = GlobalsSnapshot::take(
 				&snapshot_data.mutable_globals,
-				&mut InstanceGlobals { ctx: &mut store, instance: &instance_wrapper },
+				&mut InstanceGlobals { instance: &mut instance_wrapper },
 			);
 
 			Strategy::FastInstanceReuse {
-				instance_wrapper: Rc::new(instance_wrapper),
+				instance_wrapper,
 				globals_snapshot,
 				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
 				heap_base,
-				store,
 			}
 		} else {
 			Strategy::RecreateInstance(InstanceCreator {
-				imports: Arc::new(imports),
 				module: self.module.clone(),
-				store,
+				host_functions: self.host_functions.clone(),
 				heap_pages: self.config.heap_pages,
+				allow_missing_func_imports: self.config.allow_missing_func_imports,
+				max_memory_size: self.config.max_memory_size,
 			})
 		};
 
@@ -204,68 +195,52 @@ pub struct WasmtimeInstance {
 	strategy: Strategy,
 }
 
-// This is safe because `WasmtimeInstance` does not leak reference to `self.imports`
-// and all imports don't reference anything, other than host functions and memory
-unsafe impl Send for WasmtimeInstance {}
-
 impl WasmInstance for WasmtimeInstance {
 	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
 		match &mut self.strategy {
 			Strategy::FastInstanceReuse {
-				instance_wrapper,
+				ref mut instance_wrapper,
 				globals_snapshot,
 				data_segments_snapshot,
 				heap_base,
-				ref mut store,
 			} => {
-				let entrypoint = instance_wrapper.resolve_entrypoint(method, &mut *store)?;
+				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
 				data_segments_snapshot.apply(|offset, contents| {
-					instance_wrapper.write_memory_from(&mut *store, Pointer::new(offset), contents)
+					util::write_memory_from(
+						instance_wrapper.store_mut(),
+						Pointer::new(offset),
+						contents,
+					)
 				})?;
-				globals_snapshot
-					.apply(&mut InstanceGlobals { ctx: &mut *store, instance: &*instance_wrapper });
+				globals_snapshot.apply(&mut InstanceGlobals { instance: instance_wrapper });
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result = perform_call(
-					&mut *store,
-					data,
-					instance_wrapper.clone(),
-					entrypoint,
-					allocator,
-				);
+				let result = perform_call(data, instance_wrapper, entrypoint, allocator);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
-				instance_wrapper.decommit(store);
+				instance_wrapper.decommit();
 
 				result
 			},
 			Strategy::RecreateInstance(ref mut instance_creator) => {
-				let instance_wrapper = instance_creator.instantiate()?;
-				let heap_base = instance_wrapper.extract_heap_base(&mut instance_creator.store)?;
-				let entrypoint =
-					instance_wrapper.resolve_entrypoint(method, &mut instance_creator.store)?;
+				let mut instance_wrapper = instance_creator.instantiate()?;
+				let heap_base = instance_wrapper.extract_heap_base()?;
+				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
-				perform_call(
-					&mut instance_creator.store,
-					data,
-					Rc::new(instance_wrapper),
-					entrypoint,
-					allocator,
-				)
+				perform_call(data, &mut instance_wrapper, entrypoint, allocator)
 			},
 		}
 	}
 
 	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>> {
 		match &mut self.strategy {
-			Strategy::FastInstanceReuse { instance_wrapper, ref mut store, .. } =>
-				instance_wrapper.get_global_val(&mut *store, name),
-			Strategy::RecreateInstance(ref mut instance_creator) => instance_creator
-				.instantiate()?
-				.get_global_val(&mut instance_creator.store, name),
+			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
+				instance_wrapper.get_global_val(name),
+			Strategy::RecreateInstance(ref mut instance_creator) =>
+				instance_creator.instantiate()?.get_global_val(name),
 		}
 	}
 
@@ -276,8 +251,8 @@ impl WasmInstance for WasmtimeInstance {
 				// associated with it.
 				None
 			},
-			Strategy::FastInstanceReuse { instance_wrapper, store, .. } =>
-				Some(instance_wrapper.base_ptr(&store)),
+			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
+				Some(instance_wrapper.base_ptr()),
 		}
 	}
 }
@@ -591,7 +566,7 @@ unsafe fn do_create_runtime(
 		},
 	};
 
-	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, host_functions, engine })
+	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, host_functions })
 }
 
 fn instrument(
@@ -627,50 +602,51 @@ pub fn prepare_runtime_artifact(
 }
 
 fn perform_call(
-	mut ctx: impl AsContextMut<Data = StoreData>,
 	data: &[u8],
-	instance_wrapper: Rc<InstanceWrapper>,
+	instance_wrapper: &mut InstanceWrapper,
 	entrypoint: EntryPoint,
 	mut allocator: FreeingBumpHeapAllocator,
 ) -> Result<Vec<u8>> {
-	let (data_ptr, data_len) =
-		inject_input_data(&mut ctx, &instance_wrapper, &mut allocator, data)?;
+	let (data_ptr, data_len) = inject_input_data(instance_wrapper, &mut allocator, data)?;
 
-	let host_state = HostState::new(allocator, instance_wrapper.clone());
+	let host_state = HostState::new(allocator);
 
 	// Set the host state before calling into wasm.
-	ctx.as_context_mut().data_mut().host_state = Some(Rc::new(host_state));
+	instance_wrapper.store_mut().data_mut().host_state = Some(host_state);
 
-	let ret = entrypoint.call(&mut ctx, data_ptr, data_len).map(unpack_ptr_and_len);
+	let ret = entrypoint
+		.call(instance_wrapper.store_mut(), data_ptr, data_len)
+		.map(unpack_ptr_and_len);
 
 	// Reset the host state
-	ctx.as_context_mut().data_mut().host_state = None;
+	instance_wrapper.store_mut().data_mut().host_state = None;
 
 	let (output_ptr, output_len) = ret?;
-	let output = extract_output_data(ctx, &instance_wrapper, output_ptr, output_len)?;
+	let output = extract_output_data(instance_wrapper, output_ptr, output_len)?;
 
 	Ok(output)
 }
 
 fn inject_input_data(
-	mut ctx: impl AsContextMut,
-	instance: &InstanceWrapper,
+	instance: &mut InstanceWrapper,
 	allocator: &mut FreeingBumpHeapAllocator,
 	data: &[u8],
 ) -> Result<(Pointer<u8>, WordSize)> {
+	let mut ctx = instance.store_mut();
+	let memory = ctx.data().memory();
+	let memory = memory.data_mut(&mut ctx);
 	let data_len = data.len() as WordSize;
-	let data_ptr = instance.allocate(&mut ctx, allocator, data_len)?;
-	instance.write_memory_from(ctx, data_ptr, data)?;
+	let data_ptr = allocator.allocate(memory, data_len)?;
+	util::write_memory_from(instance.store_mut(), data_ptr, data)?;
 	Ok((data_ptr, data_len))
 }
 
 fn extract_output_data(
-	ctx: impl AsContext,
 	instance: &InstanceWrapper,
 	output_ptr: u32,
 	output_len: u32,
 ) -> Result<Vec<u8>> {
 	let mut output = vec![0; output_len as usize];
-	instance.read_memory_into(ctx, Pointer::new(output_ptr), &mut output)?;
+	util::read_memory_into(instance.store(), Pointer::new(output_ptr), &mut output)?;
 	Ok(output)
 }
