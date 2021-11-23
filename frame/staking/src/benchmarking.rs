@@ -841,7 +841,7 @@ benchmarks! {
 		assert_eq!(targets.len() as u32, v);
 	}
 
-	set_staking_limits {
+	set_staking_configs {
 		// This function always does the same thing... just write to 4 storage items.
 	}: _(
 		RawOrigin::Root,

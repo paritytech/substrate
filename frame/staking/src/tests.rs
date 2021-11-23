@@ -4350,7 +4350,7 @@ fn chill_other_works() {
 			);
 
 			// Change the minimum bond... but no limits.
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
@@ -4371,7 +4371,7 @@ fn chill_other_works() {
 			);
 
 			// Add limits, but no threshold
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
@@ -4392,7 +4392,7 @@ fn chill_other_works() {
 			);
 
 			// Add threshold, but no limits
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
@@ -4413,7 +4413,7 @@ fn chill_other_works() {
 			);
 
 			// Add threshold and limits
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
@@ -4458,7 +4458,7 @@ fn capped_stakers_works() {
 
 		// Change the maximums
 		let max = 10;
-		assert_ok!(Staking::set_staking_limits(
+		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
 			10,
 			10,
@@ -4528,7 +4528,7 @@ fn capped_stakers_works() {
 		));
 
 		// No problem when we set to `None` again
-		assert_ok!(Staking::set_staking_limits(
+		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
 			10,
 			10,
@@ -4550,7 +4550,7 @@ fn min_commission_works() {
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 		));
 
-		assert_ok!(Staking::set_staking_limits(
+		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
 			0,
 			0,

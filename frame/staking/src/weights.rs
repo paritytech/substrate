@@ -71,7 +71,7 @@ pub trait WeightInfo {
 	fn new_era(v: u32, n: u32, ) -> Weight;
 	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight;
 	fn get_npos_targets(v: u32, ) -> Weight;
-	fn set_staking_limits() -> Weight;
+	fn set_staking_configs() -> Weight;
 	fn chill_other() -> Weight;
 }
 
@@ -423,7 +423,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking ChillThreshold (r:0 w:1)
 	// Storage: Staking MaxNominatorsCount (r:0 w:1)
 	// Storage: Staking MinNominatorBond (r:0 w:1)
-	fn set_staking_limits() -> Weight {
+	fn set_staking_configs() -> Weight {
 		(6_353_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -791,7 +791,7 @@ impl WeightInfo for () {
 	// Storage: Staking ChillThreshold (r:0 w:1)
 	// Storage: Staking MaxNominatorsCount (r:0 w:1)
 	// Storage: Staking MinNominatorBond (r:0 w:1)
-	fn set_staking_limits() -> Weight {
+	fn set_staking_configs() -> Weight {
 		(6_353_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
