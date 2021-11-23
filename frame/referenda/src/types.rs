@@ -276,12 +276,14 @@ impl<
 >
 	ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId, ScheduleAddress>
 {
-	pub fn take_decision_deposit(&mut self) -> Option<Deposit<AccountId, Balance>> {
+	pub fn take_decision_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
 		use ReferendumInfo::*;
 		match self {
-			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) => d.take(),
+			Ongoing(x) if x.decision_deposit.is_none() => Ok(None),
 			// Cannot refund deposit if Ongoing as this breaks assumptions.
-			_ => None,
+			Ongoing(_) => Err(()),
+			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) | Cancelled(_, _, d) => Ok(d.take()),
+			Killed(_) => Ok(None),
 		}
 	}
 }

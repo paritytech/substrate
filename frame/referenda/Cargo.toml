@@ -26,6 +26,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
+assert_matches = "1.5"
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }

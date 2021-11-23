@@ -275,6 +275,12 @@ pub mod pallet {
 		NothingToDo,
 		/// No track exists for the proposal origin.
 		NoTrack,
+		/// Any deposit cannot be refunded until after the decision is over.
+		Unfinished,
+		/// The deposit refunder is not the depositor.
+		NoPermission,
+		/// The deposit cannot be refunded since none was made.
+		NoDeposit,
 	}
 
 	#[pallet::call]
@@ -343,7 +349,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_signed_or_root(origin)?;
 			let mut info = ReferendumInfoFor::<T>::get(index).ok_or(Error::<T>::BadReferendum)?;
-			Self::refund_deposit(info.take_decision_deposit());
+			let deposit = info.take_decision_deposit()
+				.map_err(|_| Error::<T>::Unfinished)?
+				.ok_or(Error::<T>::NoDeposit)?;
+			Self::refund_deposit(Some(deposit));
 			ReferendumInfoFor::<T>::insert(index, info);
 			Ok(())
 		}
@@ -375,7 +384,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
 		) -> DispatchResult {
-			T::CancelOrigin::ensure_origin(origin)?;
+			T::KillOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
 			if let Some(last_alarm) = status.alarm {

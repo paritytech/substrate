@@ -18,7 +18,9 @@
 //! The crate's tests.
 
 use codec::Decode;
-use frame_support::{assert_ok, assert_noop, traits::Contains, dispatch::RawOrigin};
+use assert_matches::assert_matches;
+use frame_support::{assert_ok, assert_noop, traits::Contains};
+use frame_support::dispatch::{RawOrigin, DispatchError::BadOrigin};
 use pallet_balances::Error as BalancesError;
 use super::*;
 use crate::mock::*;
@@ -146,6 +148,107 @@ fn decision_deposit_errors_work() {
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 		let e = Error::<Test>::HaveDeposit;
 		assert_noop!(Referenda::place_decision_deposit(Origin::signed(2), 0), e);
+	});
+}
+
+#[test]
+fn refund_deposit_works() {
+	new_test_ext().execute_with(|| {
+		let e = Error::<Test>::BadReferendum;
+		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(1), 0), e);
+
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		let e = Error::<Test>::NoDeposit;
+		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(2), 0), e);
+
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		let e = Error::<Test>::Unfinished;
+		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(3), 0), e);
+
+		run_to(11);
+		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(3), 0));
+	});
+}
+
+#[test]
+fn cancel_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+
+		run_to(10);
+		assert_ok!(Referenda::cancel(Origin::signed(4), 0));
+		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(3), 0));
+		assert_matches!(
+			ReferendumInfoFor::<Test>::get(0).unwrap(),
+			ReferendumInfo::Cancelled(10, Deposit { who: 1, amount: 2 }, None)
+		);
+	});
+}
+
+#[test]
+fn cancel_errors_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		assert_noop!(Referenda::cancel(Origin::signed(1), 0), BadOrigin);
+
+		run_to(11);
+		assert_noop!(Referenda::cancel(Origin::signed(4), 0), Error::<Test>::NotOngoing);
+	});
+}
+
+#[test]
+fn kill_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+
+		run_to(10);
+		assert_ok!(Referenda::kill(Origin::root(), 0));
+		let e = Error::<Test>::NoDeposit;
+		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(3), 0), e);
+		assert_matches!(
+			ReferendumInfoFor::<Test>::get(0).unwrap(),
+			ReferendumInfo::Killed(10)
+		);
+	});
+}
+
+#[test]
+fn kill_errors_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		assert_noop!(Referenda::kill(Origin::signed(4), 0), BadOrigin);
+
+		run_to(11);
+		assert_noop!(Referenda::kill(Origin::root(), 0), Error::<Test>::NotOngoing);
 	});
 }
 
