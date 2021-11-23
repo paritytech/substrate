@@ -87,7 +87,7 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
-/// This is the initial kill storage result used
+/// This is storage result in old version 2
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
 /// removed from the trie from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
