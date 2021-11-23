@@ -33,7 +33,6 @@ use fnv::FnvHashMap;
 use futures::{channel::mpsc, future, prelude::*};
 use hyper::{client, Body, Client as HyperClient};
 use hyper_rustls::HttpsConnector;
-use log::error;
 use once_cell::sync::Lazy;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
@@ -45,6 +44,8 @@ use std::{
 	sync::Arc,
 	task::{Context, Poll},
 };
+
+const LOG_TARGET: &str = "offchain-worker::http";
 
 /// Wrapper struct used for keeping the hyper_rustls client running.
 #[derive(Clone)]
@@ -146,12 +147,23 @@ impl HttpApi {
 		match self.next_id.0.checked_add(1) {
 			Some(new_id) => self.next_id.0 = new_id,
 			None => {
-				error!("Overflow in offchain worker HTTP request ID assignment");
+				tracing::error!(
+					target: LOG_TARGET,
+					"Overflow in offchain worker HTTP request ID assignment"
+				);
 				return Err(())
 			},
 		};
 		self.requests
 			.insert(new_id, HttpApiRequest::NotDispatched(request, body_sender));
+
+		tracing::error!(
+			target: LOG_TARGET,
+			id = %new_id.0,
+			%method,
+			%uri,
+			"Requested started",
+		);
 
 		Ok(new_id)
 	}
@@ -168,11 +180,14 @@ impl HttpApi {
 			_ => return Err(()),
 		};
 
-		let name = hyper::header::HeaderName::try_from(name).map_err(drop)?;
-		let value = hyper::header::HeaderValue::try_from(value).map_err(drop)?;
+		let header_name = hyper::header::HeaderName::try_from(name).map_err(drop)?;
+		let header_value = hyper::header::HeaderValue::try_from(value).map_err(drop)?;
 		// Note that we're always appending headers and never replacing old values.
 		// We assume here that the user knows what they're doing.
-		request.headers_mut().append(name, value);
+		request.headers_mut().append(header_name, header_value);
+
+		tracing::debug!(target: LOG_TARGET, id = %request_id.0, %name, %value, "Added header to request");
+
 		Ok(())
 	}
 
@@ -207,7 +222,7 @@ impl HttpApi {
 				sender.send_data(hyper::body::Bytes::from(chunk.to_owned())),
 			)
 			.map_err(|_| {
-				error!("HTTP sender refused data despite being ready");
+				tracing::error!(target: "offchain-worker::http", "HTTP sender refused data despite being ready");
 				HttpError::IoError
 			})
 		};
@@ -215,6 +230,7 @@ impl HttpApi {
 		loop {
 			request = match request {
 				HttpApiRequest::NotDispatched(request, sender) => {
+					tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Added new body chunk");
 					// If the request is not dispatched yet, dispatch it and loop again.
 					let _ = self
 						.to_worker
@@ -225,14 +241,20 @@ impl HttpApi {
 				HttpApiRequest::Dispatched(Some(mut sender)) => {
 					if !chunk.is_empty() {
 						match poll_sender(&mut sender) {
-							Err(HttpError::IoError) => return Err(HttpError::IoError),
+							Err(HttpError::IoError) => {
+								tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Encountered io error while trying to add new chunk to body");
+								return Err(HttpError::IoError)
+							},
 							other => {
+								tracing::debug!(target: LOG_TARGET, id = %request_id.0, res = ?other, "Added chunk to body");
 								self.requests
 									.insert(request_id, HttpApiRequest::Dispatched(Some(sender)));
 								return other
 							},
 						}
 					} else {
+						tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Finished writing body");
+
 						// Writing an empty body is a hint that we should stop writing. Dropping
 						// the sender.
 						self.requests.insert(request_id, HttpApiRequest::Dispatched(None));
@@ -250,14 +272,20 @@ impl HttpApi {
 								.as_mut()
 								.expect("Can only enter this match branch if Some; qed"),
 						) {
-							Err(HttpError::IoError) => return Err(HttpError::IoError),
+							Err(HttpError::IoError) => {
+								tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Encountered io error while trying to add new chunk to body");
+								return Err(HttpError::IoError)
+							},
 							other => {
+								tracing::debug!(target: LOG_TARGET, id = %request_id.0, res = ?other, "Added chunk to body");
 								self.requests
 									.insert(request_id, HttpApiRequest::Response(response));
 								return other
 							},
 						}
 					} else {
+						tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Finished writing body");
+
 						// Writing an empty body is a hint that we should stop writing. Dropping
 						// the sender.
 						self.requests.insert(
@@ -271,13 +299,18 @@ impl HttpApi {
 					}
 				},
 
-				HttpApiRequest::Fail(_) =>
-				// If the request has already failed, return without putting back the request
-				// in the list.
-					return Err(HttpError::IoError),
+				HttpApiRequest::Fail(error) => {
+					tracing::debug!(target: LOG_TARGET, id = %request_id.0, ?error, "Request failed");
+
+					// If the request has already failed, return without putting back the request
+					// in the list.
+					return Err(HttpError::IoError)
+				},
 
 				v @ HttpApiRequest::Dispatched(None) |
 				v @ HttpApiRequest::Response(HttpApiRequestRp { sending_body: None, .. }) => {
+					tracing::debug!(target: LOG_TARGET, id = %request_id.0, "Body sending already finished");
+
 					// We have already finished sending this body.
 					self.requests.insert(request_id, v);
 					return Err(HttpError::Invalid)
@@ -350,8 +383,19 @@ impl HttpApi {
 					// Requests in "fail" mode are purged before returning.
 					debug_assert_eq!(output.len(), ids.len());
 					for n in (0..ids.len()).rev() {
-						if let HttpRequestStatus::IoError = output[n] {
-							self.requests.remove(&ids[n]);
+						match output[n] {
+							HttpRequestStatus::IoError => {
+								self.requests.remove(&ids[n]);
+							},
+							HttpRequestStatus::Invalid => {
+								tracing::debug!(target: LOG_TARGET, id = %ids[n].0, "Unknown request");
+							},
+							HttpRequestStatus::DeadlineReached => {
+								tracing::debug!(target: LOG_TARGET, id = %ids[n].0, "Deadline reached");
+							},
+							HttpRequestStatus::Finished(_) => {
+								tracing::debug!(target: LOG_TARGET, id = %ids[n].0, "Request finished");
+							},
 						}
 					}
 					return output
@@ -388,20 +432,23 @@ impl HttpApi {
 							);
 						},
 						None => {}, // can happen if we detected an IO error when sending the body
-						_ => error!("State mismatch between the API and worker"),
+						_ =>
+							tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker"),
 					}
 				},
 
 				Some(WorkerToApi::Fail { id, error }) => match self.requests.remove(&id) {
 					Some(HttpApiRequest::Dispatched(_)) => {
+						tracing::debug!(target: LOG_TARGET, id = %id.0, ?error, "Request failed");
 						self.requests.insert(id, HttpApiRequest::Fail(error));
 					},
 					None => {}, // can happen if we detected an IO error when sending the body
-					_ => error!("State mismatch between the API and worker"),
+					_ =>
+						tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker"),
 				},
 
 				None => {
-					error!("Worker has crashed");
+					tracing::error!(target: "offchain-worker::http", "Worker has crashed");
 					return ids.iter().map(|_| HttpRequestStatus::IoError).collect()
 				},
 			}
@@ -474,7 +521,7 @@ impl HttpApi {
 					},
 					Err(err) => {
 						// This code should never be reached unless there's a logic error somewhere.
-						error!("Failed to read from current read chunk: {:?}", err);
+						tracing::error!(target: "offchain-worker::http", "Failed to read from current read chunk: {:?}", err);
 						return Err(HttpError::IoError)
 					},
 				}
@@ -719,7 +766,10 @@ mod tests {
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.
 	macro_rules! build_api_server {
-		() => {{
+		() => {
+			build_api_server!(hyper::Response::new(hyper::Body::from("Hello World!")))
+		};
+		( $response:expr ) => {{
 			let hyper_client = SHARED_CLIENT.clone();
 			let (api, worker) = http(hyper_client.clone());
 
@@ -736,9 +786,7 @@ mod tests {
 									// otherwise the tests are flaky.
 									let _ = req.into_body().collect::<Vec<_>>().await;
 
-									Ok::<_, Infallible>(hyper::Response::new(hyper::Body::from(
-										"Hello World!",
-									)))
+									Ok::<_, Infallible>($response)
 								},
 							))
 						}),
@@ -759,6 +807,33 @@ mod tests {
 		// Performs an HTTP query to a background HTTP server.
 
 		let (mut api, addr) = build_api_server!();
+
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
+		api.request_write_body(id, &[], Some(deadline)).unwrap();
+
+		match api.response_wait(&[id], Some(deadline))[0] {
+			HttpRequestStatus::Finished(200) => {},
+			v => panic!("Connecting to localhost failed: {:?}", v),
+		}
+
+		let headers = api.response_headers(id);
+		assert!(headers.iter().any(|(h, _)| h.eq_ignore_ascii_case(b"Date")));
+
+		let mut buf = vec![0; 2048];
+		let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
+		assert_eq!(&buf[..n], b"Hello World!");
+	}
+
+	#[test]
+	fn basic_http2_localhost() {
+		let deadline = timestamp::now().add(Duration::from_millis(10_000));
+
+		// Performs an HTTP query to a background HTTP server.
+
+		let (mut api, addr) = build_api_server!(hyper::Response::builder()
+			.version(hyper::Version::HTTP_2)
+			.body(hyper::Body::from("Hello World!"))
+			.unwrap());
 
 		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_write_body(id, &[], Some(deadline)).unwrap();

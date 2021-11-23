@@ -68,14 +68,39 @@ pub fn expand_outer_origin(
 	}
 
 	let system_path = &system_pallet.path;
+
 	let system_index = system_pallet.index;
+
+	let system_path_name = system_path.module_name();
+
+	let doc_string = get_intra_doc_string(
+		"Origin is always created with the base filter configured in",
+		&system_path_name,
+	);
+
+	let doc_string_none_origin =
+		get_intra_doc_string("Create with system none origin and", &system_path_name);
+
+	let doc_string_root_origin =
+		get_intra_doc_string("Create with system root origin and", &system_path_name);
+
+	let doc_string_signed_origin =
+		get_intra_doc_string("Create with system signed origin and", &system_path_name);
+
+	let doc_string_runtime_origin =
+		get_intra_doc_string("Convert to runtime origin, using as filter:", &system_path_name);
+
+	let doc_string_runtime_origin_with_caller = get_intra_doc_string(
+		"Convert to runtime origin with caller being system signed or none and use filter",
+		&system_path_name,
+	);
 
 	Ok(quote! {
 		#( #query_origin_part_macros )*
 
-		/// The runtime origin type represanting the origin of a call.
+		/// The runtime origin type representing the origin of a call.
 		///
-		/// Origin is always created with the base filter configured in `frame_system::Config::BaseCallFilter`.
+		#[doc = #doc_string]
 		#[derive(Clone)]
 		pub struct Origin {
 			caller: OriginCaller,
@@ -182,15 +207,18 @@ pub fn expand_outer_origin(
 		// For backwards compatibility and ease of accessing these functions.
 		#[allow(dead_code)]
 		impl Origin {
-			/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
+
+			#[doc = #doc_string_none_origin]
 			pub fn none() -> Self {
 				<Origin as #scrate::traits::OriginTrait>::none()
 			}
-			/// Create with system root origin and `frame-system::Config::BaseCallFilter`.
+
+			#[doc = #doc_string_root_origin]
 			pub fn root() -> Self {
 				<Origin as #scrate::traits::OriginTrait>::root()
 			}
-			/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
+
+			#[doc = #doc_string_signed_origin]
 			pub fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
 				<Origin as #scrate::traits::OriginTrait>::signed(by)
 			}
@@ -216,7 +244,8 @@ pub fn expand_outer_origin(
 		}
 
 		impl From<#system_path::Origin<#runtime>> for Origin {
-			/// Convert to runtime origin, using as filter: `frame-system::Config::BaseCallFilter`.
+
+			#[doc = #doc_string_runtime_origin]
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
 				let o: OriginCaller = x.into();
 				o.into()
@@ -247,8 +276,7 @@ pub fn expand_outer_origin(
 			}
 		}
 		impl From<Option<<#runtime as #system_path::Config>::AccountId>> for Origin {
-			/// Convert to runtime origin with caller being system signed or none and use filter
-			/// `frame-system::Config::BaseCallFilter`.
+			#[doc = #doc_string_runtime_origin_with_caller]
 			fn from(x: Option<<#runtime as #system_path::Config>::AccountId>) -> Self {
 				<#system_path::Origin<#runtime>>::from(x).into()
 			}
@@ -303,6 +331,8 @@ fn expand_origin_pallet_conversions(
 		None => quote!(#path::Origin),
 	};
 
+	let doc_string = get_intra_doc_string(" Convert to runtime origin using", &path.module_name());
+
 	quote! {
 		impl From<#pallet_origin> for OriginCaller {
 			fn from(x: #pallet_origin) -> Self {
@@ -311,7 +341,7 @@ fn expand_origin_pallet_conversions(
 		}
 
 		impl From<#pallet_origin> for Origin {
-			/// Convert to runtime origin using `frame-system::Config::BaseCallFilter`.
+			#[doc = #doc_string]
 			fn from(x: #pallet_origin) -> Self {
 				let x: OriginCaller = x.into();
 				x.into()
@@ -342,4 +372,9 @@ fn expand_origin_pallet_conversions(
 			}
 		}
 	}
+}
+
+// Get the actual documentation using the doc information and system path name
+fn get_intra_doc_string(doc_info: &str, system_path_name: &String) -> String {
+	format!(" {} [`{}::Config::BaseCallFilter`].", doc_info, system_path_name)
 }

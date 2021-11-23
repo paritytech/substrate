@@ -45,7 +45,7 @@ pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-fe
 # Used for runtime benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
-hex-literal = { version = "0.3.3", optional = true }
+hex-literal = { version = "0.3.4", optional = true }
 
 pallet-template = { version = "3.0.0", default-features = false, path = "../pallets/template" }
 
