@@ -36,7 +36,9 @@ sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 
 [features]
 default = ["std"]
-with-tracing = ["sp-tracing/with-tracing"]
+
+# Enable signature verification in background task
+background-sig-check = []
 std = [
 	"codec/std",
 	"scale-info/std",
@@ -48,3 +50,4 @@ std = [
 	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
+with-tracing = ["sp-tracing/with-tracing"]

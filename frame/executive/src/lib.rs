@@ -128,15 +128,19 @@ use frame_support::{
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One, Saturating,
+		self, Applyable, CheckEqual, Dispatchable, Header, NumberFor, One, Saturating,
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult,
 };
+#[cfg(feature = "background-sig-check")]
+use sp_runtime::traits::{BackgroundCheckable as Checkable, Checkable as _};
+#[cfg(not(feature = "background-sig-check"))]
+use sp_runtime::traits::Checkable;
 use sp_std::{marker::PhantomData, prelude::*};
 
-pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
+pub type CheckedOf<E, C> = <E as sp_runtime::traits::Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
@@ -366,12 +370,14 @@ where
 			// any initial checks
 			Self::initial_checks(&block);
 
+			#[cfg(feature = "background-sig-check")]
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
 			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
+			#[cfg(feature = "background-sig-check")]
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
 			}
@@ -461,6 +467,9 @@ where
 		sp_tracing::enter_span!(sp_tracing::info_span!("apply_extrinsic",
 				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode())));
 		// Verify that the signature is good.
+		#[cfg(feature = "background-sig-check")]
+		let xt = uxt.background_check(&Default::default())?;
+		#[cfg(not(feature = "background-sig-check"))]
 		let xt = uxt.check(&Default::default())?;
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be

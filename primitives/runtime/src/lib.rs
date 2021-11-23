@@ -420,6 +420,28 @@ impl Verify for MultiSignature {
 	}
 }
 
+impl crate::traits::BackgroundVerify for MultiSignature {
+	fn background_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
+		match (self, signer) {
+			(Self::Ed25519(ref sig), who) =>
+				sig.background_verify(msg, &ed25519::Public::from_slice(who.as_ref())),
+			(Self::Sr25519(ref sig), who) =>
+				sig.background_verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(Self::Ecdsa(ref sig), who) => {
+				// Unfortunatly, ecdsa signature can't be verified in a background task
+				// because we don't known the public key.
+				let m = sp_io::hashing::blake2_256(msg.get());
+				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+					Ok(pubkey) =>
+						&sp_io::hashing::blake2_256(pubkey.as_ref()) ==
+							<dyn AsRef<[u8; 32]>>::as_ref(who),
+					_ => false,
+				}
+			},
+		}
+	}
+}
+
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
