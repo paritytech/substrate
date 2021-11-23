@@ -53,13 +53,14 @@ pub enum Error {
 }
 
 /// Clear prefix result
+#[derive(Debug, Eq, PartialEq)]
 pub struct ClearPrefixResult {
 	/// returns if all keys are removed in the prefix
 	pub all_keys_removed: bool,
 	/// returns number of keys removed from backend
 	pub num_keys_from_backend: u32,
 	/// returns number of keys removed from overlay
-	pub num_keys_from_overlay: u32,
+	pub num_keys_from_overlay: Option<u32>,
 }
 
 /// The Substrate externalities.

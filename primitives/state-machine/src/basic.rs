@@ -219,7 +219,7 @@ impl Externalities for BasicExternalities {
 		ClearPrefixResult {
 			all_keys_removed: true,
 			num_keys_from_backend: num_removed as u32,
-			num_keys_from_overlay: 0
+			num_keys_from_overlay: None
 		}
 	}
 
@@ -232,7 +232,7 @@ impl Externalities for BasicExternalities {
 			return ClearPrefixResult {
 				all_keys_removed: false,
 				num_keys_from_backend: 0,
-				num_keys_from_overlay: 0
+				num_keys_from_overlay: None
 			}
 		}
 
@@ -253,7 +253,7 @@ impl Externalities for BasicExternalities {
 		ClearPrefixResult {
 			all_keys_removed: true,
 			num_keys_from_backend: num_removed as u32,
-			num_keys_from_overlay: 0,
+			num_keys_from_overlay: None,
 		}
 	}
 
@@ -279,13 +279,13 @@ impl Externalities for BasicExternalities {
 			ClearPrefixResult {
 				all_keys_removed: true,
 				num_keys_from_backend: num_removed as u32,
-				num_keys_from_overlay: 0,
+				num_keys_from_overlay: None,
 			}
 		} else {
 			ClearPrefixResult {
 				all_keys_removed: true,
 				num_keys_from_backend: 0,
-				num_keys_from_overlay: 0,
+				num_keys_from_overlay: None,
 			}
 		}
 	}
@@ -473,7 +473,10 @@ mod tests {
 		});
 
 		let res = ext.kill_child_storage(child_info, None);
-		assert_eq!(res, (true, 3));
+		assert_eq!(res, ClearPrefixResult {
+							all_keys_removed:true,
+							num_keys_from_backend:3,
+							num_keys_from_overlay: None});
 	}
 
 	#[test]

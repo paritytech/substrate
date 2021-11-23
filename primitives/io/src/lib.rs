@@ -228,12 +228,12 @@ pub trait Storage {
 		if clear_prefix_result.all_keys_removed {
 			KillStorageResult::AllRemoved {
 				backend: clear_prefix_result.num_keys_from_backend,
-				overlay: clear_prefix_result.num_keys_from_overlay,
+				overlay: clear_prefix_result.num_keys_from_overlay.unwrap(),
 			}
 		} else {
 			KillStorageResult::SomeRemaining {
 				backend: clear_prefix_result.num_keys_from_backend,
-				overlay: clear_prefix_result.num_keys_from_overlay,
+				overlay: clear_prefix_result.num_keys_from_overlay.unwrap(),
 			}
 		}
 	}
@@ -399,12 +399,12 @@ pub trait DefaultChildStorage {
 		if clear_prefix_result.all_keys_removed {
 			KillStorageResult::AllRemoved {
 				backend: clear_prefix_result.num_keys_from_backend,
-				overlay: clear_prefix_result.num_keys_from_overlay,
+				overlay: clear_prefix_result.num_keys_from_overlay.unwrap(),
 			}
 		} else {
 			KillStorageResult::SomeRemaining {
 				backend: clear_prefix_result.num_keys_from_backend,
-				overlay: clear_prefix_result.num_keys_from_overlay,
+				overlay: clear_prefix_result.num_keys_from_overlay.unwrap(),
 			}
 		}
 	}
@@ -441,12 +441,12 @@ pub trait DefaultChildStorage {
 		if clear_prefix_result.all_keys_removed {
 			KillStorageResult::AllRemoved {
 				backend: clear_prefix_result.num_keys_from_backend,
-				overlay: clear_prefix_result.num_keys_from_overlay,
+				overlay: clear_prefix_result.num_keys_from_overlay.unwrap(),
 			}
 		} else {
 			KillStorageResult::SomeRemaining {
 				backend: clear_prefix_result.num_keys_from_backend,
-				overlay: clear_prefix_result.num_keys_from_overlay,
+				overlay: clear_prefix_result.num_keys_from_overlay.unwrap(),
 			}
 		}
 	}
@@ -1661,7 +1661,7 @@ mod tests {
 		t.execute_with(|| {
 			assert!(matches!(
 				storage::clear_prefix(b":abc", None),
-				KillStorageResultPrev::AllRemoved(2)
+				KillStorageResult::AllRemoved{backend: 2, overlay: 0}
 			));
 
 			assert!(storage::get(b":a").is_some());

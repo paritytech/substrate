@@ -1406,6 +1406,7 @@ mod tests {
 		panic::UnwindSafe,
 		result,
 	};
+	use sp_externalities::ClearPrefixResult;
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -1651,7 +1652,7 @@ mod tests {
 				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
-			assert_eq!((false, 1), ext.clear_prefix(b"ab", Some(1)));
+			assert_eq!(ClearPrefixResult {all_keys_removed:false, num_keys_from_backend:1, num_keys_from_overlay:Some(2)}, ext.clear_prefix(b"ab", Some(1)));
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1699,7 +1700,7 @@ mod tests {
 				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
-			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
+			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), ClearPrefixResult {all_keys_removed:false, num_keys_from_backend:2, num_keys_from_overlay:Some(4)});
 		}
 
 		assert_eq!(
@@ -1740,14 +1741,14 @@ mod tests {
 			changes_trie::disabled_state::<_, u64>(),
 			None,
 		);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), (false, 0));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), (false, 1));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), (false, 3));
-		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 4));
+		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), ClearPrefixResult {all_keys_removed:false, num_keys_from_backend:0, num_keys_from_overlay:Some(0)});
+		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), ClearPrefixResult {all_keys_removed:false, num_keys_from_backend:1, num_keys_from_overlay:Some(0)});
+		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), ClearPrefixResult {all_keys_removed:false, num_keys_from_backend:2, num_keys_from_overlay:Some(1)});
+		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), ClearPrefixResult {all_keys_removed:false, num_keys_from_backend:3, num_keys_from_overlay:Some(2)});
+		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), ClearPrefixResult {all_keys_removed:true, num_keys_from_backend:4, num_keys_from_overlay:Some(3)});
 		// Only 4 items to remove
-		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), (true, 4));
-		assert_eq!(ext.kill_child_storage(&child_info, None), (true, 4));
+		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), ClearPrefixResult {all_keys_removed:true, num_keys_from_backend:4, num_keys_from_overlay:Some(4)});
+		assert_eq!(ext.kill_child_storage(&child_info, None), ClearPrefixResult {all_keys_removed:true, num_keys_from_backend:4, num_keys_from_overlay:Some(4)});
 	}
 
 	#[test]

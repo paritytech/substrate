@@ -461,7 +461,7 @@ where
 		ClearPrefixResult {
 			all_keys_removed: all_removed_from_backend,
 			num_keys_from_backend: num_keys_deleted_from_backend,
-			num_keys_from_overlay: num_keys_deleted_from_overlay
+			num_keys_from_overlay: Some(num_keys_deleted_from_overlay)
 		}
 	}
 
@@ -482,7 +482,7 @@ where
 			return ClearPrefixResult {
 				all_keys_removed: false,
 				num_keys_from_backend: 0,
-				num_keys_from_overlay: 0
+				num_keys_from_overlay: None
 			}
 		}
 
@@ -494,7 +494,7 @@ where
 		ClearPrefixResult {
 			all_keys_removed: all_removed_from_backend,
 			num_keys_from_backend: num_keys_deleted_from_backend,
-			num_keys_from_overlay: num_keys_deleted_from_overlay
+			num_keys_from_overlay: Some(num_keys_deleted_from_overlay)
 		}
 	}
 
@@ -520,7 +520,7 @@ where
 		ClearPrefixResult {
 			all_keys_removed: all_removed_from_backend,
 			num_keys_from_backend: num_keys_deleted_from_backend,
-			num_keys_from_overlay: num_keys_deleted_from_overlay
+			num_keys_from_overlay: Some(num_keys_deleted_from_overlay)
 		}
 	}
 
