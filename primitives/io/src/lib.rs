@@ -112,7 +112,7 @@ pub enum KillStorageResult {
 	},
 	/// At least one key still resides in the child trie or top trie prefix due to the supplied limit.
 	SomeRemaining {
-		/// number of keys in backend
+		/// number of keys removed in backend
 		backend: u32,
 
 		/// number of keys in overlay
