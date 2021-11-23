@@ -23,8 +23,8 @@ use crate::SubscriptionTaskExecutor;
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::{
-	stream::{self, Stream, StreamExt},
 	future,
+	stream::{self, Stream, StreamExt},
 	task::Spawn,
 };
 use jsonrpsee::ws_server::SubscriptionSink;
@@ -135,41 +135,43 @@ where
 	G: FnOnce() -> Block::Hash,
 	S: Stream<Item = Block::Header> + Send + 'static,
 {
-		// send current head right at the start.
-		let maybe_header = client
-			.header(BlockId::Hash(best_block_hash()))
-			.map_err(client_err)
-			.and_then(|header| {
-				header.ok_or_else(|| Error::Other("Best header missing.".to_string()))
+	// send current head right at the start.
+	let maybe_header = client
+		.header(BlockId::Hash(best_block_hash()))
+		.map_err(client_err)
+		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".to_string())))
+		.map_err(|e| {
+			log::warn!("Best header error {:?}", e);
+			e
+		})
+		.ok();
+
+	// send further subscriptions
+	let stream = stream();
+
+	// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
+	// that the stream has a hole in it. The alternative would be to look up the best block *after*
+	// we set up the stream and chain it to the stream. Consuming code would need to handle
+	// duplicates at the beginning of the stream though.
+	let fut = async move {
+		stream::iter(maybe_header)
+			.chain(stream)
+			.take_while(|storage| {
+				future::ready(sink.send(&storage).map_or_else(
+					|e| {
+						log::debug!(
+							"Could not send data to subscription: {} error: {:?}",
+							method,
+							e
+						);
+						false
+					},
+					|_| true,
+				))
 			})
-			.map_err(|e| {
-				log::warn!("Best header error {:?}", e);
-				e
-			})
-			.ok();
+			.for_each(|_| future::ready(()))
+			.await;
+	};
 
-		// send further subscriptions
-		let stream = stream();
-
-		// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
-		// that the stream has a hole in it. The alternative would be to look up the best block *after*
-		// we set up the stream and chain it to the stream. Consuming code would need to handle
-		// duplicates at the beginning of the stream though.
-		let fut = async move {
-			stream::iter(maybe_header)
-				.chain(stream)
-				.take_while(|storage| {
-					future::ready(sink.send(&storage).map_or_else(
-						|e| {
-							log::debug!("Could not send data to subscription: {} error: {:?}", method, e);
-							false
-						},
-						|_| true,
-					))
-				})
-				.for_each(|_| future::ready(()))
-				.await;
-			};
-
-		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
+	executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
 }
