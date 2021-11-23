@@ -35,12 +35,11 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	pallet_prelude::Get,
-	traits::{Currency, ReservableCurrency},
+	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency},
 	weights::Pays,
 	BoundedVec,
 };
 use scale_info::TypeInfo;
-use frame_support::traits::{PreimageProvider, PreimageRecipient};
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -121,21 +120,13 @@ pub mod pallet {
 
 	/// The request status of a given hash.
 	#[pallet::storage]
-	pub(super) type StatusFor<T: Config> = StorageMap<
-		_,
-		Identity,
-		T::Hash,
-		RequestStatus<T::AccountId, BalanceOf<T>>,
-	>;
+	pub(super) type StatusFor<T: Config> =
+		StorageMap<_, Identity, T::Hash, RequestStatus<T::AccountId, BalanceOf<T>>>;
 
 	/// The preimages stored by this pallet.
 	#[pallet::storage]
-	pub(super) type PreimageFor<T: Config> = StorageMap<
-		_,
-		Identity,
-		T::Hash,
-		BoundedVec<u8, T::MaxSize>,
-	>;
+	pub(super) type PreimageFor<T: Config> =
+		StorageMap<_, Identity, T::Hash, BoundedVec<u8, T::MaxSize>>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -241,7 +232,7 @@ impl<T: Config> Pallet<T> {
 			RequestStatus::Requested(mut count) => {
 				count.saturating_inc();
 				count
-			}
+			},
 			RequestStatus::Unrequested(None) => 1,
 			RequestStatus::Unrequested(Some((owner, deposit))) => {
 				// Return the deposit - the preimage now has outstanding requests.
@@ -264,7 +255,10 @@ impl<T: Config> Pallet<T> {
 	fn unnote_preimage(hash: T::Hash, maybe_check_owner: Option<T::AccountId>) -> DispatchResult {
 		match StatusFor::<T>::get(&hash).ok_or(Error::<T>::NotNoted)? {
 			RequestStatus::Unrequested(Some((owner, deposit))) => {
-				ensure!(maybe_check_owner.map_or(true, |c| &c == &owner), Error::<T>::NotAuthorized);
+				ensure!(
+					maybe_check_owner.map_or(true, |c| &c == &owner),
+					Error::<T>::NotAuthorized
+				);
 				T::Currency::unreserve(&owner, deposit);
 			},
 			RequestStatus::Unrequested(None) => {
@@ -284,13 +278,13 @@ impl<T: Config> Pallet<T> {
 			RequestStatus::Requested(mut count) if count > 1 => {
 				count.saturating_dec();
 				StatusFor::<T>::insert(&hash, RequestStatus::Requested(count));
-			}
+			},
 			RequestStatus::Requested(count) => {
 				debug_assert!(count == 1, "preimage request counter at zero?");
 				PreimageFor::<T>::remove(&hash);
 				StatusFor::<T>::remove(&hash);
 				Self::deposit_event(Event::Cleared { hash });
-			}
+			},
 			RequestStatus::Unrequested(_) => Err(Error::<T>::NotRequested)?,
 		}
 		Ok(())
