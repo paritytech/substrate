@@ -168,9 +168,7 @@ struct ClientSpec<E> {
 	#[serde(flatten)]
 	extensions: E,
 	// Never used, left only for backward compatibility.
-	// In a future version, a `skip_serializing` attribute should be added in order to no longer
-	// generate chain specs with this field.
-	#[serde(default)]
+	#[serde(default, skip_serializing)]
 	consensus_engine: (),
 	#[serde(skip_serializing)]
 	#[allow(unused)]
