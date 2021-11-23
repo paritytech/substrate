@@ -130,7 +130,6 @@ pub type ScheduledOf<T> = ScheduledV3Of<T>;
 pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
 	ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId>;
 
-// TODO: request when scheduled
 // TODO: unrequest when cancelled
 // TODO: unrequest when non-periodic executed
 
@@ -414,6 +413,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
+			call.ensure_requested::<T::PreimageProvider>();
 			Self::do_schedule(
 				DispatchTime::At(when),
 				maybe_periodic,
