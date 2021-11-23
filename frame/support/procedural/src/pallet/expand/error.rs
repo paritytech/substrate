@@ -95,7 +95,14 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	// derive TypeInfo for error metadata
 	error_item
 		.attrs
-		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
+		.push(syn::parse_quote! {
+			#[derive(
+				#frame_support::codec::Encode,
+				#frame_support::codec::Decode,
+				#frame_support::scale_info::TypeInfo,
+				#frame_support::CompactPalletError,
+			)]
+		});
 	error_item.attrs.push(syn::parse_quote!(
 		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
 	));
@@ -108,22 +115,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			"]
 		));
 	}
-
-	let field_tys = error
-		.variants
-		.iter()
-		.filter_map(|(_, variant_field, _)| {
-			variant_field.as_ref().map(|VariantField { ty, .. }| ty)
-		})
-		.collect::<Vec<_>>();
-
-	let compactness_check = if field_tys.is_empty() {
-		quote::quote!(true)
-	} else {
-		quote::quote! {
-			#( <#field_tys as #frame_support::traits::CompactPalletError>::check_compactness() )&&*
-		}
-	};
 
 	quote::quote_spanned!(error.attr_span =>
 		impl<#pallet_type_impl_gen> #frame_support::traits::ErrorCompactnessTest
@@ -190,13 +181,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 					message: Some(err.as_str()),
 				}
 			}
-		}
-
-		impl<#type_impl_gen> #frame_support::traits::CompactPalletError
-			for #error_ident<#type_use_gen>
-			#config_where_clause
-		{
-			fn check_compactness() -> bool { #compactness_check }
 		}
 	)
 }

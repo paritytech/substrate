@@ -1,3 +1,6 @@
+use codec::{Decode, Encode};
+use frame_support::CompactPalletError;
+
 #[frame_support::pallet]
 mod pallet {
 	#[pallet::config]
@@ -12,7 +15,7 @@ mod pallet {
 	}
 }
 
-#[derive(frame_support::CompactPalletError, scale_info::TypeInfo)]
+#[derive(Encode, Decode, CompactPalletError, scale_info::TypeInfo)]
 pub enum MyError {
     Foo,
     Bar,
@@ -21,17 +24,17 @@ pub enum MyError {
     Wrapper(Wrapper),
 }
 
-#[derive(frame_support::CompactPalletError, scale_info::TypeInfo)]
+#[derive(Encode, Decode, CompactPalletError, scale_info::TypeInfo)]
 pub enum NestedError {
     Quux
 }
 
-#[derive(frame_support::CompactPalletError, scale_info::TypeInfo)]
+#[derive(Encode, Decode, CompactPalletError, scale_info::TypeInfo)]
 pub struct MyStruct {
     field: u8,
 }
 
-#[derive(frame_support::CompactPalletError, scale_info::TypeInfo)]
+#[derive(Encode, Decode, CompactPalletError, scale_info::TypeInfo)]
 pub struct Wrapper(Option<bool>);
 
 fn main() {
