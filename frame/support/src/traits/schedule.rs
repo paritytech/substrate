@@ -82,6 +82,13 @@ impl<C: Decode, H> CallOrHash<C, H> {
 		}
 	}
 
+	pub fn ensure_requested<P: PreimageProvider<H>>(&self) {
+		match &self {
+			Self::Call(_) => (),
+			Self::Hash(hash) => P::request_preimage(hash),
+		}
+	}
+
 	pub fn resolved<P: PreimageProvider<H>>(self) -> Self {
 		match self {
 			Self::Call(c) => Self::Call(c),
