@@ -301,7 +301,8 @@ pub mod pallet {
 		/// What to do if the runtime wants to change the code to something new.
 		///
 		/// The default (`()`) implementation is responsible for setting the correct storage
-		/// entry and emitting corresponding event and log item. (see [`update_code_in_storage`]).
+		/// entry and emitting corresponding event and log item. (see
+		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
 		type OnSetCode: SetCode<Self>;
