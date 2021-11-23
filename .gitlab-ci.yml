@@ -542,7 +542,7 @@ test-full-crypto-feature:
 bench-test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *test-refs
+  <<:                              *build-refs
   variables:
     <<:                            *default-vars
     RUSTFLAGS:                     "-Cdebug-assertions=y"
