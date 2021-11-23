@@ -20,6 +20,7 @@
 use codec::{Codec, Decode, Encode, EncodeLike};
 use scale_info::TypeInfo;
 use sp_runtime::{DispatchError, RuntimeDebug};
+use frame_support::traits::PreimageProvider;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Information relating to the period of a scheduled task. First item is the length of the

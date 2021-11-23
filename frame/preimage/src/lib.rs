@@ -40,6 +40,7 @@ use frame_support::{
 	BoundedVec,
 };
 use scale_info::TypeInfo;
+use frame_support::traits::{PreimageProvider, PreimageRecipient};
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -159,9 +160,9 @@ pub mod pallet {
 
 		/// Clear an unrequested preimage from the runtime storage.
 		#[pallet::weight(0)]
-		pub fn clear_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
+		pub fn unnote_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
-			Self::do_clear_preimage(hash, maybe_sender)
+			Self::unnote_preimage(hash, maybe_sender)
 		}
 
 		/// Request a preimage be uploaded to the chain without paying any fees or deposits.
@@ -260,7 +261,7 @@ impl<T: Config> Pallet<T> {
 	// data.
 	//
 	// If `maybe_owner` is not provided, this function cannot return an error.
-	fn do_clear_preimage(hash: T::Hash, maybe_check_owner: Option<T::AccountId>) -> DispatchResult {
+	fn unnote_preimage(hash: T::Hash, maybe_check_owner: Option<T::AccountId>) -> DispatchResult {
 		match StatusFor::<T>::get(&hash).ok_or(Error::<T>::NotNoted)? {
 			RequestStatus::Unrequested(Some((owner, deposit))) => {
 				ensure!(maybe_check_owner.map_or(true, |c| &c == &owner), Error::<T>::NotAuthorized);
@@ -296,9 +297,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> frame_support::traits::PreimageHandler<T::Hash> for Pallet<T> {
-	type MaxSize = T::MaxSize;
-
+impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 	fn preimage_exists(hash: T::Hash) -> bool {
 		PreimageFor::<T>::contains_key(hash)
 	}
@@ -311,24 +310,28 @@ impl<T: Config> frame_support::traits::PreimageHandler<T::Hash> for Pallet<T> {
 		PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec())
 	}
 
+	fn request_preimage(hash: T::Hash) {
+		Self::do_request_preimage(hash)
+	}
+
+	fn clear_request(hash: T::Hash) {
+		let res = Self::do_clear_request(hash);
+		debug_assert!(res.is_ok(), "do_clear_request failed - counter underflow?");
+	}
+}
+
+impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
+	type MaxSize = T::MaxSize;
+
 	fn note_preimage(bytes: BoundedVec<u8, Self::MaxSize>) {
 		// We don't really care if this fails, since that's only the case if someone else has
 		// already noted it.
 		let _ = Self::note_bytes(bytes, None);
 	}
 
-	fn request_preimage(hash: T::Hash) {
-		Self::do_request_preimage(hash)
-	}
-
-	fn clear_preimage(hash: T::Hash) {
+	fn unnote_preimage(hash: T::Hash) {
 		// Should never fail if authorization check is skipped.
-		let res = Self::do_clear_preimage(hash, None);
-		debug_assert!(res.is_ok(), "do_clear_preimage failed - request outstanding?");
-	}
-
-	fn clear_request(hash: T::Hash) {
-		let res = Self::do_clear_request(hash);
-		debug_assert!(res.is_ok(), "do_clear_request failed - counter underflow?");
+		let res = Self::unnote_preimage(hash, None);
+		debug_assert!(res.is_ok(), "unnote_preimage failed - request outstanding?");
 	}
 }
