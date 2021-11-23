@@ -165,9 +165,18 @@ pub mod pallet {
 		/// A child-bounty is added.
 		ChildBountyAdded { index: BountyIndex, child_index: BountyIndex },
 		/// A child-bounty is awarded to a beneficiary.
-		ChildBountyAwarded { index: BountyIndex, child_index: BountyIndex, beneficiary: T::AccountId },
+		ChildBountyAwarded {
+			index: BountyIndex,
+			child_index: BountyIndex,
+			beneficiary: T::AccountId,
+		},
 		/// A child-bounty is claimed by beneficiary.
-		ChildBountyClaimed { index: BountyIndex, child_index: BountyIndex, payout: BalanceOf<T>, beneficiary: T::AccountId },
+		ChildBountyClaimed {
+			index: BountyIndex,
+			child_index: BountyIndex,
+			payout: BalanceOf<T>,
+			beneficiary: T::AccountId,
+		},
 		/// A child-bounty is cancelled.
 		ChildBountyCanceled { index: BountyIndex, child_index: BountyIndex },
 	}
@@ -779,7 +788,10 @@ impl<T: Config> Pallet<T> {
 		};
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(Event::ChildBountyAdded { index: parent_bounty_id, child_index: child_bounty_id} );
+		Self::deposit_event(Event::ChildBountyAdded {
+			index: parent_bounty_id,
+			child_index: child_bounty_id,
+		});
 	}
 
 	fn ensure_bounty_active(

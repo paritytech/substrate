@@ -256,7 +256,7 @@ fn add_child_bounty() {
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
 		// Check for the event child-bounty added.
-		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0});
+		assert_eq!(last_event(), ChildBountiesEvent::ChildBountyAdded { index: 0, child_index: 0 });
 
 		assert_eq!(Balances::free_balance(4), 101);
 		assert_eq!(Balances::reserved_balance(4), 2);
