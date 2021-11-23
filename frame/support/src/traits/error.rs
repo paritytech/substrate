@@ -16,10 +16,11 @@
 // limitations under the License.
 
 //! Traits for describing and constraining pallet error types.
+use codec::{Decode, Encode, OptionBool};
 
 /// Trait denoting that the implementing type has the most compact encoded size that is fit to be
 /// included as a field in a variant of the `#[pallet::error]` enum type.
-pub trait CompactPalletError: codec::Encode + codec::Decode {
+pub trait CompactPalletError: Encode + Decode {
 	/// Function that checks whether implementing types are either 1 bytes in size, or that its
 	/// nested types are 1 bytes in size, i.e. whether they are as memory efficient as possible.
 	///
@@ -40,7 +41,7 @@ macro_rules! impl_for_types {
     };
 }
 
-impl_for_types!(u8, i8, bool, Option<bool>);
+impl_for_types!(u8, i8, bool, OptionBool);
 
 pub trait ErrorCompactnessTest {
 	fn error_compactness_test() {}
