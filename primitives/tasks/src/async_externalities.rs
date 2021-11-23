@@ -118,7 +118,7 @@ impl Externalities for AsyncExternalities {
 		_child_info: &ChildInfo,
 		_prefix: &[u8],
 		_limit: Option<u32>,
-	) -> (bool, u32) {
+	) -> ClearPrefixResult {
 		panic!("`clear_child_prefix`: should not be used in async externalities!")
 	}
 

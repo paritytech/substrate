@@ -54,8 +54,8 @@ pub enum Error {
 
 /// Clear prefix result
 pub struct ClearPrefixResult {
-	/// returns if some keys are remaining in the prefix
-	pub are_keys_remaining: bool,
+	/// returns if all keys are removed in the prefix
+	pub all_keys_removed: bool,
 	/// returns number of keys removed from backend
 	pub num_keys_from_backend: u32,
 	/// returns number of keys removed from overlay
@@ -153,7 +153,7 @@ pub trait Externalities: ExtensionStore {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		limit: Option<u32>,
-	) -> (bool, u32);
+	) -> ClearPrefixResult;
 
 	/// Set or clear a storage entry (`key`) of current contract being called (effective
 	/// immediately).

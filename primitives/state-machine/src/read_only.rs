@@ -138,7 +138,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		_child_info: &ChildInfo,
 		_prefix: &[u8],
 		_limit: Option<u32>,
-	) -> (bool, u32) {
+	) -> ClearPrefixResult {
 		unimplemented!("clear_child_prefix is not supported in ReadOnlyExternalities")
 	}
 

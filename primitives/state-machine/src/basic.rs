@@ -217,7 +217,7 @@ impl Externalities for BasicExternalities {
 			.unwrap_or(0);
 
 		ClearPrefixResult {
-			are_keys_remaining: true,
+			all_keys_removed: true,
 			num_keys_from_backend: num_removed as u32,
 			num_keys_from_overlay: 0
 		}
@@ -230,7 +230,7 @@ impl Externalities for BasicExternalities {
 				"Refuse to clear prefix that is part of child storage key via main storage"
 			);
 			return ClearPrefixResult {
-				are_keys_remaining: false,
+				all_keys_removed: false,
 				num_keys_from_backend: 0,
 				num_keys_from_overlay: 0
 			}
@@ -251,7 +251,7 @@ impl Externalities for BasicExternalities {
 		}
 
 		ClearPrefixResult {
-			are_keys_remaining: true,
+			all_keys_removed: true,
 			num_keys_from_backend: num_removed as u32,
 			num_keys_from_overlay: 0,
 		}
@@ -262,7 +262,7 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		_limit: Option<u32>,
-	) -> (bool, u32) {
+	) -> ClearPrefixResult {
 		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
 			let to_remove = child
 				.data
@@ -276,9 +276,17 @@ impl Externalities for BasicExternalities {
 			for key in to_remove {
 				child.data.remove(&key);
 			}
-			(true, num_removed as u32)
+			ClearPrefixResult {
+				all_keys_removed: true,
+				num_keys_from_backend: num_removed as u32,
+				num_keys_from_overlay: 0,
+			}
 		} else {
-			(true, 0)
+			ClearPrefixResult {
+				all_keys_removed: true,
+				num_keys_from_backend: 0,
+				num_keys_from_overlay: 0,
+			}
 		}
 	}
 

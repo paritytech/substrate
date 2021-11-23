@@ -459,7 +459,7 @@ where
 		let (all_removed_from_backend, num_keys_deleted_from_backend) = self.limit_remove_from_backend(Some(child_info), None, limit);
 
 		ClearPrefixResult {
-			are_keys_remaining: all_removed_from_backend,
+			all_keys_removed: all_removed_from_backend,
 			num_keys_from_backend: num_keys_deleted_from_backend,
 			num_keys_from_overlay: num_keys_deleted_from_overlay
 		}
@@ -480,7 +480,7 @@ where
 				"Refuse to directly clear prefix that is part or contains of child storage key",
 			);
 			return ClearPrefixResult {
-				are_keys_remaining: false,
+				all_keys_removed: false,
 				num_keys_from_backend: 0,
 				num_keys_from_overlay: 0
 			}
@@ -492,7 +492,7 @@ where
 			self.limit_remove_from_backend(None, Some(prefix), limit);
 
 		ClearPrefixResult {
-			are_keys_remaining: all_removed_from_backend,
+			all_keys_removed: all_removed_from_backend,
 			num_keys_from_backend: num_keys_deleted_from_backend,
 			num_keys_from_overlay: num_keys_deleted_from_overlay
 		}
@@ -503,7 +503,7 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		limit: Option<u32>,
-	) -> (bool, u32) {
+	) -> ClearPrefixResult {
 		trace!(
 			target: "state",
 			method = "ChildClearPrefix",
@@ -514,8 +514,14 @@ where
 		let _guard = guard();
 
 		self.mark_dirty();
-		self.overlay.clear_child_prefix(child_info, prefix);
-		self.limit_remove_from_backend(Some(child_info), Some(prefix), limit)
+		let num_keys_deleted_from_overlay = self.overlay.clear_child_prefix(child_info, prefix);
+		let (all_removed_from_backend, num_keys_deleted_from_backend) = self.limit_remove_from_backend(Some(child_info), Some(prefix), limit);
+
+		ClearPrefixResult {
+			all_keys_removed: all_removed_from_backend,
+			num_keys_from_backend: num_keys_deleted_from_backend,
+			num_keys_from_overlay: num_keys_deleted_from_overlay
+		}
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
