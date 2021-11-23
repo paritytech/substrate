@@ -22,6 +22,7 @@ jobs:
       - name:                      Install dependencies
         run:                       |
           apt-get update
+          # and then she said
           apt-get install -y --no-install-recommends time clang
           update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
 
