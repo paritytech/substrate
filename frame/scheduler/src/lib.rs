@@ -1087,7 +1087,7 @@ mod tests {
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
 		type OriginPrivilegeCmp = EqualPrivilegeOnly;
-		type PreimageProvider = Preimage;
+		type Preimages = Preimage;
 	}
 
 	pub type LoggerCall = logger::Call<Test>;
@@ -1583,15 +1583,15 @@ mod tests {
 	#[test]
 	fn root_calls_works() {
 		new_test_ext().execute_with(|| {
-			let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }));
-			let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }));
+			let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
+			let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }).into());
 			assert_ok!(Scheduler::schedule_named(
 				Origin::root(),
 				1u32.encode(),
 				4,
 				None,
 				127,
-				call.into(),
+				call,
 			));
 			assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
 			run_to_block(3);
