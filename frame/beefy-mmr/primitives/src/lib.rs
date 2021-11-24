@@ -44,7 +44,8 @@ pub type Hash = [u8; 32];
 /// Generic hasher trait.
 ///
 /// Implement the function to support custom way of hashing data.
-/// The implementation must return a [Hash] type, so only 32-byte output hashes are supported.
+/// The implementation must return a [Hash](type@Hash) type, so only 32-byte output hashes are
+/// supported.
 pub trait Hasher {
 	/// Hash given arbitrary-length piece of data.
 	fn hash(data: &[u8]) -> Hash;
@@ -173,7 +174,7 @@ impl Visitor for () {
 ///
 /// # Panic
 ///
-/// The function will panic if given [`leaf_index`] is greater than the number of leaves.
+/// The function will panic if given `leaf_index` is greater than the number of leaves.
 pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<T>
 where
 	H: Hasher,

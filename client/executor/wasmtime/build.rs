@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,26 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Light client components.
+use std::env;
 
-use sp_runtime::traits::{Block as BlockT, HashFor};
-use std::sync::Arc;
-
-pub mod backend;
-pub mod blockchain;
-pub mod call_executor;
-
-pub use backend::*;
-pub use blockchain::*;
-pub use call_executor::*;
-
-use sc_client_api::light::Storage as BlockchainStorage;
-
-/// Create an instance of light client backend.
-pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HashFor<B>>>
-where
-	B: BlockT,
-	S: BlockchainStorage<B>,
-{
-	Arc::new(Backend::new(blockchain))
+fn main() {
+	if let Ok(profile) = env::var("PROFILE") {
+		println!("cargo:rustc-cfg=build_type=\"{}\"", profile);
+	}
 }

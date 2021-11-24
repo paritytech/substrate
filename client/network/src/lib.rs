@@ -247,7 +247,6 @@
 mod behaviour;
 mod chain;
 mod discovery;
-mod on_demand_layer;
 mod peer_info;
 mod protocol;
 mod request_responses;

@@ -17,4 +17,4 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-wasm-interface = { version = "4.0.0-dev", path = "../../primitives/wasm-interface" }
 log = "0.4.11"
-thiserror = "1.0.21"
+thiserror = "1.0.30"

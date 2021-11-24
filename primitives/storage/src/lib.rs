@@ -204,9 +204,6 @@ pub mod well_known_keys {
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
 
-	/// Changes trie configuration is stored under this key.
-	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
-
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
