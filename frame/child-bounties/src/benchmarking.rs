@@ -166,8 +166,10 @@ benchmarks! {
 	}: _(RawOrigin::Signed(bounty_setup.curator), bounty_setup.bounty_id,
 			bounty_setup.child_bounty_value, bounty_setup.reason.clone())
 	verify {
-		assert_last_event::<T>(Event::ChildBountyAdded(bounty_setup.bounty_id,
-			bounty_setup.child_bounty_id).into())
+		assert_last_event::<T>(Event::ChildBountyAdded {
+			index: bounty_setup.bounty_id,
+			child_index: bounty_setup.child_bounty_id,
+		}.into())
 	}
 
 	propose_curator {
@@ -227,8 +229,11 @@ benchmarks! {
 	}: _(RawOrigin::Signed(bounty_setup.child_curator), bounty_setup.bounty_id,
 			bounty_setup.child_bounty_id, beneficiary)
 	verify {
-		assert_last_event::<T>(Event::ChildBountyAwarded(bounty_setup.bounty_id,
-			bounty_setup.child_bounty_id, beneficiary_account).into())
+		assert_last_event::<T>(Event::ChildBountyAwarded {
+			index: bounty_setup.bounty_id,
+			child_index: bounty_setup.child_bounty_id,
+			beneficiary: beneficiary_account
+		}.into())
 	}
 
 	claim_child_bounty {
@@ -274,8 +279,10 @@ benchmarks! {
 	}: close_child_bounty(RawOrigin::Root, bounty_setup.bounty_id,
 		bounty_setup.child_bounty_id)
 	verify {
-		assert_last_event::<T>(Event::ChildBountyCanceled(bounty_setup.bounty_id,
-			bounty_setup.child_bounty_id).into())
+		assert_last_event::<T>(Event::ChildBountyCanceled {
+			index: bounty_setup.bounty_id,
+			child_index: bounty_setup.child_bounty_id
+		}.into())
 	}
 
 	// Worst case scenario.
@@ -285,8 +292,10 @@ benchmarks! {
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 	}: close_child_bounty(RawOrigin::Root, bounty_setup.bounty_id, bounty_setup.child_bounty_id)
 	verify {
-		assert_last_event::<T>(Event::ChildBountyCanceled(bounty_setup.bounty_id,
-			bounty_setup.child_bounty_id).into())
+		assert_last_event::<T>(Event::ChildBountyCanceled {
+			index: bounty_setup.bounty_id,
+			child_index: bounty_setup.child_bounty_id,
+		}.into())
 	}
 
 	impl_benchmark_test_suite!(ChildBounties, crate::tests::new_test_ext(), crate::tests::Test)
