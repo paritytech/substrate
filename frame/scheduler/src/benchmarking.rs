@@ -17,8 +17,6 @@
 
 //! Scheduler pallet benchmarking.
 
-#![cfg(feature = "runtime-benchmarks")]
-
 use super::*;
 use frame_benchmarking::benchmarks;
 use frame_support::{ensure, traits::OnInitialize};
