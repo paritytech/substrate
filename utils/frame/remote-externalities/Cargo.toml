@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "9a3c1e981bcdbbb558b1457bbd78277a14dca2da", features = ["ws-client", "macros"] }
+jsonrpsee = { version = "0.5", features = ["ws-client", "macros"] }
 
 env_logger = "0.9"
 frame-support = { path = "../../../frame/support", optional = true, version = "4.0.0-dev" }
