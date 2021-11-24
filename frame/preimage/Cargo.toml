@@ -21,12 +21,21 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
+sp-core = { version = "4.0.0-dev", optional = true, path = "../../primitives/core" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
 default = ["std"]
+runtime-benchmarks = [
+	"sp-core",
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
 std = [
 	"codec/std",
 	"scale-info/std",

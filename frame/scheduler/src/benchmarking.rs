@@ -31,7 +31,7 @@ const BLOCK_NUMBER: u32 = 2;
 // Add `n` named items to the schedule
 fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
 	// Essentially a no-op call.
-	let call = frame_system::Call::set_storage { items: vec![] };
+	let call = CallOrHashOf::<T>::Value(frame_system::Call::set_storage { items: vec![] }.into());
 	for i in 0..n {
 		// Named schedule is strictly heavier than anonymous
 		Scheduler::<T>::do_schedule_named(
@@ -56,7 +56,8 @@ benchmarks! {
 		let periodic = Some((T::BlockNumber::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
-		let call = Box::new(frame_system::Call::set_storage { items: vec![] }.into());
+		let inner_call = frame_system::Call::set_storage { items: vec![] }.into();
+		let call = Box::new(CallOrHashOf::<T>::Value(inner_call));
 
 		fill_schedule::<T>(when, s)?;
 	}: _(RawOrigin::Root, when, periodic, priority, call)
@@ -93,7 +94,8 @@ benchmarks! {
 		let periodic = Some((T::BlockNumber::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
-		let call = Box::new(frame_system::Call::set_storage { items: vec![] }.into());
+		let inner_call = frame_system::Call::set_storage { items: vec![] }.into();
+		let call = Box::new(CallOrHashOf::<T>::Value(inner_call));
 
 		fill_schedule::<T>(when, s)?;
 	}: _(RawOrigin::Root, id, when, periodic, priority, call)
@@ -138,5 +140,5 @@ benchmarks! {
 		);
 	}
 
-	impl_benchmark_test_suite!(Scheduler, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Scheduler, crate::mock::new_test_ext(), crate::mock::Test);
 }

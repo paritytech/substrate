@@ -15,128 +15,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Scheduler pallet benchmarking.
+//! Preimage pallet benchmarking.
 
 use super::*;
-use frame_benchmarking::benchmarks;
-use frame_support::{ensure, traits::OnInitialize};
+use sp_core::Hasher;
+use sp_runtime::traits::BlakeTwo256;
+use frame_benchmarking::{benchmarks, whitelist_account, account};
+use frame_support::ensure;
 use frame_system::RawOrigin;
 use sp_std::{prelude::*, vec};
+use crate::mock::*;
 
-use crate::Pallet as Scheduler;
+use crate::Pallet as Preimage;
 use frame_system::Pallet as System;
 
-const BLOCK_NUMBER: u32 = 2;
+const SEED: u32 = 0;
 
-// Add `n` named items to the schedule
-fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
-	// Essentially a no-op call.
-	let call = frame_system::Call::set_storage { items: vec![] };
-	for i in 0..n {
-		// Named schedule is strictly heavier than anonymous
-		Scheduler::<T>::do_schedule_named(
-			i.encode(),
-			DispatchTime::At(when),
-			// Add periodicity
-			Some((T::BlockNumber::one(), 100)),
-			// HARD_DEADLINE priority means it gets executed no matter what
-			0,
-			frame_system::RawOrigin::Root.into(),
-			call.clone().into(),
-		)?;
-	}
-	ensure!(Agenda::<T>::get(when).len() == n as usize, "didn't fill schedule");
-	Ok(())
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
+	System::<T>::assert_last_event(generic_event.into());
+}
+
+fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
+	let caller: T::AccountId = account(name, index, SEED);
+	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	caller
 }
 
 benchmarks! {
-	schedule {
-		let s in 0 .. T::MaxScheduledPerBlock::get();
-		let when = BLOCK_NUMBER.into();
-		let periodic = Some((T::BlockNumber::one(), 100));
-		let priority = 0;
-		// Essentially a no-op call.
-		let call = Box::new(frame_system::Call::set_storage { items: vec![] }.into());
-
-		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, when, periodic, priority, call)
+	note_preimage {
+		let s in 0 .. T::MaxSize::get();
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let mut preimage = vec![];
+		preimage.resize(s as usize, 0);
+	}: _(RawOrigin::Signed(caller), preimage)
 	verify {
-		ensure!(
-			Agenda::<T>::get(when).len() == (s + 1) as usize,
-			"didn't add to schedule"
-		);
+		assert!(Pallet::have_preimage(BlakeTwo256::hash(&preimage[..])));
 	}
-
-	cancel {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
-		let when = BLOCK_NUMBER.into();
-
-		fill_schedule::<T>(when, s)?;
-		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
-	}: _(RawOrigin::Root, when, 0)
-	verify {
-		ensure!(
-			Lookup::<T>::get(0.encode()).is_none(),
-			"didn't remove from lookup"
-		);
-		// Removed schedule is NONE
-		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
-		);
-	}
-
-	schedule_named {
-		let s in 0 .. T::MaxScheduledPerBlock::get();
-		let id = s.encode();
-		let when = BLOCK_NUMBER.into();
-		let periodic = Some((T::BlockNumber::one(), 100));
-		let priority = 0;
-		// Essentially a no-op call.
-		let call = Box::new(frame_system::Call::set_storage { items: vec![] }.into());
-
-		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, id, when, periodic, priority, call)
-	verify {
-		ensure!(
-			Agenda::<T>::get(when).len() == (s + 1) as usize,
-			"didn't add to schedule"
-		);
-	}
-
-	cancel_named {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
-		let when = BLOCK_NUMBER.into();
-
-		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, 0.encode())
-	verify {
-		ensure!(
-			Lookup::<T>::get(0.encode()).is_none(),
-			"didn't remove from lookup"
-		);
-		// Removed schedule is NONE
-		ensure!(
-			Agenda::<T>::get(when)[0].is_none(),
-			"didn't remove from schedule"
-		);
-	}
-
-	// TODO [#7141]: Make this more complex and flexible so it can be used in automation.
-	#[extra]
-	on_initialize {
-		let s in 0 .. T::MaxScheduledPerBlock::get();
-		let when = BLOCK_NUMBER.into();
-		fill_schedule::<T>(when, s)?;
-	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
-	verify {
-		assert_eq!(System::<T>::event_count(), s);
-		// Next block should have all the schedules again
-		ensure!(
-			Agenda::<T>::get(when + T::BlockNumber::one()).len() == s as usize,
-			"didn't append schedule"
-		);
-	}
-
-	impl_benchmark_test_suite!(Scheduler, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Preimage, crate::mock::new_test_ext(), crate::mock::Test);
 }
