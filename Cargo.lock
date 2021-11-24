@@ -942,9 +942,9 @@ dependencies = [
 
 [[package]]
 name = "ckb-merkle-mountain-range"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e486fe53bb9f2ca0f58cb60e8679a5354fd6687a839942ef0a75967250289ca6"
+checksum = "4f061f97d64fd1822664bdfb722f7ae5469a97b77567390f7442be5b5dc82a5b"
 dependencies = [
  "cfg-if 0.1.10",
 ]
@@ -998,6 +998,12 @@ name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
+
+[[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "core-foundation"
@@ -1482,12 +1488,14 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "0.99.11"
+version = "0.99.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41cb0e6161ad61ed084a36ba71fbba9e3ac5aee3606fb607fe08da6acbcf3d8c"
+checksum = "40eebddd2156ce1bb37b20bbe5151340a31828b1f2d22ba4141f3531710e38df"
 dependencies = [
+ "convert_case",
  "proc-macro2",
  "quote",
+ "rustc_version 0.3.3",
  "syn",
 ]
 
@@ -1945,7 +1953,7 @@ dependencies = [
  "linregress",
  "log 0.4.14",
  "parity-scale-codec",
- "paste 1.0.4",
+ "paste 1.0.6",
  "scale-info",
  "sp-api",
  "sp-io",
@@ -2042,7 +2050,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "parity-util-mem",
- "paste 1.0.4",
+ "paste 1.0.6",
  "pretty_assertions",
  "scale-info",
  "serde",
@@ -3446,7 +3454,7 @@ dependencies = [
  "multistream-select",
  "parking_lot 0.11.1",
  "pin-project 1.0.8",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "rand 0.8.4",
  "ring",
@@ -3496,7 +3504,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "rand 0.7.3",
  "smallvec 1.7.0",
@@ -3518,7 +3526,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "rand 0.7.3",
  "regex",
@@ -3539,7 +3547,7 @@ dependencies = [
  "libp2p-swarm",
  "log 0.4.14",
  "lru 0.6.6",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "smallvec 1.7.0",
  "wasm-timer",
@@ -3560,7 +3568,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "rand 0.7.3",
  "sha2 0.9.8",
@@ -3636,7 +3644,7 @@ dependencies = [
  "lazy_static",
  "libp2p-core",
  "log 0.4.14",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "rand 0.8.4",
  "sha2 0.9.8",
@@ -3672,7 +3680,7 @@ dependencies = [
  "futures 0.3.16",
  "libp2p-core",
  "log 0.4.14",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "unsigned-varint 0.7.0",
  "void",
@@ -3706,7 +3714,7 @@ dependencies = [
  "libp2p-swarm",
  "log 0.4.14",
  "pin-project 1.0.8",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "rand 0.7.3",
  "smallvec 1.7.0",
@@ -3727,7 +3735,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
- "prost 0.9.0",
+ "prost",
  "prost-build",
  "rand 0.8.4",
  "sha2 0.9.8",
@@ -6456,9 +6464,9 @@ dependencies = [
 
 [[package]]
 name = "paste"
-version = "1.0.4"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5d65c4d95931acda4498f675e332fcbdc9a06705cd07086c510e9b6009cd1c1"
+checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
 
 [[package]]
 name = "paste-impl"
@@ -6624,9 +6632,9 @@ checksum = "3831453b3449ceb48b6d9c7ad7c96d5ea673e9b470a1dc578c2ce6521230884c"
 
 [[package]]
 name = "platforms"
-version = "1.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "989d43012e2ca1c4a02507c67282691a0a3207f9dc67cec596b43fe925b3d325"
+checksum = "e8d0eef3571242013a0d5dc84861c3ae4a652e56e12adf8bdc26ff5f8cb34c94"
 
 [[package]]
 name = "plotters"
@@ -6830,22 +6838,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de5e2533f59d08fcf364fd374ebda0692a70bd6d7e66ef97f306f45c6c5d8020"
-dependencies = [
- "bytes 1.0.1",
- "prost-derive 0.8.0",
-]
-
-[[package]]
-name = "prost"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "444879275cb4fd84958b1a1d5420d15e6fcf7c235fe47f053c9c2a80aceb6001"
 dependencies = [
  "bytes 1.0.1",
- "prost-derive 0.9.0",
+ "prost-derive",
 ]
 
 [[package]]
@@ -6861,24 +6859,11 @@ dependencies = [
  "log 0.4.14",
  "multimap",
  "petgraph",
- "prost 0.9.0",
+ "prost",
  "prost-types",
  "regex",
  "tempfile",
  "which",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
-dependencies = [
- "anyhow",
- "itertools",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -6901,7 +6886,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "534b7a0e836e3c482d2693070f982e39e7611da9695d4d1f5a4b186b51faef0a"
 dependencies = [
  "bytes 1.0.1",
- "prost 0.9.0",
+ "prost",
 ]
 
 [[package]]
@@ -7585,7 +7570,7 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "parity-scale-codec",
- "prost 0.8.0",
+ "prost",
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
@@ -8025,7 +8010,7 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "paste 1.0.4",
+ "paste 1.0.6",
  "regex",
  "sc-executor-common",
  "sc-executor-wasmi",
@@ -8235,7 +8220,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "pin-project 1.0.8",
- "prost 0.8.0",
+ "prost",
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
@@ -8448,7 +8433,7 @@ dependencies = [
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
- "paste 1.0.4",
+ "paste 1.0.6",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -8909,9 +8894,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.68"
+version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
+checksum = "063bf466a64011ac24040a49009724ee60a57da1b437617ceb32e53ad61bfb19"
 dependencies = [
  "itoa",
  "ryu",
@@ -9035,7 +9020,7 @@ dependencies = [
  "approx",
  "num-complex",
  "num-traits",
- "paste 1.0.4",
+ "paste 1.0.6",
 ]
 
 [[package]]
@@ -9649,7 +9634,7 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "parity-util-mem",
- "paste 1.0.4",
+ "paste 1.0.6",
  "rand 0.7.3",
  "scale-info",
  "serde",
@@ -11557,7 +11542,7 @@ dependencies = [
  "libc",
  "log 0.4.14",
  "object 0.27.1",
- "paste 1.0.4",
+ "paste 1.0.6",
  "psm",
  "rayon",
  "region",

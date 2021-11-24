@@ -19,7 +19,7 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../..
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
 sp-tasks = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/tasks" }
-paste = "1.0.4"
+paste = "1.0.6"
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
