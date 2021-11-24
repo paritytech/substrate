@@ -513,7 +513,11 @@ pub mod pallet {
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The balance of an account.
-	///
+	/// ```
+	///  impl Balance for Runtime {
+	///    type AccountStore = StorageMapShim<Self::Account<Runtime>, frame_system::Provider<Runtime>, AccountId, Self::AccountData<Balance>>
+	///  }
+	/// ```
 	/// NOTE: This is only used in the case that this pallet is used to store balances.
 	#[pallet::storage]
 	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<
