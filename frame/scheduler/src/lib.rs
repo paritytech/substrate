@@ -77,7 +77,7 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
-pub type CallOfHashOf<T> = MaybeHashed<
+pub type CallOrHashOf<T> = MaybeHashed<
 	<T as Config>::Call,
 	<T as frame_system::Config>::Hash,
 >;
@@ -118,7 +118,7 @@ pub type ScheduledV2Of<T> = ScheduledV3<
 >;
 
 pub type ScheduledV3Of<T> = ScheduledV3<
-	CallOfHashOf<T>,
+	CallOrHashOf<T>,
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
 	<T as frame_system::Config>::AccountId,
@@ -410,7 +410,7 @@ pub mod pallet {
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOfHashOf<T>>,
+			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -459,7 +459,7 @@ pub mod pallet {
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOfHashOf<T>>,
+			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -503,7 +503,7 @@ pub mod pallet {
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOfHashOf<T>>,
+			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -529,7 +529,7 @@ pub mod pallet {
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<CallOfHashOf<T>>,
+			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
@@ -615,7 +615,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
-		Agenda::<T>::translate::<Vec<Option<ScheduledV3Of<T>>>, _>(|_, agenda| {
+		Agenda::<T>::translate::<
+			Vec<Option<Scheduled<CallOrHashOf<T>, T::BlockNumber, OldOrigin, T::AccountId>>>,
+			_
+		>(|_, agenda| {
 			Some(
 				agenda
 					.into_iter()
@@ -656,7 +659,7 @@ impl<T: Config> Pallet<T> {
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: CallOfHashOf<T>,
+		call: CallOrHashOf<T>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
 		call.ensure_requested::<T::Preimages>();
@@ -750,7 +753,7 @@ impl<T: Config> Pallet<T> {
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: CallOfHashOf<T>,
+		call: CallOrHashOf<T>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		// ensure id it is unique
 		if Lookup::<T>::contains_key(&id) {
@@ -864,7 +867,7 @@ impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: CallOfHashOf<T>,
+		call: CallOrHashOf<T>,
 	) -> Result<Self::Address, DispatchError> {
 		Self::do_schedule(when, maybe_periodic, priority, origin, call)
 	}
@@ -897,7 +900,7 @@ impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: CallOfHashOf<T>,
+		call: CallOrHashOf<T>,
 	) -> Result<Self::Address, ()> {
 		Self::do_schedule_named(id, when, maybe_periodic, priority, origin, call).map_err(|_| ())
 	}
@@ -1611,21 +1614,22 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(3);
 
-			let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
+			let call1 = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
 			let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }).into());
+			let call3 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }).into());
 
 			assert_err!(
-				Scheduler::schedule_named(Origin::root(), 1u32.encode(), 2, None, 127, call),
+				Scheduler::schedule_named(Origin::root(), 1u32.encode(), 2, None, 127, call1),
 				Error::<Test>::TargetBlockNumberInPast,
 			);
 
 			assert_err!(
-				Scheduler::schedule(Origin::root(), 2, None, 127, call2.clone()),
+				Scheduler::schedule(Origin::root(), 2, None, 127, call2),
 				Error::<Test>::TargetBlockNumberInPast,
 			);
 
 			assert_err!(
-				Scheduler::schedule(Origin::root(), 3, None, 127, call2),
+				Scheduler::schedule(Origin::root(), 3, None, 127, call3),
 				Error::<Test>::TargetBlockNumberInPast,
 			);
 		});
@@ -1642,14 +1646,14 @@ mod tests {
 				4,
 				None,
 				127,
-				call.into(),
+				call,
 			));
 			assert_ok!(Scheduler::schedule(
 				system::RawOrigin::Signed(1).into(),
 				4,
 				None,
 				127,
-				call2.into(),
+				call2,
 			));
 			run_to_block(3);
 			// Scheduled calls are in the agenda.
@@ -1766,7 +1770,7 @@ mod tests {
 					(
 						0,
 						vec![
-							Some(ScheduledV3 {
+							Some(ScheduledV3Of::<Test> {
 								maybe_id: None,
 								priority: 10,
 								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
@@ -1775,7 +1779,7 @@ mod tests {
 								_phantom: PhantomData::<u64>::default(),
 							}),
 							None,
-							Some(ScheduledV3 {
+							Some(ScheduledV3Of::<Test> {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
 								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
@@ -1788,7 +1792,7 @@ mod tests {
 					(
 						1,
 						vec![
-							Some(ScheduledV3 {
+							Some(ScheduledV3Of::<Test> {
 								maybe_id: None,
 								priority: 11,
 								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
@@ -1797,7 +1801,7 @@ mod tests {
 								_phantom: PhantomData::<u64>::default(),
 							}),
 							None,
-							Some(ScheduledV3 {
+							Some(ScheduledV3Of::<Test> {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
 								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
@@ -1810,7 +1814,7 @@ mod tests {
 					(
 						2,
 						vec![
-							Some(ScheduledV3 {
+							Some(ScheduledV3Of::<Test> {
 								maybe_id: None,
 								priority: 12,
 								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
@@ -1819,7 +1823,7 @@ mod tests {
 								_phantom: PhantomData::<u64>::default(),
 							}),
 							None,
-							Some(ScheduledV3 {
+							Some(ScheduledV3Of::<Test> {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
 								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into(),
@@ -1841,7 +1845,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			for i in 0..3u64 {
 				let k = i.twox_64_concat();
-				let old: Vec<Option<Scheduled<_, _, u32, u64>>> = vec![
+				let old: Vec<Option<Scheduled<CallOrHashOf<Test>, u64, u32, u64>>> = vec![
 					Some(Scheduled {
 						maybe_id: None,
 						priority: i as u8 + 10,
@@ -1881,7 +1885,7 @@ mod tests {
 					(
 						0,
 						vec![
-							Some(ScheduledV2::<_, _, OriginCaller, u64> {
+							Some(ScheduledV2::<CallOrHashOf<Test>, u64, OriginCaller, u64> {
 								maybe_id: None,
 								priority: 10,
 								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }).into(),
