@@ -60,7 +60,7 @@ pub struct ClearPrefixResult {
 	/// returns number of keys removed from backend
 	pub num_keys_from_backend: u32,
 	/// returns number of keys removed from overlay
-	pub num_keys_from_overlay: Option<u32>,
+	pub num_keys_from_overlay: u32,
 }
 
 /// The Substrate externalities.

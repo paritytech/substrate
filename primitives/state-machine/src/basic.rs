@@ -219,7 +219,7 @@ impl Externalities for BasicExternalities {
 		ClearPrefixResult {
 			all_keys_removed: true,
 			num_keys_from_backend: num_removed as u32,
-			num_keys_from_overlay: None
+			num_keys_from_overlay: 0
 		}
 	}
 
@@ -232,7 +232,7 @@ impl Externalities for BasicExternalities {
 			return ClearPrefixResult {
 				all_keys_removed: false,
 				num_keys_from_backend: 0,
-				num_keys_from_overlay: None
+				num_keys_from_overlay: 0
 			}
 		}
 
@@ -253,7 +253,7 @@ impl Externalities for BasicExternalities {
 		ClearPrefixResult {
 			all_keys_removed: true,
 			num_keys_from_backend: num_removed as u32,
-			num_keys_from_overlay: None,
+			num_keys_from_overlay: 0,
 		}
 	}
 
@@ -279,13 +279,13 @@ impl Externalities for BasicExternalities {
 			ClearPrefixResult {
 				all_keys_removed: true,
 				num_keys_from_backend: num_removed as u32,
-				num_keys_from_overlay: None,
+				num_keys_from_overlay:0,
 			}
 		} else {
 			ClearPrefixResult {
 				all_keys_removed: true,
 				num_keys_from_backend: 0,
-				num_keys_from_overlay: None,
+				num_keys_from_overlay: 0,
 			}
 		}
 	}
@@ -476,7 +476,7 @@ mod tests {
 		assert_eq!(res, ClearPrefixResult {
 							all_keys_removed:true,
 							num_keys_from_backend:3,
-							num_keys_from_overlay: None});
+							num_keys_from_overlay: 0});
 	}
 
 	#[test]

@@ -338,8 +338,7 @@ impl OverlayedChanges {
 		changeset.set(key, val, extrinsic_index);
 	}
 
-	/// Clear child storage of given storage key.
-	///
+	/// Clear child storage of given storage key. Returns the number of keys cleared
 	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_child_storage(&mut self, child_info: &ChildInfo) -> u32 {
 		let extrinsic_index = self.extrinsic_index();
@@ -356,14 +355,12 @@ impl OverlayedChanges {
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	/// And returns the number of keys removed
-	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) -> u32 {
 		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index())
 	}
 
-	/// Removes all key-value pairs which keys share the given prefix.
-	///
+	/// Removes all key-value pairs which keys share the given prefix. Returns the number of keys cleared
 	/// Can be rolled back or committed when called inside a transaction
 	pub(crate) fn clear_child_prefix(&mut self, child_info: &ChildInfo, prefix: &[u8]) -> u32 {
 		let extrinsic_index = self.extrinsic_index();
