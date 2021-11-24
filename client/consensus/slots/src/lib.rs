@@ -45,7 +45,7 @@ use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, HashFor, Header as HeaderT},
 };
 use sp_timestamp::Timestamp;
 use std::{fmt::Debug, ops::Deref, time::Duration};
@@ -54,7 +54,7 @@ use std::{fmt::Debug, ops::Deref, time::Duration};
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
@@ -141,11 +141,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn notify_slot(&self, _header: &B::Header, _slot: Slot, _epoch_data: &Self::EpochData) {}
 
 	/// Return the pre digest data to include in a block authored with the given claim.
-	fn pre_digest_data(
-		&self,
-		slot: Slot,
-		claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem<B::Hash>>;
+	fn pre_digest_data(&self, slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem>;
 
 	/// Returns a function which produces a `BlockImportParams`.
 	fn block_import_params(

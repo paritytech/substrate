@@ -87,7 +87,7 @@ pub use sp_runtime::BuildStorage;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::Author;
+use impls::{Author, CreditToBlockAuthor};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -226,6 +226,7 @@ impl pallet_randomness_collective_flip::Config for Runtime {}
 impl pallet_utility::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type PalletsOrigin = OriginCaller;
 	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
 
@@ -429,6 +430,14 @@ impl pallet_transaction_payment::Config for Runtime {
 	type WeightToFee = IdentityFee<Balance>;
 	type FeeMultiplierUpdate =
 		TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
+}
+
+impl pallet_asset_tx_payment::Config for Runtime {
+	type Fungibles = Assets;
+	type OnChargeAssetTransaction = pallet_asset_tx_payment::FungiblesAdapter<
+		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
+		CreditToBlockAuthor,
+	>;
 }
 
 parameter_types! {
@@ -968,7 +977,7 @@ where
 			frame_system::CheckEra::<Runtime>::from(era),
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+			pallet_asset_tx_payment::ChargeAssetTxPayment::<Runtime>::from(tip, None),
 		);
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
@@ -1167,7 +1176,7 @@ parameter_types! {
 
 impl pallet_assets::Config for Runtime {
 	type Event = Event;
-	type Balance = u64;
+	type Balance = u128;
 	type AssetId = u32;
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
@@ -1256,6 +1265,7 @@ construct_runtime!(
 		Indices: pallet_indices,
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
+		AssetTxPayment: pallet_asset_tx_payment,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
 		Staking: pallet_staking,
 		Session: pallet_session,
@@ -1314,7 +1324,7 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
-	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+	pallet_asset_tx_payment::ChargeAssetTxPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
@@ -1329,7 +1339,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
-	(),
+	pallet_bags_list::migrations::CheckCounterPrefix<Runtime>,
 >;
 
 /// MMR helper types.
@@ -1549,7 +1559,7 @@ impl_runtime_apis! {
 		Block,
 		mmr::Hash,
 	> for Runtime {
-		fn generate_proof(leaf_index: u64)
+		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
 			Mmr::generate_proof(leaf_index)

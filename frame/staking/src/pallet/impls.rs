@@ -36,7 +36,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
@@ -926,7 +926,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
-		use sp_std::convert::TryFrom;
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -981,7 +980,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
-		use sp_std::convert::TryFrom;
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
@@ -1139,6 +1137,7 @@ where
 		>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
+		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight: Weight = 0;
@@ -1208,6 +1207,7 @@ where
 				window_start,
 				now: active_era,
 				reward_proportion,
+				disable_strategy,
 			});
 
 			if let Some(mut unapplied) = unapplied {
@@ -1256,7 +1256,6 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
-		use sp_std::convert::TryInto;
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = Self::ledger(who).unwrap_or_default();
 		ledger.active = active;

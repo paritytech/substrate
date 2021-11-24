@@ -18,6 +18,7 @@
 
 #![warn(missing_docs)]
 #![recursion_limit = "1024"]
+
 //! Substrate authority discovery.
 //!
 //! This crate enables Substrate authorities to discover and directly connect to
@@ -31,7 +32,7 @@ pub use crate::{
 	worker::{NetworkProvider, Role, Worker},
 };
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use futures::{
 	channel::{mpsc, oneshot},
@@ -58,11 +59,13 @@ pub struct WorkerConfig {
 	///
 	/// By default this is set to 1 hour.
 	pub max_publish_interval: Duration,
+
 	/// Interval at which the keystore is queried. If the keys have changed, unconditionally
 	/// re-publish its addresses on the DHT.
 	///
 	/// By default this is set to 1 minute.
 	pub keystore_refresh_interval: Duration,
+
 	/// The maximum interval in which the node will query the DHT for new entries.
 	///
 	/// By default this is set to 10 minutes.
@@ -156,7 +159,7 @@ where
 /// Message send from the [`Service`] to the [`Worker`].
 pub(crate) enum ServicetoWorkerMsg {
 	/// See [`Service::get_addresses_by_authority_id`].
-	GetAddressesByAuthorityId(AuthorityId, oneshot::Sender<Option<Vec<Multiaddr>>>),
-	/// See [`Service::get_authority_id_by_peer_id`].
-	GetAuthorityIdByPeerId(PeerId, oneshot::Sender<Option<AuthorityId>>),
+	GetAddressesByAuthorityId(AuthorityId, oneshot::Sender<Option<HashSet<Multiaddr>>>),
+	/// See [`Service::get_authority_ids_by_peer_id`].
+	GetAuthorityIdsByPeerId(PeerId, oneshot::Sender<Option<HashSet<AuthorityId>>>),
 }
