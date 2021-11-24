@@ -18,21 +18,14 @@
 //! # Scheduler tests.
 
 use super::*;
-use crate::mock::*;
-
-use crate as scheduler;
-use frame_support::{
-	assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, OnFinalize, OnInitialize},
-	weights::constants::RocksDbWeight,
-	Hashable,
+use crate::mock::{
+	*, Call, root, run_to_block, new_test_ext, LoggerCall, Test, logger, Scheduler
 };
-use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
-use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
+
+use frame_support::{
+	assert_err, assert_noop, assert_ok,
+	traits::{Contains, OnInitialize},
+	Hashable,
 };
 use substrate_test_utils::assert_eq_uvec;
 

@@ -19,11 +19,12 @@
 
 use super::*;
 
-use crate as scheduler;
+use crate as pallet_preimage;
 use frame_support::{
-	ord_parameter_types, parameter_types,
+	assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{Contains, EqualPrivilegeOnly, OnFinalize, OnInitialize},
 	weights::constants::RocksDbWeight,
+	Hashable,
 };
 use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -32,68 +33,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
-
-// Logger module to track execution.
-#[frame_support::pallet]
-pub mod logger {
-	use super::*;
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
-	use std::cell::RefCell;
-
-	thread_local! {
-		static LOG: RefCell<Vec<(OriginCaller, u32)>> = RefCell::new(Vec::new());
-	}
-	pub fn log() -> Vec<(OriginCaller, u32)> {
-		LOG.with(|log| log.borrow().clone())
-	}
-
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
-	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-	}
-
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		Logged(u32, Weight),
-	}
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T>
-	where
-		<T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>,
-	{
-		#[pallet::weight(*weight)]
-		pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
-			Self::deposit_event(Event::Logged(i, weight));
-			LOG.with(|log| {
-				log.borrow_mut().push((origin.caller().clone(), i));
-			});
-			Ok(())
-		}
-
-		#[pallet::weight(*weight)]
-		pub fn log_without_filter(
-			origin: OriginFor<T>,
-			i: u32,
-			weight: Weight,
-		) -> DispatchResult {
-			Self::deposit_event(Event::Logged(i, weight));
-			LOG.with(|log| {
-				log.borrow_mut().push((origin.caller().clone(), i));
-			});
-			Ok(())
-		}
-	}
-}
+use substrate_test_utils::assert_eq_uvec;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -106,7 +46,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Logger: logger::{Pallet, Call, Event<T>},
-		Scheduler: scheduler::{Pallet, Call, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Preimage: pallet_preimage::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -149,56 +89,56 @@ impl system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
-impl logger::Config for Test {
-	type Event = Event;
+
+parameter_types! {
+	pub const ExistentialDeposit: u64 = 5;
+	pub const MaxReserves: u32 = 50;
 }
+
+impl pallet_balances::Config for Test {
+	type Balance = u64;
+	type Event = Event;
+	type DustRemoval = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+	type WeightInfo = ();
+	type MaxLocks = ();
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
+}
+
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 	pub const MaxScheduledPerBlock: u32 = 10;
 	pub const MaxSize: u32 = 1024;
-}
-ord_parameter_types! {
-	pub const One: u64 = 1;
-}
-
-impl pallet_preimage::Config for Test {
-	type Event = Event;
-	type WeightInfo = ();
-	type Currency = ();
-	type ManagerOrigin = EnsureRoot<u64>;
-	type MaxSize = MaxSize;
-	type BaseDeposit = ();
-	type ByteDeposit = ();
+	pub const BaseDeposit: u64 = 2;
+	pub const ByteDeposit: u64 = 1;
 }
 
 impl Config for Test {
 	type Event = Event;
-	type Origin = Origin;
-	type PalletsOrigin = OriginCaller;
-	type Call = Call;
-	type MaximumWeight = MaximumSchedulerWeight;
-	type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-	type MaxScheduledPerBlock = MaxScheduledPerBlock;
-	type WeightInfo = ();
-	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type Preimages = Preimage;
+	type Currency = Balances;
+	type ManagerOrigin = EnsureRoot<u64>;
+	type MaxSize = MaxSize;
+	type BaseDeposit = BaseDeposit;
+	type ByteDeposit = ByteDeposit;
 }
-
-pub type LoggerCall = logger::Call<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let balances = pallet_balances::GenesisConfig::<Test> {
+		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100)],
+	};
+	balances.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 
-pub fn run_to_block(n: u64) {
+fn run_to_block(n: u64) {
 	while System::block_number() < n {
-		Scheduler::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
-		Scheduler::on_initialize(System::block_number());
 	}
 }
 
-pub fn root() -> OriginCaller {
+fn root() -> OriginCaller {
 	system::RawOrigin::Root.into()
 }

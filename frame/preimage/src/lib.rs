@@ -28,6 +28,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod mock;
+
 use sp_runtime::traits::{BadOrigin, Hash, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};
 
@@ -40,6 +48,7 @@ use frame_support::{
 	BoundedVec,
 };
 use scale_info::TypeInfo;
+use weights::WeightInfo;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -68,6 +77,9 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The Weight information for this pallet.
+		type WeightInfo: weights::WeightInfo;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -134,7 +146,7 @@ pub mod pallet {
 		///
 		/// If the preimage was previously requested, no fees or deposits are taken for providing
 		/// the preimage. Otherwise, a deposit is taken proportional to the size of the preimage.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::note_preimage(bytes.len() as u32))]
 		pub fn note_preimage(origin: OriginFor<T>, bytes: Vec<u8>) -> DispatchResultWithPostInfo {
 			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
 			// is not taken.
@@ -150,7 +162,7 @@ pub mod pallet {
 		}
 
 		/// Clear an unrequested preimage from the runtime storage.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::unnote_preimage())]
 		pub fn unnote_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
 			Self::do_unnote_preimage(&hash, maybe_sender)
@@ -160,7 +172,7 @@ pub mod pallet {
 		///
 		/// If the preimage requests has already been provided on-chain, we unreserve any deposit
 		/// a user may have paid, and take the control of the preimage out of their hands.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::request_preimage())]
 		pub fn request_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Self::do_request_preimage(&hash);
@@ -170,7 +182,7 @@ pub mod pallet {
 		/// Clear a previously made request for a preimage.
 		///
 		/// NOTE: THIS MUST NOT BE CALLED ON `hash` MORE TIMES THAN `request_preimage`.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::unrequest_preimage())]
 		pub fn unrequest_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Self::do_unrequest_preimage(&hash)
