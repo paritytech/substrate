@@ -50,7 +50,7 @@ use log::{debug, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
-	io,
+	default, io,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -288,6 +288,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	}
 }
 
+pub struct TrieNodeCacheSettings {
+	pub enable: bool,
+	pub fast_cache: bool,
+}
+
+impl Default for TrieNodeCacheSettings {
+	fn default() -> Self {
+		Self { enable: false, fast_cache: false }
+	}
+}
+
 /// Database settings.
 pub struct DatabaseSettings {
 	/// State cache size.
@@ -302,6 +313,7 @@ pub struct DatabaseSettings {
 	pub keep_blocks: KeepBlocks,
 	/// Block body/Transaction storage scheme.
 	pub transaction_storage: TransactionStorageMode,
+	pub trie_node_cache_settings: TrieNodeCacheSettings,
 }
 
 /// Block pruning settings.
@@ -1106,7 +1118,8 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
-	trie_node_cache: sp_trie::SharedTrieNodeCache<HashFor<Block>>,
+	trie_node_cache: Option<sp_trie::SharedTrieNodeCache<HashFor<Block>>>,
+	trie_node_cache_enable_fast_cache: bool,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1144,6 +1157,7 @@ impl<Block: BlockT> Backend<Block> {
 			source: DatabaseSource::Custom(db),
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 			transaction_storage,
+			trie_node_cache_settings: Default::default(),
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -1196,7 +1210,8 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
 			genesis_state: RwLock::new(None),
-			trie_node_cache: Default::default(),
+			trie_node_cache: config.trie_node_cache_settings.enable.then(|| Default::default()),
+			trie_node_cache_enable_fast_cache: config.trie_node_cache_settings.fast_cache,
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1901,11 +1916,18 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		let db_state = DbState::<Block>::new_with_cache(
-			self.storage.clone(),
-			root,
-			self.trie_node_cache.clone().into(),
-		);
+		let db_state = if let Some(ref cache) = self.trie_node_cache {
+			DbState::<Block>::new_with_cache(
+				self.storage.clone(),
+				root,
+				sp_trie::LocalTrieNodeCache::new(
+					cache.clone(),
+					self.trie_node_cache_enable_fast_cache,
+				),
+			)
+		} else {
+			DbState::<Block>::new(self.storage.clone(), root)
+		};
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 		Ok(SyncingCachingState::new(
@@ -2378,11 +2400,18 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
 				let root = genesis_state.root.clone();
-				let db_state = DbState::<Block>::new_with_cache(
-					genesis_state.clone(),
-					root,
-					self.trie_node_cache.clone().into(),
-				);
+				let db_state = if let Some(ref cache) = self.trie_node_cache {
+					DbState::<Block>::new_with_cache(
+						genesis_state.clone(),
+						root,
+						sp_trie::LocalTrieNodeCache::new(
+							cache.clone(),
+							self.trie_node_cache_enable_fast_cache,
+						),
+					)
+				} else {
+					DbState::<Block>::new(genesis_state.clone(), root)
+				};
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 				let mut state = SyncingCachingState::new(
@@ -2413,11 +2442,18 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let db_state = DbState::<Block>::new_with_cache(
-						self.storage.clone(),
-						root,
-						self.trie_node_cache.clone().into(),
-					);
+					let db_state = if let Some(ref cache) = self.trie_node_cache {
+						DbState::<Block>::new_with_cache(
+							self.storage.clone(),
+							root,
+							sp_trie::LocalTrieNodeCache::new(
+								cache.clone(),
+								self.trie_node_cache_enable_fast_cache,
+							),
+						)
+					} else {
+						DbState::<Block>::new(self.storage.clone(), root)
+					};
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					let caching_state =

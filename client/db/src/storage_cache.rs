@@ -58,6 +58,12 @@ pub struct Cache<B: BlockT> {
 
 struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 
+impl<K: Eq + std::hash::Hash, V> LRUMap<K, V> {
+	fn new(limit: usize) -> Self {
+		Self(LinkedHashMap::new(), 0, limit)
+	}
+}
+
 /// Internal trait similar to `heapsize` but using
 /// a simply estimation.
 ///

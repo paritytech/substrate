@@ -306,6 +306,7 @@ where
 			source: config.database.clone(),
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
+			trie_node_cache_settings: Default::default(),
 		};
 
 		let backend = new_db_backend(db_config)?;
@@ -383,6 +384,7 @@ where
 			source: config.database.clone(),
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
+			trie_node_cache_settings: Default::default(),
 		};
 		sc_client_db::light::LightStorage::new(db_settings)?
 	};

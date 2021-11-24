@@ -21,7 +21,7 @@ use pprof::criterion::{Output, PProfProfiler};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
 use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
+	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode, TrieNodeCacheSettings
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -34,7 +34,7 @@ use tempfile::TempDir;
 
 pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
-fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 	let mut op = db.begin_operation().unwrap();
 	let mut header = Header {
 		number: 0,
@@ -98,39 +98,46 @@ fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 
 		number += 1;
 		parent_hash = header.hash();
-
-		let state = db.state_at(BlockId::Hash(parent_hash)).unwrap();
-		changes.iter().for_each(|(k, _)| { state.storage(&k).unwrap().unwrap(); });
 	}
 
 	parent_hash
 }
 
-fn create_backend(
-	state_cache_size: usize,
-	trie_cache_size: usize,
-	path: PathBuf,
-) -> Backend<Block> {
+enum BenchmarkConfig {
+	NoCache,
+	TrieNodeCache,
+	TrieNodeCacheWithoutFastCache,
+	StateCache,
+}
+
+fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block> {
+	let path = temp_dir.path().to_owned();
+	std::fs::remove_dir_all(&path).expect("Deletes old db files");
+
+	let (state_cache_size, trie_node_cache_settings) = match config {
+		BenchmarkConfig::NoCache => (0, TrieNodeCacheSettings { enable: false, fast_cache: false }),
+		BenchmarkConfig::TrieNodeCache => (0, TrieNodeCacheSettings { enable: true, fast_cache: true }),
+		BenchmarkConfig::TrieNodeCacheWithoutFastCache => (0, TrieNodeCacheSettings { enable: true, fast_cache: false }),
+		BenchmarkConfig::StateCache => (2048 * 1024 * 1024, TrieNodeCacheSettings { enable: false, fast_cache: false }),
+	};
+
 	let settings = DatabaseSettings {
 		state_cache_size,
+		trie_node_cache_settings,
 		state_cache_child_ratio: None,
 		state_pruning: PruningMode::ArchiveAll,
 		source: DatabaseSource::ParityDb { path },
 		keep_blocks: KeepBlocks::All,
 		transaction_storage: TransactionStorageMode::BlockBody,
-		trie_cache_size,
 	};
 
 	Backend::new(settings, 100).expect("Creates backend")
 }
 
-fn state_access_benchmarks(c: &mut Criterion) {
-	sp_tracing::try_init_simple();
-
-	let mut group = c.benchmark_group("State access");
-
-	let path = TempDir::new().expect("Creates temporary directory");
-
+/// Generate the storage that will be used for the benchmark
+///
+/// Returns the `Vec<key>` and the `Vec<(key, value)>`
+fn generate_storage() -> (Vec<Vec<u8>>, Vec<(Vec<u8>, Vec<u8>)>) {
 	let mut rng = StdRng::seed_from_u64(353893213);
 
 	let mut storage = Vec::new();
@@ -153,60 +160,77 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		storage.push((key, value));
 	}
 
-	let backend = create_backend(2048 * 1024 * 1024, 0, path.path().to_owned());
-	let block_hash = insert_block(&backend, storage.clone());
+	(keys, storage)
+}
 
-	group.sample_size(10);
+fn state_access_benchmarks(c: &mut Criterion) {
+	sp_tracing::try_init_simple();
 
-	// drop(backend);
+	let (keys, storage) = generate_storage();
+	let path = TempDir::new().expect("Creates temporary directory");
 
-	// let backend = create_backend(2048 * 1024 * 1024, 0, path.path().to_owned());
+	let mut group = c.benchmark_group("State access multiple values");
+	group.sample_size(20);
 
-	group.bench_function("with 128MB state cache", |b| {
-		b.iter_batched(
-			|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
-			|state| {
-				for key in keys.iter().cycle().take(keys.len() * 4) {
-					let _ = state.storage(&key).expect("Doesn't fail").unwrap();
-				}
-			},
-			BatchSize::SmallInput,
-		)
-	});
+	let mut bench_multiple_values = |config, desc, multiplier| {
+		let backend = create_backend(config, &path);
+		let block_hash = insert_blocks(&backend, storage.clone());
 
-	drop(backend);
+		group.bench_function(desc, |b| {
+			b.iter_batched(
+				|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
+				|state| {
+					for key in keys.iter().cycle().take(keys.len() * multiplier) {
+						let _ = state.storage(&key).expect("Doesn't fail").unwrap();
+					}
+				},
+				BatchSize::SmallInput,
+			)
+		});
+	};
 
-	std::fs::remove_dir_all(path.path());
-	let backend = create_backend(0, 0, path.path().to_owned());
-	let block_hash = insert_block(&backend, storage.clone());
+	bench_multiple_values(BenchmarkConfig::StateCache, "with state cache and reading each key once", 1);
+	bench_multiple_values(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading each key once", 1);
+	bench_multiple_values(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading each key once", 1);
+	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading each key once", 1);
 
-	group.bench_function("with 128MB trie cache", |b| {
-		b.iter_batched(
-			|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
-			|state| {
-				for key in keys.iter().cycle().take(keys.len() * 4) {
-					let _ = state.storage(&key).expect("Doesn't fail");
-				}
-			},
-			BatchSize::SmallInput,
-		)
-	});
+	bench_multiple_values(BenchmarkConfig::StateCache, "with state cache and reading 4 times each key", 4);
+	bench_multiple_values(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading 4 times each key", 4);
+	bench_multiple_values(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading 4 times each key", 4);
+	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading 4 times each key", 4);
 
-	drop(backend);
+	group.finish();
 
-	let backend = create_backend(0, 0, path.path().to_owned());
+	let mut group = c.benchmark_group("State access single value");
 
-	// group.bench_function("with cache disabled", |b| {
-	// 	b.iter_batched(
-	// 		|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
-	// 		|state| {
-	// 			for key in keys.iter().cycle().take(keys.len() * 4) {
-	// 				let _ = state.storage(&key).expect("Doesn't fail");
-	// 			}
-	// 		},
-	// 		BatchSize::SmallInput,
-	// 	)
-	// });
+	let mut bench_single_value = |config, desc, multiplier| {
+		let backend = create_backend(config, &path);
+		let block_hash = insert_blocks(&backend, storage.clone());
+
+		group.bench_function(desc, |b| {
+			b.iter_batched(
+				|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
+				|state| {
+					for key in keys.iter().take(1).cycle().take(multiplier) {
+						let _ = state.storage(&key).expect("Doesn't fail").unwrap();
+					}
+				},
+				BatchSize::SmallInput,
+			)
+		});
+	};
+
+	bench_single_value(BenchmarkConfig::StateCache, "with state cache and reading the key once", 1);
+	bench_single_value(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading the key once", 1);
+	bench_single_value(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading the key once", 1);
+	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading the key once", 1);
+
+	bench_single_value(BenchmarkConfig::StateCache, "with state cache and reading 4 times the key", 4);
+	bench_single_value(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading 4 times the key", 4);
+	bench_single_value(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading 4 times the key", 4);
+	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading 4 times the key", 4);
+
+	group.finish();
 }
 
 criterion_group! {

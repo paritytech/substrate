@@ -441,12 +441,15 @@ where
 	}
 }
 
-use std::collections::{hash_map::Entry, HashMap};
-use std::sync::Arc;
+use std::{
+	collections::{hash_map::Entry, HashMap},
+	sync::Arc,
+};
 
 #[derive(Clone)]
 pub struct SharedTrieNodeCache<H: Hasher> {
-	cache: std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>>,
+	cache:
+		std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>>,
 }
 
 impl<H: Hasher> Default for SharedTrieNodeCache<H> {
@@ -459,12 +462,16 @@ pub struct LocalTrieNodeCache<H: Hasher> {
 	shared: SharedTrieNodeCache<H>,
 	local: parking_lot::Mutex<HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
 	fast_cache: parking_lot::Mutex<HashMap<Vec<u8>, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	enable_fast_cache: bool,
 }
 
 pub struct TrieNodeCache<'a, H: Hasher> {
-	shared: parking_lot::RwLockReadGuard<'a, HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	shared:
+		parking_lot::RwLockReadGuard<'a, HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
 	local: parking_lot::MutexGuard<'a, HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
-	fast_cache: parking_lot::MutexGuard<'a, HashMap<Vec<u8>, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	fast_cache:
+		parking_lot::MutexGuard<'a, HashMap<Vec<u8>, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	enable_fast_cache: bool,
 }
 
 impl<'a, H: Hasher> trie_db::NodeCache<Layout<H>> for TrieNodeCache<'a, H> {
@@ -491,23 +498,37 @@ impl<'a, H: Hasher> trie_db::NodeCache<Layout<H>> for TrieNodeCache<'a, H> {
 	}
 
 	fn fast_cache(&self, key: &[u8]) -> Option<&Arc<trie_db::node::NodeOwned<H::Out>>> {
-		self.fast_cache.get(key)
+		if self.enable_fast_cache {
+			self.fast_cache.get(key)
+		} else {
+			None
+		}
 	}
 
 	fn fast_cache_insert(&mut self, key: &[u8], node: Arc<trie_db::node::NodeOwned<H::Out>>) {
-		self.fast_cache.insert(key.into(), node);
+		if self.enable_fast_cache {
+			self.fast_cache.insert(key.into(), node);
+		}
 	}
 }
 
 impl<H: Hasher> LocalTrieNodeCache<H> {
-	pub fn as_cache<'a>(&'a self) -> TrieNodeCache<'a, H> {
-		TrieNodeCache { shared: self.shared.cache.read(), local: self.local.lock(), fast_cache: self.fast_cache.lock() }
+	pub fn new(shared: SharedTrieNodeCache<H>, enable_fast_cache: bool) -> Self {
+		Self {
+			enable_fast_cache,
+			fast_cache: Default::default(),
+			local: Default::default(),
+			shared,
+		}
 	}
-}
 
-impl<H: Hasher> From<SharedTrieNodeCache<H>> for LocalTrieNodeCache<H> {
-	fn from(shared: SharedTrieNodeCache<H>) -> Self {
-		LocalTrieNodeCache { shared, local: Default::default(), fast_cache: Default::default() }
+	pub fn as_cache<'a>(&'a self) -> TrieNodeCache<'a, H> {
+		TrieNodeCache {
+			shared: self.shared.cache.read(),
+			local: self.local.lock(),
+			fast_cache: self.fast_cache.lock(),
+			enable_fast_cache: self.enable_fast_cache,
+		}
 	}
 }
 

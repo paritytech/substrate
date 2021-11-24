@@ -238,11 +238,13 @@ where
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		let cache = self.trie_node_cache.as_ref().unwrap();
-
-TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
+		match self.trie_node_cache {
+			Some(ref cache) =>
+				TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
 					.get(key)
-					.map_err(map_e)
+					.map_err(map_e),
+			None => TrieDB::<H>::new(self, &self.root).map_err(map_e)?.get(key).map_err(map_e),
+		}
 
 		// match &self.trie_node_cache {
 		// 	Some(cache) =>
