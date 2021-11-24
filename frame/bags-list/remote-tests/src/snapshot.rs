@@ -26,7 +26,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 	currency_unit: u64,
 	ws_url: String,
 ) {
-	use frame_support::storage::generator::{CountedStorageMap, StorageMap};
+	use frame_support::storage::generator::StorageMap;
 
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {

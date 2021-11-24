@@ -21,6 +21,7 @@ use crate::{
 	metadata::StorageEntryMetadata,
 	storage::{
 		generator::StorageMap as _,
+		storage_prefix,
 		types::{
 			OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder, StorageMap, StorageValue,
 			ValueQuery,
@@ -89,26 +90,6 @@ impl<Prefix: CountedStorageMapInstance> crate::storage::PrefixIteratorOnRemoval
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::storage::generator::CountedStorageMap<Key, Value>
-	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-where
-	Prefix: StorageInstance,
-	Hasher: crate::hash::StorageHasher,
-	Key: FullCodec,
-	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
-	MaxValues: Get<Option<u32>>,
-{
-	fn module_prefix() -> &'static [u8] {
-		Prefix::pallet_prefix().as_bytes()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		Prefix::STORAGE_PREFIX.as_bytes()
-	}
-}
-
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: CountedStorageMapInstance,
@@ -119,6 +100,23 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
+	/// Module prefix. Used for generating final key.
+	fn module_prefix() -> &'static [u8] {
+		Prefix::pallet_prefix().as_bytes()
+	}
+
+	/// Storage prefix. Used for generating final key.
+	pub fn storage_prefix() -> &'static [u8] {
+		Prefix::STORAGE_PREFIX.as_bytes()
+	}
+
+	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
+	/// `storage_prefix`.
+	pub fn prefix_hash() -> Vec<u8> {
+		let result = storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		result.to_vec()
+	}
+
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Vec<u8> {
 		<Self as MapWrapper>::Map::hashed_key_for(key)
