@@ -1,0 +1,42 @@
+[package]
+name = "pallet-election-playground"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "election playground"
+readme = "README.md"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+scale-info = { package = "scale-info", version = "1.0.0", features = ["derive"] }
+
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
+
+frame-system = { version = "4.0.0-dev", path = "../system" }
+frame-support = { version = "4.0.0-dev", path = "../support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
+pallet-staking = { version = "4.0.0-dev", path = "../staking" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
+pallet-session = { version = "4.0.0-dev", path = "../session" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
+pallet-election-provider-multi-phase = { version = "4.0.0-dev", path = "../election-provider-multi-phase" }
+parking_lot = { version = "0.11.2" }
+
+
+[dev-dependencies]
+
+sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+

@@ -890,7 +890,8 @@ impl<T: Config> Pallet<T> {
 			};
 
 		for (next, _) in Validators::<T>::iter() {
-			// TODO: rather sub-optimal, we should not need to track size if it is not bounded.
+			// NOTE: rather sub-optimal, we should not need to track size if it is not bounded, but
+			// in this case we prefer not cluttering the code.
 			let new_internal_size = internal_size + sp_std::mem::size_of::<T::AccountId>();
 			let new_final_size = new_internal_size +
 				StaticSizeTracker::<T::AccountId>::length_prefix(targets.len() + 1);
@@ -1503,16 +1504,9 @@ impl<AccountId> StaticSizeTracker<AccountId> {
 	/// The length prefix of a vector with the given length.
 	#[inline]
 	pub(crate) fn length_prefix(length: usize) -> usize {
-		// TODO: scale codec could and should expose a public function for this that I can reuse.
-		match length {
-			0..=63 => 1,
-			64..=16383 => 2,
-			16384..=1073741823 => 4,
-			// this arm almost always never happens. Although, it would be good to get rid of of it,
-			// for otherwise we could make this function const, which might enable further
-			// optimizations.
-			x @ _ => codec::Compact(x as u32).encoded_size(),
-		}
+		use codec::{Compact, CompactLen};
+		let length = length as u32;
+		Compact::<u32>::compact_len(&length)
 	}
 
 	/// Register a voter in `self` who has casted `votes`.
