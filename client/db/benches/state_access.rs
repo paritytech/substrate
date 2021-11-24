@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use pprof::criterion::{Output, PProfProfiler};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
 use sc_client_db::{
@@ -88,7 +89,7 @@ fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		header.state_root = state_root;
 
 		op.update_db_storage(tx).unwrap();
-		op.update_storage(changes, Default::default()).unwrap();
+		op.update_storage(changes.clone(), Default::default()).unwrap();
 
 		op.set_block_data(header.clone(), Some(vec![]), None, None, NewBlockState::Best)
 			.unwrap();
@@ -97,6 +98,9 @@ fn insert_block(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 
 		number += 1;
 		parent_hash = header.hash();
+
+		let state = db.state_at(BlockId::Hash(parent_hash)).unwrap();
+		changes.iter().for_each(|(k, _)| { state.storage(&k).unwrap().unwrap(); });
 	}
 
 	parent_hash
@@ -117,7 +121,7 @@ fn create_backend(
 		trie_cache_size,
 	};
 
-	Backend::new(settings, 10).expect("Creates backend")
+	Backend::new(settings, 100).expect("Creates backend")
 }
 
 fn state_access_benchmarks(c: &mut Criterion) {
@@ -126,8 +130,6 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	let mut group = c.benchmark_group("State access");
 
 	let path = TempDir::new().expect("Creates temporary directory");
-
-	let backend = create_backend(0, 0, path.path().to_owned());
 
 	let mut rng = StdRng::seed_from_u64(353893213);
 
@@ -151,20 +153,21 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		storage.push((key, value));
 	}
 
-	let block_hash = insert_block(&backend, storage);
+	let backend = create_backend(2048 * 1024 * 1024, 0, path.path().to_owned());
+	let block_hash = insert_block(&backend, storage.clone());
 
 	group.sample_size(10);
 
-	drop(backend);
+	// drop(backend);
 
-	let backend = create_backend(512 * 1024 * 1024, 0, path.path().to_owned());
+	// let backend = create_backend(2048 * 1024 * 1024, 0, path.path().to_owned());
 
 	group.bench_function("with 128MB state cache", |b| {
 		b.iter_batched(
 			|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
 			|state| {
-				for key in &keys {
-					let _ = state.storage(&key).expect("Doesn't fail");
+				for key in keys.iter().cycle().take(keys.len() * 4) {
+					let _ = state.storage(&key).expect("Doesn't fail").unwrap();
 				}
 			},
 			BatchSize::SmallInput,
@@ -173,13 +176,15 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	drop(backend);
 
-	let backend = create_backend(0, 512 * 1024 * 1024, path.path().to_owned());
+	std::fs::remove_dir_all(path.path());
+	let backend = create_backend(0, 0, path.path().to_owned());
+	let block_hash = insert_block(&backend, storage.clone());
 
 	group.bench_function("with 128MB trie cache", |b| {
 		b.iter_batched(
 			|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
 			|state| {
-				for key in &keys {
+				for key in keys.iter().cycle().take(keys.len() * 4) {
 					let _ = state.storage(&key).expect("Doesn't fail");
 				}
 			},
@@ -191,18 +196,22 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 	let backend = create_backend(0, 0, path.path().to_owned());
 
-	group.bench_function("with cache disabled", |b| {
-		b.iter_batched(
-			|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
-			|state| {
-				for key in &keys {
-					let _ = state.storage(&key).expect("Doesn't fail");
-				}
-			},
-			BatchSize::SmallInput,
-		)
-	});
+	// group.bench_function("with cache disabled", |b| {
+	// 	b.iter_batched(
+	// 		|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
+	// 		|state| {
+	// 			for key in keys.iter().cycle().take(keys.len() * 4) {
+	// 				let _ = state.storage(&key).expect("Doesn't fail");
+	// 			}
+	// 		},
+	// 		BatchSize::SmallInput,
+	// 	)
+	// });
 }
 
-criterion_group!(benches, state_access_benchmarks);
+criterion_group! {
+	name = benches;
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	targets = state_access_benchmarks
+}
 criterion_main!(benches);

@@ -73,7 +73,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	empty: H::Out,
 	#[cfg(feature = "std")]
 	pub(crate) cache: Arc<RwLock<Cache>>,
-	trie_cache: Arc<RwLock<hashbrown::HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>,
+	trie_node_cache: Option<sp_trie::LocalTrieNodeCache<H>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
@@ -81,14 +81,26 @@ where
 	H::Out: Encode,
 {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out, cache: Arc<RwLock<hashbrown::HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>) -> Self {
+	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
 			empty: H::hash(&[0u8]),
 			#[cfg(feature = "std")]
 			cache: Arc::new(RwLock::new(Cache::new())),
-			trie_cache: cache,
+			trie_node_cache: None,
+		}
+	}
+
+	/// Create new trie-based backend.
+	pub fn new_with_cache(storage: S, root: H::Out, cache: sp_trie::LocalTrieNodeCache<H>) -> Self {
+		TrieBackendEssence {
+			storage,
+			root,
+			empty: H::hash(&[0u8]),
+			#[cfg(feature = "std")]
+			cache: Arc::new(RwLock::new(Cache::new())),
+			trie_node_cache: Some(cache),
 		}
 	}
 
@@ -121,7 +133,12 @@ where
 	pub fn into_storage(self) -> S {
 		self.storage
 	}
+}
 
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
+where
+	H::Out: Encode,
+{
 	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
 	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>> {
@@ -221,7 +238,19 @@ where
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		TrieDB::<H>::new_with_cache(self, &self.root, &mut *self.trie_cache.write()).get_test(key).map_err(map_e)
+		let cache = self.trie_node_cache.as_ref().unwrap();
+
+TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
+					.get(key)
+					.map_err(map_e)
+
+		// match &self.trie_node_cache {
+		// 	Some(cache) =>
+		// 		TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
+		// 			.get(key)
+		// 			.map_err(map_e),
+		// 	None => TrieDB::<H>::new(self, &self.root).map_err(map_e)?.get(key).map_err(map_e),
+		// }
 	}
 
 	/// Get the value of child storage at given key.

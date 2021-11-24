@@ -287,7 +287,6 @@ where
 					let trie_storage = TrieBackendEssence::<_, H>::new(
 						crate::changes_trie::TrieBackendStorageAdapter(storage),
 						trie_root,
-						Default::default(),
 					);
 
 					trie_storage.for_key_values_with_prefix(&child_prefix, |mut key, mut value| {
@@ -326,7 +325,6 @@ where
 					let trie_storage = TrieBackendEssence::<_, H>::new(
 						crate::changes_trie::TrieBackendStorageAdapter(storage),
 						trie_root,
-						Default::default(),
 					);
 					trie_storage.for_keys_with_prefix(&extrinsic_prefix, |mut key| {
 						if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) =

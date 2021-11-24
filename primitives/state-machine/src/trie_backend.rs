@@ -32,7 +32,6 @@ use sp_trie::{
 	trie_types::{Layout, TrieDB, TrieError},
 	Trie,
 };
-use std::sync::Arc;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -44,8 +43,13 @@ where
 	H::Out: Codec,
 {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out, cache: Arc<RwLock<hashbrown::HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root, cache) }
+	pub fn new(storage: S, root: H::Out) -> Self {
+		TrieBackend { essence: TrieBackendEssence::new(storage, root) }
+	}
+
+	/// Create new trie-based backend.
+	pub fn new_with_cache(storage: S, root: H::Out, cache: sp_trie::LocalTrieNodeCache<H>) -> Self {
+		TrieBackend { essence: TrieBackendEssence::new_with_cache(storage, root, cache) }
 	}
 
 	/// Get backend essence reference.

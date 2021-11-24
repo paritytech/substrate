@@ -69,7 +69,6 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 			let trie_storage = TrieBackendEssence::<_, H>::new(
 				crate::changes_trie::TrieBackendStorageAdapter(storage),
 				root,
-				Default::default(),
 			);
 			let child_prefix = ChildIndex::key_neutral_prefix(block.clone());
 			let mut children_roots = Vec::new();
@@ -106,7 +105,7 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 	let mut proof_recorder: Recorder<H::Out> = Default::default();
 	{
 		let mut trie = ProvingBackendRecorder::<_, H> {
-			backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root, Default::default()),
+			backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
 			proof_recorder: &mut proof_recorder,
 		};
 		trie.record_all_keys();
