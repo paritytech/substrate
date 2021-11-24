@@ -405,6 +405,7 @@ impl OverlayedChangeSet {
 	}
 
 	/// Set all values to deleted which are matched by the predicate and return number of keys cleared.
+	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub fn clear_where(
 		&mut self,
