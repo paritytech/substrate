@@ -233,7 +233,7 @@ default:
       file:                        false
     GITHUB_SSH_PRIV_KEY:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
-      file:                        true
+      file:                        false
     GITHUB_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
       file:                        false
@@ -814,9 +814,12 @@ publish-rustdoc:
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     # setup ssh
     - apt-get update && apt-get install -y ssh
+    - eval $(ssh-agent)
+    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
     - rm -rf /tmp/*
     # Set git config
-    - git config core.sshCommand "ssh -i ${GITHUB_SSH_PRIV_KEY} -F /dev/null -o StrictHostKeyChecking=no"
     - git config user.email "devops-team@parity.io"
     - git config user.name "${GITHUB_USER}"
     - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
