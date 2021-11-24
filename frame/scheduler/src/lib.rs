@@ -62,8 +62,8 @@ use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
-		schedule::{self, DispatchTime, MaybeHashed},
-		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp,
+		EnsureOrigin, Get, IsType, OriginTrait,
+		PrivilegeCmp, schedule::{self, DispatchTime, MaybeHashed},
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -151,6 +151,22 @@ impl Default for Releases {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+mod preimage_provider {
+	use frame_support::traits::PreimageRecipient;
+	pub trait PreimageProviderAndMaybeRecipient<H>: PreimageRecipient<H> {}
+	impl<H, T: PreimageRecipient<H>> PreimageProviderAndMaybeRecipient<H> for T {}
+}
+
+#[cfg(not(feature = "runtime-benchmarks"))]
+mod preimage_provider {
+	use frame_support::traits::PreimageProvider;
+	pub trait PreimageProviderAndMaybeRecipient<H>: PreimageProvider<H> {}
+	impl<H, T: PreimageProvider<H>> PreimageProviderAndMaybeRecipient<H> for T {}
+}
+
+pub use preimage_provider::PreimageProviderAndMaybeRecipient;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -207,7 +223,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The preimage provider with which we look up call hashes to get the call.
-		type Preimages: PreimageProvider<Self::Hash>;
+		type Preimages: PreimageProviderAndMaybeRecipient<Self::Hash>;
 	}
 
 	/// Items to be executed, indexed by the block number that they should be executed on.

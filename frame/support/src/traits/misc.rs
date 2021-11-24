@@ -594,7 +594,7 @@ pub trait PreimageProvider<Hash> {
 /// Note that this API does not assume any underlying user is calling, and thus
 /// does not handle any preimage ownership or fees. Other system level logic that
 /// uses this API should implement that on their own side.
-pub trait PreimageRecipient<Hash> {
+pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	/// Maximum size of a preimage.
 	type MaxSize: Get<u32>;
 

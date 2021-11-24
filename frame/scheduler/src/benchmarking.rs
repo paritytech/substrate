@@ -49,6 +49,27 @@ fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static
 	Ok(())
 }
 
+// Add `n` named items to the schedule
+fn fill_schedule_with_call_hashes<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
+	// Essentially a no-op call.
+	let call = CallOrHashOf::<T>::Value(frame_system::Call::set_storage { items: vec![] }.into());
+	for i in 0..n {
+		// Named schedule is strictly heavier than anonymous
+		Scheduler::<T>::do_schedule_named(
+			i.encode(),
+			DispatchTime::At(when),
+			// Add periodicity
+			Some((T::BlockNumber::one(), 100)),
+			// HARD_DEADLINE priority means it gets executed no matter what
+			0,
+			frame_system::RawOrigin::Root.into(),
+			call.clone().into(),
+		)?;
+	}
+	ensure!(Agenda::<T>::get(when).len() == n as usize, "didn't fill schedule");
+	Ok(())
+}
+
 benchmarks! {
 	schedule {
 		let s in 0 .. T::MaxScheduledPerBlock::get();
