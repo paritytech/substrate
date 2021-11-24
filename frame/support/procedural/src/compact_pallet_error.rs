@@ -62,19 +62,44 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 		syn::Data::Enum(syn::DataEnum { variants, .. }) => {
 			let field_tys = variants
 				.into_iter()
-				.map(|variant| match variant.fields {
-					syn::Fields::Named(mut f) if f.named.len() == 1 =>
-						Ok(Some(f.named.pop().unwrap().into_value().ty)),
-					syn::Fields::Unnamed(mut f) if f.unnamed.len() == 1 =>
-						Ok(Some(f.unnamed.pop().unwrap().into_value().ty)),
-					syn::Fields::Unit => Ok(None),
-					_ if variant.ident == "__Ignore" => Ok(None),
-					_ => {
+				.map(|variant| {
+					let span = variant.ident.span();
+					let make_err = || {
 						let msg = "Cannot derive `CompactPalletError` for enum with variants \
-						containing more than 1 field";
-						let err = syn::Error::new(variant.ident.span(), msg);
+							containing more than 1 field";
+						let err = syn::Error::new(span, msg);
 						Err(err)
-					},
+					};
+
+					match variant.fields {
+						syn::Fields::Named(mut f) if f.named.len() == 1 =>
+							Ok(Some(f.named.pop().unwrap().into_value().ty)),
+						syn::Fields::Unnamed(mut f) if f.unnamed.len() == 1 =>
+							Ok(Some(f.unnamed.pop().unwrap().into_value().ty)),
+						syn::Fields::Unnamed(mut f) if f.unnamed.len() == 2 => {
+							let second = f.unnamed.pop().unwrap().into_value().ty;
+							let first = f.unnamed.pop().unwrap().into_value().ty;
+
+							match (first, second) {
+								// Check whether we have (PhantomData, Never), if so we skip it.
+								(syn::Type::Path(p1), syn::Type::Path(p2))
+									if p1
+										.path
+										.segments
+										.last()
+										.map_or(false, |seg| seg.ident == "PhantomData") &&
+										p2.path
+											.segments
+											.last()
+											.map_or(false, |seg| seg.ident == "Never") =>
+									Ok(None),
+								// Otherwise, it's an error.
+								_ => make_err(),
+							}
+						},
+						syn::Fields::Unit => Ok(None),
+						_ => make_err(),
+					}
 				})
 				.collect::<Result<Vec<Option<syn::Type>>, syn::Error>>();
 

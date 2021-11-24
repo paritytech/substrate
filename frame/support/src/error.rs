@@ -85,7 +85,12 @@ macro_rules! decl_error {
 		}
 	) => {
 		$(#[$attr])*
-		#[derive($crate::scale_info::TypeInfo, $crate::CompactPalletError)]
+		#[derive(
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::scale_info::TypeInfo,
+			$crate::CompactPalletError,
+		)]
 		#[scale_info(skip_type_params($generic $(, $inst_generic)?), capture_docs = "always")]
 		pub enum $error<$generic: $trait $(, $inst_generic: $instance)?>
 		$( where $( $where_ty: $where_bound ),* )?

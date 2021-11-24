@@ -93,16 +93,14 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 	error_item.variants.insert(0, phantom_variant);
 	// derive TypeInfo for error metadata
-	error_item
-		.attrs
-		.push(syn::parse_quote! {
-			#[derive(
-				#frame_support::codec::Encode,
-				#frame_support::codec::Decode,
-				#frame_support::scale_info::TypeInfo,
-				#frame_support::CompactPalletError,
-			)]
-		});
+	error_item.attrs.push(syn::parse_quote! {
+		#[derive(
+			#frame_support::codec::Encode,
+			#frame_support::codec::Decode,
+			#frame_support::scale_info::TypeInfo,
+			#frame_support::CompactPalletError,
+		)]
+	});
 	error_item.attrs.push(syn::parse_quote!(
 		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
 	));

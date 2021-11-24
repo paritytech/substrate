@@ -17,6 +17,7 @@
 
 //! Traits for describing and constraining pallet error types.
 use codec::{Decode, Encode, OptionBool};
+use sp_std::marker::PhantomData;
 
 /// Trait denoting that the implementing type has the most compact encoded size that is fit to be
 /// included as a field in a variant of the `#[pallet::error]` enum type.
@@ -42,6 +43,12 @@ macro_rules! impl_for_types {
 }
 
 impl_for_types!(u8, i8, bool, OptionBool);
+
+impl<T> CompactPalletError for PhantomData<T> {
+	fn check_compactness() -> bool {
+		true
+	}
+}
 
 pub trait ErrorCompactnessTest {
 	fn error_compactness_test() {}
