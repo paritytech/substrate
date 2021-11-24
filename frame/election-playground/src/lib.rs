@@ -43,7 +43,7 @@ impl<
 {
 }
 
-pub fn roll_to<T: ElectionRuntime>(n: T::BlockNumber) {
+pub fn roll_to<T: ElectionRuntime>(n: T::BlockNumber, foo: u32) {
 	let now = frame_system::Pallet::<T>::block_number();
 	for i in now + One::one()..=n {
 		frame_system::Pallet::<T>::set_block_number(i);
