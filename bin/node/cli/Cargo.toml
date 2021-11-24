@@ -96,7 +96,7 @@ frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../..
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
-[target.'cfg(target_arch="x86_64")'.dependencies]
+[target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
 node-executor = { version = "3.0.0-dev", path = "../executor", features = [
 	"wasmtime",
 ] }
