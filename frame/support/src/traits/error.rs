@@ -50,7 +50,10 @@ impl<T> CompactPalletError for PhantomData<T> {
 	}
 }
 
+/// Trait for testing the pallet's error enum compactness.
 pub trait ErrorCompactnessTest {
+	/// The function that gets called during integrity testing to check for the compactness
+	/// of the pallet's error enum type.
 	fn error_compactness_test() {}
 }
 
