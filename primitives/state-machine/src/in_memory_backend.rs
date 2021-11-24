@@ -32,7 +32,7 @@ where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	TrieBackend::new(db, empty_trie_root::<Layout<H>>(), Default::default())
+	TrieBackend::new(db, empty_trie_root::<Layout<H>>())
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
@@ -69,14 +69,14 @@ where
 	pub fn update_backend(&self, root: H::Out, changes: MemoryDB<H>) -> Self {
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
-		Self::new(clone, root, Default::default())
+		Self::new(clone, root)
 	}
 
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
 		let mut storage = sp_std::mem::take(self).into_storage();
 		storage.consolidate(transaction);
-		*self = TrieBackend::new(storage, root, Default::default());
+		*self = TrieBackend::new(storage, root);
 	}
 
 	/// Compare with another in-memory backend.
@@ -90,7 +90,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn clone(&self) -> Self {
-		TrieBackend::new(self.backend_storage().clone(), self.root().clone(), Default::default())
+		TrieBackend::new(self.backend_storage().clone(), self.root().clone())
 	}
 }
 

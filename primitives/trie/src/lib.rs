@@ -26,6 +26,7 @@ mod storage_proof;
 mod trie_codec;
 mod trie_stream;
 
+use codec::Output;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
 /// Various re-exports from the `hash-db` crate.
@@ -111,7 +112,7 @@ pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DB
 pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue, MemTracker>;
 
 /// Persistent trie database read-access interface for the a given hasher.
-pub type TrieDB<'a, L> = trie_db::TrieDB<'a, L>;
+pub type TrieDB<'a, 'cache, L> = trie_db::TrieDB<'a, 'cache, L>;
 /// Persistent trie database write-access interface for the a given hasher.
 pub type TrieDBMut<'a, L> = trie_db::TrieDBMut<'a, L>;
 /// Querying interface, as in `trie_db` but less generic.
@@ -124,7 +125,7 @@ pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
 pub mod trie_types {
 	pub type Layout<H> = super::Layout<H>;
 	/// Persistent trie database read-access interface for the a given hasher.
-	pub type TrieDB<'a, H> = super::TrieDB<'a, Layout<H>>;
+	pub type TrieDB<'a, 'cache, H> = super::TrieDB<'a, 'cache, Layout<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, Layout<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
@@ -151,8 +152,8 @@ where
 	K: 'a + AsRef<[u8]>,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let trie = TrieDB::<L>::new(db, &root)?;
-	generate_proof(&trie, keys)
+	let mut trie = TrieDB::<L>::new(db, &root)?;
+	generate_proof(&mut trie, keys)
 }
 
 /// Verify a set of key-value pairs against a trie root and a proof.
@@ -283,7 +284,7 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let trie = TrieDB::<L>::new(&*db, root)?;
+	let mut trie = TrieDB::<L>::new(&*db, root)?;
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -292,7 +293,7 @@ where
 		// there's currently no API like iter_with()
 		// => use iter to enumerate all keys AND lookup each
 		// key using get_with
-		trie.get_with(&key, &mut *recorder)?;
+		// trie.get_with(&key, &mut *recorder)?;
 	}
 
 	Ok(())
@@ -437,6 +438,83 @@ where
 
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T> + 'b) {
 		&mut *self
+	}
+}
+
+use std::collections::{hash_map::Entry, HashMap};
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct SharedTrieNodeCache<H: Hasher> {
+	cache: std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>>,
+}
+
+impl<H: Hasher> Default for SharedTrieNodeCache<H> {
+	fn default() -> Self {
+		Self { cache: Default::default() }
+	}
+}
+
+pub struct LocalTrieNodeCache<H: Hasher> {
+	shared: SharedTrieNodeCache<H>,
+	local: parking_lot::Mutex<HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	fast_cache: parking_lot::Mutex<HashMap<Vec<u8>, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+}
+
+pub struct TrieNodeCache<'a, H: Hasher> {
+	shared: parking_lot::RwLockReadGuard<'a, HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	local: parking_lot::MutexGuard<'a, HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	fast_cache: parking_lot::MutexGuard<'a, HashMap<Vec<u8>, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+}
+
+impl<'a, H: Hasher> trie_db::NodeCache<Layout<H>> for TrieNodeCache<'a, H> {
+	fn get_or_insert(
+		&mut self,
+		hash: H::Out,
+		fetch_node: &mut dyn FnMut() -> trie_db::Result<
+			trie_db::node::NodeOwned<H::Out>,
+			H::Out,
+			CError<Layout<H>>,
+		>,
+	) -> trie_db::Result<&Arc<trie_db::node::NodeOwned<H::Out>>, H::Out, CError<Layout<H>>> {
+		if let Some(res) = self.shared.get(&hash) {
+			return Ok(res)
+		}
+
+		match self.local.entry(hash) {
+			Entry::Occupied(res) => Ok(res.into_mut()),
+			Entry::Vacant(vacant) => {
+				let node = (*fetch_node)()?;
+				Ok(vacant.insert(Arc::new(node)))
+			},
+		}
+	}
+
+	fn fast_cache(&self, key: &[u8]) -> Option<&Arc<trie_db::node::NodeOwned<H::Out>>> {
+		self.fast_cache.get(key)
+	}
+
+	fn fast_cache_insert(&mut self, key: &[u8], node: Arc<trie_db::node::NodeOwned<H::Out>>) {
+		self.fast_cache.insert(key.into(), node);
+	}
+}
+
+impl<H: Hasher> LocalTrieNodeCache<H> {
+	pub fn as_cache<'a>(&'a self) -> TrieNodeCache<'a, H> {
+		TrieNodeCache { shared: self.shared.cache.read(), local: self.local.lock(), fast_cache: self.fast_cache.lock() }
+	}
+}
+
+impl<H: Hasher> From<SharedTrieNodeCache<H>> for LocalTrieNodeCache<H> {
+	fn from(shared: SharedTrieNodeCache<H>) -> Self {
+		LocalTrieNodeCache { shared, local: Default::default(), fast_cache: Default::default() }
+	}
+}
+
+impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
+	fn drop(&mut self) {
+		let mut shared = self.shared.cache.write();
+		shared.extend(self.local.lock().drain());
 	}
 }
 

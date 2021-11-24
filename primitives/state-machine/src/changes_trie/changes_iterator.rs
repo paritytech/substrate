@@ -342,7 +342,7 @@ where
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.essence.next(|storage, root, key| {
-			TrieBackendEssence::<_, H>::new(TrieBackendAdapter::new(storage), root, Default::default()).storage(key)
+			TrieBackendEssence::<_, H>::new(TrieBackendAdapter::new(storage), root).storage(key)
 		})
 	}
 }
@@ -391,7 +391,7 @@ where
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
 		self.essence.next(|storage, root, key| {
 			ProvingBackendRecorder::<_, H> {
-				backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root, Default::default()),
+				backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
 				proof_recorder,
 			}
 			.storage(key)
