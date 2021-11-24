@@ -233,7 +233,7 @@ default:
       file:                        false
     GITHUB_SSH_PRIV_KEY:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
-      file:                        true
+      file:                        false
     GITHUB_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
       file:                        false
@@ -538,6 +538,35 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
+
+# Mostly same as the job above, additional instrumentation was added to push test run times
+# to the time series database.
+# This is temporary and will be eventually removed.
+bench-test-full-crypto-feature:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *build-refs
+  variables:
+    <<:                            *default-vars
+    RUSTFLAGS:                     "-Cdebug-assertions=y"
+    RUST_BACKTRACE: 1
+  before_script: [""]
+  script:
+    # disable sccache for the bench purposes
+    - unset RUSTC_WRAPPER
+    - START_TIME=`date '+%s'`
+    - cd primitives/core/
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - cd ../application-crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - END_TIME=`date '+%s'`
+    - TOTAL_TIME=`expr $END_TIME - $START_TIME`
+    # send the job time measuring to the prometheus endpoint
+    - curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
+  tags:
+    - linux-docker-compare
+
+
 test-wasmer-sandbox:
   stage:                           test
   <<:                              *docker-env
@@ -813,10 +842,13 @@ publish-rustdoc:
     # whole space-separated value.
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     # setup ssh
+    # FIXME: add ssh to docker image
     - apt-get update && apt-get install -y ssh
-    - rm -rf /tmp/*
+    - eval $(ssh-agent)
+    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
     # Set git config
-    - git config core.sshCommand "ssh -i ${GITHUB_SSH_PRIV_KEY} -F /dev/null -o StrictHostKeyChecking=no"
     - git config user.email "devops-team@parity.io"
     - git config user.name "${GITHUB_USER}"
     - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
