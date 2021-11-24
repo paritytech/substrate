@@ -81,11 +81,9 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-const MAX_BYTES: u32 = 16384;
-
 benchmarks! {
 	propose_bounty {
-		let d in 0 .. MAX_BYTES;
+		let d in 0 .. T::MaximumumReasonLenght:get();
 
 		let (caller, curator, fee, value, description) = setup_bounty::<T>(0, d);
 	}: _(RawOrigin::Signed(caller), value, description)
