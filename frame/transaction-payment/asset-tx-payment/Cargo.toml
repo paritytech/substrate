@@ -30,7 +30,7 @@ serde = { version = "1.0.126", optional = true }
 
 [dev-dependencies]
 smallvec = "1.7.0"
-serde_json = "1.0.68"
+serde_json = "1.0.71"
 
 sp-storage = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/storage" }
 

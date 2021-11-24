@@ -1266,21 +1266,21 @@ macro_rules! impl_benchmark_test {
 /// 	fn bench_accumulate_dummy() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_accumulate_dummy::<Test>());
-/// 		}
+/// 		})
 /// 	}
 ///
 /// 	#[test]
 /// 	fn bench_set_dummy() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_set_dummy::<Test>());
-/// 		}
+/// 		})
 /// 	}
 ///
 /// 	#[test]
 /// 	fn bench_sort_vector() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_sort_vector::<Test>());
-/// 		}
+/// 		})
 /// 	}
 /// }
 /// ```
