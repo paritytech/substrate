@@ -25,14 +25,8 @@ use frame_system::RawOrigin;
 use frame_support::{assert_ok};
 
 use crate::Pallet as Preimage;
-use frame_system::Pallet as System;
 
 const SEED: u32 = 0;
-
-#[allow(dead_code)]
-fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	System::<T>::assert_last_event(generic_event.into());
-}
 
 fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
