@@ -351,7 +351,7 @@ impl OverlayedChanges {
 			.or_insert_with(|| (top.spawn_child(), child_info.clone()));
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		return changeset.clear_where(|_, _| true, extrinsic_index);
+		changeset.clear_where(|_, _| true, extrinsic_index)
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
