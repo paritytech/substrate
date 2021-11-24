@@ -423,7 +423,10 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			.max_request_body_size(u32::MAX)
 			.build(&online.transport.uri)
 			.await
-			.map_err(|_| "failed to build ws client")?;
+			.map_err(|e| {
+				log::error!(target: LOG_TARGET, "error: {:?}", e);
+				"failed to build ws client"
+			})?;
 		online.transport.client = Some(ws_client);
 
 		// Then, if `at` is not set, set it.
