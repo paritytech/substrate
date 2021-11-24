@@ -1246,13 +1246,15 @@ impl pallet_transaction_storage::Config for Runtime {
 parameter_types! {
 	pub const SignedMigrationMaxLimits: pallet_state_trie_migration::MigrationLimits =
 		pallet_state_trie_migration::MigrationLimits { size: 1024 * 512, item: 512 };
-	pub const SignedDepositPerItem: Balance = 1 * DOLLARS;
+	pub const MigrationSignedDepositPerItem: Balance = 1 * CENTS;
+	pub const MigrationSignedDepositBase: Balance = 20 * DOLLARS;
 }
 impl pallet_state_trie_migration::Config for Runtime {
 	type Event = Event;
 	type ControlOrigin = EnsureRoot<AccountId>;
 	type Currency = Balances;
-	type SignedDepositPerItem = SignedDepositPerItem;
+	type SignedDepositPerItem = MigrationSignedDepositPerItem;
+	type SignedDepositBase = MigrationSignedDepositBase;
 	type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
 	type UnsignedBackOff = frame_support::traits::ConstU32<5>;
