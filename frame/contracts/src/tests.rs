@@ -470,9 +470,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount {
-						account: addr.clone()
-					}),
+					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
 					topics: vec![],
 				},
 				EventRecord {
