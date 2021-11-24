@@ -19,9 +19,10 @@
 
 use super::*;
 use frame_benchmarking::benchmarks;
-use frame_support::{ensure, traits::OnInitialize};
+use frame_support::{ensure, traits::{OnInitialize, PreimageRecipient}};
 use frame_system::RawOrigin;
 use sp_std::{prelude::*, vec};
+use sp_runtime::traits::Hash;
 
 use crate::Pallet as Scheduler;
 use frame_system::Pallet as System;
@@ -49,11 +50,18 @@ fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static
 	Ok(())
 }
 
+fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::Call, CallOrHashOf::<T>) {
+	// Essentially a no-op call.
+	let call: <T as Config>::Call = frame_system::Call::set_storage { items: vec![(i.encode(), vec![])] }.into();
+	let hash = CallOrHashOf::<T>::Hash(T::Hashing::hash_of(&call));
+	(call, hash)
+}
+
 // Add `n` named items to the schedule
 fn fill_schedule_with_call_hashes<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
-	// Essentially a no-op call.
-	let call = CallOrHashOf::<T>::Value(frame_system::Call::set_storage { items: vec![] }.into());
 	for i in 0..n {
+		let (call, hash) = call_and_hash::<T>(i);
+		T::Preimages::note_preimage(call.encode().try_into().unwrap());
 		// Named schedule is strictly heavier than anonymous
 		Scheduler::<T>::do_schedule_named(
 			i.encode(),
@@ -63,7 +71,7 @@ fn fill_schedule_with_call_hashes<T: Config>(when: T::BlockNumber, n: u32) -> Re
 			// HARD_DEADLINE priority means it gets executed no matter what
 			0,
 			frame_system::RawOrigin::Root.into(),
-			call.clone().into(),
+			hash,
 		)?;
 	}
 	ensure!(Agenda::<T>::get(when).len() == n as usize, "didn't fill schedule");
