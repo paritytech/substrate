@@ -585,8 +585,8 @@ pub trait PreimageProvider<Hash> {
 	/// preimage reporting.
 	fn request_preimage(hash: &Hash);
 
-	/// Clear a preimage request.
-	fn clear_request(hash: &Hash);
+	/// Cancel a previous preimage request.
+	fn unrequest_preimage(hash: &Hash);
 }
 
 /// A interface for managing preimages to hashes on chain.

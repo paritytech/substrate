@@ -171,9 +171,9 @@ pub mod pallet {
 		///
 		/// NOTE: THIS MUST NOT BE CALLED ON `hash` MORE TIMES THAN `request_preimage`.
 		#[pallet::weight(0)]
-		pub fn clear_request(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
+		pub fn unrequest_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
-			Self::do_clear_request(&hash)
+			Self::do_unrequest_preimage(&hash)
 		}
 	}
 }
@@ -276,7 +276,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Clear a preimage request.
-	fn do_clear_request(hash: &T::Hash) -> DispatchResult {
+	fn do_unrequest_preimage(hash: &T::Hash) -> DispatchResult {
 		match StatusFor::<T>::get(hash).ok_or(Error::<T>::NotRequested)? {
 			RequestStatus::Requested(mut count) if count > 1 => {
 				count.saturating_dec();
@@ -311,9 +311,9 @@ impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 		Self::do_request_preimage(hash)
 	}
 
-	fn clear_request(hash: &T::Hash) {
-		let res = Self::do_clear_request(hash);
-		debug_assert!(res.is_ok(), "do_clear_request failed - counter underflow?");
+	fn unrequest_preimage(hash: &T::Hash) {
+		let res = Self::do_unrequest_preimage(hash);
+		debug_assert!(res.is_ok(), "do_unrequest_preimage failed - counter underflow?");
 	}
 }
 

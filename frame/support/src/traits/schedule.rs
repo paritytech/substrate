@@ -52,20 +52,20 @@ pub const LOWEST_PRIORITY: Priority = 255;
 /// Type representing a call. Can be either the `Call` value itself or the hash of the encoded
 /// `Call`.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum CallOrHash<Call, Hash> {
-	/// The `Call` value itself.
-	Call(Call),
-	/// The hash of the encoded `Call` which this value represents.
+pub enum MaybeHashed<T, Hash> {
+	/// The value itself.
+	Value(T),
+	/// The hash of the encoded value which this value represents.
 	Hash(Hash),
 }
 
-impl<C, H> From<C> for CallOrHash<C, H> {
-	fn from(c: C) -> Self {
-		CallOrHash::Call(c)
+impl<T, H> From<T> for MaybeHashed<T, H> {
+	fn from(t: T) -> Self {
+		MaybeHashed::Value(t)
 	}
 }
 
-/// Error type for `CallOrHash::lookup`.
+/// Error type for `MaybeHashed::lookup`.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum LookupError {
 	/// A call of this hash was not known.
@@ -74,43 +74,47 @@ pub enum LookupError {
 	BadFormat,
 }
 
-impl<C: Decode, H> CallOrHash<C, H> {
-	pub fn as_call(&self) -> Option<&C> {
+impl<T: Decode, H> MaybeHashed<T, H> {
+	pub fn as_value(&self) -> Option<&T> {
 		match &self {
-			Self::Call(c) => Some(c),
+			Self::Value(c) => Some(c),
 			Self::Hash(_) => None,
+		}
+	}
+
+	pub fn as_hash(&self) -> Option<&H> {
+		match &self {
+			Self::Value(_) => None,
+			Self::Hash(h) => Some(h),
 		}
 	}
 
 	pub fn ensure_requested<P: PreimageProvider<H>>(&self) {
 		match &self {
-			Self::Call(_) => (),
+			Self::Value(_) => (),
 			Self::Hash(hash) => P::request_preimage(hash),
 		}
 	}
 
-	pub fn resolved<P: PreimageProvider<H>>(self) -> Self {
-		match self {
-			Self::Call(c) => Self::Call(c),
-			Self::Hash(h) => {
-				let data = match P::get_preimage(&h) {
-					Some(p) => p,
-					None => return Self::Hash(h),
-				};
-				match C::decode(&mut &data[..]) {
-					Ok(c) => Self::Call(c),
-					Err(_) => Self::Hash(h),
-				}
-			}
+	pub fn ensure_unrequested<P: PreimageProvider<H>>(&self) {
+		match &self {
+			Self::Value(_) => (),
+			Self::Hash(hash) => P::unrequest_preimage(hash),
 		}
 	}
 
-	pub fn try_resolve<P: PreimageProvider<H>>(self) -> Result<C, LookupError> {
+	pub fn resolved<P: PreimageProvider<H>>(self) -> (Self, Option<H>) {
 		match self {
-			Self::Call(c) => Ok(c),
+			Self::Value(c) => (Self::Value(c), None),
 			Self::Hash(h) => {
-				let data = P::get_preimage(&h).ok_or(LookupError::Unknown)?;
-				C::decode(&mut &data[..]).map_err(|_| LookupError::BadFormat)
+				let data = match P::get_preimage(&h) {
+					Some(p) => p,
+					None => return (Self::Hash(h), None),
+				};
+				match T::decode(&mut &data[..]) {
+					Ok(c) => (Self::Value(c), Some(h)),
+					Err(_) => (Self::Hash(h), None),
+				}
 			}
 		}
 	}
@@ -215,7 +219,7 @@ pub mod v1 {
 			origin: Origin,
 			call: Call,
 		) -> Result<Self::Address, DispatchError> {
-			let c = CallOrHash::<Call, T::Hash>::Call(call);
+			let c = MaybeHashed::<Call, T::Hash>::Value(call);
 			T::schedule(when, maybe_periodic, priority, origin, c)
 		}
 
@@ -248,7 +252,7 @@ pub mod v1 {
 			origin: Origin,
 			call: Call,
 		) -> Result<Self::Address, ()> {
-			let c = CallOrHash::<Call, T::Hash>::Call(call);
+			let c = MaybeHashed::<Call, T::Hash>::Value(call);
 			T::schedule_named(id, when, maybe_periodic, priority, origin, c)
 		}
 
@@ -287,7 +291,7 @@ pub mod v2 {
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			origin: Origin,
-			call: CallOrHash<Call, Self::Hash>,
+			call: MaybeHashed<Call, Self::Hash>,
 		) -> Result<Self::Address, DispatchError>;
 
 		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
@@ -335,7 +339,7 @@ pub mod v2 {
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			origin: Origin,
-			call: CallOrHash<Call, Self::Hash>,
+			call: MaybeHashed<Call, Self::Hash>,
 		) -> Result<Self::Address, ()>;
 
 		/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances
