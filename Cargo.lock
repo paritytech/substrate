@@ -1388,6 +1388,103 @@ dependencies = [
 ]
 
 [[package]]
+name = "cumulus-test-client"
+version = "0.1.0"
+dependencies = [
+ "cumulus-test-runtime",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sc-block-builder",
+ "sc-consensus",
+ "sc-consensus-babe",
+ "sc-executor",
+ "sc-executor-common",
+ "sc-service",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-keyring",
+ "sp-runtime",
+ "sp-timestamp",
+ "substrate-test-client",
+]
+
+[[package]]
+name = "cumulus-test-runtime"
+version = "0.1.0"
+dependencies = [
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-rpc-runtime-api",
+ "pallet-balances",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-block-builder",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder",
+]
+
+[[package]]
+name = "cumulus-test-service"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "criterion",
+ "cumulus-test-runtime",
+ "frame-system",
+ "frame-system-rpc-runtime-api",
+ "futures 0.3.16",
+ "jsonrpc-core",
+ "pallet-sudo",
+ "parity-scale-codec",
+ "rand 0.7.3",
+ "sc-basic-authorship",
+ "sc-chain-spec",
+ "sc-cli",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-babe",
+ "sc-executor",
+ "sc-network",
+ "sc-rpc",
+ "sc-service",
+ "sc-tracing",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "serde",
+ "sp-api",
+ "sp-arithmetic",
+ "sp-blockchain",
+ "sp-core",
+ "sp-io",
+ "sp-keyring",
+ "sp-runtime",
+ "sp-state-machine",
+ "sp-timestamp",
+ "sp-tracing",
+ "sp-trie",
+ "substrate-test-client",
+ "substrate-test-utils",
+ "tokio",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6064,6 +6161,22 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+]
+
+[[package]]
+name = "pallet-test"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

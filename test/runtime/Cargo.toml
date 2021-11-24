@@ -1,0 +1,67 @@
+[package]
+name = "cumulus-test-runtime"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.3.0", default-features = false, features = ["derive"] }
+scale-info = { version = "1.0.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+
+# Substrate dependencies
+frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
+pallet-sudo ={ version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
+#pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
+sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
+
+# Cumulus dependencies
+# cumulus-primitives-core = { path = "../../primitives/core", default-features = false }
+# cumulus-primitives-timestamp = { path = "../../primitives/timestamp", default-features = false }
+
+[build-dependencies]
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder" }
+
+[features]
+default = [ "std" ]
+std = [
+	"codec/std",
+	"scale-info/std",
+#  "cumulus-primitives-timestamp/std",
+	"frame-executive/std",
+	"frame-support/std",
+	"frame-system/std",
+	"frame-system-rpc-runtime-api/std",
+	"pallet-balances/std",
+	"pallet-sudo/std",
+	"pallet-timestamp/std",
+	# "pallet-transaction-payment/std",
+	"serde",
+	"sp-api/std",
+	"sp-block-builder/std",
+	"sp-core/std",
+	"sp-inherents/std",
+	"sp-io/std",
+	"sp-offchain/std",
+	"sp-runtime/std",
+	"sp-session/std",
+	"sp-std/std",
+	"sp-transaction-pool/std",
+	"sp-version/std",
+]
+increment-spec-version = []
