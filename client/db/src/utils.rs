@@ -224,30 +224,24 @@ pub fn open_database<Block: BlockT>(
 		sp_blockchain::Error::Backend(format!("Error in migration to role subdirectory: {}", e))
 	})?;
 
-	let cache = if config.trie_cache_size == 0 {
-		None
-	} else {
-		Some(config.trie_cache_size)
-	};
-	open_database_at::<Block>(&config.source, db_type, cache)
+	open_database_at::<Block>(&config.source, db_type)
 }
 
 fn open_database_at<Block: BlockT>(
 	source: &DatabaseSource,
 	db_type: DatabaseType,
-	trie_cache: Option<usize>,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
 	let db: Arc<dyn Database<DbHash>> = match &source {
-		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, true, trie_cache)?,
+		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, true)?,
 		DatabaseSource::RocksDb { path, cache_size } =>
-			open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size, trie_cache)?,
+			open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
 		DatabaseSource::Custom(db) => db.clone(),
 		DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size } => {
 			// check if rocksdb exists first, if not, open paritydb
-			match open_kvdb_rocksdb::<Block>(&rocksdb_path, db_type, false, *cache_size, trie_cache) {
+			match open_kvdb_rocksdb::<Block>(&rocksdb_path, db_type, false, *cache_size) {
 				Ok(db) => db,
 				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
-					open_parity_db::<Block>(&paritydb_path, db_type, true, trie_cache)?,
+					open_parity_db::<Block>(&paritydb_path, db_type, true)?,
 				Err(_) => return Err(backend_err("cannot open rocksdb. corrupted database")),
 			}
 		},
@@ -308,8 +302,8 @@ impl From<io::Error> for OpenDbError {
 }
 
 #[cfg(feature = "with-parity-db")]
-fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: bool, trie_cache: Option<usize>) -> OpenDbResult {
-	let db = crate::parity_db::open(path, db_type, create, trie_cache)?;
+fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: bool) -> OpenDbResult {
+	let db = crate::parity_db::open(path, db_type, create)?;
 	Ok(db)
 }
 
@@ -318,7 +312,6 @@ fn open_parity_db<Block: BlockT>(
 	_path: &Path,
 	_db_type: DatabaseType,
 	_create: bool,
-	_trie_cache: Option<usize>,
 ) -> OpenDbResult {
 	Err(OpenDbError::NotEnabled("with-parity-db"))
 }
@@ -329,7 +322,6 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	db_type: DatabaseType,
 	create: bool,
 	cache_size: usize,
-	trie_cache: Option<usize>,
 ) -> OpenDbResult {
 	// first upgrade database to required version
 	match crate::upgrade::upgrade_db::<Block>(&path, db_type) {
@@ -383,14 +375,7 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	let db = kvdb_rocksdb::Database::open(&db_config, path)?;
 	// write database version only after the database is succesfully opened
 	crate::upgrade::update_version(path)?;
-
-	if let (Some(cache), DatabaseType::Full) = (trie_cache, db_type) {
-		let mut db = crate::trie_state_cache::DatabaseCache::new(sp_database::as_database_adapter::<_, Block::Hash>(db));
-		db.configure_cache(crate::columns::STATE, Some(cache));
-		Ok(Arc::new(db))
-	} else {
-		Ok(sp_database::as_database(db))
-	}
+	Ok(sp_database::as_database(db))
 }
 
 #[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
@@ -399,7 +384,6 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	_db_type: DatabaseType,
 	_create: bool,
 	_cache_size: usize,
-	_trie_cache_size: Option<usize>,
 ) -> OpenDbResult {
 	Err(OpenDbError::NotEnabled("with-kvdb-rocksdb"))
 }
@@ -447,7 +431,7 @@ fn maybe_migrate_to_type_subdir<Block: BlockT>(
 			// database stored in the target directory and close the database on success.
 			let mut old_source = source.clone();
 			old_source.set_path(&basedir);
-			open_database_at::<Block>(&old_source, db_type, None)
+			open_database_at::<Block>(&old_source, db_type)
 				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
 			info!(
@@ -777,7 +761,6 @@ mod tests {
 
 	fn db_settings(source: DatabaseSource) -> DatabaseSettings {
 		DatabaseSettings {
-			trie_cache_size: 0,
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
 			state_pruning: PruningMode::ArchiveAll,

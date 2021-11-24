@@ -56,16 +56,7 @@ pub struct Cache<B: BlockT> {
 	modifications: VecDeque<BlockChanges<B::Header>>,
 }
 
-pub(crate) struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
-
-impl<K, V> LRUMap<K, V>
-	where
-		K: std::hash::Hash + Eq,
-{
-	pub(crate) fn new(size_limit: usize) -> Self {
-		LRUMap(LinkedHashMap::new(), 0, size_limit)
-	}
-}
+struct LRUMap<K, V>(LinkedHashMap<K, V>, usize, usize);
 
 /// Internal trait similar to `heapsize` but using
 /// a simply estimation.
@@ -73,7 +64,7 @@ impl<K, V> LRUMap<K, V>
 /// This should not be made public, it is implementation
 /// detail trait. If it need to become public please
 /// consider using `malloc_size_of`.
-pub(crate) trait EstimateSize {
+trait EstimateSize {
 	/// Return a size estimation of additional size needed
 	/// to cache this struct (in bytes).
 	fn estimate_size(&self) -> usize;
@@ -116,7 +107,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		}
 	}
 
-	pub(crate) fn add(&mut self, k: K, v: V) {
+	fn add(&mut self, k: K, v: V) {
 		let lmap = &mut self.0;
 		let storage_used_size = &mut self.1;
 		let limit = self.2;
@@ -148,7 +139,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		}
 	}
 
-	pub(crate) fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+	fn get<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
 	where
 		K: std::borrow::Borrow<Q>,
 		Q: StdHash + Eq,

@@ -189,7 +189,6 @@ mod tests {
 	fn open_database(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
 		crate::utils::open_database::<Block>(
 			&DatabaseSettings {
-				trie_cache_size: 0,
 				state_cache_size: 0,
 				state_cache_child_ratio: None,
 				state_pruning: PruningMode::ArchiveAll,
