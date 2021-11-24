@@ -138,6 +138,7 @@ impl Config for Test {
 	type ChallengePeriod = ChallengePeriod;
 	type MaxCandidateIntake = MaxCandidateIntake;
 	type PalletId = SocietyPalletId;
+	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type ActionByteDeposit = ActionByteDeposit;
 	type PalletsOrigin = OriginCaller;
@@ -267,3 +268,11 @@ pub fn call_judge_suspended_member(who: u128, forgive: bool) -> Call {
 pub fn call_judge_suspended_candidate(who: u128, judgement: Judgement) -> Call {
 	Call::Society(SocietyCall::judge_suspended_candidate { who, judgement })
 }
+
+// pub fn validate_call(call: &Call) -> bool {
+// 	match call {
+// 		Call::Society(SocietyCall::judge_suspended_member { .. }) => true,
+// 		Call::Society(SocietyCall::judge_suspended_candidate { .. }) => true,
+// 		_ => false,
+// 	}
+// }

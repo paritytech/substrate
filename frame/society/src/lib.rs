@@ -264,7 +264,7 @@ use frame_support::{
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, ChangeMembers, Currency, EnsureOrigin,
 		ExistenceRequirement::AllowDeath,
-		Imbalance, IsSubType, OnUnbalanced, Randomness, ReservableCurrency,
+		Imbalance, IsSubType, OnUnbalanced, PalletInfo, Randomness, ReservableCurrency,
 	},
 	PalletId,
 };
@@ -394,6 +394,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
+		/// Provides information about the pallet setup in the runtime.
+		type PalletInfo: PalletInfo;
+
 		/// The society sub account
 		#[pallet::constant]
 		type SocietySubAccount: Get<&'static [u8]>;
@@ -515,6 +518,8 @@ pub mod pallet {
 		NotHead,
 		/// The action bid has too little value for it's call.
 		InsufficientActionDeposit,
+		/// The call can not be called by Society account.
+		InvalidCall,
 	}
 
 	#[pallet::event]
@@ -1380,6 +1385,8 @@ pub mod pallet {
 			let members = <Members<T, I>>::get();
 			// Check sender can create actions.
 			ensure!(Self::is_member(&members, &actor), Error::<T, I>::NotMember);
+			// Check if call can be called by Society account.
+			ensure!(Self::validate_call(&call), Error::<T, I>::InvalidCall);
 			// Reserve the value of the action.
 			T::Currency::reserve(&actor, value.clone())?;
 			Self::put_bid(bids, &actor, value.clone(), BidKind::Action(value.clone(), call));
@@ -1514,6 +1521,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check a user is a member.
 	fn is_member(members: &Vec<T::AccountId>, who: &T::AccountId) -> bool {
 		members.binary_search(who).is_ok()
+	}
+
+	/// Check if it is a valid call, meaning that it is a society's function call.
+	fn validate_call(boxed_call: &Box<<T as Config<I>>::Call>) -> bool {
+		let encoded_call = boxed_call.encode();
+		let pallet_index = <T as pallet::Config<I>>::PalletInfo::index::<Self>().unwrap() as u8;
+		if encoded_call[0] == pallet_index {
+			return true
+		}
+		false
 	}
 
 	/// Add a member to the sorted members list. If the user is already a member, do nothing.

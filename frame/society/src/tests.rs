@@ -928,116 +928,6 @@ fn bids_ordered_correctly() {
 
 #[test]
 fn bidding_action_works() {
-	// This tests that bid_action() works as expected.
-	EnvBuilder::new().execute(|| {
-		// 10 is the only member, founder, and head
-		assert_eq!(Society::members(), vec![10]);
-
-		// Funding society's account
-		assert_ok!(Balances::transfer(Origin::signed(50), society_account(), 25));
-		assert_eq!(Balances::free_balance(society_account()), 25);
-
-		// Users make bids
-		assert_ok!(Society::bid(Origin::signed(20), 1000));
-		assert_ok!(Society::bid(Origin::signed(30), 500));
-
-		// 10 makes an action bid that transfers 15 from society's account to itself
-		let boxed_call = Box::new(call_transfer(10, 15));
-		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
-
-		// 10 tries to bid another action (must fail as 10 has already made a bid)
-		assert_noop!(
-			Society::bid_action(Origin::signed(10), 200, boxed_call.clone()),
-			Error::<Test, _>::AlreadyBid
-		);
-
-		// 40 tries to bid another action (must fail as 40 is not a member)
-		assert_noop!(
-			Society::bid_action(Origin::signed(40), 300, boxed_call.clone()),
-			Error::<Test, _>::NotMember
-		);
-
-		run_to_block(4);
-
-		// Pot is 1000 after "PeriodSpend"
-		assert_eq!(Society::pot(), 1000);
-
-		// Checking candidates (20 is not a candidate because its bid's value > pot)
-		assert_eq!(
-			Society::candidates(),
-			vec![
-				create_bid(50, 10, BidKind::Action(50, boxed_call.clone())),
-				create_bid(500, 30, BidKind::Deposit(25))
-			]
-		);
-
-		// 10 votes for the bid_action created by itself
-		assert_ok!(Society::vote(Origin::signed(10), 10, true));
-
-		run_to_block(8);
-
-		// Pot is 1950 after second "PeriodSpend" (2000) minus 50 from the winning bids' payout
-		assert_eq!(Society::pot(), 1950);
-
-		// Checking candidates (20 is now a candidate)
-		assert_eq!(Society::candidates(), vec![create_bid(1000, 20, BidKind::Deposit(25))]);
-
-		// Scheduler triggers and the transfer call is executed
-		run_to_block((12 + SchedulerBlocksOffset::get()).into());
-
-		// The value (15) was transferred (Society -> 10)
-		assert_eq!(Balances::free_balance(10), 65);
-
-		// Actions balance: 25 - 15
-		assert_eq!(Balances::free_balance(society_account()), 10);
-
-		run_to_block(20);
-
-		// 20 is now suspended
-		assert_eq!(Society::suspended_candidate(20).is_some(), true);
-
-		run_to_block(24);
-
-		// 10 makes same action bid
-		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
-
-		run_to_block(28);
-
-		// Checking candidates
-		assert_eq!(
-			Society::candidates(),
-			vec![create_bid(50, 10, BidKind::Action(50, boxed_call.clone()))]
-		);
-
-		// 10 free balance (65 - 50 reserved for bid_action)
-		assert_eq!(Balances::free_balance(10), 15);
-
-		// Society account free balance
-		assert_eq!(Balances::free_balance(society_account()), 10);
-
-		run_to_block(32);
-
-		// Checking candidates, 10 bid action was rejected
-		assert_eq!(Society::candidates(), vec![]);
-
-		// 10 was not suspended even with a rejected action bid
-		// note: judge_suspended_candidate() can also be called by society_account
-		assert_noop!(
-			Society::judge_suspended_candidate(
-				Origin::signed(society_account()),
-				10,
-				Judgement::Approve
-			),
-			Error::<Test, _>::NotSuspended
-		);
-
-		// 10 rejected bid action's value (50) is transferred to society account
-		assert_eq!(Balances::free_balance(society_account()), 60);
-	});
-}
-
-#[test]
-fn bid_judge_actions_works() {
 	// This tests that change_founder() works as expected.
 	EnvBuilder::new().execute(|| {
 		// Society members
@@ -1080,15 +970,18 @@ fn bid_judge_actions_works() {
 		assert_eq!(Society::candidates(), vec![]);
 
 		// 10 makes an action bid that moves 50's bid back
-		let boxed_call = Box::new(call_judge_suspended_candidate(50, Judgement::Rebid));
-		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_call.clone()));
+		let boxed_candidate_call = Box::new(call_judge_suspended_candidate(50, Judgement::Rebid));
+		// Check if it is a valid call
+		assert_eq!(Society::validate_call(&boxed_candidate_call), true);
+		// It is valid, so bid it
+		assert_ok!(Society::bid_action(Origin::signed(10), 50, boxed_candidate_call.clone()));
 
 		run_to_block(28);
 
 		// Checking candidates
 		assert_eq!(
 			Society::candidates(),
-			vec![create_bid(50, 10, BidKind::Action(50, boxed_call.clone())),]
+			vec![create_bid(50, 10, BidKind::Action(50, boxed_candidate_call.clone())),]
 		);
 
 		// 10 and 30 vote for 10's bid_action
@@ -1118,8 +1011,19 @@ fn bid_judge_actions_works() {
 		// 50 is now a member
 		assert_eq!(Society::members(), vec![10, 30, 50]);
 
+		// Funding society's account
+		assert_ok!(Balances::transfer(Origin::signed(40), society_account(), 25));
+		assert_eq!(Balances::free_balance(society_account()), 25);
+
+		// 10 tries to bid_action with an invalid Call
+		// transferring 25 from Society's Account to itself)
+		let boxed_transfer_call = Box::new(call_transfer(10, 25));
+		// Balances::transfer is not allowed
+		assert_eq!(Society::validate_call(&boxed_transfer_call), false);
+
 		// 30 makes an action bid that forgives member 20
 		let boxed_member_call = Box::new(call_judge_suspended_member(20, true));
+		assert_eq!(Society::validate_call(&boxed_member_call), true);
 		assert_ok!(Society::bid_action(Origin::signed(30), 50, boxed_member_call.clone()));
 
 		run_to_block(48);
@@ -1143,5 +1047,8 @@ fn bid_judge_actions_works() {
 
 		// 20 is a member again
 		assert_eq!(<Members<Test>>::get(), vec![10, 20, 30, 50]);
+
+		// Society's Account still has some funds
+		assert_eq!(Balances::free_balance(society_account()), 25);
 	});
 }

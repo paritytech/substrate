@@ -1109,6 +1109,7 @@ parameter_types! {
 impl pallet_society::Config for Runtime {
 	type Event = Event;
 	type PalletId = SocietyPalletId;
+	type PalletInfo = PalletInfo;
 	type SocietySubAccount = SocietySubAccount;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
