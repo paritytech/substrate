@@ -145,12 +145,32 @@ pub fn new_partial(
 		client.clone(),
 	);
 
+	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
+		client.clone(),
+		&(client.clone() as Arc<_>),
+		select_chain.clone(),
+		telemetry.as_ref().map(|x| x.handle()),
+	)?;
+	
+	let (block_import, babe_link) = sc_consensus_babe::block_import(
+		sc_consensus_babe::Config::get_or_compute(&*client)?,
+		grandpa_block_import,
+		client.clone(),
+	)?;
+
 	let import_queue = sc_consensus_babe::import_queue(
+		babe_link,
+		block_import,
+		None,
 		client.clone(),
-		client.clone(),
+SelectChain,
 		|_, _| async { Ok(sp_timestamp::InherentDataProvider::from_system_time()) },
 		&task_manager.spawn_essential_handle(),
 		registry.clone(),
+		sp_consensus::CanAuthorWithNativeVersion::new(
+			client.executor().clone(),
+		),
+		None
 	)?;
 
 	let params = PartialComponents {
@@ -179,7 +199,7 @@ pub fn prepare_node_config(mut parachain_config: Configuration) -> Configuration
 
 
 /// Parameters given to [`start_full_node`].
-pub struct StartFullNodeParams<'a, Block: BlockT, Client, PClient> {
+pub struct StartFullNodeParams<'a, Block: BlockT, Client> {
 	pub client: Arc<Client>,
 	//pub relay_chain_full_node: RFullNode<PClient>,
 	pub task_manager: &'a mut TaskManager,
@@ -194,65 +214,66 @@ struct StartConsensus<'a, Block: BlockT, Client, Backend> {
 }
 
 
-/// Execute something with the client instance.
-///
-/// As there exist multiple chains inside Polkadot, like Polkadot itself, Kusama, Westend etc,
-/// there can exist different kinds of client types. As these client types differ in the generics
-/// that are being used, we can not easily return them from a function. For returning them from a
-/// function there exists [`Client`]. However, the problem on how to use this client instance still
-/// exists. This trait "solves" it in a dirty way. It requires a type to implement this trait and
-/// than the [`execute_with_client`](ExecuteWithClient::execute_with_client) function can be called
-/// with any possible client instance.
-///
-/// In a perfect world, we could make a closure work in this way.
-pub trait ExecuteWithClient {
-	/// The return type when calling this instance.
-	type Output;
+// /// Execute something with the client instance.
+// ///
+// /// As there exist multiple chains inside Polkadot, like Polkadot itself, Kusama, Westend etc,
+// /// there can exist different kinds of client types. As these client types differ in the generics
+// /// that are being used, we can not easily return them from a function. For returning them from a
+// /// function there exists [`Client`]. However, the problem on how to use this client instance still
+// /// exists. This trait "solves" it in a dirty way. It requires a type to implement this trait and
+// /// than the [`execute_with_client`](ExecuteWithClient::execute_with_client) function can be called
+// /// with any possible client instance.
+// ///
+// /// In a perfect world, we could make a closure work in this way.
+// pub trait ExecuteWithClient {
+// 	/// The return type when calling this instance.
+// 	type Output;
 
-	/// Execute whatever should be executed with the given client instance.
-	fn execute_with_client<Client, Api, Backend>(self, client: Arc<Client>) -> Self::Output
-	where
-		<Api as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
-		Backend: sc_client_api::Backend<Block> + 'static,
-		Backend::State: sp_api::StateBackend<BlakeTwo256>,
-		Api: crate::RuntimeApiCollection<StateBackend = Backend::State>,
-		Client: AbstractClient<Block, Backend, Api = Api> + 'static;
-}
+// 	/// Execute whatever should be executed with the given client instance.
+// 	fn execute_with_client<Client, Api, Backend>(self, client: Arc<Client>) -> Self::Output
+// 	where
+// 		<Api as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
+// 		Backend: sc_client_api::Backend<Block> + 'static,
+// 		Backend::State: sp_api::StateBackend<BlakeTwo256>,
+// 		//Api: crate::RuntimeApiCollection<StateBackend = Backend::State>,
+// 		//Client: AbstractClient<Block, Backend, Api = Api> + 'static;
+// 		Api: sp_api::ApiExt<sp_runtime::generic::Block<sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>, sp_runtime::OpaqueExtrinsic>>;
+// }
 
 
-/// A handle to a Polkadot client instance.
-///
-/// The Polkadot service supports multiple different runtimes (Westend, Polkadot itself, etc). As each runtime has a
-/// specialized client, we need to hide them behind a trait. This is this trait.
-///
-/// When wanting to work with the inner client, you need to use `execute_with`.
-///
-/// See [`ExecuteWithClient`](trait.ExecuteWithClient.html) for more information.
-pub trait ClientHandle {
-	/// Execute the given something with the client.
-	fn execute_with<T: ExecuteWithClient>(&self, t: T) -> T::Output;
-}
+// /// A handle to a Polkadot client instance.
+// ///
+// /// The Polkadot service supports multiple different runtimes (Westend, Polkadot itself, etc). As each runtime has a
+// /// specialized client, we need to hide them behind a trait. This is this trait.
+// ///
+// /// When wanting to work with the inner client, you need to use `execute_with`.
+// ///
+// /// See [`ExecuteWithClient`](trait.ExecuteWithClient.html) for more information.
+// pub trait ClientHandle {
+// 	/// Execute the given something with the client.
+// 	fn execute_with<T: ExecuteWithClient>(&self, t: T) -> T::Output;
+// }
 
-/// A wrapper for the test client that implements `ClientHandle`.
-pub struct TestClient(pub Arc<Client>);
+// /// A wrapper for the test client that implements `ClientHandle`.
+// pub struct TestClient(pub Arc<Client>);
 
-impl ClientHandle for TestClient {
-	fn execute_with<T: ExecuteWithClient>(&self, t: T) -> T::Output {
-		T::execute_with_client::<_, _, sc_service::TFullBackend<Block>>(t, self.0.clone())
-	}
-}
+// impl ClientHandle for TestClient {
+// 	fn execute_with<T: ExecuteWithClient>(&self, t: T) -> T::Output {
+// 		T::execute_with_client::<_, _, sc_service::TFullBackend<Block>>(t, self.0.clone())
+// 	}
+// }
 
 /// Start a full node for a parachain.
 ///
 /// A full node will only sync the given parachain and will follow the
 /// tip of the chain.
-pub fn start_full_node<Block, Client, Backend, PClient>(
+pub fn start_full_node<Block, Client, Backend>(
 	StartFullNodeParams {
 		client,
 		announce_block,
 		task_manager,
-		relay_chain_full_node,
-	}: StartFullNodeParams<Block, Client, PClient>,
+		//relay_chain_full_node,
+	}: StartFullNodeParams<Block, Client>,
 ) -> sc_service::error::Result<()>
 where
 	Block: BlockT,
@@ -265,16 +286,17 @@ where
 		+ 'static,
 	for<'a> &'a Client: BlockImport<Block>,
 	Backend: BackendT<Block> + 'static,
-	PClient: ClientHandle,
+	//PClient: ClientHandle,
 {
-	relay_chain_full_node.client.execute_with(StartConsensus {
-		announce_block,
-		client,
-		task_manager,
-		_phantom: PhantomData,
-	});
+	//TODO????
+	// (*client).execute_with(StartConsensus {
+	// 	announce_block,
+	// 	client,
+	// 	task_manager,
+	// 	_phantom: PhantomData,
+	// });
 
-	task_manager.add_child(relay_chain_full_node.relay_chain_full_node.task_manager);
+	//task_manager.add_child(relay_chain_full_node.relay_chain_full_node.task_manager);
 
 	Ok(())
 }
@@ -347,7 +369,7 @@ where
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue: import_queue,
-			on_demand: None,
+			//on_demand: None,
 			block_announce_validator_builder: None, //Some(Box::new(block_announce_validator_builder)),
 			warp_sync: None,
 		})?;
@@ -359,8 +381,8 @@ where
 	};
 
 	let rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
-		on_demand: None,
-		remote_blockchain: None,
+		//on_demand: None,
+		//remote_blockchain: None,
 		rpc_extensions_builder,
 		client: client.clone(),
 		transaction_pool: transaction_pool.clone(),
