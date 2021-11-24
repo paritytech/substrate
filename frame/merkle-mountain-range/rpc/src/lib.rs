@@ -36,7 +36,7 @@ use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-pub use pallet_mmr_primitives::MmrApi as MmrRuntimeApi;
+pub use pallet_mmr_primitives::{LeafIndex, MmrApi as MmrRuntimeApi};
 
 const RUNTIME_ERROR: i32 = 8000;
 const MMR_ERROR: i32 = 8010;
@@ -80,7 +80,7 @@ pub trait MmrApi<BlockHash> {
 	#[method(name = "generateProof")]
 	fn generate_proof(
 		&self,
-		leaf_index: u64,
+		leaf_index: LeafIndex,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafProof<BlockHash>>;
 }
@@ -109,7 +109,7 @@ where
 {
 	fn generate_proof(
 		&self,
-		leaf_index: u64,
+		leaf_index: LeafIndex,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafProof<Block::Hash>> {
 		let api = self.client.runtime_api();
