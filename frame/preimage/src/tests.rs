@@ -20,18 +20,135 @@
 use super::*;
 use crate::mock::*;
 
-use crate as scheduler;
-use frame_support::{
-	assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, OnFinalize, OnInitialize},
-	weights::constants::RocksDbWeight,
-	Hashable,
-};
-use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
-use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
-};
-use substrate_test_utils::assert_eq_uvec;
+use frame_support::{assert_noop, assert_ok};
+use pallet_balances::Error as BalancesError;
+
+#[test]
+fn user_note_preimage_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_eq!(Balances::reserved_balance(2), 3);
+		assert_eq!(Balances::free_balance(2), 97);
+
+		let h = hashed([1]);
+		assert!(Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+
+		assert_noop!(Preimage::note_preimage(Origin::signed(2), vec![1]), Error::<Test>::AlreadyNoted);
+		assert_noop!(Preimage::note_preimage(Origin::signed(0), vec![2]), BalancesError::<Test>::InsufficientBalance);
+	});
+}
+
+#[test]
+fn manager_note_preimage_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
+		assert_eq!(Balances::reserved_balance(1), 0);
+		assert_eq!(Balances::free_balance(1), 100);
+
+		let h = hashed([1]);
+		assert!(Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+
+		assert_noop!(Preimage::note_preimage(Origin::signed(1), vec![1]), Error::<Test>::AlreadyNoted);
+	});
+}
+
+#[test]
+fn user_unnote_preimage_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(3), hashed([1])), Error::<Test>::NotAuthorized);
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(2), hashed([2])), Error::<Test>::NotNoted);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(2), hashed([1])));
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(2), hashed([1])), Error::<Test>::NotNoted);
+
+		let h = hashed([1]);
+		assert!(!Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), None);
+	});
+}
+
+#[test]
+fn manager_unnote_preimage_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])));
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])), Error::<Test>::NotNoted);
+
+		let h = hashed([1]);
+		assert!(!Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), None);
+	});
+}
+
+#[test]
+fn manager_unnote_user_preimage_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(3), hashed([1])), Error::<Test>::NotAuthorized);
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(2), hashed([2])), Error::<Test>::NotNoted);
+
+		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])));
+
+		let h = hashed([1]);
+		assert!(!Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), None);
+	});
+}
+
+#[test]
+fn requested_then_noted_preimage_cannot_be_unnoted() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
+		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])), Error::<Test>::Requested);
+
+		let h = hashed([1]);
+		assert!(Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+	});
+}
+
+#[test]
+fn noted_then_requested_preimage_cannot_be_unnoted() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
+		assert_noop!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])), Error::<Test>::Requested);
+
+		let h = hashed([1]);
+		assert!(Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+	});
+}
+
+#[test]
+fn requested_then_user_noted_preimage_is_free() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_eq!(Balances::free_balance(2), 100);
+
+		let h = hashed([1]);
+		assert!(Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+	});
+}
+
+
+#[test]
+fn user_noted_then_requested_preimage_is_refunded() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
+		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_eq!(Balances::free_balance(2), 100);
+
+		let h = hashed([1]);
+		assert!(Preimage::have_preimage(&h));
+		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
+	});
+}

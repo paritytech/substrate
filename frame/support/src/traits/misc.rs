@@ -573,7 +573,7 @@ pub trait PreimageProvider<Hash> {
 	/// Returns whether a preimage exists for a given hash.
 	///
 	/// A value of `true` implies that `get_preimage` is `Some`.
-	fn preimage_exists(hash: &Hash) -> bool;
+	fn have_preimage(hash: &Hash) -> bool;
 
 	/// Returns the preimage for a given hash.
 	fn get_preimage(hash: &Hash) -> Option<Vec<u8>>;

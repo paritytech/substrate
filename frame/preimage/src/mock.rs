@@ -20,20 +20,11 @@
 use super::*;
 
 use crate as pallet_preimage;
-use frame_support::{
-	assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, OnFinalize, OnInitialize},
-	weights::constants::RocksDbWeight,
-	Hashable,
-};
-use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
-};
-use substrate_test_utils::assert_eq_uvec;
+use sp_runtime::{testing::Header, traits::{BlakeTwo256, IdentityLookup}, Perbill};
+use frame_support::{parameter_types, ord_parameter_types, traits::Everything};
+use frame_support::weights::constants::RocksDbWeight;
+use frame_system::EnsureSignedBy;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -45,27 +36,18 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Logger: logger::{Pallet, Call, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Preimage: pallet_preimage::{Pallet, Call, Storage, Event<T>},
 	}
 );
-
-// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
-pub struct BaseFilter;
-impl Contains<Call> for BaseFilter {
-	fn contains(call: &Call) -> bool {
-		!matches!(call, Call::Logger(LoggerCall::log { .. }))
-	}
-}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
 }
-impl system::Config for Test {
-	type BaseCallFilter = BaseFilter;
+impl frame_system::Config for Test {
+	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
@@ -82,7 +64,7 @@ impl system::Config for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -115,17 +97,22 @@ parameter_types! {
 	pub const ByteDeposit: u64 = 1;
 }
 
+ord_parameter_types! {
+	pub const One: u64 = 1;
+}
+
 impl Config for Test {
+	type WeightInfo = ();
 	type Event = Event;
 	type Currency = Balances;
-	type ManagerOrigin = EnsureRoot<u64>;
+	type ManagerOrigin = EnsureSignedBy<One, u64>;
 	type MaxSize = MaxSize;
 	type BaseDeposit = BaseDeposit;
 	type ByteDeposit = ByteDeposit;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let balances = pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100)],
 	};
@@ -133,12 +120,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-fn run_to_block(n: u64) {
-	while System::block_number() < n {
-		System::set_block_number(System::block_number() + 1);
-	}
-}
-
-fn root() -> OriginCaller {
-	system::RawOrigin::Root.into()
+pub fn hashed(data: impl AsRef<[u8]>) -> H256 {
+	BlakeTwo256::hash(data.as_ref())
 }

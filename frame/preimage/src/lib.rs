@@ -215,9 +215,12 @@ impl<T: Config> Pallet<T> {
 		// We take a deposit only if there is a provided depositor, and the preimage was not
 		// previously requested. This also allows the tx to pay no fee.
 		let was_requested = match (StatusFor::<T>::get(hash), maybe_depositor) {
-			(Some(RequestStatus::Requested(_)), _) => true,
+			(Some(RequestStatus::Requested(..)), _) => true,
 			(Some(RequestStatus::Unrequested(..)), _) => Err(Error::<T>::AlreadyNoted)?,
-			(_, None) => true,
+			(None, None) => {
+				StatusFor::<T>::insert(hash, RequestStatus::Unrequested(None));
+				true
+			},
 			(None, Some(depositor)) => {
 				let length = preimage.len() as u32;
 				let deposit = T::BaseDeposit::get()
@@ -307,7 +310,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
-	fn preimage_exists(hash: &T::Hash) -> bool {
+	fn have_preimage(hash: &T::Hash) -> bool {
 		PreimageFor::<T>::contains_key(hash)
 	}
 
