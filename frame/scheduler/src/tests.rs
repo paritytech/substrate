@@ -21,10 +21,10 @@ use super::*;
 use crate::mock::{
 	*, Call, root, run_to_block, new_test_ext, LoggerCall, Test, logger, Scheduler
 };
-
+use sp_runtime::traits::Hash;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	traits::{Contains, OnInitialize},
+	traits::{Contains, OnInitialize, PreimageProvider},
 	Hashable,
 };
 use substrate_test_utils::assert_eq_uvec;
@@ -39,6 +39,58 @@ fn basic_scheduling_works() {
 		assert!(logger::log().is_empty());
 		run_to_block(4);
 		assert_eq!(logger::log(), vec![(root(), 42u32)]);
+		run_to_block(100);
+		assert_eq!(logger::log(), vec![(root(), 42u32)]);
+	});
+}
+
+#[test]
+fn scheduling_with_preimages_works() {
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
+		let hashed = MaybeHashed::Hash(hash.clone());
+		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
+		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
+		assert!(Preimage::preimage_requested(&hash));
+		run_to_block(3);
+		assert!(logger::log().is_empty());
+		run_to_block(4);
+		assert!(!Preimage::have_preimage(&hash));
+		assert!(!Preimage::preimage_requested(&hash));
+		assert_eq!(logger::log(), vec![(root(), 42u32)]);
+		run_to_block(100);
+		assert_eq!(logger::log(), vec![(root(), 42u32)]);
+	});
+}
+
+#[test]
+fn scheduling_with_preimage_postpones_correctly() {
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
+		let hashed = MaybeHashed::Hash(hash.clone());
+
+		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
+		assert!(Preimage::preimage_requested(&hash));
+
+		run_to_block(4);
+		// #4 empty due to no preimage
+		assert!(logger::log().is_empty());
+
+		// Register preimage.
+		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
+
+		run_to_block(5);
+		// #5 empty since postponement is 2 blocks.
+		assert!(logger::log().is_empty());
+
+		run_to_block(6);
+		// #6 is good.
+		assert_eq!(logger::log(), vec![(root(), 42u32)]);
+		assert!(!Preimage::have_preimage(&hash));
+		assert!(!Preimage::preimage_requested(&hash));
+
 		run_to_block(100);
 		assert_eq!(logger::log(), vec![(root(), 42u32)]);
 	});
