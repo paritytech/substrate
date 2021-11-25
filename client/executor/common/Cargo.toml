@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-derive_more = "0.99.2"
+derive_more = "0.99.16"
 pwasm-utils = "0.18.2"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 wasmi = "0.9.1"

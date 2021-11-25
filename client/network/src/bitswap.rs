@@ -39,8 +39,7 @@ use libp2p::{
 		UpgradeInfo,
 	},
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
-		OneShotHandler, PollParameters, ProtocolsHandler,
+		NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler, PollParameters,
 	},
 };
 use log::{debug, error, trace};
@@ -297,12 +296,11 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		self.ready_blocks.push_back((peer, response));
 	}
 
-	fn poll(&mut self, _ctx: &mut Context, _: &mut impl PollParameters) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent,
-		>,
-	>{
+	fn poll(
+		&mut self,
+		_ctx: &mut Context,
+		_: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 				peer_id,
