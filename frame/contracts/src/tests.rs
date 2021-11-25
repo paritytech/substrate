@@ -447,7 +447,10 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Deposit(ALICE, 1_000_000)),
+					event: Event::Balances(pallet_balances::Event::Deposit {
+						who: ALICE,
+						amount: 1_000_000
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -457,7 +460,10 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed(ALICE, 1_000_000)),
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: ALICE,
+						free_balance: 1_000_000
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -467,19 +473,19 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed(
-						addr.clone(),
-						subsistence * 100
-					)),
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: addr.clone(),
+						free_balance: subsistence * 100
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer(
-						ALICE,
-						addr.clone(),
-						subsistence * 100
-					)),
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: subsistence * 100
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -766,11 +772,11 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer(
-						addr.clone(),
-						DJANGO,
-						100_000,
-					)),
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: addr.clone(),
+						to: DJANGO,
+						amount: 100_000,
+					}),
 					topics: vec![],
 				},
 				EventRecord {

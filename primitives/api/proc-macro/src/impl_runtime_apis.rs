@@ -288,10 +288,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			fn into_storage_changes(
 				&self,
 				backend: &Self::StateBackend,
-				changes_trie_state: Option<&#crate_::ChangesTrieState<
-					#crate_::HashFor<Block>,
-					#crate_::NumberFor<Block>,
-				>>,
 				parent_hash: Block::Hash,
 			) -> std::result::Result<
 				#crate_::StorageChanges<C::StateBackend, Block>,
@@ -305,7 +301,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 				self.changes.replace(Default::default()).into_storage_changes(
 					backend,
-					changes_trie_state,
 					parent_hash,
 					self.storage_transaction_cache.replace(Default::default()),
 					state_version,

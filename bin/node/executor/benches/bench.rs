@@ -53,7 +53,7 @@ const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
 
 const HEAP_PAGES: u64 = 20;
 
-type TestExternalities<H> = CoreTestExternalities<H, u64>;
+type TestExternalities<H> = CoreTestExternalities<H>;
 
 #[derive(Debug)]
 enum ExecutionMethod {
@@ -188,7 +188,7 @@ fn bench_execute_block(c: &mut Criterion) {
 
 	for strategy in execution_methods {
 		group.bench_function(format!("{:?}", strategy), |b| {
-			let genesis_config = node_testing::genesis::config(false, Some(compact_code_unwrap()));
+			let genesis_config = node_testing::genesis::config(Some(compact_code_unwrap()));
 			let (use_native, wasm_method) = match strategy {
 				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
 				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
