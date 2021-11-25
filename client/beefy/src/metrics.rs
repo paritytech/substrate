@@ -40,7 +40,10 @@ impl Metrics {
 	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_validator_set_id: register(
-				Gauge::new("substrate_beefy_validator_set_id", "Current BEEFY active validator set id.")?,
+				Gauge::new(
+					"substrate_beefy_validator_set_id",
+					"Current BEEFY active validator set id.",
+				)?,
 				registry,
 			)?,
 			beefy_votes_sent: register(
@@ -48,7 +51,10 @@ impl Metrics {
 				registry,
 			)?,
 			beefy_round_concluded: register(
-				Gauge::new("substrate_beefy_round_concluded", "Voting round, that has been concluded")?,
+				Gauge::new(
+					"substrate_beefy_round_concluded",
+					"Voting round, that has been concluded",
+				)?,
 				registry,
 			)?,
 			beefy_best_block: register(
