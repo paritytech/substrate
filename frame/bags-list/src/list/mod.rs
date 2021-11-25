@@ -17,8 +17,8 @@
 
 //! Implementation of a "bags list": a semi-sorted list where ordering granularity is dictated by
 //! configurable thresholds that delineate the boundaries of bags. It uses a pattern of composite
-//! data structures, where multiple storage items are masked by one outer API. See [`ListNodes`],
-//! [`ListBags`] for more information.
+//! data structures, where multiple storage items are masked by one outer API. See
+//! [`crate::ListNodes`], [`crate::ListBags`] for more information.
 //!
 //! The outer API of this module is the [`List`] struct. It wraps all acceptable operations on top
 //! of the aggregate linked list. All operations with the bags list should happen through this
@@ -460,7 +460,7 @@ impl<T: Config> List<T> {
 	}
 }
 
-/// A Bag is a doubly-linked list of ids, where each id is mapped to a [`ListNode`].
+/// A Bag is a doubly-linked list of ids, where each id is mapped to a [`Node`].
 ///
 /// Note that we maintain both head and tail pointers. While it would be possible to get away with
 /// maintaining only a head pointer and cons-ing elements onto the front of the list, it's more

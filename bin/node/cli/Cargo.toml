@@ -81,6 +81,7 @@ sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
 # node-specific dependencies
@@ -95,7 +96,7 @@ frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../..
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
-[target.'cfg(target_arch="x86_64")'.dependencies]
+[target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
 node-executor = { version = "3.0.0-dev", path = "../executor", features = [
 	"wasmtime",
 ] }
@@ -125,11 +126,11 @@ assert_cmd = "2.0.2"
 nix = "0.23"
 serde_json = "1.0"
 regex = "1"
-platforms = "1.1"
+platforms = "2.0"
 async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = [ "async_tokio" ] }
-tokio = { version = "1.10", features = ["macros", "time"] }
+tokio = { version = "1.13", features = ["macros", "time"] }
 jsonrpsee-ws-client = "0.4.1"
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
