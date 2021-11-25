@@ -19,13 +19,17 @@ use sp_std::{cmp, prelude::*};
 
 use crate::{crypto::Signature, ValidatorSetId};
 
+
+/// Id of different payloads in the [`Commitment`] data
+pub type BeefyPayloadId = [u8; 2];
+
 /// A commitment signed by GRANDPA validators as part of BEEFY protocol.
 ///
 /// The commitment contains a [payload] extracted from the finalized block at height [block_number].
 /// GRANDPA validators collect signatures on commitments and a stream of such signed commitments
 /// (see [SignedCommitment]) forms the BEEFY protocol.
 #[derive(Clone, Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-pub struct Commitment<TBlockNumber, TPayload> {
+pub struct Commitment<TBlockNumber> {
 	/// The payload being signed.
 	///
 	/// This should be some form of cumulative representation of the chain (think MMR root hash).
@@ -34,7 +38,7 @@ pub struct Commitment<TBlockNumber, TPayload> {
 	/// nor how often it should be present in commitments, however the light client has to be
 	/// provided with full validator set whenever it performs the transition (i.e. importing first
 	/// block with [validator_set_id] incremented).
-	pub payload: TPayload,
+	pub payload: Vec<(BeefyPayloadId, Vec<u8>)>,
 
 	/// Finalized block number this commitment is for.
 	///
@@ -56,20 +60,18 @@ pub struct Commitment<TBlockNumber, TPayload> {
 	pub validator_set_id: ValidatorSetId,
 }
 
-impl<TBlockNumber, TPayload> cmp::PartialOrd for Commitment<TBlockNumber, TPayload>
+impl<TBlockNumber> cmp::PartialOrd for Commitment<TBlockNumber>
 where
 	TBlockNumber: cmp::Ord,
-	TPayload: cmp::Eq,
 {
 	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-impl<TBlockNumber, TPayload> cmp::Ord for Commitment<TBlockNumber, TPayload>
+impl<TBlockNumber> cmp::Ord for Commitment<TBlockNumber>
 where
 	TBlockNumber: cmp::Ord,
-	TPayload: cmp::Eq,
 {
 	fn cmp(&self, other: &Self) -> cmp::Ordering {
 		self.validator_set_id
@@ -80,9 +82,9 @@ where
 
 /// A commitment with matching GRANDPA validators' signatures.
 #[derive(Clone, Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-pub struct SignedCommitment<TBlockNumber, TPayload> {
+pub struct SignedCommitment<TBlockNumber> {
 	/// The commitment signatures are collected for.
-	pub commitment: Commitment<TBlockNumber, TPayload>,
+	pub commitment: Commitment<TBlockNumber>,
 	/// GRANDPA validators' signatures for the commitment.
 	///
 	/// The length of this `Vec` must match number of validators in the current set (see
@@ -90,7 +92,7 @@ pub struct SignedCommitment<TBlockNumber, TPayload> {
 	pub signatures: Vec<Option<Signature>>,
 }
 
-impl<TBlockNumber, TPayload> SignedCommitment<TBlockNumber, TPayload> {
+impl<TBlockNumber> SignedCommitment<TBlockNumber> {
 	/// Return the number of collected signatures.
 	pub fn no_of_signatures(&self) -> usize {
 		self.signatures.iter().filter(|x| x.is_some()).count()
@@ -101,10 +103,10 @@ impl<TBlockNumber, TPayload> SignedCommitment<TBlockNumber, TPayload> {
 /// to the block justifications for the block for which the signed commitment
 /// has been generated.
 #[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-pub enum VersionedCommitment<N, P> {
+pub enum VersionedCommitment<N> {
 	#[codec(index = 1)]
 	/// Current active version
-	V1(SignedCommitment<N, P>),
+	V1(SignedCommitment<N>),
 }
 
 #[cfg(test)]
@@ -118,9 +120,9 @@ mod tests {
 
 	use crate::{crypto, KEY_TYPE};
 
-	type TestCommitment = Commitment<u128, String>;
-	type TestSignedCommitment = SignedCommitment<u128, String>;
-	type TestVersionedCommitment = VersionedCommitment<u128, String>;
+	type TestCommitment = Commitment<u128>;
+	type TestSignedCommitment = SignedCommitment<u128>;
+	type TestVersionedCommitment = VersionedCommitment<u128>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
@@ -147,8 +149,9 @@ mod tests {
 	#[test]
 	fn commitment_encode_decode() {
 		// given
+		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
 		let commitment: TestCommitment =
-			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
+			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
 		// when
 		let encoded = codec::Encode::encode(&commitment);
@@ -159,7 +162,7 @@ mod tests {
 		assert_eq!(
 			encoded,
 			hex_literal::hex!(
-				"3048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000"
+				"0474733048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000"
 			)
 		);
 	}
@@ -167,8 +170,9 @@ mod tests {
 	#[test]
 	fn signed_commitment_encode_decode() {
 		// given
+		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
 		let commitment: TestCommitment =
-			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
+			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 
@@ -186,10 +190,11 @@ mod tests {
 		assert_eq!(
 			encoded,
 			hex_literal::hex!(
-				"3048656c6c6f20576f726c64210500000000000000000000000000000000000000000000001000
-			0001558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f2319a5e99a830e314d
-			10dd3cd68ce3dc0c33c86e99bcb7816f9ba01012d6e1f8105c337a86cdd9aaacdc496577f3db8c55ef9e6fd48f2c5c05a
-			2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046395a71681be3d0c2a00"
+				"0474733048656c6c6f20576f726c642105000000000000000000000000000000000000000000000010
+				000001558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f23
+				19a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba01012d6e1f8105c337a86cdd9aaacdc4
+				96577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046
+				395a71681be3d0c2a00"
 			)
 		);
 	}
@@ -197,8 +202,9 @@ mod tests {
 	#[test]
 	fn signed_commitment_count_signatures() {
 		// given
+		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
 		let commitment: TestCommitment =
-			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
+			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 
@@ -221,7 +227,8 @@ mod tests {
 			block_number: u128,
 			validator_set_id: crate::ValidatorSetId,
 		) -> TestCommitment {
-			Commitment { payload: "Hello World!".into(), block_number, validator_set_id }
+			let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
+			Commitment { payload, block_number, validator_set_id }
 		}
 
 		// given
@@ -240,8 +247,9 @@ mod tests {
 
 	#[test]
 	fn versioned_commitment_encode_decode() {
+		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
 		let commitment: TestCommitment =
-			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
+			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 

@@ -40,9 +40,9 @@ use crate::{
 /// Ethereum Mainnet), in a commit-reveal like scheme, where first we submit only the signed
 /// commitment witness and later on, the client picks only some signatures to verify at random.
 #[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-pub struct SignedCommitmentWitness<TBlockNumber, TPayload, TMerkleRoot> {
+pub struct SignedCommitmentWitness<TBlockNumber, TMerkleRoot> {
 	/// The full content of the commitment.
-	pub commitment: Commitment<TBlockNumber, TPayload>,
+	pub commitment: Commitment<TBlockNumber>,
 
 	/// The bit vector of validators who signed the commitment.
 	pub signed_by: Vec<bool>, // TODO [ToDr] Consider replacing with bitvec crate
@@ -51,8 +51,8 @@ pub struct SignedCommitmentWitness<TBlockNumber, TPayload, TMerkleRoot> {
 	pub signatures_merkle_root: TMerkleRoot,
 }
 
-impl<TBlockNumber, TPayload, TMerkleRoot>
-	SignedCommitmentWitness<TBlockNumber, TPayload, TMerkleRoot>
+impl<TBlockNumber, TMerkleRoot>
+	SignedCommitmentWitness<TBlockNumber, TMerkleRoot>
 {
 	/// Convert [SignedCommitment] into [SignedCommitmentWitness].
 	///
@@ -63,7 +63,7 @@ impl<TBlockNumber, TPayload, TMerkleRoot>
 	///
 	/// Returns the full list of signatures along with the witness.
 	pub fn from_signed<TMerkelize>(
-		signed: SignedCommitment<TBlockNumber, TPayload>,
+		signed: SignedCommitment<TBlockNumber>,
 		merkelize: TMerkelize,
 	) -> (Self, Vec<Option<Signature>>)
 	where
@@ -88,10 +88,10 @@ mod tests {
 
 	use crate::{crypto, KEY_TYPE};
 
-	type TestCommitment = Commitment<u128, String>;
-	type TestSignedCommitment = SignedCommitment<u128, String>;
+	type TestCommitment = Commitment<u128>;
+	type TestSignedCommitment = SignedCommitment<u128>;
 	type TestSignedCommitmentWitness =
-		SignedCommitmentWitness<u128, String, Vec<Option<Signature>>>;
+		SignedCommitmentWitness<u128, Vec<Option<Signature>>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
@@ -116,8 +116,9 @@ mod tests {
 	}
 
 	fn signed_commitment() -> TestSignedCommitment {
+		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
 		let commitment: TestCommitment =
-			Commitment { payload: "Hello World!".into(), block_number: 5, validator_set_id: 0 };
+			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
 		let sigs = mock_signatures();
 
@@ -152,10 +153,11 @@ mod tests {
 		assert_eq!(
 			encoded,
 			hex_literal::hex!(
-				"3048656c6c6f20576f726c64210500000000000000000000000000000000000000000000001000 
-			00010110000001558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f2319a5e9
-			9a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba01012d6e1f8105c337a86cdd9aaacdc496577f3db8c55ef9e6fd
-			48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046395a71681be3d0c2a00"
+				"0474733048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000
+				100000010110000001558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da848
+				0c746cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba01012d6e1f8105c337
+				a86cdd9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a3448
+				7bca2324b6a0046395a71681be3d0c2a00"
 			)
 		);
 	}

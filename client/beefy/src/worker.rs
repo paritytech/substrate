@@ -352,7 +352,7 @@ where
 			|notification| async move {
 				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
-				VoteMessage::<Payload, NumberFor<B>, Public, Signature>::decode(
+				VoteMessage::<NumberFor<B>, Public, Signature>::decode(
 					&mut &notification.message[..],
 				)
 				.ok()

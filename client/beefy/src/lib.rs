@@ -29,7 +29,7 @@ use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
-use beefy_primitives::BeefyApi;
+use beefy_primitives::{BeefyApi, BeefyPayloadId};
 
 mod error;
 mod gossip;
@@ -39,9 +39,6 @@ mod round;
 mod worker;
 
 pub mod notification;
-
-/// Id of different payloads in the [`Commitment`] data
-pub type BeefyPayloadId = [u8; 2];
 
 /// payload type.
 pub type Payload = Vec<(BeefyPayloadId, Vec<u8>)>;

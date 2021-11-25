@@ -19,7 +19,7 @@ sp-std = { version = "4.0.0-dev", path = "../std", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3"
-
+hex = "0.4.3"
 sp-keystore = { version = "0.10.0-dev", path = "../keystore" }
 
 [features]
