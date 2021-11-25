@@ -494,6 +494,7 @@ dependencies = [
  "sp-core",
  "sp-keystore",
  "sp-runtime",
+ "sp-tracing",
  "strum",
  "substrate-prometheus-endpoint",
  "thiserror",
