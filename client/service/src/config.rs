@@ -36,7 +36,7 @@ pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;
 use std::{
-	io,
+	io, iter,
 	net::SocketAddr,
 	path::{Path, PathBuf},
 };
