@@ -28,10 +28,13 @@ sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-mach
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 
+sp-consensus = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/common" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 pallet-sudo ={ version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
+grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
+pallet-staking ={ version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
 
 
 # pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "master" }

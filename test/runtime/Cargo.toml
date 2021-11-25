@@ -14,6 +14,7 @@ frame-executive = { version = "4.0.0-dev", default-features = false, path = "../
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
+pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
 pallet-sudo ={ version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
@@ -29,6 +30,8 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
+pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../frame/collective" }
 
 # Cumulus dependencies
 # cumulus-primitives-core = { path = "../../primitives/core", default-features = false }

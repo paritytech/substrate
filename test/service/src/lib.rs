@@ -46,6 +46,7 @@ use sp_state_machine::BasicExternalities;
 use sp_trie::PrefixedMemoryDB;
 use std::sync::Arc;
 use substrate_test_client::{
+	
 	BlockchainEventsExt, RpcHandlersExt, RpcTransactionError, RpcTransactionOutput,
 };
 use sp_api::ProvideRuntimeApi;
@@ -63,7 +64,8 @@ use sc_client_api::BlockchainEvents;
 use sc_client_api::{
 	backend::{Backend as BackendT},
 };
-
+use sc_client_api::ExecutorProvider;
+//use sc_executor::NativeElseWasmExecutor;
 /// A consensus that will never produce any block.
 #[derive(Clone)]
 struct NullConsensus;
@@ -145,13 +147,14 @@ pub fn new_partial(
 		client.clone(),
 	);
 
+	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
-		telemetry.as_ref().map(|x| x.handle()),
+		None//telemetry.as_ref().map(|x| x.handle()),
 	)?;
-	
+
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
 		sc_consensus_babe::Config::get_or_compute(&*client)?,
 		grandpa_block_import,
@@ -163,7 +166,7 @@ pub fn new_partial(
 		block_import,
 		None,
 		client.clone(),
-SelectChain,
+		select_chain,
 		|_, _| async { Ok(sp_timestamp::InherentDataProvider::from_system_time()) },
 		&task_manager.spawn_essential_handle(),
 		registry.clone(),
@@ -328,11 +331,16 @@ where
 		return Err("Light client not supported!".into())
 	}
 
+
+	//let builder = TestClientBuilder::default();
+	//let (client, fork_choice_rule) = builder.build_with_executor(NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8));
+
+
 	let mut parachain_config = prepare_node_config(parachain_config);
 
 	let params = new_partial(&mut parachain_config)?;
 
-	let transaction_pool = params.transaction_pool.clone();
+	let transaction_pool = params.transaction_pool;
 	let mut task_manager = params.task_manager;
 
 	// let relay_chain_full_node = polkadot_test_service::new_full(
@@ -350,7 +358,8 @@ where
 	// })?;
 
 	let client = params.client.clone();
-	let backend = params.backend.clone();
+	
+	//let backend = builder.backend(); //params.backend.clone();
 	// let block_announce_validator = BlockAnnounceValidator::new(
 	// 	relay_chain_full_node.client.clone(),
 	// 	para_id,
@@ -389,7 +398,7 @@ where
 		task_manager: &mut task_manager,
 		config: parachain_config,
 		keystore: params.keystore_container.sync_keystore(),
-		backend,
+		backend: params.backend.clone(),
 		network: network.clone(),
 		system_rpc_tx,
 		telemetry: None,
