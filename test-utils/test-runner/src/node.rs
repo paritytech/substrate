@@ -261,8 +261,6 @@ where
 			let signal = tokio::signal::ctrl_c();
 			futures::pin_mut!(signal);
 			futures::future::select(task, signal).await;
-			// we don't really care whichever comes first.
-			task_manager.clean_shutdown().await
 		}
 	}
 }
