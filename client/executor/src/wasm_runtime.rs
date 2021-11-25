@@ -68,14 +68,13 @@ struct VersionedRuntimeId {
 struct VersionedRuntimeValue {
 	/// Shared runtime that can spawn instances.
 	module: Arc<dyn WasmModule>,
-	/// Runtime version according to `Core_version` if any.
+	/// Runtime version if any.
 	version: Option<RuntimeVersion>,
 	/// Cached instance pool.
 	instances: Arc<Vec<Mutex<Option<Box<dyn WasmInstance>>>>>,
 }
 
 /// A Wasm runtime object along with its cached runtime version.
-#[derive(Clone)]
 struct VersionedRuntime {
 	/// Runtime code hash.
 	code_hash: Vec<u8>,
@@ -193,18 +192,21 @@ pub struct RuntimeCache {
 impl RuntimeCache {
 	/// Creates a new instance of a runtimes cache.
 	///
-	/// `max_runtime_instances` specifies the number of runtime instances preserved in an in-memory
-	/// cache.
+	/// `max_runtime_instances` specifies the number of instances per runtime preserved in an
+	/// in-memory cache.
 	///
 	/// `cache_path` allows to specify an optional directory where the executor can store files
 	/// for caching.
+	///
+	/// `runtime_cache_size` specifies the number of different runtimes versions preserved in an
+	/// in-memory cache.
 	pub fn new(
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,
-		runtime_cache_size: usize,
+		runtime_cache_size: u8,
 	) -> RuntimeCache {
 		RuntimeCache {
-			runtimes: Mutex::new(LruCache::new(runtime_cache_size)),
+			runtimes: Mutex::new(LruCache::new(runtime_cache_size.into())),
 			max_runtime_instances,
 			cache_path,
 		}
@@ -374,7 +376,7 @@ fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 		})?
 		.into();
 
-	let core_api_id = sp_core::hashing::blake2_64(b"Core");
+	let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
 	if v.has_api_with(&core_api_id, |v| v >= 3) {
 		sp_api::RuntimeVersion::decode(&mut version).map_err(|_| {
 			WasmError::Instantiation("failed to decode \"Core_version\" result".into())

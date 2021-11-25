@@ -133,7 +133,7 @@ pub struct Configuration {
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
 	/// Maximum number of different runtime versions that can be cached.
-	pub runtime_cache_size: usize,
+	pub runtime_cache_size: u8,
 }
 
 /// Type for tasks spawned by the executor.

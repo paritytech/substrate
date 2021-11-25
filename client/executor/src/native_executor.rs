@@ -130,7 +130,7 @@ impl WasmExecutor {
 		host_functions: Vec<&'static dyn Function>,
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,
-		runtime_cache_size: usize,
+		runtime_cache_size: u8,
 	) -> Self {
 		WasmExecutor {
 			method,
@@ -335,7 +335,7 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
-		runtime_cache_size: usize,
+		runtime_cache_size: u8,
 	) -> Self {
 		let extended = D::ExtendHostFunctions::host_functions();
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
