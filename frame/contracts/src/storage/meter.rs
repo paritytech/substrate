@@ -46,7 +46,7 @@ pub type GenericMeter<T, S> = RawMeter<T, ReservingExt, S>;
 ///
 /// This mostly exists for testing so that the charging can be mocked.
 pub trait Ext<T: Config> {
-	/// This will be called to inform the implementer about the `storage_limit` of the meter.
+	/// This will be called to inform the implementer about the `storage_deposit_limit` of the meter.
 	///
 	/// It is necessary to reserve the balance so that the charge won't fail later on. Should fail
 	/// when `origin` does not have enough free balance.

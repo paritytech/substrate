@@ -392,7 +392,7 @@ fn instantiate_and_call_and_deposit_event() {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let endowment = min_balance * 100;
 
-		// We determine the storage limit after uploading because it depends on ALICEs free
+		// We determine the storage deposit limit after uploading because it depends on ALICEs free
 		// balance which is changed by uploading a module.
 		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), wasm, None));
 
@@ -400,7 +400,7 @@ fn instantiate_and_call_and_deposit_event() {
 		initialize_block(2);
 
 		// Check at the end to get hash on error easily
-		let storage_limit = <Pallet<Test>>::max_storage_limit(&ALICE, endowment);
+		let storage_deposit_limit = <Pallet<Test>>::max_storage_deposit_limit(&ALICE, endowment);
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			endowment,
@@ -417,7 +417,7 @@ fn instantiate_and_call_and_deposit_event() {
 		// that the contract itself occupies.
 		let events = System::events();
 		let storage_cost = deposits(&events).next().unwrap();
-		let unused = storage_limit - storage_cost;
+		let unused = storage_deposit_limit - storage_cost;
 
 		assert_eq!(
 			events,
@@ -426,7 +426,7 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: storage_limit,
+						amount: storage_deposit_limit,
 					}),
 					topics: vec![],
 				},
@@ -748,7 +748,7 @@ fn self_destruct_works() {
 		initialize_block(2);
 
 		// We need to gather this before the call. Otherwise it was already reserved.
-		let storage_limit = <Pallet<Test>>::max_storage_limit(&ALICE, 0);
+		let storage_deposit_limit = <Pallet<Test>>::max_storage_deposit_limit(&ALICE, 0);
 
 		// There is only one user of this contract.
 		assert_refcount!(&code_hash, 1);
@@ -772,7 +772,7 @@ fn self_destruct_works() {
 		// all the storage deposits of the contract.
 		let events = System::events();
 		let storage_refund = deposits(&events).next().unwrap();
-		let unreserved = storage_limit + storage_refund;
+		let unreserved = storage_deposit_limit + storage_refund;
 
 		pretty_assertions::assert_eq!(
 			events,
@@ -781,7 +781,7 @@ fn self_destruct_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: storage_limit,
+						amount: storage_deposit_limit,
 					}),
 					topics: vec![],
 				},
@@ -1934,7 +1934,7 @@ fn gas_estimation_call_runtime() {
 			dest: addr_callee,
 			value: 0,
 			gas_limit: GAS_LIMIT / 3,
-			storage_limit: None,
+			storage_deposit_limit: None,
 			data: vec![],
 		});
 		let result = Contracts::bare_call(

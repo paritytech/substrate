@@ -80,7 +80,7 @@ pub struct CallRequest<AccountId> {
 	dest: AccountId,
 	value: NumberOrHex,
 	gas_limit: NumberOrHex,
-	storage_limit: Option<NumberOrHex>,
+	storage_deposit_limit: Option<NumberOrHex>,
 	input_data: Bytes,
 }
 
@@ -92,7 +92,7 @@ pub struct InstantiateRequest<AccountId, Hash> {
 	origin: AccountId,
 	endowment: NumberOrHex,
 	gas_limit: NumberOrHex,
-	storage_limit: Option<NumberOrHex>,
+	storage_deposit_limit: Option<NumberOrHex>,
 	code: Code<Hash>,
 	data: Bytes,
 	salt: Bytes,
@@ -105,7 +105,7 @@ pub struct InstantiateRequest<AccountId, Hash> {
 pub struct CodeUploadRequest<AccountId> {
 	origin: AccountId,
 	code: Bytes,
-	storage_limit: Option<NumberOrHex>,
+	storage_deposit_limit: Option<NumberOrHex>,
 }
 
 /// Contracts RPC methods.
@@ -206,16 +206,16 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let CallRequest { origin, dest, value, gas_limit, storage_limit, input_data } =
+		let CallRequest { origin, dest, value, gas_limit, storage_deposit_limit, input_data } =
 			call_request;
 
 		let value: Balance = decode_hex(value, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
-		let storage_limit: Option<Balance> =
-			storage_limit.map(|l| decode_hex(l, "balance")).transpose()?;
+		let storage_deposit_limit: Option<Balance> =
+			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 		limit_gas(gas_limit)?;
 
-		api.call(&at, origin, dest, value, gas_limit, storage_limit, input_data.to_vec())
+		api.call(&at, origin, dest, value, gas_limit, storage_deposit_limit, input_data.to_vec())
 			.map_err(runtime_error_into_rpc_err)
 	}
 
@@ -229,13 +229,13 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let InstantiateRequest { origin, endowment, gas_limit, storage_limit, code, data, salt } =
+		let InstantiateRequest { origin, endowment, gas_limit, storage_deposit_limit, code, data, salt } =
 			instantiate_request;
 
 		let endowment: Balance = decode_hex(endowment, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
-		let storage_limit: Option<Balance> =
-			storage_limit.map(|l| decode_hex(l, "balance")).transpose()?;
+		let storage_deposit_limit: Option<Balance> =
+			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 		limit_gas(gas_limit)?;
 
 		api.instantiate(
@@ -243,7 +243,7 @@ where
 			origin,
 			endowment,
 			gas_limit,
-			storage_limit,
+			storage_deposit_limit,
 			code,
 			data.to_vec(),
 			salt.to_vec(),
@@ -261,12 +261,12 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let CodeUploadRequest { origin, code, storage_limit } = upload_request;
+		let CodeUploadRequest { origin, code, storage_deposit_limit } = upload_request;
 
-		let storage_limit: Option<Balance> =
-			storage_limit.map(|l| decode_hex(l, "balance")).transpose()?;
+		let storage_deposit_limit: Option<Balance> =
+			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 
-		api.upload_code(&at, origin, code.to_vec(), storage_limit)
+		api.upload_code(&at, origin, code.to_vec(), storage_deposit_limit)
 			.map_err(runtime_error_into_rpc_err)
 	}
 
@@ -349,7 +349,7 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(req.gas_limit.into_u256(), U256::from(0xe8d4a51000u64));
-		assert_eq!(req.storage_limit.map(|l| l.into_u256()), Some(5000.into()));
+		assert_eq!(req.storage_deposit_limit.map(|l| l.into_u256()), Some(5000.into()));
 		assert_eq!(req.value.into_u256(), U256::from(1234567890987654321u128));
 	}
 
@@ -373,7 +373,7 @@ mod tests {
 		assert_eq!(req.origin, "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL");
 		assert_eq!(req.endowment.into_u256(), 0x88.into());
 		assert_eq!(req.gas_limit.into_u256(), 42.into());
-		assert_eq!(req.storage_limit, None);
+		assert_eq!(req.storage_deposit_limit, None);
 		assert_eq!(&*req.data, [0x42, 0x99].as_ref());
 		assert_eq!(&*req.salt, [0x99, 0x88].as_ref());
 		let code = match req.code {
@@ -398,7 +398,7 @@ mod tests {
 		.unwrap();
 		assert_eq!(req.origin, "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL");
 		assert_eq!(&*req.code, [0x8c, 0x97, 0xdb, 0x39].as_ref());
-		assert_eq!(req.storage_limit.map(|l| l.into_u256()), Some(5000.into()));
+		assert_eq!(req.storage_deposit_limit.map(|l| l.into_u256()), Some(5000.into()));
 	}
 
 	#[test]

@@ -45,7 +45,7 @@ sp_api::decl_runtime_apis! {
 			dest: AccountId,
 			value: Balance,
 			gas_limit: u64,
-			storage_limit: Option<Balance>,
+			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
 		) -> ContractExecResult<Balance>;
 
@@ -56,7 +56,7 @@ sp_api::decl_runtime_apis! {
 			origin: AccountId,
 			endowment: Balance,
 			gas_limit: u64,
-			storage_limit: Option<Balance>,
+			storage_deposit_limit: Option<Balance>,
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
@@ -69,7 +69,7 @@ sp_api::decl_runtime_apis! {
 		fn upload_code(
 			origin: AccountId,
 			code: Vec<u8>,
-			storage_limit: Option<Balance>,
+			storage_deposit_limit: Option<Balance>,
 		) -> CodeUploadResult<Hash, Balance>;
 
 		/// Query a given storage key in a given contract.

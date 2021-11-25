@@ -269,7 +269,7 @@ pub mod pallet {
 		/// * `dest`: Address of the contract to call.
 		/// * `value`: The balance to transfer from the `origin` to `dest`.
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
-		/// * `storage_limit`: The maximum amount of balance that can be charged from the caller to
+		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged from the caller to
 		///   pay for the storage consumed.
 		/// * `data`: The input data to pass to the contract.
 		///
@@ -284,7 +284,7 @@ pub mod pallet {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			storage_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
@@ -294,7 +294,7 @@ pub mod pallet {
 				dest,
 				value,
 				gas_limit,
-				storage_limit.map(Into::into),
+				storage_deposit_limit.map(Into::into),
 				data,
 				None,
 			);
@@ -312,7 +312,7 @@ pub mod pallet {
 		///
 		/// * `endowment`: The balance to transfer from the `origin` to the newly created contract.
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
-		/// * `storage_limit`: The maximum amount of balance that can be charged/reserved from the
+		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged/reserved from the
 		///   caller to pay for the storage consumed.
 		/// * `code`: The contract code to deploy in raw bytes.
 		/// * `data`: The input data to pass to the contract constructor.
@@ -338,7 +338,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] endowment: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			storage_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code: Vec<u8>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
@@ -350,7 +350,7 @@ pub mod pallet {
 				origin,
 				endowment,
 				gas_limit,
-				storage_limit.map(Into::into),
+				storage_deposit_limit.map(Into::into),
 				Code::Upload(Bytes(code)),
 				data,
 				salt,
@@ -374,7 +374,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] endowment: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			storage_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
@@ -385,7 +385,7 @@ pub mod pallet {
 				origin,
 				endowment,
 				gas_limit,
-				storage_limit.map(Into::into),
+				storage_deposit_limit.map(Into::into),
 				Code::Existing(code_hash),
 				data,
 				salt,
@@ -413,10 +413,10 @@ pub mod pallet {
 		pub fn upload_code(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
-			storage_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::bare_upload_code(origin, code, storage_limit.map(Into::into)).map(|_| ())
+			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into)).map(|_| ())
 		}
 
 		/// Remove the code stored under `code_hash` and refund the deposit to its owner.
@@ -530,9 +530,9 @@ pub mod pallet {
 		DebugMessageInvalidUTF8,
 		/// A call tried to invoke a contract that is flagged as non-reentrant.
 		ReentranceDenied,
-		/// Origin doesn't have enough balance to pay for the storage limit.
+		/// Origin doesn't have enough balance to pay for the storage deposit limit.
 		StorageLimitTooHigh,
-		/// More storage was created than allowed by the storage limit.
+		/// More storage was created than allowed by the storage deposit limit.
 		StorageExhausted,
 		/// Code removal was denied because the code is still in use by at least one contract.
 		CodeInUse,
@@ -607,7 +607,7 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
-		storage_limit: Option<BalanceOf<T>>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug: bool,
 	) -> ContractExecResult<BalanceOf<T>> {
@@ -617,7 +617,7 @@ where
 			dest,
 			value,
 			gas_limit,
-			storage_limit,
+			storage_deposit_limit,
 			data,
 			debug_message.as_mut(),
 		);
@@ -646,7 +646,7 @@ where
 		origin: T::AccountId,
 		endowment: BalanceOf<T>,
 		gas_limit: Weight,
-		storage_limit: Option<BalanceOf<T>>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
@@ -657,7 +657,7 @@ where
 			origin,
 			endowment,
 			gas_limit,
-			storage_limit,
+			storage_deposit_limit,
 			code,
 			data,
 			salt,
@@ -682,13 +682,13 @@ where
 	pub fn bare_upload_code(
 		origin: T::AccountId,
 		code: Vec<u8>,
-		storage_limit: Option<BalanceOf<T>>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
 		let module = PrefabWasmModule::from_code(code, &schedule, origin)?;
 		let deposit = module.open_deposit();
-		if let Some(storage_limit) = storage_limit {
-			ensure!(storage_limit <= deposit, <Error<T>>::StorageExhausted);
+		if let Some(storage_deposit_limit) = storage_deposit_limit {
+			ensure!(storage_deposit_limit <= deposit, <Error<T>>::StorageExhausted);
 		}
 		let result = CodeUploadReturnValue { code_hash: *module.code_hash(), deposit };
 		module.store()?;
@@ -755,14 +755,14 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
-		storage_limit: Option<BalanceOf<T>>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalCallOutput<T> {
-		let storage_limit =
-			storage_limit.unwrap_or_else(|| Self::max_storage_limit(&origin, value));
+		let storage_deposit_limit =
+			storage_deposit_limit.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, value));
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let mut storage_meter = match StorageMeter::new(origin.clone(), storage_limit) {
+		let mut storage_meter = match StorageMeter::new(origin.clone(), storage_deposit_limit) {
 			Ok(meter) => meter,
 			Err(err) =>
 				return InternalCallOutput {
@@ -792,14 +792,14 @@ where
 		origin: T::AccountId,
 		endowment: BalanceOf<T>,
 		gas_limit: Weight,
-		storage_limit: Option<BalanceOf<T>>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
-		let mut storage_limit =
-			storage_limit.unwrap_or_else(|| Self::max_storage_limit(&origin, endowment));
+		let mut storage_deposit_limit =
+			storage_deposit_limit.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, endowment));
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let try_exec = || {
@@ -821,8 +821,8 @@ where
 					// storage meter because it is not transfered to the contract but
 					// reserved on the uploading account.
 					let deposit = executable.open_deposit();
-					storage_limit =
-						storage_limit.checked_sub(&deposit).ok_or(<Error<T>>::StorageExhausted)?;
+					storage_deposit_limit =
+						storage_deposit_limit.checked_sub(&deposit).ok_or(<Error<T>>::StorageExhausted)?;
 					(executable, StorageDeposit::Charge(deposit))
 				},
 				Code::Existing(hash) => (
@@ -830,7 +830,7 @@ where
 					Default::default(),
 				),
 			};
-			let mut storage_meter = StorageMeter::new(origin.clone(), storage_limit)?;
+			let mut storage_meter = StorageMeter::new(origin.clone(), storage_deposit_limit)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin,
 				executable,
@@ -848,8 +848,8 @@ where
 		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
 
-	/// If no storage limit is specified we use this function.
-	fn max_storage_limit(origin: &T::AccountId, value: BalanceOf<T>) -> BalanceOf<T> {
+	/// If no storage deposit limit is specified we use this function.
+	fn max_storage_deposit_limit(origin: &T::AccountId, value: BalanceOf<T>) -> BalanceOf<T> {
 		T::Currency::free_balance(origin)
 			.saturating_sub(T::Currency::minimum_balance())
 			.saturating_sub(value)

@@ -284,7 +284,7 @@ pub struct Stack<'a, T: Config, E> {
 	schedule: &'a Schedule<T>,
 	/// The gas meter where costs are charged to.
 	gas_meter: &'a mut GasMeter<T>,
-	/// The storage meter makes sure that the storage limit is obeyed.
+	/// The storage meter makes sure that the storage deposit limit is obeyed.
 	storage_meter: &'a mut storage::meter::Meter<T>,
 	/// The timestamp at the point of call stack instantiation.
 	timestamp: MomentOf<T>,
