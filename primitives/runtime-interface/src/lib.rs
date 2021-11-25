@@ -306,12 +306,12 @@ pub use sp_std;
 /// ```
 /// #[sp_runtime_interface::runtime_interface(feature_force_version=old_state,a_function,1)]
 /// trait RuntimeInterface {
-///		fn a_function(&mut self) {
-///		}
+/// 		fn a_function(&mut self) {
+/// 		}
 ///
-///		#[version(2)]
-///		fn a_function(&mut self) {
-///		}
+/// 		#[version(2)]
+/// 		fn a_function(&mut self) {
+/// 		}
 /// }
 /// ```
 ///
