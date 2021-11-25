@@ -304,8 +304,15 @@ pub use sp_std;
 /// Syntax is:
 ///
 /// ```
-/// #[sp_runtime_interface::runtime_interface(feature_force_version=old_state,root,1)]
-/// trait RuntimeInterface { }
+/// #[sp_runtime_interface::runtime_interface(feature_force_version=old_state,a_function,1)]
+/// trait RuntimeInterface {
+///		fn a_function(&mut self) {
+///		}
+///
+///		#[version(2)]
+///		fn a_function(&mut self) {
+///		}
+/// }
 /// ```
 ///
 /// In this case, when feature `old_state` (warning '-' are not supported in feature name) is
