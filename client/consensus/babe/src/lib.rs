@@ -892,6 +892,15 @@ where
 			self.logging_target(),
 		)
 	}
+	fn keystore(&self) -> SyncCryptoStorePtr {
+        unimplemented!()
+		// self.keystore.clone()
+	}
+
+	fn get_key(&self, claim: &Self::Claim) -> sp_core::sr25519::Public {
+        unimplemented!()
+		// claim.as_slice().try_into().unwrap()
+	}
 }
 
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
