@@ -51,9 +51,7 @@ pub struct SignedCommitmentWitness<TBlockNumber, TMerkleRoot> {
 	pub signatures_merkle_root: TMerkleRoot,
 }
 
-impl<TBlockNumber, TMerkleRoot>
-	SignedCommitmentWitness<TBlockNumber, TMerkleRoot>
-{
+impl<TBlockNumber, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TMerkleRoot> {
 	/// Convert [SignedCommitment] into [SignedCommitmentWitness].
 	///
 	/// This takes a [SignedCommitment], which contains full signatures
@@ -90,8 +88,7 @@ mod tests {
 
 	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment = SignedCommitment<u128>;
-	type TestSignedCommitmentWitness =
-		SignedCommitmentWitness<u128, Vec<Option<Signature>>>;
+	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<Option<Signature>>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {

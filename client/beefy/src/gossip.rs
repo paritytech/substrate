@@ -233,8 +233,10 @@ mod tests {
 
 	use beefy_primitives::{crypto::Signature, Commitment, MmrRootHash, VoteMessage, KEY_TYPE};
 
-	use crate::keystore::{tests::Keyring, BeefyKeystore};
-	use crate::MMR_ROOT_ID;
+	use crate::{
+		keystore::{tests::Keyring, BeefyKeystore},
+		MMR_ROOT_ID,
+	};
 
 	use super::*;
 
@@ -340,10 +342,7 @@ mod tests {
 		}
 	}
 
-	fn sign_commitment<BN: Encode>(
-		who: &Keyring,
-		commitment: &Commitment<BN>,
-	) -> Signature {
+	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> Signature {
 		let store: SyncCryptoStorePtr = std::sync::Arc::new(LocalKeystore::in_memory());
 		SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&who.to_seed())).unwrap();
 		let beefy_keystore: BeefyKeystore = Some(store).into();
@@ -357,12 +356,8 @@ mod tests {
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
-		let payload = vec![(MMR_ROOT_ID,  MmrRootHash::default().as_ref().to_vec())];
-		let commitment = Commitment {
-			payload,
-			block_number: 3_u64,
-			validator_set_id: 0,
-		};
+		let payload = vec![(MMR_ROOT_ID, MmrRootHash::default().as_ref().to_vec())];
+		let commitment = Commitment { payload, block_number: 3_u64, validator_set_id: 0 };
 
 		let signature = sign_commitment(&Keyring::Alice, &commitment);
 

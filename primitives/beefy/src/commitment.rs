@@ -19,7 +19,6 @@ use sp_std::{cmp, prelude::*};
 
 use crate::{crypto::Signature, ValidatorSetId};
 
-
 /// Id of different payloads in the [`Commitment`] data
 pub type BeefyPayloadId = [u8; 2];
 
