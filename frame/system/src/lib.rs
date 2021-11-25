@@ -316,8 +316,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToTripleRefCount::<T>::get() {
-				UpgradedToTripleRefCount::<T>::put(true);
-				migrations::migrate_to_triple_ref_count::<T>()
+				migrations::migrate_from_dual_to_triple_ref_count::<T>()
 			} else {
 				0
 			}
@@ -677,27 +676,30 @@ pub mod migrations {
 				data,
 			})
 		});
+		UpgradedToTripleRefCount::<T>::put(true);
 		T::BlockWeights::get().max_block
 	}
 
 	#[allow(dead_code)]
 	/// Migrate from unique `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
+	pub fn migrate_from_single_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(
 			|_key, (nonce, consumers, data)| {
 				Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
 			},
 		);
+		UpgradedToTripleRefCount::<T>::put(true);
 		T::BlockWeights::get().max_block
 	}
 
 	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
+	pub fn migrate_from_dual_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
 			|_key, (nonce, consumers, providers, data)| {
 				Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
 			},
 		);
+		UpgradedToTripleRefCount::<T>::put(true);
 		T::BlockWeights::get().max_block
 	}
 }
