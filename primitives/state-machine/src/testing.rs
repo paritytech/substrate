@@ -23,8 +23,8 @@ use std::{
 };
 
 use crate::{
-	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue,
+	backend::Backend, ext::Ext, InMemoryBackend, InMemoryProvingBackend, OverlayedChanges,
+	StorageKey, StorageTransactionCache, StorageValue,
 };
 
 use hash_db::Hasher;
@@ -38,6 +38,7 @@ use sp_core::{
 	traits::TaskExecutorExt,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
+use sp_trie::StorageProof;
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher>
@@ -65,6 +66,21 @@ where
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
 			&self.backend,
+			Some(&mut self.extensions),
+		)
+	}
+
+	/// Get an externalities implementation, using the given `proving_backend`.
+	///
+	/// This will be capable of computing the PoV. See [`execute_and_get_proof`].
+	pub fn proving_ext<'a>(
+		&'a mut self,
+		proving_backend: &'a InMemoryProvingBackend<'a, H>,
+	) -> Ext<H, InMemoryProvingBackend<'a, H>> {
+		Ext::new(
+			&mut self.overlay,
+			&mut self.storage_transaction_cache,
+			&proving_backend,
 			Some(&mut self.extensions),
 		)
 	}
@@ -122,6 +138,13 @@ where
 		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
 	}
 
+	/// Insert key/value into backend.
+	///
+	/// This only supports inserting keys in child tries.
+	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
+		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])]);
+	}
+
 	/// Registers the given extension for this instance.
 	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.register(ext);
@@ -169,6 +192,31 @@ where
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		let mut ext = self.ext();
 		sp_externalities::set_and_run_with_externalities(&mut ext, execute)
+	}
+
+	/// Execute the given closure while `self`, with `proving_backend` as backend, is set as
+	/// externalities.
+	///
+	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
+	/// get their own proof from scratch.
+	///
+	/// To obtain a compact proof from the returned proof of this function, record the state root
+	/// before calling into this function, and use that as an argument to `into_compact_proof`.
+	pub fn execute_with_and_prove<'a, R>(
+		&mut self,
+		execute: impl FnOnce() -> R,
+	) -> (R, StorageProof) {
+		let tri_backend = self.backend.clone();
+		let proving_backend = InMemoryProvingBackend::new(&tri_backend);
+		let mut proving_ext = self.proving_ext(&proving_backend);
+		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
+		let proof = proving_ext.backend.extract_proof();
+
+		// ensure that all changes are propagated, and the recorded is clean.
+		proving_ext.backend.clear_recorder();
+		self.commit_all().unwrap();
+
+		(outcome, proof)
 	}
 
 	/// Execute the given closure while `self` is set as externalities.
@@ -347,5 +395,41 @@ mod tests {
 
 		ext.commit_all().unwrap();
 		assert!(ext.backend.eq(&backend), "Both backend should be equal.");
+	}
+
+	#[test]
+	fn execute_and_generate_proof_works() {
+		use codec::Encode;
+		let make_ext = || {
+			let mut ext = TestExternalities::<BlakeTwo256>::default();
+			ext.insert(b"apple".to_vec(), b"fruit".to_vec());
+
+			ext.insert(b"bonobo".to_vec(), b"ape".to_vec());
+
+			ext.insert(b"cat".to_vec(), b"kitty".to_vec());
+
+			ext.insert(b"doe".to_vec(), b"reindeer".to_vec());
+			ext.insert(b"dog".to_vec(), b"puppy".to_vec());
+			ext
+		};
+
+		let mut ext = make_ext();
+		let pre_root = ext.backend.root().clone();
+		let (_, proof) = ext.execute_with_and_prove(|| {
+			sp_io::storage::get(b"doe");
+			sp_io::storage::get(b"apple");
+			sp_io::storage::get(b"bonobo");
+		});
+
+		let compact_proof = proof
+			.clone()
+			.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
+			.unwrap();
+		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+
+		println!("proof: {:?} / {} nodes", proof, proof.clone().into_nodes().len());
+		println!("proof size: {:?}", proof.encoded_size());
+		println!("compact proof size: {:?}", compact_proof.encoded_size());
+		println!("zstd-compressed compact proof size: {:?}", &compressed_proof.len());
 	}
 }

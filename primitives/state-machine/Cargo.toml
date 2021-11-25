@@ -34,8 +34,10 @@ tracing = { version = "0.1.29", optional = true }
 [dev-dependencies]
 hex-literal = "0.3.4"
 sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
+sp-io = { version = "4.0.0-dev", path = "../io" }
 pretty_assertions = "1.0.0"
 rand = "0.7.2"
+zstd = "0.9"
 
 [features]
 default = ["std"]
