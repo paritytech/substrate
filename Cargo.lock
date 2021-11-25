@@ -2053,11 +2053,11 @@ dependencies = [
 [[package]]
 name = "frame-support"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "bitflags",
  "frame-metadata",
- "frame-support-procedural 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "frame-support-procedural 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "impl-trait-for-tuples",
  "log 0.4.14",
  "once_cell",
@@ -2066,15 +2066,15 @@ dependencies = [
  "scale-info",
  "serde",
  "smallvec 1.7.0",
- "sp-arithmetic 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-inherents 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-io 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-staking 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-state-machine 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-tracing 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-arithmetic 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-io 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-staking 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-state-machine 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-tracing 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -2091,10 +2091,10 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "Inflector",
- "frame-support-procedural-tools 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "frame-support-procedural-tools 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "proc-macro2",
  "quote",
  "syn",
@@ -2114,9 +2114,9 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
- "frame-support-procedural-tools-derive 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "frame-support-procedural-tools-derive 3.0.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
@@ -2135,7 +2135,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools-derive"
 version = "3.0.0"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2196,18 +2196,18 @@ dependencies = [
 [[package]]
 name = "frame-system"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "frame-support 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "log 0.4.14",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-io 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-version 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-io 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-version 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -4666,31 +4666,31 @@ dependencies = [
 name = "orml-tokens"
 version = "0.4.1-dev"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "frame-system 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "frame-support 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "frame-system 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "mangata-primitives",
  "orml-traits",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
 name = "orml-traits"
 version = "0.4.1-dev"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "frame-support 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "impl-trait-for-tuples",
  "num-traits",
  "orml-utilities",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-io 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-io 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "xcm",
 ]
 
@@ -4698,13 +4698,13 @@ dependencies = [
 name = "orml-utilities"
 version = "0.4.1-dev"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "frame-support 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-io 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-io 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -8506,14 +8506,14 @@ dependencies = [
 [[package]]
 name = "sp-application-crypto"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-io 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-io 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -8548,15 +8548,15 @@ dependencies = [
 [[package]]
 name = "sp-arithmetic"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "integer-sqrt",
  "num-traits",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-debug-derive 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-debug-derive 3.0.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "static_assertions",
 ]
 
@@ -8763,7 +8763,7 @@ dependencies = [
 [[package]]
 name = "sp-core"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "base58",
  "blake2-rfc",
@@ -8791,11 +8791,11 @@ dependencies = [
  "secrecy",
  "serde",
  "sha2 0.9.8",
- "sp-debug-derive 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-externalities 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime-interface 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-storage 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-debug-derive 3.0.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-externalities 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime-interface 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-storage 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "ss58-registry",
  "substrate-bip39",
  "thiserror",
@@ -8826,7 +8826,7 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "3.0.0"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8846,12 +8846,12 @@ dependencies = [
 [[package]]
 name = "sp-externalities"
 version = "0.10.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "environmental",
  "parity-scale-codec",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-storage 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-storage 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -8888,14 +8888,14 @@ dependencies = [
 [[package]]
 name = "sp-inherents"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "async-trait",
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "thiserror",
 ]
 
@@ -8925,7 +8925,7 @@ dependencies = [
 [[package]]
 name = "sp-io"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "futures 0.3.16",
  "hash-db",
@@ -8933,15 +8933,15 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-externalities 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-keystore 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime-interface 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-state-machine 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-tracing 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-trie 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-wasm-interface 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-externalities 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-keystore 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime-interface 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-state-machine 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-tracing 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-trie 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-wasm-interface 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "tracing",
  "tracing-core",
 ]
@@ -8977,7 +8977,7 @@ dependencies = [
 [[package]]
 name = "sp-keystore"
 version = "0.10.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -8986,8 +8986,8 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "schnorrkel",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-externalities 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-externalities 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -9060,7 +9060,7 @@ dependencies = [
 [[package]]
 name = "sp-panic-handler"
 version = "3.0.0"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "backtrace",
 ]
@@ -9104,7 +9104,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -9116,11 +9116,11 @@ dependencies = [
  "rand 0.7.3",
  "scale-info",
  "serde",
- "sp-application-crypto 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-arithmetic 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-io 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-application-crypto 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-arithmetic 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-io 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -9148,17 +9148,17 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "primitive-types",
- "sp-externalities 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-runtime-interface-proc-macro 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-storage 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-tracing 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-wasm-interface 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-externalities 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-runtime-interface-proc-macro 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-storage 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-tracing 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-wasm-interface 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "static_assertions",
 ]
 
@@ -9176,7 +9176,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface-proc-macro"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "Inflector",
  "proc-macro-crate 1.0.0",
@@ -9272,12 +9272,12 @@ dependencies = [
 [[package]]
 name = "sp-staking"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -9308,7 +9308,7 @@ dependencies = [
 [[package]]
 name = "sp-state-machine"
 version = "0.10.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "hash-db",
  "log 0.4.14",
@@ -9317,11 +9317,11 @@ dependencies = [
  "parking_lot 0.11.1",
  "rand 0.7.3",
  "smallvec 1.7.0",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-externalities 0.10.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-panic-handler 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-trie 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-externalities 0.10.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-panic-handler 3.0.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-trie 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "thiserror",
  "tracing",
  "trie-db",
@@ -9335,7 +9335,7 @@ version = "4.0.0-dev"
 [[package]]
 name = "sp-std"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 
 [[package]]
 name = "sp-storage"
@@ -9352,14 +9352,14 @@ dependencies = [
 [[package]]
 name = "sp-storage"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
  "ref-cast",
  "serde",
- "sp-debug-derive 3.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-debug-derive 3.0.0 (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
 ]
 
 [[package]]
@@ -9416,10 +9416,10 @@ dependencies = [
 [[package]]
 name = "sp-tracing"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "parity-scale-codec",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -9470,14 +9470,14 @@ dependencies = [
 [[package]]
 name = "sp-trie"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "hash-db",
  "memory-db",
  "parity-scale-codec",
  "scale-info",
- "sp-core 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-core 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "trie-db",
  "trie-root",
 ]
@@ -9514,16 +9514,16 @@ dependencies = [
 [[package]]
 name = "sp-version"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
  "scale-info",
  "serde",
- "sp-runtime 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
- "sp-version-proc-macro 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-runtime 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
+ "sp-version-proc-macro 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "thiserror",
 ]
 
@@ -9541,7 +9541,7 @@ dependencies = [
 [[package]]
 name = "sp-version-proc-macro"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "parity-scale-codec",
  "proc-macro2",
@@ -9562,11 +9562,11 @@ dependencies = [
 [[package]]
 name = "sp-wasm-interface"
 version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12#d76f39995315ec36980908e4b99709bd14927044"
+source = "git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4#bc588b8173d69ae2ec935fb081a56f76337aca8c"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.12)",
+ "sp-std 4.0.0-dev (git+https://github.com/mangata-finance/substrate?branch=mangata-dev-v4)",
  "wasmi",
 ]
 
@@ -11456,7 +11456,7 @@ dependencies = [
 [[package]]
 name = "xcm"
 version = "0.9.12"
-source = "git+https://github.com/paritytech/polkadot?branch=release-v0.9.12#5feed981cf0fe671447eabaa9c0d235a8dd0003e"
+source = "git+https://github.com/mangata-finance/polkadot?branch=mangata-dev-v4#5feed981cf0fe671447eabaa9c0d235a8dd0003e"
 dependencies = [
  "derivative",
  "impl-trait-for-tuples",
@@ -11469,7 +11469,7 @@ dependencies = [
 [[package]]
 name = "xcm-procedural"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/polkadot?branch=release-v0.9.12#5feed981cf0fe671447eabaa9c0d235a8dd0003e"
+source = "git+https://github.com/mangata-finance/polkadot?branch=mangata-dev-v4#5feed981cf0fe671447eabaa9c0d235a8dd0003e"
 dependencies = [
  "proc-macro2",
  "quote",
