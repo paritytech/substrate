@@ -269,8 +269,8 @@ pub mod pallet {
 		/// * `dest`: Address of the contract to call.
 		/// * `value`: The balance to transfer from the `origin` to `dest`.
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
-		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged from the caller to
-		///   pay for the storage consumed.
+		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged from the
+		///   caller to pay for the storage consumed.
 		/// * `data`: The input data to pass to the contract.
 		///
 		/// * If the account is a smart-contract account, the associated code will be
@@ -312,8 +312,8 @@ pub mod pallet {
 		///
 		/// * `endowment`: The balance to transfer from the `origin` to the newly created contract.
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
-		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged/reserved from the
-		///   caller to pay for the storage consumed.
+		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged/reserved
+		///   from the caller to pay for the storage consumed.
 		/// * `code`: The contract code to deploy in raw bytes.
 		/// * `data`: The input data to pass to the contract constructor.
 		/// * `salt`: Used for the address derivation. See [`Pallet::contract_address`].
@@ -759,8 +759,8 @@ where
 		data: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalCallOutput<T> {
-		let storage_deposit_limit =
-			storage_deposit_limit.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, value));
+		let storage_deposit_limit = storage_deposit_limit
+			.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, value));
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let mut storage_meter = match StorageMeter::new(origin.clone(), storage_deposit_limit) {
 			Ok(meter) => meter,
@@ -798,8 +798,8 @@ where
 		salt: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
-		let mut storage_deposit_limit =
-			storage_deposit_limit.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, endowment));
+		let mut storage_deposit_limit = storage_deposit_limit
+			.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, endowment));
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let try_exec = || {
@@ -821,8 +821,9 @@ where
 					// storage meter because it is not transfered to the contract but
 					// reserved on the uploading account.
 					let deposit = executable.open_deposit();
-					storage_deposit_limit =
-						storage_deposit_limit.checked_sub(&deposit).ok_or(<Error<T>>::StorageExhausted)?;
+					storage_deposit_limit = storage_deposit_limit
+						.checked_sub(&deposit)
+						.ok_or(<Error<T>>::StorageExhausted)?;
 					(executable, StorageDeposit::Charge(deposit))
 				},
 				Code::Existing(hash) => (

@@ -229,8 +229,15 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let InstantiateRequest { origin, endowment, gas_limit, storage_deposit_limit, code, data, salt } =
-			instantiate_request;
+		let InstantiateRequest {
+			origin,
+			endowment,
+			gas_limit,
+			storage_deposit_limit,
+			code,
+			data,
+			salt,
+		} = instantiate_request;
 
 		let endowment: Balance = decode_hex(endowment, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
