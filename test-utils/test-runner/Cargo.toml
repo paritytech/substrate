@@ -18,12 +18,12 @@ sc-transaction-pool = { path = "../../client/transaction-pool" }
 grandpa = { package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
 sp-finality-grandpa = { path = "../../primitives/finality-grandpa" }
 sp-consensus-babe = { path = "../../primitives/consensus/babe" }
-#sc-consensus-babe = { path = "../../client/consensus/babe" }
+sc-consensus-babe = { path = "../../client/consensus/babe" }
 sc-consensus = { path = "../../client/consensus/common" }
 sc-transaction-pool-api = { path = "../../client/transaction-pool/api" }
 sc-client-api = { path = "../../client/api" }
 sc-rpc-server = { path = "../../client/rpc-servers" }
-# manual-seal = { package = "sc-consensus-manual-seal", path = "../../client/consensus/manual-seal" }
+manual-seal = { package = "sc-consensus-manual-seal", path = "../../client/consensus/manual-seal" }
 
 # primitive deps
 sp-core = { path = "../../primitives/core" }

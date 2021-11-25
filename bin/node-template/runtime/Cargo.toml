@@ -1,0 +1,95 @@
+[package]
+name = "node-template-runtime"
+version = "3.0.0"
+description = 'A fresh FRAME-based Substrate runtime, ready for hacking.'
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+homepage = "https://substrate.io/"
+edition = "2018"
+license = "Unlicense"
+publish = false
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+
+pallet-aura = { version = "4.0.0-dev", default-features = false, path = "../../../frame/aura" }
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
+pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../frame/grandpa" }
+pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
+pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../../frame/sudo" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../frame/timestamp" }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
+frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
+sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev"}
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "4.0.0-dev"}
+sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
+sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
+
+# Used for the node template's RPCs
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+
+# Used for runtime benchmarking
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking", optional = true }
+frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
+hex-literal = { version = "0.3.3", optional = true }
+
+pallet-template = { version = "3.0.0", default-features = false, path = "../pallets/template" }
+
+[build-dependencies]
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"scale-info/std",
+	"frame-executive/std",
+	"frame-support/std",
+	"frame-system-rpc-runtime-api/std",
+	"frame-system/std",
+	"pallet-aura/std",
+	"pallet-balances/std",
+	"pallet-grandpa/std",
+	"pallet-randomness-collective-flip/std",
+	"pallet-sudo/std",
+	"pallet-template/std",
+	"pallet-timestamp/std",
+	"pallet-transaction-payment-rpc-runtime-api/std",
+	"pallet-transaction-payment/std",
+	"sp-api/std",
+	"sp-block-builder/std",
+	"sp-consensus-aura/std",
+	"sp-core/std",
+	"sp-inherents/std",
+	"sp-offchain/std",
+	"sp-runtime/std",
+	"sp-session/std",
+	"sp-std/std",
+	"sp-transaction-pool/std",
+	"sp-version/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+	"frame-system-benchmarking",
+	"frame-system/runtime-benchmarks",
+	"hex-literal",
+	"pallet-balances/runtime-benchmarks",
+	"pallet-template/runtime-benchmarks",
+	"pallet-timestamp/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+]
