@@ -301,7 +301,7 @@ pub trait PrivilegeCmp<Origin> {
 
 /// Implementation of [`PrivilegeCmp`] that only checks for equal origins.
 ///
-/// This means it will either return [`Origin::Equal`] or `None`.
+/// This means it will either return [`Ordering::Equal`] or `None`.
 pub struct EqualPrivilegeOnly;
 impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
 	fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering> {

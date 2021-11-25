@@ -281,7 +281,10 @@ use sp_core::{
 };
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::{
+	traits::{Block as BlockT, NumberFor},
+	DeserializeOwned,
+};
 use sp_state_machine::{OverlayedChanges, StateMachine};
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
@@ -464,7 +467,7 @@ pub enum State {
 
 impl State {
 	/// Create the [`remote_externalities::Builder`] from self.
-	pub(crate) fn builder<Block: BlockT>(&self) -> sc_cli::Result<Builder<Block>>
+	pub(crate) fn builder<Block: BlockT + DeserializeOwned>(&self) -> sc_cli::Result<Builder<Block>>
 	where
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
@@ -677,9 +680,8 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 	extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	let mut changes = Default::default();
-	let encoded_results = StateMachine::<_, _, NumberFor<Block>, _>::new(
+	let encoded_results = StateMachine::new(
 		&ext.backend,
-		None,
 		&mut changes,
 		executor,
 		method,

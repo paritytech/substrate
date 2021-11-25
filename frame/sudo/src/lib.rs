@@ -52,28 +52,27 @@
 //! This is an example of a pallet that exposes a privileged function:
 //!
 //! ```
-//! 
 //! #[frame_support::pallet]
-//! pub mod logger {
+//! pub mod pallet {
+//! 	use super::*;
 //! 	use frame_support::pallet_prelude::*;
 //! 	use frame_system::pallet_prelude::*;
-//! 	use super::*;
+//!
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
 //!
 //! 	#[pallet::config]
 //! 	pub trait Config: frame_system::Config {}
 //!
-//! 	#[pallet::pallet]
-//! 	pub struct Pallet<T>(PhantomData<T>);
-//!
 //! 	#[pallet::call]
 //! 	impl<T: Config> Pallet<T> {
 //! 		#[pallet::weight(0)]
-//!         pub fn privileged_function(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+//!         pub fn privileged_function(origin: OriginFor<T>) -> DispatchResult {
 //!             ensure_root(origin)?;
 //!
 //!             // do something...
 //!
-//!             Ok(().into())
+//!             Ok(())
 //!         }
 //! 	}
 //! }
@@ -150,7 +149,7 @@ pub mod pallet {
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -176,7 +175,7 @@ pub mod pallet {
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(Event::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -201,7 +200,7 @@ pub mod pallet {
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
-			Self::deposit_event(Event::KeyChanged(Self::key()));
+			Self::deposit_event(Event::KeyChanged { new_sudoer: Self::key() });
 			<Key<T>>::put(new);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
@@ -241,7 +240,9 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into());
 
-			Self::deposit_event(Event::SudoAsDone(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::SudoAsDone {
+				sudo_result: res.map(|_| ()).map_err(|e| e.error),
+			});
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -251,11 +252,11 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A sudo just took place. \[result\]
-		Sudid(DispatchResult),
+		Sudid { sudo_result: DispatchResult },
 		/// The \[sudoer\] just switched identity; the old key is supplied.
-		KeyChanged(T::AccountId),
+		KeyChanged { new_sudoer: T::AccountId },
 		/// A sudo just took place. \[result\]
-		SudoAsDone(DispatchResult),
+		SudoAsDone { sudo_result: DispatchResult },
 	}
 
 	#[pallet::error]

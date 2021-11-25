@@ -95,6 +95,7 @@ mod inner {
 		let extra_scheduler = scheduler.clone();
 		scheduler.spawn(
 			"parallel-runtime-spawn",
+			Some("substrate-runtime"),
 			Box::pin(async move {
 				let result = match crate::new_async_externalities(extra_scheduler) {
 					Ok(mut ext) => {
