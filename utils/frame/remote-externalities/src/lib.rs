@@ -40,9 +40,9 @@ use std::{
 
 pub mod rpc_api;
 
-type KeyPair = (StorageKey, StorageData);
-type TopKeyPairs = Vec<KeyPair>;
-type ChildKeyPairs = Vec<(ChildInfo, Vec<KeyPair>)>;
+type KeyValue = (StorageKey, StorageData);
+type TopKeyValue = Vec<KeyValue>;
+type ChildKeyValue = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
@@ -134,10 +134,10 @@ pub struct OnlineConfig<B: BlockT> {
 	pub state_snapshot: Option<SnapshotConfig>,
 	/// The pallets to scrape. If empty, entire chain state will be scraped.
 	pub pallets: Vec<String>,
-	/// Lookout for child-keys, and scrape them as well if set to true.
-	pub scrape_children: bool,
 	/// Transport config.
 	pub transport: Transport,
+	/// Lookout for child-keys, and scrape them as well if set to true.
+	pub scrape_children: bool,
 }
 
 impl<B: BlockT> OnlineConfig<B> {
@@ -197,7 +197,7 @@ impl Default for SnapshotConfig {
 pub struct Builder<B: BlockT> {
 	/// Custom key-pairs to be injected into the externalities. The *hashed* keys and values must
 	/// be given.
-	hashed_key_values: Vec<KeyPair>,
+	hashed_key_values: Vec<KeyValue>,
 	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must
 	/// be given.
 	hashed_prefixes: Vec<Vec<u8>>,
@@ -319,14 +319,14 @@ impl<B: BlockT> Builder<B> {
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
-	) -> Result<Vec<KeyPair>, &'static str> {
+	) -> Result<Vec<KeyValue>, &'static str> {
 		use jsonrpsee_ws_client::types::traits::Client;
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
 		debug!(target: LOG_TARGET, "Querying a total of {} top keys", keys.len());
 
-		let mut key_values: Vec<KeyPair> = vec![];
+		let mut key_values: Vec<KeyValue> = vec![];
 		let client = self.as_online().rpc_client();
 		for chunk_keys in keys.chunks(BATCH_SIZE) {
 			let batch = chunk_keys
@@ -382,7 +382,7 @@ impl<B: BlockT> Builder<B> {
 // Internal methods
 impl<B: BlockT> Builder<B> {
 	/// Save the given data to the top keys snapshot.
-	fn save_top_snapshot(&self, data: &[KeyPair], path: &PathBuf) -> Result<(), &'static str> {
+	fn save_top_snapshot(&self, data: &[KeyValue], path: &PathBuf) -> Result<(), &'static str> {
 		let mut path = path.clone();
 		path.set_extension("top");
 		debug!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
@@ -393,7 +393,7 @@ impl<B: BlockT> Builder<B> {
 	/// Save the given data to the child keys snapshot.
 	fn save_child_snapshot(
 		&self,
-		data: &ChildKeyPairs,
+		data: &ChildKeyValue,
 		path: &PathBuf,
 	) -> Result<(), &'static str> {
 		debug!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
@@ -403,7 +403,7 @@ impl<B: BlockT> Builder<B> {
 		Ok(())
 	}
 
-	fn load_top_snapshot(&self, path: &PathBuf) -> Result<TopKeyPairs, &'static str> {
+	fn load_top_snapshot(&self, path: &PathBuf) -> Result<TopKeyValue, &'static str> {
 		let mut path = path.clone();
 		path.set_extension("top");
 		info!(target: LOG_TARGET, "loading top key-pairs from snapshot {:?}", path);
@@ -411,7 +411,7 @@ impl<B: BlockT> Builder<B> {
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
 
-	fn load_child_snapshot(&self, path: &PathBuf) -> Result<ChildKeyPairs, &'static str> {
+	fn load_child_snapshot(&self, path: &PathBuf) -> Result<ChildKeyValue, &'static str> {
 		let mut path = path.clone();
 		path.set_extension("child");
 		info!(target: LOG_TARGET, "loading child key-pairs from snapshot {:?}", path);
@@ -423,8 +423,8 @@ impl<B: BlockT> Builder<B> {
 	/// pairs.
 	async fn load_child_keys_remote(
 		&self,
-		top_kp: &[KeyPair],
-	) -> Result<Vec<(ChildInfo, Vec<KeyPair>)>, &'static str> {
+		top_kp: &[KeyValue],
+	) -> Result<Vec<(ChildInfo, Vec<KeyValue>)>, &'static str> {
 		let child_bearing_top_keys = top_kp
 			.iter()
 			.filter_map(
@@ -490,7 +490,7 @@ impl<B: BlockT> Builder<B> {
 	}
 
 	/// Load all the `top` keys from the remote config.
-	async fn load_top_keys_remote(&self) -> Result<Vec<KeyPair>, &'static str> {
+	async fn load_top_keys_remote(&self) -> Result<Vec<KeyValue>, &'static str> {
 		let config = self.as_online();
 		let at = self
 			.as_online()
@@ -506,7 +506,7 @@ impl<B: BlockT> Builder<B> {
 				let module_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
 				info!(
 					target: LOG_TARGET,
-					"downloaded data for module {} (count: {} / prefix: {:?}).",
+					"downloaded data for module {} (coun {} / prefix: {:?}).",
 					f,
 					module_kv.len(),
 					HexDisplay::from(&hashed_prefix),
@@ -563,17 +563,17 @@ impl<B: BlockT> Builder<B> {
 
 	pub(crate) async fn pre_build(
 		mut self,
-	) -> Result<(Vec<KeyPair>, Vec<(ChildInfo, Vec<KeyPair>)>), &'static str> {
+	) -> Result<(Vec<KeyValue>, Vec<(ChildInfo, Vec<KeyValue>)>), &'static str> {
 		let mode = self.mode.clone();
-		let mut top_kp = match mode {
+		let mut top_kv = match mode {
 			Mode::Offline(config) => self.load_top_snapshot(&config.state_snapshot.path)?,
 			Mode::Online(config) => {
 				self.init_remote_client().await?;
-				let top_kp = self.load_top_keys_remote().await?;
+				let top_kv = self.load_top_keys_remote().await?;
 				if let Some(c) = config.state_snapshot {
-					self.save_top_snapshot(&top_kp, &c.path)?;
+					self.save_top_snapshot(&top_kv, &c.path)?;
 				}
-				top_kp
+				top_kv
 			},
 		};
 
@@ -584,7 +584,7 @@ impl<B: BlockT> Builder<B> {
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
 			);
-			top_kp.extend(self.hashed_key_values.clone());
+			top_kv.extend(self.hashed_key_values.clone());
 		}
 
 		// exclude manual key values.
@@ -594,16 +594,16 @@ impl<B: BlockT> Builder<B> {
 				"excluding externalities from {} keys",
 				self.hashed_blacklist.len()
 			);
-			top_kp.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
+			top_kv.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
 		}
 
-		let child_kp = match self.mode {
+		let child_kv = match self.mode {
 			Mode::Online(ref config) if config.scrape_children => {
-				let child_kp = self.load_child_keys_remote(&top_kp).await?;
+				let child_kv = self.load_child_keys_remote(&top_kv).await?;
 				if let Some(c) = &config.state_snapshot {
-					self.save_child_snapshot(&child_kp, &c.path)?;
+					self.save_child_snapshot(&child_kv, &c.path)?;
 				}
-				child_kp
+				child_kv
 			},
 			Mode::Offline(ref config) => self.load_child_snapshot(&config.state_snapshot.path).map_err(|why|
 				log::warn!(target: LOG_TARGET, "failed to load child-key file due to {:?}", why)
@@ -611,7 +611,7 @@ impl<B: BlockT> Builder<B> {
 			_ => Default::default(),
 		};
 
-		Ok((top_kp, child_kp))
+		Ok((top_kv, child_kv))
 	}
 }
 
@@ -623,7 +623,7 @@ impl<B: BlockT> Builder<B> {
 	}
 
 	/// Inject a manual list of key and values to the storage.
-	pub fn inject_hashed_key_value(mut self, injections: &[KeyPair]) -> Self {
+	pub fn inject_hashed_key_value(mut self, injections: &[KeyValue]) -> Self {
 		for i in injections {
 			self.hashed_key_values.push(i.clone());
 		}
@@ -788,6 +788,7 @@ mod remote_tests {
 	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
+	#[ignore]
 	async fn can_build_one_big_pallet() {
 		init_logger();
 		Builder::<Block>::new()
