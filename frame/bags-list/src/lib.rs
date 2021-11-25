@@ -19,11 +19,11 @@
 //!
 //! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
 //! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
-//! signifies the chance of each id being included in the final [`VoteWeightProvider::iter`].
+//! signifies the chance of each id being included in the final [`SortedListProvider::iter`].
 //!
-//! It implements [`sp_election_provider_support::SortedListProvider`] to provide a semi-sorted list
-//! of accounts to another pallet. It needs some other pallet to give it some information about the
-//! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
+//! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
+//! list of accounts to another pallet. It needs some other pallet to give it some information about
+//! the weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
 //! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
@@ -38,7 +38,8 @@
 //!
 //! # Details
 //!
-//! - items are kept in bags, which are delineated by their range of weight (See [`BagThresholds`]).
+//! - items are kept in bags, which are delineated by their range of weight (See
+//!   [`Config::BagThresholds`]).
 //! - for iteration, bags are chained together from highest to lowest and elements within the bag
 //!   are iterated from head to tail.
 //! - items within a bag are iterated in order of insertion. Thus removing an item and re-inserting
@@ -168,8 +169,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Moved an account from one bag to another. \[who, from, to\].
-		Rebagged(T::AccountId, VoteWeight, VoteWeight),
+		/// Moved an account from one bag to another.
+		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
 	}
 
 	#[pallet::call]
@@ -216,7 +217,7 @@ impl<T: Config> Pallet<T> {
 		let maybe_movement = list::Node::<T>::get(&account)
 			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
+			Self::deposit_event(Event::<T>::Rebagged { who: account.clone(), from, to });
 		};
 		maybe_movement
 	}

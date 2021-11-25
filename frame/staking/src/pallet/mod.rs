@@ -69,7 +69,8 @@ pub mod pallet {
 
 		/// Convert a balance into a number used for election calculation. This must fit into a
 		/// `u64` but is allowed to be sensibly lossy. The `u64` is used to communicate with the
-		/// [`sp_npos_elections`] crate which accepts u64 numbers and does operations in 128.
+		/// [`frame_election_provider_support`] crate which accepts u64 numbers and does operations
+		/// in 128.
 		/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
 		/// [`BalanceOf`].
 		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
@@ -146,7 +147,7 @@ pub mod pallet {
 		type OffendingValidatorsThreshold: Get<Perbill>;
 
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
-		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
+		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
@@ -608,7 +609,9 @@ pub mod pallet {
 		DuplicateIndex,
 		/// Slash record index out of bounds.
 		InvalidSlashIndex,
-		/// Can not bond with value less than minimum required.
+		/// Cannot have a validator or nominator role, with value less than the minimum defined by
+		/// governance (see `MinValidatorBond` and `MinNominatorBond`). If unbonding is the
+		/// intention, `chill` first to remove one's role as validator/nominator.
 		InsufficientBond,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
