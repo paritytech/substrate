@@ -380,19 +380,27 @@ fn scheduler_respects_priority_ordering() {
 #[test]
 fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 	new_test_ext().execute_with(|| {
+		let max_weight = MaximumSchedulerWeight::get() - <() as WeightInfo>::on_initialize(0);
+		let item_weight = <() as WeightInfo>::on_initialize(1) - <() as WeightInfo>::on_initialize(0);
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			255,
 			root(),
-			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 3 }).into(),
+			Call::Logger(LoggerCall::log {
+				i: 42,
+				weight: max_weight / 2 - item_weight,
+			}).into(),
 		));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log {
+				i: 69,
+				weight: max_weight / 2 - item_weight,
+			}).into(),
 		));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
@@ -401,7 +409,7 @@ fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 			root(),
 			Call::Logger(LoggerCall::log {
 				i: 2600,
-				weight: MaximumSchedulerWeight::get() / 2
+				weight: max_weight / 2 - item_weight + 1,
 			}).into(),
 		));
 
@@ -417,37 +425,33 @@ fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 #[test]
 fn on_initialize_weight_is_correct() {
 	new_test_ext().execute_with(|| {
-		let base_weight: Weight =
-			<Test as frame_system::Config>::DbWeight::get().reads_writes(1, 2);
-		let base_multiplier = 0;
-		let named_multiplier = <Test as frame_system::Config>::DbWeight::get().writes(1);
-		let periodic_multiplier =
-			<Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
+		let base_weight = <() as WeightInfo>::on_initialize(0);
+		let call_weight = MaximumSchedulerWeight::get() / 4;
 
 		// Named
 		assert_ok!(Scheduler::do_schedule_named(
 			1u32.encode(),
-			DispatchTime::At(1),
+			DispatchTime::At(3),
 			None,
 			255,
 			root(),
-			Call::Logger(LoggerCall::log { i: 3, weight: MaximumSchedulerWeight::get() / 3 }).into(),
+			Call::Logger(LoggerCall::log { i: 3, weight: call_weight + 1 }).into(),
 		));
 		// Anon Periodic
 		assert_ok!(Scheduler::do_schedule(
-			DispatchTime::At(1),
+			DispatchTime::At(2),
 			Some((1000, 3)),
 			128,
 			root(),
-			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 3 }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: call_weight + 2 }).into(),
 		));
 		// Anon
 		assert_ok!(Scheduler::do_schedule(
-			DispatchTime::At(1),
+			DispatchTime::At(2),
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: call_weight + 3 }).into(),
 		));
 		// Named Periodic
 		assert_ok!(Scheduler::do_schedule_named(
@@ -456,38 +460,32 @@ fn on_initialize_weight_is_correct() {
 			Some((1000, 3)),
 			126,
 			root(),
-			Call::Logger(LoggerCall::log {
-				i: 2600,
-				weight: MaximumSchedulerWeight::get() / 2
-			}).into(),
+			Call::Logger(LoggerCall::log { i: 2600, weight: call_weight + 4 }).into(),
 		));
 
 		// Will include the named periodic only
 		let actual_weight = Scheduler::on_initialize(1);
-		let call_weight = MaximumSchedulerWeight::get() / 2;
 		assert_eq!(
 			actual_weight,
-			call_weight +
-				base_weight + base_multiplier +
-				named_multiplier + periodic_multiplier
+			base_weight + call_weight + 4 + <() as MarginalWeightInfo>::item(true, true, Some(false))
 		);
 		assert_eq!(logger::log(), vec![(root(), 2600u32)]);
 
 		// Will include anon and anon periodic
 		let actual_weight = Scheduler::on_initialize(2);
-		let call_weight = MaximumSchedulerWeight::get() / 2 + MaximumSchedulerWeight::get() / 3;
 		assert_eq!(
 			actual_weight,
-			call_weight + base_weight + base_multiplier * 2 + periodic_multiplier
+			base_weight
+				+ call_weight + 2 + <() as MarginalWeightInfo>::item(false, false, Some(false))
+				+ call_weight + 3 + <() as MarginalWeightInfo>::item(true, false, Some(false))
 		);
 		assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
 
 		// Will include named only
 		let actual_weight = Scheduler::on_initialize(3);
-		let call_weight = MaximumSchedulerWeight::get() / 3;
 		assert_eq!(
 			actual_weight,
-			call_weight + base_weight + base_multiplier + named_multiplier
+			base_weight + call_weight + 1 + <() as MarginalWeightInfo>::item(false, true, Some(false))
 		);
 		assert_eq!(
 			logger::log(),
@@ -496,7 +494,7 @@ fn on_initialize_weight_is_correct() {
 
 		// Will contain none
 		let actual_weight = Scheduler::on_initialize(4);
-		assert_eq!(actual_weight, 0);
+		assert_eq!(actual_weight, base_weight);
 	});
 }
 

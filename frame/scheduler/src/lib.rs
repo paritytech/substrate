@@ -167,6 +167,24 @@ mod preimage_provider {
 
 pub use preimage_provider::PreimageProviderAndMaybeRecipient;
 
+pub(crate) trait MarginalWeightInfo: WeightInfo {
+	fn item(periodic: bool, named: bool, resolved: Option<bool>) -> Weight {
+		match (periodic, named, resolved) {
+			(_, false, None) => Self::on_initialize_aborted(2) - Self::on_initialize_aborted(1),
+			(_, true, None) => Self::on_initialize_named_aborted(2) - Self::on_initialize_named_aborted(1),
+			(false, false, Some(false)) => Self::on_initialize(2) - Self::on_initialize(1),
+			(false, true, Some(false)) => Self::on_initialize_named(2) - Self::on_initialize_named(1),
+			(true, false, Some(false)) => Self::on_initialize_periodic(2) - Self::on_initialize_periodic(1),
+			(true, true, Some(false)) => Self::on_initialize_periodic_named(2) - Self::on_initialize_periodic_named(1),
+			(false, false, Some(true)) => Self::on_initialize_resolved(2) - Self::on_initialize_resolved(1),
+			(false, true, Some(true)) => Self::on_initialize_named_resolved(2) - Self::on_initialize_named_resolved(1),
+			(true, false, Some(true)) => Self::on_initialize_periodic_resolved(2) - Self::on_initialize_periodic_resolved(1),
+			(true, true, Some(true)) => Self::on_initialize_periodic_named_resolved(2) - Self::on_initialize_periodic_named_resolved(1),
+		}
+	}
+}
+impl<T: WeightInfo> MarginalWeightInfo for T {}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -224,6 +242,9 @@ pub mod pallet {
 
 		/// The preimage provider with which we look up call hashes to get the call.
 		type Preimages: PreimageProviderAndMaybeRecipient<Self::Hash>;
+
+		/// If `Some` then the number of blocks to postpone execution for when the item is delayed.
+		type NoPreimagePostponement: Get<Option<Self::BlockNumber>>;
 	}
 
 	/// Items to be executed, indexed by the block number that they should be executed on.
@@ -293,34 +314,15 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute the scheduled calls
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - N = Named scheduled calls
-		/// - P = Periodic Calls
-		/// - Base Weight: 9.243 + 23.45 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda + Lookup * N + Agenda(Future) * P
-		///     - Write: Agenda + Lookup * N  + Agenda(future) * P
-		/// # </weight>
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let mut base_weight: Weight = T::DbWeight::get().reads_writes(1, 2); // Agenda + Agenda(next)
 			let limit = T::MaximumWeight::get();
+
 			let mut queued = Agenda::<T>::take(now)
 				.into_iter()
 				.enumerate()
-				.filter_map(|(index, s)| {
-					let ScheduledV3 { maybe_id, priority, call, maybe_periodic, origin, _phantom } = s?;
-					let (call, maybe_completed) = call.resolved::<T::Preimages>();
-					if let Some(completed) = maybe_completed {
-						// TODO Benchmark individually.
-						base_weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
-						T::Preimages::unrequest_preimage(&completed);
-					}
-					let s = ScheduledV3 { maybe_id, priority, call, maybe_periodic, origin, _phantom };
-					Some((index as u32, s))
-				})
+				.filter_map(|(index, s)| Some((index as u32, s?)))
 				.collect::<Vec<_>>();
+
 			if queued.len() as u32 > T::MaxScheduledPerBlock::get() {
 				log::warn!(
 					target: "runtime::scheduler",
@@ -328,87 +330,92 @@ pub mod pallet {
 					expected from the runtime configuration. An update might be needed."
 				);
 			}
+
 			queued.sort_by_key(|(_, s)| s.priority);
+
 			let next = now + One::one();
-			let mut total_weight: Weight = 0;
-			queued
-				.into_iter()
-				.enumerate()
-				.scan(base_weight, |cumulative_weight, (order, (index, s))| {
 
-					if let Some(c) = s.call.as_value() {
-						*cumulative_weight =
-							cumulative_weight.saturating_add(c.get_dispatch_info().weight);
-						let origin =
-							<<T as Config>::Origin as From<T::PalletsOrigin>>::from(s.origin.clone())
-								.into();
+			let mut total_weight: Weight = T::WeightInfo::on_initialize(0);
+			for (order, (index, mut s)) in queued.into_iter().enumerate() {
 
-						if ensure_signed(origin).is_ok() {
-							// AccountData for inner call origin accountdata.
-							*cumulative_weight =
-								cumulative_weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				let named = if let Some(ref id) = s.maybe_id {
+					Lookup::<T>::remove(id);
+					true
+				} else {
+					false
+				};
+
+				let (call, maybe_completed) = s.call.resolved::<T::Preimages>();
+				s.call = call;
+
+				let resolved = if let Some(completed) = maybe_completed {
+					T::Preimages::unrequest_preimage(&completed);
+					true
+				} else {
+					false
+				};
+
+				let call = match s.call.as_value().cloned() {
+					Some(c) => c,
+					None => {
+						// Preimage not available - postpone until next block.
+						total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
+						if let Some(delay) = T::NoPreimagePostponement::get() {
+							Agenda::<T>::append(now.saturating_add(delay), Some(s));
 						}
-					}
+						continue;
+					},
+				};
 
-					if s.maybe_id.is_some() {
-						// Remove/Modify Lookup
-						*cumulative_weight =
-							cumulative_weight.saturating_add(T::DbWeight::get().writes(1));
-					}
-					if s.maybe_periodic.is_some() {
-						// Read/Write Agenda for future block
-						*cumulative_weight =
-							cumulative_weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
-					}
+				let periodic = s.maybe_periodic.is_some();
+				let mut this_weight = T::WeightInfo::item(periodic, named, Some(resolved))
+					.saturating_add(call.get_dispatch_info().weight);
 
-					Some((order, index, *cumulative_weight, s))
-				})
-				.filter_map(|(order, index, cumulative_weight, mut s)| {
-					let call = match s.call.as_value().cloned() {
-						Some(c) => c,
-						None => return Some(Some(s)),
-					};
-					// We allow a scheduled call if any is true:
-					// - It's priority is `HARD_DEADLINE`
-					// - It does not push the weight past the limit.
-					// - It is the first item in the schedule
-					if s.priority <= schedule::HARD_DEADLINE ||
-						cumulative_weight <= limit ||
-						order == 0
-					{
-						let r = call.dispatch(s.origin.clone().into());
-						let maybe_id = s.maybe_id.clone();
-						if let &Some((period, count)) = &s.maybe_periodic {
-							if count > 1 {
-								s.maybe_periodic = Some((period, count - 1));
-							} else {
-								s.maybe_periodic = None;
-							}
-							let next = now + period;
-							// If scheduled is named, place it's information in `Lookup`
-							if let Some(ref id) = s.maybe_id {
-								let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0);
-								Lookup::<T>::insert(id, (next, next_index as u32));
-							}
-							Agenda::<T>::append(next, Some(s));
-						} else {
-							if let Some(ref id) = s.maybe_id {
-								Lookup::<T>::remove(id);
-							}
-						}
-						Self::deposit_event(Event::Dispatched(
-							(now, index),
-							maybe_id,
-							r.map(|_| ()).map_err(|e| e.error),
-						));
-						total_weight = cumulative_weight;
-						None
+				let origin =
+					<<T as Config>::Origin as From<T::PalletsOrigin>>::from(s.origin.clone())
+						.into();
+				if ensure_signed(origin).is_ok() {
+					// Weights of Signed dispatches expect their signing account to be whitelisted.
+					this_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+				}
+
+				// We allow a scheduled call if any is true:
+				// - It's priority is `HARD_DEADLINE`
+				// - It does not push the weight past the limit.
+				// - It is the first item in the schedule
+				let hard_deadline = s.priority <= schedule::HARD_DEADLINE;
+				let new_total_weight = total_weight.saturating_add(this_weight);
+				if !hard_deadline && order > 0 && new_total_weight > limit {
+					// Cannot be scheduled this block - postpone until next.
+					total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
+					Agenda::<T>::append(next, Some(s));
+					continue;
+				}
+
+				total_weight = new_total_weight;
+				let r = call.dispatch(s.origin.clone().into());
+				// OPTIMIZE: add actual weight used, not max.
+				Self::deposit_event(Event::Dispatched(
+					(now, index),
+					s.maybe_id.clone(),
+					r.map(|_| ()).map_err(|e| e.error),
+				));
+
+				if let &Some((period, count)) = &s.maybe_periodic {
+					if count > 1 {
+						s.maybe_periodic = Some((period, count - 1));
 					} else {
-						Some(Some(s))
+						s.maybe_periodic = None;
 					}
-				})
-				.for_each(|unused| Agenda::<T>::append(next, unused));
-
+					let next = now + period;
+					// If scheduled is named, place its information in `Lookup`
+					if let Some(ref id) = s.maybe_id {
+						let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0);
+						Lookup::<T>::insert(id, (next, next_index as u32));
+					}
+					Agenda::<T>::append(next, Some(s));
+				}
+			}
 			total_weight
 		}
 	}

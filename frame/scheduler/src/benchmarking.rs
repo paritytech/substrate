@@ -30,21 +30,38 @@ use frame_system::Pallet as System;
 const BLOCK_NUMBER: u32 = 2;
 
 // Add `n` named items to the schedule
-fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
-	// Essentially a no-op call.
-	let call = CallOrHashOf::<T>::Value(frame_system::Call::set_storage { items: vec![] }.into());
+fn fill_schedule<T: Config>(
+	when: T::BlockNumber,
+	n: u32,
+	periodic: bool,
+	named: bool,
+	resolved: Option<bool>,
+	//^^ None -> aborted (hash without preimage)
+	//   Some(true) -> hash resolves into call
+	//   Some(false) -> plain call
+) -> Result<(), &'static str> {
 	for i in 0..n {
 		// Named schedule is strictly heavier than anonymous
-		Scheduler::<T>::do_schedule_named(
-			i.encode(),
-			DispatchTime::At(when),
-			// Add periodicity
-			Some((T::BlockNumber::one(), 100)),
-			// HARD_DEADLINE priority means it gets executed no matter what
-			0,
-			frame_system::RawOrigin::Root.into(),
-			call.clone().into(),
-		)?;
+		let (inner_call, hash) = call_and_hash::<T>(i);
+		let call = match resolved {
+			Some(true) => {
+				T::Preimages::note_preimage(inner_call.encode().try_into().unwrap());
+				hash
+			}
+			Some(false) => inner_call.into(),
+			None => hash,
+		};
+		let period = match periodic {
+			true => Some(((i + 100).into(), 100)),
+			false => None,
+		};
+		let t = DispatchTime::At(when);
+		let origin = frame_system::RawOrigin::Root.into();
+		if named {
+			Scheduler::<T>::do_schedule_named(i.encode(), t, period, 0, origin, call)?;
+		} else {
+			Scheduler::<T>::do_schedule(t, period, 0, origin, call)?;
+		}
 	}
 	ensure!(Agenda::<T>::get(when).len() == n as usize, "didn't fill schedule");
 	Ok(())
@@ -52,33 +69,128 @@ fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static
 
 fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::Call, CallOrHashOf::<T>) {
 	// Essentially a no-op call.
-	let call: <T as Config>::Call = frame_system::Call::set_storage { items: vec![(i.encode(), vec![])] }.into();
+	let call: <T as Config>::Call = frame_system::Call::remark { remark: i.encode() }.into();
 	let hash = CallOrHashOf::<T>::Hash(T::Hashing::hash_of(&call));
 	(call, hash)
 }
 
-// Add `n` named items to the schedule
-fn fill_schedule_with_call_hashes<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
-	for i in 0..n {
-		let (call, hash) = call_and_hash::<T>(i);
-		T::Preimages::note_preimage(call.encode().try_into().unwrap());
-		// Named schedule is strictly heavier than anonymous
-		Scheduler::<T>::do_schedule_named(
-			i.encode(),
-			DispatchTime::At(when),
-			// Add periodicity
-			Some((T::BlockNumber::one(), 100)),
-			// HARD_DEADLINE priority means it gets executed no matter what
-			0,
-			frame_system::RawOrigin::Root.into(),
-			hash,
-		)?;
-	}
-	ensure!(Agenda::<T>::get(when).len() == n as usize, "didn't fill schedule");
-	Ok(())
-}
-
 benchmarks! {
+	on_initialize_periodic_named_resolved {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, true, true, Some(true))?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s * 2);
+		for i in 0..s {
+			assert_eq!(Agenda::<T>::get(when + (i + 100).into()).len(), 1 as usize);
+		}
+	}
+
+	on_initialize_named_resolved {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, false, true, Some(true))?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s * 2);
+		assert!(Agenda::<T>::iter().count() == 0);
+	}
+
+	on_initialize_periodic_resolved {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, true, false, Some(true))?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s * 2);
+		for i in 0..s {
+			assert_eq!(Agenda::<T>::get(when + (i + 100).into()).len(), 1 as usize);
+		}
+	}
+
+	on_initialize_resolved {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, false, false, Some(true))?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s * 2);
+		assert!(Agenda::<T>::iter().count() == 0);
+	}
+
+	on_initialize_named_aborted {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, false, true, None)?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), 0);
+		if let Some(delay) = T::NoPreimagePostponement::get() {
+			assert_eq!(Agenda::<T>::get(when + delay).len(), s as usize);
+		} else {
+			assert!(Agenda::<T>::iter().count() == 0);
+		}
+	}
+
+	on_initialize_aborted {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, false, false, None)?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), 0);
+		if let Some(delay) = T::NoPreimagePostponement::get() {
+			assert_eq!(Agenda::<T>::get(when + delay).len(), s as usize);
+		} else {
+			assert!(Agenda::<T>::iter().count() == 0);
+		}
+	}
+
+	on_initialize_periodic_named {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, true, true, Some(false))?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s);
+		for i in 0..s {
+			assert_eq!(Agenda::<T>::get(when + (i + 100).into()).len(), 1 as usize);
+		}
+	}
+
+	on_initialize_periodic {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, true, false, Some(false))?;
+	}: { Scheduler::<T>::on_initialize(when); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s);
+		for i in 0..s {
+			assert_eq!(Agenda::<T>::get(when + (i + 100).into()).len(), 1 as usize);
+		}
+	}
+
+	on_initialize_named {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, false, true, Some(false))?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s);
+		assert!(Agenda::<T>::iter().count() == 0);
+	}
+
+	on_initialize {
+		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let when = BLOCK_NUMBER.into();
+		fill_schedule::<T>(when, s, false, false, Some(false))?;
+	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
+	verify {
+		assert_eq!(System::<T>::event_count(), s);
+		assert!(Agenda::<T>::iter().count() == 0);
+	}
+
 	schedule {
 		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
@@ -88,7 +200,7 @@ benchmarks! {
 		let inner_call = frame_system::Call::set_storage { items: vec![] }.into();
 		let call = Box::new(CallOrHashOf::<T>::Value(inner_call));
 
-		fill_schedule::<T>(when, s)?;
+		fill_schedule::<T>(when, s, true, true, Some(false))?;
 	}: _(RawOrigin::Root, when, periodic, priority, call)
 	verify {
 		ensure!(
@@ -101,7 +213,7 @@ benchmarks! {
 		let s in 1 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 
-		fill_schedule::<T>(when, s)?;
+		fill_schedule::<T>(when, s, true, true, Some(false))?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
 	}: _(RawOrigin::Root, when, 0)
 	verify {
@@ -126,7 +238,7 @@ benchmarks! {
 		let inner_call = frame_system::Call::set_storage { items: vec![] }.into();
 		let call = Box::new(CallOrHashOf::<T>::Value(inner_call));
 
-		fill_schedule::<T>(when, s)?;
+		fill_schedule::<T>(when, s, true, true, Some(false))?;
 	}: _(RawOrigin::Root, id, when, periodic, priority, call)
 	verify {
 		ensure!(
@@ -139,7 +251,7 @@ benchmarks! {
 		let s in 1 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 
-		fill_schedule::<T>(when, s)?;
+		fill_schedule::<T>(when, s, true, true, Some(false))?;
 	}: _(RawOrigin::Root, 0.encode())
 	verify {
 		ensure!(
@@ -150,22 +262,6 @@ benchmarks! {
 		ensure!(
 			Agenda::<T>::get(when)[0].is_none(),
 			"didn't remove from schedule"
-		);
-	}
-
-	// TODO [#7141]: Make this more complex and flexible so it can be used in automation.
-	#[extra]
-	on_initialize {
-		let s in 0 .. T::MaxScheduledPerBlock::get();
-		let when = BLOCK_NUMBER.into();
-		fill_schedule::<T>(when, s)?;
-	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
-	verify {
-		assert_eq!(System::<T>::event_count(), s);
-		// Next block should have all the schedules again
-		ensure!(
-			Agenda::<T>::get(when + T::BlockNumber::one()).len() == s as usize,
-			"didn't append schedule"
 		);
 	}
 
