@@ -117,6 +117,7 @@ pub enum TestNetworkEvent {
 
 pub struct TestNetwork {
 	peer_id: PeerId,
+	identity: libp2p::identity::Keypair,
 	external_addresses: Vec<Multiaddr>,
 	// Whenever functions on `TestNetwork` are called, the function arguments are added to the
 	// vectors below.
@@ -135,8 +136,10 @@ impl TestNetwork {
 impl Default for TestNetwork {
 	fn default() -> Self {
 		let (tx, rx) = mpsc::unbounded();
+		let identity = libp2p::identity::Keypair::generate_ed25519();
 		TestNetwork {
-			peer_id: PeerId::random(),
+			peer_id: identity.public().into_peer_id(),
+			identity,
 			external_addresses: vec!["/ip6/2001:db8::/tcp/30333".parse().unwrap()],
 			put_value_call: Default::default(),
 			get_value_call: Default::default(),
@@ -148,6 +151,9 @@ impl Default for TestNetwork {
 
 #[async_trait]
 impl NetworkProvider for TestNetwork {
+	fn local_identity(&self) -> &libp2p::identity::Keypair {
+		&self.identity
+	}
 	fn put_value(&self, key: kad::record::Key, value: Vec<u8>) {
 		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
 		self.event_sender
@@ -179,11 +185,13 @@ async fn build_dht_event(
 	public_key: AuthorityId,
 	key_store: &dyn CryptoStore,
 ) -> Vec<(libp2p::kad::record::Key, Vec<u8>)> {
-	let serialized_record = serialize_audi(serialize_addresses(addresses.into_iter())).unwrap();
+	let serialized_record =
+		serialize_authority_record(serialize_addresses(addresses.into_iter())).unwrap();
 
-	let kv_pairs = sign_audi_with_all(serialized_record, key_store, vec![public_key.into()])
-		.await
-		.unwrap();
+	let kv_pairs =
+		sign_record_with_authority_ids(serialized_record, None, key_store, vec![public_key.into()])
+			.await
+			.unwrap();
 	// There is always a single item in it, because we signed it with a single key
 	kv_pairs
 }
@@ -461,10 +469,11 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 		block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 			.unwrap();
 
+	let peer_id = PeerId::random();
 	let addresses = (0..100)
-		.map(|_| {
-			let peer_id = PeerId::random();
-			let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
+		.map(|i| {
+			let address: Multiaddr =
+				format!("/ip6/2001:db8:0:0:0:0:0:{:x}/tcp/30333", i).parse().unwrap();
 			address.with(multiaddr::Protocol::P2p(peer_id.into()))
 		})
 		.collect();

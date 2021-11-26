@@ -40,7 +40,7 @@ use libp2p::{
 	core::multiaddr,
 	multihash::{Hasher, Multihash},
 };
-use log::{debug, error, log_enabled};
+use log::{debug, error, log_enabled, warn};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
@@ -111,6 +111,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	client: Arc<Client>,
 
 	network: Arc<Network>,
+
 	/// Channel we receive Dht events on.
 	dht_event_rx: DhtEventStream,
 
@@ -322,12 +323,20 @@ where
 				.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
 		}
 
-		let serialized_record = serialize_audi(addresses)?;
+		let serialized_record = serialize_authority_record(addresses)?;
+		let peer_signature =
+			sign_record_with_peer_id(&serialized_record, &self.network.local_identity())?;
 
 		let keys_vec = keys.iter().cloned().collect::<Vec<_>>();
 
-		let mut kv_pairs =
-			sign_audi_with_all(serialized_record, key_store.as_ref(), keys_vec).await?;
+		let mut kv_pairs = sign_record_with_authority_ids(
+			serialized_record,
+			Some(peer_signature),
+			key_store.as_ref(),
+			keys_vec,
+		)
+		.await?;
+
 		for (key, value) in kv_pairs.drain(..) {
 			self.network.put_value(key, value);
 		}
@@ -456,15 +465,8 @@ where
 		values: Vec<(libp2p::kad::record::Key, Vec<u8>)>,
 	) -> Result<()> {
 		// Ensure `values` is not empty and all its keys equal.
-		let remote_key = values
-			.iter()
-			.fold(Ok(None), |acc, (key, _)| match acc {
-				Ok(None) => Ok(Some(key.clone())),
-				Ok(Some(ref prev_key)) if prev_key != key =>
-					Err(Error::ReceivingDhtValueFoundEventWithDifferentKeys),
-				x @ Ok(_) => x,
-				Err(e) => Err(e),
-			})?
+		let remote_key = single(values.iter().map(|(key, _)| key.clone()))
+			.map_err(|_| Error::ReceivingDhtValueFoundEventWithDifferentKeys)?
 			.ok_or(Error::ReceivingDhtValueFoundEventWithNoRecords)?;
 
 		let authority_id: AuthorityId = self
@@ -477,51 +479,68 @@ where
 		let remote_addresses: Vec<Multiaddr> = values
 			.into_iter()
 			.map(|(_k, v)| {
-				let schema::SignedAuthorityRecord { record, auth_signature, peer_signatures: _ } =
+				let schema::SignedAuthorityRecord { record, auth_signature, peer_signature } =
 					schema::SignedAuthorityRecord::decode(v.as_slice())
 						.map_err(Error::DecodingProto)?;
 
-				let signature = AuthoritySignature::decode(&mut &auth_signature[..])
+				let auth_signature = AuthoritySignature::decode(&mut &auth_signature[..])
 					.map_err(Error::EncodingDecodingScale)?;
 
-				if !AuthorityPair::verify(&signature, &record, &authority_id) {
+				if !AuthorityPair::verify(&auth_signature, &record, &authority_id) {
 					return Err(Error::VerifyingDhtPayload)
 				}
 
-				let addresses = schema::AuthorityRecord::decode(record.as_slice())
-					.map(|a| a.addresses)
-					.map_err(Error::DecodingProto)?
-					.into_iter()
-					.map(|a| a.try_into())
-					.collect::<std::result::Result<_, _>>()
-					.map_err(Error::ParsingMultiaddress)?;
+				let mut addresses: Vec<Multiaddr> =
+					schema::AuthorityRecord::decode(record.as_slice())
+						.map(|a| a.addresses)
+						.map_err(Error::DecodingProto)?
+						.into_iter()
+						.map(|a| a.try_into())
+						.collect::<std::result::Result<_, _>>()
+						.map_err(Error::ParsingMultiaddress)?;
 
+				let get_peer_id = |a: &Multiaddr| match a.iter().last() {
+					Some(multiaddr::Protocol::P2p(key)) =>
+						PeerId::from_multihash(key).map_err(|_| ()),
+					_ => return Err(()),
+				};
+
+				// Ignore [`Multiaddr`]s without [`PeerId`] and own addresses.
+				let addresses: Vec<Multiaddr> = addresses
+					.drain(..)
+					.filter(|a| match get_peer_id(a) {
+						Ok(peer_id) => peer_id != local_peer_id,
+						Err(_) => false,
+					})
+					.collect();
+
+				let remote_peer_id = single(addresses.iter().map(get_peer_id))
+					.map_err(|_| Error::ReceivingDhtValueFoundEventWithDifferentPeerIds)? // different peer_id in records
+					.ok_or(Error::ReceivingDhtValueFoundEventWithNoPeerIds)? // no records
+					.map_err(|()| Error::ReceivingDhtValueFoundEventWithNoPeerIds)?; // no peer_id in any records
+
+				if let Some(peer_signature) = peer_signature {
+					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
+						&peer_signature.public_key,
+					)
+					.map_err(|e| Error::ParsingLibp2pIdentity(e))?;
+					let peer_id_in_signature = public_key.clone().into_peer_id();
+					if remote_peer_id != peer_id_in_signature ||
+						!public_key.verify(&record, &peer_signature.signature)
+					{
+						return Err(Error::VerifyingDhtPayload)
+					}
+				} else {
+					warn!(
+						target: LOG_TARGET,
+						"Received unsigned authority discovery record from {}", authority_id
+					);
+				}
 				Ok(addresses)
 			})
 			.collect::<Result<Vec<Vec<Multiaddr>>>>()?
 			.into_iter()
 			.flatten()
-			// Ignore [`Multiaddr`]s without [`PeerId`] and own addresses.
-			.filter(|addr| {
-				addr.iter().any(|protocol| {
-					// Parse to PeerId first as Multihashes of old and new PeerId
-					// representation don't equal.
-					//
-					// See https://github.com/libp2p/rust-libp2p/issues/555 for
-					// details.
-					if let multiaddr::Protocol::P2p(hash) = protocol {
-						let peer_id = match PeerId::from_multihash(hash) {
-							Ok(peer_id) => peer_id,
-							Err(_) => return false, // Discard address.
-						};
-
-						// Discard if equal to local peer id, keep if it differs.
-						return !(peer_id == local_peer_id)
-					}
-
-					false // `protocol` is not a [`Protocol::P2p`], let's keep looking.
-				})
-			})
 			.take(MAX_ADDRESSES_PER_AUTHORITY)
 			.collect();
 
@@ -575,6 +594,9 @@ where
 /// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
 #[async_trait]
 pub trait NetworkProvider: NetworkStateInfo {
+	/// `Keypair` for signing records in the name of `self.local_peer_id()`
+	fn local_identity(&self) -> &libp2p::identity::Keypair;
+
 	/// Start putting a value in the Dht.
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>);
 
@@ -588,6 +610,9 @@ where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
+	fn local_identity(&self) -> &libp2p::identity::Keypair {
+		self.local_identity()
+	}
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
 		self.put_value(key, value)
 	}
@@ -600,11 +625,27 @@ fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
 	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
 }
 
+// Makes sure all values are the same and returns it
+//
+// Returns Err(_) if not all values are equal. Returns Ok(None) if there are
+// no values.
+fn single<T>(values: impl IntoIterator<Item = T>) -> std::result::Result<Option<T>, ()>
+where
+	T: PartialEq<T>,
+{
+	values.into_iter().fold(Ok(None), |acc, item| match acc {
+		Ok(None) => Ok(Some(item)),
+		Ok(Some(ref prev)) if *prev != item => Err(()),
+		x @ Ok(_) => x,
+		Err(e) => Err(e),
+	})
+}
+
 fn serialize_addresses(addresses: impl Iterator<Item = Multiaddr>) -> Vec<Vec<u8>> {
 	addresses.map(|a| a.to_vec()).collect()
 }
 
-fn serialize_audi(addresses: Vec<Vec<u8>>) -> Result<Vec<u8>> {
+fn serialize_authority_record(addresses: Vec<Vec<u8>>) -> Result<Vec<u8>> {
 	let mut serialized_record = vec![];
 	schema::AuthorityRecord { addresses }
 		.encode(&mut serialized_record)
@@ -612,8 +653,18 @@ fn serialize_audi(addresses: Vec<Vec<u8>>) -> Result<Vec<u8>> {
 	Ok(serialized_record)
 }
 
-async fn sign_audi_with_all(
+fn sign_record_with_peer_id(
+	serialized_record: &[u8],
+	peer_secret: &libp2p::identity::Keypair,
+) -> Result<schema::PeerSignature> {
+	let public_key = peer_secret.public().into_protobuf_encoding();
+	let signature = peer_secret.sign(serialized_record).map_err(|_| Error::Signing)?;
+	Ok(schema::PeerSignature { signature, public_key })
+}
+
+async fn sign_record_with_authority_ids(
 	serialized_record: Vec<u8>,
+	peer_signature: Option<schema::PeerSignature>,
 	key_store: &dyn CryptoStore,
 	keys: Vec<CryptoTypePublicPair>,
 ) -> Result<Vec<(libp2p::kad::record::Key, Vec<u8>)>> {
@@ -632,7 +683,7 @@ async fn sign_audi_with_all(
 		schema::SignedAuthorityRecord {
 			record: serialized_record.clone(),
 			auth_signature,
-			peer_signatures: vec![],
+			peer_signature: peer_signature.clone(),
 		}
 		.encode(&mut signed_record)
 		.map_err(Error::EncodingProto)?;

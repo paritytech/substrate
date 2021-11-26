@@ -106,6 +106,8 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
+	/// The `KeyPair` that defines the `PeerId` of the local node.
+	local_identity: libp2p::identity::Keypair,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
@@ -318,7 +320,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				};
 
 				transport::build_transport(
-					local_identity,
+					local_identity.clone(),
 					config_mem,
 					params.network_config.yamux_window_size,
 					yamux_maximum_buffer_size,
@@ -406,6 +408,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
+			local_identity,
 			to_worker,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			notifications_sizes_metric: metrics
@@ -665,6 +668,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
 		&self.local_peer_id
+	}
+
+	/// Returns the `KeyPair` that defined the local `PeerId`.
+	pub fn local_identity(&self) -> &libp2p::identity::Keypair {
+		&self.local_identity
 	}
 
 	/// Set authorized peers.
