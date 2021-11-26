@@ -119,7 +119,7 @@ impl pallet_scheduler::Config for Test {
 	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type Preimages = ();
+	type PreimageProvider = ();
 	type NoPreimagePostponement = ();
 }
 parameter_types! {

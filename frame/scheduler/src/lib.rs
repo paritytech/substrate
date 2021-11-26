@@ -242,7 +242,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The preimage provider with which we look up call hashes to get the call.
-		type Preimages: PreimageProviderAndMaybeRecipient<Self::Hash>;
+		type PreimageProvider: PreimageProviderAndMaybeRecipient<Self::Hash>;
 
 		/// If `Some` then the number of blocks to postpone execution for when the item is delayed.
 		type NoPreimagePostponement: Get<Option<Self::BlockNumber>>;
