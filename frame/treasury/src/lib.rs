@@ -258,9 +258,9 @@ pub mod pallet {
 		/// New proposal.
 		Proposed { proposal_index: ProposalIndex },
 		/// We have ended a spend period and will now allocate funds.
-		Spending { funds: BalanceOf<T, I> },
+		Spending { budget_remaining: BalanceOf<T, I> },
 		/// Some funds have been allocated.
-		Awarded { proposal_index: ProposalIndex, funds: BalanceOf<T, I>, account: T::AccountId },
+		Awarded { proposal_index: ProposalIndex, award: BalanceOf<T, I>, account: T::AccountId },
 		/// A proposal was rejected; funds were slashed.
 		Rejected { proposal_index: ProposalIndex, slashed: BalanceOf<T, I> },
 		/// Some of our funds have been burnt.
@@ -412,7 +412,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut total_weight: Weight = Zero::zero();
 
 		let mut budget_remaining = Self::pot();
-		Self::deposit_event(Event::Spending { funds: budget_remaining });
+		Self::deposit_event(Event::Spending { budget_remaining });
 		let account_id = Self::account_id();
 
 		let mut missed_any = false;
@@ -435,7 +435,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 						Self::deposit_event(Event::Awarded {
 							proposal_index: index,
-							funds: p.value,
+							award: p.value,
 							account: p.beneficiary,
 						});
 						false
