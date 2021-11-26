@@ -150,7 +150,7 @@ impl Diff {
 			deposit = deposit.saturating_add(&Deposit::Charge(
 				per_item.saturating_mul((self.items_added - self.items_removed).into()),
 			));
-		} else if self.bytes_removed > self.bytes_added {
+		} else if self.items_removed > self.items_added {
 			deposit = deposit.saturating_add(&Deposit::Refund(
 				per_item.saturating_mul((self.items_removed - self.items_added).into()),
 			));
@@ -195,7 +195,7 @@ where
 	/// This is called whenever a new subcall is initiated in order to track the storage
 	/// usage for this sub call separately. This is necessary because we want to exchange balance
 	/// with the current contract we are interacting with.
-	pub fn nested(&mut self) -> RawMeter<T, E, Nested> {
+	pub fn nested(&self) -> RawMeter<T, E, Nested> {
 		RawMeter {
 			origin: None,
 			limit: self.available(),
@@ -234,15 +234,23 @@ where
 					info.storage_deposit = info.storage_deposit.saturating_add(*amount),
 				Deposit::Refund(amount) => {
 					// We need to make sure to never refund more than what was deposited.
-					// This is relevant on runtime upgrades.
-					*amount = (*amount).min(info.storage_deposit);
-					info.storage_deposit = info.storage_deposit.saturating_sub(*amount);
+					// This case can happen when costs change due to a runtime upgrade.
+					let amount = {
+						let corrected_amount = (*amount).min(info.storage_deposit);
+						let correction = (*amount).saturating_sub(corrected_amount);
+						self.total_deposit.saturating_sub(&Deposit::Refund(correction));
+						*amount = corrected_amount;
+						corrected_amount
+					};
+					info.storage_deposit = info.storage_deposit.saturating_sub(amount);
 				},
 			}
 		}
 
 		self.total_deposit = self.total_deposit.saturating_add(&absorbed.total_deposit);
-		E::charge(origin, &contract, &absorbed.own_deposit);
+		if !absorbed.own_deposit.is_zero() {
+			E::charge(origin, &contract, &absorbed.own_deposit);
+		}
 	}
 
 	/// The amount of balance that is still available from the original `limit`.
@@ -296,7 +304,7 @@ where
 		let total_deposit = self.total_deposit.saturating_add(&deposit);
 		if let Deposit::Charge(amount) = total_deposit {
 			if amount > self.limit {
-				return Err(<Error<T>>::StorageExhausted.into())
+				return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 			}
 		}
 		self.total_deposit = total_deposit;
@@ -323,7 +331,7 @@ where
 impl<T: Config> Ext<T> for ReservingExt {
 	fn reserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>) -> DispatchResult {
 		T::Currency::reserve(origin, *limit)
-			.map_err(|_| <Error<T>>::StorageDepositLimitTooHigh.into())
+			.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds.into())
 	}
 
 	fn unreserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>, deposit: &DepositOf<T>) {
@@ -365,4 +373,328 @@ mod private {
 	pub trait Sealed {}
 	impl Sealed for super::Root {}
 	impl Sealed for super::Nested {}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{
+		exec::AccountIdOf,
+		tests::{Test, ALICE, BOB, CHARLIE},
+	};
+	use pretty_assertions::assert_eq;
+	use std::cell::RefCell;
+
+	type TestMeter = RawMeter<Test, TestExt, Root>;
+
+	thread_local! {
+		static TEST_EXT: RefCell<TestExt> = RefCell::new(Default::default());
+	}
+
+	#[derive(Debug, PartialEq, Eq)]
+	struct Reserve {
+		origin: AccountIdOf<Test>,
+		limit: BalanceOf<Test>,
+	}
+
+	#[derive(Debug, PartialEq, Eq)]
+	struct Unreserve {
+		origin: AccountIdOf<Test>,
+		limit: BalanceOf<Test>,
+		deposit: DepositOf<Test>,
+	}
+
+	#[derive(Debug, PartialEq, Eq)]
+	struct Charge {
+		origin: AccountIdOf<Test>,
+		contract: AccountIdOf<Test>,
+		amount: DepositOf<Test>,
+	}
+
+	#[derive(Default, Debug, PartialEq, Eq)]
+	struct TestExt {
+		reserves: Vec<Reserve>,
+		unreserves: Vec<Unreserve>,
+		charges: Vec<Charge>,
+	}
+
+	impl TestExt {
+		fn clear(&mut self) {
+			self.reserves.clear();
+			self.unreserves.clear();
+			self.charges.clear();
+		}
+	}
+
+	impl Ext<Test> for TestExt {
+		fn reserve_limit(origin: &AccountIdOf<Test>, limit: &BalanceOf<Test>) -> DispatchResult {
+			TEST_EXT.with(|ext| {
+				ext.borrow_mut()
+					.reserves
+					.push(Reserve { origin: origin.clone(), limit: limit.clone() })
+			});
+			Ok(())
+		}
+
+		fn unreserve_limit(
+			origin: &AccountIdOf<Test>,
+			limit: &BalanceOf<Test>,
+			deposit: &DepositOf<Test>,
+		) {
+			TEST_EXT.with(|ext| {
+				ext.borrow_mut().unreserves.push(Unreserve {
+					origin: origin.clone(),
+					limit: limit.clone(),
+					deposit: deposit.clone(),
+				})
+			});
+		}
+
+		fn charge(
+			origin: &AccountIdOf<Test>,
+			contract: &AccountIdOf<Test>,
+			amount: &DepositOf<Test>,
+		) {
+			TEST_EXT.with(|ext| {
+				ext.borrow_mut().charges.push(Charge {
+					origin: origin.clone(),
+					contract: contract.clone(),
+					amount: amount.clone(),
+				})
+			});
+		}
+	}
+
+	fn clear_ext() {
+		TEST_EXT.with(|ext| ext.borrow_mut().clear())
+	}
+
+	fn new_info(deposit: BalanceOf<Test>) -> ContractInfo<Test> {
+		use crate::storage::Storage;
+		use sp_runtime::traits::Hash;
+
+		ContractInfo::<Test> {
+			trie_id: <Storage<Test>>::generate_trie_id(&ALICE, 42),
+			code_hash: <Test as frame_system::Config>::Hashing::hash(b"42"),
+			storage_deposit: deposit,
+			_reserved: Default::default(),
+		}
+	}
+
+	#[test]
+	fn new_reserves_balance_works() {
+		clear_ext();
+
+		let _meter = TestMeter::new(ALICE, 1_000).unwrap();
+
+		TEST_EXT.with(|ext| {
+			assert_eq!(
+				*ext.borrow(),
+				TestExt {
+					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
+					..Default::default()
+				}
+			)
+		});
+	}
+
+	#[test]
+	fn unreserve_on_drop_works() {
+		clear_ext();
+
+		let meter = TestMeter::new(ALICE, 1_000).unwrap();
+		drop(meter);
+
+		TEST_EXT.with(|ext| {
+			assert_eq!(
+				*ext.borrow(),
+				TestExt {
+					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
+					unreserves: vec![Unreserve {
+						origin: ALICE,
+						limit: 1_000,
+						deposit: Deposit::Charge(0)
+					}],
+					..Default::default()
+				}
+			)
+		});
+	}
+
+	#[test]
+	fn empty_charge_works() {
+		clear_ext();
+
+		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		assert_eq!(meter.available(), 1_000);
+
+		// an empty charge foes not create a `Charge` entry
+		let mut nested0 = meter.nested();
+		nested0.charge(&Default::default()).unwrap();
+		meter.absorb(nested0, &ALICE, &BOB, None);
+
+		drop(meter);
+
+		TEST_EXT.with(|ext| {
+			assert_eq!(
+				*ext.borrow(),
+				TestExt {
+					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
+					unreserves: vec![Unreserve {
+						origin: ALICE,
+						limit: 1_000,
+						deposit: Deposit::Charge(0)
+					}],
+					..Default::default()
+				}
+			)
+		});
+	}
+
+	#[test]
+	fn existential_deposit_works() {
+		clear_ext();
+
+		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		assert_eq!(meter.available(), 1_000);
+
+		// a `Refund` will be turned into a `Charge(ed)` which is intended behaviour
+		let mut nested0 = meter.nested();
+		nested0.charge(&Diff { require_ed: true, ..Default::default() }).unwrap();
+		nested0
+			.charge(&Diff { bytes_removed: 1, require_ed: true, ..Default::default() })
+			.unwrap();
+		meter.absorb(nested0, &ALICE, &BOB, None);
+
+		drop(meter);
+
+		TEST_EXT.with(|ext| {
+			assert_eq!(
+				*ext.borrow(),
+				TestExt {
+					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
+					unreserves: vec![Unreserve {
+						origin: ALICE,
+						limit: 1_000,
+						deposit: Deposit::Charge(2)
+					}],
+					charges: vec![Charge {
+						origin: ALICE,
+						contract: BOB,
+						amount: Deposit::Charge(<Test as Config>::Currency::minimum_balance() * 2),
+					}],
+					..Default::default()
+				}
+			)
+		});
+	}
+
+	#[test]
+	fn charging_works() {
+		clear_ext();
+
+		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		assert_eq!(meter.available(), 1_000);
+
+		let mut nested0_info = new_info(100);
+		let mut nested0 = meter.nested();
+		nested0
+			.charge(&Diff {
+				bytes_added: 10,
+				bytes_removed: 5,
+				items_added: 1,
+				items_removed: 2,
+				..Default::default()
+			})
+			.unwrap();
+		nested0.charge(&Diff { bytes_removed: 1, ..Default::default() }).unwrap();
+
+		let mut nested1_info = new_info(50);
+		let mut nested1 = nested0.nested();
+		nested1.charge(&Diff { items_removed: 5, ..Default::default() }).unwrap();
+		nested0.absorb(nested1, &ALICE, &CHARLIE, Some(&mut nested1_info));
+
+		// Trying to refund more than is available in the contract will cap the charge
+		// to that value. This value is `1` in this case.
+		let mut nested2_info = new_info(1);
+		let mut nested2 = nested0.nested();
+		nested2.charge(&Diff { bytes_removed: 7, ..Default::default() }).unwrap();
+		nested0.absorb(nested2, &ALICE, &CHARLIE, Some(&mut nested2_info));
+
+		meter.absorb(nested0, &ALICE, &BOB, Some(&mut nested0_info));
+		drop(meter);
+
+		assert_eq!(nested0_info.storage_deposit, 102);
+		assert_eq!(nested1_info.storage_deposit, 40);
+		assert_eq!(nested2_info.storage_deposit, 0);
+
+		TEST_EXT.with(|ext| {
+			assert_eq!(
+				*ext.borrow(),
+				TestExt {
+					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
+					unreserves: vec![Unreserve {
+						origin: ALICE,
+						limit: 1_000,
+						deposit: Deposit::Refund(15)
+					}],
+					charges: vec![
+						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(10) },
+						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(1) },
+						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(2) }
+					],
+					..Default::default()
+				}
+			)
+		});
+	}
+
+	#[test]
+	fn termination_works() {
+		clear_ext();
+
+		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		assert_eq!(meter.available(), 1_000);
+
+		let mut nested0 = meter.nested();
+		nested0
+			.charge(&Diff {
+				bytes_added: 5,
+				bytes_removed: 1,
+				items_added: 3,
+				items_removed: 1,
+				..Default::default()
+			})
+			.unwrap();
+		nested0.charge(&Diff { items_added: 2, ..Default::default() }).unwrap();
+
+		let nested1_info = new_info(400);
+		let mut nested1 = nested0.nested();
+		nested1.charge(&Diff { items_removed: 5, ..Default::default() }).unwrap();
+		nested1.charge(&Diff { bytes_added: 20, ..Default::default() }).unwrap();
+		nested1.terminate(&nested1_info);
+		nested0.absorb(nested1, &ALICE, &CHARLIE, None);
+
+		meter.absorb(nested0, &ALICE, &BOB, None);
+		drop(meter);
+
+		TEST_EXT.with(|ext| {
+			assert_eq!(
+				*ext.borrow(),
+				TestExt {
+					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
+					unreserves: vec![Unreserve {
+						origin: ALICE,
+						limit: 1_000,
+						deposit: Deposit::Refund(388)
+					}],
+					charges: vec![
+						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(400) },
+						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(12) }
+					],
+					..Default::default()
+				}
+			)
+		});
+	}
 }

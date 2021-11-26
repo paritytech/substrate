@@ -191,6 +191,13 @@ impl<Balance: Zero> StorageDeposit<Balance> {
 			Self::Refund(_) => Zero::zero(),
 		}
 	}
+
+	pub fn is_zero(&self) -> bool {
+		match self {
+			Self::Charge(amount) => amount.is_zero(),
+			Self::Refund(amount) => amount.is_zero(),
+		}
+	}
 }
 
 impl<Balance> StorageDeposit<Balance>

@@ -92,7 +92,7 @@ where
 			// This `None` case happens only in freshly uploaded modules. This means that
 			// the `owner` is always the origin of the current transaction.
 			T::Currency::reserve(&owner_info.owner, owner_info.deposit)
-				.map_err(|_| <Error<T>>::StorageDepositLimitTooHigh)?;
+				.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
 			owner_info.refcount = if instantiated { 1 } else { 0 };
 			<PristineCode<T>>::insert(&code_hash, orig_code);
 			<OwnerInfoOf<T>>::insert(&code_hash, owner_info);

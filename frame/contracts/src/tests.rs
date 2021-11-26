@@ -24,12 +24,12 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Config, ContractInfoOf, Error, Pallet, Schedule,
+	BalanceOf, CodeStorage, Config, ContractInfoOf, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
-	assert_err, assert_err_ignore_postinfo, assert_ok,
+	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::DispatchErrorWithPostInfo,
 	parameter_types,
 	storage::child,
@@ -242,7 +242,7 @@ parameter_types! {
 	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
 	pub const TransactionByteFee: u64 = 0;
 	pub const DepositPerByte: BalanceOf<Test> = 1;
-	pub const DepositPerItem: BalanceOf<Test> = 1;
+	pub const DepositPerItem: BalanceOf<Test> = 2;
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
@@ -2016,4 +2016,235 @@ fn ecdsa_recover() {
 		assert!(result.is_success());
 		assert_eq!(result.data.as_ref(), &EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
+}
+
+#[test]
+fn upload_code_works() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert!(!<CodeStorage<Test>>::contains_key(code_hash));
+		assert_ok!(Contracts::upload_code(
+			Origin::signed(ALICE),
+			wasm,
+			Some(codec::Compact(1_000))
+		));
+		assert!(<CodeStorage<Test>>::contains_key(code_hash));
+
+		let events = System::events();
+
+		assert_eq!(
+			events,
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: 181,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![],
+				},
+			]
+		);
+	});
+}
+
+#[test]
+fn upload_code_limit_too_low() {
+	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm, Some(codec::Compact(100))),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+
+		assert_eq!(System::events(), vec![]);
+	});
+}
+
+#[test]
+fn upload_code_not_enough_balance() {
+	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 150);
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm, Some(codec::Compact(1_000))),
+			<Error<Test>>::StorageDepositNotEnoughFunds,
+		);
+
+		assert_eq!(System::events(), vec![]);
+	});
+}
+
+#[test]
+fn remove_code_works() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_ok!(Contracts::upload_code(
+			Origin::signed(ALICE),
+			wasm,
+			Some(codec::Compact(1_000))
+		));
+
+		assert!(<CodeStorage<Test>>::contains_key(code_hash));
+		assert_ok!(Contracts::remove_code(Origin::signed(ALICE), code_hash));
+		assert!(!<CodeStorage<Test>>::contains_key(code_hash));
+
+		let events = System::events();
+
+		assert_eq!(
+			events,
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: 181,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Unreserved {
+						who: ALICE,
+						amount: 181,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::CodeRemoved { code_hash }),
+					topics: vec![],
+				},
+			]
+		);
+	});
+}
+
+#[test]
+fn remove_code_wrong_origin() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_ok!(Contracts::upload_code(
+			Origin::signed(ALICE),
+			wasm,
+			Some(codec::Compact(1_000))
+		));
+
+		assert_noop!(
+			Contracts::remove_code(Origin::signed(BOB), code_hash),
+			sp_runtime::traits::BadOrigin,
+		);
+
+		let events = System::events();
+
+		assert_eq!(
+			events,
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: 181,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![],
+				},
+			]
+		);
+	});
+}
+
+#[test]
+fn remove_code_in_use() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_noop!(
+			Contracts::remove_code(Origin::signed(BOB), code_hash),
+			<Error<Test>>::CodeInUse,
+		);
+
+		let events = System::events();
+
+		assert_eq!(events, vec![]);
+	});
+}
+
+#[test]
+fn remove_code_not_found() {
+	let (_wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Drop previous events
+		initialize_block(2);
+
+		assert_noop!(
+			Contracts::remove_code(Origin::signed(ALICE), code_hash),
+			<Error<Test>>::CodeNotFound,
+		);
+
+		let events = System::events();
+
+		assert_eq!(events, vec![]);
+	});
 }
