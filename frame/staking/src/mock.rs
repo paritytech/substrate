@@ -252,6 +252,12 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 
+pub struct TestBenchmarkingConfig;
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	type MaxValidators = ConstU32<100>;
+	type MaxNominators = ConstU32<100>;
+}
+
 impl crate::pallet::pallet::Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
@@ -272,9 +278,10 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type WeightInfo = ();
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
+	type BenchmarkingConfig = TestBenchmarkingConfig;
+	type WeightInfo = ();
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test

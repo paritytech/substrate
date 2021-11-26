@@ -807,3 +807,12 @@ where
 		R::is_known_offence(offenders, time_slot)
 	}
 }
+
+/// Configurations of the benchmarking of the pallet.
+pub trait BenchmarkingConfig {
+	/// The maximum number of validators to use.
+	type MaxValidators: Get<u32>;
+	/// The maximum number of nominators to use.
+	type MaxNominators: Get<u32>;
+}
+

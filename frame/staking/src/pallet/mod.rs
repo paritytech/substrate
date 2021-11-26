@@ -50,7 +50,9 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
+	use crate::BenchmarkingConfig;
+
+use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -151,8 +153,12 @@ pub mod pallet {
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
+		/// Some parameters of the benchmarking.
+		type BenchmarkingConfig: BenchmarkingConfig;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
 	}
 
 	#[pallet::extra_constants]
