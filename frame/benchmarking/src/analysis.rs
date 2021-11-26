@@ -199,7 +199,7 @@ impl Analysis {
 	}
 
 	pub fn min_squares_iqr(r: &Vec<BenchmarkResult>, selector: BenchmarkSelector) -> Option<Self> {
-		if r[0].components.len() <= 1 {
+		if r[0].components.is_empty() || r.len() <= 2 {
 			return Self::median_value(r, selector)
 		}
 
