@@ -976,36 +976,41 @@ mod tests {
 	}
 
 	#[test]
-	fn test_GET_request_from_gh_api() {
-		let deadline = timestamp::now().add(Duration::from_millis(4_000));
-
-		let (mut api, addr) = build_api_server!();
+	fn test_get_request_to_gh_api() {
+		let (mut api, _addr) = build_api_server!();
 
 		let id = api.request_start(
 			"GET",
 			&format!("https://api.github.com/orgs/substrate-developer-hub")
 		).unwrap();
+		let _ = api.request_add_header(id, "Content-Type", "application/json");
+		let _ = api.request_add_header(id, "User-Agent", "jimmychu0807");
 
-		// let id = api.request_start("GET", &format!("https://www.google.com")).unwrap();
-
+		let deadline = timestamp::now().add(Duration::from_millis(3_000));
 		match api.response_wait(&[id], Some(deadline))[0] {
 			HttpRequestStatus::Finished(200) => {},
-			v => panic!("Connecting to google website failed: {:?}", v),
+			v => panic!("Fetching GitHub API failed: {:?}", v),
 		}
 
-		let mut buf = [0; 10240];
+		let mut buf = [0; 2048];
 		let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
-
-		println!("{:?}", buf);
-		// assert_eq!(&buf[..n], b"Hello World!");
+		// The string `"login":"substrate-developer-hub"` should be part of the JSON result
+		let resp_str = std::str::from_utf8(&buf[..n]).unwrap();
+		assert!(resp_str.contains("\"login\":\"substrate-developer-hub\""));
 	}
 
 	#[test]
-	fn test_POST_request_from_polkadot_rpc() {
-		let deadline = timestamp::now().add(Duration::from_millis(4_000));
+	fn test_post_request_to_polkadot_rpc() {
+		let deadline = timestamp::now().add(Duration::from_millis(3_000));
+		let (mut api, _addr) = build_api_server!();
 
-		let (mut api, addr) = build_api_server!();
-		let id = api.request_start("POST", &format!("https://rpc.polkadot.io")).unwrap();
+		let id = api.request_start(
+			"POST",
+			&format!("https://rpc.polkadot.io")
+		).unwrap();
+
+		let _ = api.request_add_header(id, "Content-Type", "application/json");
+
 		api.request_write_body(
 			id,
 			b"{\"id\": 1,\"jsonrpc\": \"2.0\",\"method\": \"chain_getHeader\"}",
@@ -1014,14 +1019,14 @@ mod tests {
 
 		match api.response_wait(&[id], Some(deadline))[0] {
 			HttpRequestStatus::Finished(200) => {},
-			v => panic!("Connecting to Polkadot RPC failed: {:?}", v),
+			v => panic!("Fetching from Polkadot RPC failed: {:?}", v),
 		}
 
-		let mut buf = [0; 10240];
+		let mut buf = [0; 2048];
 		let n = api.response_read_body(id, &mut buf, Some(deadline)).unwrap();
-
-		println!("{:?}", buf);
-		// assert_eq!(&buf[..n], b"Hello World!");
+		// The string `"jsonrpc":"2.0"` should be part of the JSON result
+		let resp_str = std::str::from_utf8(&buf[..n]).unwrap();
+		assert!(resp_str.contains("\"jsonrpc\":\"2.0\""));
 	}
 
 	#[test]
