@@ -40,10 +40,16 @@ mod worker;
 
 pub mod notification;
 
-/// payload type.
+/// A BEEFY payload type allowing for future extensibility of adding additional kinds of payloads.
+///
+/// The idea is to store a vector of SCALE-encoded values with an extra identifier.
+/// Identifiers MUST be sorted by the `BeefyPayloadId` to allow efficient lookup of expected value. Duplicated identifiers are disallowed.
+/// It's okay for different implementations to only support a subset of possible values.
 pub type Payload = Vec<(BeefyPayloadId, Vec<u8>)>;
 
-/// Id of the mmr root hash in the [`Commitment`] payload
+/// A [`Payload`] identifier for Merkle Mountain Range root hash.
+///
+/// Encoded value should contain a [`beefy_primitives::MmrRootHash`] type (i.e. 32-bytes hash).
 pub const MMR_ROOT_ID: BeefyPayloadId = *b"mh";
 
 pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
