@@ -783,7 +783,7 @@ fn migration_to_v3_works() {
 			]
 		);
 
-		assert_eq!(StorageVersion::<Test>::get(), Releases::V2);
+		assert_eq!(StorageVersion::<Test>::get(), Releases::V3);
 	});
 }
 
