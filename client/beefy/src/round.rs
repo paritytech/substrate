@@ -53,14 +53,14 @@ fn threshold(authorities: usize) -> usize {
 	authorities - faulty
 }
 
-pub(crate) struct Rounds<Hash, Number> {
-	rounds: BTreeMap<(Hash, Number), RoundTracker>,
+pub(crate) struct Rounds<Payload, Number> {
+	rounds: BTreeMap<(Payload, Number), RoundTracker>,
 	validator_set: ValidatorSet<Public>,
 }
 
-impl<H, N> Rounds<H, N>
+impl<P, N> Rounds<P, N>
 where
-	H: Ord + Hash,
+	P: Ord + Hash,
 	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
 {
 	pub(crate) fn new(validator_set: ValidatorSet<Public>) -> Self {

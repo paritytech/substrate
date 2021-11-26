@@ -36,8 +36,8 @@ use sp_runtime::{
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet,
-	VersionedCommitment, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
+	ValidatorSet, VersionedCommitment, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 use crate::{
@@ -46,7 +46,7 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification, round, Client, Payload, MMR_ROOT_ID,
+	notification, round, Client,
 };
 
 pub(crate) struct WorkerParams<B, BE, C>
@@ -262,8 +262,10 @@ where
 					return
 				};
 
+			let mut payload = Payload::default();
+			payload.push(known_payload_ids::MMR_ROOT_ID, mmr_root);
 			let commitment = Commitment {
-				payload: vec![(MMR_ROOT_ID, mmr_root.as_ref().to_vec())],
+				payload,
 				block_number: notification.header.number(),
 				validator_set_id: self.rounds.validator_set_id(),
 			};

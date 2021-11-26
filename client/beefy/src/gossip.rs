@@ -231,11 +231,10 @@ mod tests {
 	use sc_network_test::Block;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-	use beefy_primitives::{crypto::Signature, Commitment, MmrRootHash, VoteMessage, KEY_TYPE};
-
-	use crate::{
-		keystore::{tests::Keyring, BeefyKeystore},
-		MMR_ROOT_ID,
+	use crate::keystore::{tests::Keyring, BeefyKeystore};
+	use beefy_primitives::{
+		crypto::Signature, known_payload_ids, Commitment, MmrRootHash, Payload, VoteMessage,
+		KEY_TYPE,
 	};
 
 	use super::*;
@@ -356,7 +355,8 @@ mod tests {
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
-		let payload = vec![(MMR_ROOT_ID, MmrRootHash::default().as_ref().to_vec())];
+		let mut payload = Payload::default();
+		payload.push(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default());
 		let commitment = Commitment { payload, block_number: 3_u64, validator_set_id: 0 };
 
 		let signature = sign_commitment(&Keyring::Alice, &commitment);

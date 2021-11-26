@@ -15,12 +15,69 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::{Decode, Encode};
 use sp_std::{cmp, prelude::*};
 
 use crate::{crypto::Signature, ValidatorSetId};
 
 /// Id of different payloads in the [`Commitment`] data
 pub type BeefyPayloadId = [u8; 2];
+
+/// Registry of all known [`BeefyPayloadId`].
+pub mod known_payload_ids {
+	use crate::BeefyPayloadId;
+
+	/// A [`Payload`] identifier for Merkle Mountain Range root hash.
+	///
+	/// Encoded value should contain a [`beefy_primitives::MmrRootHash`] type (i.e. 32-bytes hash).
+	pub const MMR_ROOT_ID: BeefyPayloadId = *b"mh";
+}
+
+/// A BEEFY payload type allowing for future extensibility of adding additional kinds of payloads.
+///
+/// The idea is to store a vector of SCALE-encoded values with an extra identifier.
+/// Identifiers MUST be sorted by the [`BeefyPayloadId`] to allow efficient lookup of expected
+/// value. Duplicated identifiers are disallowed. It's okay for different implementations to only
+/// support a subset of possible values.
+#[derive(Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, Default, Hash)]
+pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
+
+impl Payload {
+	/// Returns a raw payload under given `id`. If the `BeefyPayloadId` is not found in the payload
+	/// `None` is returned.
+	pub fn get_raw(&self, id: &BeefyPayloadId) -> Option<&Vec<u8>> {
+		self.0.iter().find_map(
+			|(payload_id, bytes)| {
+				if payload_id == id {
+					Some(bytes)
+				} else {
+					None
+				}
+			},
+		)
+	}
+
+	/// Returns a decoded value `T`, in case the value is not there or the encoding does not match
+	/// it returns `None`.
+	pub fn get_decoded<T: Decode>(&self, id: &BeefyPayloadId) -> Option<T> {
+		self.0.iter().find_map(|(payload_id, bytes)| {
+			if payload_id == id {
+				T::decode(&mut &bytes[..]).ok()
+			} else {
+				None
+			}
+		})
+	}
+
+	/// Push a value that implements [`codec::Encode`] with a given id
+	/// to the back of the payload vec.
+	pub fn push<T: Encode>(&mut self, id: BeefyPayloadId, value: T) {
+		self.0.push((id, value.encode()));
+		self.0.sort_by(|(id_1, _), (id_2, _)| {
+			id_1.partial_cmp(id_2).expect("well_known_payload_ids are always comparable")
+		})
+	}
+}
 
 /// A commitment signed by GRANDPA validators as part of BEEFY protocol.
 ///
@@ -30,15 +87,8 @@ pub type BeefyPayloadId = [u8; 2];
 /// (see [SignedCommitment]) forms the BEEFY protocol.
 #[derive(Clone, Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
 pub struct Commitment<TBlockNumber> {
-	/// The payload being signed.
-	///
-	/// This should be some form of cumulative representation of the chain (think MMR root hash).
-	/// The payload should also contain some details that allow the light client to verify next
-	/// validator set. The protocol does not enforce any particular format of this data,
-	/// nor how often it should be present in commitments, however the light client has to be
-	/// provided with full validator set whenever it performs the transition (i.e. importing first
-	/// block with [validator_set_id] incremented).
-	pub payload: Vec<(BeefyPayloadId, Vec<u8>)>,
+	/// The payload being signed. see [`Payload`]
+	pub payload: Payload,
 
 	/// Finalized block number this commitment is for.
 	///
@@ -149,7 +199,8 @@ mod tests {
 	#[test]
 	fn commitment_encode_decode() {
 		// given
-		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
+		let mut payload = Payload::default();
+		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -170,7 +221,8 @@ mod tests {
 	#[test]
 	fn signed_commitment_encode_decode() {
 		// given
-		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
+		let mut payload = Payload::default();
+		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -202,7 +254,8 @@ mod tests {
 	#[test]
 	fn signed_commitment_count_signatures() {
 		// given
-		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
+		let mut payload = Payload::default();
+		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -227,7 +280,8 @@ mod tests {
 			block_number: u128,
 			validator_set_id: crate::ValidatorSetId,
 		) -> TestCommitment {
-			let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
+			let mut payload = Payload::default();
+			payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
 			Commitment { payload, block_number, validator_set_id }
 		}
 
@@ -247,7 +301,8 @@ mod tests {
 
 	#[test]
 	fn versioned_commitment_encode_decode() {
-		let payload = vec![(*b"ts", "Hello World!".as_bytes().to_vec())];
+		let mut payload = Payload::default();
+		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
