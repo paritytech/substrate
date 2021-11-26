@@ -32,16 +32,18 @@ use frame_system::Pallet as System;
 
 const BLOCK_NUMBER: u32 = 2;
 
-// Add `n` named items to the schedule
+/// Add `n` named items to the schedule.
+///
+/// For `resolved`:
+/// - `None`: aborted (hash without preimage)
+/// - `Some(true)`: hash resolves into call if possible, plain call otherwise
+/// - `Some(false)`: plain call
 fn fill_schedule<T: Config>(
 	when: T::BlockNumber,
 	n: u32,
 	periodic: bool,
 	named: bool,
 	resolved: Option<bool>,
-	/* None -> aborted (hash without preimage) */
-	 *   Some(true) -> hash resolves into call if possible, plain call otherwise
-	 *   Some(false) -> plain call */
 ) -> Result<(), &'static str> {
 	for i in 0..n {
 		// Named schedule is strictly heavier than anonymous
