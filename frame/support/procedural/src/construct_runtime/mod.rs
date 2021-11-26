@@ -84,6 +84,7 @@
 //! 			}]
 //! 			pattern = [{ System: frame_system }]
 //! 			tokens = [{ ::{Pallet, Call} }]
+//! 		}
 //! 	}]
 //! 	pattern = [{ Balances: pallet_balances }]
 //! 	tokens = [{ ::{Pallet, Call} }]

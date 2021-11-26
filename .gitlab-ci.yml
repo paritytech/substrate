@@ -204,6 +204,9 @@ default:
     GITHUB_PR_TOKEN:
       vault:                       cicd/gitlab/parity/GITHUB_PR_TOKEN@kv
       file:                        false
+    GITHUB_TOKEN:
+      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
+      file:                        false
     AWS_ACCESS_KEY_ID:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_ACCESS_KEY_ID@kv
       file:                        false
@@ -228,8 +231,8 @@ default:
     GITHUB_RELEASE_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_RELEASE_TOKEN@kv
       file:                        false
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_TOKEN@kv
+    GITHUB_SSH_PRIV_KEY:
+      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
       file:                        false
     GITHUB_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
@@ -535,6 +538,35 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
+
+# Mostly same as the job above, additional instrumentation was added to push test run times
+# to the time series database.
+# This is temporary and will be eventually removed.
+bench-test-full-crypto-feature:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *build-refs
+  variables:
+    <<:                            *default-vars
+    RUSTFLAGS:                     "-Cdebug-assertions=y"
+    RUST_BACKTRACE: 1
+  before_script: [""]
+  script:
+    # disable sccache for the bench purposes
+    - unset RUSTC_WRAPPER
+    - START_TIME=`date '+%s'`
+    - cd primitives/core/
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - cd ../application-crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - END_TIME=`date '+%s'`
+    - TOTAL_TIME=`expr $END_TIME - $START_TIME`
+    # send the job time measuring to the prometheus endpoint
+    - curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
+  tags:
+    - linux-docker-compare
+
+
 test-wasmer-sandbox:
   stage:                           test
   <<:                              *docker-env
@@ -809,12 +841,17 @@ publish-rustdoc:
     # Putting spaces at the front and back to ensure we are not matching just any substring, but the
     # whole space-separated value.
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
-    - rm -rf /tmp/*
+    # setup ssh
+    # FIXME: add ssh to docker image
+    - apt-get update && apt-get install -y ssh
+    - eval $(ssh-agent)
+    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
     # Set git config
-    - rm -rf .git/config
     - git config user.email "devops-team@parity.io"
     - git config user.name "${GITHUB_USER}"
-    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com/paritytech/${CI_PROJECT_NAME}.git"
+    - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
     - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     - git fetch origin gh-pages
     # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
@@ -909,7 +946,6 @@ simnet-tests:
   stage:                           deploy
   image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -939,7 +975,6 @@ simnet-tests-quick:
   stage:                           deploy
   image:                           docker.io/paritytech/simnet:${SIMNET_REF}
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   <<:                              *test-refs-no-trigger-prs-only
   variables:
     SIMNET_FEATURES:               "${SIMNET_FEATURES_PATH}/quick"

@@ -140,6 +140,15 @@ mod types;
 pub use types::*;
 
 use codec::HasCompact;
+use scale_info::TypeInfo;
+use sp_runtime::{
+	traits::{
+		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
+	},
+	ArithmeticError, TokenError,
+};
+use sp_std::{borrow::Borrow, convert::TryInto, prelude::*};
+
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
@@ -151,16 +160,6 @@ use frame_support::{
 	},
 };
 use frame_system::Config as SystemConfig;
-use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero,
-	},
-	ArithmeticError, TokenError,
-};
-use sp_std::{borrow::Borrow, prelude::*};
-
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -168,7 +167,7 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]

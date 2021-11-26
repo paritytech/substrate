@@ -183,8 +183,8 @@
 //!    are helpful for logging and are thus nested as:
 //!    - [`ElectionError::Miner`]: wraps a [`unsigned::MinerError`].
 //!    - [`ElectionError::Feasibility`]: wraps a [`FeasibilityError`].
-//!    - [`ElectionError::OnChainFallback`]: wraps a
-//!      [`frame_election_provider_support::onchain::Error`].
+//!    - [`ElectionError::Fallback`]: wraps a fallback error.
+//!    - [`ElectionError::DataProvider`]: wraps a static str.
 //!
 //! Note that there could be an overlap between these sub-errors. For example, A
 //! `SnapshotUnavailable` can happen in both miner and feasibility check phase.
@@ -1244,14 +1244,14 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
+	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
 	pub fn on_initialize_open_signed() {
 		log!(info, "Starting signed phase round {}.", Self::round());
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
 	}
 
-	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
+	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
 	pub fn on_initialize_open_unsigned(enabled: bool, now: T::BlockNumber) {
 		let round = Self::round();
 		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
