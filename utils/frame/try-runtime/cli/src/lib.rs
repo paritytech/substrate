@@ -757,30 +757,34 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 
 	let proof_nodes = proof.clone().into_nodes();
 
-	let kb = |s| s as f64 / 1024f64;
+	let humanize = |s| {
+		if s < 1024 * 1024 {
+			format!("{:.2} KB ({} bytes)", s as f64 / 1024f64, s)
+		} else {
+			format!(
+				"{:.2} MB ({} KB) ({} bytes)",
+				s as f64 / (1024f64 * 1024f64),
+				s as f64 / 1024f64,
+				s
+			)
+		}
+	};
 	log::info!(
 		target: LOG_TARGET,
 		"proof: {} / {} nodes",
 		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
 		proof_nodes.len()
 	);
+	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof.encoded_size()),);
 	log::info!(
 		target: LOG_TARGET,
-		"proof size: {:.2} / {}",
-		kb(proof.encoded_size()),
-		proof.encoded_size()
+		"compact proof size: {}",
+		humanize(compact_proof.encoded_size()),
 	);
 	log::info!(
 		target: LOG_TARGET,
-		"compact proof size: {} / {}",
-		kb(compact_proof.encoded_size()),
-		compact_proof.encoded_size()
-	);
-	log::info!(
-		target: LOG_TARGET,
-		"zstd-compressed compact proof size: {} {}",
-		kb(compressed_proof.len()),
-		&compressed_proof.len()
+		"zstd-compressed compact proof {}",
+		humanize(compressed_proof.len()),
 	);
 	Ok((changes, encoded_results))
 }
