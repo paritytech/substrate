@@ -19,7 +19,7 @@
 
 use super::*;
 use frame_benchmarking::benchmarks;
-use frame_support::{ensure, traits::{OnInitialize, PreimageRecipient}};
+use frame_support::{ensure, traits::{OnInitialize, PreimageProvider, PreimageRecipient}};
 use frame_system::RawOrigin;
 use sp_std::{prelude::*, vec};
 use sp_runtime::traits::Hash;
@@ -37,19 +37,23 @@ fn fill_schedule<T: Config>(
 	named: bool,
 	resolved: Option<bool>,
 	//^^ None -> aborted (hash without preimage)
-	//   Some(true) -> hash resolves into call
+	//   Some(true) -> hash resolves into call if possible, plain call otherwise
 	//   Some(false) -> plain call
 ) -> Result<(), &'static str> {
 	for i in 0..n {
 		// Named schedule is strictly heavier than anonymous
-		let (inner_call, hash) = call_and_hash::<T>(i);
-		let call = match resolved {
+		let (call, hash) = call_and_hash::<T>(i);
+		let call_or_hash = match resolved {
 			Some(true) => {
-				T::Preimages::note_preimage(inner_call.encode().try_into().unwrap());
-				hash
+				T::Preimages::note_preimage(call.encode().try_into().unwrap());
+				if T::Preimages::have_preimage(&hash) {
+					CallOrHashOf::<T>::Hash(hash)
+				} else {
+					call.into()
+				}
 			}
-			Some(false) => inner_call.into(),
-			None => hash,
+			Some(false) => call.into(),
+			None => CallOrHashOf::<T>::Hash(hash),
 		};
 		let period = match periodic {
 			true => Some(((i + 100).into(), 100)),
@@ -58,19 +62,19 @@ fn fill_schedule<T: Config>(
 		let t = DispatchTime::At(when);
 		let origin = frame_system::RawOrigin::Root.into();
 		if named {
-			Scheduler::<T>::do_schedule_named(i.encode(), t, period, 0, origin, call)?;
+			Scheduler::<T>::do_schedule_named(i.encode(), t, period, 0, origin, call_or_hash)?;
 		} else {
-			Scheduler::<T>::do_schedule(t, period, 0, origin, call)?;
+			Scheduler::<T>::do_schedule(t, period, 0, origin, call_or_hash)?;
 		}
 	}
 	ensure!(Agenda::<T>::get(when).len() == n as usize, "didn't fill schedule");
 	Ok(())
 }
 
-fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::Call, CallOrHashOf::<T>) {
+fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::Call, T::Hash) {
 	// Essentially a no-op call.
 	let call: <T as Config>::Call = frame_system::Call::remark { remark: i.encode() }.into();
-	let hash = CallOrHashOf::<T>::Hash(T::Hashing::hash_of(&call));
+	let hash = T::Hashing::hash_of(&call);
 	(call, hash)
 }
 

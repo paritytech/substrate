@@ -589,6 +589,14 @@ pub trait PreimageProvider<Hash> {
 	fn unrequest_preimage(hash: &Hash);
 }
 
+impl<Hash> PreimageProvider<Hash> for () {
+	fn have_preimage(_: &Hash) -> bool { false }
+	fn get_preimage(_: &Hash) -> Option<Vec<u8>> { None }
+	fn preimage_requested(_: &Hash) -> bool { false }
+	fn request_preimage(_: &Hash) {}
+	fn unrequest_preimage(_: &Hash) {}
+}
+
 /// A interface for managing preimages to hashes on chain.
 ///
 /// Note that this API does not assume any underlying user is calling, and thus
@@ -605,6 +613,12 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	/// hint - if it was not previously noted or if it is now requested, then this will not do
 	/// anything.
 	fn unnote_preimage(hash: &Hash);
+}
+
+impl<Hash> PreimageRecipient<Hash> for () {
+	type MaxSize = ();
+	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
+	fn unnote_preimage(_: &Hash) {}
 }
 
 #[cfg(test)]

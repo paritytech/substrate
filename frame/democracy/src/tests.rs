@@ -119,6 +119,8 @@ impl pallet_scheduler::Config for Test {
 	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
+	type Preimages = ();
+	type NoPreimagePostponement = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
