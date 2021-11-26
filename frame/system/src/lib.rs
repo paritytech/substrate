@@ -301,7 +301,8 @@ pub mod pallet {
 		/// What to do if the runtime wants to change the code to something new.
 		///
 		/// The default (`()`) implementation is responsible for setting the correct storage
-		/// entry and emitting corresponding event and log item. (see [`update_code_in_storage`]).
+		/// entry and emitting corresponding event and log item. (see
+		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
 		type OnSetCode: SetCode<Self>;
@@ -350,14 +351,6 @@ pub mod pallet {
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage write.
-		/// - Base Weight: 1.405 µs
-		/// - 1 write to HEAP_PAGES
-		/// - 1 digest item
-		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -406,13 +399,6 @@ pub mod pallet {
 		}
 
 		/// Set some items of storage.
-		///
-		/// # <weight>
-		/// - `O(I)` where `I` length of `items`
-		/// - `I` storage writes (`O(1)`).
-		/// - Base Weight: 0.568 * i µs
-		/// - Writes: Number of items
-		/// # </weight>
 		#[pallet::weight((
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
@@ -429,13 +415,6 @@ pub mod pallet {
 		}
 
 		/// Kill some items from storage.
-		///
-		/// # <weight>
-		/// - `O(IK)` where `I` length of `keys` and `K` length of one key
-		/// - `I` storage deletions.
-		/// - Base Weight: .378 * i µs
-		/// - Writes: Number of items
-		/// # </weight>
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
@@ -452,13 +431,6 @@ pub mod pallet {
 		///
 		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
 		/// the prefix we are removing to accurately calculate the weight of this function.
-		///
-		/// # <weight>
-		/// - `O(P)` where `P` amount of keys with prefix `prefix`
-		/// - `P` storage deletions.
-		/// - Base Weight: 0.834 * P µs
-		/// - Writes: Number of subkeys + 1
-		/// # </weight>
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,

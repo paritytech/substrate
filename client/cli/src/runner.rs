@@ -98,7 +98,7 @@ where
 	pin_mut!(f);
 
 	tokio_runtime.block_on(main(f))?;
-	tokio_runtime.block_on(task_manager.clean_shutdown());
+	drop(task_manager);
 
 	Ok(())
 }
@@ -154,7 +154,6 @@ impl<C: SubstrateCli> Runner<C> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
-		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		Ok(res?)
 	}
 

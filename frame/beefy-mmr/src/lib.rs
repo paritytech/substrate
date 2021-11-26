@@ -149,7 +149,7 @@ pub mod pallet {
 
 	/// Details of next BEEFY authority set.
 	///
-	/// This storage entry is used as cache for calls to [`update_beefy_next_authority_set`].
+	/// This storage entry is used as cache for calls to `update_beefy_next_authority_set`.
 	#[pallet::storage]
 	#[pallet::getter(fn beefy_next_authorities)]
 	pub type BeefyNextAuthorities<T: Config> =

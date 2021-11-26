@@ -26,7 +26,8 @@ use futures::prelude::*;
 use libp2p::{
 	core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId},
 	swarm::{
-		DialPeerCondition, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
+		DialError, DialPeerCondition, IntoProtocolsHandler, NetworkBehaviour,
+		NetworkBehaviourAction, NotifyHandler, PollParameters,
 	},
 };
 use log::{error, trace, warn};
@@ -38,7 +39,7 @@ use std::{
 	borrow::Cow,
 	cmp,
 	collections::{hash_map::Entry, VecDeque},
-	error, mem,
+	mem,
 	pin::Pin,
 	str,
 	sync::Arc,
@@ -132,7 +133,7 @@ pub struct Notifications {
 	next_incoming_index: sc_peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: VecDeque<NetworkBehaviourAction<NotifsHandlerIn, NotificationsOut>>,
+	events: VecDeque<NetworkBehaviourAction<NotificationsOut, NotifsHandlerProto>>,
 }
 
 /// Configuration for a notifications protocol.
@@ -628,6 +629,7 @@ impl Notifications {
 	/// Function that is called when the peerset wants us to connect to a peer.
 	fn peerset_report_connect(&mut self, peer_id: PeerId, set_id: sc_peerset::SetId) {
 		// If `PeerId` is unknown to us, insert an entry, start dialing, and return early.
+		let handler = self.new_handler();
 		let mut occ_entry = match self.peers.entry((peer_id, set_id)) {
 			Entry::Occupied(entry) => entry,
 			Entry::Vacant(entry) => {
@@ -643,6 +645,7 @@ impl Notifications {
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: entry.key().0.clone(),
 					condition: DialPeerCondition::Disconnected,
+					handler,
 				});
 				entry.insert(PeerState::Requested);
 				return
@@ -679,6 +682,7 @@ impl Notifications {
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: occ_entry.key().0.clone(),
 					condition: DialPeerCondition::Disconnected,
+					handler,
 				});
 				*occ_entry.into_mut() = PeerState::Requested;
 			},
@@ -1094,6 +1098,7 @@ impl NetworkBehaviour for Notifications {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		_failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			match self.peers.entry((*peer_id, set_id)).or_insert(PeerState::Poisoned) {
@@ -1152,6 +1157,7 @@ impl NetworkBehaviour for Notifications {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		_endpoint: &ConnectedPoint,
+		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
@@ -1411,70 +1417,74 @@ impl NetworkBehaviour for Notifications {
 
 	fn inject_disconnected(&mut self, _peer_id: &PeerId) {}
 
-	fn inject_addr_reach_failure(
+	fn inject_dial_failure(
 		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn error::Error,
+		peer_id: Option<PeerId>,
+		_: Self::ProtocolsHandler,
+		error: &DialError,
 	) {
-		trace!(target: "sub-libp2p", "Libp2p => Reach failure for {:?} through {:?}: {:?}", peer_id, addr, error);
-	}
+		if let DialError::Transport(errors) = error {
+			for (addr, error) in errors.iter() {
+				trace!(target: "sub-libp2p", "Libp2p => Reach failure for {:?} through {:?}: {:?}", peer_id, addr, error);
+			}
+		}
 
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
+		if let Some(peer_id) = peer_id {
+			trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
 
-		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
-			if let Entry::Occupied(mut entry) = self.peers.entry((peer_id.clone(), set_id)) {
-				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					// The peer is not in our list.
-					st @ PeerState::Backoff { .. } => {
-						*entry.into_mut() = st;
-					},
+			for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
+				if let Entry::Occupied(mut entry) = self.peers.entry((peer_id.clone(), set_id)) {
+					match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+						// The peer is not in our list.
+						st @ PeerState::Backoff { .. } => {
+							*entry.into_mut() = st;
+						},
 
-					// "Basic" situation: we failed to reach a peer that the peerset requested.
-					st @ PeerState::Requested | st @ PeerState::PendingRequest { .. } => {
-						trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, *peer_id, DropReason::Unknown);
+						// "Basic" situation: we failed to reach a peer that the peerset requested.
+						st @ PeerState::Requested | st @ PeerState::PendingRequest { .. } => {
+							trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
+							self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
 
-						let now = Instant::now();
-						let ban_duration = match st {
-							PeerState::PendingRequest { timer_deadline, .. }
-								if timer_deadline > now =>
-								cmp::max(timer_deadline - now, Duration::from_secs(5)),
-							_ => Duration::from_secs(5),
-						};
+							let now = Instant::now();
+							let ban_duration = match st {
+								PeerState::PendingRequest { timer_deadline, .. }
+									if timer_deadline > now =>
+									cmp::max(timer_deadline - now, Duration::from_secs(5)),
+								_ => Duration::from_secs(5),
+							};
 
-						let delay_id = self.next_delay_id;
-						self.next_delay_id.0 += 1;
-						let delay = futures_timer::Delay::new(ban_duration);
-						let peer_id = *peer_id;
-						self.delays.push(
-							async move {
-								delay.await;
-								(delay_id, peer_id, set_id)
-							}
-							.boxed(),
-						);
+							let delay_id = self.next_delay_id;
+							self.next_delay_id.0 += 1;
+							let delay = futures_timer::Delay::new(ban_duration);
+							let peer_id = peer_id;
+							self.delays.push(
+								async move {
+									delay.await;
+									(delay_id, peer_id, set_id)
+								}
+								.boxed(),
+							);
 
-						*entry.into_mut() = PeerState::Backoff {
-							timer: delay_id,
-							timer_deadline: now + ban_duration,
-						};
-					},
+							*entry.into_mut() = PeerState::Backoff {
+								timer: delay_id,
+								timer_deadline: now + ban_duration,
+							};
+						},
 
-					// We can still get dial failures even if we are already connected to the peer,
-					// as an extra diagnostic for an earlier attempt.
-					st @ PeerState::Disabled { .. } |
-					st @ PeerState::Enabled { .. } |
-					st @ PeerState::DisabledPendingEnable { .. } |
-					st @ PeerState::Incoming { .. } => {
-						*entry.into_mut() = st;
-					},
+						// We can still get dial failures even if we are already connected to the
+						// peer, as an extra diagnostic for an earlier attempt.
+						st @ PeerState::Disabled { .. } |
+						st @ PeerState::Enabled { .. } |
+						st @ PeerState::DisabledPendingEnable { .. } |
+						st @ PeerState::Incoming { .. } => {
+							*entry.into_mut() = st;
+						},
 
-					PeerState::Poisoned => {
-						error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id);
-						debug_assert!(false);
-					},
+						PeerState::Poisoned => {
+							error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id);
+							debug_assert!(false);
+						},
+					}
 				}
 			}
 		}
@@ -2000,7 +2010,7 @@ impl NetworkBehaviour for Notifications {
 		&mut self,
 		cx: &mut Context,
 		_params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<NotifsHandlerIn, Self::OutEvent>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(event)
 		}
@@ -2032,6 +2042,8 @@ impl NetworkBehaviour for Notifications {
 		while let Poll::Ready(Some((delay_id, peer_id, set_id))) =
 			Pin::new(&mut self.delays).poll_next(cx)
 		{
+			let handler = self.new_handler();
+
 			let peer_state = match self.peers.get_mut(&(peer_id, set_id)) {
 				Some(s) => s,
 				// We intentionally never remove elements from `delays`, and it may
@@ -2051,6 +2063,7 @@ impl NetworkBehaviour for Notifications {
 					self.events.push_back(NetworkBehaviourAction::DialPeer {
 						peer_id,
 						condition: DialPeerCondition::Disconnected,
+						handler,
 					});
 					*peer_state = PeerState::Requested;
 				},
