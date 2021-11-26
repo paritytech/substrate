@@ -265,8 +265,6 @@ impl<T: Config> Pallet<T> {
 	//
 	// If `maybe_owner` is provided, we verify that it is the correct owner before clearing the
 	// data.
-	//
-	// If `maybe_owner` is not provided, this function cannot return an error.
 	fn do_unnote_preimage(
 		hash: &T::Hash,
 		maybe_check_owner: Option<T::AccountId>,
