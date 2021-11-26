@@ -346,11 +346,11 @@ pub mod pallet {
 					false
 				};
 
-				let (call, maybe_completed) = s.call.resolved::<T::Preimages>();
+				let (call, maybe_completed) = s.call.resolved::<T::PreimageProvider>();
 				s.call = call;
 
 				let resolved = if let Some(completed) = maybe_completed {
-					T::Preimages::unrequest_preimage(&completed);
+					T::PreimageProvider::unrequest_preimage(&completed);
 					true
 				} else {
 					false
@@ -709,7 +709,7 @@ impl<T: Config> Pallet<T> {
 		call: CallOrHashOf<T>,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
-		call.ensure_requested::<T::Preimages>();
+		call.ensure_requested::<T::PreimageProvider>();
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -759,7 +759,7 @@ impl<T: Config> Pallet<T> {
 			)
 		})?;
 		if let Some(s) = scheduled {
-			s.call.ensure_unrequested::<T::Preimages>();
+			s.call.ensure_unrequested::<T::PreimageProvider>();
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
@@ -809,7 +809,7 @@ impl<T: Config> Pallet<T> {
 
 		let when = Self::resolve_time(when)?;
 
-		call.ensure_requested::<T::Preimages>();
+		call.ensure_requested::<T::PreimageProvider>();
 
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
@@ -854,7 +854,7 @@ impl<T: Config> Pallet<T> {
 							) {
 								return Err(BadOrigin.into())
 							}
-							s.call.ensure_unrequested::<T::Preimages>();
+							s.call.ensure_unrequested::<T::PreimageProvider>();
 						}
 						*s = None;
 					}

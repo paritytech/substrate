@@ -45,8 +45,8 @@ fn fill_schedule<T: Config>(
 		let (call, hash) = call_and_hash::<T>(i);
 		let call_or_hash = match resolved {
 			Some(true) => {
-				T::Preimages::note_preimage(call.encode().try_into().unwrap());
-				if T::Preimages::have_preimage(&hash) {
+				T::PreimageProvider::note_preimage(call.encode().try_into().unwrap());
+				if T::PreimageProvider::have_preimage(&hash) {
 					CallOrHashOf::<T>::Hash(hash)
 				} else {
 					call.into()

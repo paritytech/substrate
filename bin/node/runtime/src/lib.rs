@@ -1799,11 +1799,13 @@ mod tests {
 
 	#[test]
 	fn call_size() {
+		let size = core::mem::size_of::<Call>();
 		assert!(
-			core::mem::size_of::<Call>() <= 200,
-			"size of Call is more than 200 bytes: some calls have too big arguments, use Box to reduce the
+			size <= 200,
+			"size of Call {} is more than 200 bytes: some calls have too big arguments, use Box to reduce the
 			size of Call.
 			If the limit is too strong, maybe consider increase the limit to 300.",
+			size,
 		);
 	}
 }
