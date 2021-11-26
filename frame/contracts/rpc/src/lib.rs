@@ -349,7 +349,7 @@ mod tests {
 			"dest": "5DRakbLVnjVrW6niwLfHGW24EeCEvDAFGEXrtaYS5M4ynoom",
 			"value": "0x112210f4B16c1cb1",
 			"gasLimit": 1000000000000,
-			"storageLimit": 5000,
+			"storageDepositLimit": 5000,
 			"inputData": "0x8c97db39"
 		}
 		"#,
@@ -398,7 +398,7 @@ mod tests {
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
 			"code": "0x8c97db39",
-			"storageLimit": 5000
+			"storageDepositLimit": 5000
 		}
 		"#,
 		)
