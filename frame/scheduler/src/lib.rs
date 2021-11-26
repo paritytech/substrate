@@ -671,7 +671,7 @@ impl<T: Config> Pallet<T> {
 	pub fn post_migrate_to_v3() -> Result<(), &'static str> {
 		assert!(StorageVersion::<T>::get() == Releases::V3);
 		for k in Agenda::<T>::iter_keys() {
-			let _ = Agenda::<T>::try_get(k)?;
+			let _ = Agenda::<T>::try_get(k).map_err(|()| "Invalid item in Agenda")?;
 		}
 		Ok(())
 	}
