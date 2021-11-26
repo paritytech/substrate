@@ -1517,32 +1517,32 @@ impl_runtime_apis! {
 			dest: AccountId,
 			value: Balance,
 			gas_limit: u64,
-			storage_limit: Option<Balance>,
+			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractExecResult<Balance> {
-			Contracts::bare_call(origin, dest, value, gas_limit, storage_limit, input_data, true)
+			Contracts::bare_call(origin, dest, value, gas_limit, storage_deposit_limit, input_data, true)
 		}
 
 		fn instantiate(
 			origin: AccountId,
 			endowment: Balance,
 			gas_limit: u64,
-			storage_limit: Option<Balance>,
+			storage_deposit_limit: Option<Balance>,
 			code: pallet_contracts_primitives::Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance>
 		{
-			Contracts::bare_instantiate(origin, endowment, gas_limit, storage_limit, code, data, salt, true)
+			Contracts::bare_instantiate(origin, endowment, gas_limit, storage_deposit_limit, code, data, salt, true)
 		}
 
 		fn upload_code(
 			origin: AccountId,
 			code: Vec<u8>,
-			storage_limit: Option<Balance>,
+			storage_deposit_limit: Option<Balance>,
 		) -> pallet_contracts_primitives::CodeUploadResult<Hash, Balance>
 		{
-			Contracts::bare_upload_code(origin, code, storage_limit)
+			Contracts::bare_upload_code(origin, code, storage_deposit_limit)
 		}
 
 		fn get_storage(

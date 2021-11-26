@@ -702,7 +702,7 @@ fn deploying_wasm_contract_should_work() {
 					pallet_contracts::Call::instantiate_with_code::<Runtime> {
 						endowment: 1000 * DOLLARS + min_balance,
 						gas_limit: 500_000_000,
-						storage_limit: None,
+						storage_deposit_limit: None,
 						code: transfer_code,
 						data: Vec::new(),
 						salt: Vec::new(),
@@ -715,7 +715,7 @@ fn deploying_wasm_contract_should_work() {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
 					gas_limit: 500_000_000,
-					storage_limit: None,
+					storage_deposit_limit: None,
 					data: vec![0x00, 0x01, 0x02, 0x03],
 				}),
 			},
