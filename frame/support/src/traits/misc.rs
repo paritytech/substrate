@@ -286,7 +286,11 @@ pub trait ExecuteBlock<Block: BlockT> {
 	/// # Panic
 	///
 	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
-	fn execute_block(block: Block, info: Vec<Option<AccountId32>>);
+	fn execute_block_with_authors(block: Block, info: Vec<Option<AccountId32>>){
+        unimplemented!();
+    }
+
+	fn execute_block(block: Block);
 }
 
 /// Off-chain computation trait.

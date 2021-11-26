@@ -4,7 +4,7 @@ resolver = "2"
 members = [
 	#"bin/node-template/node",
 	#"bin/node-template/pallets/template",
-	#"bin/node-template/runtime",
+	"bin/node-template/runtime",
 	#"bin/node/bench",
 	#"bin/node/cli",
 	#"bin/node/test-runner-example",
@@ -209,7 +209,7 @@ members = [
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	# "utils/frame/generate-bags",
-	# "utils/frame/generate-bags/node-runtime",
+	#"utils/frame/generate-bags/node-runtime",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
@@ -275,9 +275,6 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch."https://github.com/mangata-finance/open-runtime-module-library"]
-orml-tokens = { path = "../open-runtime-module-library/tokens" }
 
 [patch."https://github.com/mangata-finance/mangata-node"]
 mangata-primitives = { path = "../mangata-node/primitives/mangata" }
@@ -586,3 +583,8 @@ pallet-proxy = { path = "../substrate/frame/proxy" }
 pallet-balances = { path = "../substrate/frame/balances" }
 pallet-multisig = { path = "../substrate/frame/multisig" }
 
+
+[patch."https://github.com/mangata-finance/open-runtime-module-library"]
+orml-tokens = { path = "../open-runtime-module-library/tokens" }
+orml-utilities = { path = "../open-runtime-module-library/utilities" }
+orml-traits = { path = "../open-runtime-module-library/traits" }

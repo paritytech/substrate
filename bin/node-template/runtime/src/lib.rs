@@ -333,7 +333,7 @@ impl_runtime_apis! {
 		}
 
 		fn execute_block(block: Block) {
-			Executive::execute_block(block);
+			Executive::execute_block(block, vec![]);
 		}
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {

@@ -24,9 +24,9 @@ sp-tracing = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore" }
 extrinsic-shuffler = { version='4.0.0-dev', default-features = false, path = '../../primitives/shuffler'}
-schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
+sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore", optional = true}
+schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false, optional = true }
 
 [dev-dependencies]
 hex-literal = "0.3.3"
@@ -50,5 +50,6 @@ std = [
 	"sp-tracing/std",
 	"sp-std/std",
 	"sp-keystore/std",
+    "schnorrkel/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

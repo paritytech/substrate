@@ -126,12 +126,12 @@ use frame_support::{
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
 use frame_system::{extrinsics_root, DigestOf};
-use schnorrkel::{
-	vrf::{VRFOutput, VRFProof},
-	SignatureError,
-};
+// use schnorrkel::{
+// 	vrf::{VRFOutput, VRFProof},
+// 	SignatureError,
+// };
 use sp_core::ShufflingSeed;
-use sp_keystore::vrf;
+// use sp_keystore::vrf;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -182,7 +182,19 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
-	fn execute_block(block: Block, info: Vec<Option<AccountId32>>) {
+    // for backward compatibility
+	fn execute_block(block: Block) {
+		Executive::<
+			System,
+			Block,
+			Context,
+			UnsignedValidator,
+			AllPallets,
+			COnRuntimeUpgrade,
+		>::execute_block(block, Default::default());
+	}
+
+	fn execute_block_with_authors(block: Block, info: Vec<Option<AccountId32>>) {
 		Executive::<
 			System,
 			Block,
@@ -194,15 +206,15 @@ where
 	}
 }
 
-fn create_shuffling_seed_input_data(prev_seed: &ShufflingSeed) -> vrf::VRFTranscriptData {
-	vrf::VRFTranscriptData {
-		label: b"shuffling_seed",
-		items: vec![(
-			"prev_seed",
-			vrf::VRFTranscriptValue::Bytes(prev_seed.seed.as_bytes().to_vec()),
-		)],
-	}
-}
+// fn create_shuffling_seed_input_data(prev_seed: &ShufflingSeed) -> vrf::VRFTranscriptData {
+// 	vrf::VRFTranscriptData {
+// 		label: b"shuffling_seed",
+// 		items: vec![(
+// 			"prev_seed",
+// 			vrf::VRFTranscriptValue::Bytes(prev_seed.seed.as_bytes().to_vec()),
+// 		)],
+// 	}
+// }
 
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
@@ -411,10 +423,16 @@ where
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
+           
+            // maintain backward compatibility
+            if info.len() > 0 {
+                let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
+                let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed::<Block::Extrinsic>(extrinsics_with_author, &header.seed().seed);
+                Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
+            }else{
+                Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+            }
 
-			let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
-			let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed::<Block::Extrinsic>(extrinsics_with_author, &header.seed().seed);
-			Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
