@@ -406,8 +406,8 @@ mod tests {
 		let pre_root = ext.backend.root().clone();
 		let (_, proof) = ext.execute_and_prove(|| {
 			sp_io::storage::get(b"doe");
-			sp_io::storage::get(b"apple");
-			sp_io::storage::get(b"bonobo");
+			sp_io::storage::get(b"dog");
+			sp_io::storage::get(b"cat");
 		});
 
 		let compact_proof = proof
