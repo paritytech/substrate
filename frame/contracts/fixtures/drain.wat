@@ -34,8 +34,8 @@
 		)
 
 		;; Try to self-destruct by sending full balance to the 0 address.
-		;; All the free balance will be send away but the contract's which is a valid
-		;; thing to do because the storage deposits will keep the account alive.
+		;; All the *free* balance will be send away, which is a valid thing to do
+		;; because the storage deposits will keep the account alive.
 		(call $assert
 			(i32.eq
 				(call $seal_transfer
