@@ -1059,6 +1059,8 @@ mod tests {
 			&format!("https://api.github.com/orgs/substrate-developer-hub")
 		).unwrap();
 		let _ = api.request_add_header(id, "Content-Type", "application/json");
+		// Github requires specifying user-Agent header:
+		//   https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
 		let _ = api.request_add_header(id, "User-Agent", "jimmychu0807");
 
 		let deadline = timestamp::now().add(Duration::from_millis(3_000));
