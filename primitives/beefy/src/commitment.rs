@@ -70,7 +70,8 @@ impl Payload {
 	}
 
 	/// Push a value that implements [`codec::Encode`] with a given id
-	/// to the back of the payload vec.
+	/// to the back of the payload vec. This method will internally sort the payload vec
+	/// after every push.
 	pub fn push<T: Encode>(&mut self, id: BeefyPayloadId, value: T) {
 		self.0.push((id, value.encode()));
 		self.0.sort_by(|(id_1, _), (id_2, _)| {
