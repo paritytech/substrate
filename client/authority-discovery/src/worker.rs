@@ -524,7 +524,7 @@ where
 						&peer_signature.public_key,
 					)
 					.map_err(|e| Error::ParsingLibp2pIdentity(e))?;
-					let peer_id_in_signature = public_key.clone().into_peer_id();
+					let peer_id_in_signature = public_key.clone().to_peer_id();
 					if remote_peer_id != peer_id_in_signature ||
 						!public_key.verify(&record, &peer_signature.signature)
 					{
@@ -657,7 +657,7 @@ fn sign_record_with_peer_id(
 	serialized_record: &[u8],
 	peer_secret: &libp2p::identity::Keypair,
 ) -> Result<schema::PeerSignature> {
-	let public_key = peer_secret.public().into_protobuf_encoding();
+	let public_key = peer_secret.public().to_protobuf_encoding();
 	let signature = peer_secret.sign(serialized_record).map_err(|_| Error::Signing)?;
 	Ok(schema::PeerSignature { signature, public_key })
 }

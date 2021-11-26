@@ -138,7 +138,7 @@ impl Default for TestNetwork {
 		let (tx, rx) = mpsc::unbounded();
 		let identity = libp2p::identity::Keypair::generate_ed25519();
 		TestNetwork {
-			peer_id: identity.public().into_peer_id(),
+			peer_id: identity.public().to_peer_id(),
 			identity,
 			external_addresses: vec!["/ip6/2001:db8::/tcp/30333".parse().unwrap()],
 			put_value_call: Default::default(),
