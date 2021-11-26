@@ -40,7 +40,7 @@ fn fill_schedule<T: Config>(
 	named: bool,
 	resolved: Option<bool>,
 	/* None -> aborted (hash without preimage) */
-	/*   Some(true) -> hash resolves into call if possible, plain call otherwise
+	 *   Some(true) -> hash resolves into call if possible, plain call otherwise
 	 *   Some(false) -> plain call */
 ) -> Result<(), &'static str> {
 	for i in 0..n {

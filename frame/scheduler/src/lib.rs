@@ -135,7 +135,7 @@ pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
 // A value placed in storage that represents the current version of the Scheduler storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, TypeInfo)]
 enum Releases {
 	V1,
 	V2,
@@ -599,7 +599,7 @@ impl<T: Config> Pallet<T> {
 	/// Return true if migration is performed.
 	pub fn migrate_v1_to_v3() -> bool {
 		if StorageVersion::<T>::get() == Releases::V1 {
-			StorageVersion::<T>::put(Releases::V2);
+			StorageVersion::<T>::put(Releases::V3);
 
 			Agenda::<T>::translate::<
 				Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>,
@@ -630,15 +630,18 @@ impl<T: Config> Pallet<T> {
 
 	/// Migrate storage format from V2 to V3.
 	/// Return true if migration is performed.
-	pub fn migrate_v2_to_v3() -> bool {
-		if StorageVersion::<T>::get() == Releases::V1 {
-			StorageVersion::<T>::put(Releases::V2);
+	pub fn migrate_v2_to_v3() -> Weight {
+		if StorageVersion::<T>::get() == Releases::V2 {
+			StorageVersion::<T>::put(Releases::V3);
+
+			let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
 			Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
 				Some(
 					agenda
 						.into_iter()
 						.map(|schedule| {
+							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 							schedule.map(|schedule| ScheduledV3 {
 								maybe_id: schedule.maybe_id,
 								priority: schedule.priority,
@@ -652,10 +655,25 @@ impl<T: Config> Pallet<T> {
 				)
 			});
 
-			true
+			weight
 		} else {
-			false
+			0
 		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	pub fn pre_migrate_to_v3() -> Result<(), &'static str> {
+		assert!(StorageVersion::<T>::get() < Releases::V3);
+		Ok(())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	pub fn post_migrate_to_v3<T: Config>() -> Result<(), &'static str> {
+		assert!(StorageVersion::<T>::get() == Releases::V3);
+		for k in Agenda::<T>::iter_keys() {
+			let _ = Agenda::<T>::try_get(k)?;
+		}
+		Ok(())
 	}
 
 	/// Helper to migrate scheduler when the pallet origin type has changed.
