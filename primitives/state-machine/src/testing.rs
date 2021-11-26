@@ -202,10 +202,7 @@ where
 	///
 	/// To obtain a compact proof from the returned proof of this function, record the state root
 	/// before calling into this function, and use that as an argument to `into_compact_proof`.
-	pub fn execute_with_and_prove<'a, R>(
-		&mut self,
-		execute: impl FnOnce() -> R,
-	) -> (R, StorageProof) {
+	pub fn execute_and_prove<'a, R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
 		let tri_backend = self.backend.clone();
 		let proving_backend = InMemoryProvingBackend::new(&tri_backend);
 		let mut proving_ext = self.proving_ext(&proving_backend);
@@ -400,22 +397,14 @@ mod tests {
 	#[test]
 	fn execute_and_generate_proof_works() {
 		use codec::Encode;
-		let make_ext = || {
-			let mut ext = TestExternalities::<BlakeTwo256>::default();
-			ext.insert(b"apple".to_vec(), b"fruit".to_vec());
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 
-			ext.insert(b"bonobo".to_vec(), b"ape".to_vec());
+		ext.insert(b"doe".to_vec(), b"reindeer".to_vec());
+		ext.insert(b"dog".to_vec(), b"puppy".to_vec());
+		ext.insert(b"cat".to_vec(), b"kitty".to_vec());
 
-			ext.insert(b"cat".to_vec(), b"kitty".to_vec());
-
-			ext.insert(b"doe".to_vec(), b"reindeer".to_vec());
-			ext.insert(b"dog".to_vec(), b"puppy".to_vec());
-			ext
-		};
-
-		let mut ext = make_ext();
 		let pre_root = ext.backend.root().clone();
-		let (_, proof) = ext.execute_with_and_prove(|| {
+		let (_, proof) = ext.execute_and_prove(|| {
 			sp_io::storage::get(b"doe");
 			sp_io::storage::get(b"apple");
 			sp_io::storage::get(b"bonobo");

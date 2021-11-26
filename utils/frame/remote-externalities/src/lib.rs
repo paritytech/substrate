@@ -53,8 +53,7 @@ type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
-// const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
-const DEFAULT_TARGET: &str = "ws://localhost:9999";
+const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
 const BATCH_SIZE: usize = 1000;
 
 #[rpc(client)]
@@ -153,9 +152,6 @@ pub struct OnlineConfig<B: BlockT> {
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
 	/// The pallets to scrape. If empty, entire chain state will be scraped.
-	///
-	/// With each added pallet, its own prefix, plus the entire child-tree prefix of that pallet
-	/// will be added to the scrape range.
 	pub pallets: Vec<String>,
 	/// Transport config.
 	pub transport: Transport,
@@ -376,7 +372,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
-	) -> Result<Vec<(StorageKey, StorageData)>, &'static str> {
+	) -> Result<Vec<KeyValue>, &'static str> {
 		let mut child_kv_inner = vec![];
 		for batch_child_key in child_keys.chunks(BATCH_SIZE) {
 			let batch_request = batch_child_key
@@ -393,6 +389,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 					)
 				})
 				.collect::<Vec<_>>();
+
 			let batch_response = self
 				.as_online()
 				.rpc_client()

@@ -710,6 +710,10 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 	Ok((changes, encoded_results))
 }
 
+/// Same as [`state_machine_call`], but it also computes and prints the storage proof in different
+/// size and formats.
+///
+/// Make sure [`LOG_TARGET`] is enabled in logging.
 pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	ext: &TestExternalities,
 	executor: &NativeElseWasmExecutor<D>,
