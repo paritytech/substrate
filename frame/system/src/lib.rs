@@ -969,7 +969,9 @@ where
 /// Ensure that the origin `o` represents either a signed extrinsic (i.e. transaction) or the root.
 /// Returns `Ok` with the account that signed the extrinsic, `None` if it was root,  or an `Err`
 /// otherwise.
-pub fn ensure_signed_or_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<Option<AccountId>, BadOrigin>
+pub fn ensure_signed_or_root<OuterOrigin, AccountId>(
+	o: OuterOrigin,
+) -> Result<Option<AccountId>, BadOrigin>
 where
 	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
 {

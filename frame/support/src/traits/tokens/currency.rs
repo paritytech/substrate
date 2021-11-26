@@ -204,40 +204,64 @@ impl<AccountId> Currency<AccountId> for () {
 	type Balance = u32;
 	type PositiveImbalance = ();
 	type NegativeImbalance = ();
-	fn total_balance(_: &AccountId) -> Self::Balance { 0 }
-	fn can_slash(_: &AccountId, _: Self::Balance) -> bool { true }
-	fn total_issuance() -> Self::Balance { 0 }
-	fn minimum_balance() -> Self::Balance { 0 }
-	fn burn(_: Self::Balance) -> Self::PositiveImbalance { () }
-	fn issue(_: Self::Balance) -> Self::NegativeImbalance { () }
-	fn pair(_: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) { ((), ()) }
-	fn free_balance(_: &AccountId) -> Self::Balance { 0 }
+	fn total_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
+	fn can_slash(_: &AccountId, _: Self::Balance) -> bool {
+		true
+	}
+	fn total_issuance() -> Self::Balance {
+		0
+	}
+	fn minimum_balance() -> Self::Balance {
+		0
+	}
+	fn burn(_: Self::Balance) -> Self::PositiveImbalance {
+		()
+	}
+	fn issue(_: Self::Balance) -> Self::NegativeImbalance {
+		()
+	}
+	fn pair(_: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+		((), ())
+	}
+	fn free_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
 	fn ensure_can_withdraw(
 		_: &AccountId,
 		_: Self::Balance,
 		_: WithdrawReasons,
 		_: Self::Balance,
-	) -> DispatchResult { Ok(()) }
+	) -> DispatchResult {
+		Ok(())
+	}
 	fn transfer(
 		_: &AccountId,
 		_: &AccountId,
 		_: Self::Balance,
 		_: ExistenceRequirement,
-	) -> DispatchResult { Ok(()) }
+	) -> DispatchResult {
+		Ok(())
+	}
 	fn slash(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
 		((), 0)
 	}
 	fn deposit_into_existing(
 		_: &AccountId,
 		_: Self::Balance,
-	) -> Result<Self::PositiveImbalance, DispatchError> { Ok(()) }
+	) -> Result<Self::PositiveImbalance, DispatchError> {
+		Ok(())
+	}
 	fn resolve_into_existing(
 		_: &AccountId,
 		_: Self::NegativeImbalance,
 	) -> Result<(), Self::NegativeImbalance> {
 		Ok(())
 	}
-	fn deposit_creating(_: &AccountId, _: Self::Balance) -> Self::PositiveImbalance { () }
+	fn deposit_creating(_: &AccountId, _: Self::Balance) -> Self::PositiveImbalance {
+		()
+	}
 	fn resolve_creating(_: &AccountId, _: Self::NegativeImbalance) {}
 	fn withdraw(
 		_: &AccountId,

@@ -52,18 +52,18 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-pub mod weights;
-#[cfg(test)]
-mod tests;
 #[cfg(test)]
 mod mock;
+#[cfg(test)]
+mod tests;
+pub mod weights;
 
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
-		EnsureOrigin, Get, IsType, OriginTrait,
-		PrivilegeCmp, schedule::{self, DispatchTime, MaybeHashed},
+		schedule::{self, DispatchTime, MaybeHashed},
+		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -82,10 +82,7 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
-pub type CallOrHashOf<T> = MaybeHashed<
-	<T as Config>::Call,
-	<T as frame_system::Config>::Hash,
->;
+pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
@@ -171,15 +168,24 @@ pub(crate) trait MarginalWeightInfo: WeightInfo {
 	fn item(periodic: bool, named: bool, resolved: Option<bool>) -> Weight {
 		match (periodic, named, resolved) {
 			(_, false, None) => Self::on_initialize_aborted(2) - Self::on_initialize_aborted(1),
-			(_, true, None) => Self::on_initialize_named_aborted(2) - Self::on_initialize_named_aborted(1),
+			(_, true, None) =>
+				Self::on_initialize_named_aborted(2) - Self::on_initialize_named_aborted(1),
 			(false, false, Some(false)) => Self::on_initialize(2) - Self::on_initialize(1),
-			(false, true, Some(false)) => Self::on_initialize_named(2) - Self::on_initialize_named(1),
-			(true, false, Some(false)) => Self::on_initialize_periodic(2) - Self::on_initialize_periodic(1),
-			(true, true, Some(false)) => Self::on_initialize_periodic_named(2) - Self::on_initialize_periodic_named(1),
-			(false, false, Some(true)) => Self::on_initialize_resolved(2) - Self::on_initialize_resolved(1),
-			(false, true, Some(true)) => Self::on_initialize_named_resolved(2) - Self::on_initialize_named_resolved(1),
-			(true, false, Some(true)) => Self::on_initialize_periodic_resolved(2) - Self::on_initialize_periodic_resolved(1),
-			(true, true, Some(true)) => Self::on_initialize_periodic_named_resolved(2) - Self::on_initialize_periodic_named_resolved(1),
+			(false, true, Some(false)) =>
+				Self::on_initialize_named(2) - Self::on_initialize_named(1),
+			(true, false, Some(false)) =>
+				Self::on_initialize_periodic(2) - Self::on_initialize_periodic(1),
+			(true, true, Some(false)) =>
+				Self::on_initialize_periodic_named(2) - Self::on_initialize_periodic_named(1),
+			(false, false, Some(true)) =>
+				Self::on_initialize_resolved(2) - Self::on_initialize_resolved(1),
+			(false, true, Some(true)) =>
+				Self::on_initialize_named_resolved(2) - Self::on_initialize_named_resolved(1),
+			(true, false, Some(true)) =>
+				Self::on_initialize_periodic_resolved(2) - Self::on_initialize_periodic_resolved(1),
+			(true, true, Some(true)) =>
+				Self::on_initialize_periodic_named_resolved(2) -
+					Self::on_initialize_periodic_named_resolved(1),
 		}
 	}
 }
@@ -188,8 +194,11 @@ impl<T: WeightInfo> MarginalWeightInfo for T {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch::PostDispatchInfo, pallet_prelude::*};
-	use frame_support::traits::{PreimageProvider, schedule::LookupError};
+	use frame_support::{
+		dispatch::PostDispatchInfo,
+		pallet_prelude::*,
+		traits::{schedule::LookupError, PreimageProvider},
+	};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -250,13 +259,8 @@ pub mod pallet {
 
 	/// Items to be executed, indexed by the block number that they should be executed on.
 	#[pallet::storage]
-	pub type Agenda<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		T::BlockNumber,
-		Vec<Option<ScheduledV3Of<T>>>,
-		ValueQuery,
-	>;
+	pub type Agenda<T: Config> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<Option<ScheduledV3Of<T>>>, ValueQuery>;
 
 	/// Lookup from identity to the block number and index of the task.
 	#[pallet::storage]
@@ -338,7 +342,6 @@ pub mod pallet {
 
 			let mut total_weight: Weight = T::WeightInfo::on_initialize(0);
 			for (order, (index, mut s)) in queued.into_iter().enumerate() {
-
 				let named = if let Some(ref id) = s.maybe_id {
 					Lookup::<T>::remove(id);
 					true
@@ -369,7 +372,7 @@ pub mod pallet {
 							}
 							Agenda::<T>::append(until, Some(s));
 						}
-						continue;
+						continue
 					},
 				};
 
@@ -389,7 +392,8 @@ pub mod pallet {
 				// - It does not push the weight past the limit.
 				// - It is the first item in the schedule
 				let hard_deadline = s.priority <= schedule::HARD_DEADLINE;
-				let test_weight = total_weight.saturating_add(call_weight).saturating_add(item_weight);
+				let test_weight =
+					total_weight.saturating_add(call_weight).saturating_add(item_weight);
 				if !hard_deadline && order > 0 && test_weight > limit {
 					// Cannot be scheduled this block - postpone until next.
 					total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
@@ -402,17 +406,14 @@ pub mod pallet {
 						Lookup::<T>::insert(id, (next, index as u32));
 					}
 					Agenda::<T>::append(next, Some(s));
-					continue;
+					continue
 				}
 
 				let dispatch_origin = s.origin.clone().into();
 				let (maybe_actual_call_weight, result) = match call.dispatch(dispatch_origin) {
-					Ok(post_info) => {
-						(post_info.actual_weight, Ok(()))
-					},
-					Err(error_and_info) => {
-						(error_and_info.post_info.actual_weight, Err(error_and_info.error))
-					},
+					Ok(post_info) => (post_info.actual_weight, Ok(())),
+					Err(error_and_info) =>
+						(error_and_info.post_info.actual_weight, Err(error_and_info.error)),
 				};
 				let actual_call_weight = maybe_actual_call_weight.unwrap_or(call_weight);
 				total_weight.saturating_accrue(item_weight);
@@ -633,10 +634,7 @@ impl<T: Config> Pallet<T> {
 		if StorageVersion::<T>::get() == Releases::V1 {
 			StorageVersion::<T>::put(Releases::V2);
 
-			Agenda::<T>::translate::<
-				Vec<Option<ScheduledV2Of<T>>>,
-				_,
-			>(|_, agenda| {
+			Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
 				Some(
 					agenda
 						.into_iter()
@@ -664,7 +662,7 @@ impl<T: Config> Pallet<T> {
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
 			Vec<Option<Scheduled<CallOrHashOf<T>, T::BlockNumber, OldOrigin, T::AccountId>>>,
-			_
+			_,
 		>(|_, agenda| {
 			Some(
 				agenda

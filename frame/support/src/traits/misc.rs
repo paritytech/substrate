@@ -82,7 +82,9 @@ pub trait TryDrop: Sized {
 }
 
 impl TryDrop for () {
-	fn try_drop(self) -> Result<(), Self> { Ok(()) }
+	fn try_drop(self) -> Result<(), Self> {
+		Ok(())
+	}
 }
 
 /// Return type used when we need to return one of two items, each of the opposite direction or
@@ -590,9 +592,15 @@ pub trait PreimageProvider<Hash> {
 }
 
 impl<Hash> PreimageProvider<Hash> for () {
-	fn have_preimage(_: &Hash) -> bool { false }
-	fn get_preimage(_: &Hash) -> Option<Vec<u8>> { None }
-	fn preimage_requested(_: &Hash) -> bool { false }
+	fn have_preimage(_: &Hash) -> bool {
+		false
+	}
+	fn get_preimage(_: &Hash) -> Option<Vec<u8>> {
+		None
+	}
+	fn preimage_requested(_: &Hash) -> bool {
+		false
+	}
 	fn request_preimage(_: &Hash) {}
 	fn unrequest_preimage(_: &Hash) {}
 }

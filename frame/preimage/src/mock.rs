@@ -20,11 +20,16 @@
 use super::*;
 
 use crate as pallet_preimage;
-use sp_core::H256;
-use sp_runtime::{testing::Header, traits::{BlakeTwo256, IdentityLookup}, Perbill};
-use frame_support::{parameter_types, ord_parameter_types, traits::Everything};
-use frame_support::weights::constants::RocksDbWeight;
+use frame_support::{
+	ord_parameter_types, parameter_types, traits::Everything, weights::constants::RocksDbWeight,
+};
 use frame_system::EnsureSignedBy;
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

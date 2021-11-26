@@ -18,15 +18,13 @@
 //! # Scheduler tests.
 
 use super::*;
-use crate::mock::{
-	*, Call, root, run_to_block, new_test_ext, LoggerCall, Test, logger, Scheduler
-};
-use sp_runtime::traits::Hash;
+use crate::mock::{logger, new_test_ext, root, run_to_block, Call, LoggerCall, Scheduler, Test, *};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	traits::{Contains, OnInitialize, PreimageProvider},
 	Hashable,
 };
+use sp_runtime::traits::Hash;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -366,14 +364,16 @@ fn scheduler_respects_weight_limits() {
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 })
+				.into(),
 		));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
+				.into(),
 		));
 		// 69 and 42 do not fit together
 		run_to_block(4);
@@ -391,14 +391,16 @@ fn scheduler_respects_hard_deadlines_more() {
 			None,
 			0,
 			root(),
-			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 })
+				.into(),
 		));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			0,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
+				.into(),
 		));
 		// With base weights, 69 and 42 should not fit together, but do because of hard
 		// deadlines
@@ -415,14 +417,16 @@ fn scheduler_respects_priority_ordering() {
 			None,
 			1,
 			root(),
-			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 })
+				.into(),
 		));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			0,
 			root(),
-			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 }).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
+				.into(),
 		));
 		run_to_block(4);
 		assert_eq!(logger::log(), vec![(root(), 69u32), (root(), 42u32)]);
@@ -433,36 +437,29 @@ fn scheduler_respects_priority_ordering() {
 fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 	new_test_ext().execute_with(|| {
 		let max_weight = MaximumSchedulerWeight::get() - <() as WeightInfo>::on_initialize(0);
-		let item_weight = <() as WeightInfo>::on_initialize(1) - <() as WeightInfo>::on_initialize(0);
+		let item_weight =
+			<() as WeightInfo>::on_initialize(1) - <() as WeightInfo>::on_initialize(0);
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			255,
 			root(),
-			Call::Logger(LoggerCall::log {
-				i: 42,
-				weight: max_weight / 2 - item_weight,
-			}).into(),
+			Call::Logger(LoggerCall::log { i: 42, weight: max_weight / 2 - item_weight }).into(),
 		));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			127,
 			root(),
-			Call::Logger(LoggerCall::log {
-				i: 69,
-				weight: max_weight / 2 - item_weight,
-			}).into(),
+			Call::Logger(LoggerCall::log { i: 69, weight: max_weight / 2 - item_weight }).into(),
 		));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
 			126,
 			root(),
-			Call::Logger(LoggerCall::log {
-				i: 2600,
-				weight: max_weight / 2 - item_weight + 1,
-			}).into(),
+			Call::Logger(LoggerCall::log { i: 2600, weight: max_weight / 2 - item_weight + 1 })
+				.into(),
 		));
 
 		// 2600 does not fit with 69 or 42, but has higher priority, so will go through
@@ -519,7 +516,8 @@ fn on_initialize_weight_is_correct() {
 		let actual_weight = Scheduler::on_initialize(1);
 		assert_eq!(
 			actual_weight,
-			base_weight + call_weight + 4 + <() as MarginalWeightInfo>::item(true, true, Some(false))
+			base_weight +
+				call_weight + 4 + <() as MarginalWeightInfo>::item(true, true, Some(false))
 		);
 		assert_eq!(logger::log(), vec![(root(), 2600u32)]);
 
@@ -527,9 +525,9 @@ fn on_initialize_weight_is_correct() {
 		let actual_weight = Scheduler::on_initialize(2);
 		assert_eq!(
 			actual_weight,
-			base_weight
-				+ call_weight + 2 + <() as MarginalWeightInfo>::item(false, false, Some(false))
-				+ call_weight + 3 + <() as MarginalWeightInfo>::item(true, false, Some(false))
+			base_weight +
+				call_weight + 2 + <() as MarginalWeightInfo>::item(false, false, Some(false)) +
+				call_weight + 3 + <() as MarginalWeightInfo>::item(true, false, Some(false))
 		);
 		assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
 
@@ -537,7 +535,8 @@ fn on_initialize_weight_is_correct() {
 		let actual_weight = Scheduler::on_initialize(3);
 		assert_eq!(
 			actual_weight,
-			base_weight + call_weight + 1 + <() as MarginalWeightInfo>::item(false, true, Some(false))
+			base_weight +
+				call_weight + 1 + <() as MarginalWeightInfo>::item(false, true, Some(false))
 		);
 		assert_eq!(
 			logger::log(),
@@ -555,14 +554,7 @@ fn root_calls_works() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }).into());
 		let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }).into());
-		assert_ok!(Scheduler::schedule_named(
-			Origin::root(),
-			1u32.encode(),
-			4,
-			None,
-			127,
-			call,
-		));
+		assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call,));
 		assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
 		run_to_block(3);
 		// Scheduled calls are in the agenda.
@@ -615,13 +607,7 @@ fn should_use_orign() {
 			127,
 			call,
 		));
-		assert_ok!(Scheduler::schedule(
-			system::RawOrigin::Signed(1).into(),
-			4,
-			None,
-			127,
-			call2,
-		));
+		assert_ok!(Scheduler::schedule(system::RawOrigin::Signed(1).into(), 4, None, 127, call2,));
 		run_to_block(3);
 		// Scheduled calls are in the agenda.
 		assert_eq!(Agenda::<Test>::get(4).len(), 2);
@@ -672,13 +658,7 @@ fn should_check_orign_for_cancel() {
 			127,
 			call,
 		));
-		assert_ok!(Scheduler::schedule(
-			system::RawOrigin::Signed(1).into(),
-			4,
-			None,
-			127,
-			call2,
-		));
+		assert_ok!(Scheduler::schedule(system::RawOrigin::Signed(1).into(), 4, None, 127, call2,));
 		run_to_block(3);
 		// Scheduled calls are in the agenda.
 		assert_eq!(Agenda::<Test>::get(4).len(), 2);

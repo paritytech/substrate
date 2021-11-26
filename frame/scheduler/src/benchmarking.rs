@@ -19,10 +19,13 @@
 
 use super::*;
 use frame_benchmarking::benchmarks;
-use frame_support::{ensure, traits::{OnInitialize, PreimageProvider, PreimageRecipient}};
+use frame_support::{
+	ensure,
+	traits::{OnInitialize, PreimageProvider, PreimageRecipient},
+};
 use frame_system::RawOrigin;
-use sp_std::{prelude::*, vec};
 use sp_runtime::traits::Hash;
+use sp_std::{prelude::*, vec};
 
 use crate::Pallet as Scheduler;
 use frame_system::Pallet as System;
@@ -36,9 +39,9 @@ fn fill_schedule<T: Config>(
 	periodic: bool,
 	named: bool,
 	resolved: Option<bool>,
-	//^^ None -> aborted (hash without preimage)
-	//   Some(true) -> hash resolves into call if possible, plain call otherwise
-	//   Some(false) -> plain call
+	/* None -> aborted (hash without preimage) */
+	/*   Some(true) -> hash resolves into call if possible, plain call otherwise
+	 *   Some(false) -> plain call */
 ) -> Result<(), &'static str> {
 	for i in 0..n {
 		// Named schedule is strictly heavier than anonymous
@@ -51,7 +54,7 @@ fn fill_schedule<T: Config>(
 				} else {
 					call.into()
 				}
-			}
+			},
 			Some(false) => call.into(),
 			None => CallOrHashOf::<T>::Hash(hash),
 		};

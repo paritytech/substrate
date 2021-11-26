@@ -81,11 +81,7 @@ pub mod logger {
 		}
 
 		#[pallet::weight(*weight)]
-		pub fn log_without_filter(
-			origin: OriginFor<T>,
-			i: u32,
-			weight: Weight,
-		) -> DispatchResult {
+		pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 			Self::deposit_event(Event::Logged(i, weight));
 			LOG.with(|log| {
 				log.borrow_mut().push((origin.caller().clone(), i));

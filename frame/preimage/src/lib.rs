@@ -30,11 +30,11 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-pub mod weights;
-#[cfg(test)]
-mod tests;
 #[cfg(test)]
 mod mock;
+#[cfg(test)]
+mod tests;
+pub mod weights;
 
 use sp_runtime::traits::{BadOrigin, Hash, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};

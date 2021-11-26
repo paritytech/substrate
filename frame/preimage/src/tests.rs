@@ -34,8 +34,14 @@ fn user_note_preimage_works() {
 		assert!(Preimage::have_preimage(&h));
 		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
 
-		assert_noop!(Preimage::note_preimage(Origin::signed(2), vec![1]), Error::<Test>::AlreadyNoted);
-		assert_noop!(Preimage::note_preimage(Origin::signed(0), vec![2]), BalancesError::<Test>::InsufficientBalance);
+		assert_noop!(
+			Preimage::note_preimage(Origin::signed(2), vec![1]),
+			Error::<Test>::AlreadyNoted
+		);
+		assert_noop!(
+			Preimage::note_preimage(Origin::signed(0), vec![2]),
+			BalancesError::<Test>::InsufficientBalance
+		);
 	});
 }
 
@@ -50,7 +56,10 @@ fn manager_note_preimage_works() {
 		assert!(Preimage::have_preimage(&h));
 		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
 
-		assert_noop!(Preimage::note_preimage(Origin::signed(1), vec![1]), Error::<Test>::AlreadyNoted);
+		assert_noop!(
+			Preimage::note_preimage(Origin::signed(1), vec![1]),
+			Error::<Test>::AlreadyNoted
+		);
 	});
 }
 
@@ -58,11 +67,20 @@ fn manager_note_preimage_works() {
 fn user_unnote_preimage_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
-		assert_noop!(Preimage::unnote_preimage(Origin::signed(3), hashed([1])), Error::<Test>::NotAuthorized);
-		assert_noop!(Preimage::unnote_preimage(Origin::signed(2), hashed([2])), Error::<Test>::NotNoted);
+		assert_noop!(
+			Preimage::unnote_preimage(Origin::signed(3), hashed([1])),
+			Error::<Test>::NotAuthorized
+		);
+		assert_noop!(
+			Preimage::unnote_preimage(Origin::signed(2), hashed([2])),
+			Error::<Test>::NotNoted
+		);
 
 		assert_ok!(Preimage::unnote_preimage(Origin::signed(2), hashed([1])));
-		assert_noop!(Preimage::unnote_preimage(Origin::signed(2), hashed([1])), Error::<Test>::NotNoted);
+		assert_noop!(
+			Preimage::unnote_preimage(Origin::signed(2), hashed([1])),
+			Error::<Test>::NotNoted
+		);
 
 		let h = hashed([1]);
 		assert!(!Preimage::have_preimage(&h));
@@ -75,7 +93,10 @@ fn manager_unnote_preimage_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
 		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])));
-		assert_noop!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])), Error::<Test>::NotNoted);
+		assert_noop!(
+			Preimage::unnote_preimage(Origin::signed(1), hashed([1])),
+			Error::<Test>::NotNoted
+		);
 
 		let h = hashed([1]);
 		assert!(!Preimage::have_preimage(&h));
@@ -87,8 +108,14 @@ fn manager_unnote_preimage_works() {
 fn manager_unnote_user_preimage_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
-		assert_noop!(Preimage::unnote_preimage(Origin::signed(3), hashed([1])), Error::<Test>::NotAuthorized);
-		assert_noop!(Preimage::unnote_preimage(Origin::signed(2), hashed([2])), Error::<Test>::NotNoted);
+		assert_noop!(
+			Preimage::unnote_preimage(Origin::signed(3), hashed([1])),
+			Error::<Test>::NotAuthorized
+		);
+		assert_noop!(
+			Preimage::unnote_preimage(Origin::signed(2), hashed([2])),
+			Error::<Test>::NotNoted
+		);
 
 		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])));
 
@@ -103,7 +130,10 @@ fn requested_then_noted_preimage_cannot_be_unnoted() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
 		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
-		assert_noop!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])), Error::<Test>::Requested);
+		assert_noop!(
+			Preimage::unnote_preimage(Origin::signed(1), hashed([1])),
+			Error::<Test>::Requested
+		);
 
 		let h = hashed([1]);
 		assert!(Preimage::have_preimage(&h));
@@ -173,13 +203,19 @@ fn unrequest_preimage_works() {
 		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
 		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
 		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
-		assert_noop!(Preimage::unrequest_preimage(Origin::signed(1), hashed([2])), Error::<Test>::NotRequested);
+		assert_noop!(
+			Preimage::unrequest_preimage(Origin::signed(1), hashed([2])),
+			Error::<Test>::NotRequested
+		);
 
 		assert_ok!(Preimage::unrequest_preimage(Origin::signed(1), hashed([1])));
 		assert!(Preimage::have_preimage(&hashed([1])));
 
 		assert_ok!(Preimage::unrequest_preimage(Origin::signed(1), hashed([1])));
-		assert_noop!(Preimage::unrequest_preimage(Origin::signed(1), hashed([1])), Error::<Test>::NotRequested);
+		assert_noop!(
+			Preimage::unrequest_preimage(Origin::signed(1), hashed([1])),
+			Error::<Test>::NotRequested
+		);
 	});
 }
 

@@ -18,11 +18,11 @@
 //! Preimage pallet benchmarking.
 
 use super::*;
-use sp_std::{prelude::*, vec};
-use sp_runtime::traits::Bounded;
-use frame_benchmarking::{benchmarks, whitelist_account, account};
+use frame_benchmarking::{account, benchmarks, whitelist_account};
+use frame_support::assert_ok;
 use frame_system::RawOrigin;
-use frame_support::{assert_ok};
+use sp_runtime::traits::Bounded;
+use sp_std::{prelude::*, vec};
 
 use crate::Pallet as Preimage;
 

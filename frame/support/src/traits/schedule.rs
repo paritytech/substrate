@@ -20,7 +20,7 @@
 use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{DispatchError, RuntimeDebug};
-use sp_std::{fmt::Debug, result::Result, prelude::*};
+use sp_std::{fmt::Debug, prelude::*, result::Result};
 
 /// Information relating to the period of a scheduled task. First item is the length of the
 /// period and the second is the number of times it should be executed in total before the task
@@ -115,7 +115,7 @@ impl<T: Decode, H> MaybeHashed<T, H> {
 					Ok(c) => (Self::Value(c), Some(h)),
 					Err(_) => (Self::Hash(h), None),
 				}
-			}
+			},
 		}
 	}
 }
@@ -207,7 +207,8 @@ pub mod v1 {
 		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
 	}
 
-	impl<T, BlockNumber, Call, Origin> Anon<BlockNumber, Call, Origin> for T where
+	impl<T, BlockNumber, Call, Origin> Anon<BlockNumber, Call, Origin> for T
+	where
 		T: v2::Anon<BlockNumber, Call, Origin>,
 	{
 		type Address = T::Address;
@@ -239,7 +240,8 @@ pub mod v1 {
 		}
 	}
 
-	impl<T, BlockNumber, Call, Origin> Named<BlockNumber, Call, Origin> for T where
+	impl<T, BlockNumber, Call, Origin> Named<BlockNumber, Call, Origin> for T
+	where
 		T: v2::Named<BlockNumber, Call, Origin>,
 	{
 		type Address = T::Address;
