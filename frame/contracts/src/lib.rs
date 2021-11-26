@@ -531,7 +531,7 @@ pub mod pallet {
 		/// A call tried to invoke a contract that is flagged as non-reentrant.
 		ReentranceDenied,
 		/// Origin doesn't have enough balance to pay for the storage deposit limit.
-		StorageLimitTooHigh,
+		StorageDepositLimitTooHigh,
 		/// More storage was created than allowed by the storage deposit limit.
 		StorageExhausted,
 		/// Code removal was denied because the code is still in use by at least one contract.

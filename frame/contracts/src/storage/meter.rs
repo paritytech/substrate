@@ -323,6 +323,7 @@ where
 impl<T: Config> Ext<T> for ReservingExt {
 	fn reserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>) -> DispatchResult {
 		T::Currency::reserve(origin, *limit)
+			.map_err(|_| <Error<T>>::StorageDepositLimitTooHigh.into())
 	}
 
 	fn unreserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>, deposit: &DepositOf<T>) {
