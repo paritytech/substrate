@@ -668,7 +668,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub fn post_migrate_to_v3<T: Config>() -> Result<(), &'static str> {
+	pub fn post_migrate_to_v3() -> Result<(), &'static str> {
 		assert!(StorageVersion::<T>::get() == Releases::V3);
 		for k in Agenda::<T>::iter_keys() {
 			let _ = Agenda::<T>::try_get(k)?;
