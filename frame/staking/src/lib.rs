@@ -301,7 +301,7 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	traits::{Currency, Get},
+	traits::{Currency, Get, ConstU32},
 	weights::Weight,
 };
 use scale_info::TypeInfo;
@@ -816,3 +816,14 @@ pub trait BenchmarkingConfig {
 	type MaxNominators: Get<u32>;
 }
 
+/// A mock benchmarking config for pallet-staking.
+///
+/// Should only be used for testing.
+#[cfg(feature = "std")]
+pub struct TestBenchmarkingConfig;
+
+#[cfg(feature = "std")]
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	type MaxValidators = ConstU32<100>;
+	type MaxNominators = ConstU32<100>;
+}

@@ -22,7 +22,7 @@ use frame_election_provider_support::{onchain, SortedListProvider};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
-		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler, ConstU32,
+		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
@@ -250,12 +250,6 @@ impl pallet_bags_list::Config for Test {
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
-}
-
-pub struct TestBenchmarkingConfig;
-impl BenchmarkingConfig for TestBenchmarkingConfig {
-	type MaxValidators = ConstU32<100>;
-	type MaxNominators = ConstU32<100>;
 }
 
 impl crate::pallet::pallet::Config for Test {
