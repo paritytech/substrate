@@ -26,6 +26,8 @@ use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+pub(super) type AssetAccountOf<T, I> =
+	AssetAccount::<<T as Config<I>>::Balance, DepositBalanceOf<T, I>, <T as Config<I>>::Extra>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AssetDetails<Balance, AccountId, DepositBalance> {
@@ -76,14 +78,45 @@ pub struct Approval<Balance, DepositBalance> {
 	pub(super) deposit: DepositBalance,
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, MaxEncodedLen, TypeInfo)]
-pub struct AssetBalance<Balance, Extra> {
+#[test]
+fn ensure_bool_decodes_to_consumer_or_sufficient() {
+	assert_eq!(false.encode(), ExistenceReason::<()>::Consumer.encode());
+	assert_eq!(true.encode(), ExistenceReason::<()>::Sufficient.encode());
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub enum ExistenceReason<Balance> {
+	#[codec(index = 0)]
+	Consumer,
+	#[codec(index = 1)]
+	Sufficient,
+	#[codec(index = 2)]
+	DepositHeld(Balance),
+	#[codec(index = 3)]
+	DepositRefunded,
+}
+
+impl<Balance> ExistenceReason<Balance> {
+	pub(crate) fn take_deposit(&mut self) -> Option<Balance> {
+		if !matches!(self, ExistenceReason::DepositHeld(_)) {
+			return None
+		}
+		if let ExistenceReason::DepositHeld(deposit) = sp_std::mem::replace(self, ExistenceReason::DepositRefunded) {
+			return Some(deposit)
+		} else {
+			return None
+		}
+	}
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct AssetAccount<Balance, DepositBalance, Extra> {
 	/// The balance.
 	pub(super) balance: Balance,
 	/// Whether the account is frozen.
 	pub(super) is_frozen: bool,
 	/// `true` if this balance gave the account a self-sufficient reference.
-	pub(super) sufficient: bool,
+	pub(super) reason: ExistenceReason<DepositBalance>,
 	/// Additional "sidecar" data, in case some other pallet wants to use this storage item.
 	pub(super) extra: Extra,
 }

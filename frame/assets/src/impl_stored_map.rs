@@ -22,11 +22,7 @@ use super::*;
 impl<T: Config<I>, I: 'static> StoredMap<(T::AssetId, T::AccountId), T::Extra> for Pallet<T, I> {
 	fn get(id_who: &(T::AssetId, T::AccountId)) -> T::Extra {
 		let &(id, ref who) = id_who;
-		if Account::<T, I>::contains_key(id, who) {
-			Account::<T, I>::get(id, who).extra
-		} else {
-			Default::default()
-		}
+		Account::<T, I>::get(id, who).map(|a| a.extra).unwrap_or_default()
 	}
 
 	fn try_mutate_exists<R, E: From<DispatchError>>(
@@ -34,7 +30,7 @@ impl<T: Config<I>, I: 'static> StoredMap<(T::AssetId, T::AccountId), T::Extra> f
 		f: impl FnOnce(&mut Option<T::Extra>) -> Result<R, E>,
 	) -> Result<R, E> {
 		let &(id, ref who) = id_who;
-		let mut maybe_extra = Some(Account::<T, I>::get(id, who).extra);
+		let mut maybe_extra = Account::<T, I>::get(id, who).map(|a| a.extra);
 		let r = f(&mut maybe_extra)?;
 		// They want to write some value or delete it.
 		// If the account existed and they want to write a value, then we write.

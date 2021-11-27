@@ -488,7 +488,7 @@ fn transferring_amount_more_than_available_balance_should_not_work() {
 		assert_eq!(Assets::balance(0, 2), 50);
 		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::MAX));
 		assert_eq!(Assets::balance(0, 1), 0);
-		assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::BalanceLow);
+		assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::NoAccount);
 		assert_noop!(Assets::transfer(Origin::signed(2), 0, 1, 51), Error::<Test>::BalanceLow);
 	});
 }
@@ -536,7 +536,7 @@ fn burning_asset_balance_with_zero_balance_does_nothing() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 2), 0);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 2, u64::MAX));
+		assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::MAX), Error::<Test>::NoAccount);
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert_eq!(Assets::total_supply(0), 100);
 	});
@@ -688,7 +688,7 @@ fn force_metadata_should_work() {
 		);
 
 		// string length limit check
-		let limit = StringLimit::get() as usize;
+		let limit = 50usize;
 		assert_noop!(
 			Assets::force_set_metadata(
 				Origin::root(),
