@@ -449,33 +449,34 @@ use std::{
 #[derive(Clone)]
 pub struct SharedTrieNodeCache<H: Hasher> {
 	cache:
-		std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>>,
+		std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>,
+	cache_data:
+		std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<bytes::Bytes>>>>>,
 }
 
 impl<H: Hasher> Default for SharedTrieNodeCache<H> {
 	fn default() -> Self {
-		Self { cache: Default::default() }
+		Self { cache: Default::default(), cache_data: Default::default() }
 	}
 }
 
 pub struct LocalTrieNodeCache<H: Hasher> {
 	shared: SharedTrieNodeCache<H>,
-	local: parking_lot::Mutex<HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
-	fast_cache: parking_lot::Mutex<HashMap<Vec<u8>, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+	local: parking_lot::Mutex<HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
 	enable_fast_cache: bool,
 }
 
 pub struct TrieNodeCache<'a, H: Hasher> {
 	shared:
-		parking_lot::RwLockReadGuard<'a, HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
-	local: parking_lot::MutexGuard<'a, HashMap<H::Out, Arc<trie_db::node::NodeOwned<H::Out>>>>,
-	fast_cache:
-		parking_lot::MutexGuard<'a, HashMap<Vec<u8>, Arc<trie_db::node::NodeOwned<H::Out>>>>,
+		parking_lot::RwLockReadGuard<'a, HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
+	local: parking_lot::MutexGuard<'a, HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
 	enable_fast_cache: bool,
+	fast_cache:
+		parking_lot::MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, Option<bytes::Bytes>>>,
 }
 
-impl<'a, H: Hasher> trie_db::NodeCache<Layout<H>> for TrieNodeCache<'a, H> {
-	fn get_or_insert(
+impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
+	fn get_or_insert_node(
 		&mut self,
 		hash: H::Out,
 		fetch_node: &mut dyn FnMut() -> trie_db::Result<
@@ -483,7 +484,7 @@ impl<'a, H: Hasher> trie_db::NodeCache<Layout<H>> for TrieNodeCache<'a, H> {
 			H::Out,
 			CError<Layout<H>>,
 		>,
-	) -> trie_db::Result<&Arc<trie_db::node::NodeOwned<H::Out>>, H::Out, CError<Layout<H>>> {
+	) -> trie_db::Result<&trie_db::node::NodeOwned<H::Out>, H::Out, CError<Layout<H>>> {
 		if let Some(res) = self.shared.get(&hash) {
 			return Ok(res)
 		}
@@ -492,12 +493,16 @@ impl<'a, H: Hasher> trie_db::NodeCache<Layout<H>> for TrieNodeCache<'a, H> {
 			Entry::Occupied(res) => Ok(res.into_mut()),
 			Entry::Vacant(vacant) => {
 				let node = (*fetch_node)()?;
-				Ok(vacant.insert(Arc::new(node)))
+				Ok(vacant.insert(node))
 			},
 		}
 	}
 
-	fn fast_cache(&self, key: &[u8]) -> Option<&Arc<trie_db::node::NodeOwned<H::Out>>> {
+	fn insert_node(&mut self, hash: H::Out, node: trie_db::node::NodeOwned<H::Out>) {
+		self.local.insert(hash, node);
+	}
+
+	fn lookup_data_for_key(&self, key: &[u8]) -> Option<&Option<bytes::Bytes>> {
 		if self.enable_fast_cache {
 			self.fast_cache.get(key)
 		} else {
@@ -505,9 +510,9 @@ impl<'a, H: Hasher> trie_db::NodeCache<Layout<H>> for TrieNodeCache<'a, H> {
 		}
 	}
 
-	fn fast_cache_insert(&mut self, key: &[u8], node: Arc<trie_db::node::NodeOwned<H::Out>>) {
+	fn cache_data_for_key(&mut self, key: &[u8], data: Option<bytes::Bytes>) {
 		if self.enable_fast_cache {
-			self.fast_cache.insert(key.into(), node);
+			self.fast_cache.insert(key.into(), data);
 		}
 	}
 }
@@ -516,17 +521,16 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 	pub fn new(shared: SharedTrieNodeCache<H>, enable_fast_cache: bool) -> Self {
 		Self {
 			enable_fast_cache,
-			fast_cache: Default::default(),
 			local: Default::default(),
 			shared,
 		}
 	}
 
-	pub fn as_cache<'a>(&'a self) -> TrieNodeCache<'a, H> {
+	pub fn as_cache<'a>(&'a self, hash: H::Out) -> TrieNodeCache<'a, H> {
 		TrieNodeCache {
 			shared: self.shared.cache.read(),
 			local: self.local.lock(),
-			fast_cache: self.fast_cache.lock(),
+			fast_cache: parking_lot::RwLockWriteGuard::map(self.shared.cache_data.write(), |cache| cache.entry(hash).or_default()),
 			enable_fast_cache: self.enable_fast_cache,
 		}
 	}

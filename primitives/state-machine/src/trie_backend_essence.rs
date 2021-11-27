@@ -240,7 +240,7 @@ where
 
 		match self.trie_node_cache {
 			Some(ref cache) =>
-				TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
+				TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache(self.root))
 					.get(key)
 					.map_err(map_e),
 			None => TrieDB::<H>::new(self, &self.root).map_err(map_e)?.get(key).map_err(map_e),
