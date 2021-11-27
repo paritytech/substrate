@@ -18,7 +18,9 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../f
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
 pallet-sudo ={ version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
-#pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
+pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../frame/collective" }
+pallet-staking ={ version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
+
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
@@ -31,11 +33,12 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
-pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../frame/collective" }
 
 # Cumulus dependencies
 # cumulus-primitives-core = { path = "../../primitives/core", default-features = false }
-# cumulus-primitives-timestamp = { path = "../../primitives/timestamp", default-features = false }
+frame-election-provider-support = { version = "4.0.0-dev",default-features = false, path = "../../frame/election-provider-support", features = ["runtime-benchmarks"] }
+
+getrandom = { version = "0.2", features = ["js"] }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder" }
@@ -45,19 +48,22 @@ default = [ "std" ]
 std = [
 	"codec/std",
 	"scale-info/std",
-#  "cumulus-primitives-timestamp/std",
+	"frame-election-provider-support/std",
 	"frame-executive/std",
 	"frame-support/std",
 	"frame-system/std",
 	"frame-system-rpc-runtime-api/std",
+	"pallet-babe/std",
 	"pallet-balances/std",
+	"pallet-collective/std",
 	"pallet-sudo/std",
+	"pallet-staking/std",
 	"pallet-timestamp/std",
-	# "pallet-transaction-payment/std",
 	"serde",
 	"sp-api/std",
 	"sp-block-builder/std",
 	"sp-core/std",
+	"sp-consensus-babe/std",
 	"sp-inherents/std",
 	"sp-io/std",
 	"sp-offchain/std",
