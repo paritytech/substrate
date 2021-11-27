@@ -634,6 +634,14 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 			.into_value()
 			.ident;
 
+		if &trait_.to_string() == "Config" {
+			let span = trait_.span();
+			return Err(Error::new(
+				span,
+				"Config trait implementations should be outside the impl_untime_apis! macro.",
+			))
+		}
+
 		let span = trait_.span();
 		if !processed_traits.insert(trait_) {
 			return Err(Error::new(
