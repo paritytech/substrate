@@ -219,7 +219,7 @@ where
 		weight
 	}
 
-	/// Execute given block, but don't do any of the [`final_checks`].
+	/// Execute given block, but don't do any of the `final_checks`.
 	///
 	/// Should only be used for testing.
 	#[cfg(feature = "try-runtime")]

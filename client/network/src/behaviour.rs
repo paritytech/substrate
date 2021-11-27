@@ -32,7 +32,10 @@ use libp2p::{
 	core::{Multiaddr, PeerId, PublicKey},
 	identify::IdentifyInfo,
 	kad::record,
-	swarm::{toggle::Toggle, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
+	swarm::{
+		toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess,
+		PollParameters,
+	},
 	NetworkBehaviour,
 };
 use log::debug;
@@ -58,7 +61,7 @@ pub use crate::request_responses::{
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll")]
+#[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll", event_process = true)]
 pub struct Behaviour<B: BlockT> {
 	/// All the substrate-specific protocols.
 	substrate: Protocol<B>,
@@ -512,11 +515,12 @@ impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B> {
 }
 
 impl<B: BlockT> Behaviour<B> {
-	fn poll<TEv>(
+	fn poll(
 		&mut self,
 		_cx: &mut Context,
 		_: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
+	) -> Poll<NetworkBehaviourAction<BehaviourOut<B>, <Self as NetworkBehaviour>::ProtocolsHandler>>
+	{
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
 		}

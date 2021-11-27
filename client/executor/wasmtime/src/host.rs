@@ -19,7 +19,7 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::{instance_wrapper::InstanceWrapper, runtime::StoreData};
+use crate::{runtime::StoreData, util};
 use codec::{Decode, Encode};
 use log::trace;
 use sc_allocator::FreeingBumpHeapAllocator;
@@ -30,101 +30,104 @@ use sc_executor_common::{
 };
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
-use std::{cell::RefCell, rc::Rc};
 use wasmtime::{Caller, Func, Val};
+
+// The sandbox store is inside of a Option<Box<..>>> so that we can temporarily borrow it.
+struct SandboxStore(Option<Box<sandbox::Store<Func>>>);
+
+// There are a bunch of `Rc`s within the sandbox store, however we only manipulate
+// those within one thread so this should be safe.
+unsafe impl Send for SandboxStore {}
 
 /// The state required to construct a HostContext context. The context only lasts for one host
 /// call, whereas the state is maintained for the duration of a Wasm runtime call, which may make
 /// many different host calls that must share state.
 pub struct HostState {
-	/// We need some interior mutability here since the host state is shared between all host
-	/// function handlers and the wasmtime backend's `impl WasmRuntime`.
-	///
-	/// Furthermore, because of recursive calls (e.g. runtime can create and call an sandboxed
-	/// instance which in turn can call the runtime back) we have to be very careful with borrowing
-	/// those.
-	///
-	/// Basically, most of the interactions should do temporary borrow immediately releasing the
-	/// borrow after performing necessary queries/changes.
-	sandbox_store: Rc<RefCell<sandbox::Store<Func>>>,
-	allocator: RefCell<FreeingBumpHeapAllocator>,
-	instance: Rc<InstanceWrapper>,
+	sandbox_store: SandboxStore,
+	allocator: FreeingBumpHeapAllocator,
 }
 
 impl HostState {
 	/// Constructs a new `HostState`.
-	pub fn new(allocator: FreeingBumpHeapAllocator, instance: Rc<InstanceWrapper>) -> Self {
+	pub fn new(allocator: FreeingBumpHeapAllocator) -> Self {
 		HostState {
-			sandbox_store: Rc::new(RefCell::new(sandbox::Store::new(
+			sandbox_store: SandboxStore(Some(Box::new(sandbox::Store::new(
 				sandbox::SandboxBackend::TryWasmer,
-			))),
-			allocator: RefCell::new(allocator),
-			instance,
+			)))),
+			allocator,
 		}
-	}
-
-	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.
-	pub(crate) fn materialize<'a, 'b, 'c>(
-		&'a self,
-		caller: &'b mut Caller<'c, StoreData>,
-	) -> HostContext<'a, 'b, 'c> {
-		HostContext { host_state: self, caller }
 	}
 }
 
 /// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
-pub(crate) struct HostContext<'a, 'b, 'c> {
-	host_state: &'a HostState,
-	caller: &'b mut Caller<'c, StoreData>,
+pub(crate) struct HostContext<'a, 'b> {
+	pub(crate) caller: &'a mut Caller<'b, StoreData>,
 }
 
-impl<'a, 'b, 'c> std::ops::Deref for HostContext<'a, 'b, 'c> {
-	type Target = HostState;
-	fn deref(&self) -> &HostState {
-		self.host_state
+impl<'a, 'b> HostContext<'a, 'b> {
+	fn host_state(&self) -> &HostState {
+		self.caller
+			.data()
+			.host_state()
+			.expect("host state is not empty when calling a function in wasm; qed")
+	}
+
+	fn host_state_mut(&mut self) -> &mut HostState {
+		self.caller
+			.data_mut()
+			.host_state_mut()
+			.expect("host state is not empty when calling a function in wasm; qed")
+	}
+
+	fn sandbox_store(&self) -> &sandbox::Store<Func> {
+		self.host_state()
+			.sandbox_store
+			.0
+			.as_ref()
+			.expect("sandbox store is only empty when temporarily borrowed")
+	}
+
+	fn sandbox_store_mut(&mut self) -> &mut sandbox::Store<Func> {
+		self.host_state_mut()
+			.sandbox_store
+			.0
+			.as_mut()
+			.expect("sandbox store is only empty when temporarily borrowed")
 	}
 }
 
-impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> {
+impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
 	fn read_memory_into(
 		&self,
 		address: Pointer<u8>,
 		dest: &mut [u8],
 	) -> sp_wasm_interface::Result<()> {
-		let ctx = &self.caller;
-		self.host_state
-			.instance
-			.read_memory_into(ctx, address, dest)
-			.map_err(|e| e.to_string())
+		util::read_memory_into(&self.caller, address, dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> sp_wasm_interface::Result<()> {
-		let ctx = &mut self.caller;
-		self.host_state
-			.instance
-			.write_memory_from(ctx, address, data)
-			.map_err(|e| e.to_string())
+		util::write_memory_from(&mut self.caller, address, data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
-		let ctx = &mut self.caller;
-		let allocator = &self.host_state.allocator;
-
-		self.host_state
-			.instance
-			.allocate(ctx, &mut *allocator.borrow_mut(), size)
+		let memory = self.caller.data().memory();
+		let (memory, data) = memory.data_and_store_mut(&mut self.caller);
+		data.host_state_mut()
+			.expect("host state is not empty when calling a function in wasm; qed")
+			.allocator
+			.allocate(memory, size)
 			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
-		let ctx = &mut self.caller;
-		let allocator = &self.host_state.allocator;
-
-		self.host_state
-			.instance
-			.deallocate(ctx, &mut *allocator.borrow_mut(), ptr)
+		let memory = self.caller.data().memory();
+		let (memory, data) = memory.data_and_store_mut(&mut self.caller);
+		data.host_state_mut()
+			.expect("host state is not empty when calling a function in wasm; qed")
+			.allocator
+			.deallocate(memory, ptr)
 			.map_err(|e| e.to_string())
 	}
 
@@ -133,7 +136,7 @@ impl<'a, 'b, 'c> sp_wasm_interface::FunctionContext for HostContext<'a, 'b, 'c> 
 	}
 }
 
-impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
+impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -141,8 +144,7 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
-		let sandboxed_memory =
-			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory = self.sandbox_store().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = buf_len as usize;
 
@@ -151,8 +153,7 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 			Ok(buffer) => buffer,
 		};
 
-		let instance = self.instance.clone();
-		if let Err(_) = instance.write_memory_from(&mut self.caller, buf_ptr, &buffer) {
+		if util::write_memory_from(&mut self.caller, buf_ptr, &buffer).is_err() {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
 
@@ -166,17 +167,16 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> sp_wasm_interface::Result<u32> {
-		let sandboxed_memory =
-			self.sandbox_store.borrow().memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory = self.sandbox_store().memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = val_len as usize;
 
-		let buffer = match self.instance.read_memory(&self.caller, val_ptr, len) {
+		let buffer = match util::read_memory(&self.caller, val_ptr, len) {
 			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
+		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
 
@@ -184,17 +184,11 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> sp_wasm_interface::Result<()> {
-		self.sandbox_store
-			.borrow_mut()
-			.memory_teardown(memory_id)
-			.map_err(|e| e.to_string())
+		self.sandbox_store_mut().memory_teardown(memory_id).map_err(|e| e.to_string())
 	}
 
 	fn memory_new(&mut self, initial: u32, maximum: u32) -> sp_wasm_interface::Result<u32> {
-		self.sandbox_store
-			.borrow_mut()
-			.new_memory(initial, maximum)
-			.map_err(|e| e.to_string())
+		self.sandbox_store_mut().new_memory(initial, maximum).map_err(|e| e.to_string())
 	}
 
 	fn invoke(
@@ -215,14 +209,10 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance =
-			self.sandbox_store.borrow().instance(instance_id).map_err(|e| e.to_string())?;
+		let instance = self.sandbox_store().instance(instance_id).map_err(|e| e.to_string())?;
 
-		let dispatch_thunk = self
-			.sandbox_store
-			.borrow()
-			.dispatch_thunk(instance_id)
-			.map_err(|e| e.to_string())?;
+		let dispatch_thunk =
+			self.sandbox_store().dispatch_thunk(instance_id).map_err(|e| e.to_string())?;
 
 		let result = instance.invoke(
 			export_name,
@@ -249,8 +239,7 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> sp_wasm_interface::Result<()> {
-		self.sandbox_store
-			.borrow_mut()
+		self.sandbox_store_mut()
 			.instance_teardown(instance_id)
 			.map_err(|e| e.to_string())
 	}
@@ -264,14 +253,12 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 	) -> sp_wasm_interface::Result<u32> {
 		// Extract a dispatch thunk from the instance's table by the specified index.
 		let dispatch_thunk = {
-			let ctx = &mut self.caller;
-			let table_item = self
-				.host_state
-				.instance
+			let table = self
+				.caller
+				.data()
 				.table()
-				.as_ref()
-				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?
-				.get(ctx, dispatch_thunk_id);
+				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
+			let table_item = table.get(&mut self.caller, dispatch_thunk_id);
 
 			table_item
 				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?
@@ -281,25 +268,39 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 				.clone()
 		};
 
-		let guest_env =
-			match sandbox::GuestEnvironment::decode(&*self.sandbox_store.borrow(), raw_env_def) {
-				Ok(guest_env) => guest_env,
-				Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
-			};
+		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store(), raw_env_def)
+		{
+			Ok(guest_env) => guest_env,
+			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+		};
 
-		let store = self.sandbox_store.clone();
-		let store = &mut store.borrow_mut();
-		let result = store
-			.instantiate(
+		let mut store = self
+			.host_state_mut()
+			.sandbox_store
+			.0
+			.take()
+			.expect("sandbox store is only empty when borrowed");
+
+		// Catch any potential panics so that we can properly restore the sandbox store
+		// which we've destructively borrowed.
+		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			store.instantiate(
 				wasm,
 				guest_env,
 				state,
 				&mut SandboxContext { host_context: self, dispatch_thunk: dispatch_thunk.clone() },
 			)
-			.map(|i| i.register(store, dispatch_thunk));
+		}));
+
+		self.host_state_mut().sandbox_store.0 = Some(store);
+
+		let result = match result {
+			Ok(result) => result,
+			Err(error) => std::panic::resume_unwind(error),
+		};
 
 		let instance_idx_or_err_code = match result {
-			Ok(instance_idx) => instance_idx,
+			Ok(instance) => instance.register(&mut self.sandbox_store_mut(), dispatch_thunk),
 			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
 			Err(_) => sandbox_primitives::ERR_MODULE,
 		};
@@ -312,20 +313,19 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 		instance_idx: u32,
 		name: &str,
 	) -> sp_wasm_interface::Result<Option<sp_wasm_interface::Value>> {
-		self.sandbox_store
-			.borrow()
+		self.sandbox_store()
 			.instance(instance_idx)
 			.map(|i| i.get_global_val(name))
 			.map_err(|e| e.to_string())
 	}
 }
 
-struct SandboxContext<'a, 'b, 'c, 'd> {
-	host_context: &'a mut HostContext<'b, 'c, 'd>,
+struct SandboxContext<'a, 'b, 'c> {
+	host_context: &'a mut HostContext<'b, 'c>,
 	dispatch_thunk: Func,
 }
 
-impl<'a, 'b, 'c, 'd> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c, 'd> {
+impl<'a, 'b, 'c> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c> {
 	fn invoke(
 		&mut self,
 		invoke_args_ptr: Pointer<u8>,
