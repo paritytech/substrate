@@ -53,9 +53,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn new_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
+		maybe_deposit: Option<DepositBalanceOf<T, I>>,
 	) -> Result<ExistenceReason<DepositBalanceOf<T, I>>, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-		let reason = if d.is_sufficient {
+		let reason = if let Some(deposit) = maybe_deposit {
+			ExistenceReason::DepositHeld(deposit)
+		} else if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
 			d.sufficients += 1;
 			ExistenceReason::Sufficient
@@ -278,11 +281,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		ensure!(!Account::<T, I>::contains_key(id, &who), Error::<T, I>::AlreadyExists);
 		let deposit = T::AssetAccountDeposit::get();
+		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
+		let reason = Self::new_account(&who, &mut details, Some(deposit))?;
 		T::Currency::reserve(&who, deposit)?;
+		Asset::<T, I>::insert(&id, details);
 		Account::<T, I>::insert(id, &who, AssetAccountOf::<T, I> {
 			balance: Zero::zero(),
 			is_frozen: false,
-			reason: ExistenceReason::DepositHeld(deposit),
+			reason,
 			extra: T::Extra::default(),
 		});
 		Ok(())
@@ -376,7 +382,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: amount,
-							reason: Self::new_account(beneficiary, details)?,
+							reason: Self::new_account(beneficiary, details, None)?,
 							is_frozen: false,
 							extra: T::Extra::default(),
 						});
@@ -538,7 +544,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: credit,
 							is_frozen: false,
-							reason: Self::new_account(&dest, details)?,
+							reason: Self::new_account(&dest, details, None)?,
 							extra: T::Extra::default(),
 						});
 					}

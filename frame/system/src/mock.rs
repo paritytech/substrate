@@ -111,6 +111,7 @@ impl Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 pub type SysEvent = frame_system::Event<Test>;

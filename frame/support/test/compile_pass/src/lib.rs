@@ -73,6 +73,7 @@ impl system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 }

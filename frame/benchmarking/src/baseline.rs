@@ -162,6 +162,7 @@ pub mod mock {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl super::Config for Test {}

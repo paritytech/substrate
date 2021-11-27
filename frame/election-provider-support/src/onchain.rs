@@ -145,6 +145,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type OnSetCode = ();
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl Config for Runtime {
