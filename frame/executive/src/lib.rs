@@ -191,7 +191,7 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block(block, Default::default());
+		>::execute_block(block);
 	}
 
 	fn execute_block_with_authors(block: Block, info: Vec<Option<AccountId32>>) {
@@ -202,7 +202,7 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block(block, info);
+		>::execute_block_with_authors(block, info);
 	}
 }
 
@@ -409,7 +409,33 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block(block: Block, info: Vec<Option<AccountId32>>) {
+	pub fn execute_block(block: Block) {
+		sp_io::init_tracing();
+		sp_tracing::within_span! {
+			sp_tracing::info_span!("execute_block", ?block);
+
+			Self::initialize_block(block.header());
+
+			// any initial checks
+			Self::initial_checks(&block);
+
+			let signature_batching = sp_runtime::SignatureBatching::start();
+
+			// execute extrinsics
+			let (header, extrinsics) = block.deconstruct();
+            Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+
+			if !signature_batching.verify() {
+				panic!("Signature verification failed.");
+			}
+
+			// any final checks
+			Self::final_checks(&header);
+		}
+	}
+
+	/// Actually execute all transitions for `block`.
+	pub fn execute_block_with_authors(block: Block, info: Vec<Option<AccountId32>>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -424,14 +450,9 @@ where
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
            
-            // maintain backward compatibility
-            if info.len() > 0 {
-                let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
-                let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed::<Block::Extrinsic>(extrinsics_with_author, &header.seed().seed);
-                Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
-            }else{
-                Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-            }
+            let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
+            let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed::<Block::Extrinsic>(extrinsics_with_author, &header.seed().seed);
+            Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
 
 			if !signature_batching.verify() {
@@ -442,6 +463,7 @@ where
 			Self::final_checks(&header);
 		}
 	}
+
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(
