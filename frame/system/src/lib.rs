@@ -1225,7 +1225,8 @@ impl<T: Config> Pallet<T> {
 
 	/// True if the account has at least one provider reference.
 	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
-		Account::<T>::get(who).providers > 0
+		let a = Account::<T>::get(who);
+		a.providers > 0 && a.consumers < T::MaxConsumers::get()
 	}
 
 	/// Deposits an event into this block's event record.

@@ -40,9 +40,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ExtraMutator::maybe_new(id, who)
 	}
 
-	/// Get the asset `id` balance of `who`.
+	/// Get the asset `id` balance of `who`, or zero if the asset-account doesn't exist.
 	pub fn balance(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Account::<T, I>::get(id, who.borrow()).map(|a| a.balance).unwrap_or_default()
+		Self::maybe_balance(id, who).unwrap_or_default()
+	}
+
+	/// Get the asset `id` balance of `who` if the asset-account exists.
+	pub fn maybe_balance(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>) -> Option<T::Balance> {
+		Account::<T, I>::get(id, who.borrow()).map(|a| a.balance)
 	}
 
 	/// Get the total supply of an asset `id`.
@@ -102,15 +107,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if details.supply.checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
-		let balance = Self::balance(id, who);
-		if balance.checked_add(&amount).is_none() {
-			return DepositConsequence::Overflow
-		}
-		if balance.is_zero() {
+		if let Some(balance) = Self::maybe_balance(id, who) {
+			if balance.checked_add(&amount).is_none() {
+				return DepositConsequence::Overflow
+			}
+		} else {
 			if amount < details.min_balance {
 				return DepositConsequence::BelowMinimum
 			}
-			if !details.is_sufficient && frame_system::Pallet::<T>::providers(who) == 0 {
+			if !details.is_sufficient && !frame_system::Pallet::<T>::can_inc_consumer(who) {
 				return DepositConsequence::CannotCreate
 			}
 			if details.is_sufficient && details.sufficients.checked_add(1).is_none() {

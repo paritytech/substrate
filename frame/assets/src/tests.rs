@@ -35,6 +35,54 @@ fn basic_minting_should_work() {
 }
 
 #[test]
+fn minting_too_many_insufficient_assets_fails() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+		assert_ok!(Assets::force_create(Origin::root(), 1, 1, false, 1));
+		assert_ok!(Assets::force_create(Origin::root(), 2, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Assets::mint(Origin::signed(1), 1, 1, 100));
+		assert_noop!(Assets::mint(Origin::signed(1), 2, 1, 100), TokenError::CannotCreate);
+
+		Balances::make_free_balance_be(&2, 1);
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 100));
+		assert_ok!(Assets::mint(Origin::signed(1), 2, 1, 100));
+	});
+}
+
+#[test]
+fn minting_insufficient_asset_with_deposit_should_work_when_consumers_exhausted() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+		assert_ok!(Assets::force_create(Origin::root(), 1, 1, false, 1));
+		assert_ok!(Assets::force_create(Origin::root(), 2, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Assets::mint(Origin::signed(1), 1, 1, 100));
+		assert_noop!(Assets::mint(Origin::signed(1), 2, 1, 100), TokenError::CannotCreate);
+
+		assert_ok!(Assets::touch(Origin::signed(1), 2));
+		assert_eq!(Balances::reserved_balance(&1), 10);
+
+		assert_ok!(Assets::mint(Origin::signed(1), 2, 1, 100));
+	});
+}
+
+#[test]
+fn minting_insufficient_assets_with_deposit_without_consumer_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+		assert_noop!(Assets::mint(Origin::signed(1), 0, 1, 100), TokenError::CannotCreate);
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::touch(Origin::signed(1), 0));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_eq!(Balances::reserved_balance(&1), 10);
+		assert_eq!(System::consumers(&1), 0);
+	});
+}
+
+#[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {
 		// can't approve non-existent token
@@ -299,17 +347,17 @@ fn min_balance_should_work() {
 
 		// When deducting from an account to below minimum, it should be reaped.
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
-		assert!(Assets::balance(0, 1).is_zero());
+		assert!(Assets::maybe_balance(0, 1).is_none());
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 		assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 2, 1, 91));
-		assert!(Assets::balance(0, 2).is_zero());
+		assert!(Assets::maybe_balance(0, 2).is_none());
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 91));
-		assert!(Assets::balance(0, 1).is_zero());
+		assert!(Assets::maybe_balance(0, 1).is_none());
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 0);
 	});
 }
