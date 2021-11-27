@@ -6972,6 +6972,31 @@ dependencies = [
 name = "sc-basic-authorship"
 version = "0.10.0-dev"
 dependencies = [
+ "futures 0.3.18",
+ "futures-timer 3.0.2",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "parking_lot 0.11.2",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-proposer-metrics",
+ "sc-telemetry",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "sp-api",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-core",
+ "sp-inherents",
+ "sp-runtime",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "sc-basic-authorship-ver"
+version = "0.10.0-dev"
+dependencies = [
  "env_logger 0.9.0",
  "extrinsic-info-runtime-api",
  "futures 0.3.18",
@@ -6979,7 +7004,7 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.2",
- "sc-block-builder",
+ "sc-block-builder-ver",
  "sc-client-api",
  "sc-proposer-metrics",
  "sc-telemetry",
@@ -6998,6 +7023,22 @@ dependencies = [
 
 [[package]]
 name = "sc-block-builder"
+version = "0.10.0-dev"
+dependencies = [
+ "parity-scale-codec",
+ "sc-client-api",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-core",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-state-machine",
+ "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "sc-block-builder-ver"
 version = "0.10.0-dev"
 dependencies = [
  "extrinsic-info-runtime-api",
