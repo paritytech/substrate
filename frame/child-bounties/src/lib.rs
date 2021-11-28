@@ -82,7 +82,7 @@ type BountiesError<T> = pallet_bounties::Error<T>;
 pub type BountyIndex = u32;
 
 /// A child bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ChildBounty<AccountId, Balance, BlockNumber> {
 	/// The parent of this child-bounty.
 	parent_bounty: BountyIndex,
@@ -95,7 +95,7 @@ pub struct ChildBounty<AccountId, Balance, BlockNumber> {
 }
 
 /// The status of a child-bounty.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum ChildBountyStatus<AccountId, BlockNumber> {
 	/// The child-bounty is added and waiting for curator assignment.
 	Added,
@@ -127,6 +127,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -161,15 +162,23 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A child-bounty is added. \[index, child-bounty index\]
-		ChildBountyAdded(BountyIndex, BountyIndex),
-		/// A child-bounty is awarded to a beneficiary. \[index, child-bounty index, beneficiary\]
-		ChildBountyAwarded(BountyIndex, BountyIndex, T::AccountId),
-		/// A child-bounty is claimed by beneficiary. \[index, child-bounty index, payout,
-		/// beneficiary\]
-		ChildBountyClaimed(BountyIndex, BountyIndex, BalanceOf<T>, T::AccountId),
-		/// A child-bounty is cancelled. \[index, child-bounty index,\]
-		ChildBountyCanceled(BountyIndex, BountyIndex),
+		/// A child-bounty is added.
+		ChildBountyAdded { index: BountyIndex, child_index: BountyIndex },
+		/// A child-bounty is awarded to a beneficiary.
+		ChildBountyAwarded {
+			index: BountyIndex,
+			child_index: BountyIndex,
+			beneficiary: T::AccountId,
+		},
+		/// A child-bounty is claimed by beneficiary.
+		ChildBountyClaimed {
+			index: BountyIndex,
+			child_index: BountyIndex,
+			payout: BalanceOf<T>,
+			beneficiary: T::AccountId,
+		},
+		/// A child-bounty is cancelled.
+		ChildBountyCanceled { index: BountyIndex, child_index: BountyIndex },
 	}
 
 	/// Number of total child bounties.
@@ -198,7 +207,8 @@ pub mod pallet {
 	/// The description of each child-bounty.
 	#[pallet::storage]
 	#[pallet::getter(fn child_bounty_descriptions)]
-	pub type ChildBountyDescriptions<T: Config> = StorageMap<_, Twox64Concat, BountyIndex, Vec<u8>>;
+	pub type ChildBountyDescriptions<T: Config> =
+		StorageMap<_, Twox64Concat, BountyIndex, BoundedVec<u8, T::MaximumReasonLength>>;
 
 	/// The cumulative child-bounty curator fee for each parent bounty.
 	#[pallet::storage]
@@ -232,15 +242,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
 			#[pallet::compact] value: BalanceOf<T>,
-			description: Vec<u8>,
+			description: BoundedVec<u8, T::MaximumReasonLength>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 
 			// Verify the arguments.
-			ensure!(
-				description.len() <= T::MaximumReasonLength::get() as usize,
-				BountiesError::<T>::ReasonTooBig,
-			);
+			let bounded_description =
+				description.try_into().map_err(|_| BountiesError::<T>::ReasonTooBig)?;
 			ensure!(value >= T::ChildBountyValueMinimum::get(), BountiesError::<T>::InvalidValue);
 			ensure!(
 				Self::parent_child_bounties(parent_bounty_id) <=
@@ -281,7 +289,7 @@ pub mod pallet {
 			<ChildBountyCount<T>>::put(child_bounty_id.saturating_add(1));
 
 			// Create child-bounty instance
-			Self::create_child_bounty(parent_bounty_id, child_bounty_id, description);
+			Self::create_child_bounty(parent_bounty_id, child_bounty_id, bounded_description);
 			Ok(())
 		}
 
@@ -612,11 +620,11 @@ pub mod pallet {
 			)?;
 
 			// Trigger the event ChildBountyAwarded
-			Self::deposit_event(Event::<T>::ChildBountyAwarded(
-				parent_bounty_id,
-				child_bounty_id,
+			Self::deposit_event(Event::<T>::ChildBountyAwarded {
+				index: parent_bounty_id,
+				child_index: child_bounty_id,
 				beneficiary,
-			));
+			});
 
 			Ok(())
 		}
@@ -688,12 +696,12 @@ pub mod pallet {
 						);
 
 						// Trigger the ChildBountyClaimed event.
-						Self::deposit_event(Event::<T>::ChildBountyClaimed(
-							parent_bounty_id,
-							child_bounty_id,
+						Self::deposit_event(Event::<T>::ChildBountyClaimed {
+							index: parent_bounty_id,
+							child_index: child_bounty_id,
 							payout,
-							beneficiary.clone(),
-						));
+							beneficiary: beneficiary.clone(),
+						});
 
 						// Update the active child-bounty tracking count.
 						<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| {
@@ -770,7 +778,7 @@ impl<T: Config> Pallet<T> {
 	fn create_child_bounty(
 		parent_bounty_id: BountyIndex,
 		child_bounty_id: BountyIndex,
-		description: Vec<u8>,
+		description: BoundedVec<u8, T::MaximumReasonLength>,
 	) {
 		let child_bounty = ChildBounty {
 			parent_bounty: parent_bounty_id,
@@ -780,7 +788,10 @@ impl<T: Config> Pallet<T> {
 		};
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(Event::ChildBountyAdded(parent_bounty_id, child_bounty_id));
+		Self::deposit_event(Event::ChildBountyAdded {
+			index: parent_bounty_id,
+			child_index: child_bounty_id,
+		});
 	}
 
 	fn ensure_bounty_active(
@@ -852,10 +863,10 @@ impl<T: Config> Pallet<T> {
 
 				*maybe_child_bounty = None;
 
-				Self::deposit_event(Event::<T>::ChildBountyCanceled(
-					parent_bounty_id,
-					child_bounty_id,
-				));
+				Self::deposit_event(Event::<T>::ChildBountyCanceled {
+					index: parent_bounty_id,
+					child_index: child_bounty_id,
+				});
 				Ok(())
 			},
 		)
