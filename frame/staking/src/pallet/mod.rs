@@ -50,6 +50,8 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::BenchmarkingConfig;
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -69,7 +71,8 @@ pub mod pallet {
 
 		/// Convert a balance into a number used for election calculation. This must fit into a
 		/// `u64` but is allowed to be sensibly lossy. The `u64` is used to communicate with the
-		/// [`sp_npos_elections`] crate which accepts u64 numbers and does operations in 128.
+		/// [`frame_election_provider_support`] crate which accepts u64 numbers and does operations
+		/// in 128.
 		/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
 		/// [`BalanceOf`].
 		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
@@ -146,9 +149,12 @@ pub mod pallet {
 		type OffendingValidatorsThreshold: Get<Perbill>;
 
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
-		/// original use case for this was designed with [`pallet_bags_list::Pallet`] in mind. If
+		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
+
+		/// Some parameters of the benchmarking.
+		type BenchmarkingConfig: BenchmarkingConfig;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;

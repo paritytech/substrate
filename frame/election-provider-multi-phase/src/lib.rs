@@ -183,8 +183,8 @@
 //!    are helpful for logging and are thus nested as:
 //!    - [`ElectionError::Miner`]: wraps a [`unsigned::MinerError`].
 //!    - [`ElectionError::Feasibility`]: wraps a [`FeasibilityError`].
-//!    - [`ElectionError::OnChainFallback`]: wraps a
-//!      [`frame_election_provider_support::onchain::Error`].
+//!    - [`ElectionError::Fallback`]: wraps a fallback error.
+//!    - [`ElectionError::DataProvider`]: wraps a static str.
 //!
 //! Note that there could be an overlap between these sub-errors. For example, A
 //! `SnapshotUnavailable` can happen in both miner and feasibility check phase.
@@ -307,16 +307,6 @@ pub trait BenchmarkingConfig {
 	const MINER_MAXIMUM_VOTERS: u32;
 	/// Maximum number of targets expected. This is used only for memory-benchmarking.
 	const MAXIMUM_TARGETS: u32;
-}
-
-impl BenchmarkingConfig for () {
-	const VOTERS: [u32; 2] = [4000, 6000];
-	const TARGETS: [u32; 2] = [1000, 1600];
-	const ACTIVE_VOTERS: [u32; 2] = [1000, 3000];
-	const DESIRED_TARGETS: [u32; 2] = [400, 800];
-	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 10_000;
-	const MINER_MAXIMUM_VOTERS: u32 = 10_000;
-	const MAXIMUM_TARGETS: u32 = 2_000;
 }
 
 /// A fallback implementation that transitions the pallet to the emergency phase.
@@ -1244,14 +1234,14 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
+	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
 	pub fn on_initialize_open_signed() {
 		log!(info, "Starting signed phase round {}.", Self::round());
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
 	}
 
-	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
+	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
 	pub fn on_initialize_open_unsigned(enabled: bool, now: T::BlockNumber) {
 		let round = Self::round();
 		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
