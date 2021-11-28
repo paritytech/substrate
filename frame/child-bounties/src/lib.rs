@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,9 +77,7 @@ pub use pallet::*;
 
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 type BountiesError<T> = pallet_bounties::Error<T>;
-
-/// An index of a bounty. Just a `u32`.
-pub type BountyIndex = u32;
+type BountyIndex = pallet_bounties::BountyIndex;
 
 /// A child bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -99,8 +97,8 @@ pub struct ChildBounty<AccountId, Balance, BlockNumber> {
 pub enum ChildBountyStatus<AccountId, BlockNumber> {
 	/// The child-bounty is added and waiting for curator assignment.
 	Added,
-	/// A curator has been proposed by the parent-bounty curator. Waiting for acceptance from the
-	/// child-bounty curator.
+	/// A curator has been proposed by the parent-bounty curator. Waiting for
+	/// acceptance from the child-bounty curator.
 	CuratorProposed {
 		/// The assigned child-bounty curator of this bounty.
 		curator: AccountId,
@@ -163,22 +161,18 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A child-bounty is added.
-		ChildBountyAdded { index: BountyIndex, child_index: BountyIndex },
+		Added { index: BountyIndex, child_index: BountyIndex },
 		/// A child-bounty is awarded to a beneficiary.
-		ChildBountyAwarded {
-			index: BountyIndex,
-			child_index: BountyIndex,
-			beneficiary: T::AccountId,
-		},
+		Awarded { index: BountyIndex, child_index: BountyIndex, beneficiary: T::AccountId },
 		/// A child-bounty is claimed by beneficiary.
-		ChildBountyClaimed {
+		Claimed {
 			index: BountyIndex,
 			child_index: BountyIndex,
 			payout: BalanceOf<T>,
 			beneficiary: T::AccountId,
 		},
 		/// A child-bounty is cancelled.
-		ChildBountyCanceled { index: BountyIndex, child_index: BountyIndex },
+		Canceled { index: BountyIndex, child_index: BountyIndex },
 	}
 
 	/// Number of total child bounties.
@@ -187,10 +181,11 @@ pub mod pallet {
 	pub type ChildBountyCount<T: Config> = StorageValue<_, BountyIndex, ValueQuery>;
 
 	/// Number of child-bounties per parent bounty.
+	/// Map of parent bounty index to number of child bounties.
 	#[pallet::storage]
 	#[pallet::getter(fn parent_child_bounties)]
 	pub type ParentChildBounties<T: Config> =
-		StorageMap<_, Twox64Concat, BountyIndex, BountyIndex, ValueQuery>;
+		StorageMap<_, Twox64Concat, BountyIndex, u32, ValueQuery>;
 
 	/// Child-bounties that have been added.
 	#[pallet::storage]
@@ -220,21 +215,21 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Add a new child-bounty.
 		///
-		/// The dispatch origin for this call must be master curator.
-		/// parent bounty must be in "active" state.
+		/// The dispatch origin for this call must be the curator of parent
+		/// bounty and the parent bounty must be in "active" state.
 		///
 		/// Child-bounty gets added successfully & fund gets transferred from
-		/// parent bounty to child-bounty account, if parent bounty has
-		/// enough fund. Else call gets failed.
+		/// parent bounty to child-bounty account, if parent bounty has enough
+		/// fund. Else call gets failed.
 		///
-		/// Upper bound to maximum number of active  child-bounties that
-		/// can be added are managed via runtime trait config
-		/// 'MaxActiveChildBountyCount'.
+		/// Upper bound to maximum number of active  child-bounties that can be
+		/// added are managed via runtime trait config
+		/// [`Config::MaxActiveChildBountyCount`].
 		///
-		/// If the call is success, the state of child-bounty is
-		/// moved to "Added" state.
+		/// If the call is success, the state of child-bounty is moved to
+		/// "Added" state.
 		///
-		/// - `bounty_id`: Bounty ID for which child-bounty to be added.
+		/// - `parent_bounty_id`: Index of parent bounty for which child-bounty is being added.
 		/// - `value`: Value for executing the proposal.
 		/// - `description`: Text description for the child-bounty.
 		#[pallet::weight(<T as Config>::WeightInfo::add_child_bounty(description.len() as u32))]
@@ -242,7 +237,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
 			#[pallet::compact] value: BalanceOf<T>,
-			description: BoundedVec<u8, T::MaximumReasonLength>,
+			description: Vec<u8>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 
@@ -295,15 +290,14 @@ pub mod pallet {
 
 		/// Propose curator for funded child-bounty.
 		///
-		/// The dispatch origin for this call must be master curator.
+		/// The dispatch origin for this call must be curator of parent bounty.
 		///
-		/// Parent bounty must be in active state,
-		/// for this child-bounty call to work.
+		/// Parent bounty must be in active state, for this child-bounty call to
+		/// work.
 		///
-		/// Child-bounty must be in "Added" state, for
-		/// processing the call. And state of child-bounty is
-		/// moved to "CuratorProposed" on successful call
-		/// completion.
+		/// Child-bounty must be in "Added" state, for processing the call. And
+		/// state of child-bounty is moved to "CuratorProposed" on successful
+		/// call completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
@@ -362,22 +356,20 @@ pub mod pallet {
 
 		/// Accept the curator role for the child-bounty.
 		///
-		/// The dispatch origin for this call must be
-		/// the curator of this child-bounty.
+		/// The dispatch origin for this call must be the curator of this
+		/// child-bounty.
 		///
-		/// A deposit will be reserved from the curator and
-		/// refund upon successful payout or cancellation.
+		/// A deposit will be reserved from the curator and refund upon
+		/// successful payout or cancellation.
 		///
-		/// Fee for curator is deducted from curator
-		/// fee of parent bounty.
+		/// Fee for curator is deducted from curator fee of parent bounty.
 		///
-		/// Parent bounty must be in active state,
-		/// for this child-bounty call to work.
+		/// Parent bounty must be in active state, for this child-bounty call to
+		/// work.
 		///
-		/// Child-bounty must be in "CuratorProposed" state, for
-		/// processing the call. And state of child-bounty is
-		/// moved to "Active" on successful call
-		/// completion.
+		/// Child-bounty must be in "CuratorProposed" state, for processing the
+		/// call. And state of child-bounty is moved to "Active" on successful
+		/// call completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
@@ -420,38 +412,35 @@ pub mod pallet {
 
 		/// Unassign curator from a child-bounty.
 		///
-		/// The dispatch origin for this call can be
-		/// either `RejectOrigin` or any signed origin.
+		/// The dispatch origin for this call can be either `RejectOrigin` or
+		/// any signed origin.
 		///
-		/// For the origin other than T::RejectOrigin,
-		/// parent-bounty must be in active state,
-		/// for this call to work. For origin
-		/// T::RejectOrigin execution is forced by ignoring
-		/// the state of parent bounty.
+		/// For the origin other than T::RejectOrigin, parent-bounty must be in
+		/// active state, for this call to work. For origin T::RejectOrigin
+		/// execution is forced by ignoring the state of parent bounty.
 		///
-		/// If this function is called by the `RejectOrigin` or
-		/// the parent curator, we assume that the child-bounty curator is
-		/// malicious or inactive.
+		/// If this function is called by the `RejectOrigin` or the parent
+		/// curator, we assume that the child-bounty curator is malicious or
+		/// inactive.
 		///
 		/// As a result, child-bounty curator deposit may be slashed.
 		///
-		/// If the origin is the child-bounty curator, we take this as a sign they are
-		/// unable to do their job, and they willingly give up.
-		/// We could slash the deposit, but for now we allow them to
-		/// unreserve their deposit and exit without issue.
-		/// (We may want to change this if it is abused.)
+		/// If the origin is the child-bounty curator, we take this as a sign
+		/// they are unable to do their job, and they willingly give up. We
+		/// could slash the deposit, but for now we allow them to unreserve
+		/// their deposit and exit without issue. (We may want to change this if
+		/// it is abused.)
 		///
-		/// Finally, the origin can be anyone if and only if the child-bounty curator
-		/// is "inactive". Expiry update due of parent bounty is
-		/// used to estimate mature or inactive state of child-bounty curator.
+		/// Finally, the origin can be anyone if and only if the child-bounty
+		/// curator is "inactive". Expiry update due of parent bounty is used to
+		/// estimate mature or inactive state of child-bounty curator.
 		///
-		/// This allows anyone in the community to call out
-		/// that a child-bounty curator is not doing their due diligence, and
-		/// we should pick a new one. In this case the child-bounty curator
-		/// deposit is slashed.
+		/// This allows anyone in the community to call out that a child-bounty
+		/// curator is not doing their due diligence, and we should pick a new
+		/// one. In this case the child-bounty curator deposit is slashed.
 		///
-		/// State of child-bounty is moved to Added state
-		/// on successful call completion.
+		/// State of child-bounty is moved to Added state on successful call
+		/// completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
@@ -562,18 +551,16 @@ pub mod pallet {
 
 		/// Award child-bounty to a beneficiary.
 		///
-		/// The beneficiary will be able to claim the
-		/// funds after a delay.
+		/// The beneficiary will be able to claim the funds after a delay.
 		///
-		/// The dispatch origin for this call must be
-		/// the master curator or curator of this child-bounty.
+		/// The dispatch origin for this call must be the master curator or
+		/// curator of this child-bounty.
 		///
-		/// Parent bounty must be in active state,
-		/// for this child-bounty call to work.
+		/// Parent bounty must be in active state, for this child-bounty call to
+		/// work.
 		///
-		/// Child-bounty must be in active state, for
-		/// processing the call. And state of child-bounty is
-		/// moved to "PendingPayout" on successful call
+		/// Child-bounty must be in active state, for processing the call. And
+		/// state of child-bounty is moved to "PendingPayout" on successful call
 		/// completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
@@ -619,8 +606,8 @@ pub mod pallet {
 				},
 			)?;
 
-			// Trigger the event ChildBountyAwarded
-			Self::deposit_event(Event::<T>::ChildBountyAwarded {
+			// Trigger the event Awarded
+			Self::deposit_event(Event::<T>::Awarded {
 				index: parent_bounty_id,
 				child_index: child_bounty_id,
 				beneficiary,
@@ -633,15 +620,15 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call may be any signed origin.
 		///
-		/// Call works independent of parent bounty state,
-		/// No need for parent bounty to be in active state.
+		/// Call works independent of parent bounty state, No need for parent
+		/// bounty to be in active state.
 		///
-		/// The Beneficiary is paid out with agreed bounty value.
-		/// Curator fee is paid & curator deposit is unreserved.
+		/// The Beneficiary is paid out with agreed bounty value. Curator fee is
+		/// paid & curator deposit is unreserved.
 		///
-		/// Child-bounty must be in "PendingPayout" state, for
-		/// processing the call. And instance of child-bounty is
-		/// removed from DB on successful call completion.
+		/// Child-bounty must be in "PendingPayout" state, for processing the
+		/// call. And instance of child-bounty is removed from DB on successful
+		/// call completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
@@ -695,8 +682,8 @@ pub mod pallet {
 							AllowDeath,
 						);
 
-						// Trigger the ChildBountyClaimed event.
-						Self::deposit_event(Event::<T>::ChildBountyClaimed {
+						// Trigger the Claimed event.
+						Self::deposit_event(Event::<T>::Claimed {
 							index: parent_bounty_id,
 							child_index: child_bounty_id,
 							payout,
@@ -722,26 +709,25 @@ pub mod pallet {
 			)
 		}
 
-		/// Cancel a proposed or active child-bounty.
-		/// Child-bounty account funds are transferred to parent bounty account.
-		/// The child-bounty curator deposit may be unreserved if possible.
+		/// Cancel a proposed or active child-bounty. Child-bounty account funds
+		/// are transferred to parent bounty account. The child-bounty curator
+		/// deposit may be unreserved if possible.
 		///
-		/// The dispatch origin for this call must be
-		/// either parent curator or `T::RejectOrigin`.
+		/// The dispatch origin for this call must be either parent curator or
+		/// `T::RejectOrigin`.
 		///
-		/// If the state of child-bounty is `Active`,
-		/// curator deposit is unreserved.
+		/// If the state of child-bounty is `Active`, curator deposit is
+		/// unreserved.
 		///
-		/// If the state of child-bounty is `PendingPayout`,
-		/// call fails & returns `PendingPayout` error.
+		/// If the state of child-bounty is `PendingPayout`, call fails &
+		/// returns `PendingPayout` error.
 		///
-		/// For the origin other than T::RejectOrigin,
-		/// parent bounty must be in active state,
-		/// for this child-bounty call to work. For origin
+		/// For the origin other than T::RejectOrigin, parent bounty must be in
+		/// active state, for this child-bounty call to work. For origin
 		/// T::RejectOrigin execution is forced.
 		///
-		/// Instance of child-bounty is removed from DB
-		/// on successful call completion.
+		/// Instance of child-bounty is removed from DB on successful call
+		/// completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
@@ -770,8 +756,9 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// The account ID of a child-bounty account.
 	pub fn child_bounty_account_id(id: BountyIndex) -> T::AccountId {
-		// only use two byte prefix to support 16 byte account id (used by test)
-		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for bounty index
+		// Only use two byte prefix to support 16 byte account id (used by test)
+		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for
+		// bounty index.
 		T::PalletId::get().into_sub_account(("cb", id))
 	}
 
@@ -788,10 +775,7 @@ impl<T: Config> Pallet<T> {
 		};
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(Event::ChildBountyAdded {
-			index: parent_bounty_id,
-			child_index: child_bounty_id,
-		});
+		Self::deposit_event(Event::Added { index: parent_bounty_id, child_index: child_bounty_id });
 	}
 
 	fn ensure_bounty_active(
@@ -863,7 +847,7 @@ impl<T: Config> Pallet<T> {
 
 				*maybe_child_bounty = None;
 
-				Self::deposit_event(Event::<T>::ChildBountyCanceled {
+				Self::deposit_event(Event::<T>::Canceled {
 					index: parent_bounty_id,
 					child_index: child_bounty_id,
 				});
@@ -873,8 +857,9 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-// Implement ChildBountyManager to connect with the bounties pallet.
-// This is where we pass the active child-bounties and child curator fees to the parent bounty.
+// Implement ChildBountyManager to connect with the bounties pallet. This is
+// where we pass the active child-bounties and child curator fees to the parent
+// bounty.
 impl<T: Config> pallet_bounties::ChildBountyManager<BalanceOf<T>> for Pallet<T> {
 	fn child_bounties_count(
 		bounty_id: pallet_bounties::BountyIndex,

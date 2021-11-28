@@ -123,10 +123,10 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	status: BountyStatus<AccountId, BlockNumber>,
 }
 
-// Getter for bounty status, to be used for child bounties.
 impl<AccountId: PartialEq + Clone + Ord + Default, Balance, BlockNumber: Clone>
 	Bounty<AccountId, Balance, BlockNumber>
 {
+	/// Getter for bounty status, to be used for child bounties.
 	pub fn get_status(&self) -> BountyStatus<AccountId, BlockNumber> {
 		self.status.clone()
 	}
@@ -245,7 +245,7 @@ pub mod pallet {
 		/// The bounties cannot be claimed/closed because it's still in the countdown period.
 		Premature,
 		/// The bounty cannot be closed because it has active child-bounties.
-		RequireNoActiveChildBounty,
+		HasActiveChildBounty,
 	}
 
 	#[pallet::event]
@@ -537,7 +537,7 @@ pub mod pallet {
 				// Ensure no active child-bounties before processing the call.
 				ensure!(
 					T::ChildBountyManager::child_bounties_count(bounty_id) == 0,
-					Error::<T>::RequireNoActiveChildBounty
+					Error::<T>::HasActiveChildBounty
 				);
 
 				match &bounty.status {
@@ -648,7 +648,7 @@ pub mod pallet {
 					// Ensure no active child-bounties before processing the call.
 					ensure!(
 						T::ChildBountyManager::child_bounties_count(bounty_id) == 0,
-						Error::<T>::RequireNoActiveChildBounty
+						Error::<T>::HasActiveChildBounty
 					);
 
 					match &bounty.status {
