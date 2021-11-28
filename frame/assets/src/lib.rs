@@ -234,11 +234,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type StringLimit: Get<u32>;
 
-		/// The number of non-provider asset accounts which may exist per account without a deposit
-		/// being paid.
-		#[pallet::constant]
-		type FreeAssetAccounts: Get<u32>;
-
 		/// A hook to allow a per-asset, per-account minimum balance to be enforced. This must be
 		/// respected in all permissionless operations.
 		type Freezer: FrozenBalance<Self::AssetId, Self::AccountId, Self::Balance>;

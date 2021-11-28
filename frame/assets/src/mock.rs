@@ -92,7 +92,6 @@ impl Config for Test {
 	type MetadataDepositBase = ConstU64<1>;
 	type MetadataDepositPerByte = ConstU64<1>;
 	type ApprovalDeposit = ConstU64<1>;
-	type FreeAssetAccounts = ConstU32<2>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = TestFreezer;
 	type WeightInfo = ();

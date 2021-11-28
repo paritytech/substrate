@@ -112,7 +112,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {
@@ -170,6 +170,7 @@ impl pallet_assets::Config for Runtime {
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = AssetDeposit;
+	type AssetAccountDeposit = frame_support::traits::ConstU64<2>;
 	type MetadataDepositBase = MetadataDeposit;
 	type MetadataDepositPerByte = MetadataDeposit;
 	type ApprovalDeposit = MetadataDeposit;

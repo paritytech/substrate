@@ -18,7 +18,8 @@
 use super::{Event as CollectiveEvent, *};
 use crate as pallet_collective;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types, traits::GenesisBuild, weights::Pays, Hashable,
+	assert_noop, assert_ok, parameter_types, traits::GenesisBuild,
+	weights::Pays, Hashable,
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::{
@@ -115,7 +116,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 impl Config<Instance1> for Test {
 	type Origin = Origin;

@@ -64,7 +64,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type OnNewAccount = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 	type Origin = Origin;
 	type PalletInfo = PalletInfo;
 	type SS58Prefix = ();
