@@ -207,10 +207,10 @@ where
 		let proving_backend = InMemoryProvingBackend::new(&tri_backend);
 		let mut proving_ext = self.proving_ext(&proving_backend);
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
-		let proof = proving_ext.backend.extract_proof();
+		let proof = proving_backend.extract_proof();
 
 		// ensure that all changes are propagated, and the recorded is clean.
-		proving_ext.backend.clear_recorder();
+		proving_backend.clear_recorder();
 		self.commit_all().unwrap();
 
 		(outcome, proof)
@@ -319,10 +319,14 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use crate::create_proof_check_backend;
+
+use super::*;
+	use hash_db::{EMPTY_PREFIX};
 	use hex_literal::hex;
 	use sp_core::{storage::ChildInfo, traits::Externalities, H256};
 	use sp_runtime::traits::BlakeTwo256;
+use trie_db::proof;
 
 	#[test]
 	fn commit_should_work() {
@@ -399,15 +403,18 @@ mod tests {
 		use codec::Encode;
 		let mut ext = TestExternalities::<BlakeTwo256>::default();
 
-		ext.insert(b"doe".to_vec(), b"reindeer".to_vec());
-		ext.insert(b"dog".to_vec(), b"puppy".to_vec());
-		ext.insert(b"cat".to_vec(), b"kitty".to_vec());
+		ext.insert(b"a".to_vec(), vec![1u8; 33]);
+		ext.insert(b"b".to_vec(), vec![2u8; 33]);
+		ext.insert(b"c".to_vec(), vec![3u8; 33]);
+		ext.insert(b"d".to_vec(), vec![4u8; 33]);
+
 
 		let pre_root = ext.backend.root().clone();
 		let (_, proof) = ext.execute_and_prove(|| {
-			sp_io::storage::get(b"doe");
-			sp_io::storage::get(b"dog");
-			sp_io::storage::get(b"cat");
+			sp_io::storage::get(b"a");
+			sp_io::storage::get(b"b");
+			sp_io::storage::get(b"v");
+			sp_io::storage::get(b"d");
 		});
 
 		let compact_proof = proof
@@ -416,9 +423,13 @@ mod tests {
 			.unwrap();
 		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
 
-		println!("proof: {:?} / {} nodes", proof, proof.clone().into_nodes().len());
+		// just an example of how you'd inspect the size of the proof.
 		println!("proof size: {:?}", proof.encoded_size());
 		println!("compact proof size: {:?}", compact_proof.encoded_size());
 		println!("zstd-compressed compact proof size: {:?}", &compressed_proof.len());
+
+		// create a new trie-backed from the proof and make sure it contains everything
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(pre_root, proof).unwrap();
+		assert_eq!(proof_check.storage(b"a", ).unwrap().unwrap(), vec![1u8; 33]);
 	}
 }

@@ -363,7 +363,9 @@ where
 	}
 }
 
-/// Create proof check backend.
+/// Create a backend used for checking the proof., using `H` as hasher.
+///
+/// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
