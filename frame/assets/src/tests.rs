@@ -83,6 +83,49 @@ fn minting_insufficient_assets_with_deposit_without_consumer_should_work() {
 }
 
 #[test]
+fn refunding_asset_deposit_with_burn_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::touch(Origin::signed(1), 0));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Assets::refund(Origin::signed(1), 0, true));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Assets::balance(1, 0), 0);
+	});
+}
+
+#[test]
+fn refunding_asset_deposit_with_burn_disallowed_should_fail() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::touch(Origin::signed(1), 0));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_noop!(Assets::refund(Origin::signed(1), 0, false), Error::<Test>::WouldBurn);
+	});
+}
+
+#[test]
+fn refunding_asset_deposit_without_burn_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+		assert_noop!(Assets::mint(Origin::signed(1), 0, 1, 100), TokenError::CannotCreate);
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::touch(Origin::signed(1), 0));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&2, 100);
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 100));
+		assert_eq!(Assets::balance(0, 2), 100);
+		assert_eq!(Assets::balance(0, 1), 0);
+		assert_eq!(Balances::reserved_balance(&1), 10);
+		assert_ok!(Assets::refund(Origin::signed(1), 0, false));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Assets::balance(1, 0), 0);
+	});
+}
+
+#[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {
 		// can't approve non-existent token

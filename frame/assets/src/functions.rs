@@ -562,11 +562,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				debug_assert!(source_account.balance.is_zero(), "checked in prep; qed");
 				if let Remove = Self::dead_account(id, &source, details, &source_account.reason) {
 					Account::<T, I>::remove(id, &source);
+					return Ok(())
 				}
-			} else {
-				Account::<T, I>::insert(id, &source, &source_account)
 			}
-
+			Account::<T, I>::insert(id, &source, &source_account);
 			Ok(())
 		})?;
 
