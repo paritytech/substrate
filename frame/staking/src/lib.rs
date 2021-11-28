@@ -301,7 +301,7 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	traits::{Currency, Get, ConstU32},
+	traits::{ConstU32, Currency, Get},
 	weights::Weight,
 };
 use scale_info::TypeInfo;

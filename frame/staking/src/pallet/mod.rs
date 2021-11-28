@@ -52,7 +52,7 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 pub mod pallet {
 	use crate::BenchmarkingConfig;
 
-use super::*;
+	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -158,7 +158,6 @@ use super::*;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
-
 	}
 
 	#[pallet::extra_constants]
