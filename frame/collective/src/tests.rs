@@ -18,8 +18,7 @@
 use super::{Event as CollectiveEvent, *};
 use crate as pallet_collective;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types, traits::GenesisBuild,
-	weights::Pays, Hashable,
+	assert_noop, assert_ok, parameter_types, traits::GenesisBuild, weights::Pays, Hashable,
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::{

@@ -27,7 +27,7 @@ use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type AssetAccountOf<T, I> =
-	AssetAccount::<<T as Config<I>>::Balance, DepositBalanceOf<T, I>, <T as Config<I>>::Extra>;
+	AssetAccount<<T as Config<I>>::Balance, DepositBalanceOf<T, I>, <T as Config<I>>::Extra>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AssetDetails<Balance, AccountId, DepositBalance> {
@@ -101,7 +101,9 @@ impl<Balance> ExistenceReason<Balance> {
 		if !matches!(self, ExistenceReason::DepositHeld(_)) {
 			return None
 		}
-		if let ExistenceReason::DepositHeld(deposit) = sp_std::mem::replace(self, ExistenceReason::DepositRefunded) {
+		if let ExistenceReason::DepositHeld(deposit) =
+			sp_std::mem::replace(self, ExistenceReason::DepositRefunded)
+		{
 			return Some(deposit)
 		} else {
 			return None

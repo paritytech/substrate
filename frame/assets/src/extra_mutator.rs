@@ -89,7 +89,10 @@ impl<T: Config<I>, I: 'static> ExtraMutator<T, I> {
 	pub fn revert(mut self) -> Result<(), ()> {
 		self.pending = None;
 		Account::<T, I>::try_mutate_exists(self.id, self.who.borrow(), |maybe_account| {
-			maybe_account.as_mut().ok_or(()).map(|account| account.extra = self.original.clone())
+			maybe_account
+				.as_mut()
+				.ok_or(())
+				.map(|account| account.extra = self.original.clone())
 		})
 	}
 }

@@ -255,7 +255,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// The number of consumer asset-accounts being held. If this is some, the it implies a 
+	/// The number of consumer asset-accounts being held. If this is some, the it implies a
 	pub(super) type ConsumerAccounts<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -686,16 +686,13 @@ pub mod pallet {
 		///
 		/// A deposit will be taken from the signer account.
 		///
-		/// - `origin`: Must be Signed; the signer account must have sufficient funds for a
-		///   deposit to be taken.
+		/// - `origin`: Must be Signed; the signer account must have sufficient funds for a deposit
+		///   to be taken.
 		/// - `id`: The identifier of the asset for the account to be created.
 		///
 		/// Emits `Touched` event when successful.
 		#[pallet::weight(T::WeightInfo::mint())]
-		pub fn touch(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		pub fn touch(origin: OriginFor<T>, #[pallet::compact] id: T::AssetId) -> DispatchResult {
 			Self::do_touch(id, ensure_signed(origin)?)
 		}
 

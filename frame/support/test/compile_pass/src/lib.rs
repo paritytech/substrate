@@ -22,10 +22,13 @@
 //! This crate tests that `construct_runtime!` expands the pallet parts
 //! correctly even when frame-support is renamed in Cargo.toml
 
-use sp_core::{sr25519, H256};
-use sp_runtime::{create_runtime_str, generic, traits::{BlakeTwo256, IdentityLookup, Verify}};
-use sp_version::RuntimeVersion;
 use frame_support::{construct_runtime, parameter_types};
+use sp_core::{sr25519, H256};
+use sp_runtime::{
+	create_runtime_str, generic,
+	traits::{BlakeTwo256, IdentityLookup, Verify},
+};
+use sp_version::RuntimeVersion;
 
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("frame-support-test-compile-pass"),

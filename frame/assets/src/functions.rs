@@ -21,7 +21,7 @@ use super::*;
 use frame_support::{traits::Get, BoundedVec};
 
 #[must_use]
-pub(super)enum DeadConsequence {
+pub(super) enum DeadConsequence {
 	Remove,
 	Keep,
 }
@@ -46,7 +46,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Get the asset `id` balance of `who` if the asset-account exists.
-	pub fn maybe_balance(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>) -> Option<T::Balance> {
+	pub fn maybe_balance(
+		id: T::AssetId,
+		who: impl sp_std::borrow::Borrow<T::AccountId>,
+	) -> Option<T::Balance> {
 		Account::<T, I>::get(id, who.borrow()).map(|a| a.balance)
 	}
 
@@ -87,8 +90,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				d.sufficients = d.sufficients.saturating_sub(1);
 				frame_system::Pallet::<T>::dec_sufficients(who);
 			},
-			ExistenceReason::DepositHeld(_) => { return Keep }
-			ExistenceReason::DepositRefunded => {}
+			ExistenceReason::DepositHeld(_) => return Keep,
+			ExistenceReason::DepositRefunded => {},
 		}
 		d.accounts = d.accounts.saturating_sub(1);
 		T::Freezer::died(what, who);
@@ -280,31 +283,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Creates a account for `who` to hold asset `id` with a zero balance and takes a deposit.
-	pub(super) fn do_touch(
-		id: T::AssetId,
-		who: T::AccountId,
-	) -> DispatchResult {
+	pub(super) fn do_touch(id: T::AssetId, who: T::AccountId) -> DispatchResult {
 		ensure!(!Account::<T, I>::contains_key(id, &who), Error::<T, I>::AlreadyExists);
 		let deposit = T::AssetAccountDeposit::get();
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 		let reason = Self::new_account(&who, &mut details, Some(deposit))?;
 		T::Currency::reserve(&who, deposit)?;
 		Asset::<T, I>::insert(&id, details);
-		Account::<T, I>::insert(id, &who, AssetAccountOf::<T, I> {
-			balance: Zero::zero(),
-			is_frozen: false,
-			reason,
-			extra: T::Extra::default(),
-		});
+		Account::<T, I>::insert(
+			id,
+			&who,
+			AssetAccountOf::<T, I> {
+				balance: Zero::zero(),
+				is_frozen: false,
+				reason,
+				extra: T::Extra::default(),
+			},
+		);
 		Ok(())
 	}
 
 	/// Returns a deposit, destroying an asset-account unless sufficient.
-	pub(super) fn do_refund(
-		id: T::AssetId,
-		who: T::AccountId,
-		allow_burn: bool,
-	) -> DispatchResult {
+	pub(super) fn do_refund(id: T::AssetId, who: T::AccountId, allow_burn: bool) -> DispatchResult {
 		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		let deposit = account.reason.take_deposit().ok_or(Error::<T, I>::NoDeposit)?;
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
@@ -382,7 +382,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				match maybe_account {
 					Some(ref mut account) => {
 						account.balance.saturating_accrue(amount);
-					}
+					},
 					maybe_account @ None => {
 						ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
 						*maybe_account = Some(AssetAccountOf::<T, I> {
@@ -391,7 +391,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							is_frozen: false,
 							extra: T::Extra::default(),
 						});
-					}
+					},
 				}
 				Ok(())
 			})?;
@@ -511,7 +511,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let debit = Self::prep_debit(id, &source, amount, f.into())?;
 		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, f.burn_dust)?;
 
-		let mut source_account = Account::<T, I>::get(id, &source).ok_or(Error::<T, I>::NoAccount)?;
+		let mut source_account =
+			Account::<T, I>::get(id, &source).ok_or(Error::<T, I>::NoAccount)?;
 
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -541,10 +542,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Account::<T, I>::try_mutate(id, &dest, |maybe_account| -> DispatchResult {
 				match maybe_account {
 					Some(ref mut account) => {
-						// Calculate new balance; this will not saturate since it's already checked in prep.
-						debug_assert!(account.balance.checked_add(&credit).is_some(), "checked in prep; qed");
+						// Calculate new balance; this will not saturate since it's already checked
+						// in prep.
+						debug_assert!(
+							account.balance.checked_add(&credit).is_some(),
+							"checked in prep; qed"
+						);
 						account.balance.saturating_accrue(credit);
-					}
+					},
 					maybe_account @ None => {
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: credit,
@@ -552,7 +557,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							reason: Self::new_account(&dest, details, None)?,
 							extra: T::Extra::default(),
 						});
-					}
+					},
 				}
 				Ok(())
 			})?;

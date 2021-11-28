@@ -73,7 +73,7 @@ macro_rules! impl_const_get {
 				Some(T)
 			}
 		}
-	}
+	};
 }
 
 impl_const_get!(ConstBool, bool);

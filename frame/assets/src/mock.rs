@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_assets;
 
-use frame_support::{construct_runtime, traits::{ConstU32, ConstU64, GenesisBuild}};
+use frame_support::{
+	construct_runtime,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
