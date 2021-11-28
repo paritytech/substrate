@@ -29,7 +29,6 @@ use pallet_bounties::Pallet as Bounties;
 use pallet_treasury::Pallet as Treasury;
 
 const SEED: u32 = 0;
-const MAX_BYTES: u32 = 16384;
 
 #[derive(Clone)]
 struct BenchmarkChildBounty<T: Config> {
@@ -62,7 +61,8 @@ fn setup_bounty<T: Config>(
 	let caller = account("caller", user, SEED);
 	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
 	let fee = value / 2u32.into();
-	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
+	let deposit = T::BountyDepositBase::get() +
+		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
 	let curator = account("curator", user, SEED);
 	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
@@ -166,7 +166,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 
 benchmarks! {
 	add_child_bounty {
-		let d in 0 .. MAX_BYTES;
+		let d in 0 .. T::MaximumReasonLength::get();
 		setup_pot_account::<T>();
 		let bounty_setup = activate_bounty::<T>(0, d)?;
 	}: _(RawOrigin::Signed(bounty_setup.curator), bounty_setup.bounty_id,
@@ -180,7 +180,7 @@ benchmarks! {
 
 	propose_curator {
 		setup_pot_account::<T>();
-		let bounty_setup = activate_bounty::<T>(0, MAX_BYTES)?;
+		let bounty_setup = activate_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		let child_curator_lookup = T::Lookup::unlookup(bounty_setup.child_curator.clone());
 
 		ChildBounties::<T>::add_child_bounty(
@@ -196,7 +196,7 @@ benchmarks! {
 
 	accept_curator {
 		setup_pot_account::<T>();
-		let mut bounty_setup = activate_bounty::<T>(0, MAX_BYTES)?;
+		let mut bounty_setup = activate_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		let child_curator_lookup = T::Lookup::unlookup(bounty_setup.child_curator.clone());
 
 		ChildBounties::<T>::add_child_bounty(
@@ -220,7 +220,7 @@ benchmarks! {
 	// Worst case when curator is inactive and any sender un-assigns the curator.
 	unassign_curator {
 		setup_pot_account::<T>();
-		let bounty_setup = activate_child_bounty::<T>(0, MAX_BYTES)?;
+		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
 		let caller = whitelisted_caller();
@@ -229,7 +229,7 @@ benchmarks! {
 
 	award_child_bounty {
 		setup_pot_account::<T>();
-		let bounty_setup = activate_child_bounty::<T>(0, MAX_BYTES)?;
+		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 	}: _(RawOrigin::Signed(bounty_setup.child_curator), bounty_setup.bounty_id,
@@ -244,7 +244,7 @@ benchmarks! {
 
 	claim_child_bounty {
 		setup_pot_account::<T>();
-		let bounty_setup = activate_child_bounty::<T>(0, MAX_BYTES)?;
+		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 
@@ -272,7 +272,7 @@ benchmarks! {
 	// Best case scenario.
 	close_child_bounty_added {
 		setup_pot_account::<T>();
-		let mut bounty_setup = activate_bounty::<T>(0, MAX_BYTES)?;
+		let mut bounty_setup = activate_bounty::<T>(0, T::MaximumReasonLength::get())?;
 
 		ChildBounties::<T>::add_child_bounty(
 			RawOrigin::Signed(bounty_setup.curator.clone()).into(),
@@ -294,7 +294,7 @@ benchmarks! {
 	// Worst case scenario.
 	close_child_bounty_active {
 		setup_pot_account::<T>();
-		let bounty_setup = activate_child_bounty::<T>(0, MAX_BYTES)?;
+		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 	}: close_child_bounty(RawOrigin::Root, bounty_setup.bounty_id, bounty_setup.child_bounty_id)
 	verify {
