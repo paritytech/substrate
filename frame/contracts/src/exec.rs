@@ -1910,10 +1910,10 @@ mod tests {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
 				let info = ctx.ext.contract_info();
-				assert_eq!(info._reserved, None);
-				info._reserved = Some(());
+				assert_eq!(info.storage_deposit, 0);
+				info.storage_deposit = 42;
 				assert_eq!(ctx.ext.call(0, CHARLIE, 0, vec![], true), exec_trapped());
-				assert_eq!(ctx.ext.contract_info()._reserved, Some(()));
+				assert_eq!(ctx.ext.contract_info().storage_deposit, 42);
 			}
 			exec_success()
 		});

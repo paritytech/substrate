@@ -65,14 +65,6 @@ pub struct PrefabWasmModule<T: Config> {
 	/// The maximum memory size of a contract's sandbox.
 	#[codec(compact)]
 	maximum: u32,
-	/// This field is reserved for future evolution of format.
-	///
-	/// For now this field is serialized as `None`. In the future we are able to change the
-	/// type parameter to a new struct that contains the fields that we want to add.
-	/// That new struct would also contain a reserved field for its future extensions.
-	/// This works because in SCALE `None` is encoded independently from the type parameter
-	/// of the option.
-	_reserved: Option<()>,
 	/// Code instrumented with the latest schedule.
 	code: Vec<u8>,
 	/// The uninstrumented, pristine version of the code.

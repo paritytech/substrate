@@ -2045,7 +2045,7 @@ fn upload_code_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 181,
+						amount: 180,
 					}),
 					topics: vec![],
 				},
@@ -2126,7 +2126,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 181,
+						amount: 180,
 					}),
 					topics: vec![],
 				},
@@ -2139,7 +2139,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Unreserved {
 						who: ALICE,
-						amount: 181,
+						amount: 180,
 					}),
 					topics: vec![],
 				},
@@ -2183,7 +2183,7 @@ fn remove_code_wrong_origin() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 181,
+						amount: 180,
 					}),
 					topics: vec![],
 				},

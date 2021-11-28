@@ -477,7 +477,6 @@ mod tests {
 			trie_id: <Storage<Test>>::generate_trie_id(&ALICE, 42),
 			code_hash: <Test as frame_system::Config>::Hashing::hash(b"42"),
 			storage_deposit: deposit,
-			_reserved: Default::default(),
 		}
 	}
 

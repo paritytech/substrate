@@ -52,8 +52,6 @@ pub struct RawContractInfo<CodeHash, Balance> {
 	pub code_hash: CodeHash,
 	/// The amount of balance that is currently deposited to pay for consumed storage.
 	pub storage_deposit: Balance,
-	/// This field is reserved for future evolution of format.
-	pub _reserved: Option<()>,
 }
 
 impl<CodeHash, Balance> RawContractInfo<CodeHash, Balance> {
@@ -149,12 +147,8 @@ where
 			return Err(Error::<T>::DuplicateContract.into())
 		}
 
-		let contract = ContractInfo::<T> {
-			code_hash: ch,
-			trie_id,
-			storage_deposit: <BalanceOf<T>>::zero(),
-			_reserved: None,
-		};
+		let contract =
+			ContractInfo::<T> { code_hash: ch, trie_id, storage_deposit: <BalanceOf<T>>::zero() };
 
 		Ok(contract)
 	}
