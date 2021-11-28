@@ -303,7 +303,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Returns a deposit, destroying an asset-account unless sufficient.
+	/// Returns a deposit, destroying an asset-account.
 	pub(super) fn do_refund(id: T::AssetId, who: T::AccountId, allow_burn: bool) -> DispatchResult {
 		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		let deposit = account.reason.take_deposit().ok_or(Error::<T, I>::NoDeposit)?;
