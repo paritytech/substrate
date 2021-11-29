@@ -319,11 +319,9 @@ where
 mod tests {
 	use super::*;
 	use crate::create_proof_check_backend;
-	use hash_db::EMPTY_PREFIX;
 	use hex_literal::hex;
 	use sp_core::{storage::ChildInfo, traits::Externalities, H256};
 	use sp_runtime::traits::BlakeTwo256;
-	use trie_db::proof;
 
 	#[test]
 	fn commit_should_work() {
