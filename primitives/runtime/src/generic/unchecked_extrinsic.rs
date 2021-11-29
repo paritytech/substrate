@@ -20,8 +20,8 @@
 use crate::{
 	generic::CheckedExtrinsic,
 	traits::{
-		self, BackgroundCheckable, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
-		SignedExtension,
+		self, BackgroundCheckable, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount,
+		MaybeDisplay, Member, SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
@@ -175,7 +175,9 @@ where
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
-				if !raw_payload.using_encoded(|payload| signature.background_verify(payload, &signed)) {
+				if !raw_payload
+					.using_encoded(|payload| signature.background_verify(payload, &signed))
+				{
 					return Err(InvalidTransaction::BadProof.into())
 				}
 
