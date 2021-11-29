@@ -24,13 +24,11 @@
 //!
 //! This is internal api and is subject to change.
 
-pub(crate) mod counted_map;
 mod double_map;
 pub(crate) mod map;
 mod nmap;
 mod value;
 
-pub use counted_map::CountedStorageMap;
 pub use double_map::StorageDoubleMap;
 pub use map::StorageMap;
 pub use nmap::StorageNMap;
