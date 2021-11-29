@@ -199,26 +199,27 @@ where
 	///
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
-	///
-	/// To obtain a compact proof from the returned proof of this function, record the state root
-	/// before calling into this function, and use that as an argument to `into_compact_proof`.
-	pub fn execute_and_prove<'a, R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
-		let tri_backend = self.backend.clone();
-		let proving_backend = InMemoryProvingBackend::new(&tri_backend);
-		let mut proving_ext = self.proving_ext(&proving_backend);
+	pub fn execute_and_prove<'a, R>(
+		&mut self,
+		execute: impl FnOnce() -> R,
+	) -> (R, StorageProof) {
+		let proving_backend = InMemoryProvingBackend::new(&self.backend);
+		let mut proving_ext = Ext::new(
+			&mut self.overlay,
+			&mut self.storage_transaction_cache,
+			&proving_backend,
+			Some(&mut self.extensions),
+		);
+
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
 		let proof = proving_backend.extract_proof();
-
-		// ensure that all changes are propagated, and the recorded is clean.
-		proving_backend.clear_recorder();
-		self.commit_all().unwrap();
 
 		(outcome, proof)
 	}
 
 	/// Execute the given closure while `self` is set as externalities.
 	///
-	/// Returns the result of the given closure, if no panics occured.
+	/// Returns the result of the given closure, if no panics occurred.
 	/// Otherwise, returns `Err`.
 	pub fn execute_with_safe<R>(
 		&mut self,
@@ -320,13 +321,12 @@ where
 #[cfg(test)]
 mod tests {
 	use crate::create_proof_check_backend;
-
-use super::*;
+	use super::*;
 	use hash_db::{EMPTY_PREFIX};
 	use hex_literal::hex;
 	use sp_core::{storage::ChildInfo, traits::Externalities, H256};
 	use sp_runtime::traits::BlakeTwo256;
-use trie_db::proof;
+	use trie_db::proof;
 
 	#[test]
 	fn commit_should_work() {
@@ -431,5 +431,16 @@ use trie_db::proof;
 		// create a new trie-backed from the proof and make sure it contains everything
 		let proof_check = create_proof_check_backend::<BlakeTwo256>(pre_root, proof).unwrap();
 		assert_eq!(proof_check.storage(b"a", ).unwrap().unwrap(), vec![1u8; 33]);
+
+		let _ = ext.execute_and_prove(|| {
+			sp_io::storage::set(b"a", &vec![1u8; 44]);
+		});
+
+		// ensure that these changes are propagated to the backend.
+
+		ext.execute_with(|| {
+			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
+			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
+		});
 	}
 }

@@ -465,11 +465,11 @@ pub enum State {
 
 		/// Fetch the child-keys as well.
 		///
-		/// Default is false if specific `pallets` is `Some` (individual pallets are specified),
-		/// true otherwise. In other words, if you scrape the whole state the child tree data is
-		/// included out of the box. Otherwise, it must be enabled explicitly.
-		#[structopt(short, long, require_delimiter = true)]
-		child_tree: Option<bool>,
+		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other words,
+		/// if you scrape the whole state the child tree data is included out of the box. Otherwise,
+		/// it must be enabled explicitly using this flag.
+		#[structopt(long, require_delimiter = true)]
+		child_tree: bool,
 	},
 }
 
@@ -501,7 +501,7 @@ impl State {
 					.inject_hashed_key(
 						&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
 					);
-				if child_tree.unwrap_or(false) || pallets.is_none() {
+				if *child_tree {
 					builder = builder.inject_default_child_tree_prefix();
 				}
 				builder
@@ -749,13 +749,14 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	let proof = proving_backend.extract_proof();
+	let proof_size = proof.encoded_size();
 	let compact_proof = proof
-		.clone()
 		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
 		.unwrap();
+	let compact_proof_size = compact_proof.encoded_size();
 	let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
 
-	let proof_nodes = proof.clone().into_nodes();
+	let proof_nodes = proof.into_nodes();
 
 	let humanize = |s| {
 		if s < 1024 * 1024 {
@@ -775,11 +776,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
 		proof_nodes.len()
 	);
-	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof.encoded_size()),);
+	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
 	log::info!(
 		target: LOG_TARGET,
 		"compact proof size: {}",
-		humanize(compact_proof.encoded_size()),
+		humanize(compact_proof_size),
 	);
 	log::info!(
 		target: LOG_TARGET,

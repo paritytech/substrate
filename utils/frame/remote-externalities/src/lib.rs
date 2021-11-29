@@ -36,7 +36,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
-		ChildInfo, PrefixedStorageKey, StorageData, StorageKey,
+		ChildInfo, PrefixedStorageKey, StorageData, StorageKey, ChildType,
 	},
 };
 pub use sp_io::TestExternalities;
@@ -566,8 +566,16 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			let child_kv_inner =
 				self.rpc_child_get_storage_paged(prefixed_top_key, child_keys, at).await?;
 
-			// super tricky.
-			let un_prefixed = &prefixed_top_key.0[DEFAULT_CHILD_STORAGE_KEY_PREFIX.len()..];
+			let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
+			let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
+				Some((ChildType::ParentKeyId, storage_key)) =>
+					storage_key,
+				None => {
+					log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
+					return Err("Invalid child key")
+				},
+			};
+
 			child_kv.push((ChildInfo::new_default(&un_prefixed), child_kv_inner));
 		}
 
@@ -744,6 +752,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	///
 	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
 	///
+	/// This is not needed if the entire state is being downloaded.
+	///
 	/// Otherwise, the only other way to make sure a child-tree is manually included is to inject
 	/// its root (`DEFAULT_CHILD_STORAGE_KEY_PREFIX`, plus some other postfix) into
 	/// [`inject_hashed_key`]. Unfortunately, there's no federated way of managing child tree roots
@@ -897,10 +907,10 @@ mod remote_tests {
 		// this shows that in the second run, we use the remote and create a cache.
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig { state_snapshot: SnapshotConfig::new("test_snapshot_to_remove") },
+				OfflineConfig { state_snapshot: SnapshotConfig::new("offline_else_online_works_data") },
 				OnlineConfig {
 					pallets: vec!["Proxy".to_owned()],
-					state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove")),
+					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
 					..Default::default()
 				},
 			))
@@ -912,10 +922,10 @@ mod remote_tests {
 		// this shows that in the second run, we are not using the remote
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig { state_snapshot: SnapshotConfig::new("test_snapshot_to_remove") },
+				OfflineConfig { state_snapshot: SnapshotConfig::new("offline_else_online_works_data") },
 				OnlineConfig {
 					pallets: vec!["Proxy".to_owned()],
-					state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove")),
+					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
 					transport: "ws://non-existent:666".to_owned().into(),
 					..Default::default()
 				},
@@ -924,6 +934,21 @@ mod remote_tests {
 			.await
 			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
+
+		let to_delete = std::fs::read_dir(Path::new("."))
+			.unwrap()
+			.into_iter()
+			.map(|d| d.unwrap())
+			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "offline_else_online_works_data" ||
+				p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
+			})
+			.collect::<Vec<_>>();
+		assert!(to_delete.len() > 0);
+		for d in to_delete {
+			std::fs::remove_file(d.path()).unwrap();
+		}
 	}
 
 	#[tokio::test]
@@ -998,7 +1023,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove")),
+				state_snapshot: Some(SnapshotConfig::new("can_create_top_snapshot_data")),
 				pallets: vec!["Proxy".to_owned()],
 				..Default::default()
 			}))
@@ -1012,6 +1037,7 @@ mod remote_tests {
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "can_create_top_snapshot_data" ||
 				p.path().extension().unwrap_or_default() == "top" ||
 					p.path().extension().unwrap_or_default() == "child"
 			})
@@ -1030,17 +1056,6 @@ mod remote_tests {
 			}
 			std::fs::remove_file(d.path()).unwrap();
 		}
-	}
-
-	#[tokio::test]
-	#[ignore = "too slow"]
-	async fn can_fetch_all() {
-		init_logger();
-		Builder::<Block>::new()
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {});
 	}
 
 	#[tokio::test]
@@ -1063,7 +1078,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove")),
+				state_snapshot: Some(SnapshotConfig::new("can_create_child_snapshot_data")),
 				pallets: vec!["Crowdloan".to_owned()],
 				..Default::default()
 			}))
@@ -1078,6 +1093,7 @@ mod remote_tests {
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "can_create_child_snapshot_data" ||
 				p.path().extension().unwrap_or_default() == "top" ||
 					p.path().extension().unwrap_or_default() == "child"
 			})
@@ -1088,6 +1104,44 @@ mod remote_tests {
 		for d in to_delete {
 			use std::os::unix::fs::MetadataExt;
 			// if this is the top snapshot it must not be empty
+			if d.path().extension().unwrap_or_default() == "child" {
+				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
+			} else {
+				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
+			}
+			std::fs::remove_file(d.path()).unwrap();
+		}
+	}
+
+	#[tokio::test]
+	async fn can_fetch_all() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				state_snapshot: Some(SnapshotConfig::new("can_fetch_all_data")),
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+			let to_delete = std::fs::read_dir(Path::new("."))
+			.unwrap()
+			.into_iter()
+			.map(|d| d.unwrap())
+			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "can_fetch_all_data" ||
+				p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
+			})
+			.collect::<Vec<_>>();
+
+		assert!(to_delete.len() > 0);
+
+		for d in to_delete {
+			use std::os::unix::fs::MetadataExt;
+			// if we download everything, child tree must also be filled.
 			if d.path().extension().unwrap_or_default() == "child" {
 				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
 			} else {

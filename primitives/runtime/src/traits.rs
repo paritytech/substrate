@@ -756,9 +756,6 @@ pub trait ExtrinsicMetadata {
 }
 
 /// Extract the hashing type for a block.
-// NOTE: this is a horrible choice of name, `Header` has both `type Hash` and `type Hashing`, and
-// this is exactly what you would NOT expect. Should be called `HashingFor` and have a separate one
-// called `HashFor`.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
