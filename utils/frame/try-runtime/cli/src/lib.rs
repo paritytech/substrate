@@ -745,16 +745,19 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))
+	.map_err(|e| format!("failed to execute {}: {:?}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	let proof = proving_backend.extract_proof();
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
+		.clone()
 		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
-		.unwrap();
+		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
+
 	let compact_proof_size = compact_proof.encoded_size();
-	let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+	let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0)
+		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
 
 	let proof_nodes = proof.into_nodes();
 

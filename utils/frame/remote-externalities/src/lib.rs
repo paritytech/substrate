@@ -543,11 +543,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			.iter()
 			.filter_map(
 				|(k, _)| {
-					if is_default_child_storage_key(k.as_ref()) {
-						Some(k)
-					} else {
-						None
-					}
+					is_default_child_storage_key(k.as_ref()).then(|| k)
 				},
 			)
 			.collect::<Vec<_>>();
