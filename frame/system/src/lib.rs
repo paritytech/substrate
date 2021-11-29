@@ -114,6 +114,8 @@ pub mod mocking;
 mod tests;
 pub mod weights;
 
+pub mod migrations;
+
 pub use extensions::{
 	check_genesis::CheckGenesis, check_mortality::CheckMortality, check_nonce::CheckNonce,
 	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
@@ -314,14 +316,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedToTripleRefCount::<T>::get() {
-				migrations::migrate_from_dual_to_triple_ref_count::<T>()
-			} else {
-				0
-			}
-		}
-
 		fn integrity_test() {
 			T::BlockWeights::get().validate().expect("The weights are invalid.");
 		}
@@ -658,49 +652,6 @@ pub mod pallet {
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 		}
-	}
-}
-
-pub mod migrations {
-	use super::*;
-
-	#[allow(dead_code)]
-	/// Migrate from unique `u8` reference counting to triple `u32` reference counting.
-	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)| {
-			Some(AccountInfo {
-				nonce,
-				consumers: rc as RefCount,
-				providers: 1,
-				sufficients: 0,
-				data,
-			})
-		});
-		UpgradedToTripleRefCount::<T>::put(true);
-		T::BlockWeights::get().max_block
-	}
-
-	#[allow(dead_code)]
-	/// Migrate from unique `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_from_single_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(
-			|_key, (nonce, consumers, data)| {
-				Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
-			},
-		);
-		UpgradedToTripleRefCount::<T>::put(true);
-		T::BlockWeights::get().max_block
-	}
-
-	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_from_dual_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
-			|_key, (nonce, consumers, providers, data)| {
-				Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
-			},
-		);
-		UpgradedToTripleRefCount::<T>::put(true);
-		T::BlockWeights::get().max_block
 	}
 }
 
