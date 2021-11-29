@@ -16,18 +16,19 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
-pallet-bounties  ={ version = "4.0.0-dev", default-features = false, path = "../../frame/bounties" }
-pallet-sudo ={ version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
+pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../../frame/bounties" }
+pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../frame/collective" }
-pallet-session ={ version = "4.0.0-dev", default-features = false, path = "../../frame/session" }
-pallet-staking ={ version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
-pallet-offences ={ version = "4.0.0-dev", default-features = false, path = "../../frame/offences" }
+pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../frame/session" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
+pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../frame/offences" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../frame/election-provider-multi-phase" }
-pallet-treasury ={ version = "4.0.0-dev", default-features = false, path = "../../frame/treasury" }
-pallet-staking-reward-curve ={ version = "4.0.0-dev", default-features = false, path = "../../frame/staking/reward-curve" }
-pallet-grandpa ={ version = "4.0.0-dev", default-features = false, path = "../../frame/grandpa" }
-pallet-transaction-payment={ version = "4.0.0-dev", default-features = false, path = "../../frame/transaction-payment"}
+pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../../frame/treasury" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", default-features = false, path = "../../frame/staking/reward-curve" }
+pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../frame/grandpa" }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../frame/transaction-payment" }
+pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../../frame/authorship" }
 
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
@@ -48,7 +49,7 @@ sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = ".
 
 # Cumulus dependencies
 # cumulus-primitives-core = { path = "../../primitives/core", default-features = false }
-frame-election-provider-support = { version = "4.0.0-dev",default-features = false, path = "../../frame/election-provider-support", features = ["runtime-benchmarks"] }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/election-provider-support", features = ["runtime-benchmarks"] }
 
 getrandom = { version = "0.2", features = ["js"] }
 
@@ -56,7 +57,7 @@ getrandom = { version = "0.2", features = ["js"] }
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder" }
 
 [features]
-default = [ "std" ]
+default = ["std"]
 std = [
 	"codec/std",
 	"scale-info/std",
@@ -70,7 +71,7 @@ std = [
 	"pallet-collective/std",
 	"pallet-offences/std",
 	"pallet-session/std",
-	"pallet-sudo/std",	
+	"pallet-sudo/std",
 	"pallet-election-provider-multi-phase/std",
 	"pallet-staking/std",
 	"pallet-timestamp/std",

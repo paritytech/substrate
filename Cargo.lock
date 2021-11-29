@@ -1422,6 +1422,7 @@ dependencies = [
  "frame-system",
  "frame-system-rpc-runtime-api",
  "getrandom 0.2.3",
+ "pallet-authorship",
  "pallet-babe",
  "pallet-balances",
  "pallet-bounties",

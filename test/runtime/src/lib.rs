@@ -26,7 +26,9 @@ pub mod wasm_spec_version_incremented {
 	#[cfg(feature = "std")]
 	include!(concat!(env!("OUT_DIR"), "/wasm_binary_spec_version_incremented.rs"));
 }
-
+use pallet_transaction_payment::CurrencyAdapter;
+use pallet_transaction_payment::Multiplier;
+use sp_runtime::Perquintill;
 use frame_election_provider_support::onchain;
 use frame_support::pallet_prelude::TransactionPriority;
 use frame_support::traits::KeyOwnerProofSystem;
@@ -53,10 +55,12 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
 };
+use codec::Decode;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	traits::{self, ConvertInto, NumberFor, OpaqueKeys},
+	traits::{self, ConvertInto, NumberFor},
 };
+use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128};
 use sp_std::prelude::*;
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -83,15 +87,80 @@ use sp_core::offchain::KeyTypeId;
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
+
+pallet_staking_reward_curve::build! {
+	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
+		min_inflation: 0_025_000,
+		max_inflation: 0_100_000,
+		ideal_stake: 0_500_000,
+		falloff: 0_050_000,
+		max_piece_count: 40,
+		test_precision: 0_005_000,
+	);
+}
+
 /// Type used for expressing timestamp.
 pub type Moment = u64;
 
-pub type SessionHandlers = ();
+
+
+construct_runtime! {
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = NodeBlock,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system,
+		TransactionPayment: pallet_transaction_payment,
+		Staking: pallet_staking,
+		Authorship: pallet_authorship,
+		Session: pallet_session,
+		Collective: pallet_collective::<Instance1>,
+		Offences: pallet_offences,
+		Babe: pallet_babe,
+		Historical: pallet_session::historical::{Pallet},
+		Bounties: pallet_bounties,
+		Treasury: pallet_treasury,
+		//OnChain: onchain,
+		Grandpa: pallet_grandpa,
+		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
+		// ParachainSystem: cumulus_pallet_parachain_system::{
+		// 	Pallet, Call, Config, Storage, Inherent, Event<T>, ValidateUnsigned,
+		// },
+		Timestamp: pallet_timestamp,
+		Balances: pallet_balances,
+		Sudo: pallet_sudo,
+		// TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+	}
+}
+
+
+
+pub struct TestSessionHandler;
+
+
+
+
+
 
 impl_opaque_keys! {
 	pub struct SessionKeys {}
 }
 
+impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+
+	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
+
+	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(
+		_: bool,
+		_: &[(AccountId, Ks)],
+		_: &[(AccountId, Ks)],
+	) {
+	}
+
+	fn on_disabled(_: u32) {}
+}
 /// Some key that we set in genesis and only read in [`TestRuntimeUpgrade`] to ensure that
 /// [`OnRuntimeUpgrade`] works as expected.
 pub const TEST_RUNTIME_UPGRADE_KEY: &[u8] = b"+test_runtime_upgrade_key+";
@@ -109,7 +178,7 @@ type EnsureRootOrHalfCouncil = EnsureOneOf<
 parameter_types! {
 	// NOTE: Currently it is not possible to change the epoch duration after the chain has started.
 	//       Attempting to do so will brick block production.
-	pub const MaxAuthorities: u64 = 100;
+	pub const MaxAuthorities: u32 = 100;
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 	pub const ReportLongevity: u64 =
@@ -122,6 +191,25 @@ parameter_types! {
 	pub const MaxKeys: u32 = 10_000;
 	pub const MaxPeerInHeartbeats: u32 = 10_000;
 	pub const MaxPeerDataEncodingSize: u32 = 1_000;
+}
+
+
+parameter_types! {
+	
+	pub const OperationalFeeMultiplier: u8 = 5;
+	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
+	pub AdjustmentVariable: Multiplier = <Multiplier as FixedPointNumber>::saturating_from_rational(1, 100_000);
+	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 1_000_000_000u128);
+}
+
+
+impl pallet_transaction_payment::Config for Runtime {
+	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
+	type TransactionByteFee = TransactionByteFee;
+	type OperationalFeeMultiplier = OperationalFeeMultiplier;
+	type WeightToFee = IdentityFee<Balance>;
+	type FeeMultiplierUpdate =
+		();
 }
 
 //pub const MAX_NOMINATIONS: u32 = 1000;
@@ -309,7 +397,6 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = MaxReserves;
 	type ReserveIdentifier = [u8; 8];
 }
-
 // parameter_types! {
 // 	pub const OperationalFeeMultiplier: u8 = 5;
 // }
@@ -394,33 +481,15 @@ impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::Extend
 		Some((iters, 0))
 	}
 }
+parameter_types! {
+	pub const UncleGenerations: BlockNumber = 5;
+}
 
-construct_runtime! {
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = NodeBlock,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-		TransactionPayment: pallet_transaction_payment,
-		Staking: pallet_staking,
-		Session: pallet_session,
-		Offences: pallet_offences,
-		Babe: pallet_babe,
-		Historical: pallet_session::historical::{Pallet},
-		Bounties: pallet_bounties,
-		Treasury: pallet_treasury,
-		//OnChain: onchain,
-		Grandpa: pallet_grandpa,
-		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
-		// ParachainSystem: cumulus_pallet_parachain_system::{
-		// 	Pallet, Call, Config, Storage, Inherent, Event<T>, ValidateUnsigned,
-		// },
-		Timestamp: pallet_timestamp,
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Sudo: pallet_sudo::{Pallet, Call, Storage, Config<T>, Event<T>},
-		// TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
-	}
+impl pallet_authorship::Config for Runtime {
+	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = (Staking,);
 }
 
 /// Index of a transaction in the chain.
@@ -501,12 +570,14 @@ impl pallet_staking::Config for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = SlashDeferDuration;
+	
 	/// A super-majority of the council can cancel the slash.
 	type SlashCancelOrigin = EnsureOneOf<
 		AccountId,
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>,
 	>;
+	//type SlashCancelOrigin = EnsureRoot<AccountId>;
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
@@ -519,6 +590,8 @@ impl pallet_staking::Config for Runtime {
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Runtime>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
+
+
 
 /// The BABE epoch configuration at genesis.
 pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
@@ -552,16 +625,6 @@ impl pallet_babe::Config for Runtime {
 	type MaxAuthorities = MaxAuthorities;
 }
 
-pallet_staking_reward_curve::build! {
-	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
-		min_inflation: 0_025_000,
-		max_inflation: 0_100_000,
-		ideal_stake: 0_500_000,
-		falloff: 0_050_000,
-		max_piece_count: 40,
-		test_precision: 0_005_000,
-	);
-}
 
 parameter_types! {
 	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
@@ -659,7 +722,7 @@ impl pallet_session::Config for Runtime {
 	type ShouldEndSession = Babe;
 	type NextSessionRotation = Babe;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
-	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type SessionHandler = TestSessionHandler; //<SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
@@ -667,7 +730,7 @@ impl pallet_session::Config for Runtime {
 impl pallet_offences::Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
-	type OnOffenceHandler = Staking;
+	type OnOffenceHandler = ();
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
@@ -702,6 +765,15 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type BenchmarkingConfig = BenchmarkConfig;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 }
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+where
+	Call: From<C>,
+{
+	type Extrinsic = UncheckedExtrinsic;
+	type OverarchingCall = Call;
+}
+
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
