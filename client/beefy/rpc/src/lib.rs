@@ -69,7 +69,7 @@ where
 {
 	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
 		fn log_err(err: JsonRpseeError) -> bool {
-			log::error!(
+			log::debug!(
 				"Could not send data to beefy_justifications subscription. Error: {:?}",
 				err
 			);

@@ -409,7 +409,7 @@ where
 		}
 		.boxed();
 
-		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
+		executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn subscribe_storage(
@@ -463,7 +463,7 @@ where
 		}
 		.boxed();
 
-		executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
+		executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	async fn trace_block(
