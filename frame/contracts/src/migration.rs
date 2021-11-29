@@ -225,7 +225,7 @@ mod v6 {
 		});
 
 		<CodeStorage<T>>::translate(|key, old: OldPrefabWasmModule| {
-			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 2));
 			<OwnerInfoOf<T>>::insert(
 				key,
 				OwnerInfo {
