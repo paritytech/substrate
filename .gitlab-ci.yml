@@ -842,12 +842,12 @@ publish-rustdoc:
     # whole space-separated value.
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     # setup ssh
+    # FIXME: add ssh to docker image
     - apt-get update && apt-get install -y ssh
     - eval $(ssh-agent)
     - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
     - mkdir ~/.ssh && touch ~/.ssh/known_hosts
     - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-    - rm -rf /tmp/*
     # Set git config
     - git config user.email "devops-team@parity.io"
     - git config user.name "${GITHUB_USER}"
