@@ -465,9 +465,9 @@ pub enum State {
 
 		/// Fetch the child-keys as well.
 		///
-		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other words,
-		/// if you scrape the whole state the child tree data is included out of the box. Otherwise,
-		/// it must be enabled explicitly using this flag.
+		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other
+		/// words, if you scrape the whole state the child tree data is included out of the box.
+		/// Otherwise, it must be enabled explicitly using this flag.
 		#[structopt(long, require_delimiter = true)]
 		child_tree: bool,
 	},
@@ -780,11 +780,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		proof_nodes.len()
 	);
 	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
-	log::info!(
-		target: LOG_TARGET,
-		"compact proof size: {}",
-		humanize(compact_proof_size),
-	);
+	log::info!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
 	log::info!(
 		target: LOG_TARGET,
 		"zstd-compressed compact proof {}",

@@ -36,7 +36,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
-		ChildInfo, PrefixedStorageKey, StorageData, StorageKey, ChildType,
+		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
 	},
 };
 pub use sp_io::TestExternalities;
@@ -541,11 +541,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	async fn load_child_remote(&self, top_kv: &[KeyValue]) -> Result<ChildKeyValues, &'static str> {
 		let child_bearing_top_keys = top_kv
 			.iter()
-			.filter_map(
-				|(k, _)| {
-					is_default_child_storage_key(k.as_ref()).then(|| k)
-				},
-			)
+			.filter_map(|(k, _)| is_default_child_storage_key(k.as_ref()).then(|| k))
 			.collect::<Vec<_>>();
 
 		info!(
@@ -564,8 +560,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 			let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
 			let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
-				Some((ChildType::ParentKeyId, storage_key)) =>
-					storage_key,
+				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
 				None => {
 					log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
 					return Err("Invalid child key")
@@ -903,7 +898,9 @@ mod remote_tests {
 		// this shows that in the second run, we use the remote and create a cache.
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig { state_snapshot: SnapshotConfig::new("offline_else_online_works_data") },
+				OfflineConfig {
+					state_snapshot: SnapshotConfig::new("offline_else_online_works_data"),
+				},
 				OnlineConfig {
 					pallets: vec!["Proxy".to_owned()],
 					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
@@ -918,7 +915,9 @@ mod remote_tests {
 		// this shows that in the second run, we are not using the remote
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig { state_snapshot: SnapshotConfig::new("offline_else_online_works_data") },
+				OfflineConfig {
+					state_snapshot: SnapshotConfig::new("offline_else_online_works_data"),
+				},
 				OnlineConfig {
 					pallets: vec!["Proxy".to_owned()],
 					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
@@ -937,7 +936,7 @@ mod remote_tests {
 			.map(|d| d.unwrap())
 			.filter(|p| {
 				p.path().file_name().unwrap_or_default() == "offline_else_online_works_data" ||
-				p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "top" ||
 					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();
@@ -1034,7 +1033,7 @@ mod remote_tests {
 			.map(|d| d.unwrap())
 			.filter(|p| {
 				p.path().file_name().unwrap_or_default() == "can_create_top_snapshot_data" ||
-				p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "top" ||
 					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();
@@ -1090,7 +1089,7 @@ mod remote_tests {
 			.map(|d| d.unwrap())
 			.filter(|p| {
 				p.path().file_name().unwrap_or_default() == "can_create_child_snapshot_data" ||
-				p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "top" ||
 					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();
@@ -1122,13 +1121,13 @@ mod remote_tests {
 			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
 
-			let to_delete = std::fs::read_dir(Path::new("."))
+		let to_delete = std::fs::read_dir(Path::new("."))
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
 				p.path().file_name().unwrap_or_default() == "can_fetch_all_data" ||
-				p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "top" ||
 					p.path().extension().unwrap_or_default() == "child"
 			})
 			.collect::<Vec<_>>();

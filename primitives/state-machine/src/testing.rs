@@ -199,10 +199,7 @@ where
 	///
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
-	pub fn execute_and_prove<'a, R>(
-		&mut self,
-		execute: impl FnOnce() -> R,
-	) -> (R, StorageProof) {
+	pub fn execute_and_prove<'a, R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
 		let proving_backend = InMemoryProvingBackend::new(&self.backend);
 		let mut proving_ext = Ext::new(
 			&mut self.overlay,
@@ -320,9 +317,9 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::create_proof_check_backend;
 	use super::*;
-	use hash_db::{EMPTY_PREFIX};
+	use crate::create_proof_check_backend;
+	use hash_db::EMPTY_PREFIX;
 	use hex_literal::hex;
 	use sp_core::{storage::ChildInfo, traits::Externalities, H256};
 	use sp_runtime::traits::BlakeTwo256;
@@ -408,7 +405,6 @@ mod tests {
 		ext.insert(b"c".to_vec(), vec![3u8; 33]);
 		ext.insert(b"d".to_vec(), vec![4u8; 33]);
 
-
 		let pre_root = ext.backend.root().clone();
 		let (_, proof) = ext.execute_and_prove(|| {
 			sp_io::storage::get(b"a");
@@ -430,7 +426,7 @@ mod tests {
 
 		// create a new trie-backed from the proof and make sure it contains everything
 		let proof_check = create_proof_check_backend::<BlakeTwo256>(pre_root, proof).unwrap();
-		assert_eq!(proof_check.storage(b"a", ).unwrap().unwrap(), vec![1u8; 33]);
+		assert_eq!(proof_check.storage(b"a",).unwrap().unwrap(), vec![1u8; 33]);
 
 		let _ = ext.execute_and_prove(|| {
 			sp_io::storage::set(b"a", &vec![1u8; 44]);
