@@ -110,7 +110,11 @@ pub struct CodeUploadRequest<AccountId> {
 
 /// Contracts RPC methods.
 #[rpc]
-pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash> {
+pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash>
+where
+	NumberOrHex: From<Balance>,
+	Balance: Copy + TryFrom<NumberOrHex>,
+{
 	/// Executes a call to a contract.
 	///
 	/// This call is performed locally without submitting any transactions. Thus executing this
@@ -193,7 +197,8 @@ where
 		Hash,
 	>,
 	AccountId: Codec,
-	Balance: Codec + TryFrom<NumberOrHex>,
+	Balance: Codec + Copy + TryFrom<NumberOrHex>,
+	NumberOrHex: From<Balance>,
 	Hash: Codec,
 {
 	fn call(

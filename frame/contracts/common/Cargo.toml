@@ -21,6 +21,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 # Substrate Dependencies (This crate should not rely on frame)
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core", default-features = false }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-rpc = { version = "4.0.0-dev", path = "../../../primitives/rpc", optional = true }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
@@ -31,5 +32,6 @@ std = [
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-rpc",
 	"serde",
 ]

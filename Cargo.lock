@@ -5440,6 +5440,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-core",
+ "sp-rpc",
  "sp-runtime",
  "sp-std",
 ]

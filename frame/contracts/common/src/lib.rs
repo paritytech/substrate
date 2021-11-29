@@ -31,12 +31,22 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "std")]
+use sp_rpc::number::NumberOrHex;
+
 /// Result type of a `bare_call` or `bare_instantiate` call.
 ///
 /// It contains the execution result together with some auxiliary information.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(
+	feature = "std",
+	serde(
+		rename_all = "camelCase",
+		bound(serialize = "R: Serialize, NumberOrHex: From<Balance>, Balance: Copy"),
+		bound(deserialize = "R: Deserialize<'de>, Balance: TryFrom<NumberOrHex>")
+	)
+)]
 pub struct ContractResult<R, Balance> {
 	/// How much gas was consumed during execution.
 	pub gas_consumed: u64,
@@ -163,17 +173,26 @@ pub enum Code<Hash> {
 /// The amount of balance that was either charged or refunded in order to pay for storage.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(
+	feature = "std",
+	serde(
+		rename_all = "camelCase",
+		bound(serialize = "NumberOrHex: From<Balance>, Balance: Copy"),
+		bound(deserialize = "Balance: TryFrom<NumberOrHex>")
+	)
+)]
 pub enum StorageDeposit<Balance> {
 	/// The transaction reduced storage consumption.
 	///
 	/// This means that the specified amount of balance was transferred from the involved
 	/// contracts to the call origin.
+	#[cfg_attr(feature = "std", serde(with = "as_hex"))]
 	Refund(Balance),
 	/// The transaction increased overall storage usage.
 	///
 	/// This means that the specified amount of balance was transferred from the call origin
 	/// to the contracts involved.
+	#[cfg_attr(feature = "std", serde(with = "as_hex"))]
 	Charge(Balance),
 }
 
@@ -274,5 +293,29 @@ mod as_string {
 
 	pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
 		Ok(String::deserialize(deserializer)?.into_bytes())
+	}
+}
+
+#[cfg(feature = "std")]
+mod as_hex {
+	use super::*;
+	use serde::{de::Error as _, Deserializer, Serializer};
+
+	pub fn serialize<S, Balance>(balance: &Balance, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+		NumberOrHex: From<Balance>,
+		Balance: Copy,
+	{
+		NumberOrHex::from(*balance).serialize(serializer)
+	}
+
+	pub fn deserialize<'de, D, Balance>(deserializer: D) -> Result<Balance, D::Error>
+	where
+		D: Deserializer<'de>,
+		Balance: TryFrom<NumberOrHex>,
+	{
+		Balance::try_from(NumberOrHex::deserialize(deserializer)?)
+			.map_err(|_| D::Error::custom("Cannot decode NumberOrHex to Balance"))
 	}
 }
