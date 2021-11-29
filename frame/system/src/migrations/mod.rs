@@ -19,10 +19,8 @@
 
 use codec::{Decode, Encode, FullCodec};
 use frame_support::{
-	pallet_prelude::ValueQuery,
-	traits::PalletInfoAccess,
-	weights::Weight,
-	RuntimeDebug, Blake2_128Concat,
+	pallet_prelude::ValueQuery, traits::PalletInfoAccess, weights::Weight, Blake2_128Concat,
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -32,7 +30,7 @@ type RefCount = u32;
 /// All balance information for an account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen)]
 struct AccountData<Balance> {
-    free: Balance,
+	free: Balance,
 	reserved: Balance,
 	misc_frozen: Balance,
 	fee_frozen: Balance,
@@ -90,29 +88,29 @@ frame_support::generate_storage_alias!(
 ///
 /// This function tries to infer the right migration to apply only based on whether it could
 /// decode any value consistent with a state representation.
-/// 
+///
 /// + If the state is fully migrated, it does nothing.
 /// + If the state is in single u8 reference counting, it migrates the full state to triple
 /// (u32) reference counting
 /// + Otherwise, it first tries to migrate assuming the state is dual reference counting,
-/// and *only if no element has been translated* tries to apply the migration from single 
+/// and *only if no element has been translated* tries to apply the migration from single
 /// (u32) to triple reference counting.
 ///
 /// If unsure about the behaviour, the standalone functions below have to be preferred.
 pub fn apply<T: V2ToV3>() -> Weight {
-    if !<UpgradedToTripleRefCount>::get(){
-        if !<UpgradedToU32RefCount>::get() {
-            let _ = migrate_from_single_u8_to_triple_ref_count::<T>();
-            <UpgradedToU32RefCount>::put(true);        
-        } else{
-            let nb_translated = migrate_from_dual_to_triple_ref_count::<T>();
-            if 0 == nb_translated {
-                let _ = migrate_from_single_to_triple_ref_count::<T>();
-            }
-        }
-        <UpgradedToTripleRefCount>::put(true);
+	if !<UpgradedToTripleRefCount>::get() {
+		if !<UpgradedToU32RefCount>::get() {
+			let _ = migrate_from_single_u8_to_triple_ref_count::<T>();
+			<UpgradedToU32RefCount>::put(true);
+		} else {
+			let nb_translated = migrate_from_dual_to_triple_ref_count::<T>();
+			if 0 == nb_translated {
+				let _ = migrate_from_single_to_triple_ref_count::<T>();
+			}
+		}
+		<UpgradedToTripleRefCount>::put(true);
 		Weight::max_value()
-    } else {
+	} else {
 		log::info!(
 			target: "runtime::system",
 			"Already upgraded to triple reference counting. No migration necessary."
@@ -126,57 +124,59 @@ use super::*;
 #[allow(dead_code)]
 /// Migrate from unique `u8` reference counting to triple `u32` reference counting.
 pub fn migrate_from_single_u8_to_triple_ref_count<T: V2ToV3>() -> usize {
-    let mut translated : usize = 0;
-    <Account::<T>>::translate::<(T::Index, u8, AccountData<T::Balance>), _>(|_key, (nonce, rc, data)| {
-        translated=translated+1;
-        Some(AccountInfo {
-            nonce,
-            consumers: rc as RefCount,
-            providers: 1,
-            sufficients: 0,
-            data,
-        })
-    });
-    log::info!(
-        target: "runtime::system",
-        "Applied migration from single u8 to triple reference counting to {:?} elements.",
-        translated
-    );
-    translated
+	let mut translated: usize = 0;
+	<Account<T>>::translate::<(T::Index, u8, AccountData<T::Balance>), _>(
+		|_key, (nonce, rc, data)| {
+			translated = translated + 1;
+			Some(AccountInfo {
+				nonce,
+				consumers: rc as RefCount,
+				providers: 1,
+				sufficients: 0,
+				data,
+			})
+		},
+	);
+	log::info!(
+		target: "runtime::system",
+		"Applied migration from single u8 to triple reference counting to {:?} elements.",
+		translated
+	);
+	translated
 }
 
 #[allow(dead_code)]
 /// Migrate from unique `u32` reference counting to triple `u32` reference counting.
 pub fn migrate_from_single_to_triple_ref_count<T: V2ToV3>() -> usize {
-    let mut translated : usize = 0;
+	let mut translated: usize = 0;
 	<Account<T>>::translate::<(T::Index, RefCount, AccountData<T::Balance>), _>(
-        |_key, (nonce, consumers, data)| {
-            translated=translated+1;
-            Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
-        },
+		|_key, (nonce, consumers, data)| {
+			translated = translated + 1;
+			Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
+		},
 	);
-    log::info!(
-        target: "runtime::system",
-        "Applied migration from single to triple reference counting to {:?} elements.",
-        translated
-    );  
-    translated
+	log::info!(
+		target: "runtime::system",
+		"Applied migration from single to triple reference counting to {:?} elements.",
+		translated
+	);
+	translated
 }
 
 #[allow(dead_code)]
 /// Migrate from dual `u32` reference counting to triple `u32` reference counting.
 pub fn migrate_from_dual_to_triple_ref_count<T: V2ToV3>() -> usize {
-    let mut translated : usize = 0;
+	let mut translated: usize = 0;
 	<Account<T>>::translate::<(T::Index, RefCount, RefCount, AccountData<T::Balance>), _>(
-        |_key, (nonce, consumers, providers, data)| {
-            translated=translated+1;
-            Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
-        },
+		|_key, (nonce, consumers, providers, data)| {
+			translated = translated + 1;
+			Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
+		},
 	);
-    log::info!(
-        target: "runtime::system",
-        "Applied migration from dual to triple reference counting to {:?} elements.",
-        translated
-    );
-    translated
+	log::info!(
+		target: "runtime::system",
+		"Applied migration from dual to triple reference counting to {:?} elements.",
+		translated
+	);
+	translated
 }
