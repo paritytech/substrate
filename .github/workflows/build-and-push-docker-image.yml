@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - dev-cere
+      - feature/CBI-1639-decrease-governance-timing
 env:
   ECR_REPOSITORY: pos-network-node
 jobs:
