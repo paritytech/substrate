@@ -249,6 +249,13 @@ pub struct RunCmd {
 	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
+
+	/// Authenticate authority records not only by the authority key, but also by their peer id.
+	///
+	/// Enable this option if all nodes on the network are already signing their records with the
+	/// peer id.
+	#[structopt(long = "strict-authority-records")]
+	pub strict_authority_records: bool,
 }
 
 impl RunCmd {
@@ -461,6 +468,10 @@ impl CliConfiguration for RunCmd {
 				None => None,
 			}
 		})
+	}
+
+	fn strict_authority_records(&self) -> bool {
+		self.strict_authority_records
 	}
 }
 

@@ -58,4 +58,6 @@ pub enum Error {
 	ReceivingDhtValueFoundEventWithDifferentPeerIds,
 	/// Received authority record without any addresses having a peer id
 	ReceivingDhtValueFoundEventWithNoPeerIds,
+	/// Received authority record without a valid signature for the remote peer id.
+	MissingPeerIdSignature,
 }

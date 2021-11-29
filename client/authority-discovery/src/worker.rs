@@ -125,6 +125,8 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	latest_published_keys: HashSet<CryptoTypePublicPair>,
 	/// Same value as in the configuration.
 	publish_non_global_ips: bool,
+	/// Same value as in the configuration.
+	strict_record_validation: bool,
 
 	/// Interval at which to request addresses of authorities, refilling the pending lookups queue.
 	query_interval: ExpIncInterval,
@@ -198,6 +200,7 @@ where
 			publish_if_changed_interval,
 			latest_published_keys: HashSet::new(),
 			publish_non_global_ips: config.publish_non_global_ips,
+			strict_record_validation: config.strict_record_validation,
 			query_interval,
 			pending_lookups: Vec::new(),
 			in_flight_lookups: HashMap::new(),
@@ -530,6 +533,8 @@ where
 					{
 						return Err(Error::VerifyingDhtPayload)
 					}
+				} else if self.strict_record_validation {
+					return Err(Error::MissingPeerIdSignature)
 				} else {
 					warn!(
 						target: LOG_TARGET,

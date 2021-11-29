@@ -132,6 +132,8 @@ pub struct Configuration {
 	pub base_path: Option<BasePath>,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
+	/// Reject authority discovery records that are not signed by their network identity (PeerId)
+	pub strict_authority_records: bool,
 }
 
 /// Type for tasks spawned by the executor.

@@ -261,6 +261,7 @@ fn node_config<
 		announce_block: true,
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
+		strict_authority_records: true,
 	}
 }
 
