@@ -239,6 +239,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 				self.execution_strategies,
 				self.keystore,
 				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
+				None
 			),
 			None,
 			None,

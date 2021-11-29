@@ -50,7 +50,6 @@ mod client;
 pub mod genesis;
 mod wasm_override;
 mod wasm_substitutes;
-
 pub use self::{
 	call_executor::LocalCallExecutor,
 	client::{Client, ClientConfig},

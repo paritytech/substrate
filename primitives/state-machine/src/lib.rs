@@ -334,7 +334,7 @@ mod execution {
 		) -> Self {
 			extensions.register(ReadRuntimeVersionExt::new(exec.clone()));
 			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
-
+			// exntesions.register(sp_core::traits::RuntimeMetrics::new())
 			Self {
 				backend,
 				exec,

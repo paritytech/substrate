@@ -278,3 +278,22 @@ impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
 		(**self).spawn_essential(name, group, future)
 	}
 }
+
+pub trait RuntimeMetrics: Send {
+	/// Increment a specified metric by value.
+	fn inc_by(&mut self, name: &str, value: u64);
+}
+
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// The runtime extension that we need to register/retrieve to publish metrics.
+	pub struct RuntimeMetricsExt(Box<dyn RuntimeMetrics>);
+}
+
+impl RuntimeMetricsExt {
+	/// Creates a new instance of the extension that wraps an object
+	/// which implements the RuntimeMetrics interface.
+	pub fn new<T: RuntimeMetrics + 'static>(inner: T) -> Self {
+		Self(Box::new(inner))
+	}
+}

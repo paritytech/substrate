@@ -27,6 +27,7 @@ pub mod in_mem;
 pub mod leaves;
 pub mod notifications;
 pub mod proof_provider;
+pub mod metrics;
 
 pub use backend::*;
 pub use call_executor::*;
@@ -35,6 +36,7 @@ pub use notifications::*;
 pub use proof_provider::*;
 pub use sp_blockchain as blockchain;
 pub use sp_blockchain::HeaderBackend;
+pub use metrics::RuntimeMetricsProvider;
 
 pub use sp_state_machine::{CompactProof, ExecutionStrategy, StorageProof};
 pub use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};

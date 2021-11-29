@@ -235,6 +235,7 @@ where
 		Default::default(),
 		keystore,
 		sc_offchain::OffchainDb::factory_from_backend(&*backend),
+		prometheus_registry.clone()
 	);
 	Client::new(
 		backend,

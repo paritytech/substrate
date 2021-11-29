@@ -40,7 +40,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	storage::ChildInfo,
-	traits::{RuntimeSpawnExt, TaskExecutorExt},
+	traits::{RuntimeSpawnExt, TaskExecutorExt, RuntimeMetricsExt},
 };
 #[cfg(feature = "std")]
 use sp_keystore::{KeystoreExt, SyncCryptoStore};
@@ -1495,6 +1495,7 @@ pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
 /// All these host functions will be callable from inside the Wasm environment.
+/// TODO: add metrics here
 #[cfg(feature = "std")]
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
@@ -1511,7 +1512,17 @@ pub type SubstrateHostFunctions = (
 	offchain_index::HostFunctions,
 	runtime_tasks::HostFunctions,
 	transaction_index::HostFunctions,
+	runtime_metrics::HostFunctions
 );
+
+#[runtime_interface]
+pub trait RuntimeMetrics {
+	fn inc_by(&mut self, name: &str, value: u64) {
+		self.extension::<RuntimeMetricsExt>()
+			.expect("RuntimeMetrics extension not registered")
+			.inc_by(name, value)
+	}
+}
 
 #[cfg(test)]
 mod tests {
