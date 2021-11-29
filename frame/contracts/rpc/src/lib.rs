@@ -90,7 +90,7 @@ pub struct CallRequest<AccountId> {
 #[serde(deny_unknown_fields)]
 pub struct InstantiateRequest<AccountId, Hash> {
 	origin: AccountId,
-	endowment: NumberOrHex,
+	value: NumberOrHex,
 	gas_limit: NumberOrHex,
 	storage_deposit_limit: Option<NumberOrHex>,
 	code: Code<Hash>,
@@ -236,7 +236,7 @@ where
 
 		let InstantiateRequest {
 			origin,
-			endowment,
+			value,
 			gas_limit,
 			storage_deposit_limit,
 			code,
@@ -244,7 +244,7 @@ where
 			salt,
 		} = instantiate_request;
 
-		let endowment: Balance = decode_hex(endowment, "balance")?;
+		let value: Balance = decode_hex(value, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
 		let storage_deposit_limit: Option<Balance> =
 			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
@@ -253,7 +253,7 @@ where
 		api.instantiate(
 			&at,
 			origin,
-			endowment,
+			value,
 			gas_limit,
 			storage_deposit_limit,
 			code,
@@ -372,7 +372,7 @@ mod tests {
 			r#"
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
-			"endowment": "0x88",
+			"value": "0x88",
 			"gasLimit": 42,
 			"code": { "existing": "0x1122" },
 			"data": "0x4299",
@@ -383,7 +383,7 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(req.origin, "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL");
-		assert_eq!(req.endowment.into_u256(), 0x88.into());
+		assert_eq!(req.value.into_u256(), 0x88.into());
 		assert_eq!(req.gas_limit.into_u256(), 42.into());
 		assert_eq!(req.storage_deposit_limit, None);
 		assert_eq!(&*req.data, [0x42, 0x99].as_ref());

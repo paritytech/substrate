@@ -310,7 +310,7 @@ pub mod pallet {
 		///
 		/// # Parameters
 		///
-		/// * `endowment`: The balance to transfer from the `origin` to the newly created contract.
+		/// * `value`: The balance to transfer from the `origin` to the newly created contract.
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
 		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged/reserved
 		///   from the caller to pay for the storage consumed.
@@ -325,7 +325,7 @@ pub mod pallet {
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
 		/// - The smart-contract account is created at the computed address.
-		/// - The `endowment` is transferred to the new account.
+		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
 			T::WeightInfo::instantiate_with_code(
@@ -336,7 +336,7 @@ pub mod pallet {
 		)]
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
-			#[pallet::compact] endowment: BalanceOf<T>,
+			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code: Vec<u8>,
@@ -348,7 +348,7 @@ pub mod pallet {
 			let salt_len = salt.len() as u32;
 			let output = Self::internal_instantiate(
 				origin,
-				endowment,
+				value,
 				gas_limit,
 				storage_deposit_limit.map(Into::into),
 				Code::Upload(Bytes(code)),
@@ -372,7 +372,7 @@ pub mod pallet {
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
-			#[pallet::compact] endowment: BalanceOf<T>,
+			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code_hash: CodeHash<T>,
@@ -383,7 +383,7 @@ pub mod pallet {
 			let salt_len = salt.len() as u32;
 			let output = Self::internal_instantiate(
 				origin,
-				endowment,
+				value,
 				gas_limit,
 				storage_deposit_limit.map(Into::into),
 				Code::Existing(code_hash),
@@ -644,7 +644,7 @@ where
 	/// If set to `true` it returns additional human readable debugging information.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
-		endowment: BalanceOf<T>,
+		value: BalanceOf<T>,
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
@@ -655,7 +655,7 @@ where
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let output = Self::internal_instantiate(
 			origin,
-			endowment,
+			value,
 			gas_limit,
 			storage_deposit_limit,
 			code,
@@ -790,7 +790,7 @@ where
 	/// Called by dispatchables and public functions.
 	fn internal_instantiate(
 		origin: T::AccountId,
-		endowment: BalanceOf<T>,
+		value: BalanceOf<T>,
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
@@ -799,7 +799,7 @@ where
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
 		let mut storage_deposit_limit = storage_deposit_limit
-			.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, endowment));
+			.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, value));
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let try_exec = || {
@@ -838,7 +838,7 @@ where
 				&mut gas_meter,
 				&mut storage_meter,
 				&schedule,
-				endowment,
+				value,
 				data,
 				&salt,
 				debug_message,

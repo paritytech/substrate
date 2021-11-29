@@ -280,7 +280,7 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq)]
 	struct InstantiateEntry {
 		code_hash: H256,
-		endowment: u64,
+		value: u64,
 		data: Vec<u8>,
 		gas_left: u64,
 		salt: Vec<u8>,
@@ -361,13 +361,13 @@ mod tests {
 			&mut self,
 			gas_limit: Weight,
 			code_hash: CodeHash<Test>,
-			endowment: u64,
+			value: u64,
 			data: Vec<u8>,
 			salt: &[u8],
 		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
-				endowment,
+				value,
 				data: data.to_vec(),
 				gas_left: gas_limit,
 				salt: salt.to_vec(),
@@ -783,7 +783,7 @@ mod tests {
 			&mock_ext.instantiates[..],
 			[InstantiateEntry {
 				code_hash,
-				endowment: 3,
+				value: 3,
 				data,
 				gas_left: _,
 				salt,

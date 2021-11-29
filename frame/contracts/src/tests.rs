@@ -390,7 +390,7 @@ fn instantiate_and_call_and_deposit_event() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let endowment = min_balance * 100;
+		let value = min_balance * 100;
 
 		// We determine the storage deposit limit after uploading because it depends on ALICEs free
 		// balance which is changed by uploading a module.
@@ -400,10 +400,10 @@ fn instantiate_and_call_and_deposit_event() {
 		initialize_block(2);
 
 		// Check at the end to get hash on error easily
-		let storage_deposit_limit = <Pallet<Test>>::max_storage_deposit_limit(&ALICE, endowment);
+		let storage_deposit_limit = <Pallet<Test>>::max_storage_deposit_limit(&ALICE, value);
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
-			endowment,
+			value,
 			GAS_LIMIT,
 			None,
 			code_hash,

@@ -684,8 +684,6 @@ fn deploying_wasm_contract_should_work() {
 
 	let addr = pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[]);
 
-	let min_balance = <Runtime as pallet_contracts::Config>::Currency::minimum_balance();
-
 	let time = 42 * 1000;
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap()),
@@ -700,7 +698,7 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate_with_code::<Runtime> {
-						endowment: 1000 * DOLLARS + min_balance,
+						value: 0,
 						gas_limit: 500_000_000,
 						storage_deposit_limit: None,
 						code: transfer_code,

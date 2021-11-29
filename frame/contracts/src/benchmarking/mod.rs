@@ -57,7 +57,7 @@ struct Contract<T: Config> {
 	caller: T::AccountId,
 	account_id: T::AccountId,
 	addr: <T::Lookup as StaticLookup>::Source,
-	endowment: BalanceOf<T>,
+	value: BalanceOf<T>,
 }
 
 impl<T: Config> Contract<T>
@@ -86,7 +86,7 @@ where
 		module: WasmModule<T>,
 		data: Vec<u8>,
 	) -> Result<Contract<T>, &'static str> {
-		let endowment = T::Currency::minimum_balance();
+		let value = T::Currency::minimum_balance();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
 		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
@@ -94,7 +94,7 @@ where
 		Contracts::<T>::store_code_raw(module.code, caller.clone())?;
 		Contracts::<T>::instantiate(
 			RawOrigin::Signed(caller.clone()).into(),
-			endowment,
+			value,
 			Weight::MAX,
 			None,
 			module.hash,
@@ -102,12 +102,8 @@ where
 			salt,
 		)?;
 
-		let result = Contract {
-			caller,
-			account_id: addr.clone(),
-			addr: T::Lookup::unlookup(addr),
-			endowment,
-		};
+		let result =
+			Contract { caller, account_id: addr.clone(), addr: T::Lookup::unlookup(addr), value };
 
 		ContractInfoOf::<T>::insert(&result.account_id, result.info()?);
 
@@ -270,13 +266,13 @@ benchmarks! {
 		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len / 1024);
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = T::Currency::minimum_balance();
+		let value = T::Currency::minimum_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
-	}: _(origin, endowment, Weight::MAX, None, code, vec![], salt)
+	}: _(origin, value, Weight::MAX, None, code, vec![], salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
@@ -284,10 +280,10 @@ benchmarks! {
 		let code_deposit = T::Currency::reserved_balance(&caller);
 		assert_eq!(
 			T::Currency::free_balance(&caller),
-			caller_funding::<T>() - endowment - deposit - code_deposit,
+			caller_funding::<T>() - value - deposit - code_deposit,
 		);
-		// contract has the full endowment
-		assert_eq!(T::Currency::free_balance(&addr), endowment);
+		// contract has the full value
+		assert_eq!(T::Currency::free_balance(&addr), value);
 		// instantiate should leave a contract
 		Contract::<T>::address_info(&addr)?;
 	}
@@ -297,21 +293,21 @@ benchmarks! {
 	instantiate {
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = T::Currency::minimum_balance();
+		let value = T::Currency::minimum_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
 		Contracts::<T>::store_code_raw(code, caller.clone())?;
-	}: _(origin, endowment, Weight::MAX, None, hash, vec![], salt)
+	}: _(origin, value, Weight::MAX, None, hash, vec![], salt)
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&addr);
-		// endowment was removed from the caller
-		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment - deposit);
-		// contract has the full endowment
-		assert_eq!(T::Currency::free_balance(&addr), endowment);
+		// value was removed from the caller
+		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - value - deposit);
+		// contract has the full value
+		assert_eq!(T::Currency::free_balance(&addr), value);
 		// instantiate should leave a contract
 		Contract::<T>::address_info(&addr)?;
 	}
@@ -334,10 +330,10 @@ benchmarks! {
 	verify {
 		// the contract itself does not trigger any reserves
 		let deposit = T::Currency::reserved_balance(&instance.account_id);
-		// endowment and value transfered via call should be removed from the caller
+		// value and value transfered via call should be removed from the caller
 		assert_eq!(
 			T::Currency::free_balance(&instance.caller),
-			caller_funding::<T>() - instance.endowment - value - deposit,
+			caller_funding::<T>() - instance.value - value - deposit,
 		);
 		// contract should have received the value
 		assert_eq!(T::Currency::free_balance(&instance.account_id), before + value);

@@ -54,7 +54,7 @@ sp_api::decl_runtime_apis! {
 		/// See `pallet_contracts::Pallet::instantiate`.
 		fn instantiate(
 			origin: AccountId,
-			endowment: Balance,
+			value: Balance,
 			gas_limit: u64,
 			storage_deposit_limit: Option<Balance>,
 			code: Code<Hash>,

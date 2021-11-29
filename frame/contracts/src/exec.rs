@@ -109,7 +109,7 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of
-	/// value transferred from this to the newly created account (also known as endowment).
+	/// value transferred from this to the newly created account (also known as value).
 	///
 	/// # Return Value
 	///
@@ -156,7 +156,7 @@ pub trait Ext: sealing::Sealed {
 	/// The `value_transferred` is already added.
 	fn balance(&self) -> BalanceOf<Self::T>;
 
-	/// Returns the value transferred along with this call or as endowment.
+	/// Returns the value transferred along with this call or as value.
 	fn value_transferred(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a reference to the timestamp of the current block
@@ -938,7 +938,7 @@ where
 		&mut self,
 		gas_limit: Weight,
 		code_hash: CodeHash<T>,
-		endowment: BalanceOf<T>,
+		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
@@ -951,7 +951,7 @@ where
 				executable,
 				salt,
 			},
-			endowment,
+			value,
 			gas_limit,
 		)?;
 		let account_id = self.top_frame().account_id.clone();
@@ -1660,7 +1660,7 @@ mod tests {
 					&mut gas_meter,
 					&mut storage_meter,
 					&schedule,
-					0, // <- zero endowment
+					0, // <- zero value
 					vec![],
 					&[],
 					None,
