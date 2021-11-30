@@ -60,13 +60,7 @@ impl Payload {
 	///
 	/// In case the value is not there or it cannot be decoded does not match `None` is returned.
 	pub fn get_decoded<T: Decode>(&self, id: &BeefyPayloadId) -> Option<T> {
-		self.0.iter().find_map(|(payload_id, bytes)| {
-			if payload_id == id {
-				T::decode(&mut &bytes[..]).ok()
-			} else {
-				None
-			}
-		})
+		self.get_raw(id).and_then(|raw| T::decode(&mut &*raw).ok())
 	}
 
 	/// Push a `Vec<u8>` with a given id into the payload vec.
