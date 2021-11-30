@@ -996,6 +996,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		value: T::Balance,
 		best_effort: bool,
 		status: Status,
+		allow_creation: bool,
 	) -> Result<T::Balance, DispatchError> {
 		if value.is_zero() {
 			return Ok(Zero::zero())
@@ -1011,12 +1012,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ((actual, _maybe_one_dust), _maybe_other_dust) = Self::try_mutate_account_with_dust(
 			beneficiary,
 			|to_account, is_new| -> Result<(T::Balance, DustCleaner<T, I>), DispatchError> {
-				ensure!(!is_new, Error::<T, I>::DeadAccount);
+				ensure!(!is_new || allow_creation, Error::<T, I>::DeadAccount);
 				Self::try_mutate_account_with_dust(
 					slashed,
 					|from_account, _| -> Result<T::Balance, DispatchError> {
 						let actual = cmp::min(from_account.reserved, value);
 						ensure!(best_effort || actual == value, Error::<T, I>::InsufficientBalance);
+						ensure!(
+							!is_new || actual >= T::ExistentialDeposit::get(),
+							Error::<T, I>::ExistentialDeposit
+						);
 						match status {
 							Status::Free =>
 								to_account.free = to_account
@@ -1208,7 +1213,7 @@ impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, 
 		on_hold: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		let status = if on_hold { Status::Reserved } else { Status::Free };
-		Self::do_transfer_reserved(source, dest, amount, best_effort, status)
+		Self::do_transfer_reserved(source, dest, amount, best_effort, status, false)
 	}
 }
 
@@ -1868,7 +1873,22 @@ where
 		value: Self::Balance,
 		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
-		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, true, status)?;
+		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, true, status, false)?;
+		Ok(value.saturating_sub(actual))
+	}
+
+	/// Move the reserved balance of one account into the balance of another, according to `status`.
+	///
+	/// Is a no-op if:
+	/// - the value to be moved is zero; or
+	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	fn repatriate_reserved_creating(
+		slashed: &T::AccountId,
+		beneficiary: &T::AccountId,
+		value: Self::Balance,
+		status: Status,
+	) -> Result<Self::Balance, DispatchError> {
+		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, true, status, true)?;
 		Ok(value.saturating_sub(actual))
 	}
 }

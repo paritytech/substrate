@@ -79,6 +79,21 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 		value: Self::Balance,
 		status: BalanceStatus,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Moves up to `value` from reserved balance of account `slashed` to balance of account
+	/// `beneficiary`. `beneficiary` must either exist or the actually transferred funds must be
+	/// larger than the existential deposit for this to succeed. If it does not, `Err` will be
+	/// returned. Funds will be placed in either the `free` balance or the `reserved` balance,
+	/// depending on the `status`.
+	///
+	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
+	/// then `Ok(non_zero)` will be returned.
+	fn repatriate_reserved_creating(
+		slashed: &AccountId,
+		beneficiary: &AccountId,
+		value: Self::Balance,
+		status: BalanceStatus,
+	) -> Result<Self::Balance, DispatchError>;
 }
 
 pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
