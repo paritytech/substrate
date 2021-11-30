@@ -83,7 +83,6 @@ members = [
 	"frame/elections",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
-	"frame/election-playground",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
 	"frame/examples/parallel",
