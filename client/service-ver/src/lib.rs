@@ -32,7 +32,7 @@ pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
 mod metrics;
-mod task_manager;
+// mod task_manager;
 
 use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
 
@@ -77,7 +77,8 @@ pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, Trans
 use sp_runtime::AccountId32;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
-pub use task_manager::{SpawnTaskHandle, TaskManager};
+// pub use task_manager::{SpawnTaskHandle, TaskManager};
+pub use sc_service_old::{SpawnTaskHandle, TaskManager};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 

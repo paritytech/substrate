@@ -61,7 +61,6 @@ use sp_blockchain::{
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
-use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	convert_hash,
@@ -933,8 +932,7 @@ where
 	where
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>
-			+ ApiExt<Block, StateBackend = B::State>
-			+ ExtrinsicInfoRuntimeApi<Block>,
+			+ ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
 		let at = BlockId::Hash(*parent_hash);
@@ -1429,8 +1427,7 @@ where
 	Block: BlockT,
 	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-		+ BlockBuilderApi<Block>
-		+ ExtrinsicInfoRuntimeApi<Block>,
+		+ BlockBuilderApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
@@ -1884,7 +1881,7 @@ where
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State> + ExtrinsicInfoRuntimeApi<Block>,
+		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	RA: Sync + Send,
 	backend::TransactionFor<B, Block>: Send + 'static,
 {
@@ -1999,7 +1996,7 @@ where
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api:
-		CoreApi<Block> + ApiExt<Block, StateBackend = B::State> + ExtrinsicInfoRuntimeApi<Block>,
+		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	RA: Sync + Send,
 	backend::TransactionFor<B, Block>: Send + 'static,
 {
