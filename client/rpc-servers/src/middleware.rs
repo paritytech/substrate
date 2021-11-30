@@ -20,18 +20,28 @@
 
 use jsonrpsee::types::middleware::Middleware;
 use prometheus_endpoint::{
-	register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
+	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
+	U64,
 };
 
 /// Metrics for RPC middleware storing information about the number of requests started/completed,
 /// calls started/completed and their timings.
 #[derive(Debug, Clone)]
 pub struct RpcMetrics {
+	/// Number of RPC requests received since the server started.
 	requests_started: CounterVec<U64>,
+	/// Number of RPC requests completed since the server started.
 	requests_finished: CounterVec<U64>,
+	/// Histogram over RPC execution times.
 	calls_time: HistogramVec,
+	/// Number of calls started.
 	calls_started: CounterVec<U64>,
+	/// Number of calls completed.
 	calls_finished: CounterVec<U64>,
+	/// Number of Websocket sessions opened (Websocket only).
+	ws_sessions_opened: Option<Counter<U64>>,
+	/// Number of Websocket sessions closed (Websocket only).
+	ws_sessions_closed: Option<Counter<U64>>,
 }
 
 impl RpcMetrics {
@@ -85,6 +95,16 @@ impl RpcMetrics {
 				)?,
 				metrics_registry,
 			)?,
+			ws_sessions_opened: register(
+				Counter::new("rpc_sessions_opened", "Number of persistent RPC sessions opened")?,
+				metrics_registry,
+			)?
+			.into(),
+			ws_sessions_closed: register(
+				Counter::new("rpc_sessions_closed", "Number of persistent RPC sessions closed")?,
+				metrics_registry,
+			)?
+			.into(),
 		})
 	}
 }
@@ -105,6 +125,10 @@ impl RpcMiddleware {
 
 impl Middleware for RpcMiddleware {
 	type Instant = std::time::Instant;
+
+	fn on_connect(&self) {
+		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
+	}
 
 	fn on_request(&self) -> Self::Instant {
 		let now = std::time::Instant::now();
@@ -139,5 +163,9 @@ impl Middleware for RpcMiddleware {
 	fn on_response(&self, started_at: Self::Instant) {
 		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
 		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
+	}
+
+	fn on_disconnect(&self) {
+		self.metrics.ws_sessions_closed.as_ref().map(|counter| counter.inc());
 	}
 }

@@ -25,7 +25,7 @@ use jsonrpsee::{
 	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
-use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
+use prometheus_endpoint::Registry;
 use std::net::SocketAddr;
 
 use crate::middleware::{RpcMetrics, RpcMiddleware};
@@ -42,44 +42,6 @@ pub const WS_MAX_BUFFER_CAPACITY_DEFAULT: usize = 16 * MEGABYTE;
 const WS_MAX_CONNECTIONS: usize = 100;
 
 pub mod middleware;
-
-// TODO: (dp) Wire up the ServerMetrics as well
-/// RPC server-specific prometheus metrics.
-#[derive(Debug, Clone, Default)]
-pub struct ServerMetrics {
-	/// Number of sessions opened.
-	session_opened: Option<Counter<U64>>,
-	/// Number of sessions closed.
-	session_closed: Option<Counter<U64>>,
-}
-
-impl ServerMetrics {
-	/// Create new WebSocket RPC server metrics.
-	pub fn new(registry: Option<&Registry>) -> Result<Self, PrometheusError> {
-		registry
-			.map(|r| {
-				Ok(Self {
-					session_opened: register(
-						Counter::new(
-							"rpc_sessions_opened",
-							"Number of persistent RPC sessions opened",
-						)?,
-						r,
-					)?
-					.into(),
-					session_closed: register(
-						Counter::new(
-							"rpc_sessions_closed",
-							"Number of persistent RPC sessions closed",
-						)?,
-						r,
-					)?
-					.into(),
-				})
-			})
-			.unwrap_or_else(|| Ok(Default::default()))
-	}
-}
 
 /// Type alias for http server
 pub type HttpServer = HttpServerHandle;
@@ -121,7 +83,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
 		server.start(rpc_api)?
 	} else {
-		let server= tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
 		server.start(rpc_api)?
 	};
 
@@ -164,7 +126,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
 		server.start(rpc_api)?
 	} else {
-		let server= tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
+		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
 		server.start(rpc_api)?
 	};
 
