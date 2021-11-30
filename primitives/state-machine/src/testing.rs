@@ -318,7 +318,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::create_proof_check_backend;
 	use hex_literal::hex;
 	use sp_core::{storage::ChildInfo, traits::Externalities, H256};
 	use sp_runtime::traits::BlakeTwo256;
