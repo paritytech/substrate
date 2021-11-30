@@ -283,7 +283,7 @@ pub mod pallet {
 			});
 			<ChildBountyCount<T>>::put(child_bounty_id.saturating_add(1));
 
-			// Create child-bounty instance
+			// Create child-bounty instance.
 			Self::create_child_bounty(parent_bounty_id, child_bounty_id, bounded_description);
 			Ok(())
 		}
@@ -413,7 +413,7 @@ pub mod pallet {
 		/// Unassign curator from a child-bounty.
 		///
 		/// The dispatch origin for this call can be either `RejectOrigin` or
-		/// any signed origin.
+		/// the curator of the parent bounty.
 		///
 		/// For the origin other than T::RejectOrigin, parent-bounty must be in
 		/// active state, for this call to work. For origin T::RejectOrigin
@@ -478,9 +478,11 @@ pub mod pallet {
 							return Err(BountiesError::<T>::UnexpectedStatus.into())
 						},
 						ChildBountyStatus::CuratorProposed { ref curator } => {
-							// A child-bounty curator has been proposed, but not accepted yet.
-							// Either `RejectOrigin`, parent-bounty curator or the proposed
-							// child-bounty curator can unassign the child-bounty curator.
+							// A child-bounty curator has been proposed, but not
+							// accepted yet. Either `RejectOrigin`,
+							// parent-bounty curator or the proposed
+							// child-bounty curator can unassign the
+							// child-bounty curator.
 							ensure!(
 								maybe_sender.map_or(true, |sender| sender == *curator ||
 									sender == parent_curator),
@@ -490,33 +492,33 @@ pub mod pallet {
 						ChildBountyStatus::Active { ref curator } => {
 							// The child-bounty is active.
 							match maybe_sender {
-								// If the `RejectOrigin` is calling this function,
-								// slash the curator deposit.
+								// If the `RejectOrigin` is calling this
+								// function, slash the curator deposit.
 								None => {
 									slash_curator(curator, &mut child_bounty.curator_deposit);
-									// Continue to change child-bounty status below...
+									// Continue to change child-bounty status below.
 								},
 								Some(sender) => {
 									if sender == *curator {
 										// This is the child-bounty curator,
-										// willingly giving up their role.
-										// Give back their deposit.
+										// willingly giving up their role. Give
+										// back their deposit.
 										T::Currency::unreserve(
 											&curator,
 											child_bounty.curator_deposit,
 										);
 										// Reset curator deposit.
 										child_bounty.curator_deposit = Zero::zero();
-									// Continue to change bounty status below...
+									// Continue to change bounty status below.
 									} else if parent_curator == sender {
-										// Looks like child-bounty curator is inactive,
-										// slash their deposit.
+										// Looks like child-bounty curator is
+										// inactive, slash their deposit.
 										slash_curator(curator, &mut child_bounty.curator_deposit);
-									// Continue to change child-bounty status below...
+									// Continue to change child-bounty status below.
 									} else {
-										// Check for expiry,
-										// looks like curator is inactive,
-										// slash the curator deposit.
+										// Check for expiry, looks like curator
+										// is inactive, slash the curator
+										// deposit.
 										let block_number =
 											frame_system::Pallet::<T>::block_number();
 										if update_due < block_number {
@@ -524,7 +526,7 @@ pub mod pallet {
 												curator,
 												&mut child_bounty.curator_deposit,
 											);
-										// Continue to change child-bounty status below...
+										// Continue to change child-bounty status below.
 										} else {
 											// Curator has more time to give an update.
 											return Err(BountiesError::<T>::Premature.into())
@@ -606,7 +608,7 @@ pub mod pallet {
 				},
 			)?;
 
-			// Trigger the event Awarded
+			// Trigger the event Awarded.
 			Self::deposit_event(Event::<T>::Awarded {
 				index: parent_bounty_id,
 				child_index: child_bounty_id,
@@ -627,8 +629,8 @@ pub mod pallet {
 		/// paid & curator deposit is unreserved.
 		///
 		/// Child-bounty must be in "PendingPayout" state, for processing the
-		/// call. And instance of child-bounty is removed from DB on successful
-		/// call completion.
+		/// call. And instance of child-bounty is removed from the state on
+		/// successful call completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
@@ -654,8 +656,8 @@ pub mod pallet {
 						ref unlock_at,
 					} = child_bounty.status
 					{
-						// Ensure block number is elapsed for
-						// processing the claim.
+						// Ensure block number is elapsed for processing the
+						// claim.
 						ensure!(
 							frame_system::Pallet::<T>::block_number() >= *unlock_at,
 							BountiesError::<T>::Premature,
@@ -664,23 +666,33 @@ pub mod pallet {
 						// Make curator fee payment.
 						let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 						let balance = T::Currency::free_balance(&child_bounty_account);
-						let fee = child_bounty.fee.min(balance);
-						let payout = balance.saturating_sub(fee);
+						let curator_fee = child_bounty.fee.min(balance);
+						let payout = balance.saturating_sub(curator_fee);
 
-						// Unreserve the curator deposit.
+						// Unreserve the curator deposit. Should not fail
+						// because the fee is always reserves when curator is
+						// assigned.
 						let _ = T::Currency::unreserve(&curator, child_bounty.curator_deposit);
 
 						// Make payout to child-bounty curator.
-						let _ =
-							T::Currency::transfer(&child_bounty_account, &curator, fee, AllowDeath);
+						// Should not fail because curator fee is always less than bounty value.
+						let fee_transfer_result = T::Currency::transfer(
+							&child_bounty_account,
+							&curator,
+							curator_fee,
+							AllowDeath,
+						);
+						debug_assert!(fee_transfer_result.is_ok());
 
 						// Make payout to beneficiary.
-						let _ = T::Currency::transfer(
+						// Should not fail.
+						let payout_transfer_result = T::Currency::transfer(
 							&child_bounty_account,
 							beneficiary,
 							payout,
 							AllowDeath,
 						);
+						debug_assert!(payout_transfer_result.is_ok());
 
 						// Trigger the Claimed event.
 						Self::deposit_event(Event::<T>::Claimed {
@@ -692,13 +704,13 @@ pub mod pallet {
 
 						// Update the active child-bounty tracking count.
 						<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| {
-							*count = count.saturating_sub(1)
+							count.saturating_dec()
 						});
 
 						// Remove the child-bounty description.
 						<ChildBountyDescriptions<T>>::remove(child_bounty_id);
 
-						// Remove the child-bounty instance from DB.
+						// Remove the child-bounty instance from the state.
 						*maybe_child_bounty = None;
 
 						Ok(())
@@ -726,8 +738,8 @@ pub mod pallet {
 		/// active state, for this child-bounty call to work. For origin
 		/// T::RejectOrigin execution is forced.
 		///
-		/// Instance of child-bounty is removed from DB on successful call
-		/// completion.
+		/// Instance of child-bounty is removed from the state on successful
+		/// call completion.
 		///
 		/// - `parent_bounty_id`: Index of parent bounty.
 		/// - `child_bounty_id`: Index of child bounty.
@@ -757,7 +769,7 @@ impl<T: Config> Pallet<T> {
 	/// The account ID of a child-bounty account.
 	pub fn child_bounty_account_id(id: BountyIndex) -> T::AccountId {
 		// Only use two byte prefix to support 16 byte account id (used by test)
-		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for
+		// "modl" ++ "py/trsry" ++ "cb" is 14 bytes, and two bytes remaining for
 		// bounty index.
 		T::PalletId::get().into_sub_account(("cb", id))
 	}
@@ -812,11 +824,11 @@ impl<T: Config> Pallet<T> {
 						// Then execute removal of the child-bounty below.
 					},
 					ChildBountyStatus::PendingPayout { .. } => {
-						// Child-bounty is already in pending payout. If parent curator or
-						// Root origin wants to cancel this child-bounty,
-						// it should mean the child-bounty curator was acting maliciously.
-						// So first unassign the child-bounty curator,
-						// slashing their deposit.
+						// Child-bounty is already in pending payout. If parent
+						// curator or Root origin wants to cancel this
+						// child-bounty, it should mean the child-bounty curator
+						// was acting maliciously. So first unassign the
+						// child-bounty curator, slashing their deposit.
 						return Err(BountiesError::<T>::PendingPayout.into())
 					},
 				}
@@ -835,12 +847,13 @@ impl<T: Config> Pallet<T> {
 					pallet_bounties::Pallet::<T>::bounty_account_id(parent_bounty_id);
 				let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
 				let balance = T::Currency::free_balance(&child_bounty_account);
-				let _ = T::Currency::transfer(
+				let transfer_result = T::Currency::transfer(
 					&child_bounty_account,
 					&parent_bounty_account,
 					balance,
 					AllowDeath,
-				);
+				); // Should not fail; child bounty account gets this balance during creation.
+				debug_assert!(transfer_result.is_ok());
 
 				// Remove the child-bounty description.
 				<ChildBountyDescriptions<T>>::remove(child_bounty_id);
@@ -868,8 +881,8 @@ impl<T: Config> pallet_bounties::ChildBountyManager<BalanceOf<T>> for Pallet<T> 
 	}
 
 	fn children_curator_fees(bounty_id: pallet_bounties::BountyIndex) -> BalanceOf<T> {
-		// This is asked for when the parent bounty is being claimed.
-		// No use of keeping it in state after that. Hence removing.
+		// This is asked for when the parent bounty is being claimed. No use of
+		// keeping it in state after that. Hence removing.
 		let children_fee_total = Self::children_curator_fees(bounty_id);
 		<ChildrenCuratorFees<T>>::remove(bounty_id);
 		children_fee_total
