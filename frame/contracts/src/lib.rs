@@ -125,7 +125,7 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
-use sp_runtime::traits::{CheckedSub, Convert, Hash, Saturating, StaticLookup};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, prelude::*};
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
@@ -759,10 +759,8 @@ where
 		data: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalCallOutput<T> {
-		let storage_deposit_limit = storage_deposit_limit
-			.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, value));
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let mut storage_meter = match StorageMeter::new(origin.clone(), storage_deposit_limit) {
+		let mut storage_meter = match StorageMeter::new(&origin, storage_deposit_limit, value) {
 			Ok(meter) => meter,
 			Err(err) =>
 				return InternalCallOutput {
@@ -798,13 +796,11 @@ where
 		salt: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
-		let mut storage_deposit_limit = storage_deposit_limit
-			.unwrap_or_else(|| Self::max_storage_deposit_limit(&origin, value));
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let try_exec = || {
 			let schedule = T::Schedule::get();
-			let (executable, extra_deposit) = match code {
+			let (extra_deposit, executable) = match code {
 				Code::Upload(Bytes(binary)) => {
 					ensure!(
 						binary.len() as u32 <= schedule.limits.code_len,
@@ -816,22 +812,22 @@ where
 						executable.code_len() <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge
 					);
-					// There might be an deposit that will be charged during execution when the
+					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transfered to the contract but
 					// reserved on the uploading account.
-					let deposit = executable.open_deposit();
-					storage_deposit_limit = storage_deposit_limit
-						.checked_sub(&deposit)
-						.ok_or(<Error<T>>::StorageDepositLimitExhausted)?;
-					(executable, StorageDeposit::Charge(deposit))
+					(executable.open_deposit(), executable)
 				},
 				Code::Existing(hash) => (
-					PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?,
 					Default::default(),
+					PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?,
 				),
 			};
-			let mut storage_meter = StorageMeter::new(origin.clone(), storage_deposit_limit)?;
+			let mut storage_meter = StorageMeter::new(
+				&origin,
+				storage_deposit_limit,
+				value.saturating_add(extra_deposit),
+			)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin,
 				executable,
@@ -843,16 +839,11 @@ where
 				&salt,
 				debug_message,
 			);
-			storage_deposit = storage_meter.into_deposit().saturating_add(&extra_deposit);
+			storage_deposit = storage_meter
+				.into_deposit()
+				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
 		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
-	}
-
-	/// If no storage deposit limit is specified we use this function.
-	fn max_storage_deposit_limit(origin: &T::AccountId, value: BalanceOf<T>) -> BalanceOf<T> {
-		T::Currency::free_balance(origin)
-			.saturating_sub(T::Currency::minimum_balance())
-			.saturating_sub(value)
 	}
 }

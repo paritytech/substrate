@@ -23,7 +23,6 @@ use crate::{
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
-	pallet_prelude::Encode,
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
 	weights::Weight,
@@ -588,7 +587,6 @@ where
 		gas_limit: Weight,
 		schedule: &Schedule<T>,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
-		let mut nested_storage = storage_meter.nested();
 		let (account_id, contract_info, executable, entry_point, account_counter) = match frame_args
 		{
 			FrameArgs::Call { dest, cached_info } => {
@@ -611,16 +609,6 @@ where
 					trie_id,
 					executable.code_hash().clone(),
 				)?;
-				nested_storage.charge(&storage::meter::Diff {
-					bytes_added: contract.encoded_size() as u32,
-					items_added: 1,
-					// We make sure that this deposit that is charged for every new contract
-					// is at least the existential deposit. This makes sure that the contract's
-					// account is never dusted even when all the free balance is removed. This
-					// saves us all kind of checks when dealing with balance transfers.
-					require_ed: true,
-					..Default::default()
-				})?;
 				(account_id, contract, executable, ExportedFunction::Constructor, Some(trie_seed))
 			},
 		};
@@ -631,7 +619,7 @@ where
 			account_id,
 			entry_point,
 			nested_gas: gas_meter.nested(gas_limit)?,
-			nested_storage,
+			nested_storage: storage_meter.nested(),
 			allows_reentry: true,
 		};
 
@@ -681,6 +669,17 @@ where
 	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError> {
 		let entry_point = self.top_frame().entry_point;
 		let do_transaction = || {
+			// We need to charge the storage deposit before the initial transfer so that
+			// it can create the account incase the initial transfer is < ed.
+			if entry_point == ExportedFunction::Constructor {
+				let top_frame = top_frame_mut!(self);
+				top_frame.nested_storage.charge_instantiate(
+					&self.origin,
+					&top_frame.account_id,
+					&mut top_frame.contract_info.get(&top_frame.account_id),
+				)?;
+			}
+
 			// Every call or instantiate also optionally transferres balance.
 			self.initial_transfer()?;
 
@@ -1292,7 +1291,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, exec_ch);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), value).unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -1346,7 +1345,7 @@ mod tests {
 			place_contract(&dest, return_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
-			let mut storage_meter = storage::meter::Meter::new(origin.clone(), 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
 
 			let output = MockStack::run_call(
 				origin.clone(),
@@ -1396,7 +1395,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
-			let mut storage_meter = storage::meter::Meter::new(origin.clone(), 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 0).unwrap();
 			place_contract(&BOB, return_ch);
 
 			let result = MockStack::run_call(
@@ -1429,7 +1428,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, return_ch);
-			let mut storage_meter = storage::meter::Meter::new(origin.clone(), 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				origin,
@@ -1459,7 +1458,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, input_data_ch);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				ALICE,
@@ -1490,7 +1489,8 @@ mod tests {
 			let executable =
 				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, min_balance * 100).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -1539,7 +1539,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			set_balance(&BOB, 1);
 			place_contract(&BOB, recurse_ch);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), value).unwrap();
 
 			let result = MockStack::run_call(
 				ALICE,
@@ -1586,7 +1586,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&dest, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
-			let mut storage_meter = storage::meter::Meter::new(origin.clone(), 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				origin.clone(),
@@ -1625,7 +1625,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				ALICE,
@@ -1651,7 +1651,7 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_instantiate(
@@ -1683,7 +1683,8 @@ mod tests {
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, min_balance * 100).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
 
 			let instantiated_contract_address = assert_matches!(
 				MockStack::run_instantiate(
@@ -1726,7 +1727,8 @@ mod tests {
 			let executable =
 				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, min_balance * 100).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
 
 			let instantiated_contract_address = assert_matches!(
 				MockStack::run_instantiate(
@@ -1779,7 +1781,9 @@ mod tests {
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			set_balance(&ALICE, min_balance * 100);
 			place_contract(&BOB, instantiator_ch);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, min_balance * 10).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&ALICE, Some(min_balance * 10), min_balance * 10)
+					.unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -1841,7 +1845,7 @@ mod tests {
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
 			place_contract(&BOB, instantiator_ch);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 100).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 0).unwrap();
 
 			assert_matches!(
 				MockStack::run_call(
@@ -1876,7 +1880,7 @@ mod tests {
 			let executable =
 				MockExecutable::from_storage(terminate_ch, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, 1000);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 100).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(100), 100).unwrap();
 
 			assert_eq!(
 				MockStack::run_instantiate(
@@ -1927,7 +1931,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 
 			let result = MockStack::run_call(
 				ALICE,
@@ -1960,7 +1964,8 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, min_balance * 100).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&ALICE, Some(min_balance * 100), min_balance).unwrap();
 
 			let result = MockStack::run_instantiate(
 				ALICE,
@@ -1993,7 +1998,7 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 			MockStack::run_call(
 				ALICE,
 				BOB,
@@ -2026,7 +2031,7 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 			let result = MockStack::run_call(
 				ALICE,
 				BOB,
@@ -2057,7 +2062,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 
 			// Calling another contract should succeed
 			assert_ok!(MockStack::run_call(
@@ -2107,7 +2112,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 
 			// BOB -> CHARLIE -> BOB fails as BOB denies reentry.
 			assert_err!(
@@ -2143,7 +2148,7 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 			System::reset_events();
 			MockStack::run_call(
 				ALICE,
@@ -2211,7 +2216,7 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, min_balance * 10);
 			place_contract(&BOB, code_hash);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, 0).unwrap();
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 			System::reset_events();
 			MockStack::run_call(
 				ALICE,
@@ -2287,7 +2292,9 @@ mod tests {
 			let succ_succ_executable =
 				MockExecutable::from_storage(succ_succ_code, &schedule, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
-			let mut storage_meter = storage::meter::Meter::new(ALICE, min_balance * 500).unwrap();
+			let mut storage_meter =
+				storage::meter::Meter::new(&ALICE, Some(min_balance * 500), min_balance * 100)
+					.unwrap();
 
 			MockStack::run_instantiate(
 				ALICE,

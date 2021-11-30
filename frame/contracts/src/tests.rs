@@ -241,7 +241,7 @@ parameter_types! {
 	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
 	pub const TransactionByteFee: u64 = 0;
-	pub const DepositPerByte: BalanceOf<Test> = 1;
+	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
 }
 
@@ -312,6 +312,9 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
+		use env_logger::{Builder, Env};
+		let env = Env::new().default_filter_or("runtime=debug");
+		let _ = Builder::from_env(env).is_test(true).try_init();
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> { balances: vec![] }
@@ -335,30 +338,6 @@ where
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
-}
-
-/// Extract the ordered list of deposit or refund amounts from a list of events.
-fn deposits(
-	events: &[EventRecord<Event, <Test as frame_system::Config>::Hash>],
-) -> impl Iterator<Item = BalanceOf<Test>> + '_ {
-	events.iter().filter_map(|event| {
-		if let EventRecord {
-			phase: Phase::Initialization,
-			event:
-				Event::Balances(pallet_balances::Event::ReserveRepatriated {
-					from: _,
-					to: _,
-					amount,
-					destination_status: BalanceStatus::Reserved,
-				}),
-			topics: _,
-		} = event
-		{
-			Some(*amount)
-		} else {
-			None
-		}
-	})
 }
 
 // Perform a call to a plain account.
@@ -387,10 +366,10 @@ fn calling_plain_account_fails() {
 fn instantiate_and_call_and_deposit_event() {
 	let (wasm, code_hash) = compile_module::<Test>("return_from_start_fn").unwrap();
 
-	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let value = min_balance * 100;
+		let value = 100;
 
 		// We determine the storage deposit limit after uploading because it depends on ALICEs free
 		// balance which is changed by uploading a module.
@@ -400,7 +379,6 @@ fn instantiate_and_call_and_deposit_event() {
 		initialize_block(2);
 
 		// Check at the end to get hash on error easily
-		let storage_deposit_limit = <Pallet<Test>>::max_storage_deposit_limit(&ALICE, value);
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			value,
@@ -413,23 +391,9 @@ fn instantiate_and_call_and_deposit_event() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 		assert!(ContractInfoOf::<Test>::contains_key(&addr));
 
-		// We instantiate a contract. This means the caller is charged for the storage
-		// that the contract itself occupies.
-		let events = System::events();
-		let storage_cost = deposits(&events).next().unwrap();
-		let unused = storage_deposit_limit - storage_cost;
-
 		assert_eq!(
-			events,
+			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: storage_deposit_limit,
-					}),
-					topics: vec![],
-				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
@@ -439,7 +403,7 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
-						free_balance: min_balance * 100
+						free_balance: min_balance,
 					}),
 					topics: vec![],
 				},
@@ -448,7 +412,24 @@ fn instantiate_and_call_and_deposit_event() {
 					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
-						amount: min_balance * 100
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: value,
 					}),
 					topics: vec![],
 				},
@@ -465,24 +446,6 @@ fn instantiate_and_call_and_deposit_event() {
 					event: Event::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone()
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
-						from: ALICE,
-						to: addr.clone(),
-						amount: storage_cost,
-						destination_status: BalanceStatus::Reserved,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Unreserved {
-						who: ALICE,
-						amount: unused,
 					}),
 					topics: vec![],
 				},
@@ -618,10 +581,14 @@ fn storage_max_value_limit() {
 
 #[test]
 fn deploy_and_call_other_contract() {
-	let (callee_wasm, callee_code_hash) = compile_module::<Test>("return_with_data").unwrap();
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>("caller_contract").unwrap();
+	let (callee_wasm, callee_code_hash) = compile_module::<Test>("return_with_data").unwrap();
+	let caller_addr = Contracts::contract_address(&ALICE, &caller_code_hash, &[]);
+	let callee_addr = Contracts::contract_address(&caller_addr, &callee_code_hash, &[]);
 
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
 		// Create
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::instantiate_with_code(
@@ -643,29 +610,94 @@ fn deploy_and_call_other_contract() {
 			vec![42],
 		));
 
+		// Drop previous events
+		initialize_block(2);
+
 		// Call BOB contract, which attempts to instantiate and call the callee contract and
 		// makes various assertions on the results from those calls.
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
-			Contracts::contract_address(&ALICE, &caller_code_hash, &[]),
+			caller_addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
 			callee_code_hash.as_ref().to_vec(),
 		));
+
+		assert_eq!(
+			System::events(),
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::System(frame_system::Event::NewAccount(callee_addr.clone())),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: callee_addr.clone(),
+						free_balance: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: callee_addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: callee_addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: caller_addr.clone(),
+						to: callee_addr.clone(),
+						amount: 32768, // hard coded in wasm
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Instantiated {
+						deployer: caller_addr.clone(),
+						contract: callee_addr.clone(),
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: caller_addr.clone(),
+						to: callee_addr.clone(),
+						amount: 32768,
+					}),
+					topics: vec![],
+				},
+			]
+		);
 	});
 }
 
 #[test]
 fn cannot_self_destruct_through_draning() {
 	let (wasm, code_hash) = compile_module::<Test>("drain").unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		// Instantiate the BOB contract.
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
-			100_000,
+			1_000,
 			GAS_LIMIT,
 			None,
 			wasm,
@@ -679,12 +711,73 @@ fn cannot_self_destruct_through_draning() {
 
 		// Call BOB which makes it send all funds to the zero address
 		// The contract code asserts that the transfer was successful
-		assert_ok!(Contracts::call(Origin::signed(ALICE), addr, 0, GAS_LIMIT, None, vec![]));
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![]
+		));
 
 		// Make sure the account wasn't remove by sending all free balance away.
-		assert!(
-			<Test as Config>::Currency::total_balance(&ALICE) >=
-				<Test as Config>::Currency::minimum_balance()
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			<Test as Config>::Currency::minimum_balance(),
+		);
+	});
+}
+
+#[test]
+fn cannot_self_destruct_through_storage_refund() {
+	let (wasm, code_hash) = compile_module::<Test>("store").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Check that the BOB contract has been instantiated and has the minimum balance
+		let info = ContractInfoOf::<Test>::get(&addr).unwrap();
+		assert_eq!(info.storage_deposit, min_balance);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
+
+		// Create 100 bytes of storage with a price of per byte
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			100u32.to_le_bytes().to_vec()
+		));
+
+		// Increase the byte price and trigger a refund. This could potentially destroy the account
+		// because the refund removes the reserved existential deposit. This should not happen.
+		DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = 500);
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			0u32.to_le_bytes().to_vec()
+		));
+
+		// Make sure the account wasn't removed by the refund
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			<Test as Config>::Currency::minimum_balance(),
 		);
 	});
 }
@@ -725,7 +818,7 @@ fn cannot_self_destruct_while_live() {
 #[test]
 fn self_destruct_works() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(1_000).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let _ = Balances::deposit_creating(&DJANGO, 1_000_000);
 
@@ -747,12 +840,6 @@ fn self_destruct_works() {
 		// Drop all previous events
 		initialize_block(2);
 
-		// We need to gather this before the call. Otherwise it was already reserved.
-		let storage_deposit_limit = <Pallet<Test>>::max_storage_deposit_limit(&ALICE, 0);
-
-		// There is only one user of this contract.
-		assert_refcount!(&code_hash, 1);
-
 		// Call BOB without input data which triggers termination.
 		assert_matches!(
 			Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, vec![],),
@@ -764,27 +851,14 @@ fn self_destruct_works() {
 
 		// Check that account is gone
 		assert!(ContractInfoOf::<Test>::get(&addr).is_none());
+		assert_eq!(Balances::total_balance(&addr), 0);
 
 		// check that the beneficiary (django) got remaining balance
 		assert_eq!(Balances::free_balance(DJANGO), 1_000_000 + 100_000);
 
-		// We delete a contract here. This means that the caller gets a refund over
-		// all the storage deposits of the contract.
-		let events = System::events();
-		let storage_refund = deposits(&events).next().unwrap();
-		let unreserved = storage_deposit_limit + storage_refund;
-
 		pretty_assertions::assert_eq!(
-			events,
+			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: storage_deposit_limit,
-					}),
-					topics: vec![],
-				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Transfer {
@@ -812,16 +886,8 @@ fn self_destruct_works() {
 					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
 						from: addr.clone(),
 						to: ALICE,
-						amount: storage_refund,
-						destination_status: BalanceStatus::Reserved,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Unreserved {
-						who: ALICE,
-						amount: unreserved,
+						amount: 1_000,
+						destination_status: BalanceStatus::Free,
 					}),
 					topics: vec![],
 				},
@@ -2036,10 +2102,8 @@ fn upload_code_works() {
 		));
 		assert!(<CodeStorage<Test>>::contains_key(code_hash));
 
-		let events = System::events();
-
 		assert_eq!(
-			events,
+			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2117,10 +2181,8 @@ fn remove_code_works() {
 		assert_ok!(Contracts::remove_code(Origin::signed(ALICE), code_hash));
 		assert!(!<CodeStorage<Test>>::contains_key(code_hash));
 
-		let events = System::events();
-
 		assert_eq!(
-			events,
+			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2174,10 +2236,8 @@ fn remove_code_wrong_origin() {
 			sp_runtime::traits::BadOrigin,
 		);
 
-		let events = System::events();
-
 		assert_eq!(
-			events,
+			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2222,9 +2282,7 @@ fn remove_code_in_use() {
 			<Error<Test>>::CodeInUse,
 		);
 
-		let events = System::events();
-
-		assert_eq!(events, vec![]);
+		assert_eq!(System::events(), vec![]);
 	});
 }
 
@@ -2243,8 +2301,319 @@ fn remove_code_not_found() {
 			<Error<Test>>::CodeNotFound,
 		);
 
-		let events = System::events();
+		assert_eq!(System::events(), vec![]);
+	});
+}
 
-		assert_eq!(events, vec![]);
+#[test]
+fn instantiate_with_zero_balance_works() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Drop previous events
+		initialize_block(2);
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Check that the BOB contract has been instantiated.
+		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+
+		// Make sure the account exists even though no free balance was send
+		assert_eq!(<Test as Config>::Currency::free_balance(&addr), 0,);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			<Test as Config>::Currency::minimum_balance(),
+		);
+
+		assert_eq!(
+			System::events(),
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: addr.clone(),
+						free_balance: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: 180,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Instantiated {
+						deployer: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![],
+				},
+			]
+		);
+	});
+}
+
+#[test]
+fn instantiate_with_below_existential_deposit_works() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Drop previous events
+		initialize_block(2);
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			50,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Check that the BOB contract has been instantiated.
+		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+
+		// Make sure the account exists even though no free balance was send
+		assert_eq!(<Test as Config>::Currency::free_balance(&addr), 50,);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			<Test as Config>::Currency::minimum_balance() + 50,
+		);
+
+		assert_eq!(
+			System::events(),
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: addr.clone(),
+						free_balance: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: 50,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: 180,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Instantiated {
+						deployer: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![],
+				},
+			]
+		);
+	});
+}
+
+#[test]
+fn storage_deposit_works() {
+	let (wasm, code_hash) = compile_module::<Test>("multi_store").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let mut deposit = <Test as Config>::Currency::minimum_balance();
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Drop previous events
+		initialize_block(2);
+
+		// Create storage
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			42,
+			GAS_LIMIT,
+			None,
+			(1_000u32, 5_000u32).encode(),
+		));
+		// 4 is for creating 2 storage items
+		let charged0 = 4 + 1_000 + 5_000;
+		deposit += charged0;
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().storage_deposit, deposit);
+
+		// Add more storage (but also remove some)
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			(2_000u32, 4_900u32).encode(),
+		));
+		let charged1 = 1_000 - 100;
+		deposit += charged1;
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().storage_deposit, deposit);
+
+		// Remove more storage (but also add some)
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			(2_100u32, 900u32).encode(),
+		));
+		let refunded0 = 4_000 - 100;
+		deposit -= refunded0;
+		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().storage_deposit, deposit);
+
+		assert_eq!(
+			System::events(),
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: 42,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: charged0,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: addr.clone(),
+						amount: charged0,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: charged1,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Reserved {
+						who: addr.clone(),
+						amount: charged1,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
+						from: addr.clone(),
+						to: ALICE,
+						amount: refunded0,
+						destination_status: BalanceStatus::Free,
+					}),
+					topics: vec![],
+				},
+			]
+		);
 	});
 }

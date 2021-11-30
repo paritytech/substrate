@@ -18,14 +18,15 @@
 //! This module contains functions to meter the storage deposit.
 
 use crate::{storage::ContractInfo, BalanceOf, Config, Error};
+use codec::Encode;
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	traits::{tokens::BalanceStatus, Currency, Get, ReservableCurrency},
+	dispatch::DispatchError,
+	traits::{tokens::BalanceStatus, Currency, ExistenceRequirement, Get, ReservableCurrency},
 	DefaultNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
 use sp_core::crypto::UncheckedFrom;
-use sp_runtime::traits::Saturating;
+use sp_runtime::traits::{Saturating, Zero};
 use sp_std::marker::PhantomData;
 
 /// Deposit that uses the native currency's balance type.
@@ -46,31 +47,29 @@ pub type GenericMeter<T, S> = RawMeter<T, ReservingExt, S>;
 ///
 /// This mostly exists for testing so that the charging can be mocked.
 pub trait Ext<T: Config> {
-	/// This will be called to inform the implementer about the `storage_deposit_limit` of the
-	/// meter.
+	/// This checks whether `origin` is able to afford the storage deposit limit.
 	///
-	/// It is necessary to reserve the balance so that the charge won't fail later on. Should fail
-	/// when `origin` does not have enough free balance.
+	/// It is necessary to do this check beforehand so that the charge won't fail later on.
 	///
 	/// `origin`: The origin of the call stack from which is reponsible for putting down a deposit.
 	/// `limit`: The limit with which the meter was constructed.
-	fn reserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>) -> DispatchResult;
-	/// This called to inform the implementer that the metering is finished.
+	/// `min_leftover`: How much `free_balance` in addition to the ed should be left inside the
+	/// `origin` account.
 	///
-	/// This is should be used to unreserve the unused balance. The amount to unreserve can be
-	/// calculated from `limit` and `deposit`.
-	///
-	/// `origin`: The origin of the call stack from which is reponsible for putting down a deposit.
-	/// `limit`: The limit with which the meter was constructed.
-	/// `deposit`: The amount of actually used balance during the life time of this meter.
-	fn unreserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>, deposit: &DepositOf<T>);
+	/// Returns the limit that should be used by the meter. If origin can't afford the `limit`
+	/// it returns `Err`.
+	fn check_limit(
+		origin: &T::AccountId,
+		limit: Option<BalanceOf<T>>,
+		min_leftover: BalanceOf<T>,
+	) -> Result<BalanceOf<T>, DispatchError>;
 	/// This is called to inform the implementer that some balance should be charged due to
 	/// some interaction of the `origin` with a `contract`.
 	///
 	/// The balance transfer can either flow from `origin` to `contract` or the other way
 	/// around depending on whether `amount` constitues a `Charge` or a `Refund`.
-	/// It is garantueed that that all the possible balance that can be charged from the `origin`
-	/// was reserved by a call to `reserve_limit`. This is why this function is infallible.
+	/// It is garantueed that that this succeeds because no more balance then returned by
+	/// `check_limit` is ever charged. This is why this function is infallible.
 	fn charge(origin: &T::AccountId, contract: &T::AccountId, amount: &DepositOf<T>);
 }
 
@@ -96,13 +95,6 @@ impl State for Nested {}
 /// A type that allows the metering of consumed or freed storage of a single contract call stack.
 #[derive(DefaultNoBound)]
 pub struct RawMeter<T: Config, E: Ext<T>, S: State> {
-	/// The origin is the account that instantiates a call stack. This is where the balance is
-	/// charged from and refunded to.
-	///
-	/// # Note
-	///
-	/// This is `Some` if and only if `S == Root`.
-	origin: Option<T::AccountId>,
 	/// The limit of how much balance this meter is allowed to consume.
 	limit: BalanceOf<T>,
 	/// The amount of balance that was used in this meter and all of its already absorbed children.
@@ -164,24 +156,6 @@ impl Diff {
 	}
 }
 
-impl<T, E, S> Drop for RawMeter<T, E, S>
-where
-	T: Config,
-	E: Ext<T>,
-	S: State,
-{
-	/// The drop implementation makes sure that the initial reserve is removed.
-	fn drop(&mut self) {
-		// Drop cannot be specialized: We need to do a runtime check.
-		// An origin exists if and only if this is a root meter.
-		if let Some(origin) = self.origin.as_ref() {
-			// you cannot charge to the root meter
-			debug_assert_eq!(self.own_deposit, <DepositOf<T>>::default());
-			E::unreserve_limit(origin, &self.limit, &self.total_deposit);
-		}
-	}
-}
-
 /// Functions that apply to all states.
 impl<T, E, S> RawMeter<T, E, S>
 where
@@ -197,7 +171,6 @@ where
 	/// with the current contract we are interacting with.
 	pub fn nested(&self) -> RawMeter<T, E, Nested> {
 		RawMeter {
-			origin: None,
 			limit: self.available(),
 			total_deposit: Default::default(),
 			own_deposit: Default::default(),
@@ -233,12 +206,17 @@ where
 				Deposit::Charge(amount) =>
 					info.storage_deposit = info.storage_deposit.saturating_add(*amount),
 				Deposit::Refund(amount) => {
-					// We need to make sure to never refund more than what was deposited.
-					// This case can happen when costs change due to a runtime upgrade.
+					// We need to make sure to never refund more than what was deposited and
+					// still leave the existential deposit inside the contract's account.
+					// This case can happen when costs change due to a runtime upgrade where
+					// increased costs could remove an account due to refunds.
 					let amount = {
-						let corrected_amount = (*amount).min(info.storage_deposit);
+						let corrected_amount = (*amount).min(
+							info.storage_deposit.saturating_sub(T::Currency::minimum_balance()),
+						);
 						let correction = (*amount).saturating_sub(corrected_amount);
-						self.total_deposit.saturating_sub(&Deposit::Refund(correction));
+						absorbed.total_deposit =
+							absorbed.total_deposit.saturating_sub(&Deposit::Refund(correction));
 						*amount = corrected_amount;
 						corrected_amount
 					};
@@ -268,11 +246,14 @@ where
 {
 	/// Create new storage meter for the specified `origin` and `limit`.
 	///
-	/// This tries to [`Ext::reserve_limit`] on `origin` and fails if this is not possible.
-	pub fn new(origin: T::AccountId, limit: BalanceOf<T>) -> Result<Self, DispatchError> {
-		E::reserve_limit(&origin, &limit)?;
+	/// This tries to [`Ext::check_limit`] on `origin` and fails if this is not possible.
+	pub fn new(
+		origin: &T::AccountId,
+		limit: Option<BalanceOf<T>>,
+		min_leftover: BalanceOf<T>,
+	) -> Result<Self, DispatchError> {
+		let limit = E::check_limit(&origin, limit, min_leftover)?;
 		Ok(Self {
-			origin: Some(origin),
 			limit,
 			total_deposit: Default::default(),
 			own_deposit: Default::default(),
@@ -312,6 +293,42 @@ where
 		Ok(deposit)
 	}
 
+	/// Charge from `origin` a storage deposit for contract instantiation.
+	///
+	/// This immediatly transfers the balance in order to create the account.
+	pub fn charge_instantiate(
+		&mut self,
+		origin: &T::AccountId,
+		contract: &T::AccountId,
+		info: &mut ContractInfo<T>,
+	) -> Result<DepositOf<T>, DispatchError> {
+		let deposit = Diff {
+			bytes_added: info.encoded_size() as u32,
+			items_added: 1,
+			require_ed: true,
+			..Default::default()
+		}
+		.to_deposit::<T>();
+		// We do not increase `own_deposit` because this will be charged later when the contract
+		// execution does conclude.
+		let total_deposit = self.total_deposit.saturating_add(&deposit);
+		if let Deposit::Charge(amount) = &total_deposit {
+			if amount > &self.limit {
+				return Err(<Error<T>>::StorageDepositLimitExhausted.into())
+			}
+		}
+		if let Deposit::Charge(amount) = &deposit {
+			info.storage_deposit = info.storage_deposit.saturating_add(*amount);
+		}
+		self.total_deposit = total_deposit;
+		if !deposit.is_zero() {
+			// We need to charge immediatly so that the account is created before the `value`
+			// is transferred from the caller to the contract.
+			E::charge(origin, contract, &deposit);
+		}
+		Ok(deposit)
+	}
+
 	/// Call to tell the meter that the currently executing contract was executed.
 	///
 	/// This will manipulate the meter so that all storage deposit accumulated in
@@ -329,43 +346,72 @@ where
 }
 
 impl<T: Config> Ext<T> for ReservingExt {
-	fn reserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>) -> DispatchResult {
-		T::Currency::reserve(origin, *limit)
-			.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds.into())
-	}
-
-	fn unreserve_limit(origin: &T::AccountId, limit: &BalanceOf<T>, deposit: &DepositOf<T>) {
-		T::Currency::unreserve(origin, deposit.available(&limit));
+	fn check_limit(
+		origin: &T::AccountId,
+		limit: Option<BalanceOf<T>>,
+		min_leftover: BalanceOf<T>,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		let max = T::Currency::free_balance(origin)
+			.saturating_sub(T::Currency::minimum_balance())
+			.saturating_sub(min_leftover);
+		match limit {
+			Some(limit) if limit <= max => Ok(limit),
+			None => Ok(max),
+			_ => Err(<Error<T>>::StorageDepositNotEnoughFunds.into()),
+		}
 	}
 
 	fn charge(origin: &T::AccountId, contract: &T::AccountId, amount: &DepositOf<T>) {
-		let (slashed, beneficiary, amount) = match amount {
-			Deposit::Charge(amount) => (origin, contract, amount),
-			Deposit::Refund(amount) => (contract, origin, amount),
+		// There is nothing we can do when this fails as this constitutes a bug in the runtime:
+		// Either the runtime does not hold up the invariant of never deleting a contract's account
+		// or it does not honor reserved balances. We need to settle for emitting an error log
+		// in this case.
+		match amount {
+			Deposit::Charge(amount) => {
+				// This will never fail because a contract's account is required to exist
+				// at all times. The pallet enforces this invariant by depositing at least the
+				// existential deposit when instantiating and never refunds it unless the contract
+				// is removed. This means the receiver always exists except when instantiating a
+				// contract. In this case we made sure that at least the existential deposit is
+				// sent. The sender always has enough balance because we checked that it had enough
+				// balance when instantiating the storage meter.
+				let result = T::Currency::transfer(
+					origin,
+					contract,
+					*amount,
+					ExistenceRequirement::KeepAlive,
+				)
+				.and_then(|_| T::Currency::reserve(contract, *amount));
+				if let Err(err) = result {
+					log::warn!(
+						target: "runtime::contracts",
+						"Failed to transfer storage deposit {:?} from origin {:?} to contract {:?}: {:?}",
+						amount, origin, contract, err,
+					);
+				}
+			},
+			// For `Refund(_)` no error happen because the initial value transfer from the
+			// origin to the contract has a keep alive existence requirement and when reserving we
+			// make sure to leave at least the ed in the free balance. Therefore the receiver always
+			// exists because there is no way for it to be removed in between. The sender always has
+			// enough reserved balance because we track it in the `ContractInfo` and never send more
+			// back than we have.
+			Deposit::Refund(amount) => {
+				let result = T::Currency::repatriate_reserved(
+					contract,
+					origin,
+					*amount,
+					BalanceStatus::Free,
+				);
+				if matches!(result, Ok(val) if !val.is_zero()) || matches!(result, Err(_)) {
+					log::warn!(
+						target: "runtime::contracts",
+						"Failed to repatriate storage deposit {:?} from contract {:?} to origin {:?}: {:?}",
+						amount, contract, origin, result,
+					);
+				}
+			},
 		};
-
-		// For charge `Err` can never happen as a contract's account is required to exist
-		// at all times. The pallet enforces this invariant. Chain extensions or dispatchables
-		// that allow the removal of the contract's account are defunct.
-		//
-		// For refund `Err` can't happen because the initial value transfer from the
-		// origin to the contract has a keep alive existence requirement.
-		//
-		// There is nothing we can do when either `Err` or `Ok(> 0)` happens as this constitutes
-		// a bug in the runtime: Either the runtime does not hold up the invariant of never
-		// deleting a contract's account or it does not honor reserved balances.
-		//
-		// There is one exception:
-		//
-		// If a contract is terminated its account's free balance is completely removed and
-		// sent to the beneficiary. This could lead to the removal of the contract's account if
-		// the amount of reserved balance is below the existential deposit.
-		let _ = T::Currency::repatriate_reserved(
-			slashed,
-			beneficiary,
-			*amount,
-			BalanceStatus::Reserved,
-		);
 	}
 }
 
@@ -392,16 +438,10 @@ mod tests {
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
-	struct Reserve {
+	struct LimitCheck {
 		origin: AccountIdOf<Test>,
 		limit: BalanceOf<Test>,
-	}
-
-	#[derive(Debug, PartialEq, Eq)]
-	struct Unreserve {
-		origin: AccountIdOf<Test>,
-		limit: BalanceOf<Test>,
-		deposit: DepositOf<Test>,
+		min_leftover: BalanceOf<Test>,
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
@@ -413,41 +453,32 @@ mod tests {
 
 	#[derive(Default, Debug, PartialEq, Eq)]
 	struct TestExt {
-		reserves: Vec<Reserve>,
-		unreserves: Vec<Unreserve>,
+		limit_checks: Vec<LimitCheck>,
 		charges: Vec<Charge>,
 	}
 
 	impl TestExt {
 		fn clear(&mut self) {
-			self.reserves.clear();
-			self.unreserves.clear();
+			self.limit_checks.clear();
 			self.charges.clear();
 		}
 	}
 
 	impl Ext<Test> for TestExt {
-		fn reserve_limit(origin: &AccountIdOf<Test>, limit: &BalanceOf<Test>) -> DispatchResult {
-			TEST_EXT.with(|ext| {
-				ext.borrow_mut()
-					.reserves
-					.push(Reserve { origin: origin.clone(), limit: limit.clone() })
-			});
-			Ok(())
-		}
-
-		fn unreserve_limit(
+		fn check_limit(
 			origin: &AccountIdOf<Test>,
-			limit: &BalanceOf<Test>,
-			deposit: &DepositOf<Test>,
-		) {
+			limit: Option<BalanceOf<Test>>,
+			min_leftover: BalanceOf<Test>,
+		) -> Result<BalanceOf<Test>, DispatchError> {
+			let limit = limit.unwrap_or(42);
 			TEST_EXT.with(|ext| {
-				ext.borrow_mut().unreserves.push(Unreserve {
+				ext.borrow_mut().limit_checks.push(LimitCheck {
 					origin: origin.clone(),
-					limit: limit.clone(),
-					deposit: deposit.clone(),
+					limit,
+					min_leftover,
 				})
 			});
+			Ok(limit)
 		}
 
 		fn charge(
@@ -484,36 +515,13 @@ mod tests {
 	fn new_reserves_balance_works() {
 		clear_ext();
 
-		let _meter = TestMeter::new(ALICE, 1_000).unwrap();
+		TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 
 		TEST_EXT.with(|ext| {
 			assert_eq!(
 				*ext.borrow(),
 				TestExt {
-					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
-					..Default::default()
-				}
-			)
-		});
-	}
-
-	#[test]
-	fn unreserve_on_drop_works() {
-		clear_ext();
-
-		let meter = TestMeter::new(ALICE, 1_000).unwrap();
-		drop(meter);
-
-		TEST_EXT.with(|ext| {
-			assert_eq!(
-				*ext.borrow(),
-				TestExt {
-					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
-					unreserves: vec![Unreserve {
-						origin: ALICE,
-						limit: 1_000,
-						deposit: Deposit::Charge(0)
-					}],
+					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					..Default::default()
 				}
 			)
@@ -524,7 +532,7 @@ mod tests {
 	fn empty_charge_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
 		// an empty charge foes not create a `Charge` entry
@@ -532,18 +540,11 @@ mod tests {
 		nested0.charge(&Default::default()).unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);
 
-		drop(meter);
-
 		TEST_EXT.with(|ext| {
 			assert_eq!(
 				*ext.borrow(),
 				TestExt {
-					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
-					unreserves: vec![Unreserve {
-						origin: ALICE,
-						limit: 1_000,
-						deposit: Deposit::Charge(0)
-					}],
+					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					..Default::default()
 				}
 			)
@@ -554,7 +555,7 @@ mod tests {
 	fn existential_deposit_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
 		// a `Refund` will be turned into a `Charge(ed)` which is intended behaviour
@@ -565,18 +566,11 @@ mod tests {
 			.unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);
 
-		drop(meter);
-
 		TEST_EXT.with(|ext| {
 			assert_eq!(
 				*ext.borrow(),
 				TestExt {
-					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
-					unreserves: vec![Unreserve {
-						origin: ALICE,
-						limit: 1_000,
-						deposit: Deposit::Charge(2)
-					}],
+					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![Charge {
 						origin: ALICE,
 						contract: BOB,
@@ -592,7 +586,9 @@ mod tests {
 	fn charging_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
 		let mut nested0_info = new_info(100);
@@ -614,32 +610,26 @@ mod tests {
 		nested0.absorb(nested1, &ALICE, &CHARLIE, Some(&mut nested1_info));
 
 		// Trying to refund more than is available in the contract will cap the charge
-		// to that value. This value is `1` in this case.
-		let mut nested2_info = new_info(1);
+		// to (deposit_in_contract - ed).
+		let mut nested2_info = new_info(5);
 		let mut nested2 = nested0.nested();
 		nested2.charge(&Diff { bytes_removed: 7, ..Default::default() }).unwrap();
 		nested0.absorb(nested2, &ALICE, &CHARLIE, Some(&mut nested2_info));
 
 		meter.absorb(nested0, &ALICE, &BOB, Some(&mut nested0_info));
-		drop(meter);
 
 		assert_eq!(nested0_info.storage_deposit, 102);
 		assert_eq!(nested1_info.storage_deposit, 40);
-		assert_eq!(nested2_info.storage_deposit, 0);
+		assert_eq!(nested2_info.storage_deposit, min_balance);
 
 		TEST_EXT.with(|ext| {
 			assert_eq!(
 				*ext.borrow(),
 				TestExt {
-					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
-					unreserves: vec![Unreserve {
-						origin: ALICE,
-						limit: 1_000,
-						deposit: Deposit::Refund(15)
-					}],
+					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![
 						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(10) },
-						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(1) },
+						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(4) },
 						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(2) }
 					],
 					..Default::default()
@@ -652,7 +642,7 @@ mod tests {
 	fn termination_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(ALICE, 1_000).unwrap();
+		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
 		let mut nested0 = meter.nested();
@@ -681,12 +671,7 @@ mod tests {
 			assert_eq!(
 				*ext.borrow(),
 				TestExt {
-					reserves: vec![Reserve { origin: ALICE, limit: 1_000 }],
-					unreserves: vec![Unreserve {
-						origin: ALICE,
-						limit: 1_000,
-						deposit: Deposit::Refund(388)
-					}],
+					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![
 						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(400) },
 						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(12) }
