@@ -459,15 +459,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(true)
 	}
 
-	/// Authorities sign discovery records by their PeerId-s. If there are no old nodes in the
-	/// network, which do not prove owning their multiaddresses, you should start rejecting unsigned
-	/// records by enabling this switch.
-	///
-	/// By default this is `false`.
-	fn strict_authority_records(&self) -> bool {
-		false
-	}
-
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCli>(
 		&self,
@@ -543,7 +534,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
-			strict_authority_records: self.strict_authority_records(),
 		})
 	}
 
