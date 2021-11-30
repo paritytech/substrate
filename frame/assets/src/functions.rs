@@ -83,19 +83,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 		reason: &ExistenceReason<DepositBalanceOf<T, I>>,
+		force: bool,
 	) -> DeadConsequence {
+		let mut result = Remove;
 		match *reason {
 			ExistenceReason::Consumer => frame_system::Pallet::<T>::dec_consumers(who),
 			ExistenceReason::Sufficient => {
 				d.sufficients = d.sufficients.saturating_sub(1);
 				frame_system::Pallet::<T>::dec_sufficients(who);
 			},
-			ExistenceReason::DepositHeld(_) => return Keep,
 			ExistenceReason::DepositRefunded => {},
+			ExistenceReason::DepositHeld(_) if !force => return Keep,
+			ExistenceReason::DepositHeld(_) => result = Keep,
 		}
 		d.accounts = d.accounts.saturating_sub(1);
 		T::Freezer::died(what, who);
-		Remove
+		result
 	}
 
 	pub(super) fn can_increase(
@@ -315,7 +318,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Currency::unreserve(&who, deposit);
 
-		if let Remove = Self::dead_account(id, &who, &mut details, &account.reason) {
+		if let Remove = Self::dead_account(id, &who, &mut details, &account.reason, false) {
 			Account::<T, I>::remove(id, &who);
 		} else {
 			debug_assert!(false, "refund did not result in dead account?!");
@@ -466,7 +469,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				account.balance = account.balance.saturating_sub(actual);
 				if account.balance < details.min_balance {
 					debug_assert!(account.balance.is_zero(), "checked in prep; qed");
-					if let Remove = Self::dead_account(id, target, &mut details, &account.reason) {
+					if let Remove = Self::dead_account(id, target, &mut details, &account.reason, false) {
 						return Ok(())
 					}
 				};
@@ -565,7 +568,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Remove source account if it's now dead.
 			if source_account.balance < details.min_balance {
 				debug_assert!(source_account.balance.is_zero(), "checked in prep; qed");
-				if let Remove = Self::dead_account(id, &source, details, &source_account.reason) {
+				if let Remove = Self::dead_account(id, &source, details, &source_account.reason, false) {
 					Account::<T, I>::remove(id, &source);
 					return Ok(())
 				}
@@ -643,7 +646,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
 
 			for (who, v) in Account::<T, I>::drain_prefix(id) {
-				let _ = Self::dead_account(id, &who, &mut details, &v.reason);
+				// We have to force this as it's destroying the entire asset class.
+				// This could mean that means that some accounts now have irreversibly reserved
+				// funds.
+				let _ = Self::dead_account(id, &who, &mut details, &v.reason, true);
 			}
 			debug_assert_eq!(details.accounts, 0);
 			debug_assert_eq!(details.sufficients, 0);
