@@ -2875,7 +2875,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.5.1"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#9fefc84e27e13123cb171f1befc10c5c87afa871"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#10e586af7baa3fbbfb71a95ae42aae809c35d773"
 dependencies = [
  "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
@@ -2888,7 +2888,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.5.1"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#9fefc84e27e13123cb171f1befc10c5c87afa871"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#10e586af7baa3fbbfb71a95ae42aae809c35d773"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2907,7 +2907,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.5.1"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#9fefc84e27e13123cb171f1befc10c5c87afa871"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#10e586af7baa3fbbfb71a95ae42aae809c35d773"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2918,7 +2918,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.5.1"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#9fefc84e27e13123cb171f1befc10c5c87afa871"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#10e586af7baa3fbbfb71a95ae42aae809c35d773"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2936,7 +2936,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.5.1"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#9fefc84e27e13123cb171f1befc10c5c87afa871"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#10e586af7baa3fbbfb71a95ae42aae809c35d773"
 dependencies = [
  "arrayvec 0.7.1",
  "beef",
@@ -2957,7 +2957,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.5.1"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#9fefc84e27e13123cb171f1befc10c5c87afa871"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#10e586af7baa3fbbfb71a95ae42aae809c35d773"
 dependencies = [
  "async-trait",
  "fnv",
@@ -2980,7 +2980,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.5.1"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#9fefc84e27e13123cb171f1befc10c5c87afa871"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=mh-metrics-middleware#10e586af7baa3fbbfb71a95ae42aae809c35d773"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -10279,8 +10279,8 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
 dependencies = [
- "cfg-if 1.0.0",
- "rand 0.8.4",
+ "cfg-if 0.1.10",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
