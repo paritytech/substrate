@@ -262,8 +262,7 @@ where
 					return
 				};
 
-			let payload = Payload::default()
-				.push_raw(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
+			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 			let commitment = Commitment {
 				payload,
 				block_number: notification.header.number(),

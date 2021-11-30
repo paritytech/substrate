@@ -39,10 +39,16 @@ pub mod known_payload_ids {
 /// Identifiers MUST be sorted by the [`BeefyPayloadId`] to allow efficient lookup of expected
 /// value. Duplicated identifiers are disallowed. It's okay for different implementations to only
 /// support a subset of possible values.
-#[derive(Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, Default, Hash)]
+#[derive(Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, Hash)]
 pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
+	/// Construct a new payload given an initial vallue
+	///
+	pub fn new(id: BeefyPayloadId, value: Vec<u8>) -> Self {
+		Self(vec![(id, value)])
+	}
+
 	/// Returns a raw payload under given `id`.
 	///
 	/// If the [`BeefyPayloadId`] is not found in the payload `None` is returned.
@@ -64,9 +70,10 @@ impl Payload {
 		})
 	}
 
-	/// Push a value that implements [`codec::Encode`] with a given id
-	/// to the back of the payload vec. This method will internally sort the payload vec
-	/// after every push. Returns self to allow for daisy chaining.
+	/// Push a `Vec<u8>` with a given id into the payload vec.
+	/// This method will internally sort the payload vec after every push.
+	///
+	/// Returns self to allow for daisy chaining.
 	pub fn push_raw(mut self, id: BeefyPayloadId, value: Vec<u8>) -> Self {
 		self.0.push((id, value));
 		self.0.sort_by_key(|(id, _)| *id);
