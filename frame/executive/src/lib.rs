@@ -126,10 +126,10 @@ use frame_support::{
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
 use frame_system::{extrinsics_root, DigestOf};
-// use schnorrkel::{
-// 	vrf::{VRFOutput, VRFProof},
-// 	SignatureError,
-// };
+use schnorrkel::{
+	vrf::{VRFOutput, VRFProof},
+	SignatureError,
+};
 use sp_core::ShufflingSeed;
 // use sp_keystore::vrf;
 use sp_runtime::{
