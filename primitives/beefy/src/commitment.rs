@@ -43,15 +43,17 @@ pub mod known_payload_ids {
 pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
-	/// Returns a raw payload under given `id`. If the `BeefyPayloadId` is not found in the payload
-	/// `None` is returned.
+	/// Returns a raw payload under given `id`.
+	///
+	/// If the [`BeefyPayloadId`] is not found in the payload `None` is returned.
 	pub fn get_raw(&self, id: &BeefyPayloadId) -> Option<&Vec<u8>> {
 		let index = self.0.binary_search_by(|probe| probe.0.cmp(id)).ok()?;
 		Some(&self.0[index].1)
 	}
 
-	/// Returns a decoded value `T`, in case the value is not there or the encoding does not match
-	/// it returns `None`.
+	/// Returns a decoded payload value under given `id`.
+	/// 
+	/// In case the value is not there or it cannot be decoded does not match `None` is returned.
 	pub fn get_decoded<T: Decode>(&self, id: &BeefyPayloadId) -> Option<T> {
 		self.0.iter().find_map(|(payload_id, bytes)| {
 			if payload_id == id {
@@ -80,7 +82,14 @@ impl Payload {
 /// (see [SignedCommitment]) forms the BEEFY protocol.
 #[derive(Clone, Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
 pub struct Commitment<TBlockNumber> {
-	/// The payload being signed. see [`Payload`]
+	///  A collection of payloads to be signed, see [`Payload`] for details.
+	///
+	/// One of the payloads should be some form of cumulative representation of the chain (think MMR root hash).
+	/// Additionally one of the payloads should also contain some details that allow the light client to verify next
+	/// validator set. The protocol does not enforce any particular format of this data,
+	/// nor how often it should be present in commitments, however the light client has to be
+	/// provided with full validator set whenever it performs the transition (i.e. importing first
+	/// block with [validator_set_id](Commitment::validator_set_id) incremented).
 	pub payload: Payload,
 
 	/// Finalized block number this commitment is for.
