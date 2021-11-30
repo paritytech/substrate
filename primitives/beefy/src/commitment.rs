@@ -44,7 +44,6 @@ pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
 	/// Construct a new payload given an initial vallue
-	///
 	pub fn new(id: BeefyPayloadId, value: Vec<u8>) -> Self {
 		Self(vec![(id, value)])
 	}
@@ -58,7 +57,7 @@ impl Payload {
 	}
 
 	/// Returns a decoded payload value under given `id`.
-	/// 
+	///
 	/// In case the value is not there or it cannot be decoded does not match `None` is returned.
 	pub fn get_decoded<T: Decode>(&self, id: &BeefyPayloadId) -> Option<T> {
 		self.0.iter().find_map(|(payload_id, bytes)| {
@@ -91,12 +90,13 @@ impl Payload {
 pub struct Commitment<TBlockNumber> {
 	///  A collection of payloads to be signed, see [`Payload`] for details.
 	///
-	/// One of the payloads should be some form of cumulative representation of the chain (think MMR root hash).
-	/// Additionally one of the payloads should also contain some details that allow the light client to verify next
-	/// validator set. The protocol does not enforce any particular format of this data,
-	/// nor how often it should be present in commitments, however the light client has to be
-	/// provided with full validator set whenever it performs the transition (i.e. importing first
-	/// block with [validator_set_id](Commitment::validator_set_id) incremented).
+	/// One of the payloads should be some form of cumulative representation of the chain (think
+	/// MMR root hash). Additionally one of the payloads should also contain some details that
+	/// allow the light client to verify next validator set. The protocol does not enforce any
+	/// particular format of this data, nor how often it should be present in commitments, however
+	/// the light client has to be provided with full validator set whenever it performs the
+	/// transition (i.e. importing first block with
+	/// [validator_set_id](Commitment::validator_set_id) incremented).
 	pub payload: Payload,
 
 	/// Finalized block number this commitment is for.
@@ -208,8 +208,7 @@ mod tests {
 	#[test]
 	fn commitment_encode_decode() {
 		// given
-		let mut payload = Payload::default();
-		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
+		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -230,8 +229,7 @@ mod tests {
 	#[test]
 	fn signed_commitment_encode_decode() {
 		// given
-		let mut payload = Payload::default();
-		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
+		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -263,8 +261,7 @@ mod tests {
 	#[test]
 	fn signed_commitment_count_signatures() {
 		// given
-		let mut payload = Payload::default();
-		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
+		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -289,8 +286,7 @@ mod tests {
 			block_number: u128,
 			validator_set_id: crate::ValidatorSetId,
 		) -> TestCommitment {
-			let mut payload = Payload::default();
-			payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
+			let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 			Commitment { payload, block_number, validator_set_id }
 		}
 
@@ -310,8 +306,7 @@ mod tests {
 
 	#[test]
 	fn versioned_commitment_encode_decode() {
-		let mut payload = Payload::default();
-		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
+		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 

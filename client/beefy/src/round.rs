@@ -179,7 +179,7 @@ mod tests {
 		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
 
 		assert!(rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))
 		));
 
@@ -187,21 +187,21 @@ mod tests {
 
 		// invalid vote
 		assert!(!rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed"))
 		));
 
 		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 		assert!(rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed"))
 		));
 
 		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 		assert!(rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed"))
 		));
 
@@ -225,31 +225,31 @@ mod tests {
 
 		// round 1
 		rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
 		);
 		rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
 		);
 
 		// round 2
 		rounds.add_vote(
-			(H256::from_low_u64_le(2), 2),
+			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am again committed")),
 		);
 		rounds.add_vote(
-			(H256::from_low_u64_le(2), 2),
+			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
 		);
 
 		// round 3
 		rounds.add_vote(
-			(H256::from_low_u64_le(3), 3),
+			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
 		);
 		rounds.add_vote(
-			(H256::from_low_u64_le(3), 3),
+			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am still committed")),
 		);
 

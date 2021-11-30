@@ -355,8 +355,8 @@ mod tests {
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
-		let mut payload = Payload::default();
-		payload.push(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default());
+		let payload =
+			Payload::new(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default().as_ref().to_vec());
 		let commitment = Commitment { payload, block_number: 3_u64, validator_set_id: 0 };
 
 		let signature = sign_commitment(&Keyring::Alice, &commitment);

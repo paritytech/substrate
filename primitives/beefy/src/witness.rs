@@ -113,8 +113,8 @@ mod tests {
 	}
 
 	fn signed_commitment() -> TestSignedCommitment {
-		let mut payload = Payload::default();
-		payload.push(known_payload_ids::MMR_ROOT_ID, "Hello World!");
+		let mut payload =
+			Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".as_bytes().to_vec());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
