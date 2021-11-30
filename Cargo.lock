@@ -9649,6 +9649,7 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-runtime-client",
+ "zstd",
 ]
 
 [[package]]
@@ -9783,7 +9784,6 @@ dependencies = [
  "smallvec 1.7.0",
  "sp-core",
  "sp-externalities",
- "sp-io",
  "sp-panic-handler",
  "sp-runtime",
  "sp-std",
@@ -9792,7 +9792,6 @@ dependencies = [
  "tracing",
  "trie-db",
  "trie-root",
- "zstd",
 ]
 
 [[package]]
