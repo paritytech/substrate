@@ -351,6 +351,7 @@ where
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
+		config.prometheus_registry(),
 		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 	)

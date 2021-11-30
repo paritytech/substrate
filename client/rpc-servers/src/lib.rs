@@ -25,7 +25,10 @@ use jsonrpsee::{
 	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
+use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use std::net::SocketAddr;
+
+use crate::middleware::{RpcMetrics, RpcMiddleware};
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -38,7 +41,10 @@ pub const WS_MAX_BUFFER_CAPACITY_DEFAULT: usize = 16 * MEGABYTE;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
-/*/// RPC server-specific prometheus metrics.
+pub mod middleware;
+
+// TODO: (dp) Wire up the ServerMetrics as well
+/// RPC server-specific prometheus metrics.
 #[derive(Debug, Clone, Default)]
 pub struct ServerMetrics {
 	/// Number of sessions opened.
@@ -73,7 +79,7 @@ impl ServerMetrics {
 			})
 			.unwrap_or_else(|| Ok(Default::default()))
 	}
-}*/
+}
 
 /// Type alias for http server
 pub type HttpServer = HttpServerHandle;
@@ -103,6 +109,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 		acl = acl.set_allowed_origins(cors)?;
 	};
 
+	// TODO: (dp)
 	let builder = HttpServerBuilder::default()
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
@@ -121,19 +128,25 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	addrs: &[SocketAddr],
 	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
-	maybe_max_payload_mb: Option<usize>,
-	module: RpcModule<M>,
+	max_payload_mb: Option<usize>,
+	prometheus_registry: Option<&Registry>,
+	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 ) -> Result<WsServerHandle, anyhow::Error> {
-	let max_request_body_size = maybe_max_payload_mb
+	let max_request_body_size = max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 	let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
-	let mut builder = WsServerBuilder::default()
-		.max_request_body_size(max_request_body_size as u32)
-		.max_connections(max_connections as u64)
-		.custom_tokio_runtime(rt.clone());
+	let prometheus_registry = prometheus_registry.unwrap(); // TODO: (dp) what's the idea of making prometheus optional? Can we make it not so?
+	let mut builder = {
+		let metrics = RpcMetrics::new(&prometheus_registry)?;
+		let middleware = RpcMiddleware::new(metrics, "ws".into());
+		WsServerBuilder::with_middleware(middleware)
+			.max_request_body_size(max_request_body_size as u32)
+			.max_connections(max_connections as u64)
+			.custom_tokio_runtime(rt.clone())
+	};
 
 	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
 
@@ -146,7 +159,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 
 	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
 
-	let rpc_api = build_rpc_api(module);
+	let rpc_api = build_rpc_api(rpc_api);
 	let handle = server.start(rpc_api)?;
 
 	Ok(handle)
