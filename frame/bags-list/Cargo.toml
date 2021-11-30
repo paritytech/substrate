@@ -56,7 +56,7 @@ std = [
 	"log/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"sp-core",
 	"sp-io",
 	"pallet-balances",
