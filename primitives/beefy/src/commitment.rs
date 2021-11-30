@@ -46,15 +46,8 @@ impl Payload {
 	/// Returns a raw payload under given `id`. If the `BeefyPayloadId` is not found in the payload
 	/// `None` is returned.
 	pub fn get_raw(&self, id: &BeefyPayloadId) -> Option<&Vec<u8>> {
-		self.0.iter().find_map(
-			|(payload_id, bytes)| {
-				if payload_id == id {
-					Some(bytes)
-				} else {
-					None
-				}
-			},
-		)
+		let index = self.0.binary_search_by(|probe| probe.0.cmp(id)).ok()?;
+		Some(&self.0[index].1)
 	}
 
 	/// Returns a decoded value `T`, in case the value is not there or the encoding does not match
@@ -71,12 +64,11 @@ impl Payload {
 
 	/// Push a value that implements [`codec::Encode`] with a given id
 	/// to the back of the payload vec. This method will internally sort the payload vec
-	/// after every push.
-	pub fn push<T: Encode>(&mut self, id: BeefyPayloadId, value: T) {
-		self.0.push((id, value.encode()));
-		self.0.sort_by(|(id_1, _), (id_2, _)| {
-			id_1.partial_cmp(id_2).expect("well_known_payload_ids are always comparable")
-		})
+	/// after every push. Returns self to allow for daisy chaining.
+	pub fn push_raw(mut self, id: BeefyPayloadId, value: Vec<u8>) -> Self {
+		self.0.push((id, value));
+		self.0.sort_by_key(|(id, _)| *id);
+		self
 	}
 }
 

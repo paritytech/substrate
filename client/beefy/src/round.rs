@@ -70,8 +70,8 @@ where
 
 impl<H, N> Rounds<H, N>
 where
-	H: Ord + Hash,
-	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
+	H: Ord + Hash + Clone,
+	N: Ord + AtLeast32BitUnsigned + MaybeDisplay + Clone,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id
@@ -81,9 +81,9 @@ where
 		self.validator_set.validators.clone()
 	}
 
-	pub(crate) fn add_vote(&mut self, round: (H, N), vote: (Public, Signature)) -> bool {
+	pub(crate) fn add_vote(&mut self, round: &(H, N), vote: (Public, Signature)) -> bool {
 		if self.validator_set.validators.iter().any(|id| vote.0 == *id) {
-			self.rounds.entry(round).or_default().add_vote(vote)
+			self.rounds.entry(round.clone()).or_default().add_vote(vote)
 		} else {
 			false
 		}

@@ -262,8 +262,8 @@ where
 					return
 				};
 
-			let mut payload = Payload::default();
-			payload.push(known_payload_ids::MMR_ROOT_ID, mmr_root);
+			let payload = Payload::default()
+				.push_raw(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 			let commitment = Commitment {
 				payload,
 				block_number: notification.header.number(),
@@ -306,7 +306,7 @@ where
 	fn handle_vote(&mut self, round: (Payload, NumberFor<B>), vote: (Public, Signature)) {
 		self.gossip_validator.note_round(round.1);
 
-		let vote_added = self.rounds.add_vote(round.clone(), vote);
+		let vote_added = self.rounds.add_vote(&round, vote);
 
 		if vote_added && self.rounds.is_done(&round) {
 			if let Some(signatures) = self.rounds.drop(&round) {
