@@ -40,7 +40,7 @@ use libp2p::{
 	core::multiaddr,
 	multihash::{Hasher, Multihash},
 };
-use log::{debug, error, log_enabled, warn};
+use log::{debug, error, info, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
@@ -503,24 +503,27 @@ where
 						.map_err(Error::ParsingMultiaddress)?;
 
 				let get_peer_id = |a: &Multiaddr| match a.iter().last() {
-					Some(multiaddr::Protocol::P2p(key)) =>
-						PeerId::from_multihash(key).map_err(|_| ()),
-					_ => return Err(()),
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key).ok(),
+					_ => None,
 				};
 
-				// Ignore [`Multiaddr`]s without [`PeerId`] and own addresses.
+				// Ignore [`Multiaddr`]s without [`PeerId`] or with own addresses.
 				let addresses: Vec<Multiaddr> = addresses
 					.drain(..)
-					.filter(|a| match get_peer_id(a) {
-						Ok(peer_id) => peer_id != local_peer_id,
-						Err(_) => false,
+					.filter_map(|a| {
+						get_peer_id(&a)
+							.and_then(|p| if p != local_peer_id { Some(a) } else { None })
 					})
 					.collect();
 
 				let remote_peer_id = single(addresses.iter().map(get_peer_id))
 					.map_err(|_| Error::ReceivingDhtValueFoundEventWithDifferentPeerIds)? // different peer_id in records
-					.ok_or(Error::ReceivingDhtValueFoundEventWithNoPeerIds)? // no records
-					.map_err(|()| Error::ReceivingDhtValueFoundEventWithNoPeerIds)?; // no peer_id in any records
+					.flatten()
+					.ok_or(Error::ReceivingDhtValueFoundEventWithNoPeerIds)?; // no records with peer_id in them
+
+				// At this point we know all the valid multiaddresses from the record, know that
+				// each of them belong to the same PeerId, we just need to check if the record is
+				// properly signed by the owner of the PeerId
 
 				if let Some(peer_signature) = peer_signature {
 					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
@@ -536,7 +539,7 @@ where
 				} else if self.strict_record_validation {
 					return Err(Error::MissingPeerIdSignature)
 				} else {
-					warn!(
+					info!(
 						target: LOG_TARGET,
 						"Received unsigned authority discovery record from {}", authority_id
 					);
@@ -638,11 +641,10 @@ fn single<T>(values: impl IntoIterator<Item = T>) -> std::result::Result<Option<
 where
 	T: PartialEq<T>,
 {
-	values.into_iter().fold(Ok(None), |acc, item| match acc {
-		Ok(None) => Ok(Some(item)),
-		Ok(Some(ref prev)) if *prev != item => Err(()),
-		x @ Ok(_) => x,
-		Err(e) => Err(e),
+	values.into_iter().try_fold(None, |acc, item| match acc {
+		None => Ok(Some(item)),
+		Some(ref prev) if *prev != item => Err(()),
+		Some(x) => Ok(Some(x)),
 	})
 }
 
