@@ -122,17 +122,18 @@ fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 ) -> cumulus_test_runtime::GenesisConfig {
-	cumulus_test_runtime::GenesisConfig {
-		system: cumulus_test_runtime::SystemConfig {
-			code: cumulus_test_runtime::WASM_BINARY
-				.expect("WASM binary was not build, please build it!")
-				.to_vec(),
-			..Default::default()
-		},
-		// parachain_system: Default::default(),
-		balances: cumulus_test_runtime::BalancesConfig {
-			balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
-		},
-		sudo: cumulus_test_runtime::SudoConfig { key: root_key },
-	}
+	cumulus_test_runtime::GenesisConfig::default()
+	// cumulus_test_runtime::GenesisConfig {
+	// 	system: cumulus_test_runtime::SystemConfig {
+	// 		code: cumulus_test_runtime::WASM_BINARY
+	// 			.expect("WASM binary was not build, please build it!")
+	// 			.to_vec(),
+	// 		..Default::default()
+	// 	},
+	// 	// parachain_system: Default::default(),
+	// 	balances: cumulus_test_runtime::BalancesConfig {
+	// 		balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
+	// 	},
+	// 	sudo: cumulus_test_runtime::SudoConfig { key: root_key },
+	// }
 }

@@ -46,8 +46,10 @@ use sp_core::u32_trait::_2;
 use sp_core::u32_trait::_3;
 use sp_core::u32_trait::_4;
 use sp_core::u32_trait::_5;
+use sp_finality_grandpa as fg_primitives;
+use sp_runtime::traits::NumberFor;
 use sp_core::OpaqueMetadata;
-use sp_finality_grandpa::AuthorityId as GrandpaId;
+use sp_finality_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use sp_runtime::Percent;
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
@@ -58,10 +60,9 @@ use sp_runtime::{
 use codec::Decode;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	traits::{self, ConvertInto, NumberFor},
+	//traits::{self, ConvertInto, NumberFor},
 };
-use sp_runtime::{traits::Convert, FixedPointNumber, FixedPointOperand, FixedU128};
-use sp_std::prelude::*;
+use sp_runtime::{FixedPointNumber};
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -121,7 +122,6 @@ construct_runtime! {
 		Historical: pallet_session::historical::{Pallet},
 		Bounties: pallet_bounties,
 		Treasury: pallet_treasury,
-		//OnChain: onchain,
 		Grandpa: pallet_grandpa,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
 		// ParachainSystem: cumulus_pallet_parachain_system::{
@@ -130,6 +130,7 @@ construct_runtime! {
 		Timestamp: pallet_timestamp,
 		Balances: pallet_balances,
 		Sudo: pallet_sudo,
+	
 		// TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 	}
 }
@@ -909,7 +910,41 @@ impl_runtime_apis! {
 	// 		ParachainSystem::collect_collation_info()
 	// 	}
 	// }
+	impl fg_primitives::GrandpaApi<Block> for Runtime {
+		fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+			Grandpa::grandpa_authorities()
+		}
 
+		fn current_set_id() -> fg_primitives::SetId {
+			Grandpa::current_set_id()
+		}
+
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: fg_primitives::EquivocationProof<
+				<Block as BlockT>::Hash,
+				NumberFor<Block>,
+			>,
+			key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
+		) -> Option<()> {
+			let key_owner_proof = key_owner_proof.decode()?;
+
+			Grandpa::submit_unsigned_equivocation_report(
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
+
+		fn generate_key_ownership_proof(
+			_set_id: fg_primitives::SetId,
+			authority_id: GrandpaId,
+		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
+			use codec::Encode;
+
+			Historical::prove((fg_primitives::KEY_TYPE, authority_id))
+				.map(|p| p.encode())
+				.map(fg_primitives::OpaqueKeyOwnershipProof::new)
+		}
+	}
 
 	impl sp_consensus_babe::BabeApi<Block> for Runtime {
 		fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {

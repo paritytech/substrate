@@ -29,7 +29,8 @@ use sp_blockchain::HeaderBackend;
 use sp_core::storage::Storage;
 use sp_io::TestExternalities;
 use sp_runtime::{generic::Era, BuildStorage, SaturatedConversion};
-
+use cumulus_test_runtime::AccountId;
+use sp_core::Public;
 pub use block_builder::*;
 pub use cumulus_test_runtime as runtime;
 pub use sc_executor::error::Result as ExecutorResult;
@@ -81,7 +82,7 @@ pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		genesis_config().build_storage().unwrap()
+		cumulus_test_service::local_testnet_genesis().build_storage().unwrap()
 	}
 }
 
@@ -114,34 +115,6 @@ impl DefaultTestClientBuilderExt for TestClientBuilder {
 	}
 }
 
-// /// Local testnet genesis for testing.
-// pub fn genesis_config() -> GenesisConfig {
-// 	testnet_genesis(
-// 		get_account_id_from_seed::<sr25519::Public>("Alice"),
-// 		vec![
-// 			get_account_id_from_seed::<sr25519::Public>("Alice"),
-// 			get_account_id_from_seed::<sr25519::Public>("Bob"),
-// 			get_account_id_from_seed::<sr25519::Public>("Charlie"),
-// 			get_account_id_from_seed::<sr25519::Public>("Dave"),
-// 			get_account_id_from_seed::<sr25519::Public>("Eve"),
-// 			get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-// 			get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-// 			get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-// 			get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
-// 			get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
-// 			get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
-// 			get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
-// 		],
-// 	)
-// }
-
-// /// Helper function to generate an account ID from seed.
-// pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
-// where
-// 	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
-// {
-// 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
-// }
 
 /// Generate an extrinsic from the provided function call, origin and [`Client`].
 pub fn generate_extrinsic(

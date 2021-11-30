@@ -46,7 +46,6 @@ sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 
-
 # Cumulus dependencies
 # cumulus-primitives-core = { path = "../../primitives/core", default-features = false }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/election-provider-support", features = ["runtime-benchmarks"] }
@@ -66,16 +65,21 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-system-rpc-runtime-api/std",
+	"pallet-authorship/std",
 	"pallet-babe/std",
 	"pallet-balances/std",
+	"pallet-bounties/std",
 	"pallet-collective/std",
 	"pallet-offences/std",
 	"pallet-session/std",
 	"pallet-sudo/std",
 	"pallet-election-provider-multi-phase/std",
 	"pallet-staking/std",
+	# "pallet-staking-reward-curve/std",
 	"pallet-timestamp/std",
 	"pallet-treasury/std",
+	"pallet-grandpa/std",
+	"pallet-transaction-payment/std",
 	"serde",
 	"sp-api/std",
 	"sp-block-builder/std",

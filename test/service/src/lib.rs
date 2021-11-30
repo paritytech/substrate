@@ -161,13 +161,28 @@ pub fn new_partial(
 		client.clone(),
 	)?;
 
+	let slot_duration = babe_link.config().slot_duration();
 	let import_queue = sc_consensus_babe::import_queue(
 		babe_link,
 		block_import,
 		None,
 		client.clone(),
 		select_chain,
-		|_, _| async { Ok(sp_timestamp::InherentDataProvider::from_system_time()) },
+	move |_, _| async move { 
+			
+			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+			let slot =
+				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+					*timestamp,
+					slot_duration,
+				);
+
+			let uncles =
+				sp_authorship::InherentDataProvider::<<Block as BlockT>::Header>::check_inherents();
+
+			Ok((timestamp, slot, uncles))
+			},
 		&task_manager.spawn_essential_handle(),
 		registry.clone(),
 		sp_consensus::CanAuthorWithNativeVersion::new(
