@@ -384,8 +384,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	///
 	/// Removes and returns worst transactions from the queues and all transactions that depend on
 	/// them. Technically the worst transaction should be evaluated by computing the entire pending
-	/// set. We use a simplified approach to remove the transaction that occupies the pool for the
-	/// longest time or has the lowest priority.
+	/// set. We use a simplified approach to remove transactions with the lowest priority first or
+	/// those that occupy the pool for the longest time in case priority is the same.
 	pub fn enforce_limits(
 		&mut self,
 		ready: &Limit,
