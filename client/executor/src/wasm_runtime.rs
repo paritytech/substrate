@@ -65,16 +65,8 @@ struct VersionedRuntimeId {
 	heap_pages: u64,
 }
 
-struct VersionedRuntimeValue {
-	/// Shared runtime that can spawn instances.
-	module: Arc<dyn WasmModule>,
-	/// Runtime version if any.
-	version: Option<RuntimeVersion>,
-	/// Cached instance pool.
-	instances: Arc<Vec<Mutex<Option<Box<dyn WasmInstance>>>>>,
-}
-
 /// A Wasm runtime object along with its cached runtime version.
+#[derive(Clone)]
 struct VersionedRuntime {
 	/// Runtime code hash.
 	code_hash: Vec<u8>,
@@ -91,17 +83,6 @@ struct VersionedRuntime {
 }
 
 impl VersionedRuntime {
-	fn from_cache(id: VersionedRuntimeId, value: &VersionedRuntimeValue) -> Self {
-		Self {
-			code_hash: id.code_hash,
-			wasm_method: id.wasm_method,
-			heap_pages: id.heap_pages,
-			module: value.module.clone(),
-			version: value.version.clone(),
-			instances: value.instances.clone(),
-		}
-	}
-
 	/// Run the given closure `f` with an instance of this runtime.
 	fn with_instance<'c, R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
 	where
@@ -183,7 +164,7 @@ pub struct RuntimeCache {
 	/// A cache of runtimes along with metadata.
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
-	runtimes: Mutex<LruCache<VersionedRuntimeId, VersionedRuntimeValue>>,
+	runtimes: Mutex<LruCache<VersionedRuntimeId, VersionedRuntime>>,
 	/// The size of the instances cache for each runtime.
 	max_runtime_instances: usize,
 	cache_path: Option<PathBuf>,
@@ -265,9 +246,9 @@ impl RuntimeCache {
 			VersionedRuntimeId { code_hash: code_hash.clone(), heap_pages, wasm_method };
 
 		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
-		let runtime_value = runtimes.get(&versioned_runtime_id);
-		let runtime = if let Some(runtime_value) = runtime_value {
-			VersionedRuntime::from_cache(versioned_runtime_id, runtime_value)
+		let versioned_runtime = if let Some(versioned_runtime) = runtimes.get(&versioned_runtime_id)
+		{
+			versioned_runtime.clone()
 		} else {
 			let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
 
@@ -302,14 +283,7 @@ impl RuntimeCache {
 			let versioned_runtime = result?;
 
 			// Save new versioned wasm runtime in cache
-			runtimes.put(
-				versioned_runtime_id,
-				VersionedRuntimeValue {
-					module: versioned_runtime.module.clone(),
-					version: versioned_runtime.version.clone(),
-					instances: versioned_runtime.instances.clone(),
-				},
-			);
+			runtimes.put(versioned_runtime_id, versioned_runtime.clone());
 
 			versioned_runtime
 		};
@@ -317,7 +291,7 @@ impl RuntimeCache {
 		// Lock must be released prior to calling f
 		drop(runtimes);
 
-		Ok(runtime.with_instance(ext, f))
+		Ok(versioned_runtime.with_instance(ext, f))
 	}
 }
 
