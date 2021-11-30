@@ -90,17 +90,16 @@ pub type WsServer = WsServerHandle;
 pub fn start_http<M: Send + Sync + 'static>(
 	addrs: &[SocketAddr],
 	cors: Option<&Vec<String>>,
-	maybe_max_payload_mb: Option<usize>,
-	module: RpcModule<M>,
+	max_payload_mb: Option<usize>,
+	prometheus_registry: Option<&Registry>,
+	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 ) -> Result<HttpServerHandle, anyhow::Error> {
-	let max_request_body_size = maybe_max_payload_mb
+	let max_request_body_size = max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 
 	let mut acl = AccessControlBuilder::new();
-
-	log::info!("Starting JSON-RPC HTTP server: addr={:?}, allowed origins={:?}", addrs, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
@@ -109,17 +108,28 @@ pub fn start_http<M: Send + Sync + 'static>(
 		acl = acl.set_allowed_origins(cors)?;
 	};
 
-	// TODO: (dp)
-	let builder = HttpServerBuilder::default()
+	let builder = HttpServerBuilder::new()
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
 		.custom_tokio_runtime(rt.clone());
 
-	let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+	let rpc_api = build_rpc_api(rpc_api);
+	let handle = if let Some(prometheus_registry) = prometheus_registry {
+		let metrics = RpcMetrics::new(&prometheus_registry)?;
+		let middleware = RpcMiddleware::new(metrics, "http".into());
+		let builder = builder.set_middleware(middleware);
+		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+		server.start(rpc_api)?
+	} else {
+		let server= tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+		server.start(rpc_api)?
+	};
 
-	let rpc_api = build_rpc_api(module);
-	let handle = server.start(rpc_api)?;
+	// let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
 
+	// let rpc_api = build_rpc_api(rpc_api);
+	// let handle = server.start(rpc_api)?;
+	log::info!("Starting JSON-RPC HTTP server: addr={:?}, allowed origins={:?}", addrs, cors);
 	Ok(handle)
 }
 
@@ -151,7 +161,6 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	}
 
 	let rpc_api = build_rpc_api(rpc_api);
-
 	let handle = if let Some(prometheus_registry) = prometheus_registry {
 		let metrics = RpcMetrics::new(&prometheus_registry)?;
 		let middleware = RpcMiddleware::new(metrics, "ws".into());
