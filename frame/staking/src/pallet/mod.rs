@@ -217,7 +217,7 @@ pub mod pallet {
 
 	/// The minimum amount of commission that validators can set.
 	///
-	/// If non-existent, no limit exists.
+	/// If set to `0`, no limit exists.
 	#[pallet::storage]
 	pub type MinCommission<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
