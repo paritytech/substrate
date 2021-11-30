@@ -7985,7 +7985,7 @@ dependencies = [
  "parking_lot 0.11.2",
  "pin-project 1.0.8",
  "rand 0.7.3",
- "sc-block-builder",
+ "sc-block-builder-ver",
  "sc-chain-spec",
  "sc-client-api",
  "sc-client-db",
