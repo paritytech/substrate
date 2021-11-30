@@ -9936,6 +9936,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-std",
  "wasmi",
+ "wasmtime",
 ]
 
 [[package]]
@@ -11534,6 +11535,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "311d06b0c49346d1fbf48a17052e844036b95a7753c1afb34e8c0af3f6b5bb13"
 dependencies = [
  "anyhow",
+ "async-trait",
  "backtrace",
  "bincode",
  "cfg-if 1.0.0",
@@ -11554,8 +11556,10 @@ dependencies = [
  "wasmtime-cache",
  "wasmtime-cranelift",
  "wasmtime-environ",
+ "wasmtime-fiber",
  "wasmtime-jit",
  "wasmtime-runtime",
+ "wat",
  "winapi 0.3.9",
 ]
 
@@ -11623,6 +11627,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-fiber"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1d8822813b51b91e199c44a086c3ca76567e95e7fd563589acb631029eba79e"
+dependencies = [
+ "cc",
+ "rsix",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "wasmtime-jit"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11669,6 +11684,7 @@ dependencies = [
  "rsix",
  "thiserror",
  "wasmtime-environ",
+ "wasmtime-fiber",
  "winapi 0.3.9",
 ]
 

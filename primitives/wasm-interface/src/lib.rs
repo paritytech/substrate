@@ -24,6 +24,25 @@ use sp_std::{borrow::Cow, iter::Iterator, marker::PhantomData, mem, result, vec,
 #[cfg(feature = "std")]
 mod wasmi_impl;
 
+#[cfg(not(all(feature = "std", feature = "wasmtime")))]
+#[macro_export]
+macro_rules! if_wasmtime_is_enabled {
+	($($token:tt)*) => {};
+}
+
+#[cfg(all(feature = "std", feature = "wasmtime"))]
+#[macro_export]
+macro_rules! if_wasmtime_is_enabled {
+    ($($token:tt)*) => {
+        $($token)*
+    }
+}
+
+if_wasmtime_is_enabled! {
+	// Reexport wasmtime so that its types are accessible from the procedural macro.
+	pub extern crate wasmtime;
+}
+
 /// Result type used by traits in this crate.
 #[cfg(feature = "std")]
 pub type Result<T> = result::Result<T, String>;
@@ -338,10 +357,25 @@ pub trait Sandbox {
 	fn get_global_val(&self, instance_idx: u32, name: &str) -> Result<Option<Value>>;
 }
 
+if_wasmtime_is_enabled! {
+	pub trait HostFunctionRegistry {
+		type State;
+		type Error;
+		type FunctionContext: FunctionContext;
+		fn with_function_context<R>(caller: wasmtime::Caller<Self::State>, callback: impl FnOnce(&mut dyn FunctionContext) -> R) -> R;
+		fn register_static<Params, Results>(&mut self, fn_name: &str, func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static) -> core::result::Result<(), Self::Error>;
+	}
+}
+
 /// Something that provides implementations for host functions.
-pub trait HostFunctions: 'static {
+pub trait HostFunctions: 'static + Send + Sync {
 	/// Returns the host functions `Self` provides.
 	fn host_functions() -> Vec<&'static dyn Function>;
+
+	if_wasmtime_is_enabled! {
+		/// Statically registers the host functions.
+		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error> where T: HostFunctionRegistry;
+	}
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
@@ -353,7 +387,32 @@ impl HostFunctions for Tuple {
 
 		host_functions
 	}
+
+	#[cfg(all(feature = "std", feature = "wasmtime"))]
+	fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+	where
+		T: HostFunctionRegistry,
+	{
+		for_tuples!(
+			#( Tuple::register_static(registry)?; )*
+		);
+
+		Ok(())
+	}
 }
+
+/// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
+#[cfg(all(feature = "std", feature = "wasmtime"))]
+pub trait WasmTy: wasmtime::WasmTy {}
+
+/// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
+#[cfg(not(all(feature = "std", feature = "wasmtime")))]
+pub trait WasmTy {}
+
+impl WasmTy for i32 {}
+impl WasmTy for u32 {}
+impl WasmTy for i64 {}
+impl WasmTy for u64 {}
 
 /// Something that can be converted into a wasm compatible `Value`.
 pub trait IntoValue {
