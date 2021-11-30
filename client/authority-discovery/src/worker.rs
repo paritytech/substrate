@@ -40,7 +40,7 @@ use libp2p::{
 	core::multiaddr,
 	multihash::{Hasher, Multihash},
 };
-use log::{debug, error, info, log_enabled};
+use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
@@ -539,7 +539,7 @@ where
 				} else if self.strict_record_validation {
 					return Err(Error::MissingPeerIdSignature)
 				} else {
-					info!(
+					debug!(
 						target: LOG_TARGET,
 						"Received unsigned authority discovery record from {}", authority_id
 					);
