@@ -138,17 +138,10 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 	let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
-	let prometheus_registry = prometheus_registry.unwrap(); // TODO: (dp) what's the idea of making prometheus optional? Can we make it not so?
-	let mut builder = {
-		let metrics = RpcMetrics::new(&prometheus_registry)?;
-		let middleware = RpcMiddleware::new(metrics, "ws".into());
-		WsServerBuilder::with_middleware(middleware)
-			.max_request_body_size(max_request_body_size as u32)
-			.max_connections(max_connections as u64)
-			.custom_tokio_runtime(rt.clone())
-	};
-
-	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
+	let mut builder = WsServerBuilder::new()
+		.max_request_body_size(max_request_body_size as u32)
+		.max_connections(max_connections as u64)
+		.custom_tokio_runtime(rt.clone());
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
@@ -157,11 +150,20 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
-	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
-
 	let rpc_api = build_rpc_api(rpc_api);
-	let handle = server.start(rpc_api)?;
 
+	let handle = if let Some(prometheus_registry) = prometheus_registry {
+		let metrics = RpcMetrics::new(&prometheus_registry)?;
+		let middleware = RpcMiddleware::new(metrics, "ws".into());
+		let builder = builder.set_middleware(middleware);
+		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
+		server.start(rpc_api)?
+	} else {
+		let server= tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
+		server.start(rpc_api)?
+	};
+
+	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
 	Ok(handle)
 }
 
