@@ -208,7 +208,7 @@ mod tests {
 	#[test]
 	fn commitment_encode_decode() {
 		// given
-		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -229,7 +229,7 @@ mod tests {
 	#[test]
 	fn signed_commitment_encode_decode() {
 		// given
-		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -261,7 +261,7 @@ mod tests {
 	#[test]
 	fn signed_commitment_count_signatures() {
 		// given
-		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -286,7 +286,7 @@ mod tests {
 			block_number: u128,
 			validator_set_id: crate::ValidatorSetId,
 		) -> TestCommitment {
-			let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 			Commitment { payload, block_number, validator_set_id }
 		}
 
@@ -306,7 +306,7 @@ mod tests {
 
 	#[test]
 	fn versioned_commitment_encode_decode() {
-		let mut payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
