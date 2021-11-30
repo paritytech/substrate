@@ -160,8 +160,8 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 		&[trie_constants::EMPTY_TRIE]
 	}
 
-	fn leaf_node(partial: Partial, value: &[u8]) -> Vec<u8> {
-		let mut output = partial_encode(partial, NodeKind::Leaf);
+	fn leaf_node(partial: impl Iterator<Item = u8>, number_nibble: usize, value: &[u8]) -> Vec<u8> {
+		let mut output = partial_from_iterator_encode(partial, number_nibble, NodeKind::Leaf);
 		value.encode_to(&mut output);
 		output
 	}
@@ -187,11 +187,9 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
 		maybe_value: Option<&[u8]>,
 	) -> Vec<u8> {
-		let mut output = if maybe_value.is_some() {
-			partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchWithValue)
-		} else {
-			partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue)
-		};
+		let kind = maybe_value.is_some().then(|| NodeKind::BranchWithValue).unwrap_or_else(|| NodeKind::BranchNoValue);
+		let mut output = partial_from_iterator_encode(partial, number_nibble, kind);
+
 		let bitmap_index = output.len();
 		let mut bitmap: [u8; BITMAP_LENGTH] = [0; BITMAP_LENGTH];
 		(0..BITMAP_LENGTH).for_each(|_| output.push(0));
@@ -236,27 +234,6 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
 	};
 	output.extend(partial);
-	output
-}
-
-/// Encode and allocate node type header (type and size), and partial value.
-/// Same as `partial_from_iterator_encode` but uses non encoded `Partial` as input.
-fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
-	let number_nibble_encoded = (partial.0).0 as usize;
-	let nibble_count = partial.1.len() * nibble_ops::NIBBLE_PER_BYTE + number_nibble_encoded;
-
-	let nibble_count = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
-
-	let mut output = Vec::with_capacity(3 + partial.1.len());
-	match node_kind {
-		NodeKind::Leaf => NodeHeader::Leaf(nibble_count).encode_to(&mut output),
-		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
-		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
-	};
-	if number_nibble_encoded > 0 {
-		output.push(nibble_ops::pad_right((partial.0).1));
-	}
-	output.extend_from_slice(partial.1);
 	output
 }
 
