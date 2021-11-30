@@ -105,15 +105,15 @@ where
 		Prefix::pallet_prefix().as_bytes()
 	}
 
-	/// Storage prefix. Used for generating final key.
-	pub fn storage_prefix() -> &'static [u8] {
+	/// Counted Storage prefix. Used for generating final key.
+	pub fn storage_counter_prefix() -> &'static [u8] {
 		Prefix::STORAGE_PREFIX.as_bytes()
 	}
 
 	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
-	/// `storage_prefix`.
+	/// `storage_counter_prefix`.
 	pub fn prefix_hash() -> Vec<u8> {
-		let result = storage_prefix(Self::module_prefix(), Self::storage_prefix());
+		let result = storage_prefix(Self::module_prefix(), Self::storage_counter_prefix());
 		result.to_vec()
 	}
 
