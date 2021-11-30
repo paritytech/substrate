@@ -125,10 +125,6 @@ pub fn start_http<M: Send + Sync + 'static>(
 		server.start(rpc_api)?
 	};
 
-	// let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
-
-	// let rpc_api = build_rpc_api(rpc_api);
-	// let handle = server.start(rpc_api)?;
 	log::info!("Starting JSON-RPC HTTP server: addr={:?}, allowed origins={:?}", addrs, cors);
 	Ok(handle)
 }
