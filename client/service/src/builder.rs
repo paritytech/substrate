@@ -275,7 +275,7 @@ where
 			config.execution_strategies.clone(),
 			Some(keystore_container.sync_keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
-			config.prometheus_config.as_ref().map(|config| config.registry.clone())
+			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		);
 
 		let wasm_runtime_substitutes = config

@@ -27,7 +27,8 @@ use parking_lot::RwLock;
 use sc_transaction_pool_api::OffchainSubmitTransaction;
 use sp_core::{
 	offchain::{self, OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
-	ExecutionContext, traits::RuntimeMetricsExt
+	traits::RuntimeMetricsExt,
+	ExecutionContext,
 };
 use sp_externalities::Extensions;
 use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
@@ -117,7 +118,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			offchain_db: None,
 			transaction_pool: RwLock::new(None),
 			extensions_factory: RwLock::new(Box::new(())),
-			metrics_provider
+			metrics_provider,
 		}
 	}
 }
@@ -132,7 +133,8 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
-		let metrics_provider = crate::RuntimeMetricsProvider::new(prometheus_registry.as_ref()).unwrap();
+		let metrics_provider =
+			crate::RuntimeMetricsProvider::new(prometheus_registry.as_ref()).unwrap();
 
 		Self {
 			strategies,
@@ -140,7 +142,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			offchain_db,
 			extensions_factory: RwLock::new(extensions_factory),
 			transaction_pool,
-			metrics_provider
+			metrics_provider,
 		}
 	}
 
@@ -201,7 +203,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 				ext.0,
 			)));
 		}
-		
+
 		// TODO: add feature
 		// #[cfg(feature = "runtime_metrics")]
 		if let Some(metrics_provider) = self.metrics_provider.clone() {

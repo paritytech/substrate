@@ -40,7 +40,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	storage::ChildInfo,
-	traits::{RuntimeSpawnExt, TaskExecutorExt, RuntimeMetricsExt},
+	traits::{RuntimeMetricsExt, RuntimeSpawnExt, TaskExecutorExt},
 };
 #[cfg(feature = "std")]
 use sp_keystore::{KeystoreExt, SyncCryptoStore};
@@ -1512,7 +1512,7 @@ pub type SubstrateHostFunctions = (
 	offchain_index::HostFunctions,
 	runtime_tasks::HostFunctions,
 	transaction_index::HostFunctions,
-	runtime_metrics::HostFunctions
+	runtime_metrics::HostFunctions,
 );
 
 #[runtime_interface]
