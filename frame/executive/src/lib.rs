@@ -194,7 +194,7 @@ where
 		>::execute_block(block);
 	}
 
-	fn execute_block_with_authors(block: Block, info: Vec<Option<AccountId32>>) {
+	fn execute_block_ver(block: Block, info: Vec<Option<AccountId32>>) {
 		Executive::<
 			System,
 			Block,
@@ -202,7 +202,7 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block_with_authors(block, info);
+		>::execute_block_ver(block, info);
 	}
 }
 
@@ -435,7 +435,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_with_authors(block: Block, info: Vec<Option<AccountId32>>) {
+	pub fn execute_block_ver(block: Block, info: Vec<Option<AccountId32>>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
