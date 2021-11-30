@@ -44,3 +44,4 @@ std = [
 	"linregress",
 	"log/std",
 ]
+runtime-benchmarks = []
