@@ -434,11 +434,11 @@ mod tests {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let in_memory = in_memory.update(vec![(None, contents)]);
-		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
+		let in_memory_root = in_memory.storage_root(std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -450,6 +450,29 @@ mod tests {
 		let proof_check =
 			create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
+	}
+
+	#[test]
+	fn proof_record_works_with_iter() {
+		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let in_memory = in_memory.update(vec![(None, contents)]);
+		let in_memory_root = in_memory.storage_root(std::iter::empty()).0;
+		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
+
+		let trie = in_memory.as_trie_backend().unwrap();
+		let trie_root = trie.storage_root(std::iter::empty()).0;
+		assert_eq!(in_memory_root, trie_root);
+		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
+
+		let proving = ProvingBackend::new(trie);
+		(0..63).for_each(|i| assert_eq!(proving.next_storage_key(&[i]).unwrap(), Some(vec![i + 1])));
+
+		let proof = proving.extract_proof();
+
+		let proof_check =
+			create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
+		(0..63).for_each(|i| assert_eq!(proof_check.next_storage_key(&[i]).unwrap(), Some(vec![i + 1])));
 	}
 
 	#[test]

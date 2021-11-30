@@ -25,7 +25,7 @@ use sp_std::{borrow::Borrow, marker::PhantomData, ops::Range, vec::Vec};
 use trie_db::{
 	self, nibble_ops,
 	node::{NibbleSlicePlan, NodeHandlePlan, NodePlan},
-	ChildReference, NodeCodec as NodeCodecT, Partial,
+	ChildReference, NodeCodec as NodeCodecT,
 };
 
 /// Helper struct for trie node decoder. This implements `codec::Input` on a byte slice, while
@@ -187,7 +187,10 @@ impl<H: Hasher> NodeCodecT for NodeCodec<H> {
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
 		maybe_value: Option<&[u8]>,
 	) -> Vec<u8> {
-		let kind = maybe_value.is_some().then(|| NodeKind::BranchWithValue).unwrap_or_else(|| NodeKind::BranchNoValue);
+		let kind = maybe_value
+			.is_some()
+			.then(|| NodeKind::BranchWithValue)
+			.unwrap_or_else(|| NodeKind::BranchNoValue);
 		let mut output = partial_from_iterator_encode(partial, number_nibble, kind);
 
 		let bitmap_index = output.len();
