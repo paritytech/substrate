@@ -694,7 +694,7 @@ impl<T: Config> Pallet<T> {
 		));
 		log!(
 			info,
-			"generated {} npos voters, {} from validators and {} nominators, without size limit",
+			"generated {} npos voters, {} from validators and {} nominators, without any bounds",
 			validator_votes.len() + nominator_votes.len(),
 			validator_votes.len(),
 			nominator_votes.len(),
@@ -728,20 +728,25 @@ impl<T: Config> Pallet<T> {
 		bounds: SnapshotBounds,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let mut tracker = StaticSizeTracker::<T::AccountId>::new();
-		let mut voters = if let Some(capacity) =
-			bounds.predict_capacity(StaticSizeTracker::<T::AccountId>::voter_size(
+		let mut voters = {
+			// we take the maximum voter size, to do the minimum allocation. Note that we prefer not
+			// over-allocating.
+			let maximum_voter_size = StaticSizeTracker::<T::AccountId>::voter_size(
 				T::NominationQuota::ABSOLUTE_MAXIMUM as usize,
-			)) {
-			Vec::with_capacity(capacity.min(sp_core::MAX_POSSIBLE_ALLOCATION as usize / 2))
-		} else {
-			Vec::new()
+			);
+			if let Some(capacity) = bounds.predict_capacity(maximum_voter_size) {
+				Vec::with_capacity(capacity.min(sp_core::MAX_POSSIBLE_ALLOCATION as usize / 2))
+			} else {
+				Vec::new()
+			}
 		};
 
 		// we create two closures to make us agnostic of the type of `bounds` that we are dealing
 		// with. This still not the optimum. The most performant option would have been having a
 		// dedicated function for each variant. For example, in the current code, if `bounds`
-		// count-bounded, the static size tracker is allocated for now reason. Nonetheless, it is
-		// not actually tracking anything if it is not needed.
+		// count-bounded, the static size tracker is allocated for no reason. Nonetheless, it is
+		// not actually tracking anything if it is not needed. This is as good as it gets without
+		// creating too much duplicate code.
 
 		// register a voter with `votes` with regards to bounds.
 		let add_voter = |tracker_ref: &mut StaticSizeTracker<T::AccountId>, votes: usize| {
@@ -764,7 +769,10 @@ impl<T: Config> Pallet<T> {
 			(Some(max_size), None) =>
 				tracker_ref.final_byte_size_of(voters_ref.len().saturating_add(1)) > max_size,
 			(None, Some(max_count)) => voters_ref.len().saturating_add(1) > max_count,
-			(None, None) => false,
+			(None, None) => {
+				debug_assert!(false, "unreachable code");
+				false
+			},
 		};
 
 		// first, grab all validators in no particular order. In most cases, all of them should fit
@@ -809,7 +817,7 @@ impl<T: Config> Pallet<T> {
 							.get(stash)
 							.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 					});
-					if !targets.len().is_zero() {
+					if !targets.is_empty() {
 						voters.push((nominator.clone(), weight_of(&nominator), targets));
 					}
 				} else {
@@ -861,7 +869,7 @@ impl<T: Config> Pallet<T> {
 	pub fn get_npos_targets_unbounded() -> Vec<T::AccountId> {
 		let targets = Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>();
 		Self::register_weight(T::WeightInfo::get_npos_targets_unbounded(targets.len() as u32));
-		log!(info, "generated {} npos targets, without size limit.", targets.len());
+		log!(info, "generated {} npos targets, without bounds.", targets.len());
 		targets
 	}
 
@@ -882,10 +890,10 @@ impl<T: Config> Pallet<T> {
 
 		let next_will_exhaust =
 			|new_final_size, new_count| match (bounds.size_bound(), bounds.count_bound()) {
-				(Some(max_size), Some(max_count)) =>
-					new_final_size > max_size || new_count > max_count,
-				(Some(max_size), None) => new_final_size > max_size,
-				(None, Some(max_count)) => new_count > max_count,
+				(Some(size_bound), Some(count_bound)) =>
+					new_final_size > size_bound || new_count > count_bound,
+				(Some(size_bound), None) => new_final_size > size_bound,
+				(None, Some(count_bound)) => new_count > count_bound,
 				(None, None) => false,
 			};
 
@@ -894,8 +902,8 @@ impl<T: Config> Pallet<T> {
 			// in this case we prefer not cluttering the code.
 			let new_internal_size = internal_size + sp_std::mem::size_of::<T::AccountId>();
 			let new_final_size = new_internal_size +
-				StaticSizeTracker::<T::AccountId>::length_prefix(targets.len() + 1);
-			let new_count = targets.len() + 1;
+				StaticSizeTracker::<T::AccountId>::length_prefix(targets.len().saturating_add(1));
+			let new_count = targets.len().saturating_add(1);
 			if next_will_exhaust(new_final_size, new_count) {
 				// we've had enough
 				break
@@ -912,7 +920,7 @@ impl<T: Config> Pallet<T> {
 			|| targets.len() as u32
 		));
 
-		log!(info, "generated {} npos targets, with bounds limit {:?}", targets.len(), bounds);
+		log!(info, "generated {} npos targets, with bounds {:?}", targets.len(), bounds);
 		targets
 	}
 
@@ -1477,10 +1485,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 ///
 /// Computes the (SCALE) encoded byte length of a snapshot based on static rules, without any actual
 /// encoding.
-///
-/// ## Warning
-///
-/// Make sure any change to SCALE is reflected here.
 ///
 /// ## Details
 ///

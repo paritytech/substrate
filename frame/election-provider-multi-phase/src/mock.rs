@@ -271,15 +271,6 @@ parameter_types! {
 	pub static VoterSnapshotBounds: SnapshotBounds = SnapshotBounds::new_unbounded();
 	pub static TargetSnapshotBounds: SnapshotBounds = SnapshotBounds::new_unbounded();
 
-	// TODO: we want a test to see:
-	// - how many nominators we can create in a normal distribution, for a runtime
-	// - what is the maximum number of nominators that we can create, for a runtime.
-	// - with this work we are potentially allowing more NUMBER of nominators, with the same amount
-	//   of byte size to enter the system. We need to make sure nothing else breaks elsewhere down
-	//   the road.
-	// - make sure both of the above run in wasm.
-	// - For all of this, we need a `pallet-election-playground`.
-
 	pub static EpochLength: u64 = 30;
 	pub static OnChianFallback: bool = true;
 }
@@ -408,7 +399,7 @@ impl crate::Config for Runtime {
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
-	type BenchmarkingConfig = ();
+	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;

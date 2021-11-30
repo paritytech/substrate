@@ -50,6 +50,8 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::BenchmarkingConfig;
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -150,6 +152,9 @@ pub mod pallet {
 
 		/// Something that can dictate the number of nominations allowed per nominator.
 		type NominationQuota: NominationQuota<BalanceOf<Self>>;
+
+		/// Some parameters of the benchmarking.
+		type BenchmarkingConfig: BenchmarkingConfig;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;

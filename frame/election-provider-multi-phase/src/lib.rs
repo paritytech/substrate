@@ -308,14 +308,21 @@ pub trait BenchmarkingConfig {
 	const MAXIMUM_TARGETS: u32;
 }
 
-impl BenchmarkingConfig for () {
-	const VOTERS: [u32; 2] = [4000, 6000];
-	const TARGETS: [u32; 2] = [1000, 1600];
-	const ACTIVE_VOTERS: [u32; 2] = [1000, 3000];
-	const DESIRED_TARGETS: [u32; 2] = [400, 800];
-	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 10_000;
-	const MINER_MAXIMUM_VOTERS: u32 = 10_000;
-	const MAXIMUM_TARGETS: u32 = 2_000;
+/// A benchmarking config, to be used only for testing.
+#[cfg(feature = "std")]
+pub struct TestBenchmarkingConfig;
+
+#[cfg(feature = "std")]
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	const VOTERS: [u32; 2] = [400, 600];
+	const ACTIVE_VOTERS: [u32; 2] = [100, 300];
+	const TARGETS: [u32; 2] = [200, 400];
+	const DESIRED_TARGETS: [u32; 2] = [100, 180];
+
+	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
+	const MINER_MAXIMUM_VOTERS: u32 = 1000;
+
+	const MAXIMUM_TARGETS: u32 = 200;
 }
 
 /// A fallback implementation that transitions the pallet to the emergency phase.
@@ -836,8 +843,8 @@ pub mod pallet {
 			// ----------------------------
 			// maximum size of a snapshot should not exceed half the size of our allocator limit.
 			assert!(
-				T::VoterSnapshotBounds::get().count_bound().unwrap_or_default().saturating_add(
-					T::TargetSnapshotBounds::get().count_bound().unwrap_or_default()
+				T::VoterSnapshotBounds::get().size_bound().unwrap_or_default().saturating_add(
+					T::TargetSnapshotBounds::get().size_bound().unwrap_or_default()
 				) < sp_core::MAX_POSSIBLE_ALLOCATION as usize / 2 - 1
 			);
 		}

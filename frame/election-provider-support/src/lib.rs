@@ -502,9 +502,9 @@ impl SnapshotBounds {
 
 	/// Returns true if `self` is exhausted by either of `given_size` and `given_count`.
 	///
-	/// Note that this will return `false` against an empty contains (size = 1, count = 0). Calling
-	/// [`self.size_exhausted`] alone cannot handle this edge case, since no information of the
-	/// count is available.
+	/// Note that this will return `false` against an empty collection (size = 1, count = 0).
+	/// Calling [`self.size_exhausted`] alone cannot handle this edge case, since no information of
+	/// the count is available.
 	///
 	/// # Warning
 	///
@@ -556,5 +556,52 @@ impl SnapshotBounds {
 			(None, Some(max_count)) => Some(max_count),
 			(None, None) => None,
 		}
+	}
+}
+
+#[cfg(test)]
+mod snapshot_bounds {
+	use super::*;
+
+	#[test]
+	fn predict_capacity_works_single_byte() {
+		// count is smaller
+		assert_eq!(
+			SnapshotBounds { count: Some(100), size: Some(200) }.predict_capacity(1),
+			Some(100)
+		);
+
+		// size is smaller
+		assert_eq!(
+			SnapshotBounds { count: Some(200), size: Some(100) }.predict_capacity(1),
+			Some(100)
+		);
+
+		// only one is present
+		assert_eq!(SnapshotBounds { count: Some(100), size: None }.predict_capacity(1), Some(100));
+		assert_eq!(SnapshotBounds { count: None, size: Some(100) }.predict_capacity(1), Some(100));
+
+		assert_eq!(SnapshotBounds::new_unbounded().predict_capacity(1), None);
+	}
+
+	#[test]
+	fn predict_capacity_works_multi_byte() {
+		// count is smaller
+		assert_eq!(
+			SnapshotBounds { count: Some(20), size: Some(200) }.predict_capacity(4),
+			Some(20)
+		);
+
+		// size is smaller
+		assert_eq!(
+			SnapshotBounds { count: Some(200), size: Some(100) }.predict_capacity(4),
+			Some(25)
+		);
+
+		// only one is present
+		assert_eq!(SnapshotBounds { count: Some(100), size: None }.predict_capacity(4), Some(100));
+		assert_eq!(SnapshotBounds { count: None, size: Some(100) }.predict_capacity(4), Some(25));
+
+		assert_eq!(SnapshotBounds::new_unbounded().predict_capacity(4), None);
 	}
 }

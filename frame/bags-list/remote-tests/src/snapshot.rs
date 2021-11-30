@@ -23,7 +23,7 @@ use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute create a snapshot from pallet-staking.
 pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
-	voter_limit: Option<usize>,
+	voter_bounds: SnapshotBounds,
 	currency_unit: u64,
 	ws_url: String,
 ) {
@@ -58,7 +58,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		let voters = <pallet_staking::Pallet<Runtime> as ElectionDataProvider<
 			Runtime::AccountId,
 			Runtime::BlockNumber,
-		>>::voters(SnapshotBounds::new_unbounded())
+		>>::voters(voter_bounds)
 		.unwrap();
 
 		let mut voters_nominator_only = voters
@@ -78,7 +78,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		log::info!(
 			target: crate::LOG_TARGET,
 			"a snapshot with limit {:?} has been created, {} voters are taken. min nominator: {:?}, max: {:?}",
-			voter_limit,
+			voter_bounds,
 			voters.len(),
 			min_voter,
 			max_voter

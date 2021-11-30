@@ -19,6 +19,7 @@ scale-info = { package = "scale-info", version = "1.0.0", features = ["derive"] 
 
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
+sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 frame-system = { version = "4.0.0-dev", path = "../system" }
 frame-support = { version = "4.0.0-dev", path = "../support" }

@@ -15,10 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, ExtendedBalance, SequentialPhragmen,
-	SnapshotBounds,
+	onchain, ExtendedBalance, SequentialPhragmen, SnapshotBounds,
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
@@ -38,7 +36,7 @@ use pallet_election_provider_multi_phase as multi_phase;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::Header,
-	traits::{BlakeTwo256, Bounded, IdentityLookup},
+	traits::{BlakeTwo256, Bounded, IdentityLookup, OpaqueKeys},
 	PerU16, Perbill,
 };
 use std::sync::Arc;
@@ -53,6 +51,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage,},
+		Session: pallet_session::{Pallet, Call, Storage, Config<T>, Event},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MultiPhase: multi_phase::{Pallet, Call, Storage, Event<T>},
 	}
@@ -175,7 +174,7 @@ impl pallet_election_provider_multi_phase::Config for TestRuntime {
 	type RewardHandler = ();
 	type DataProvider = Staking;
 	type WeightInfo = ();
-	type BenchmarkingConfig = ();
+	type BenchmarkingConfig = pallet_election_provider_multi_phase::TestBenchmarkingConfig;
 	type Fallback = frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
@@ -217,17 +216,27 @@ parameter_types! {
 	pub static SessionPeriod: BlockNumber = 10;
 }
 
-struct TestSessionInterface;
-impl SessionInterface for TestSessionInterface {
-	fn disable_validator(validator_index: u32) -> bool {
-		Default::default()
+sp_runtime::impl_opaque_keys! {
+	pub struct MockSessionKeys {
+		pub foo: sp_runtime::testing::UintAuthorityId,
 	}
+}
 
-	fn validators() -> Vec<AccountId> {
-		Default::default()
-	}
+impl pallet_session::historical::Config for TestRuntime {
+	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<TestRuntime>;
+}
 
-	fn prune_historical_up_to(up_to: SessionIndex) {}
+impl pallet_session::Config for TestRuntime {
+	type Event = Event;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = pallet_staking::StashOf<Self>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<SessionPeriod, SessionOffset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<SessionPeriod, SessionOffset>;
+	type SessionManager = Staking;
+	type SessionHandler = TestSessionHandler;
+	type Keys = MockSessionKeys;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for TestRuntime {
@@ -242,15 +251,16 @@ impl pallet_staking::Config for TestRuntime {
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = BondingDuration;
-	type SessionInterface = TestSessionInterface;
+	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
-	type NextNewSession = PeriodicSessions<SessionOffset, SessionPeriod>;
+	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = MultiPhase;
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type SortedListProvider = BagsList;
 	type NominationQuota = pallet_staking::FixedNominationQuota<16>;
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
 

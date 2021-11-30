@@ -43,23 +43,34 @@ impl<
 {
 }
 
-pub fn roll_to<T: ElectionRuntime>(n: T::BlockNumber, foo: u32) {
-	let now = frame_system::Pallet::<T>::block_number();
-	for i in now + One::one()..=n {
-		frame_system::Pallet::<T>::set_block_number(i);
-		pallet_bags_list::Pallet::<T>::on_initialize(i);
-		pallet_election_provider_multi_phase::Pallet::<T>::on_initialize(i);
-		pallet_staking::Pallet::<T>::on_initialize(i);
+pub fn roll_to<T: ElectionRuntime>(n: T::BlockNumber) {
+	let mut now = frame_system::Pallet::<T>::block_number();
+	while now + One::one() <= n {
+		now += One::one();
+		pallet_bags_list::Pallet::<T>::on_initialize(now);
+		pallet_election_provider_multi_phase::Pallet::<T>::on_initialize(now);
+		pallet_staking::Pallet::<T>::on_initialize(now);
 	}
 }
 
 pub fn roll_to_with_ocw<T: ElectionRuntime>(n: T::BlockNumber) {
-	let now = frame_system::Pallet::<T>::block_number();
-	for i in now + One::one()..=n {
-		frame_system::Pallet::<T>::set_block_number(i);
-		pallet_bags_list::Pallet::<T>::on_initialize(i);
-		pallet_election_provider_multi_phase::Pallet::<T>::on_initialize(i);
-		pallet_election_provider_multi_phase::Pallet::<T>::offchain_worker(i);
-		pallet_staking::Pallet::<T>::on_initialize(i);
+	let mut now = frame_system::Pallet::<T>::block_number();
+	while now + One::one() <= n {
+		now += One::one();
+		frame_system::Pallet::<T>::set_block_number(now);
+		pallet_bags_list::Pallet::<T>::on_initialize(now);
+		pallet_election_provider_multi_phase::Pallet::<T>::on_initialize(now);
+		pallet_election_provider_multi_phase::Pallet::<T>::offchain_worker(now);
+		pallet_staking::Pallet::<T>::on_initialize(now);
 	}
+}
+
+/// Simple test demonstrating what happens in the staking system, end to end.
+pub fn simple_end_to_end<T: ElectionRuntime>() {
+	// some data must currently exist in pallet-staking. We first fast-forward to the corresponding
+	// block of the next election
+	let now = frame_system::Pallet::<T>::block_number();
+	let next_election =
+		<T as pallet_staking::Config>::NextNewSession::estimate_next_new_session(now);
+	roll_to::<T>(next_election);
 }

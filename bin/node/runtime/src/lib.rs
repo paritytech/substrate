@@ -26,8 +26,8 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		Currency, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		ConstU32, Currency, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -515,6 +515,12 @@ impl onchain::Config for Runtime {
 	type DataProvider = Staking;
 }
 
+pub struct StakingBenchmarkingConfig;
+impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
+	type MaxNominators = ConstU32<1000>;
+	type MaxValidators = ConstU32<1000>;
+}
+
 impl pallet_staking::Config for Runtime {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
@@ -545,6 +551,7 @@ impl pallet_staking::Config for Runtime {
 	// each nominator is allowed a fix number of nomination targets.
 	type NominationQuota = pallet_staking::FixedNominationQuota<MAX_NOMINATIONS>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
+	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
 
 use frame_election_provider_support::SnapshotBounds;
@@ -594,8 +601,8 @@ pub const MAX_NOMINATIONS: u32 = <NposSolution16 as sp_npos_elections::NposSolut
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
 /// to ensure election snapshot will not run out of memory. For now, we set them to smaller values
 /// since the staking is bounded and the weight pipeline takes hours for this single pallet.
-pub struct BenchmarkConfig;
-impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfig {
+pub struct ElectionProviderBenchmarkConfig;
+impl pallet_election_provider_multi_phase::BenchmarkingConfig for ElectionProviderBenchmarkConfig {
 	const VOTERS: [u32; 2] = [1000, 2000];
 	const TARGETS: [u32; 2] = [500, 1000];
 	const ACTIVE_VOTERS: [u32; 2] = [500, 800];
@@ -662,7 +669,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type VoterSnapshotBounds = VoterSnapshotBounds;
 	type TargetSnapshotBounds = TargetSnapshotBounds;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
-	type BenchmarkingConfig = BenchmarkConfig;
+	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 }
 
 parameter_types! {
@@ -1563,7 +1570,7 @@ impl_runtime_apis! {
 		Block,
 		mmr::Hash,
 	> for Runtime {
-		fn generate_proof(leaf_index: u64)
+		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
 			Mmr::generate_proof(leaf_index)

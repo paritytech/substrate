@@ -301,14 +301,14 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	traits::{Currency, Get},
+	traits::{ConstU32, Currency, Get},
 	weights::Weight,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	traits::{AtLeast32BitUnsigned, Convert, Saturating, Zero},
-	Perbill, RuntimeDebug,
+	traits::{AtLeast32BitUnsigned, Convert, One, Saturating, UniqueSaturatedInto, Zero},
+	Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
@@ -830,15 +830,10 @@ impl<Balance, const MAX: u32> NominationQuota<Balance> for FixedNominationQuota<
 	}
 }
 
-use sp_runtime::{
-	traits::{One, UniqueSaturatedInto},
-	SaturatedConversion,
-};
-
 /// An implementation of a linear nomination distribution.
 ///
 /// TODO: ideally we want this to be a const expression all the way through, no point in
-/// re-computing this on the fly. For now we stick to a runtime placeholder.
+/// re-computing this on the fly. For now we stick to a runtime placeholder code.
 ///
 ///  Essentially, draws a line between `(MinBalance, MinQuota)` and `(MaxBalance, MaxQuota)`, Also,
 /// values less than `MinBalance` have `MinQuota` and values higher than `MaxBalance` have
@@ -878,4 +873,24 @@ where
 			MAX_QUOTA
 		}
 	}
+}
+
+/// Configurations of the benchmarking of the pallet.
+pub trait BenchmarkingConfig {
+	/// The maximum number of validators to use.
+	type MaxValidators: Get<u32>;
+	/// The maximum number of nominators to use.
+	type MaxNominators: Get<u32>;
+}
+
+/// A mock benchmarking config for pallet-staking.
+///
+/// Should only be used for testing.
+#[cfg(feature = "std")]
+pub struct TestBenchmarkingConfig;
+
+#[cfg(feature = "std")]
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	type MaxValidators = ConstU32<100>;
+	type MaxNominators = ConstU32<100>;
 }

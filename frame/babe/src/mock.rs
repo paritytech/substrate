@@ -214,9 +214,10 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type WeightInfo = ();
 	type NominationQuota = pallet_staking::FixedNominationQuota<16>;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
+	type WeightInfo = ();
 }
 
 impl pallet_offences::Config for Test {

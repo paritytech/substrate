@@ -178,6 +178,7 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type NominationQuota = pallet_staking::FixedNominationQuota<16>;
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
 
