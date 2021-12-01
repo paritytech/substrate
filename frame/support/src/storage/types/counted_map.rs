@@ -21,7 +21,6 @@ use crate::{
 	metadata::StorageEntryMetadata,
 	storage::{
 		generator::StorageMap as _,
-		storage_prefix,
 		types::{
 			OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder, StorageMap, StorageValue,
 			ValueQuery,
