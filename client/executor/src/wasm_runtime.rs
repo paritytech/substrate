@@ -66,7 +66,6 @@ struct VersionedRuntimeId {
 }
 
 /// A Wasm runtime object along with its cached runtime version.
-#[derive(Clone)]
 struct VersionedRuntime {
 	/// Runtime code hash.
 	code_hash: Vec<u8>,
@@ -164,7 +163,7 @@ pub struct RuntimeCache {
 	/// A cache of runtimes along with metadata.
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
-	runtimes: Mutex<LruCache<VersionedRuntimeId, VersionedRuntime>>,
+	runtimes: Mutex<LruCache<VersionedRuntimeId, Arc<VersionedRuntime>>>,
 	/// The size of the instances cache for each runtime.
 	max_runtime_instances: usize,
 	cache_path: Option<PathBuf>,
@@ -280,7 +279,7 @@ impl RuntimeCache {
 				},
 			}
 
-			let versioned_runtime = result?;
+			let versioned_runtime = Arc::new(result?);
 
 			// Save new versioned wasm runtime in cache
 			runtimes.put(versioned_runtime_id, versioned_runtime.clone());
