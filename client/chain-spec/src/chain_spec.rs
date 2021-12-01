@@ -119,6 +119,10 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 					})
 					.collect(),
 			}),
+			// The `StateRootHash` variant exists as a way to keep note that other clients support
+			// it, but Substrate itself isn't capable of loading chain specs with just a hash at the
+			// moment.
+			Genesis::StateRootHash(_) => Err("Genesis storage in hash format not supported".into()),
 		}
 	}
 
@@ -144,6 +148,8 @@ pub struct RawGenesis {
 enum Genesis<G> {
 	Runtime(G),
 	Raw(RawGenesis),
+	/// State root hash of the genesis storage.
+	StateRootHash(StorageData),
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
@@ -162,6 +168,9 @@ struct ClientSpec<E> {
 	#[serde(flatten)]
 	extensions: E,
 	// Never used, left only for backward compatibility.
+	// In a future version, a `skip_serializing` attribute should be added in order to no longer
+	// generate chain specs with this field.
+	#[serde(default)]
 	consensus_engine: (),
 	#[serde(skip_serializing)]
 	#[allow(unused)]

@@ -18,7 +18,7 @@
 use super::*;
 use crate::{
 	mock::{test_utils::*, *},
-	CounterForListNodes, ListBags, ListNodes,
+	ListBags, ListNodes,
 };
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, assert_storage_noop};
@@ -29,7 +29,7 @@ fn basic_setup_works() {
 		// syntactic sugar to create a raw node
 		let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
 
-		assert_eq!(CounterForListNodes::<Runtime>::get(), 4);
+		assert_eq!(ListNodes::<Runtime>::count(), 4);
 		assert_eq!(ListNodes::<Runtime>::iter().count(), 4);
 		assert_eq!(ListBags::<Runtime>::iter().count(), 2);
 
@@ -249,10 +249,10 @@ mod list {
 
 	#[test]
 	fn remove_works() {
-		use crate::{CounterForListNodes, ListBags, ListNodes};
+		use crate::{ListBags, ListNodes};
 		let ensure_left = |id, counter| {
 			assert!(!ListNodes::<Runtime>::contains_key(id));
-			assert_eq!(CounterForListNodes::<Runtime>::get(), counter);
+			assert_eq!(ListNodes::<Runtime>::count(), counter);
 			assert_eq!(ListNodes::<Runtime>::iter().count() as u32, counter);
 		};
 
@@ -357,10 +357,19 @@ mod list {
 			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified"));
 		});
 
-		// ensure count is in sync with `CounterForListNodes`.
+		// ensure count is in sync with `ListNodes::count()`.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			crate::CounterForListNodes::<Runtime>::mutate(|counter| *counter += 1);
-			assert_eq!(crate::CounterForListNodes::<Runtime>::get(), 5);
+			assert_eq!(crate::ListNodes::<Runtime>::count(), 4);
+			// we do some wacky stuff here to get access to the counter, since it is (reasonably)
+			// not exposed as mutable in any sense.
+			frame_support::generate_storage_alias!(
+				BagsList,
+				CounterForListNodes
+				=> Value<u32, frame_support::pallet_prelude::ValueQuery>
+			);
+			CounterForListNodes::mutate(|counter| *counter += 1);
+			assert_eq!(crate::ListNodes::<Runtime>::count(), 5);
+
 			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != stored_count"));
 		});
 	}

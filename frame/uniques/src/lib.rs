@@ -206,63 +206,90 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// An asset class was created. \[ class, creator, owner \]
-		Created(T::ClassId, T::AccountId, T::AccountId),
-		/// An asset class was force-created. \[ class, owner \]
-		ForceCreated(T::ClassId, T::AccountId),
-		/// An asset `class` was destroyed. \[ class \]
-		Destroyed(T::ClassId),
-		/// An asset `instance` was issued. \[ class, instance, owner \]
-		Issued(T::ClassId, T::InstanceId, T::AccountId),
-		/// An asset `instance` was transferred. \[ class, instance, from, to \]
-		Transferred(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
-		/// An asset `instance` was destroyed. \[ class, instance, owner \]
-		Burned(T::ClassId, T::InstanceId, T::AccountId),
-		/// Some asset `instance` was frozen. \[ class, instance \]
-		Frozen(T::ClassId, T::InstanceId),
-		/// Some asset `instance` was thawed. \[ class, instance \]
-		Thawed(T::ClassId, T::InstanceId),
-		/// Some asset `class` was frozen. \[ class \]
-		ClassFrozen(T::ClassId),
-		/// Some asset `class` was thawed. \[ class \]
-		ClassThawed(T::ClassId),
-		/// The owner changed \[ class, new_owner \]
-		OwnerChanged(T::ClassId, T::AccountId),
-		/// The management team changed \[ class, issuer, admin, freezer \]
-		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
+		/// An asset class was created.
+		Created { class: T::ClassId, creator: T::AccountId, owner: T::AccountId },
+		/// An asset class was force-created.
+		ForceCreated { class: T::ClassId, owner: T::AccountId },
+		/// An asset `class` was destroyed.
+		Destroyed { class: T::ClassId },
+		/// An asset `instance` was issued.
+		Issued { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
+		/// An asset `instance` was transferred.
+		Transferred {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			from: T::AccountId,
+			to: T::AccountId,
+		},
+		/// An asset `instance` was destroyed.
+		Burned { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
+		/// Some asset `instance` was frozen.
+		Frozen { class: T::ClassId, instance: T::InstanceId },
+		/// Some asset `instance` was thawed.
+		Thawed { class: T::ClassId, instance: T::InstanceId },
+		/// Some asset `class` was frozen.
+		ClassFrozen { class: T::ClassId },
+		/// Some asset `class` was thawed.
+		ClassThawed { class: T::ClassId },
+		/// The owner changed.
+		OwnerChanged { class: T::ClassId, new_owner: T::AccountId },
+		/// The management team changed.
+		TeamChanged {
+			class: T::ClassId,
+			issuer: T::AccountId,
+			admin: T::AccountId,
+			freezer: T::AccountId,
+		},
 		/// An `instance` of an asset `class` has been approved by the `owner` for transfer by a
 		/// `delegate`.
-		/// \[ class, instance, owner, delegate \]
-		ApprovedTransfer(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
+		ApprovedTransfer {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
 		/// An approval for a `delegate` account to transfer the `instance` of an asset `class` was
 		/// cancelled by its `owner`.
-		/// \[ class, instance, owner, delegate \]
-		ApprovalCancelled(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
+		ApprovalCancelled {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
 		/// An asset `class` has had its attributes changed by the `Force` origin.
-		/// \[ class \]
-		AssetStatusChanged(T::ClassId),
-		/// New metadata has been set for an asset class. \[ class, data, is_frozen \]
-		ClassMetadataSet(T::ClassId, BoundedVec<u8, T::StringLimit>, bool),
-		/// Metadata has been cleared for an asset class. \[ class \]
-		ClassMetadataCleared(T::ClassId),
+		AssetStatusChanged { class: T::ClassId },
+		/// New metadata has been set for an asset class.
+		ClassMetadataSet {
+			class: T::ClassId,
+			data: BoundedVec<u8, T::StringLimit>,
+			is_frozen: bool,
+		},
+		/// Metadata has been cleared for an asset class.
+		ClassMetadataCleared { class: T::ClassId },
 		/// New metadata has been set for an asset instance.
-		/// \[ class, instance, data, is_frozen \]
-		MetadataSet(T::ClassId, T::InstanceId, BoundedVec<u8, T::StringLimit>, bool),
-		/// Metadata has been cleared for an asset instance. \[ class, instance \]
-		MetadataCleared(T::ClassId, T::InstanceId),
-		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
-		Redeposited(T::ClassId, Vec<T::InstanceId>),
+		MetadataSet {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			data: BoundedVec<u8, T::StringLimit>,
+			is_frozen: bool,
+		},
+		/// Metadata has been cleared for an asset instance.
+		MetadataCleared { class: T::ClassId, instance: T::InstanceId },
+		/// Metadata has been cleared for an asset instance.
+		Redeposited { class: T::ClassId, successful_instances: Vec<T::InstanceId> },
 		/// New attribute metadata has been set for an asset class or instance.
-		/// \[ class, maybe_instance, key, value \]
-		AttributeSet(
-			T::ClassId,
-			Option<T::InstanceId>,
-			BoundedVec<u8, T::KeyLimit>,
-			BoundedVec<u8, T::ValueLimit>,
-		),
+		AttributeSet {
+			class: T::ClassId,
+			maybe_instance: Option<T::InstanceId>,
+			key: BoundedVec<u8, T::KeyLimit>,
+			value: BoundedVec<u8, T::ValueLimit>,
+		},
 		/// Attribute metadata has been cleared for an asset class or instance.
-		/// \[ class, maybe_instance, key, maybe_value \]
-		AttributeCleared(T::ClassId, Option<T::InstanceId>, BoundedVec<u8, T::KeyLimit>),
+		AttributeCleared {
+			class: T::ClassId,
+			maybe_instance: Option<T::InstanceId>,
+			key: BoundedVec<u8, T::KeyLimit>,
+		},
 	}
 
 	#[pallet::error]
@@ -336,7 +363,7 @@ pub mod pallet {
 				admin.clone(),
 				T::ClassDeposit::get(),
 				false,
-				Event::Created(class, owner, admin),
+				Event::Created { class, creator: owner, owner: admin },
 			)
 		}
 
@@ -372,7 +399,7 @@ pub mod pallet {
 				owner.clone(),
 				Zero::zero(),
 				free_holding,
-				Event::ForceCreated(class, owner),
+				Event::ForceCreated { class, owner },
 			)
 		}
 
@@ -568,7 +595,10 @@ pub mod pallet {
 			}
 			Class::<T, I>::insert(&class, &class_details);
 
-			Self::deposit_event(Event::<T, I>::Redeposited(class, successful));
+			Self::deposit_event(Event::<T, I>::Redeposited {
+				class,
+				successful_instances: successful,
+			});
 
 			Ok(())
 		}
@@ -599,7 +629,7 @@ pub mod pallet {
 			details.is_frozen = true;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
-			Self::deposit_event(Event::<T, I>::Frozen(class, instance));
+			Self::deposit_event(Event::<T, I>::Frozen { class, instance });
 			Ok(())
 		}
 
@@ -629,7 +659,7 @@ pub mod pallet {
 			details.is_frozen = false;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
-			Self::deposit_event(Event::<T, I>::Thawed(class, instance));
+			Self::deposit_event(Event::<T, I>::Thawed { class, instance });
 			Ok(())
 		}
 
@@ -655,7 +685,7 @@ pub mod pallet {
 
 				details.is_frozen = true;
 
-				Self::deposit_event(Event::<T, I>::ClassFrozen(class));
+				Self::deposit_event(Event::<T, I>::ClassFrozen { class });
 				Ok(())
 			})
 		}
@@ -682,7 +712,7 @@ pub mod pallet {
 
 				details.is_frozen = false;
 
-				Self::deposit_event(Event::<T, I>::ClassThawed(class));
+				Self::deposit_event(Event::<T, I>::ClassThawed { class });
 				Ok(())
 			})
 		}
@@ -724,7 +754,7 @@ pub mod pallet {
 				ClassAccount::<T, I>::insert(&owner, &class, ());
 				details.owner = owner.clone();
 
-				Self::deposit_event(Event::OwnerChanged(class, owner));
+				Self::deposit_event(Event::OwnerChanged { class, new_owner: owner });
 				Ok(())
 			})
 		}
@@ -762,7 +792,7 @@ pub mod pallet {
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(Event::TeamChanged(class, issuer, admin, freezer));
+				Self::deposit_event(Event::TeamChanged { class, issuer, admin, freezer });
 				Ok(())
 			})
 		}
@@ -804,7 +834,12 @@ pub mod pallet {
 			Asset::<T, I>::insert(&class, &instance, &details);
 
 			let delegate = details.approved.expect("set as Some above; qed");
-			Self::deposit_event(Event::ApprovedTransfer(class, instance, details.owner, delegate));
+			Self::deposit_event(Event::ApprovedTransfer {
+				class,
+				instance,
+				owner: details.owner,
+				delegate,
+			});
 
 			Ok(())
 		}
@@ -850,7 +885,12 @@ pub mod pallet {
 			}
 
 			Asset::<T, I>::insert(&class, &instance, &details);
-			Self::deposit_event(Event::ApprovalCancelled(class, instance, details.owner, old));
+			Self::deposit_event(Event::ApprovalCancelled {
+				class,
+				instance,
+				owner: details.owner,
+				delegate: old,
+			});
 
 			Ok(())
 		}
@@ -898,7 +938,8 @@ pub mod pallet {
 				*maybe_asset = Some(asset);
 				ClassAccount::<T, I>::remove(&old_owner, &class);
 				ClassAccount::<T, I>::insert(&new_owner, &class, ());
-				Self::deposit_event(Event::AssetStatusChanged(class));
+
+				Self::deposit_event(Event::AssetStatusChanged { class });
 				Ok(())
 			})
 		}
@@ -965,7 +1006,7 @@ pub mod pallet {
 
 			Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
 			Class::<T, I>::insert(class, &class_details);
-			Self::deposit_event(Event::AttributeSet(class, maybe_instance, key, value));
+			Self::deposit_event(Event::AttributeSet { class, maybe_instance, key, value });
 			Ok(())
 		}
 
@@ -1014,7 +1055,7 @@ pub mod pallet {
 				class_details.total_deposit.saturating_reduce(deposit);
 				T::Currency::unreserve(&class_details.owner, deposit);
 				Class::<T, I>::insert(class, &class_details);
-				Self::deposit_event(Event::AttributeCleared(class, maybe_instance, key));
+				Self::deposit_event(Event::AttributeCleared { class, maybe_instance, key });
 			}
 			Ok(())
 		}
@@ -1079,7 +1120,7 @@ pub mod pallet {
 				*metadata = Some(InstanceMetadata { deposit, data: data.clone(), is_frozen });
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataSet(class, instance, data, is_frozen));
+				Self::deposit_event(Event::MetadataSet { class, instance, data, is_frozen });
 				Ok(())
 			})
 		}
@@ -1124,7 +1165,7 @@ pub mod pallet {
 				class_details.total_deposit.saturating_reduce(deposit);
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataCleared(class, instance));
+				Self::deposit_event(Event::MetadataCleared { class, instance });
 				Ok(())
 			})
 		}
@@ -1184,7 +1225,7 @@ pub mod pallet {
 
 				*metadata = Some(ClassMetadata { deposit, data: data.clone(), is_frozen });
 
-				Self::deposit_event(Event::ClassMetadataSet(class, data, is_frozen));
+				Self::deposit_event(Event::ClassMetadataSet { class, data, is_frozen });
 				Ok(())
 			})
 		}
@@ -1221,7 +1262,7 @@ pub mod pallet {
 
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
 				T::Currency::unreserve(&details.owner, deposit);
-				Self::deposit_event(Event::ClassMetadataCleared(class));
+				Self::deposit_event(Event::ClassMetadataCleared { class });
 				Ok(())
 			})
 		}

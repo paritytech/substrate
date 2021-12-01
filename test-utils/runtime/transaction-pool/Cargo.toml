@@ -2,7 +2,7 @@
 name = "substrate-test-runtime-transaction-pool"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -20,4 +20,4 @@ sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool", features = ["test-helpers"] }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 futures = "0.3.16"
-derive_more = "0.99.2"
+derive_more = "0.99.16"

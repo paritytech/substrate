@@ -18,6 +18,8 @@
 //! A set of benchmarks which can establish a global baseline for all other
 //! benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use crate::benchmarks;
 use codec::Encode;
 use frame_system::Pallet as System;

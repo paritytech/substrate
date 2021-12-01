@@ -44,7 +44,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		details.owner = dest;
 		Asset::<T, I>::insert(&class, &instance, &details);
 
-		Self::deposit_event(Event::Transferred(class, instance, origin, details.owner));
+		Self::deposit_event(Event::Transferred {
+			class,
+			instance,
+			from: origin,
+			to: details.owner,
+		});
 		Ok(())
 	}
 
@@ -107,7 +112,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ClassAccount::<T, I>::remove(&class_details.owner, &class);
 			T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
 
-			Self::deposit_event(Event::Destroyed(class));
+			Self::deposit_event(Event::Destroyed { class });
 
 			Ok(DestroyWitness {
 				instances: class_details.instances,
@@ -148,7 +153,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		Self::deposit_event(Event::Issued(class, instance, owner));
+		Self::deposit_event(Event::Issued { class, instance, owner });
 		Ok(())
 	}
 
@@ -176,7 +181,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Asset::<T, I>::remove(&class, &instance);
 		Account::<T, I>::remove((&owner, &class, &instance));
 
-		Self::deposit_event(Event::Burned(class, instance, owner));
+		Self::deposit_event(Event::Burned { class, instance, owner });
 		Ok(())
 	}
 }

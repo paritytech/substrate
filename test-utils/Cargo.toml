@@ -2,7 +2,7 @@
 name = "substrate-test-utils"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -18,4 +18,4 @@ tokio = { version = "1.10", features = ["macros", "time"] }
 
 [dev-dependencies]
 sc-service = { version = "0.10.0-dev", path = "../client/service" }
-trybuild = { version = "1.0.43", features = [ "diff" ] }
+trybuild = { version = "1.0.52", features = [ "diff" ] }

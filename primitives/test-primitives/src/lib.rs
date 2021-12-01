@@ -73,15 +73,10 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = sp_runtime::generic::DigestItem<H256>;
+pub type DigestItem = sp_runtime::generic::DigestItem;
 /// The digest of a block.
-pub type Digest = sp_runtime::generic::Digest<H256>;
+pub type Digest = sp_runtime::generic::Digest;
 /// A test block.
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
 pub type Header = sp_runtime::generic::Header<BlockNumber, BlakeTwo256>;
-
-/// Changes trie configuration (optionally) used in tests.
-pub fn changes_trie_config() -> sp_core::ChangesTrieConfiguration {
-	sp_core::ChangesTrieConfiguration { digest_interval: 4, digest_levels: 2 }
-}
