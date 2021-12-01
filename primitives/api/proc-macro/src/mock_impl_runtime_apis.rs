@@ -116,10 +116,6 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 			fn into_storage_changes(
 				&self,
 				_: &Self::StateBackend,
-				_: Option<&#crate_::ChangesTrieState<
-					#crate_::HashFor<#block_type>,
-					#crate_::NumberFor<#block_type>,
-				>>,
 				_: <#block_type as #crate_::BlockT>::Hash,
 			) -> std::result::Result<
 				#crate_::StorageChanges<Self::StateBackend, #block_type>,

@@ -64,6 +64,8 @@ mod api;
 pub use api::Db as OffchainDb;
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 
+const LOG_TARGET: &str = "offchain-worker";
+
 /// NetworkProvider provides [`OffchainWorkers`] with all necessary hooks into the
 /// underlying Substrate networking.
 pub trait NetworkProvider: NetworkStateInfo {
@@ -88,6 +90,7 @@ where
 	}
 }
 
+<<<<<<< HEAD
 /// Counts number of concurrently running workers
 /// and makes sure it does not go above configured limit.
 struct MaxRunning {
@@ -132,26 +135,43 @@ impl Drop for MaxRunningGuard {
 	}
 }
 
+/// Options for [`OffchainWorkers`]
+pub struct OffchainWorkerOptions {
+	/// Enable http requests from offchain workers?
+	///
+	/// If not enabled, any http request will panic.
+	pub enable_http_requests: bool,
+}
+
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Block: traits::Block> {
 	client: Arc<Client>,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
-	shared_client: api::SharedClient,
+	shared_http_client: api::SharedClient,
+	enable_http: bool,
 	finality_limit: MaxRunning,
 	regular_limit: MaxRunning,
 }
 
 impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
-	/// Creates new `OffchainWorkers`.
+	/// Creates new [`OffchainWorkers`].
 	pub fn new(client: Arc<Client>) -> Self {
-		let shared_client = api::SharedClient::new();
+		Self::new_with_options(client, OffchainWorkerOptions { enable_http_requests: true })
+	}
+
+	/// Creates new [`OffchainWorkers`] using the given `options`.
+	pub fn new_with_options(client: Arc<Client>, options: OffchainWorkerOptions) -> Self {
 		let threads = num_cpus::get();
 		Self {
 			client,
 			_block: PhantomData,
-			thread_pool: Mutex::new(ThreadPool::with_name("offchain-worker".into(), threads)),
-			shared_client,
+			thread_pool: Mutex::new(ThreadPool::with_name(
+				"offchain-worker".into(),
+				threads,
+			)),
+			shared_http_client: api::SharedClient::new(),
+			enable_http: options.enable_http_requests,
 			// in case both finality and regular workers are running we will
 			// have at most `threads` elements queued up of each kind.
 			finality_limit: MaxRunning::new(threads),
@@ -250,16 +270,29 @@ where
 		let runtime = self.client.runtime_api();
 		let at = BlockId::hash(header.hash());
 		let version = ocw_api_version(&at, runtime);
-		log::debug!("Checking offchain workers at {:?}: version:{}", at, version);
+		tracing::debug!(
+			target: LOG_TARGET,
+			"Checking offchain workers at {:?}: version:{}",
+			at,
+			version
+		);
 		if version == 0 {
-			log::trace!("Skipping running offchain workers, because they are not supported by current runtime.");
+			let help =
+				"Consider turning off offchain workers if they are not part of your runtime.";
+			tracing::error!(
+				target: LOG_TARGET,
+				"Unsupported Offchain Worker API version: {:?}. {}.",
+				err,
+				help
+			);
 			return Either::Right(future::ready(()))
 		}
 
 		let guard = match self.regular_limit.try_run() {
 			Ok(guard) => guard,
 			Err(()) => {
-				log::debug!(
+				tracing::debug!(
+					target: LOG_TARGET
 					"Skipping running finality offchain workers at {:?}: limit reached.",
 					at
 				);
@@ -267,16 +300,19 @@ where
 			},
 		};
 		let (api, runner) =
-			api::AsyncApi::new(network_provider, is_validator, self.shared_client.clone());
-		log::debug!("Spawning offchain workers at {:?}", at);
+			api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
+		tracing::debug!(target: LOG_TARGET, "Spawning offchain workers at {:?}", at);
 		let header = header.clone();
 		let client = self.client.clone();
+		let mut capabilities = offchain::Capabilities::all();
+		capabilities.set(offchain::Capabilities::HTTP, self.enable_http);
+
 		self.spawn_worker(move || {
 			let runtime = client.runtime_api();
 			let api = Box::new(api);
-			log::debug!("Running offchain workers at {:?}", at);
+			tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", at);
 			let context =
-				ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all())));
+				ExecutionContext::OffchainCall(Some((api, capabilities)));
 			let run = {
 				#[allow(deprecated)]
 				match version {
@@ -291,11 +327,19 @@ where
 				}
 			};
 			if let Err(e) = run {
-				log::error!("Error running offchain workers at {:?}: {:?}", at, e);
+				tracing::error!(
+					target: LOG_TARGET,
+					"Error running offchain workers at {:?}: {:?}",
+					at,
+					e
+				);
 			}
 			std::mem::drop(guard);
 		});
-		Either::Left(runner.process())
+
+		async move {
+			futures::future::OptionFuture::from(process).await;
+		}
 	}
 
 	/// Spawns a new offchain worker.
@@ -335,13 +379,14 @@ pub async fn notification_future<Client, Block, Spawner>(
 			if n.is_new_best {
 				spawner.spawn(
 					"offchain-on-block",
+					Some("offchain-worker"),
 					offchain
 						.on_block_imported(&n.header, network_provider.clone(), is_validator)
 						.boxed(),
 				);
 			} else {
-				log::debug!(
-					target: "sc_offchain",
+				tracing::debug!(
+					target: LOG_TARGET,
 					"Skipping offchain workers for non-canon block: {:?}",
 					n.header,
 				)

@@ -218,6 +218,7 @@ impl pallet_staking::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
 
@@ -254,7 +255,7 @@ impl Config for Test {
 	type MaxAuthorities = MaxAuthorities;
 }
 
-pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
+pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {
 	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
 
