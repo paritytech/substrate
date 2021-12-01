@@ -11,7 +11,7 @@ pub struct Signature {
 }
 
 impl Signature {
-	/// Create a signature for a message with a given network identity
+	/// Create a signature for a message with a given network identity.
 	pub fn sign_message(
 		message: impl AsRef<[u8]>,
 		keypair: &libp2p::identity::Keypair,

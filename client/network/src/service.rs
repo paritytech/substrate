@@ -674,8 +674,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Signs the message with the `KeyPair` that defined the local `PeerId`.
-	///
-	/// Returns a tuple that consists of the public key the
 	pub fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,

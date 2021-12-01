@@ -525,10 +525,10 @@ where
 						&peer_signature.public_key,
 					)
 					.map_err(|e| Error::ParsingLibp2pIdentity(e))?;
-					let peer_id_in_signature = public_key.clone().to_peer_id();
-					if remote_peer_id != peer_id_in_signature ||
-						!public_key.verify(&record, &peer_signature.signature)
-					{
+					let signature =
+						sc_network::Signature { public_key, bytes: peer_signature.signature };
+
+					if !signature.verify(record, &remote_peer_id) {
 						return Err(Error::VerifyingDhtPayload)
 					}
 				} else if self.strict_record_validation {
