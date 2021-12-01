@@ -231,8 +231,7 @@ pub mod pallet {
 		/// If the call is success, the status of child-bounty is updated to
 		/// "Added".
 		///
-		/// - `parent_bounty_id`: Index of parent bounty for which child-bounty
-		///   is being added.
+		/// - `parent_bounty_id`: Index of parent bounty for which child-bounty is being added.
 		/// - `value`: Value for executing the proposal.
 		/// - `description`: Text description for the child-bounty.
 		#[pallet::weight(<T as Config>::WeightInfo::add_child_bounty(description.len() as u32))]
