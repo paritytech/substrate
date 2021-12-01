@@ -74,7 +74,7 @@ where
 	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
 		subscribe_headers(
 			&self.client,
-			self.executor.clone(),
+			&self.executor,
 			"chain_subscribeAllHeads",
 			sink,
 			|| self.client().info().best_hash,
@@ -89,7 +89,7 @@ where
 	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
 		subscribe_headers(
 			&self.client,
-			self.executor.clone(),
+			&self.executor,
 			"chain_subscribeNewHeads",
 			sink,
 			|| self.client().info().best_hash,
@@ -105,7 +105,7 @@ where
 	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
 		subscribe_headers(
 			&self.client,
-			self.executor.clone(),
+			&self.executor,
 			"chain_subscribeFinalizedHeads",
 			sink,
 			|| self.client().info().finalized_hash,
@@ -121,7 +121,7 @@ where
 /// Subscribe to new headers.
 fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
-	executor: SubscriptionTaskExecutor,
+	executor: &SubscriptionTaskExecutor,
 	method: &'static str,
 	mut sink: SubscriptionSink,
 	best_block_hash: G,

@@ -364,7 +364,6 @@ where
 		&self,
 		mut sink: SubscriptionSink,
 	) -> std::result::Result<(), Error> {
-		let executor = self.executor.clone();
 		let client = self.client.clone();
 
 		let version = self
@@ -409,7 +408,7 @@ where
 		}
 		.boxed();
 
-		executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn subscribe_storage(
@@ -417,10 +416,8 @@ where
 		mut sink: SubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
 	) -> std::result::Result<(), Error> {
-		let executor = self.executor.clone();
-		let client = self.client.clone();
-
-		let stream = client
+		let stream = self
+			.client
 			.storage_changes_notification_stream(keys.as_ref().map(|keys| &**keys), None)
 			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
@@ -463,7 +460,7 @@ where
 		}
 		.boxed();
 
-		executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	async fn trace_block(

@@ -185,7 +185,6 @@ where
 			},
 		};
 
-		let executor = self.executor.clone();
 		let pool = self.pool.clone();
 		let fut = async move {
 			let stream = match pool
@@ -216,7 +215,7 @@ where
 				.await;
 		};
 
-		executor
+		self.executor
 			.spawn_obj(Box::pin(fut).into())
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
