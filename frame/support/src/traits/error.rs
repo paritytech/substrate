@@ -57,6 +57,10 @@ pub trait ErrorCompactnessTest {
 	fn error_compactness_test() {}
 }
 
+// This can happen in tests where no additional pallets aside from the System pallet is included
+// in the runtime
+impl ErrorCompactnessTest for () {}
+
 impl<A: ErrorCompactnessTest> ErrorCompactnessTest for (A,) {
 	fn error_compactness_test() {
 		A::error_compactness_test();
