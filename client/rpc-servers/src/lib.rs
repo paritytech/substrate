@@ -25,7 +25,10 @@ use jsonrpsee::{
 	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
+use prometheus_endpoint::Registry;
 use std::net::SocketAddr;
+
+use crate::middleware::{RpcMetrics, RpcMiddleware};
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -38,42 +41,7 @@ pub const WS_MAX_BUFFER_CAPACITY_DEFAULT: usize = 16 * MEGABYTE;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
-/*/// RPC server-specific prometheus metrics.
-#[derive(Debug, Clone, Default)]
-pub struct ServerMetrics {
-	/// Number of sessions opened.
-	session_opened: Option<Counter<U64>>,
-	/// Number of sessions closed.
-	session_closed: Option<Counter<U64>>,
-}
-
-impl ServerMetrics {
-	/// Create new WebSocket RPC server metrics.
-	pub fn new(registry: Option<&Registry>) -> Result<Self, PrometheusError> {
-		registry
-			.map(|r| {
-				Ok(Self {
-					session_opened: register(
-						Counter::new(
-							"rpc_sessions_opened",
-							"Number of persistent RPC sessions opened",
-						)?,
-						r,
-					)?
-					.into(),
-					session_closed: register(
-						Counter::new(
-							"rpc_sessions_closed",
-							"Number of persistent RPC sessions closed",
-						)?,
-						r,
-					)?
-					.into(),
-				})
-			})
-			.unwrap_or_else(|| Ok(Default::default()))
-	}
-}*/
+pub mod middleware;
 
 /// Type alias for http server
 pub type HttpServer = HttpServerHandle;
@@ -84,17 +52,16 @@ pub type WsServer = WsServerHandle;
 pub fn start_http<M: Send + Sync + 'static>(
 	addrs: &[SocketAddr],
 	cors: Option<&Vec<String>>,
-	maybe_max_payload_mb: Option<usize>,
-	module: RpcModule<M>,
+	max_payload_mb: Option<usize>,
+	prometheus_registry: Option<&Registry>,
+	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 ) -> Result<HttpServerHandle, anyhow::Error> {
-	let max_request_body_size = maybe_max_payload_mb
+	let max_request_body_size = max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 
 	let mut acl = AccessControlBuilder::new();
-
-	log::info!("Starting JSON-RPC HTTP server: addr={:?}, allowed origins={:?}", addrs, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
@@ -103,16 +70,24 @@ pub fn start_http<M: Send + Sync + 'static>(
 		acl = acl.set_allowed_origins(cors)?;
 	};
 
-	let builder = HttpServerBuilder::default()
+	let builder = HttpServerBuilder::new()
 		.max_request_body_size(max_request_body_size as u32)
 		.set_access_control(acl.build())
 		.custom_tokio_runtime(rt.clone());
 
-	let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+	let rpc_api = build_rpc_api(rpc_api);
+	let handle = if let Some(prometheus_registry) = prometheus_registry {
+		let metrics = RpcMetrics::new(&prometheus_registry)?;
+		let middleware = RpcMiddleware::new(metrics, "http".into());
+		let builder = builder.set_middleware(middleware);
+		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+		server.start(rpc_api)?
+	} else {
+		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+		server.start(rpc_api)?
+	};
 
-	let rpc_api = build_rpc_api(module);
-	let handle = server.start(rpc_api)?;
-
+	log::info!("Starting JSON-RPC HTTP server: addr={:?}, allowed origins={:?}", addrs, cors);
 	Ok(handle)
 }
 
@@ -121,21 +96,20 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	addrs: &[SocketAddr],
 	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
-	maybe_max_payload_mb: Option<usize>,
-	module: RpcModule<M>,
+	max_payload_mb: Option<usize>,
+	prometheus_registry: Option<&Registry>,
+	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 ) -> Result<WsServerHandle, anyhow::Error> {
-	let max_request_body_size = maybe_max_payload_mb
+	let max_request_body_size = max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
 		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 	let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
-	let mut builder = WsServerBuilder::default()
+	let mut builder = WsServerBuilder::new()
 		.max_request_body_size(max_request_body_size as u32)
 		.max_connections(max_connections as u64)
 		.custom_tokio_runtime(rt.clone());
-
-	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.
@@ -144,11 +118,19 @@ pub fn start_ws<M: Send + Sync + 'static>(
 		builder = builder.set_allowed_origins(cors)?;
 	}
 
-	let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
+	let rpc_api = build_rpc_api(rpc_api);
+	let handle = if let Some(prometheus_registry) = prometheus_registry {
+		let metrics = RpcMetrics::new(&prometheus_registry)?;
+		let middleware = RpcMiddleware::new(metrics, "ws".into());
+		let builder = builder.set_middleware(middleware);
+		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
+		server.start(rpc_api)?
+	} else {
+		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
+		server.start(rpc_api)?
+	};
 
-	let rpc_api = build_rpc_api(module);
-	let handle = server.start(rpc_api)?;
-
+	log::info!("Starting JSON-RPC WS server: addrs={:?}, allowed origins={:?}", addrs, cors);
 	Ok(handle)
 }
 

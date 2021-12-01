@@ -276,3 +276,12 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+jsonrpsee ={git = "https://github.com/paritytech/jsonrpsee" ,branch = "mh-metrics-middleware" }
+jsonrpsee-types ={git = "https://github.com/paritytech/jsonrpsee" ,branch = "mh-metrics-middleware" }
+jsonrpsee-utils ={git = "https://github.com/paritytech/jsonrpsee" ,branch = "mh-metrics-middleware" }
+jsonrpsee-http-server ={git = "https://github.com/paritytech/jsonrpsee" ,branch = "mh-metrics-middleware" }
+jsonrpsee-proc-macros ={git = "https://github.com/paritytech/jsonrpsee" ,branch = "mh-metrics-middleware" }
+jsonrpsee-ws-client ={git = "https://github.com/paritytech/jsonrpsee" ,branch = "mh-metrics-middleware" }
+jsonrpsee-ws-server ={git = "https://github.com/paritytech/jsonrpsee" ,branch = "mh-metrics-middleware" }
