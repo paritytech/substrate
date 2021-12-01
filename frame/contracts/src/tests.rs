@@ -396,7 +396,7 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
 					topics: vec![],
 				},
 				EventRecord {
@@ -629,7 +629,9 @@ fn deploy_and_call_other_contract() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount(callee_addr.clone())),
+					event: Event::System(frame_system::Event::NewAccount {
+						account: callee_addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -878,7 +880,9 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::KilledAccount(addr.clone())),
+					event: Event::System(frame_system::Event::KilledAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -2342,7 +2346,7 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
 					topics: vec![],
 				},
 				EventRecord {
@@ -2433,7 +2437,7 @@ fn instantiate_with_below_existential_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
 					topics: vec![],
 				},
 				EventRecord {

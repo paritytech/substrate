@@ -53,14 +53,14 @@ fn threshold(authorities: usize) -> usize {
 	authorities - faulty
 }
 
-pub(crate) struct Rounds<Hash, Number> {
-	rounds: BTreeMap<(Hash, Number), RoundTracker>,
+pub(crate) struct Rounds<Payload, Number> {
+	rounds: BTreeMap<(Payload, Number), RoundTracker>,
 	validator_set: ValidatorSet<Public>,
 }
 
-impl<H, N> Rounds<H, N>
+impl<P, N> Rounds<P, N>
 where
-	H: Ord + Hash,
+	P: Ord + Hash,
 	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
 {
 	pub(crate) fn new(validator_set: ValidatorSet<Public>) -> Self {
@@ -70,8 +70,8 @@ where
 
 impl<H, N> Rounds<H, N>
 where
-	H: Ord + Hash,
-	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
+	H: Ord + Hash + Clone,
+	N: Ord + AtLeast32BitUnsigned + MaybeDisplay + Clone,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id
@@ -81,9 +81,9 @@ where
 		self.validator_set.validators.clone()
 	}
 
-	pub(crate) fn add_vote(&mut self, round: (H, N), vote: (Public, Signature)) -> bool {
+	pub(crate) fn add_vote(&mut self, round: &(H, N), vote: (Public, Signature)) -> bool {
 		if self.validator_set.validators.iter().any(|id| vote.0 == *id) {
-			self.rounds.entry(round).or_default().add_vote(vote)
+			self.rounds.entry(round.clone()).or_default().add_vote(vote)
 		} else {
 			false
 		}
@@ -179,7 +179,7 @@ mod tests {
 		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
 
 		assert!(rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))
 		));
 
@@ -187,21 +187,21 @@ mod tests {
 
 		// invalid vote
 		assert!(!rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed"))
 		));
 
 		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 		assert!(rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed"))
 		));
 
 		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 		assert!(rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed"))
 		));
 
@@ -225,31 +225,31 @@ mod tests {
 
 		// round 1
 		rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
 		);
 		rounds.add_vote(
-			(H256::from_low_u64_le(1), 1),
+			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
 		);
 
 		// round 2
 		rounds.add_vote(
-			(H256::from_low_u64_le(2), 2),
+			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am again committed")),
 		);
 		rounds.add_vote(
-			(H256::from_low_u64_le(2), 2),
+			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
 		);
 
 		// round 3
 		rounds.add_vote(
-			(H256::from_low_u64_le(3), 3),
+			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
 		);
 		rounds.add_vote(
-			(H256::from_low_u64_le(3), 3),
+			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am still committed")),
 		);
 

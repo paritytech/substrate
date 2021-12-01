@@ -750,7 +750,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::NewAccount(1)),
+							Event::System(system::Event::NewAccount { account: 1 }),
 							Event::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
 							Event::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
 						]
@@ -762,7 +762,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::KilledAccount(1)),
+							Event::System(system::Event::KilledAccount { account: 1 }),
 							Event::Balances(crate::Event::DustLost { account: 1, amount: 99 }),
 							Event::Balances(crate::Event::Slashed { who: 1, amount: 1 }),
 						]
@@ -781,7 +781,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::NewAccount(1)),
+							Event::System(system::Event::NewAccount { account: 1 }),
 							Event::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
 							Event::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
 						]
@@ -793,7 +793,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::KilledAccount(1)),
+							Event::System(system::Event::KilledAccount { account: 1 }),
 							Event::Balances(crate::Event::Slashed { who: 1, amount: 100 }),
 						]
 					);
