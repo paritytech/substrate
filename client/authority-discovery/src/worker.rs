@@ -327,8 +327,7 @@ where
 		}
 
 		let serialized_record = serialize_authority_record(addresses)?;
-		let peer_signature =
-			sign_record_with_peer_id(&serialized_record, &self.network.local_identity())?;
+		let peer_signature = sign_record_with_peer_id(&serialized_record, self.network.as_ref())?;
 
 		let keys_vec = keys.iter().cloned().collect::<Vec<_>>();
 
@@ -593,19 +592,37 @@ where
 	}
 }
 
+pub trait NetworkSigner {
+	/// Sign a message in the name of `self.local_peer_id()`
+	fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, libp2p::identity::error::SigningError>;
+}
+
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
 /// underlying Substrate networking. Using this trait abstraction instead of
 /// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
 #[async_trait]
-pub trait NetworkProvider: NetworkStateInfo {
-	/// `Keypair` for signing records in the name of `self.local_peer_id()`
-	fn local_identity(&self) -> &libp2p::identity::Keypair;
-
+pub trait NetworkProvider: NetworkStateInfo + NetworkSigner {
 	/// Start putting a value in the Dht.
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>);
 
 	/// Start getting a value from the Dht.
 	fn get_value(&self, key: &libp2p::kad::record::Key);
+}
+
+impl<B, H> NetworkSigner for sc_network::NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, libp2p::identity::error::SigningError> {
+		self.sign_with_local_identity(msg)
+	}
 }
 
 #[async_trait::async_trait]
@@ -614,9 +631,6 @@ where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	fn local_identity(&self) -> &libp2p::identity::Keypair {
-		self.local_identity()
-	}
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
 		self.put_value(key, value)
 	}
@@ -658,10 +672,13 @@ fn serialize_authority_record(addresses: Vec<Vec<u8>>) -> Result<Vec<u8>> {
 
 fn sign_record_with_peer_id(
 	serialized_record: &[u8],
-	peer_secret: &libp2p::identity::Keypair,
+	network: &impl NetworkSigner,
 ) -> Result<schema::PeerSignature> {
-	let public_key = peer_secret.public().to_protobuf_encoding();
-	let signature = peer_secret.sign(serialized_record).map_err(|_| Error::Signing)?;
+	let signature = network
+		.sign_with_local_identity(serialized_record)
+		.map_err(|_| Error::Signing)?;
+	let public_key = signature.public_key.to_protobuf_encoding();
+	let signature = signature.bytes;
 	Ok(schema::PeerSignature { signature, public_key })
 }
 

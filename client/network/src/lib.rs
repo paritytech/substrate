@@ -274,7 +274,7 @@ pub use protocol::{
 };
 pub use service::{
 	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
-	OutboundFailure, RequestFailure,
+	OutboundFailure, RequestFailure, Signature,
 };
 
 pub use sc_peerset::ReputationChange;

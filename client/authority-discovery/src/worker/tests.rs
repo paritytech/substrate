@@ -149,11 +149,17 @@ impl Default for TestNetwork {
 	}
 }
 
+impl NetworkSigner for TestNetwork {
+	fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, libp2p::identity::error::SigningError> {
+		sc_network::Signature::sign_message(msg, &self.identity)
+	}
+}
+
 #[async_trait]
 impl NetworkProvider for TestNetwork {
-	fn local_identity(&self) -> &libp2p::identity::Keypair {
-		&self.identity
-	}
 	fn put_value(&self, key: kad::record::Key, value: Vec<u8>) {
 		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
 		self.event_sender
@@ -180,16 +186,25 @@ impl NetworkStateInfo for TestNetwork {
 	}
 }
 
-async fn build_dht_event(
+impl NetworkSigner for libp2p::identity::Keypair {
+	fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, libp2p::identity::error::SigningError> {
+		sc_network::Signature::sign_message(msg, self)
+	}
+}
+
+async fn build_dht_event<Signer: NetworkSigner>(
 	addresses: Vec<Multiaddr>,
 	public_key: AuthorityId,
 	key_store: &dyn CryptoStore,
-	node_key: Option<&libp2p::identity::Keypair>,
+	network: Option<&Signer>,
 ) -> Vec<(libp2p::kad::record::Key, Vec<u8>)> {
 	let serialized_record =
 		serialize_authority_record(serialize_addresses(addresses.into_iter())).unwrap();
 
-	let peer_signature = node_key.map(|k| sign_record_with_peer_id(&serialized_record, k).unwrap());
+	let peer_signature = network.map(|n| sign_record_with_peer_id(&serialized_record, n).unwrap());
 	let kv_pairs = sign_record_with_authority_ids(
 		serialized_record,
 		peer_signature,
@@ -447,7 +462,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 
 		// Make previously triggered lookup succeed.
 		let dht_event = {
-			let kv_pairs = build_dht_event(
+			let kv_pairs = build_dht_event::<TestNetwork>(
 				vec![remote_multiaddr.clone()],
 				remote_public_key.clone(),
 				&remote_key_store,
@@ -549,7 +564,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 	let mut tester = DhtValueFoundTester::new();
 	assert!(MAX_ADDRESSES_PER_AUTHORITY < 100);
 	let addresses = (1..100).map(|i| tester.multiaddr_with_peer_id(i)).collect();
-	let kv_pairs = block_on(build_dht_event(
+	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		addresses,
 		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
@@ -624,7 +639,7 @@ fn reject_address_with_invalid_peer_signature() {
 #[test]
 fn reject_address_without_peer_signature() {
 	let mut tester = DhtValueFoundTester::new();
-	let kv_pairs = block_on(build_dht_event(
+	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		vec![tester.multiaddr_with_peer_id(1)],
 		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
@@ -642,7 +657,7 @@ fn do_not_cache_addresses_without_peer_id() {
 	let multiaddr_with_peer_id = tester.multiaddr_with_peer_id(1);
 	let multiaddr_without_peer_id: Multiaddr =
 		"/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
-	let kv_pairs = block_on(build_dht_event(
+	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		vec![multiaddr_with_peer_id.clone(), multiaddr_without_peer_id],
 		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
@@ -786,7 +801,7 @@ fn lookup_throttling() {
 			let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
 			let remote_key: AuthorityId = remote_hash_to_key.get(&remote_hash).unwrap().clone();
 			let dht_event = {
-				let kv_pairs = build_dht_event(
+				let kv_pairs = build_dht_event::<TestNetwork>(
 					vec![remote_multiaddr.clone()],
 					remote_key,
 					&remote_key_store,

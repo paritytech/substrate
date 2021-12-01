@@ -93,8 +93,11 @@ pub use behaviour::{
 
 mod metrics;
 mod out_events;
+mod signature;
 #[cfg(test)]
 mod tests;
+
+pub use signature::*;
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -670,9 +673,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
-	/// Returns the `KeyPair` that defined the local `PeerId`.
-	pub fn local_identity(&self) -> &libp2p::identity::Keypair {
-		&self.local_identity
+	/// Signs the message with the `KeyPair` that defined the local `PeerId`.
+	///
+	/// Returns a tuple that consists of the public key the
+	pub fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> Result<Signature, libp2p::identity::error::SigningError> {
+		Signature::sign_message(msg.as_ref(), &self.local_identity)
 	}
 
 	/// Set authorized peers.
