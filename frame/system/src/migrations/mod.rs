@@ -85,7 +85,6 @@ frame_support::generate_storage_alias!(
 	>
 );
 
-#[allow(dead_code)]
 /// Migrate from unique `u8` reference counting to triple `u32` reference counting.
 pub fn migrate_from_single_u8_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	let mut translated: usize = 0;
@@ -103,7 +102,6 @@ pub fn migrate_from_single_u8_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	Weight::max_value()
 }
 
-#[allow(dead_code)]
 /// Migrate from unique `u32` reference counting to triple `u32` reference counting.
 pub fn migrate_from_single_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	let mut translated: usize = 0;
@@ -122,7 +120,6 @@ pub fn migrate_from_single_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	Weight::max_value()
 }
 
-#[allow(dead_code)]
 /// Migrate from dual `u32` reference counting to triple `u32` reference counting.
 pub fn migrate_from_dual_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	let mut translated: usize = 0;
