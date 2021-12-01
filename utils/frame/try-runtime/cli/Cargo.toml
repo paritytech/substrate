@@ -31,4 +31,4 @@ sp-externalities = { version = "0.10.0-dev", path = "../../../../primitives/exte
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
-jsonrpsee = { version = "0.5", features = ["ws-client"] }
+jsonrpsee = { version = "0.6.0", features = ["ws-client"] }

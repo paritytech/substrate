@@ -276,12 +276,3 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", rev = "1657e26b7461d5fe52d98615ce5064f18c829859" }
-jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", rev = "1657e26b7461d5fe52d98615ce5064f18c829859" }
-jsonrpsee-utils = { git = "https://github.com/paritytech/jsonrpsee", rev = "1657e26b7461d5fe52d98615ce5064f18c829859" }
-jsonrpsee-http-server = { git = "https://github.com/paritytech/jsonrpsee", rev = "1657e26b7461d5fe52d98615ce5064f18c829859" }
-jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", rev = "1657e26b7461d5fe52d98615ce5064f18c829859" }
-jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev = "1657e26b7461d5fe52d98615ce5064f18c829859" }
-jsonrpsee-ws-server = { git = "https://github.com/paritytech/jsonrpsee", rev = "1657e26b7461d5fe52d98615ce5064f18c829859" }
