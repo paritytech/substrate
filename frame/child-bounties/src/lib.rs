@@ -59,11 +59,13 @@ pub mod weights;
 use sp_std::prelude::*;
 
 use frame_support::traits::{
-	Currency, ExistenceRequirement::AllowDeath, Get, OnUnbalanced, ReservableCurrency,
+	Currency,
+	ExistenceRequirement::{AllowDeath, KeepAlive},
+	Get, OnUnbalanced, ReservableCurrency, WithdrawReasons,
 };
 
 use sp_runtime::{
-	traits::{AccountIdConversion, BadOrigin, Saturating, StaticLookup, Zero},
+	traits::{AccountIdConversion, BadOrigin, CheckedSub, Saturating, StaticLookup, Zero},
 	DispatchResult, RuntimeDebug,
 };
 
@@ -220,16 +222,17 @@ pub mod pallet {
 		///
 		/// Child-bounty gets added successfully & fund gets transferred from
 		/// parent bounty to child-bounty account, if parent bounty has enough
-		/// fund. Else call gets failed.
+		/// funds, else the call fails.
 		///
 		/// Upper bound to maximum number of active  child-bounties that can be
 		/// added are managed via runtime trait config
 		/// [`Config::MaxActiveChildBountyCount`].
 		///
-		/// If the call is success, the state of child-bounty is moved to
-		/// "Added" state.
+		/// If the call is success, the status of child-bounty is updated to
+		/// "Added".
 		///
-		/// - `parent_bounty_id`: Index of parent bounty for which child-bounty is being added.
+		/// - `parent_bounty_id`: Index of parent bounty for which child-bounty
+		///   is being added.
 		/// - `value`: Value for executing the proposal.
 		/// - `description`: Text description for the child-bounty.
 		#[pallet::weight(<T as Config>::WeightInfo::add_child_bounty(description.len() as u32))]
@@ -259,28 +262,26 @@ pub mod pallet {
 				pallet_bounties::Pallet::<T>::bounty_account_id(parent_bounty_id);
 
 			// Ensure parent bounty has enough balance after adding child-bounty.
-			let balance = T::Currency::free_balance(&parent_bounty_account);
-			ensure!(
-				balance.saturating_sub(value) >= T::Currency::minimum_balance(),
-				Error::<T>::InsufficientBountyBalance,
-			);
-
-			// Create child-bounty ID.
-			let child_bounty_id = Self::child_bounty_count();
-
-			// Transfer fund from parent bounty to child-bounty.
-			let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
-			T::Currency::transfer(
+			let bounty_balance = T::Currency::free_balance(&parent_bounty_account);
+			let new_bounty_balance = bounty_balance
+				.checked_sub(&value)
+				.ok_or(Error::<T>::InsufficientBountyBalance)?;
+			T::Currency::ensure_can_withdraw(
 				&parent_bounty_account,
-				&child_bounty_account,
 				value,
-				AllowDeath,
+				WithdrawReasons::TRANSFER,
+				new_bounty_balance,
 			)?;
 
+			// Get child-bounty ID.
+			let child_bounty_id = Self::child_bounty_count();
+			let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
+
+			// Transfer funds from parent bounty to child-bounty.
+			T::Currency::transfer(&parent_bounty_account, &child_bounty_account, value, KeepAlive)?;
+
 			// Increment the active child-bounty count.
-			<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| {
-				*count = count.saturating_add(1)
-			});
+			<ParentChildBounties<T>>::mutate(parent_bounty_id, |count| count.saturating_inc());
 			<ChildBountyCount<T>>::put(child_bounty_id.saturating_add(1));
 
 			// Create child-bounty instance.
@@ -336,8 +337,9 @@ pub mod pallet {
 					let child_bounty_value = T::Currency::free_balance(&child_bounty_account);
 					ensure!(fee < child_bounty_value, BountiesError::<T>::InvalidFee);
 
-					// Add child-bounty curator fee to the cumulative sum.
-					// To be subtracted from the parent bounty curator when claiming bounty.
+					// Add child-bounty curator fee to the cumulative sum. To be
+					// subtracted from the parent bounty curator when claiming
+					// bounty.
 					ChildrenCuratorFees::<T>::mutate(parent_bounty_id, |value| {
 						*value = value.saturating_add(fee)
 					});
@@ -768,9 +770,9 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// The account ID of a child-bounty account.
 	pub fn child_bounty_account_id(id: BountyIndex) -> T::AccountId {
-		// Only use two byte prefix to support 16 byte account id (used by test)
-		// "modl" ++ "py/trsry" ++ "cb" is 14 bytes, and two bytes remaining for
-		// bounty index.
+		// This function is taken from the parent (bounties) pallet, but the
+		// prefix is changed to have different AccountId when the index of
+		// parent and child is same.
 		T::PalletId::get().into_sub_account(("cb", id))
 	}
 

@@ -249,6 +249,11 @@ fn add_child_bounty() {
 
 		assert_noop!(
 			ChildBounties::add_child_bounty(Origin::signed(4), 0, 50, b"12345-p1".to_vec()),
+			pallet_balances::Error::<Test>::KeepAlive,
+		);
+
+		assert_noop!(
+			ChildBounties::add_child_bounty(Origin::signed(4), 0, 100, b"12345-p1".to_vec()),
 			Error::<Test>::InsufficientBountyBalance,
 		);
 
