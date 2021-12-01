@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Democracy's Launch/Voting/Enactment periods set to 1 day
-- Democracy's Minimum Deposit set to 1000 dollars
+- Democracy's Minimum Deposit set to 5000 dollars
 
 ## [2.5.1]
 

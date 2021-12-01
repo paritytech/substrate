@@ -115,7 +115,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 272,
+	spec_version: 273,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -478,7 +478,7 @@ parameter_types! {
 	pub const VotingPeriod: BlockNumber = 1 * 24 * 60 * MINUTES;
 	pub const FastTrackVotingPeriod: BlockNumber = 3 * 60 * MINUTES;
 	pub const InstantAllowed: bool = true;
-	pub const MinimumDeposit: Balance = 1000 * DOLLARS;
+	pub const MinimumDeposit: Balance = 5000 * DOLLARS;
 	pub const EnactmentPeriod: BlockNumber = 1 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 7 * 24 * 60 * MINUTES;
 	// One cent: $10,000 / MB
