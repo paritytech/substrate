@@ -1,7 +1,7 @@
 [package]
 name = "node-template-runtime"
 version = "3.0.0"
-description = 'A fresh FRAME-based Substrate runtime, ready for hacking.'
+description = "A fresh FRAME-based Substrate runtime, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
 edition = "2021"
