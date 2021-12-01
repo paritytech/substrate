@@ -100,21 +100,15 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	/// Module prefix. Used for generating final key.
-	fn module_prefix() -> &'static [u8] {
-		Prefix::pallet_prefix().as_bytes()
+	/// The key used to store the counter of the map.
+	pub fn counter_storage_final_key() -> [u8; 32] {
+		CounterFor::<Prefix>::hashed_key()
 	}
 
-	/// Counted Storage prefix. Used for generating final key.
-	pub fn storage_counter_prefix() -> &'static [u8] {
-		Prefix::STORAGE_PREFIX.as_bytes()
-	}
-
-	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
-	/// `storage_counter_prefix`.
-	pub fn prefix_hash() -> Vec<u8> {
-		let result = storage_prefix(Self::module_prefix(), Self::storage_counter_prefix());
-		result.to_vec()
+	/// The prefix used to generate the key of the map.
+	pub fn map_storage_final_prefix() -> Vec<u8> {
+		use crate::storage::generator::StorageMap;
+		<Self as MapWrapper>::Map::prefix_hash()
 	}
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
