@@ -19,7 +19,7 @@
 use crate::{
 	error::{Error, Result},
 	interval::ExpIncInterval,
-	ServicetoWorkerMsg,
+	ServicetoWorkerMsg, WorkerConfig,
 };
 
 use std::{
@@ -161,7 +161,7 @@ where
 		dht_event_rx: DhtEventStream,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
-		config: crate::WorkerConfig,
+		config: WorkerConfig,
 	) -> Self {
 		// When a node starts up publishing and querying might fail due to various reasons, for
 		// example due to being not yet fully bootstrapped on the DHT. Thus one should retry rather
