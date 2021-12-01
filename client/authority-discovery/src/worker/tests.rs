@@ -593,8 +593,8 @@ fn reject_address_with_rogue_peer_signature() {
 
 	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
 
-	assert_eq!(
-		None, cached_remote_addresses,
+	assert!(
+		cached_remote_addresses.is_none(),
 		"Expected worker to ignore record signed by a different key.",
 	);
 }
@@ -615,8 +615,8 @@ fn reject_address_with_invalid_peer_signature() {
 
 	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
 
-	assert_eq!(
-		None, cached_remote_addresses,
+	assert!(
+		cached_remote_addresses.is_none(),
 		"Expected worker to ignore record with tampered signature.",
 	);
 }
@@ -633,7 +633,7 @@ fn reject_address_without_peer_signature() {
 
 	let cached_remote_addresses = tester.process_value_found(true, kv_pairs);
 
-	assert_eq!(None, cached_remote_addresses, "Expected worker to ignore unsigned record.",);
+	assert!(cached_remote_addresses.is_none(), "Expected worker to ignore unsigned record.",);
 }
 
 #[test]

@@ -332,7 +332,7 @@ where
 
 		let keys_vec = keys.iter().cloned().collect::<Vec<_>>();
 
-		let mut kv_pairs = sign_record_with_authority_ids(
+		let kv_pairs = sign_record_with_authority_ids(
 			serialized_record,
 			Some(peer_signature),
 			key_store.as_ref(),
@@ -340,7 +340,7 @@ where
 		)
 		.await?;
 
-		for (key, value) in kv_pairs.drain(..) {
+		for (key, value) in kv_pairs.into_iter() {
 			self.network.put_value(key, value);
 		}
 
@@ -493,14 +493,13 @@ where
 					return Err(Error::VerifyingDhtPayload)
 				}
 
-				let mut addresses: Vec<Multiaddr> =
-					schema::AuthorityRecord::decode(record.as_slice())
-						.map(|a| a.addresses)
-						.map_err(Error::DecodingProto)?
-						.into_iter()
-						.map(|a| a.try_into())
-						.collect::<std::result::Result<_, _>>()
-						.map_err(Error::ParsingMultiaddress)?;
+				let addresses: Vec<Multiaddr> = schema::AuthorityRecord::decode(record.as_slice())
+					.map(|a| a.addresses)
+					.map_err(Error::DecodingProto)?
+					.into_iter()
+					.map(|a| a.try_into())
+					.collect::<std::result::Result<_, _>>()
+					.map_err(Error::ParsingMultiaddress)?;
 
 				let get_peer_id = |a: &Multiaddr| match a.iter().last() {
 					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key).ok(),
@@ -509,11 +508,8 @@ where
 
 				// Ignore [`Multiaddr`]s without [`PeerId`] or with own addresses.
 				let addresses: Vec<Multiaddr> = addresses
-					.drain(..)
-					.filter_map(|a| {
-						get_peer_id(&a)
-							.and_then(|p| if p != local_peer_id { Some(a) } else { None })
-					})
+					.into_iter()
+					.filter(|a| get_peer_id(&a).filter(|p| *p != local_peer_id).is_some())
 					.collect();
 
 				let remote_peer_id = single(addresses.iter().map(get_peer_id))
@@ -676,7 +672,7 @@ async fn sign_record_with_authority_ids(
 	keys: Vec<CryptoTypePublicPair>,
 ) -> Result<Vec<(libp2p::kad::record::Key, Vec<u8>)>> {
 	let signatures = key_store
-		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), serialized_record.as_slice())
+		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), &serialized_record)
 		.await
 		.map_err(|_| Error::Signing)?;
 
