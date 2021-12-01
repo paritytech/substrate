@@ -30,7 +30,7 @@ use wasm_timer::Instant;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
-	MmrRootHash, VoteMessage,
+	VoteMessage,
 };
 
 use crate::keystore::BeefyKeystore;
@@ -142,9 +142,7 @@ where
 		sender: &PeerId,
 		mut data: &[u8],
 	) -> ValidationResult<B::Hash> {
-		if let Ok(msg) =
-			VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut data)
-		{
+		if let Ok(msg) = VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
 			let msg_hash = twox_64(data);
 			let round = msg.commitment.block_number;
 
@@ -178,9 +176,7 @@ where
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
 		let known_votes = self.known_votes.read();
 		Box::new(move |_topic, mut data| {
-			let msg = match VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(
-				&mut data,
-			) {
+			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return true,
 			};
@@ -214,9 +210,7 @@ where
 				return do_rebroadcast
 			}
 
-			let msg = match VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(
-				&mut data,
-			) {
+			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return true,
 			};
@@ -237,9 +231,11 @@ mod tests {
 	use sc_network_test::Block;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
-	use beefy_primitives::{crypto::Signature, Commitment, MmrRootHash, VoteMessage, KEY_TYPE};
-
 	use crate::keystore::{tests::Keyring, BeefyKeystore};
+	use beefy_primitives::{
+		crypto::Signature, known_payload_ids, Commitment, MmrRootHash, Payload, VoteMessage,
+		KEY_TYPE,
+	};
 
 	use super::*;
 
@@ -345,10 +341,7 @@ mod tests {
 		}
 	}
 
-	fn sign_commitment<BN: Encode, P: Encode>(
-		who: &Keyring,
-		commitment: &Commitment<BN, P>,
-	) -> Signature {
+	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> Signature {
 		let store: SyncCryptoStorePtr = std::sync::Arc::new(LocalKeystore::in_memory());
 		SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&who.to_seed())).unwrap();
 		let beefy_keystore: BeefyKeystore = Some(store).into();
@@ -362,11 +355,8 @@ mod tests {
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
-		let commitment = Commitment {
-			payload: MmrRootHash::default(),
-			block_number: 3_u64,
-			validator_set_id: 0,
-		};
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default().encode());
+		let commitment = Commitment { payload, block_number: 3_u64, validator_set_id: 0 };
 
 		let signature = sign_commitment(&Keyring::Alice, &commitment);
 
