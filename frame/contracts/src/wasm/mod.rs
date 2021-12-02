@@ -50,7 +50,7 @@ pub use tests::MockExt;
 ///
 /// This data structure is mostly immutable once created and stored. The exceptions that
 /// can be changed by calling a contract are `instruction_weights_version` and `code`.
-/// `instruction_weights_version` and `code` change when a contract with an outdated instrumention
+/// `instruction_weights_version` and `code` change when a contract with an outdated instrumentation
 /// is called. Therefore one must be careful when holding any in-memory representation of this
 /// type while calling into a contract as those fields can get out of date.
 #[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
@@ -80,7 +80,7 @@ pub struct PrefabWasmModule<T: Config> {
 	/// when loading the module from storage.
 	#[codec(skip)]
 	code_hash: CodeHash<T>,
-	// This isn't needed for contract execution and does not get loaded from storage by defaut.
+	// This isn't needed for contract execution and does not get loaded from storage by default.
 	// It is `Some` if and only if this struct was generated from code.
 	#[codec(skip)]
 	owner_info: Option<OwnerInfo<T>>,
@@ -88,7 +88,7 @@ pub struct PrefabWasmModule<T: Config> {
 
 /// Information that belongs to a [`PrefabWasmModule`] but is stored separately.
 ///
-/// It is stored in a seperate storage entry to avoid loading the code when not necessary.
+/// It is stored in a separate storage entry to avoid loading the code when not necessary.
 #[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -143,7 +143,7 @@ where
 		code_cache::try_remove::<T>(origin, code_hash)
 	}
 
-	/// Returns whether there is an deposit to be payed for this module.
+	/// Returns whether there is a deposit to be payed for this module.
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
@@ -152,7 +152,7 @@ where
 			0u32.into()
 		} else {
 			// Only already in-storage contracts have their `owner_info` set to `None`.
-			// Therefore is is correct to return `0` in this case.
+			// Therefore it is correct to return `0` in this case.
 			self.owner_info.as_ref().map(|i| i.deposit).unwrap_or_default()
 		}
 	}

@@ -1215,7 +1215,7 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the value transferred along with this call or as value into the supplied buffer.
+	// Stores the value transferred along with this call/instantiate into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at

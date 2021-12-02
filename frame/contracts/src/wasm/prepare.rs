@@ -25,8 +25,7 @@ use crate::{
 	wasm::{env_def::ImportSatisfyCheck, OwnerInfo, PrefabWasmModule},
 	AccountIdOf, Config, Schedule,
 };
-use codec::Encode;
-use frame_support::pallet_prelude::MaxEncodedLen;
+use codec::{Encode, MaxEncodedLen};
 use pwasm_utils::parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType};
 use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
@@ -415,7 +414,7 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 	};
 
 	// We need to add the sizes of the `#[codec(skip)]` fields which are stored in different
-	// storage items. This is also why we have `3` items addeded and not only one.
+	// storage items. This is also why we have `3` items added and not only one.
 	let bytes_added = module
 		.encoded_size()
 		.saturating_add(original_code_len)
