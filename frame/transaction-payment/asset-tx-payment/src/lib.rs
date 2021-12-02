@@ -210,7 +210,7 @@ where
 		// tip
 		BalanceOf<T>,
 		// who paid the fee
-		Self::AccountId,
+		Option<Self::AccountId>,
 		// imbalance resulting from withdrawing the fee
 		InitialPayment<T>,
 	);
@@ -240,7 +240,7 @@ where
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		let (_fee, initial_payment) = self.withdraw_fee(who, call, info, len)?;
-		Ok((self.tip, who.clone(), initial_payment))
+		Ok((self.tip, Some(who.clone()), initial_payment))
 	}
 
 	fn post_dispatch(
@@ -265,6 +265,7 @@ where
 				let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
 					len as u32, info, post_info, tip,
 				);
+				let who = who.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(255)))?;
 				T::OnChargeAssetTransaction::correct_and_deposit_fee(
 					&who,
 					info,
