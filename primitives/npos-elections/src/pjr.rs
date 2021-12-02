@@ -287,7 +287,14 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 			let elected = maybe_support.is_some();
 			let backed_stake = maybe_support.map(|support| support.total).unwrap_or_default();
 
-			Candidate { who, elected, backed_stake, ..Default::default() }.to_ptr()
+			Candidate {
+				who,
+				elected,
+				backed_stake,
+				score: Default::default(),
+				approval_stake: Default::default(),
+				round: Default::default(),
+			}.to_ptr()
 		})
 		.collect::<Vec<_>>();
 
@@ -315,7 +322,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 						who: t,
 						candidate: Rc::clone(&candidates[*idx]),
 						weight,
-						..Default::default()
+        				load: Default::default(),
 					});
 				}
 			}

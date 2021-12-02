@@ -508,7 +508,7 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: `who` must be sorted. If it is not, then you'll get the wrong answer.
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		T::AccountId::decode(&mut &entropy[..]).expect("`AccountId` is never larger than 256 bits; qed")
 	}
 
 	fn operate(

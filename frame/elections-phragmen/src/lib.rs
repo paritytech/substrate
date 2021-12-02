@@ -147,7 +147,7 @@ pub enum Renouncing {
 }
 
 /// An active voter.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct Voter<AccountId, Balance> {
 	/// The members being backed.
 	pub votes: Vec<AccountId>,
@@ -157,6 +157,16 @@ pub struct Voter<AccountId, Balance> {
 	///
 	/// To be unreserved upon removal.
 	pub deposit: Balance,
+}
+
+impl<AccountId, Balance: Default> Default for Voter<AccountId, Balance> {
+	fn default() -> Self {
+		Self {
+			votes: vec![],
+			stake: Default::default(),
+			deposit: Default::default(),
+		}
+	}
 }
 
 /// A holder of a seat as either a member or a runner-up.

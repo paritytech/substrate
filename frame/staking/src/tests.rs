@@ -2051,7 +2051,7 @@ fn reward_from_authorship_event_handler_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		use pallet_authorship::EventHandler;
 
-		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), 11);
+		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), Some(11));
 
 		<Pallet<Test>>::note_author(11);
 		<Pallet<Test>>::note_uncle(21, 1);

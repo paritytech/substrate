@@ -55,7 +55,6 @@ use sp_arithmetic::traits::{Bounded, Zero};
 use sp_std::{
 	collections::btree_map::{BTreeMap, Entry::*},
 	prelude::*,
-	vec,
 };
 
 /// Map type used for reduce_4. Can be easily swapped with HashMap.
@@ -417,8 +416,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 				// find minimum of cycle.
 				let mut min_value: ExtendedBalance = Bounded::max_value();
 				// The voter and the target pair that create the min edge.
-				let mut min_target: A = Default::default();
-				let mut min_voter: A = Default::default();
+				let mut min_target: Option<A> = None;
+				let mut min_voter: Option<A> = None;
 				// The index of the min in opaque cycle list.
 				let mut min_index = 0usize;
 				// 1 -> next // 0 -> prev
@@ -448,8 +447,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 							ass.distribution.iter().find(|d| d.0 == next).map(|(_, w)| {
 								if *w < min_value {
 									min_value = *w;
-									min_target = next.clone();
-									min_voter = current.clone();
+									min_target = Some(next.clone());
+									min_voter = Some(current.clone());
 									min_index = i;
 									min_direction = 1;
 								}
@@ -459,8 +458,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 							ass.distribution.iter().find(|d| d.0 == prev).map(|(_, w)| {
 								if *w < min_value {
 									min_value = *w;
-									min_target = prev.clone();
-									min_voter = current.clone();
+									min_target = Some(prev.clone());
+									min_voter = Some(current.clone());
 									min_index = i;
 									min_direction = 0;
 								}
@@ -578,7 +577,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 
 				// re-org.
 				if should_reorg {
-					let min_edge = vec![min_voter, min_target];
+					let min_edge = min_voter.into_iter().chain(min_target.into_iter()).collect::<Vec<_>>();
 					if min_chain_in_voter {
 						// NOTE: safe; voter_root_path is always bigger than 1 element.
 						for i in 0..voter_root_path.len() - 1 {

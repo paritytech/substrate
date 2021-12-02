@@ -653,7 +653,7 @@ impl<T: Config> Pallet<T> {
 		});
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		T::AccountId::decode(&mut &entropy[..]).expect("`AccountId` type is never greater than 32 bytes; qed")
 	}
 
 	/// Register a proxy account for the delegator that is able to make calls on its behalf.

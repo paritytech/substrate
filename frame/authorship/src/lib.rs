@@ -170,7 +170,9 @@ pub mod pallet {
 
 			<DidSetUncles<T>>::put(false);
 
-			T::EventHandler::note_author(Self::author());
+			if let Some(author) = Self::author() {
+				T::EventHandler::note_author(author);
+			}
 
 			0
 		}
@@ -300,19 +302,19 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
 	/// as afterwards.
-	pub fn author() -> T::AccountId {
+	pub fn author() -> Option<T::AccountId> {
 		// Check the memoized storage value.
 		if let Some(author) = <Author<T>>::get() {
-			return author
+			return Some(author)
 		}
 
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
 			<Author<T>>::put(&author);
-			author
+			Some(author)
 		} else {
-			Default::default()
+			None
 		}
 	}
 
@@ -329,14 +331,13 @@ impl<T: Config> Pallet<T> {
 				UncleEntryItem::InclusionHeight(_) => None,
 				UncleEntryItem::Uncle(h, _) => Some(h),
 			});
-			let author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
+			let maybe_author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
 			let hash = uncle.hash();
 
-			T::EventHandler::note_uncle(
-				author.clone().unwrap_or_default(),
-				now - uncle.number().clone(),
-			);
-			uncles.push(UncleEntryItem::Uncle(hash, author));
+			if let Some(author) = maybe_author.clone() {
+				T::EventHandler::note_uncle(author, now - uncle.number().clone());
+			}
+			uncles.push(UncleEntryItem::Uncle(hash, maybe_author));
 		}
 
 		<Uncles<T>>::put(&uncles);

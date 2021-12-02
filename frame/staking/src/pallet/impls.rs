@@ -1109,7 +1109,9 @@ where
 		Self::reward_by_ids(vec![(author, 20)])
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
+		if let Some(author) = <pallet_authorship::Pallet<T>>::author() {
+			Self::reward_by_ids(vec![(author, 2), (author, 1)])
+		}
 	}
 }
 

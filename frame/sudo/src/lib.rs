@@ -274,20 +274,22 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		/// The `AccountId` of the sudo key.
-		pub key: T::AccountId,
+		pub key: Option<T::AccountId>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { key: Default::default() }
+			Self { key: None }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			<Key<T>>::put(&self.key);
+			if let Some(ref key) = self.key {
+				<Key<T>>::put(key);
+			}
 		}
 	}
 }
