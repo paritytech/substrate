@@ -57,6 +57,7 @@ use sp_runtime::{
 	},
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
+		InvalidTransaction,
 	},
 	FixedPointNumber, FixedPointOperand, FixedU128, Perquintill, RuntimeDebug,
 };
@@ -704,8 +705,8 @@ where
 	type Pre = (
 		// tip
 		BalanceOf<T>,
-		// who paid the fee
-		Self::AccountId,
+		// who paid the fee - this is an option to allow for a Default impl.
+		Option<Self::AccountId>,
 		// imbalance resulting from withdrawing the fee
 		<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 	);
@@ -736,7 +737,7 @@ where
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		let (_fee, imbalance) = self.withdraw_fee(who, call, info, len)?;
-		Ok((self.0, who.clone(), imbalance))
+		Ok((self.0, Some(who.clone()), imbalance))
 	}
 
 	fn post_dispatch(
@@ -748,6 +749,8 @@ where
 	) -> Result<(), TransactionValidityError> {
 		let (tip, who, imbalance) = pre;
 		let actual_fee = Pallet::<T>::compute_actual_fee(len as u32, info, post_info, tip);
+		let e = TransactionValidityError::Invalid(InvalidTransaction::Custom(255));
+		let who = who.clone().ok_or(e)?;
 		T::OnChargeTransaction::correct_and_deposit_fee(
 			&who, info, post_info, actual_fee, tip, imbalance,
 		)?;

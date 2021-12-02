@@ -850,6 +850,7 @@ pub trait SignedExtension:
 	/// from the transaction using the `additional_signed` function.
 	type AdditionalSigned: Encode + TypeInfo;
 
+	// TODO: Refactor to remove the Default bound.
 	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
 	type Pre: Default;
 
