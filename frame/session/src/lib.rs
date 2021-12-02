@@ -424,7 +424,9 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			if T::SessionHandler::KEY_TYPE_IDS.len() != T::Keys::key_ids().len() {
-				panic!("Number of keys in session handler and session keys does not match");
+				panic!("Number of keys in session handler ({}) and session keys ({}) does not match", 
+				T::SessionHandler::KEY_TYPE_IDS.len(), 
+				T::Keys::key_ids().len());
 			}
 
 			T::SessionHandler::KEY_TYPE_IDS

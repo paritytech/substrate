@@ -17,27 +17,20 @@
 //! A Cumulus test client.
 
 mod block_builder;
-use codec::{Decode, Encode};
+use codec::{Encode};
 use runtime::{
-	Balance, Block, BlockHashCount, Call, GenesisConfig, Runtime, Signature, SignedExtra,
+	Balance, Block, BlockHashCount, Call, Runtime, Signature, SignedExtra,
 	SignedPayload, UncheckedExtrinsic, VERSION,
 };
-use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutionMethod, WasmExecutor};
-use sc_executor_common::runtime_blob::RuntimeBlob;
 use sc_service::client;
 use sp_blockchain::HeaderBackend;
 use sp_core::storage::Storage;
-use sp_io::TestExternalities;
 use sp_runtime::{generic::Era, BuildStorage, SaturatedConversion};
-use cumulus_test_runtime::AccountId;
-use sp_core::Public;
+
 pub use block_builder::*;
 pub use cumulus_test_runtime as runtime;
 pub use sc_executor::error::Result as ExecutorResult;
 pub use substrate_test_client::*;
-use sp_core::sr25519;
-use frame_system::limits::ValidationResult;
-// pub type ParachainBlockData = cumulus_primitives_core::ParachainBlockData<Block>;
 
 mod local_executor {
 	/// Native executor instance.
@@ -128,14 +121,13 @@ pub fn generate_extrinsic(
 	let nonce = 0;
 	let period =
 		BlockHashCount::get().checked_next_power_of_two().map(|c| c / 2).unwrap_or(2) as u64;
-	let tip = 0;
+	
 	let extra: SignedExtra = (
 		frame_system::CheckSpecVersion::<Runtime>::new(),
 		frame_system::CheckGenesis::<Runtime>::new(),
 		frame_system::CheckEra::<Runtime>::from(Era::mortal(period, current_block)),
 		frame_system::CheckNonce::<Runtime>::from(nonce),
 		frame_system::CheckWeight::<Runtime>::new(),
-		// pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 	);
 	let raw_payload = SignedPayload::from_raw(
 		function.clone(),

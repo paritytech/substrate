@@ -49,18 +49,17 @@ use sp_core::u32_trait::_5;
 use sp_finality_grandpa as fg_primitives;
 use sp_runtime::traits::NumberFor;
 use sp_core::OpaqueMetadata;
-use sp_finality_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
+use sp_finality_grandpa::{AuthorityId as GrandpaId};
 use sp_runtime::Percent;
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
-	traits::{BlakeTwo256, Block as BlockT, IdentifyAccount, IdentityLookup, Verify},
+	traits::{BlakeTwo256, Block as BlockT, IdentifyAccount, IdentityLookup, Verify,OpaqueKeys},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
 };
 use codec::Decode;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	//traits::{self, ConvertInto, NumberFor},
 };
 use sp_runtime::{FixedPointNumber};
 use sp_std::prelude::*;
@@ -79,7 +78,6 @@ pub use frame_support::{
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 pub use pallet_balances::Call as BalancesCall;
-//use pallet_session::historical::Module as Historical;
 use pallet_staking_reward_curve;
 pub use pallet_sudo::Call as SudoCall;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -124,44 +122,20 @@ construct_runtime! {
 		Treasury: pallet_treasury,
 		Grandpa: pallet_grandpa,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
-		// ParachainSystem: cumulus_pallet_parachain_system::{
-		// 	Pallet, Call, Config, Storage, Inherent, Event<T>, ValidateUnsigned,
-		// },
 		Timestamp: pallet_timestamp,
 		Balances: pallet_balances,
 		Sudo: pallet_sudo,
-	
-		// TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 	}
 }
-
-
-
-pub struct TestSessionHandler;
-
-
-
-
-
 
 impl_opaque_keys! {
-	pub struct SessionKeys {}
-}
-
-impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
-
-	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
-
-	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(
-		_: bool,
-		_: &[(AccountId, Ks)],
-		_: &[(AccountId, Ks)],
-	) {
+	pub struct SessionKeys {
+		pub grandpa: Grandpa,
+		pub babe: Babe,
+		//pub authority_discovery: AuthorityDiscovery,
 	}
-
-	fn on_disabled(_: u32) {}
 }
+
 /// Some key that we set in genesis and only read in [`TestRuntimeUpgrade`] to ensure that
 /// [`OnRuntimeUpgrade`] works as expected.
 pub const TEST_RUNTIME_UPGRADE_KEY: &[u8] = b"+test_runtime_upgrade_key+";
@@ -723,7 +697,7 @@ impl pallet_session::Config for Runtime {
 	type ShouldEndSession = Babe;
 	type NextSessionRotation = Babe;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
-	type SessionHandler = TestSessionHandler; //<SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
@@ -905,11 +879,6 @@ impl_runtime_apis! {
 		}
 	}
 
-	// impl cumulus_primitives_core::CollectCollationInfo<Block> for Runtime {
-	// 	fn collect_collation_info() -> cumulus_primitives_core::CollationInfo {
-	// 		ParachainSystem::collect_collation_info()
-	// 	}
-	// }
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
 			Grandpa::grandpa_authorities()

@@ -34,7 +34,9 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
 grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
 # pallet-staking ={ version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
-
+pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
+pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../frame/collective" }
+sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
 
 # pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../client/basic-authorship" }

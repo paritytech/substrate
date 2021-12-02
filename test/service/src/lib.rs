@@ -22,9 +22,6 @@ mod chain_spec;
 mod genesis;
 
 use core::future::Future;
-//use cumulus_client_consensus_common::{ParachainCandidate, ParachainConsensus};
-//use cumulus_client_network::BlockAnnounceValidator;
-
 use cumulus_test_runtime::{Hash, NodeBlock as Block, RuntimeApi};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use sc_client_api::execution_extensions::ExecutionStrategies;
@@ -46,7 +43,6 @@ use sp_state_machine::BasicExternalities;
 use sp_trie::PrefixedMemoryDB;
 use std::sync::Arc;
 use substrate_test_client::{
-	
 	BlockchainEventsExt, RpcHandlersExt, RpcTransactionError, RpcTransactionOutput,
 };
 use sp_api::ProvideRuntimeApi;
@@ -55,15 +51,14 @@ pub use chain_spec::*;
 pub use cumulus_test_runtime as runtime;
 pub use genesis::*;
 pub use sp_keyring::Sr25519Keyring as Keyring;
-use std::marker::PhantomData;
-use sc_consensus::BlockImport;
-use sc_client_api::BlockBackend;
-use sc_client_api::UsageProvider;
-use sc_client_api::Finalizer;
-use sc_client_api::BlockchainEvents;
-use sc_client_api::{
-	backend::{Backend as BackendT},
-};
+// use sc_consensus::BlockImport;
+// use sc_client_api::BlockBackend;
+// use sc_client_api::UsageProvider;
+// use sc_client_api::Finalizer;
+// use sc_client_api::BlockchainEvents;
+// use sc_client_api::{
+// 	backend::{Backend as BackendT},
+// };
 use sc_client_api::ExecutorProvider;
 //use sc_executor::NativeElseWasmExecutor;
 /// A consensus that will never produce any block.
@@ -148,7 +143,7 @@ pub fn new_partial(
 	);
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
-	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
+	let (grandpa_block_import, _grandpa_link) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
@@ -205,31 +200,32 @@ pub fn new_partial(
 	Ok(params)
 }
 
-/// Prepare the parachain's node condifugration
-///
-/// This function will disable the default announcement of Substrate for the parachain in favor
-/// of the one of Cumulus.
-pub fn prepare_node_config(mut parachain_config: Configuration) -> Configuration {
-	parachain_config.announce_block = false;
+// /// Prepare the parachain's node condifugration
+// ///
+// /// This function will disable the default announcement of Substrate for the parachain in favor
+// /// of the one of Cumulus.
+// pub fn prepare_node_config(mut parachain_config: Configuration) -> Configuration {
+// 	parachain_config.announce_block = false;
 
-	parachain_config
-}
+// 	parachain_config
+// }
 
 
-/// Parameters given to [`start_full_node`].
-pub struct StartFullNodeParams<'a, Block: BlockT, Client> {
-	pub client: Arc<Client>,
-	//pub relay_chain_full_node: RFullNode<PClient>,
-	pub task_manager: &'a mut TaskManager,
-	pub announce_block: Arc<dyn Fn(Block::Hash, Option<Vec<u8>>) + Send + Sync>,
-}
+// / Parameters given to [`start_full_node`].
+// pub struct StartFullNodeParams<'a, Block: BlockT, Client> {
+// 	// The clinet
+// 	pub client: Arc<Client>,
+// 	//pub relay_chain_full_node: RFullNode<PClient>,
+// 	pub task_manager: &'a mut TaskManager,
+// 	pub announce_block: Arc<dyn Fn(Block::Hash, Option<Vec<u8>>) + Send + Sync>,
+// }
 
-struct StartConsensus<'a, Block: BlockT, Client, Backend> {
-	announce_block: Arc<dyn Fn(Block::Hash, Option<Vec<u8>>) + Send + Sync>,
-	client: Arc<Client>,
-	task_manager: &'a mut TaskManager,
-	_phantom: PhantomData<Backend>,
-}
+// struct StartConsensus<'a, Block: BlockT, Client, Backend> {
+// 	announce_block: Arc<dyn Fn(Block::Hash, Option<Vec<u8>>) + Send + Sync>,
+// 	client: Arc<Client>,
+// 	task_manager: &'a mut TaskManager,
+// 	_phantom: PhantomData<Backend>,
+// }
 
 
 // /// Execute something with the client instance.
@@ -281,55 +277,51 @@ struct StartConsensus<'a, Block: BlockT, Client, Backend> {
 // 	}
 // }
 
-/// Start a full node for a parachain.
-///
-/// A full node will only sync the given parachain and will follow the
-/// tip of the chain.
-pub fn start_full_node<Block, Client, Backend>(
-	StartFullNodeParams {
-		client,
-		announce_block,
-		task_manager,
-		//relay_chain_full_node,
-	}: StartFullNodeParams<Block, Client>,
-) -> sc_service::error::Result<()>
-where
-	Block: BlockT,
-	Client: Finalizer<Block, Backend>
-		+ UsageProvider<Block>
-		+ Send
-		+ Sync
-		+ BlockBackend<Block>
-		+ BlockchainEvents<Block>
-		+ 'static,
-	for<'a> &'a Client: BlockImport<Block>,
-	Backend: BackendT<Block> + 'static,
-	//PClient: ClientHandle,
-{
-	//TODO????
-	// (*client).execute_with(StartConsensus {
-	// 	announce_block,
-	// 	client,
-	// 	task_manager,
-	// 	_phantom: PhantomData,
-	// });
+// /// Start a full node for a parachain.
+// ///
+// /// A full node will only sync the given parachain and will follow the
+// /// tip of the chain.
+// pub fn start_full_node<Block, Client, Backend>(
+// 	StartFullNodeParams {
+// 		client,
+// 		announce_block,
+// 		task_manager,
+// 	}: StartFullNodeParams<Block, Client>,
+// ) -> sc_service::error::Result<()>
+// where
+// 	Block: BlockT,
+// 	Client: Finalizer<Block, Backend>
+// 		+ UsageProvider<Block>
+// 		+ Send
+// 		+ Sync
+// 		+ BlockBackend<Block>
+// 		+ BlockchainEvents<Block>
+// 		+ 'static,
+// 	for<'a> &'a Client: BlockImport<Block>,
+// 	Backend: BackendT<Block> + 'static,
+// 	//PClient: ClientHandle,
+// {
+// 	//TODO????
+// 	// (*client).execute_with(StartConsensus {
+// 	// 	announce_block,
+// 	// 	client,
+// 	// 	task_manager,
+// 	// 	_phantom: PhantomData,
+// 	// });
 
-	//task_manager.add_child(relay_chain_full_node.relay_chain_full_node.task_manager);
+// 	//task_manager.add_child(relay_chain_full_node.relay_chain_full_node.task_manager);
 
-	Ok(())
-}
+// 	Ok(())
+// }
 
 
 /// Start a node with the given parachain `Configuration` and relay chain `Configuration`.
 ///
 /// This is the actual implementation that is abstract over the executor and the runtime api.
 async fn start_node_impl<RB>(
-	parachain_config: Configuration,
-	
-	
-	wrap_announce_block: Option<Box<dyn FnOnce(AnnounceBlockFn) -> AnnounceBlockFn>>,
+	mut parachain_config: Configuration,
+	//wrap_announce_block: Option<Box<dyn FnOnce(AnnounceBlockFn) -> AnnounceBlockFn>>,
 	rpc_ext_builder: RB,
-	consensus: Consensus,
 ) -> sc_service::error::Result<(
 	TaskManager,
 	Arc<Client>,
@@ -351,7 +343,7 @@ where
 	//let (client, fork_choice_rule) = builder.build_with_executor(NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8));
 
 
-	let mut parachain_config = prepare_node_config(parachain_config);
+	//let mut parachain_config = prepare_node_config(parachain_config);
 
 	let params = new_partial(&mut parachain_config)?;
 
@@ -384,7 +376,7 @@ where
 	// );
 	//let block_announce_validator_builder = move |_| Box::new(block_announce_validator) as Box<_>;
 
-	let prometheus_registry = parachain_config.prometheus_registry().cloned();
+	// let prometheus_registry = parachain_config.prometheus_registry().cloned();
 	let import_queue = params.import_queue;
 	let (network, system_rpc_tx, start_network) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -419,27 +411,27 @@ where
 		telemetry: None,
 	})?;
 
-	let announce_block = {
-		let network = network.clone();
-		Arc::new(move |hash, data| network.announce_block(hash, data))
-	};
+	// let announce_block = {
+	// 	let network = network.clone();
+	// 	Arc::new(move |hash, data| network.announce_block(hash, data))
+	// };
 
-	let announce_block = wrap_announce_block
-		.map(|w| (w)(announce_block.clone()))
-		.unwrap_or_else(|| announce_block);
+	// let announce_block = wrap_announce_block
+	// 	.map(|w| (w)(announce_block.clone()))
+	// 	.unwrap_or_else(|| announce_block);
 
 
 	// let relay_chain_full_node =
 	// 	relay_chain_full_node.with_client(substrate_test_service::TestClient);
 
-	let params = StartFullNodeParams {
-		client: client.clone(),
-		announce_block,
-		task_manager: &mut task_manager,
+	// let params = StartFullNodeParams {
+	// 	client: client.clone(),
+	// 	announce_block,
+	// 	task_manager: &mut task_manager,
 		
-	};
+	// };
 
-	start_full_node(params)?;
+	//start_full_node(params)?;
 	
 
 	start_network.start_network();
@@ -464,22 +456,13 @@ pub struct TestNode {
 	pub transaction_pool: TransactionPool,
 }
 
-enum Consensus {
-	/// Use the relay-chain provided consensus.
-	RelayChain,
-	/// Use the null consensus that will never produce any block.
-	Null,
-}
-
 /// A builder to create a [`TestNode`].
 pub struct TestNodeBuilder {
 	tokio_handle: tokio::runtime::Handle,
 	key: Sr25519Keyring,
 	parachain_nodes: Vec<MultiaddrWithPeerId>,
-	wrap_announce_block: Option<Box<dyn FnOnce(AnnounceBlockFn) -> AnnounceBlockFn>>,
+	//wrap_announce_block: Option<Box<dyn FnOnce(AnnounceBlockFn) -> AnnounceBlockFn>>,
 	storage_update_func_parachain: Option<Box<dyn Fn()>>,
-	storage_update_func_relay_chain: Option<Box<dyn Fn()>>,
-	consensus: Consensus,
 }
 
 impl TestNodeBuilder {
@@ -493,10 +476,9 @@ impl TestNodeBuilder {
 			key,
 			tokio_handle,
 			parachain_nodes: Vec::new(),
-			wrap_announce_block: None,
+			//wrap_announce_block: None,
 			storage_update_func_parachain: None,
-			storage_update_func_relay_chain: None,
-			consensus: Consensus::RelayChain,
+			
 		}
 	}
 
@@ -521,14 +503,14 @@ impl TestNodeBuilder {
 		self
 	}
 
-	/// Wrap the announce block function of this node.
-	pub fn wrap_announce_block(
-		mut self,
-		wrap: impl FnOnce(AnnounceBlockFn) -> AnnounceBlockFn + 'static,
-	) -> Self {
-		self.wrap_announce_block = Some(Box::new(wrap));
-		self
-	}
+	// /// Wrap the announce block function of this node.
+	// pub fn wrap_announce_block(
+	// 	mut self,
+	// 	wrap: impl FnOnce(AnnounceBlockFn) -> AnnounceBlockFn + 'static,
+	// ) -> Self {
+	// 	self.wrap_announce_block = Some(Box::new(wrap));
+	// 	self
+	// }
 
 	/// Allows accessing the parachain storage before the test node is built.
 	pub fn update_storage_parachain(mut self, updater: impl Fn() + 'static) -> Self {
@@ -536,17 +518,11 @@ impl TestNodeBuilder {
 		self
 	}
 
-	/// Allows accessing the relay chain storage before the test node is built.
-	pub fn update_storage_relay_chain(mut self, updater: impl Fn() + 'static) -> Self {
-		self.storage_update_func_relay_chain = Some(Box::new(updater));
-		self
-	}
-
-	/// Use the null consensus that will never author any block.
-	pub fn use_null_consensus(mut self) -> Self {
-		self.consensus = Consensus::Null;
-		self
-	}
+	// /// Allows accessing the relay chain storage before the test node is built.
+	// pub fn update_storage_relay_chain(mut self, updater: impl Fn() + 'static) -> Self {
+	// 	self.storage_update_func_relay_chain = Some(Box::new(updater));
+	// 	self
+	// }
 
 	/// Build the [`TestNode`].
 	pub async fn build(self) -> TestNode {
@@ -559,15 +535,10 @@ impl TestNodeBuilder {
 		)
 		.expect("could not generate Configuration");
 		
-
 		let multiaddr = parachain_config.network.listen_addresses[0].clone();
 		let (task_manager, client, network, rpc_handlers, transaction_pool) = start_node_impl(
 			parachain_config,
-			
-		
-			self.wrap_announce_block,
 			|_| Ok(Default::default()),
-			self.consensus,
 		)
 		.await
 		.expect("could not create Cumulus test service");
@@ -733,7 +704,7 @@ pub fn construct_extrinsic(
 		.checked_next_power_of_two()
 		.map(|c| c / 2)
 		.unwrap_or(2) as u64;
-	let tip = 0;
+	
 	let extra: runtime::SignedExtra = (
 		frame_system::CheckSpecVersion::<runtime::Runtime>::new(),
 		frame_system::CheckGenesis::<runtime::Runtime>::new(),

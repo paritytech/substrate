@@ -22,7 +22,10 @@ use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-
+use cumulus_test_runtime::{BabeConfig,GrandpaConfig,SessionConfig,DOLLARS,Balance,SessionKeys};
+use pallet_staking::StakerStatus;
+use cumulus_test_runtime::MAX_NOMINATIONS;
+use sp_runtime::Perbill; use cumulus_test_runtime::StakingConfig;
 /// Specialized `ChainSpec` for the normal parachain runtime.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisExt, Extensions>;
 
@@ -117,23 +120,93 @@ pub fn local_testnet_genesis() -> cumulus_test_runtime::GenesisConfig {
 		],
 	)
 }
+fn session_keys(
+	grandpa: sp_finality_grandpa::AuthorityId,
+	babe: sp_consensus_babe::AuthorityId,
+	//im_online: ImOnlineId,
+	//authority_discovery: AuthorityDiscoveryId,
+) -> SessionKeys {
+	SessionKeys { grandpa, babe }
+}
 
 fn testnet_genesis(
+	
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 ) -> cumulus_test_runtime::GenesisConfig {
-	cumulus_test_runtime::GenesisConfig::default()
-	// cumulus_test_runtime::GenesisConfig {
-	// 	system: cumulus_test_runtime::SystemConfig {
-	// 		code: cumulus_test_runtime::WASM_BINARY
-	// 			.expect("WASM binary was not build, please build it!")
-	// 			.to_vec(),
-	// 		..Default::default()
-	// 	},
-	// 	// parachain_system: Default::default(),
-	// 	balances: cumulus_test_runtime::BalancesConfig {
-	// 		balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
-	// 	},
-	// 	sudo: cumulus_test_runtime::SudoConfig { key: root_key },
-	// }
+	//cumulus_test_runtime::GenesisConfig::default()
+	let initial_authorities: Vec<(
+		AccountId,
+		AccountId,
+		sp_finality_grandpa::AuthorityId,
+		sp_consensus_babe::AuthorityId,
+		//ImOnlineId,
+		//AuthorityDiscoveryId,
+	)> = vec![];
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = ENDOWMENT / 1000;
+	let mut rng = rand::thread_rng();
+	let initial_nominators: Vec<AccountId> = vec![];
+	let stakers = initial_authorities
+		.iter()
+		.map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
+		.chain(initial_nominators.iter().map(|x| {
+			use rand::{seq::SliceRandom, Rng};
+			let limit = (MAX_NOMINATIONS as usize).min(initial_authorities.len());
+			let count = rng.gen::<usize>() % limit;
+			let nominations = initial_authorities
+				.as_slice()
+				.choose_multiple(&mut rng, count)
+				.into_iter()
+				.map(|choice| choice.0.clone())
+				.collect::<Vec<_>>();
+			(x.clone(), x.clone(), STASH, StakerStatus::Nominator(nominations))
+		}))
+		.collect::<Vec<_>>();
+	cumulus_test_runtime::GenesisConfig {
+		system: cumulus_test_runtime::SystemConfig {
+			code: cumulus_test_runtime::WASM_BINARY
+				.expect("WASM binary was not build, please build it!")
+				.to_vec(),
+			..Default::default()
+		},
+		// parachain_system: Default::default(),
+		balances: cumulus_test_runtime::BalancesConfig {
+			balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
+		},
+		babe: BabeConfig {
+			authorities: vec![],
+			epoch_config: Some(cumulus_test_runtime::BABE_GENESIS_EPOCH_CONFIG),
+		},
+		grandpa: GrandpaConfig { authorities: vec![] },
+		staking: StakingConfig {
+			validator_count: initial_authorities.len() as u32,
+			minimum_validator_count: initial_authorities.len() as u32,
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			slash_reward_fraction: Perbill::from_percent(10),
+			stakers,
+			..Default::default()
+		},	transaction_payment: Default::default(),
+			treasury: Default::default(),
+			collective: pallet_collective::pallet::GenesisConfig{
+			
+			..Default::default()
+
+			},//cumulus_test_runtime::CouncilConfig::default(),
+			session: SessionConfig {
+			keys: initial_authorities
+				.iter()
+				.map(|x| {
+					(
+						x.0.clone(),
+						x.0.clone(),
+						session_keys(x.2.clone(), x.3.clone(),
+						//  x.4.clone(), x.5.clone()
+						),
+					)
+				})
+				.collect::<Vec<_>>(),
+		},
+		sudo: cumulus_test_runtime::SudoConfig { key: root_key },
+	}
 }
