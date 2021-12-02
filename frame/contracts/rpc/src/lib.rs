@@ -147,7 +147,7 @@ where
 	/// This upload is performed locally without submitting any transactions. Thus executing this
 	/// won't change any state.
 	///
-	/// This method is useful for calling getter-like methods on contracts.
+	/// This method is useful for UIs to dry-run code upload.
 	#[rpc(name = "contracts_upload_code")]
 	fn upload_code(
 		&self,
