@@ -25,10 +25,9 @@ use jsonrpsee::{
 	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
-use prometheus_endpoint::Registry;
 use std::net::SocketAddr;
 
-use crate::middleware::{RpcMetrics, RpcMiddleware};
+pub use crate::middleware::{RpcMetrics, RpcMiddleware};
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -53,7 +52,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 	addrs: &[SocketAddr],
 	cors: Option<&Vec<String>>,
 	max_payload_mb: Option<usize>,
-	prometheus_registry: Option<&Registry>,
+	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 ) -> Result<HttpServerHandle, anyhow::Error> {
@@ -76,8 +75,7 @@ pub fn start_http<M: Send + Sync + 'static>(
 		.custom_tokio_runtime(rt.clone());
 
 	let rpc_api = build_rpc_api(rpc_api);
-	let handle = if let Some(prometheus_registry) = prometheus_registry {
-		let metrics = RpcMetrics::new(&prometheus_registry)?;
+	let handle = if let Some(metrics) = metrics {
 		let middleware = RpcMiddleware::new(metrics, "http".into());
 		let builder = builder.set_middleware(middleware);
 		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
@@ -97,7 +95,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
 	max_payload_mb: Option<usize>,
-	prometheus_registry: Option<&Registry>,
+	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 ) -> Result<WsServerHandle, anyhow::Error> {
@@ -119,8 +117,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	}
 
 	let rpc_api = build_rpc_api(rpc_api);
-	let handle = if let Some(prometheus_registry) = prometheus_registry {
-		let metrics = RpcMetrics::new(&prometheus_registry)?;
+	let handle = if let Some(metrics) = metrics {
 		let middleware = RpcMiddleware::new(metrics, "ws".into());
 		let builder = builder.set_middleware(middleware);
 		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;

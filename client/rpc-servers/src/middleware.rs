@@ -46,66 +46,79 @@ pub struct RpcMetrics {
 
 impl RpcMetrics {
 	/// Create an instance of metrics
-	pub fn new(metrics_registry: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Self {
-			requests_started: register(
-				CounterVec::new(
-					Opts::new(
-						"rpc_requests_started",
-						"Number of RPC requests (not calls) received by the server.",
-					),
-					&["protocol"],
+	pub fn new(metrics_registry: Option<&Registry>) -> Result<Option<Self>, PrometheusError> {
+		if let Some(metrics_registry) = metrics_registry {
+			Ok(Some(Self {
+				requests_started: register(
+					CounterVec::new(
+						Opts::new(
+							"rpc_requests_started",
+							"Number of RPC requests (not calls) received by the server.",
+						),
+						&["protocol"],
+					)?,
+					metrics_registry,
 				)?,
-				metrics_registry,
-			)?,
-			requests_finished: register(
-				CounterVec::new(
-					Opts::new(
-						"rpc_requests_finished",
-						"Number of RPC requests (not calls) processed by the server.",
-					),
-					&["protocol"],
+				requests_finished: register(
+					CounterVec::new(
+						Opts::new(
+							"rpc_requests_finished",
+							"Number of RPC requests (not calls) processed by the server.",
+						),
+						&["protocol"],
+					)?,
+					metrics_registry,
 				)?,
-				metrics_registry,
-			)?,
-			calls_time: register(
-				HistogramVec::new(
-					HistogramOpts::new("rpc_calls_time", "Total time [μs] of processed RPC calls"),
-					&["protocol", "method"],
+				calls_time: register(
+					HistogramVec::new(
+						HistogramOpts::new(
+							"rpc_calls_time",
+							"Total time [μs] of processed RPC calls",
+						),
+						&["protocol", "method"],
+					)?,
+					metrics_registry,
 				)?,
-				metrics_registry,
-			)?,
-			calls_started: register(
-				CounterVec::new(
-					Opts::new(
-						"rpc_calls_started",
-						"Number of received RPC calls (unique un-batched requests)",
-					),
-					&["protocol", "method"],
+				calls_started: register(
+					CounterVec::new(
+						Opts::new(
+							"rpc_calls_started",
+							"Number of received RPC calls (unique un-batched requests)",
+						),
+						&["protocol", "method"],
+					)?,
+					metrics_registry,
 				)?,
-				metrics_registry,
-			)?,
-			calls_finished: register(
-				CounterVec::new(
-					Opts::new(
-						"rpc_calls_finished",
-						"Number of processed RPC calls (unique un-batched requests)",
-					),
-					&["protocol", "method", "is_error"],
+				calls_finished: register(
+					CounterVec::new(
+						Opts::new(
+							"rpc_calls_finished",
+							"Number of processed RPC calls (unique un-batched requests)",
+						),
+						&["protocol", "method", "is_error"],
+					)?,
+					metrics_registry,
 				)?,
-				metrics_registry,
-			)?,
-			ws_sessions_opened: register(
-				Counter::new("rpc_sessions_opened", "Number of persistent RPC sessions opened")?,
-				metrics_registry,
-			)?
-			.into(),
-			ws_sessions_closed: register(
-				Counter::new("rpc_sessions_closed", "Number of persistent RPC sessions closed")?,
-				metrics_registry,
-			)?
-			.into(),
-		})
+				ws_sessions_opened: register(
+					Counter::new(
+						"rpc_sessions_opened",
+						"Number of persistent RPC sessions opened",
+					)?,
+					metrics_registry,
+				)?
+				.into(),
+				ws_sessions_closed: register(
+					Counter::new(
+						"rpc_sessions_closed",
+						"Number of persistent RPC sessions closed",
+					)?,
+					metrics_registry,
+				)?
+				.into(),
+			}))
+		} else {
+			Ok(None)
+		}
 	}
 }
 
