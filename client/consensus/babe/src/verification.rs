@@ -31,7 +31,7 @@ use sp_consensus_babe::{
 	make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_consensus_slots::Slot;
-use sp_core::{Pair, Public, ByteArray};
+use sp_core::{Pair, ByteArray};
 use sp_runtime::{traits::Header, DigestItem};
 
 /// BABE verification parameters
