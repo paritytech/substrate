@@ -785,6 +785,14 @@ pub trait Checkable<Context>: Sized {
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
+pub trait HasAddress{
+	/// Returned if `check` succeeds.
+	type AccountId;
+
+	/// Check self, given an instance of Context.
+	fn get_address(&self) -> Option<Self::AccountId>;
+}
+
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
 /// Implement for pieces of information that don't require additional context in order to be

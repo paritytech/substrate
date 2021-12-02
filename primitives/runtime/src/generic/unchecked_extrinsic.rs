@@ -20,10 +20,11 @@
 use crate::{
 	generic::CheckedExtrinsic,
 	traits::{
-		self, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
+		self, HasAddress, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
 		SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
+    MultiAddress,
 	OpaqueExtrinsic,
 };
 use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
@@ -156,6 +157,19 @@ where
 			},
 			None => CheckedExtrinsic { signed: None, function: self.function },
 		})
+	}
+}
+
+impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress 
+    for UncheckedExtrinsic<MultiAddress<AccountId,AccountIndex>, Call, Signature, Extra> where
+	Signature: Member + traits::Verify,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
+	Extra: SignedExtension<AccountId = AccountId>,
+{
+    type AccountId = AccountId;
+
+	fn get_address(&self) -> Option<Self::AccountId>{
+        None
 	}
 }
 
