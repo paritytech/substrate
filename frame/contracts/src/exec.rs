@@ -187,9 +187,6 @@ pub trait Ext: sealing::Sealed {
 	/// Get a mutable reference to the nested gas meter.
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T>;
 
-	/// Get a mutable reference to the nested storage meter.
-	fn storage_meter(&mut self) -> &mut storage::meter::NestedMeter<Self::T>;
-
 	/// Append a string to the debug buffer.
 	///
 	/// It is added as-is without any additional new line.
@@ -1051,10 +1048,6 @@ where
 
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 		&mut self.top_frame_mut().nested_gas
-	}
-
-	fn storage_meter(&mut self) -> &mut storage::meter::NestedMeter<Self::T> {
-		&mut self.top_frame_mut().nested_storage
 	}
 
 	fn append_debug_buffer(&mut self, msg: &str) -> bool {
