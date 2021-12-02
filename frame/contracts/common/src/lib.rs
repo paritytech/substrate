@@ -43,7 +43,7 @@ use sp_rpc::number::NumberOrHex;
 	feature = "std",
 	serde(
 		rename_all = "camelCase",
-		bound(serialize = "R: Serialize, NumberOrHex: From<Balance>, Balance: Copy"),
+		bound(serialize = "R: Serialize, Balance: Copy + Into<NumberOrHex>"),
 		bound(deserialize = "R: Deserialize<'de>, Balance: TryFrom<NumberOrHex>")
 	)
 )]
@@ -177,7 +177,7 @@ pub enum Code<Hash> {
 	feature = "std",
 	serde(
 		rename_all = "camelCase",
-		bound(serialize = "NumberOrHex: From<Balance>, Balance: Copy"),
+		bound(serialize = "Balance: Copy + Into<NumberOrHex>"),
 		bound(deserialize = "Balance: TryFrom<NumberOrHex>")
 	)
 )]
@@ -304,10 +304,9 @@ mod as_hex {
 	pub fn serialize<S, Balance>(balance: &Balance, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
-		NumberOrHex: From<Balance>,
-		Balance: Copy,
+		Balance: Copy + Into<NumberOrHex>,
 	{
-		NumberOrHex::from(*balance).serialize(serializer)
+		Into::<NumberOrHex>::into(*balance).serialize(serializer)
 	}
 
 	pub fn deserialize<'de, D, Balance>(deserializer: D) -> Result<Balance, D::Error>

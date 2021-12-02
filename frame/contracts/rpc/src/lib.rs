@@ -112,8 +112,7 @@ pub struct CodeUploadRequest<AccountId> {
 #[rpc]
 pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash>
 where
-	NumberOrHex: From<Balance>,
-	Balance: Copy + TryFrom<NumberOrHex>,
+	Balance: Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 {
 	/// Executes a call to a contract.
 	///
@@ -197,8 +196,7 @@ where
 		Hash,
 	>,
 	AccountId: Codec,
-	Balance: Codec + Copy + TryFrom<NumberOrHex>,
-	NumberOrHex: From<Balance>,
+	Balance: Codec + Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 	Hash: Codec,
 {
 	fn call(
