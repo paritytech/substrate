@@ -337,11 +337,13 @@ where
 		.unwrap_or_else(|| "127.0.0.1:9933".parse().expect("valid sockaddr; qed"));
 	let http_addr2 = random_port(http_addr);
 
+	let metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
+
 	let http = sc_rpc_server::start_http(
 		&[http_addr, http_addr2],
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
-		config.prometheus_registry(),
+		metrics.clone(),
 		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 	)
@@ -352,7 +354,7 @@ where
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
-		config.prometheus_registry(),
+		metrics,
 		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
 	)
