@@ -59,7 +59,7 @@ where
 	type Call = T::Call;
 	type AdditionalSigned = ();
 	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckNonZero";
+	const IDENTIFIER: &'static str = "CheckNonZeroSender";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
 		Ok(())
