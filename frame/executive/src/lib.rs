@@ -130,12 +130,12 @@ use schnorrkel::{
 	vrf::{VRFOutput, VRFProof},
 	SignatureError,
 };
-use sp_core::ShufflingSeed;
+use sp_core::{ShufflingSeed, crypto::UncheckedFrom, Hasher};
 // use sp_keystore::vrf;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, HasAddress, Header, NumberFor, One, Saturating,
+		self, Applyable, BlakeTwo256, CheckEqual, Checkable, Dispatchable, HasAddress, Header, NumberFor, One, Saturating,
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
@@ -194,7 +194,7 @@ where
 		>::execute_block(block);
 	}
 
-	fn execute_block_ver(block: Block, info: Vec<Option<AccountId32>>) {
+	fn execute_block_ver(block: Block) {
 		Executive::<
 			System,
 			Block,
@@ -202,7 +202,7 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block_ver(block, info);
+		>::execute_block_ver(block);
 	}
 }
 
@@ -435,7 +435,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver(block: Block, info: Vec<Option<AccountId32>>) {
+	pub fn execute_block_ver(block: Block) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -450,7 +450,15 @@ where
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
            
-            let extrinsics_with_author: Vec<(Option<_>,_)> = info.into_iter().zip(extrinsics.into_iter()).collect();
+            let extrinsics_with_author: Vec<_> = extrinsics.into_iter().map(|e| 
+                    (     
+                        e.get_address().map(
+                            |addr| AccountId32::unchecked_from(BlakeTwo256::hash(&addr.encode()))
+                        ),
+                        e
+                    )
+            ).collect();
+
             let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed::<Block::Extrinsic>(extrinsics_with_author, &header.seed().seed);
             Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
