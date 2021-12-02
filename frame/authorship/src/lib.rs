@@ -310,8 +310,7 @@ impl<T: Config> Pallet<T> {
 
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-			<Author<T>>::put(&author);
+		T::FindAuthor::find_author(pre_runtime_digests).map(|a| { <Author<T>>::put(&a); a })
 			Some(author)
 		} else {
 			None
