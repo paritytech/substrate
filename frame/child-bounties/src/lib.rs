@@ -66,7 +66,7 @@ use frame_support::traits::{
 
 use sp_runtime::{
 	traits::{AccountIdConversion, BadOrigin, CheckedSub, Saturating, StaticLookup, Zero},
-	DispatchResult, RuntimeDebug,
+	DispatchResult, Permill, RuntimeDebug,
 };
 
 use frame_support::pallet_prelude::*;
@@ -86,6 +86,8 @@ type BountyIndex = pallet_bounties::BountyIndex;
 pub struct ChildBounty<AccountId, Balance, BlockNumber> {
 	/// The parent of this child-bounty.
 	parent_bounty: BountyIndex,
+	/// The (total) amount that should be paid if this child-bounty is rewarded.
+	value: Balance,
 	/// The child bounty curator fee.
 	fee: Balance,
 	/// The deposit of child-bounty curator.
@@ -123,6 +125,7 @@ pub enum ChildBountyStatus<AccountId, BlockNumber> {
 
 #[frame_support::pallet]
 pub mod pallet {
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -141,6 +144,11 @@ pub mod pallet {
 		/// Minimum value for a child-bounty.
 		#[pallet::constant]
 		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
+
+		/// Percentage of child-bounty value to be reserved as curator deposit
+		/// when curator fee is zero.
+		#[pallet::constant]
+		type ChildBountyCuratorDepositBase: Get<Permill>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -284,7 +292,12 @@ pub mod pallet {
 			<ChildBountyCount<T>>::put(child_bounty_id.saturating_add(1));
 
 			// Create child-bounty instance.
-			Self::create_child_bounty(parent_bounty_id, child_bounty_id, bounded_description);
+			Self::create_child_bounty(
+				parent_bounty_id,
+				child_bounty_id,
+				value,
+				bounded_description,
+			);
 			Ok(())
 		}
 
@@ -332,9 +345,7 @@ pub mod pallet {
 					);
 
 					// Ensure child-bounty curator fee is less than child-bounty value.
-					let child_bounty_account = Self::child_bounty_account_id(child_bounty_id);
-					let child_bounty_value = T::Currency::free_balance(&child_bounty_account);
-					ensure!(fee < child_bounty_value, BountiesError::<T>::InvalidFee);
+					ensure!(fee < child_bounty.value, BountiesError::<T>::InvalidFee);
 
 					// Add child-bounty curator fee to the cumulative sum. To be
 					// subtracted from the parent bounty curator when claiming
@@ -396,8 +407,11 @@ pub mod pallet {
 					{
 						ensure!(signer == *curator, BountiesError::<T>::RequireCurator);
 
-						// Reserve child-bounty curator deposit.
-						let deposit = T::BountyCuratorDeposit::get() * child_bounty.fee;
+						// Reserve child-bounty curator deposit. Curator deposit
+						// is reserved based on a percentage of child-bounty
+						// value instead of fee, to avoid no deposit in case the
+						// fee is set as zero.
+						let deposit = T::ChildBountyCuratorDepositBase::get() * child_bounty.value;
 						T::Currency::reserve(curator, deposit)?;
 						child_bounty.curator_deposit = deposit;
 
@@ -542,7 +556,7 @@ pub mod pallet {
 								BadOrigin,
 							);
 							slash_curator(curator, &mut child_bounty.curator_deposit);
-							// Continue to change child-bounty status below...
+							// Continue to change child-bounty status below.
 						},
 					};
 					// Move the child-bounty state to Added.
@@ -671,7 +685,7 @@ pub mod pallet {
 						let payout = balance.saturating_sub(curator_fee);
 
 						// Unreserve the curator deposit. Should not fail
-						// because the fee is always reserves when curator is
+						// because the deposit is always reserved when curator is
 						// assigned.
 						let _ = T::Currency::unreserve(&curator, child_bounty.curator_deposit);
 
@@ -778,10 +792,12 @@ impl<T: Config> Pallet<T> {
 	fn create_child_bounty(
 		parent_bounty_id: BountyIndex,
 		child_bounty_id: BountyIndex,
+		child_bounty_value: BalanceOf<T>,
 		description: BoundedVec<u8, T::MaximumReasonLength>,
 	) {
 		let child_bounty = ChildBounty {
 			parent_bounty: parent_bounty_id,
+			value: child_bounty_value,
 			fee: 0u32.into(),
 			curator_deposit: 0u32.into(),
 			status: ChildBountyStatus::Added,
@@ -819,14 +835,14 @@ impl<T: Config> Pallet<T> {
 						// Nothing extra to do besides the removal of the child-bounty below.
 					},
 					ChildBountyStatus::Active { curator } => {
-						// Cancelled by admin(master curator or Root origin),
+						// Cancelled by master curator or RejectOrigin,
 						// refund deposit of the working child-bounty curator.
 						let _ = T::Currency::unreserve(curator, child_bounty.curator_deposit);
 						// Then execute removal of the child-bounty below.
 					},
 					ChildBountyStatus::PendingPayout { .. } => {
 						// Child-bounty is already in pending payout. If parent
-						// curator or Root origin wants to cancel this
+						// curator or RejectOrigin wants to close this
 						// child-bounty, it should mean the child-bounty curator
 						// was acting maliciously. So first unassign the
 						// child-bounty curator, slashing their deposit.

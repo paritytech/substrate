@@ -153,11 +153,13 @@ impl pallet_bounties::Config for Test {
 parameter_types! {
 	pub const MaxActiveChildBountyCount: u32 = 2;
 	pub const ChildBountyValueMinimum: u64 = 1;
+	pub const ChildBountyCuratorDepositBase: Permill = Permill::from_percent(10);
 }
 impl pallet_child_bounties::Config for Test {
 	type Event = Event;
 	type MaxActiveChildBountyCount = MaxActiveChildBountyCount;
 	type ChildBountyValueMinimum = ChildBountyValueMinimum;
+	type ChildBountyCuratorDepositBase = ChildBountyCuratorDepositBase;
 	type WeightInfo = ();
 }
 
@@ -272,6 +274,7 @@ fn add_child_bounty() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 0,
 				curator_deposit: 0,
 				status: ChildBountyStatus::Added,
@@ -340,6 +343,7 @@ fn child_bounty_assign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 0,
 				status: ChildBountyStatus::CuratorProposed { curator: 8 },
@@ -361,6 +365,7 @@ fn child_bounty_assign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: ChildBountyStatus::Active { curator: 8 },
@@ -430,6 +435,7 @@ fn award_claim_child_bounty() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: ChildBountyStatus::PendingPayout {
@@ -700,6 +706,7 @@ fn child_bounty_curator_proposed_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 0,
 				status: ChildBountyStatus::CuratorProposed { curator: 8 },
@@ -714,6 +721,7 @@ fn child_bounty_curator_proposed_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 0,
 				status: ChildBountyStatus::Added,
@@ -770,6 +778,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: ChildBountyStatus::Active { curator: 8 },
@@ -787,6 +796,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 0,
 				status: ChildBountyStatus::Added,
@@ -805,6 +815,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: ChildBountyStatus::Active { curator: 7 },
@@ -822,6 +833,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 0,
 				status: ChildBountyStatus::Added,
@@ -840,6 +852,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: ChildBountyStatus::Active { curator: 6 },
@@ -857,6 +870,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 0,
 				status: ChildBountyStatus::Added,
@@ -875,6 +889,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: ChildBountyStatus::Active { curator: 6 },
@@ -902,6 +917,7 @@ fn child_bounty_active_unassign_curator() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 0,
 				status: ChildBountyStatus::Added,
@@ -1018,6 +1034,7 @@ fn children_curator_fee_calculation_test() {
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
+				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: ChildBountyStatus::PendingPayout {
