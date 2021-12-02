@@ -102,10 +102,7 @@ benchmarks! {
 		.collect();
 	}: {
 		msg_and_sigs.iter().for_each(|(msg, sig)| {
-			assert_eq!(
-				sig.verify(&msg[..], &public),
-				true
-			);
+			assert!(sig.verify(&msg, &public));
 		});
 	}
 
