@@ -403,6 +403,10 @@ pub mod pallet {
 		/// and unreserved only when [`Self::remove_code`] is called. The size of the reserve
 		/// depends on the instrumented size of the the supplied `code`.
 		///
+		/// If the code already exists in storage it will still return `Ok` and upgrades
+		/// the in storage version to the current
+		/// [`InstructionWeights::version`](InstructionWeights).
+		///
 		/// # Note
 		///
 		/// Anyone can instantiate a contract from any uploaded code and thus prevent its removal.
