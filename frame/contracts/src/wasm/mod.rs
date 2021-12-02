@@ -33,11 +33,8 @@ use crate::{
 	wasm::env_def::FunctionImplProvider,
 	AccountIdOf, BalanceOf, CodeHash, CodeStorage, Config, Schedule,
 };
-use codec::{Decode, Encode};
-use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	pallet_prelude::MaxEncodedLen,
-};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
