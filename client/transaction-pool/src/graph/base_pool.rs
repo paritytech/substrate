@@ -399,6 +399,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 				let transaction = &current.transaction;
 				worst
 					.map(|worst| {
+						// Here we don't use `TransactionRef`'s ordering implementation because
+						// while it prefers priority like need here, it also prefers older
+						// transactions for inclusion purposes and limit enforcement needs to prefer
+						// newer transactions instead and drop the older ones.
 						match worst.transaction.priority.cmp(&transaction.transaction.priority) {
 							Ordering::Less => worst,
 							Ordering::Equal =>
