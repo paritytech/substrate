@@ -49,6 +49,8 @@ std = [
 	"sp-runtime/std",
 	"sp-tracing/std",
 	"sp-std/std",
+	"sp-io/std",
+	"extrinsic-shuffler/std",
 	"sp-keystore/std",
     "schnorrkel/std",
 ]
