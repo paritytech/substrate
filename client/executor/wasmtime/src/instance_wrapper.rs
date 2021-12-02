@@ -19,15 +19,12 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::imports::Imports;
-
+use crate::runtime::{Store, StoreData};
 use sc_executor_common::{
 	error::{Error, Result},
-	util::checked_range,
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{Pointer, Value, WordSize};
-use std::marker;
+use sp_wasm_interface::{Function, Pointer, Value, WordSize};
 use wasmtime::{
 	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
 };
@@ -107,18 +104,8 @@ impl EntryPoint {
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
-
-	// The memory instance of the `instance`.
-	//
-	// It is important to make sure that we don't make any copies of this to make it easier to
-	// proof See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
-
-	/// Indirect functions table of the module
-	table: Option<Table>,
-
-	// Make this struct explicitly !Send & !Sync.
-	_not_send_nor_sync: marker::PhantomData<*const ()>,
+	store: Store,
 }
 
 fn extern_memory(extern_: &Extern) -> Option<&Memory> {
@@ -153,11 +140,36 @@ impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
 	pub fn new(
 		module: &Module,
-		imports: &Imports,
+		host_functions: &[&'static dyn Function],
 		heap_pages: u64,
-		mut ctx: impl AsContextMut,
+		allow_missing_func_imports: bool,
+		max_memory_size: Option<usize>,
 	) -> Result<Self> {
-		let instance = Instance::new(&mut ctx, module, &imports.externs)
+		let limits = if let Some(max_memory_size) = max_memory_size {
+			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
+		} else {
+			Default::default()
+		};
+
+		let mut store = Store::new(
+			module.engine(),
+			StoreData { limits, host_state: None, memory: None, table: None },
+		);
+		if max_memory_size.is_some() {
+			store.limiter(|s| &mut s.limits);
+		}
+
+		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
+		// and results.
+		let imports = crate::imports::resolve_imports(
+			&mut store,
+			module,
+			host_functions,
+			heap_pages,
+			allow_missing_func_imports,
+		)?;
+
+		let instance = Instance::new(&mut store, module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {
@@ -165,55 +177,56 @@ impl InstanceWrapper {
 				.expect("only memory can be at the `memory_idx`; qed")
 				.clone(),
 			None => {
-				let memory = get_linear_memory(&instance, &mut ctx)?;
-				if !memory.grow(&mut ctx, heap_pages).is_ok() {
+				let memory = get_linear_memory(&instance, &mut store)?;
+				if !memory.grow(&mut store, heap_pages).is_ok() {
 					return Err("failed top increase the linear memory size".into())
 				}
 				memory
 			},
 		};
 
-		let table = get_table(&instance, ctx);
+		let table = get_table(&instance, &mut store);
 
-		Ok(Self { table, instance, memory, _not_send_nor_sync: marker::PhantomData })
+		store.data_mut().memory = Some(memory);
+		store.data_mut().table = table;
+
+		Ok(Self { instance, memory, store })
 	}
 
 	/// Resolves a substrate entrypoint by the given name.
 	///
 	/// An entrypoint must have a signature `(i32, i32) -> i64`, otherwise this function will return
 	/// an error.
-	pub fn resolve_entrypoint(
-		&self,
-		method: InvokeMethod,
-		mut ctx: impl AsContextMut,
-	) -> Result<EntryPoint> {
+	pub fn resolve_entrypoint(&mut self, method: InvokeMethod) -> Result<EntryPoint> {
 		Ok(match method {
 			InvokeMethod::Export(method) => {
 				// Resolve the requested method and verify that it has a proper signature.
-				let export = self.instance.get_export(&mut ctx, method).ok_or_else(|| {
-					Error::from(format!("Exported method {} is not found", method))
-				})?;
+				let export =
+					self.instance.get_export(&mut self.store, method).ok_or_else(|| {
+						Error::from(format!("Exported method {} is not found", method))
+					})?;
 				let func = extern_func(&export)
 					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
 					.clone();
-				EntryPoint::direct(func, ctx).map_err(|_| {
+				EntryPoint::direct(func, &self.store).map_err(|_| {
 					Error::from(format!("Exported function '{}' has invalid signature.", method))
 				})?
 			},
 			InvokeMethod::Table(func_ref) => {
 				let table = self
 					.instance
-					.get_table(&mut ctx, "__indirect_function_table")
+					.get_table(&mut self.store, "__indirect_function_table")
 					.ok_or(Error::NoTable)?;
-				let val =
-					table.get(&mut ctx, func_ref).ok_or(Error::NoTableEntryWithIndex(func_ref))?;
+				let val = table
+					.get(&mut self.store, func_ref)
+					.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
 				let func = val
 					.funcref()
 					.ok_or(Error::TableElementIsNotAFunction(func_ref))?
 					.ok_or(Error::FunctionRefIsNull(func_ref))?
 					.clone();
 
-				EntryPoint::direct(func, ctx).map_err(|_| {
+				EntryPoint::direct(func, &self.store).map_err(|_| {
 					Error::from(format!(
 						"Function @{} in exported table has invalid signature for direct call.",
 						func_ref,
@@ -223,10 +236,10 @@ impl InstanceWrapper {
 			InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
 				let table = self
 					.instance
-					.get_table(&mut ctx, "__indirect_function_table")
+					.get_table(&mut self.store, "__indirect_function_table")
 					.ok_or(Error::NoTable)?;
 				let val = table
-					.get(&mut ctx, dispatcher_ref)
+					.get(&mut self.store, dispatcher_ref)
 					.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
 				let dispatcher = val
 					.funcref()
@@ -234,7 +247,7 @@ impl InstanceWrapper {
 					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?
 					.clone();
 
-				EntryPoint::wrapped(dispatcher, func, ctx).map_err(|_| {
+				EntryPoint::wrapped(dispatcher, func, &self.store).map_err(|_| {
 					Error::from(format!(
 						"Function @{} in exported table has invalid signature for wrapped call.",
 						dispatcher_ref,
@@ -244,25 +257,20 @@ impl InstanceWrapper {
 		})
 	}
 
-	/// Returns an indirect function table of this instance.
-	pub fn table(&self) -> Option<&Table> {
-		self.table.as_ref()
-	}
-
 	/// Reads `__heap_base: i32` global variable and returns it.
 	///
 	/// If it doesn't exist, not a global or of not i32 type returns an error.
-	pub fn extract_heap_base(&self, mut ctx: impl AsContextMut) -> Result<u32> {
+	pub fn extract_heap_base(&mut self) -> Result<u32> {
 		let heap_base_export = self
 			.instance
-			.get_export(&mut ctx, "__heap_base")
+			.get_export(&mut self.store, "__heap_base")
 			.ok_or_else(|| Error::from("__heap_base is not found"))?;
 
 		let heap_base_global = extern_global(&heap_base_export)
 			.ok_or_else(|| Error::from("__heap_base is not a global"))?;
 
 		let heap_base = heap_base_global
-			.get(&mut ctx)
+			.get(&mut self.store)
 			.i32()
 			.ok_or_else(|| Error::from("__heap_base is not a i32"))?;
 
@@ -270,15 +278,15 @@ impl InstanceWrapper {
 	}
 
 	/// Get the value from a global with the given `name`.
-	pub fn get_global_val(&self, mut ctx: impl AsContextMut, name: &str) -> Result<Option<Value>> {
-		let global = match self.instance.get_export(&mut ctx, name) {
+	pub fn get_global_val(&mut self, name: &str) -> Result<Option<Value>> {
+		let global = match self.instance.get_export(&mut self.store, name) {
 			Some(global) => global,
 			None => return Ok(None),
 		};
 
 		let global = extern_global(&global).ok_or_else(|| format!("`{}` is not a global", name))?;
 
-		match global.get(ctx) {
+		match global.get(&mut self.store) {
 			Val::I32(val) => Ok(Some(Value::I32(val))),
 			Val::I64(val) => Ok(Some(Value::I64(val))),
 			Val::F32(val) => Ok(Some(Value::F32(val))),
@@ -288,8 +296,8 @@ impl InstanceWrapper {
 	}
 
 	/// Get a global with the given `name`.
-	pub fn get_global(&self, ctx: impl AsContextMut, name: &str) -> Option<wasmtime::Global> {
-		self.instance.get_global(ctx, name)
+	pub fn get_global(&mut self, name: &str) -> Option<wasmtime::Global> {
+		self.instance.get_global(&mut self.store, name)
 	}
 }
 
@@ -307,7 +315,7 @@ fn get_linear_memory(instance: &Instance, ctx: impl AsContextMut) -> Result<Memo
 }
 
 /// Extract the table from the given instance if any.
-fn get_table(instance: &Instance, ctx: impl AsContextMut) -> Option<Table> {
+fn get_table(instance: &Instance, ctx: &mut Store) -> Option<Table> {
 	instance
 		.get_export(ctx, "__indirect_function_table")
 		.as_ref()
@@ -317,97 +325,16 @@ fn get_table(instance: &Instance, ctx: impl AsContextMut) -> Option<Table> {
 
 /// Functions related to memory.
 impl InstanceWrapper {
-	/// Read data from a slice of memory into a newly allocated buffer.
-	///
-	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory(
-		&self,
-		ctx: impl AsContext,
-		source_addr: Pointer<u8>,
-		size: usize,
-	) -> Result<Vec<u8>> {
-		let range = checked_range(source_addr.into(), size, self.memory.data_size(&ctx))
-			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-
-		let mut buffer = vec![0; range.len()];
-		self.read_memory_into(ctx, source_addr, &mut buffer)?;
-
-		Ok(buffer)
-	}
-
-	/// Read data from the instance memory into a slice.
-	///
-	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory_into(
-		&self,
-		ctx: impl AsContext,
-		address: Pointer<u8>,
-		dest: &mut [u8],
-	) -> Result<()> {
-		let memory = self.memory.data(ctx.as_context());
-
-		let range = checked_range(address.into(), dest.len(), memory.len())
-			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-		dest.copy_from_slice(&memory[range]);
-		Ok(())
-	}
-
-	/// Write data to the instance memory from a slice.
-	///
-	/// Returns an error if the write would go out of the memory bounds.
-	pub fn write_memory_from(
-		&self,
-		mut ctx: impl AsContextMut,
-		address: Pointer<u8>,
-		data: &[u8],
-	) -> Result<()> {
-		let memory = self.memory.data_mut(ctx.as_context_mut());
-
-		let range = checked_range(address.into(), data.len(), memory.len())
-			.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-		memory[range].copy_from_slice(data);
-		Ok(())
-	}
-
-	/// Allocate some memory of the given size. Returns pointer to the allocated memory region.
-	///
-	/// Returns `Err` in case memory cannot be allocated. Refer to the allocator documentation
-	/// to get more details.
-	pub fn allocate(
-		&self,
-		mut ctx: impl AsContextMut,
-		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
-		size: WordSize,
-	) -> Result<Pointer<u8>> {
-		let memory = self.memory.data_mut(ctx.as_context_mut());
-
-		allocator.allocate(memory, size).map_err(Into::into)
-	}
-
-	/// Deallocate the memory pointed by the given pointer.
-	///
-	/// Returns `Err` in case the given memory region cannot be deallocated.
-	pub fn deallocate(
-		&self,
-		mut ctx: impl AsContextMut,
-		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
-		ptr: Pointer<u8>,
-	) -> Result<()> {
-		let memory = self.memory.data_mut(ctx.as_context_mut());
-
-		allocator.deallocate(memory, ptr).map_err(Into::into)
-	}
-
 	/// Returns the pointer to the first byte of the linear memory for this instance.
-	pub fn base_ptr(&self, ctx: impl AsContext) -> *const u8 {
-		self.memory.data_ptr(ctx)
+	pub fn base_ptr(&self) -> *const u8 {
+		self.memory.data_ptr(&self.store)
 	}
 
 	/// If possible removes physical backing from the allocated linear memory which
 	/// leads to returning the memory back to the system; this also zeroes the memory
 	/// as a side-effect.
-	pub fn decommit(&self, mut ctx: impl AsContextMut) {
-		if self.memory.data_size(&ctx) == 0 {
+	pub fn decommit(&mut self) {
+		if self.memory.data_size(&self.store) == 0 {
 			return
 		}
 
@@ -416,8 +343,8 @@ impl InstanceWrapper {
 				use std::sync::Once;
 
 				unsafe {
-					let ptr = self.memory.data_ptr(&ctx);
-					let len = self.memory.data_size(&ctx);
+					let ptr = self.memory.data_ptr(&self.store);
+					let len = self.memory.data_size(&self.store);
 
 					// Linux handles MADV_DONTNEED reliably. The result is that the given area
 					// is unmapped and will be zeroed on the next pagefault.
@@ -438,6 +365,14 @@ impl InstanceWrapper {
 
 		// If we're on an unsupported OS or the memory couldn't have been
 		// decommited for some reason then just manually zero it out.
-		self.memory.data_mut(ctx.as_context_mut()).fill(0);
+		self.memory.data_mut(self.store.as_context_mut()).fill(0);
+	}
+
+	pub(crate) fn store(&self) -> &Store {
+		&self.store
+	}
+
+	pub(crate) fn store_mut(&mut self) -> &mut Store {
+		&mut self.store
 	}
 }
