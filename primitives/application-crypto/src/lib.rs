@@ -27,7 +27,7 @@ pub use sp_core::crypto::{DeriveJunction, Pair, SecretStringError, Ss58Codec};
 #[doc(hidden)]
 pub use sp_core::{
 	self,
-	crypto::{CryptoType, CryptoTypePublicPair, Derive, IsWrappedBy, Public, Wraps},
+	crypto::{CryptoType, CryptoTypePublicPair, Derive, IsWrappedBy, Public, Wraps, ByteArray},
 	RuntimeDebug,
 };
 
@@ -221,7 +221,7 @@ macro_rules! app_crypto_public_full_crypto {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
-				Clone, Default, Eq, Hash, PartialEq, PartialOrd, Ord,
+				Clone, Eq, Hash, PartialEq, PartialOrd, Ord,
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
@@ -258,7 +258,7 @@ macro_rules! app_crypto_public_not_full_crypto {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
-				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
+				Clone, Eq, PartialEq, Ord, PartialOrd,
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
@@ -301,13 +301,12 @@ macro_rules! app_crypto_public_common {
 			}
 		}
 
+		impl $crate::ByteArray for Public {
+			const LEN: usize = <$public>::LEN;
+		}
 		impl $crate::Public for Public {
-			fn from_slice(x: &[u8]) -> Self {
-				Self(<$public>::from_slice(x))
-			}
-
 			fn to_public_crypto_pair(&self) -> $crate::CryptoTypePublicPair {
-				$crate::CryptoTypePublicPair($crypto_type, self.to_raw_vec())
+				$crate::CryptoTypePublicPair($crypto_type, $crate::ByteArray::to_raw_vec(self))
 			}
 		}
 
@@ -357,7 +356,7 @@ macro_rules! app_crypto_public_common {
 
 		impl From<&Public> for $crate::CryptoTypePublicPair {
 			fn from(key: &Public) -> Self {
-				$crate::CryptoTypePublicPair($crypto_type, $crate::Public::to_raw_vec(key))
+				$crate::CryptoTypePublicPair($crypto_type, $crate::ByteArray::to_raw_vec(key))
 			}
 		}
 
@@ -435,7 +434,7 @@ macro_rules! app_crypto_signature_full_crypto {
 	($sig:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
-			#[derive(Clone, Default, Eq, PartialEq,
+			#[derive(Clone, Eq, PartialEq,
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
@@ -470,7 +469,7 @@ macro_rules! app_crypto_signature_not_full_crypto {
 	($sig:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
-			#[derive(Clone, Default, Eq, PartialEq,
+			#[derive(Clone, Eq, PartialEq,
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::scale_info::TypeInfo,

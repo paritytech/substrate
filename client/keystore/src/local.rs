@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use sp_application_crypto::{ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
 use sp_core::{
-	crypto::{CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, Public, SecretString},
+	crypto::{CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, ByteArray, SecretString},
 	sr25519::{Pair as Sr25519Pair, Public as Sr25519Public},
 	Encode,
 };
@@ -189,7 +189,8 @@ impl SyncCryptoStore for LocalKeystore {
 	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
 		match key.0 {
 			ed25519::CRYPTO_ID => {
-				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
+				let pub_key = ed25519::Public::from_slice(key.1.as_slice())
+					.map_err(|()| TraitError::Other("Corrupted key - Invalid size".into()))?;
 				let key_pair = self
 					.0
 					.read()
@@ -198,7 +199,8 @@ impl SyncCryptoStore for LocalKeystore {
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			sr25519::CRYPTO_ID => {
-				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
+				let pub_key = sr25519::Public::from_slice(key.1.as_slice())
+					.map_err(|()| TraitError::Other("Corrupted key - Invalid size".into()))?;
 				let key_pair = self
 					.0
 					.read()
@@ -207,7 +209,8 @@ impl SyncCryptoStore for LocalKeystore {
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			ecdsa::CRYPTO_ID => {
-				let pub_key = ecdsa::Public::from_slice(key.1.as_slice());
+				let pub_key = ecdsa::Public::from_slice(key.1.as_slice())
+					.map_err(|()| TraitError::Other("Corrupted key - Invalid size".into()))?;
 				let key_pair = self
 					.0
 					.read()
@@ -223,7 +226,7 @@ impl SyncCryptoStore for LocalKeystore {
 		self.0
 			.read()
 			.raw_public_keys(key_type)
-			.map(|v| v.into_iter().map(|k| sr25519::Public::from_slice(k.as_slice())).collect())
+			.map(|v| v.into_iter().filter_map(|k| sr25519::Public::from_slice(k.as_slice()).ok()).collect())
 			.unwrap_or_default()
 	}
 
@@ -246,7 +249,7 @@ impl SyncCryptoStore for LocalKeystore {
 		self.0
 			.read()
 			.raw_public_keys(key_type)
-			.map(|v| v.into_iter().map(|k| ed25519::Public::from_slice(k.as_slice())).collect())
+			.map(|v| v.into_iter().filter_map(|k| ed25519::Public::from_slice(k.as_slice()).ok()).collect())
 			.unwrap_or_default()
 	}
 
@@ -269,7 +272,7 @@ impl SyncCryptoStore for LocalKeystore {
 		self.0
 			.read()
 			.raw_public_keys(key_type)
-			.map(|v| v.into_iter().map(|k| ecdsa::Public::from_slice(k.as_slice())).collect())
+			.map(|v| v.into_iter().filter_map(|k| ecdsa::Public::from_slice(k.as_slice()).ok()).collect())
 			.unwrap_or_default()
 	}
 
@@ -562,7 +565,7 @@ mod tests {
 
 		fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
 			self.raw_public_keys(Public::ID)
-				.map(|v| v.into_iter().map(|k| Public::from_slice(k.as_slice())).collect())
+				.map(|v| v.into_iter().filter_map(|k| Public::from_slice(k.as_slice()).ok()).collect())
 		}
 
 		fn generate<Pair: AppPair>(&mut self) -> Result<Pair> {

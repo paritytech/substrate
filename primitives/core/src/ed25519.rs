@@ -22,7 +22,7 @@
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
-use crate::hash::{H256, H512};
+use crate::{crypto::ByteArray, hash::{H256, H512}};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -66,7 +66,6 @@ type Seed = [u8; 32];
 	Copy,
 	Encode,
 	Decode,
-	Default,
 	PassByInner,
 	MaxEncodedLen,
 	TypeInfo,
@@ -118,13 +117,12 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 32 {
-			let mut inner = [0u8; 32];
-			inner.copy_from_slice(data);
-			Ok(Public(inner))
-		} else {
-			Err(())
+		if data.len() != Self::LEN {
+			return Err(())
 		}
+		let mut r = [0u8; Self::LEN];
+		r.copy_from_slice(data);
+		Ok(Self::unchecked_from(r))
 	}
 }
 
@@ -255,12 +253,6 @@ impl Clone for Signature {
 		let mut r = [0u8; 64];
 		r.copy_from_slice(&self.0[..]);
 		Signature(r)
-	}
-}
-
-impl Default for Signature {
-	fn default() -> Self {
-		Signature([0u8; 64])
 	}
 }
 
@@ -400,17 +392,11 @@ impl Public {
 	}
 }
 
-impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 32 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
-		r.copy_from_slice(data);
-		Public(r)
-	}
+impl ByteArray for Public {
+	const LEN: usize = 32;
+}
 
+impl TraitPublic for Public {
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
 	}

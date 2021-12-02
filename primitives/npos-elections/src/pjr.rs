@@ -322,7 +322,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 
 			let who = v;
 			let budget: ExtendedBalance = w.into();
-			Voter { who, budget, edges, ..Default::default() }
+			Voter { who, budget, edges, load: Default::default() }
 		})
 		.collect::<Vec<_>>();
 
@@ -387,7 +387,14 @@ mod tests {
 			.into_iter()
 			.map(|(t, w, e)| {
 				budget += w;
-				Candidate { who: t, elected: e, backed_stake: w, ..Default::default() }
+				Candidate {
+					who: t,
+					elected: e,
+					backed_stake: w,
+					score: Default::default(),
+					approval_stake: Default::default(),
+					round: Default::default(),
+				}
 			})
 			.collect::<Vec<_>>();
 		let edges = candidates
@@ -396,7 +403,7 @@ mod tests {
 				who: c.who,
 				weight: c.backed_stake,
 				candidate: c.to_ptr(),
-				..Default::default()
+				load: Default::default(),
 			})
 			.collect::<Vec<_>>();
 		voter.edges = edges;
@@ -432,7 +439,14 @@ mod tests {
 		// will give 10 slack.
 		let v3 = setup_voter(30, vec![(1, 20, true), (2, 20, true), (3, 0, false)]);
 
-		let unelected = Candidate { who: 3u32, elected: false, ..Default::default() }.to_ptr();
+		let unelected = Candidate {
+			who: 3u32,
+			elected: false,
+			score: Default::default(),
+			approval_stake: Default::default(),
+			backed_stake: Default::default(),
+			round: Default::default(),
+		}.to_ptr();
 		let score = pre_score(unelected, &vec![v1, v2, v3], 15);
 
 		assert_eq!(score, 15);
