@@ -23,6 +23,7 @@ use frame_support::{
 	traits::StorageInfo,
 };
 use sp_io::hashing::blake2_256;
+use sp_runtime::traits::TrailingZeroInput;
 use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
 
@@ -327,7 +328,8 @@ pub fn account<AccountId: Decode>(
 	seed: u32,
 ) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
-	AccountId::decode(&mut &entropy[..]).expect("`AccountId` type must be able to decode from any 32 bytes; qed")
+	Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+		.expect("infinite length input; no invalid inputs for type; qed")
 }
 
 /// This caller account is automatically whitelisted for DB reads/writes by the benchmarking macro.

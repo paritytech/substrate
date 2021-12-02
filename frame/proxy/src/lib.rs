@@ -44,10 +44,7 @@ use frame_support::{
 use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{
-	traits::{Dispatchable, Hash, Saturating, Zero},
-	DispatchResult,
-};
+use sp_runtime::{DispatchResult, traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero}};
 use sp_std::{convert::TryInto, prelude::*};
 pub use weights::WeightInfo;
 
@@ -653,7 +650,8 @@ impl<T: Config> Pallet<T> {
 		});
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).expect("`AccountId` type is never greater than 32 bytes; qed")
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
 	/// Register a proxy account for the delegator that is able to make calls on its behalf.

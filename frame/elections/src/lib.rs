@@ -657,8 +657,7 @@ pub mod pallet {
 			let count = Self::candidate_count() as usize;
 			let candidates = Self::candidates();
 			ensure!(
-				(slot == count && count == candidates.len()) ||
-					(slot < candidates.len() && candidates[slot] == T::AccountId::default()),
+				slot == count && count == candidates.len(),
 				Error::<T>::InvalidCandidateSlot,
 			);
 			// NOTE: This must be last as it has side-effects.
@@ -1019,7 +1018,7 @@ impl<T: Config> Pallet<T> {
 			// initialize leaderboard.
 			let leaderboard_size = empty_seats + T::CarryCount::get() as usize;
 			<Leaderboard<T>>::put(vec![
-				(BalanceOf::<T>::zero(), T::AccountId::default());
+				(BalanceOf::<T>::zero(), None);
 				leaderboard_size
 			]);
 
@@ -1085,7 +1084,7 @@ impl<T: Config> Pallet<T> {
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
-		let mut new_candidates = vec![T::AccountId::default(); candidates.len()]; // shrink later.
+		let mut new_candidates = vec![None; candidates.len()]; // shrink later.
 		let runners_up = leaderboard
 			.into_iter()
 			.rev()
@@ -1094,12 +1093,12 @@ impl<T: Config> Pallet<T> {
 			.filter_map(|(_, a)| Self::candidate_reg_info(&a).map(|i| (a, i.1)));
 		let mut count = 0u32;
 		for (address, slot) in runners_up {
-			new_candidates[slot as usize] = address;
+			new_candidates[slot as usize] = Some(address);
 			count += 1;
 		}
-		for (old, new) in candidates.iter().zip(new_candidates.iter()) {
+		for (old, new) in candidates.iter().map(Some).zip(new_candidates.iter()) {
 			// candidate is not a runner up.
-			if old != new {
+			if new.as_ref() != old {
 				// removed - kill it
 				<RegisterInfoOf<T>>::remove(old);
 
@@ -1112,14 +1111,11 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		// discard any superfluous slots.
-		if let Some(last_index) = new_candidates.iter().rposition(|c| *c != T::AccountId::default())
-		{
-			new_candidates.truncate(last_index + 1);
-		}
+		let new_candidates = new_candidates.into_iter().filter_map(|x| x).collect::<Vec<_>>();
 
 		Self::deposit_event(Event::<T>::TallyFinalized { incoming, outgoing });
 
-		<Candidates<T>>::put(new_candidates);
+		Candidates::<T>::put(new_candidates);
 		CandidateCount::<T>::put(count);
 		VoteCount::<T>::put(Self::vote_index() + 1);
 		Ok(())
