@@ -128,14 +128,7 @@ impl pallet_test::OtherConfig for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
-	use sp_std::sync::Arc;
-
-	let mut ext: sp_io::TestExternalities =
-		GenesisConfig::default().build_storage().unwrap().into();
-	ext.register_extension(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
-
-	ext
+	GenesisConfig::default().build_storage().unwrap().into()
 }
 
 mod benchmarks {
