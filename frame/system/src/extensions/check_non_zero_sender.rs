@@ -26,7 +26,7 @@ use sp_runtime::{
 		ValidTransaction,
 	},
 };
-use sp_std::{prelude::*, marker::PhantomData};
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// Check to ensure that the sender is not the zero address.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
@@ -74,7 +74,7 @@ where
 		_len: usize,
 	) -> TransactionValidity {
 		if who.using_encoded(|d| d.into_iter().all(|x| *x == 0)) {
-			return Err(TransactionValidityError::Invalid(InvalidTransaction::BadSigner));
+			return Err(TransactionValidityError::Invalid(InvalidTransaction::BadSigner))
 		}
 		Ok(ValidTransaction::default())
 	}
@@ -95,9 +95,7 @@ mod tests {
 				CheckNonZeroSender::<Test>::new().validate(&0, CALL, &info, len),
 				InvalidTransaction::BadSigner
 			);
-			assert_ok!(
-				CheckNonZeroSender::<Test>::new().validate(&1, CALL, &info, len),
-			);
+			assert_ok!(CheckNonZeroSender::<Test>::new().validate(&1, CALL, &info, len),);
 		})
 	}
 }
