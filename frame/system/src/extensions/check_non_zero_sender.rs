@@ -94,7 +94,7 @@ mod tests {
 				CheckNonZeroSender::<Test>::new().validate(&0, CALL, &info, len),
 				InvalidTransaction::BadSigner
 			);
-			assert_ok!(CheckNonZeroSender::<Test>::new().validate(&1, CALL, &info, len),);
+			assert_ok!(CheckNonZeroSender::<Test>::new().validate(&1, CALL, &info, len));
 		})
 	}
 }
