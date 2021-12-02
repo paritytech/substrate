@@ -54,7 +54,6 @@ use libp2p::{
 		either::EitherError,
 		upgrade, ConnectedPoint, Executor,
 	},
-	kad::record,
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
@@ -97,6 +96,13 @@ mod signature;
 #[cfg(test)]
 mod tests;
 
+pub use libp2p::{
+	identity::{
+		error::{DecodingError, SigningError},
+		Keypair, PublicKey,
+	},
+	kad::record::Key as KademliaKey,
+};
 pub use signature::*;
 
 /// Substrate network service. Handles network IO and manages connectivity.
@@ -110,7 +116,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// The `KeyPair` that defines the `PeerId` of the local node.
-	local_identity: libp2p::identity::Keypair,
+	local_identity: Keypair,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
 	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
@@ -677,7 +683,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,
-	) -> Result<Signature, libp2p::identity::error::SigningError> {
+	) -> Result<Signature, SigningError> {
 		Signature::sign_message(msg.as_ref(), &self.local_identity)
 	}
 
@@ -1041,7 +1047,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
 	/// item on the [`NetworkWorker`] stream.
-	pub fn get_value(&self, key: &record::Key) {
+	pub fn get_value(&self, key: &KademliaKey) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::GetValue(key.clone()));
 	}
 
@@ -1049,7 +1055,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it as an
 	/// item on the [`NetworkWorker`] stream.
-	pub fn put_value(&self, key: record::Key, value: Vec<u8>) {
+	pub fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
 	}
 
@@ -1410,8 +1416,8 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	ClearJustificationRequests,
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
-	GetValue(record::Key),
-	PutValue(record::Key, Vec<u8>),
+	GetValue(KademliaKey),
+	PutValue(KademliaKey, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SetReservedOnly(bool),
 	AddReserved(PeerId),

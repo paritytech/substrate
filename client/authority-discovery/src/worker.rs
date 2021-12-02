@@ -134,7 +134,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	/// Queue of throttled lookups pending to be passed to the network.
 	pending_lookups: Vec<AuthorityId>,
 	/// Set of in-flight lookups.
-	in_flight_lookups: HashMap<libp2p::kad::record::Key, AuthorityId>,
+	in_flight_lookups: HashMap<sc_network::KademliaKey, AuthorityId>,
 
 	addr_cache: addr_cache::AddrCache,
 
@@ -464,7 +464,7 @@ where
 
 	fn handle_dht_value_found_event(
 		&mut self,
-		values: Vec<(libp2p::kad::record::Key, Vec<u8>)>,
+		values: Vec<(sc_network::KademliaKey, Vec<u8>)>,
 	) -> Result<()> {
 		// Ensure `values` is not empty and all its keys equal.
 		let remote_key = single(values.iter().map(|(key, _)| key.clone()))
@@ -521,10 +521,9 @@ where
 				// properly signed by the owner of the PeerId
 
 				if let Some(peer_signature) = peer_signature {
-					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
-						&peer_signature.public_key,
-					)
-					.map_err(|e| Error::ParsingLibp2pIdentity(e))?;
+					let public_key =
+						sc_network::PublicKey::from_protobuf_encoding(&peer_signature.public_key)
+							.map_err(|e| Error::ParsingLibp2pIdentity(e))?;
 					let signature =
 						sc_network::Signature { public_key, bytes: peer_signature.signature };
 
@@ -597,7 +596,7 @@ pub trait NetworkSigner {
 	fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<sc_network::Signature, libp2p::identity::error::SigningError>;
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError>;
 }
 
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
@@ -606,10 +605,10 @@ pub trait NetworkSigner {
 #[async_trait]
 pub trait NetworkProvider: NetworkStateInfo + NetworkSigner {
 	/// Start putting a value in the Dht.
-	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>);
+	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>);
 
 	/// Start getting a value from the Dht.
-	fn get_value(&self, key: &libp2p::kad::record::Key);
+	fn get_value(&self, key: &sc_network::KademliaKey);
 }
 
 impl<B, H> NetworkSigner for sc_network::NetworkService<B, H>
@@ -620,7 +619,7 @@ where
 	fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<sc_network::Signature, libp2p::identity::error::SigningError> {
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
 		self.sign_with_local_identity(msg)
 	}
 }
@@ -631,16 +630,16 @@ where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
+	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>) {
 		self.put_value(key, value)
 	}
-	fn get_value(&self, key: &libp2p::kad::record::Key) {
+	fn get_value(&self, key: &sc_network::KademliaKey) {
 		self.get_value(key)
 	}
 }
 
-fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
-	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
+fn hash_authority_id(id: &[u8]) -> sc_network::KademliaKey {
+	sc_network::KademliaKey::new(&libp2p::multihash::Sha2_256::digest(id))
 }
 
 // Makes sure all values are the same and returns it
@@ -687,7 +686,7 @@ async fn sign_record_with_authority_ids(
 	peer_signature: Option<schema::PeerSignature>,
 	key_store: &dyn CryptoStore,
 	keys: Vec<CryptoTypePublicPair>,
-) -> Result<Vec<(libp2p::kad::record::Key, Vec<u8>)>> {
+) -> Result<Vec<(sc_network::KademliaKey, Vec<u8>)>> {
 	let signatures = key_store
 		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), &serialized_record)
 		.await

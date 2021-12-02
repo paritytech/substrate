@@ -47,7 +47,7 @@ pub enum Error {
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
 	/// Failed to parse a libp2p key.
-	ParsingLibp2pIdentity(libp2p::identity::error::DecodingError),
+	ParsingLibp2pIdentity(sc_network::DecodingError),
 	/// Failed to sign using a specific public key.
 	MissingSignature(CryptoTypePublicPair),
 	/// Failed to sign using all public keys.

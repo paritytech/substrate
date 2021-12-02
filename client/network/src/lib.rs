@@ -272,10 +272,7 @@ pub use protocol::{
 	sync::{StateDownloadProgress, SyncState, WarpSyncPhase, WarpSyncProgress},
 	PeerInfo,
 };
-pub use service::{
-	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
-	OutboundFailure, RequestFailure, Signature,
-};
+pub use service::*;
 
 pub use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};

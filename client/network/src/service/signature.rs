@@ -5,7 +5,7 @@ use super::*;
 /// if the signature was made by the entity that controls a given `PeerId`.
 pub struct Signature {
 	/// The public key derived from the network identity that signed the message.
-	pub public_key: libp2p::identity::PublicKey,
+	pub public_key: PublicKey,
 	/// The actual signature made for the message signed.
 	pub bytes: Vec<u8>,
 }
@@ -14,8 +14,8 @@ impl Signature {
 	/// Create a signature for a message with a given network identity.
 	pub fn sign_message(
 		message: impl AsRef<[u8]>,
-		keypair: &libp2p::identity::Keypair,
-	) -> Result<Self, libp2p::identity::error::SigningError> {
+		keypair: &Keypair,
+	) -> Result<Self, SigningError> {
 		let public_key = keypair.public();
 		let bytes = keypair.sign(message.as_ref())?;
 		Ok(Self { public_key, bytes })
