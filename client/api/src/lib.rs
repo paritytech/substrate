@@ -32,6 +32,7 @@ pub mod proof_provider;
 pub use backend::*;
 pub use call_executor::*;
 pub use client::*;
+#[cfg(feature = "runtime_metrics")]
 pub use metrics::RuntimeMetricsProvider;
 pub use notifications::*;
 pub use proof_provider::*;

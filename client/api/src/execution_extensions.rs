@@ -27,9 +27,11 @@ use parking_lot::RwLock;
 use sc_transaction_pool_api::OffchainSubmitTransaction;
 use sp_core::{
 	offchain::{self, OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
-	traits::RuntimeMetricsExt,
 	ExecutionContext,
 };
+
+#[cfg(feature = "runtime_metrics")]
+use sp_core::traits::RuntimeMetricsExt;
 use sp_externalities::Extensions;
 use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::{generic::BlockId, traits};
@@ -105,12 +107,14 @@ pub struct ExecutionExtensions<Block: traits::Block> {
 	// during initialization.
 	transaction_pool: RwLock<Option<Weak<dyn OffchainSubmitTransaction<Block>>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory>>,
+	#[cfg(feature = "runtime_metrics")]
 	metrics_provider: Option<crate::RuntimeMetricsProvider>,
 }
 
 impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 	fn default() -> Self {
-		let metrics_provider = crate::RuntimeMetricsProvider::new(None).unwrap();
+		#[cfg(feature = "runtime_metrics")]
+		let metrics_provider = crate::RuntimeMetricsProvider::new(None);
 
 		Self {
 			strategies: Default::default(),
@@ -118,6 +122,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 			offchain_db: None,
 			transaction_pool: RwLock::new(None),
 			extensions_factory: RwLock::new(Box::new(())),
+			#[cfg(feature = "runtime_metrics")]
 			metrics_provider,
 		}
 	}
@@ -129,12 +134,13 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		strategies: ExecutionStrategies,
 		keystore: Option<SyncCryptoStorePtr>,
 		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
+		#[cfg(feature = "runtime_metrics")]
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
-		let metrics_provider =
-			crate::RuntimeMetricsProvider::new(prometheus_registry.as_ref()).unwrap();
+		#[cfg(feature = "runtime_metrics")]
+		let metrics_provider = crate::RuntimeMetricsProvider::new(prometheus_registry.clone());
 
 		Self {
 			strategies,
@@ -142,6 +148,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			offchain_db,
 			extensions_factory: RwLock::new(extensions_factory),
 			transaction_pool,
+			#[cfg(feature = "runtime_metrics")]
 			metrics_provider,
 		}
 	}
@@ -204,9 +211,9 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			)));
 		}
 
-		// TODO: add feature
-		// #[cfg(feature = "runtime_metrics")]
+		#[cfg(feature = "runtime_metrics")]
 		if let Some(metrics_provider) = self.metrics_provider.clone() {
+			log::warn!("Registered runtime metrics extension. Do not deploy in production !!!");
 			extensions.register(RuntimeMetricsExt::new(metrics_provider));
 		}
 		extensions

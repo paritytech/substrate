@@ -16,41 +16,66 @@
 // limitations under the License.
 
 //! Runtime metrics provider.
+#![cfg(feature = "runtime_metrics")]
 
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
+use sp_core::RuntimeMetricLabel;
+use std::collections::hash_map::HashMap;
 
-/// We only have a single registered counter metric and se a label to
-/// diferentiate between different runtime metrics.
-#[derive(Clone)]
+/// We only support CounterVec.
+#[derive(Clone, Default)]
 pub struct Metrics {
-	generic_metric: CounterVec<U64>,
+	counter_vecs: HashMap<String, CounterVec<U64>>,
 }
 
 /// Runtime metrics wrapper.
 #[derive(Clone)]
-pub struct RuntimeMetricsProvider(Metrics);
+pub struct RuntimeMetricsProvider(Registry, Metrics);
 
 impl RuntimeMetricsProvider {
-	pub fn new(metrics_registry: Option<&Registry>) -> Result<Option<Self>, PrometheusError> {
+	/// Creates new isntance.
+	pub fn new(metrics_registry: Option<Registry>) -> Option<Self> {
 		if let Some(registry) = metrics_registry {
-			let metrics = Metrics {
-				generic_metric: register(
-					CounterVec::new(
-						Opts::new("runtime_generic", "Runtime generic metric."),
-						&["name"],
-					)?,
-					registry,
-				)?,
-			};
-
-			return Ok(Some(Self(metrics)))
+			return Some(Self(registry, Metrics::default()))
 		}
-		Ok(None)
+		None
+	}
+
+	fn register_countervec(
+		&mut self,
+		metric_name: &str,
+		description: &str,
+		label: &RuntimeMetricLabel,
+	) -> Result<&mut CounterVec<U64>, PrometheusError> {
+		if !self.1.counter_vecs.contains_key(metric_name) {
+			let counter_vec = register(
+				CounterVec::new(Opts::new(metric_name, description), &[label.as_str()])?,
+				&self.0,
+			)?;
+
+			self.1.counter_vecs.insert(metric_name.to_owned(), counter_vec);
+		}
+
+		// The hashmap is populated above so unwrap() doesn't panic.
+		Ok(self.1.counter_vecs.get_mut(metric_name).unwrap())
 	}
 }
 
 impl sp_core::traits::RuntimeMetrics for RuntimeMetricsProvider {
-	fn inc_by(&mut self, name: &str, value: u64) {
-		self.0.generic_metric.with_label_values(&[name]).inc_by(value);
+	fn register_counter(
+		&mut self,
+		metric_name: &str,
+		description: &str,
+		label: &RuntimeMetricLabel,
+	) {
+		let _ = self.register_countervec(metric_name, description, label);
+	}
+
+	fn inc_counter_by(&mut self, name: &str, value: u64, label: &RuntimeMetricLabel) {
+		let _ = self
+			.register_countervec(name, "default description", &RuntimeMetricLabel::from("label"))
+			.map_err(|e| )
+			.map(|counter| counter.with_label_values(&[label.as_str()]).inc_by(value))
+			
 	}
 }

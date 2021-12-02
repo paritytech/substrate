@@ -468,3 +468,26 @@ macro_rules! impl_maybe_marker {
 // The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
 // everybody.
 pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
+
+/// Metric label wrapper.
+#[derive(Encode, Decode, PassByInner, Clone)]
+pub struct RuntimeMetricLabel(Vec<u8>);
+
+impl From<&[u8]> for RuntimeMetricLabel {
+	fn from(v: &[u8]) -> Self {
+		Self(Vec::from(v))
+	}
+}
+
+impl From<&str> for RuntimeMetricLabel {
+	fn from(v: &str) -> Self {
+		Self(Vec::from(v))
+	}
+}
+
+impl RuntimeMetricLabel {
+	/// Returns a reference to the label str.
+	pub fn as_str(&self) -> &str {
+		core::str::from_utf8(&self.0).expect("utf8 string")
+	}
+}

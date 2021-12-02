@@ -279,9 +279,17 @@ impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
 	}
 }
 
+/// Runtime metrics extension.
 pub trait RuntimeMetrics: Send {
+	/// Register a counter vec.
+	fn register_counter(
+		&mut self,
+		metric_name: &str,
+		description: &str,
+		label: &crate::RuntimeMetricLabel,
+	);
 	/// Increment a specified metric by value.
-	fn inc_by(&mut self, name: &str, value: u64);
+	fn inc_counter_by(&mut self, name: &str, value: u64, label: &crate::RuntimeMetricLabel);
 }
 
 #[cfg(feature = "std")]

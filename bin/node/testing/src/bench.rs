@@ -404,7 +404,7 @@ impl BenchDb {
 			&keyring.generate_genesis(),
 			None,
 			None,
-			ExecutionExtensions::new(profile.into_execution_strategies(), None, None),
+			ExecutionExtensions::new(profile.into_execution_strategies(), None, None, None),
 			Box::new(task_executor.clone()),
 			None,
 			None,

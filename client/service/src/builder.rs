@@ -275,6 +275,7 @@ where
 			config.execution_strategies.clone(),
 			Some(keystore_container.sync_keystore()),
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			#[cfg(feature = "runtime_metrics")]
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		);
 

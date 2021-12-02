@@ -20,6 +20,7 @@ db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
 wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []
+runtime_metrics = ["sc-client-api/runtime_metrics"]
 
 [dependencies]
 thiserror = "1.0.30"

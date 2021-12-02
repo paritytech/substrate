@@ -51,7 +51,7 @@ use sp_core::{
 	offchain::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
-	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, H256,
+	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, RuntimeMetricLabel, H256,
 };
 
 #[cfg(feature = "std")]
@@ -1495,7 +1495,6 @@ pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
 /// All these host functions will be callable from inside the Wasm environment.
-/// TODO: add metrics here
 #[cfg(feature = "std")]
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
@@ -1515,12 +1514,27 @@ pub type SubstrateHostFunctions = (
 	runtime_metrics::HostFunctions,
 );
 
+/// Interface for registering and publishing runtime prometheus metrics.
 #[runtime_interface]
+#[cfg(feature = "std")]
 pub trait RuntimeMetrics {
-	fn inc_by(&mut self, name: &str, value: u64) {
-		self.extension::<RuntimeMetricsExt>()
-			.expect("RuntimeMetrics extension not registered")
-			.inc_by(name, value)
+	/// Register a new counter vec.
+	fn register_counter(
+		&mut self,
+		metric_name: &str,
+		description: &str,
+		label: &RuntimeMetricLabel,
+	) {
+		if let Some(runtime_metrics_ext) = self.extension::<RuntimeMetricsExt>() {
+			runtime_metrics_ext.register_counter(metric_name, description, label)
+		}
+	}
+
+	/// Increment a specified metric by value.
+	fn inc_counter_by(&mut self, name: &str, value: u64, label: &RuntimeMetricLabel) {
+		if let Some(runtime_metrics_ext) = self.extension::<RuntimeMetricsExt>() {
+			runtime_metrics_ext.inc_counter_by(name, value, label)
+		}
 	}
 }
 
