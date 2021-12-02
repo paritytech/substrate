@@ -47,7 +47,7 @@ use sp_core::{
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
-use sp_wasm_interface::{Function, HostFunctions};
+use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 2048;
@@ -330,61 +330,6 @@ where
 		self.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
 			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 		})
-	}
-}
-
-/// A wrapper which merges two sets of host functions, and allows the second set to override
-/// the host functions from the first set.
-pub struct ExtendedHostFunctions<Base, Overlay> {
-	phantom: PhantomData<(Base, Overlay)>,
-}
-
-impl<Base, Overlay> HostFunctions for ExtendedHostFunctions<Base, Overlay>
-where
-	Base: HostFunctions,
-	Overlay: HostFunctions,
-{
-	fn host_functions() -> Vec<&'static dyn Function> {
-		let mut base = Base::host_functions();
-		let overlay = Overlay::host_functions();
-		base.retain(|host_fn| {
-			!overlay.iter().any(|ext_host_fn| host_fn.name() == ext_host_fn.name())
-		});
-		base.extend(overlay);
-		base
-	}
-
-	sp_wasm_interface::if_wasmtime_is_enabled! {
-		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error> where T: sp_wasm_interface::HostFunctionRegistry {
-			struct Proxy<'a, T> where T: sp_wasm_interface::HostFunctionRegistry {
-				registry: &'a mut T,
-				seen: std::collections::HashSet<String>
-			}
-			impl<'a, T> sp_wasm_interface::HostFunctionRegistry for Proxy<'a, T> where T: sp_wasm_interface::HostFunctionRegistry {
-				type State = T::State;
-				type Error = T::Error;
-				type FunctionContext = T::FunctionContext;
-				fn with_function_context<R>(caller: sp_wasm_interface::wasmtime::Caller<Self::State>, callback: impl FnOnce(&mut dyn sp_wasm_interface::FunctionContext) -> R) -> R {
-					T::with_function_context(caller, callback)
-				}
-
-				fn register_static<Params, Results>(&mut self, fn_name: &str, func: impl sp_wasm_interface::wasmtime::IntoFunc<Self::State, Params, Results> + 'static) -> core::result::Result<(), Self::Error> {
-					if self.seen.contains(fn_name) {
-						return Ok(());
-					}
-
-					self.seen.insert(fn_name.to_owned());
-					self.registry.register_static(fn_name, func)
-				}
-			}
-
-			let mut proxy = Proxy { registry, seen: Default::default() };
-
-			Overlay::register_static(&mut proxy)?;
-			Base::register_static(&mut proxy)?;
-
-			Ok(())
-		}
 	}
 }
 

@@ -401,6 +401,61 @@ impl HostFunctions for Tuple {
 	}
 }
 
+/// A wrapper which merges two sets of host functions, and allows the second set to override
+/// the host functions from the first set.
+pub struct ExtendedHostFunctions<Base, Overlay> {
+	phantom: PhantomData<(Base, Overlay)>,
+}
+
+impl<Base, Overlay> HostFunctions for ExtendedHostFunctions<Base, Overlay>
+where
+	Base: HostFunctions,
+	Overlay: HostFunctions,
+{
+	fn host_functions() -> Vec<&'static dyn Function> {
+		let mut base = Base::host_functions();
+		let overlay = Overlay::host_functions();
+		base.retain(|host_fn| {
+			!overlay.iter().any(|ext_host_fn| host_fn.name() == ext_host_fn.name())
+		});
+		base.extend(overlay);
+		base
+	}
+
+	if_wasmtime_is_enabled! {
+		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error> where T: HostFunctionRegistry {
+			struct Proxy<'a, T> where T: HostFunctionRegistry {
+				registry: &'a mut T,
+				seen: std::collections::HashSet<String>
+			}
+			impl<'a, T> HostFunctionRegistry for Proxy<'a, T> where T: HostFunctionRegistry {
+				type State = T::State;
+				type Error = T::Error;
+				type FunctionContext = T::FunctionContext;
+				fn with_function_context<R>(caller: wasmtime::Caller<Self::State>, callback: impl FnOnce(&mut dyn FunctionContext) -> R) -> R {
+					T::with_function_context(caller, callback)
+				}
+
+				fn register_static<Params, Results>(&mut self, fn_name: &str, func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static) -> core::result::Result<(), Self::Error> {
+					if self.seen.contains(fn_name) {
+						return Ok(());
+					}
+
+					self.seen.insert(fn_name.to_owned());
+					self.registry.register_static(fn_name, func)
+				}
+			}
+
+			let mut proxy = Proxy { registry, seen: Default::default() };
+
+			Overlay::register_static(&mut proxy)?;
+			Base::register_static(&mut proxy)?;
+
+			Ok(())
+		}
+	}
+}
+
 /// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
 #[cfg(all(feature = "std", feature = "wasmtime"))]
 pub trait WasmTy: wasmtime::WasmTy {}
