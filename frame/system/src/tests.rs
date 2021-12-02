@@ -462,17 +462,6 @@ fn events_not_emitted_during_genesis() {
 }
 
 #[test]
-fn ensure_one_of_works() {
-	fn ensure_root_or_signed(o: RawOrigin<u64>) -> Result<Either<(), u64>, Origin> {
-		EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
-	}
-
-	assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
-	assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
-	assert!(ensure_root_or_signed(RawOrigin::None).is_err());
-}
-
-#[test]
 fn extrinsics_root_is_calculated_correctly() {
 	new_test_ext().execute_with(|| {
 		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);

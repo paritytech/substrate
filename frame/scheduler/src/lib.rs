@@ -805,11 +805,11 @@ mod tests {
 	use crate as scheduler;
 	use frame_support::{
 		assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{Contains, EqualPrivilegeOnly, OnFinalize, OnInitialize},
+		traits::{Contains, EnsureOneOf, EqualPrivilegeOnly, OnFinalize, OnInitialize},
 		weights::constants::RocksDbWeight,
 		Hashable,
 	};
-	use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+	use frame_system::{EnsureRoot, EnsureSignedBy};
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
@@ -950,7 +950,7 @@ mod tests {
 		type PalletsOrigin = OriginCaller;
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
-		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+		type ScheduleOrigin = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
 		type OriginPrivilegeCmp = EqualPrivilegeOnly;
