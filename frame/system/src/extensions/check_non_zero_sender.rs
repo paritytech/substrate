@@ -16,17 +16,14 @@
 // limitations under the License.
 
 use crate::Config;
-use codec::{Decode, Encode};
-use frame_support::weights::DispatchInfo;
-use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, One, SignedExtension},
-	transaction_validity::{
-		InvalidTransaction, TransactionLongevity, TransactionValidity, TransactionValidityError,
-		ValidTransaction,
-	},
-};
 use sp_std::{marker::PhantomData, prelude::*};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
+use sp_runtime::traits::{DispatchInfoOf, Dispatchable, SignedExtension};
+use sp_runtime::transaction_validity::{
+	InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
+};
+use frame_support::weights::DispatchInfo;
 
 /// Check to ensure that the sender is not the zero address.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
