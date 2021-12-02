@@ -205,7 +205,7 @@ mod tests {
 	}
 
 	impl Config for Test {
-		type MaxAuthorities = MaxAuthorities;
+		type MaxAuthorities = frame_support::traits::ConstU32<100>;
 	}
 
 	impl pallet_session::Config for Test {

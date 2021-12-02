@@ -58,7 +58,6 @@ construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
 }
 
@@ -77,7 +76,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();

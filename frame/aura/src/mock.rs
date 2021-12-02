@@ -48,7 +48,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 	pub const MinimumPeriod: u64 = 1;
@@ -69,7 +68,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();

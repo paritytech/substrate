@@ -42,9 +42,6 @@ construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -59,7 +56,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;

@@ -81,10 +81,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
-
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -92,7 +88,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }

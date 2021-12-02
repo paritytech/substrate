@@ -195,14 +195,10 @@ impl frame_system::Config for Runtime {
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
 
-parameter_types! {
-	pub const MaxAuthorities: u32 = 32;
-}
-
 impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
-	type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = frame_support::traits::ConstU32<32>;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -222,7 +218,7 @@ impl pallet_grandpa::Config for Runtime {
 	type HandleEquivocation = ();
 
 	type WeightInfo = ();
-	type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = frame_support::traits::ConstU32<32>;
 }
 
 parameter_types! {
@@ -237,13 +233,8 @@ impl pallet_timestamp::Config for Runtime {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-	pub const MaxLocks: u32 = 50;
-}
-
 impl pallet_balances::Config for Runtime {
-	type MaxLocks = MaxLocks;
+	type MaxLocks = frame_support::traits::ConstU32<50>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	/// The type for recording an account's balance.
@@ -251,20 +242,19 @@ impl pallet_balances::Config for Runtime {
 	/// The ubiquitous event type.
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = frame_support::traits::ConstU128<500>;
 	type AccountStore = System;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
 	pub const TransactionByteFee: Balance = 1;
-	pub OperationalFeeMultiplier: u8 = 5;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type TransactionByteFee = TransactionByteFee;
-	type OperationalFeeMultiplier = OperationalFeeMultiplier;
+	type OperationalFeeMultiplier = frame_support::traits::ConstU8<5>;
 	type WeightToFee = IdentityFee<Balance>;
 	type FeeMultiplierUpdate = ();
 }

@@ -190,7 +190,6 @@ parameter_types! {
 		})
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
 		.build_or_panic();
-	pub const SS58Prefix: u16 = 42;
 }
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
@@ -217,7 +216,7 @@ impl frame_system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = frame_system::weights::SubstrateWeight<Runtime>;
-	type SS58Prefix = SS58Prefix;
+	type SS58Prefix = frame_support::traits::ConstU16<42>;
 	type OnSetCode = ();
 }
 
@@ -235,7 +234,6 @@ parameter_types! {
 	pub const DepositBase: Balance = deposit(1, 88);
 	// Additional storage item size of 32 bytes.
 	pub const DepositFactor: Balance = deposit(0, 32);
-	pub const MaxSignatories: u16 = 100;
 }
 
 impl pallet_multisig::Config for Runtime {
@@ -244,7 +242,7 @@ impl pallet_multisig::Config for Runtime {
 	type Currency = Balances;
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
-	type MaxSignatories = MaxSignatories;
+	type MaxSignatories = frame_support::traits::ConstU16<100>;
 	type WeightInfo = pallet_multisig::weights::SubstrateWeight<Runtime>;
 }
 
@@ -334,7 +332,6 @@ impl pallet_proxy::Config for Runtime {
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
 		RuntimeBlockWeights::get().max_block;
-	pub const MaxScheduledPerBlock: u32 = 50;
 }
 
 impl pallet_scheduler::Config for Runtime {
@@ -344,7 +341,7 @@ impl pallet_scheduler::Config for Runtime {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<AccountId>;
-	type MaxScheduledPerBlock = MaxScheduledPerBlock;
+	type MaxScheduledPerBlock = frame_support::traits::ConstU32<50>;
 	type WeightInfo = pallet_scheduler::weights::SubstrateWeight<Runtime>;
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 }

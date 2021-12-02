@@ -113,12 +113,10 @@ impl FindAuthor<AccountId> for Author11 {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
 			frame_support::weights::constants::WEIGHT_PER_SECOND * 2
 		);
-	pub const MaxLocks: u32 = 1024;
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static ExistentialDeposit: Balance = 1;
 	pub static SlashDeferDuration: EraIndex = 0;
@@ -141,7 +139,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<Balance>;
@@ -152,7 +150,7 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 impl pallet_balances::Config for Test {
-	type MaxLocks = MaxLocks;
+	type MaxLocks = frame_support::traits::ConstU32<1024>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;

@@ -70,16 +70,14 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type Version = ();
 }
-parameter_types! {
-	pub const MaxLocks: u32 = 10;
-}
+
 impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type MaxLocks = MaxLocks;
+	type MaxLocks = frame_support::traits::ConstU32<10>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();

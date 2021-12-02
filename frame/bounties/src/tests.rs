@@ -54,11 +54,11 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
+
+pub type MaximumBlockLength = frame_support::traits::ConstU32<2048>;
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -75,7 +75,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -85,9 +85,7 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -95,7 +93,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -109,8 +107,8 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const MaxApprovals: u32 = 100;
 }
+
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
@@ -126,7 +124,7 @@ impl pallet_treasury::Config for Test {
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
-	type MaxApprovals = MaxApprovals;
+	type MaxApprovals = frame_support::traits::ConstU32<100>;
 }
 parameter_types! {
 	pub const BountyDepositBase: u64 = 80;
@@ -134,7 +132,6 @@ parameter_types! {
 	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
-	pub const MaximumReasonLength: u32 = 16384;
 }
 impl Config for Test {
 	type Event = Event;
@@ -144,7 +141,7 @@ impl Config for Test {
 	type BountyCuratorDeposit = BountyCuratorDeposit;
 	type BountyValueMinimum = BountyValueMinimum;
 	type DataDepositPerByte = DataDepositPerByte;
-	type MaximumReasonLength = MaximumReasonLength;
+	type MaximumReasonLength = frame_support::traits::ConstU32<16384>;
 	type WeightInfo = ();
 }
 

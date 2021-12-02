@@ -54,9 +54,7 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Config for Test {
@@ -74,7 +72,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -84,9 +82,7 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -94,7 +90,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }

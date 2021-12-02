@@ -429,7 +429,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -449,7 +448,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = frame_support::traits::ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -460,13 +459,9 @@ mod tests {
 		type OnSetCode = ();
 	}
 
-	parameter_types! {
-		pub const UncleGenerations: u64 = 5;
-	}
-
 	impl pallet::Config for Test {
 		type FindAuthor = AuthorGiven;
-		type UncleGenerations = UncleGenerations;
+		type UncleGenerations = frame_support::traits::ConstU64<5>;
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}

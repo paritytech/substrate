@@ -58,7 +58,6 @@ frame_support::construct_runtime!(
 );
 
 frame_support::parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
 			4 * 1024 * 1024, Perbill::from_percent(75),
@@ -83,7 +82,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
