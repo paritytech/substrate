@@ -67,14 +67,8 @@ struct VersionedRuntimeId {
 
 /// A Wasm runtime object along with its cached runtime version.
 struct VersionedRuntime {
-	/// Runtime code hash.
-	code_hash: Vec<u8>,
-	/// Wasm runtime type.
-	wasm_method: WasmExecutionMethod,
 	/// Shared runtime that can spawn instances.
 	module: Arc<dyn WasmModule>,
-	/// The number of WebAssembly heap pages this instance was created with.
-	heap_pages: u64,
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 	/// Cached instance pool.
@@ -255,7 +249,6 @@ impl RuntimeCache {
 
 			let result = create_versioned_wasm_runtime(
 				&code,
-				code_hash.clone(),
 				ext,
 				wasm_method,
 				heap_pages,
@@ -401,7 +394,6 @@ pub fn read_embedded_version(blob: &RuntimeBlob) -> Result<Option<RuntimeVersion
 
 fn create_versioned_wasm_runtime(
 	code: &[u8],
-	code_hash: Vec<u8>,
 	ext: &mut dyn Externalities,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
@@ -455,11 +447,8 @@ fn create_versioned_wasm_runtime(
 	instances.resize_with(max_instances, || Mutex::new(None));
 
 	Ok(VersionedRuntime {
-		code_hash,
 		module: runtime,
 		version,
-		heap_pages,
-		wasm_method,
 		instances: Arc::new(instances),
 	})
 }
