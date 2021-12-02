@@ -83,6 +83,7 @@ pub fn create_extrinsic(
 		.unwrap_or(2) as u64;
 	let tip = 0;
 	let extra: node_runtime::SignedExtra = (
+		frame_system::CheckNonZeroSender::<node_runtime::Runtime>::new(),
 		frame_system::CheckSpecVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckTxVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckGenesis::<node_runtime::Runtime>::new(),
@@ -719,6 +720,7 @@ mod tests {
 				let function =
 					Call::Balances(BalancesCall::transfer { dest: to.into(), value: amount });
 
+				let check_non_zero_sender = frame_system::CheckNonZeroSender::new();
 				let check_spec_version = frame_system::CheckSpecVersion::new();
 				let check_tx_version = frame_system::CheckTxVersion::new();
 				let check_genesis = frame_system::CheckGenesis::new();
@@ -727,6 +729,7 @@ mod tests {
 				let check_weight = frame_system::CheckWeight::new();
 				let tx_payment = pallet_asset_tx_payment::ChargeAssetTxPayment::from(0, None);
 				let extra = (
+					check_non_zero_sender,
 					check_spec_version,
 					check_tx_version,
 					check_genesis,
