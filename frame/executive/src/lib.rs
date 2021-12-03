@@ -447,13 +447,10 @@ where
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
-			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
-
-            for log in header.digest().logs(){
-            }
+            let extrinsics = sp_ver::find_prev_extrinsics::<Block>(&header).unwrap(); 
            
-            let extrinsics_with_author: Vec<_> = extrinsics.into_iter().map(|e| 
+            let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e: Block::Extrinsic| 
                     (     
                         e.get_address().map(
                             |addr| AccountId32::unchecked_from(BlakeTwo256::hash(&addr.encode()))
@@ -461,8 +458,8 @@ where
                         e
                     )
             ).collect();
-
-            let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed::<Block::Extrinsic>(extrinsics_with_author, &header.seed().seed);
+            let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
+            
             Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
 
