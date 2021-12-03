@@ -428,7 +428,7 @@ pub mod pallet {
 		/// Unassign curator from a child-bounty.
 		///
 		/// The dispatch origin for this call can be either `RejectOrigin` or
-		/// the curator of the parent bounty.
+		/// the curator of the parent bounty or any signed origin.
 		///
 		/// For the origin other than T::RejectOrigin, parent-bounty must be in
 		/// active state, for this call to work. For origin T::RejectOrigin
@@ -469,10 +469,6 @@ pub mod pallet {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			// Ensure parent bounty exist, get active status info.
-			let (parent_curator, update_due) = Self::ensure_bounty_active(parent_bounty_id)?;
-
-			// Ensure child-bounty is in expected state.
 			ChildBounties::<T>::try_mutate_exists(
 				parent_bounty_id,
 				child_bounty_id,
@@ -498,11 +494,23 @@ pub mod pallet {
 							// parent-bounty curator or the proposed
 							// child-bounty curator can unassign the
 							// child-bounty curator.
-							ensure!(
-								maybe_sender.map_or(true, |sender| sender == *curator ||
-									sender == parent_curator),
-								BadOrigin,
-							);
+							match Self::ensure_bounty_active(parent_bounty_id) {
+								// Parent-bounty curator is available only when
+								// the parent-bounty is active.
+								Ok((parent_curator, _)) => {
+									ensure!(
+										maybe_sender.map_or(true, |sender| sender == *curator ||
+											sender == parent_curator),
+										BadOrigin,
+									);
+								},
+								Err(_) => {
+									ensure!(
+										maybe_sender.map_or(true, |sender| sender == *curator),
+										BadOrigin,
+									);
+								},
+							}
 						},
 						ChildBountyStatus::Active { ref curator } => {
 							// The child-bounty is active.
@@ -514,10 +522,10 @@ pub mod pallet {
 									// Continue to change child-bounty status below.
 								},
 								Some(sender) => {
+									// This is the child-bounty curator,
+									// willingly giving up their role. Give
+									// back their deposit.
 									if sender == *curator {
-										// This is the child-bounty curator,
-										// willingly giving up their role. Give
-										// back their deposit.
 										T::Currency::unreserve(
 											&curator,
 											child_bounty.curator_deposit,
@@ -525,32 +533,41 @@ pub mod pallet {
 										// Reset curator deposit.
 										child_bounty.curator_deposit = Zero::zero();
 									// Continue to change bounty status below.
-									} else if parent_curator == sender {
-										// Looks like child-bounty curator is
-										// inactive, slash their deposit.
-										slash_curator(curator, &mut child_bounty.curator_deposit);
-									// Continue to change child-bounty status below.
 									} else {
-										// Check for expiry, looks like curator
-										// is inactive, slash the curator
-										// deposit.
-										let block_number =
-											frame_system::Pallet::<T>::block_number();
-										if update_due < block_number {
+										let (parent_curator, update_due) =
+											Self::ensure_bounty_active(parent_bounty_id)?;
+										// If the call is made by the
+										// parent-bounty curator, slash the
+										// child-bounty curator.
+										if sender == parent_curator {
 											slash_curator(
 												curator,
 												&mut child_bounty.curator_deposit,
 											);
-										// Continue to change child-bounty status below.
 										} else {
-											// Curator has more time to give an update.
-											return Err(BountiesError::<T>::Premature.into())
+											// Call is made by any signed origin.
+											// Check for expiry, if the curator
+											// is inactive, slash the curator
+											// deposit.
+											let block_number =
+												frame_system::Pallet::<T>::block_number();
+											if update_due < block_number {
+												slash_curator(
+													curator,
+													&mut child_bounty.curator_deposit,
+												);
+											// Continue to change child-bounty status below.
+											} else {
+												// Curator has more time to give an update.
+												return Err(BountiesError::<T>::Premature.into())
+											}
 										}
 									}
 								},
 							}
 						},
 						ChildBountyStatus::PendingPayout { ref curator, .. } => {
+							let (parent_curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
 							ensure!(
 								maybe_sender.map_or(true, |sender| parent_curator == sender),
 								BadOrigin,
