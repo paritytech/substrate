@@ -40,7 +40,7 @@ pub mod v8 {
 		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
 			crate::log!(info, "migrating staking to Releases::V8_0_0");
 
-			let migrated = T::SortedListProvider::regenerate(
+			let migrated = T::SortedListProvider::unsafe_regenerate(
 				Nominators::<T>::iter().map(|(id, _)| id),
 				Pallet::<T>::weight_of_fn(),
 			);
