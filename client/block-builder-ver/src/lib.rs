@@ -35,7 +35,7 @@ use sp_blockchain::{ApplyExtrinsicFailed, Backend, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	traits::{BlakeTwo256, Block as BlockT, DigestFor, DigestItemFor, Hash, HashFor, Header as HeaderT, NumberFor, One},
 };
 
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
@@ -44,7 +44,7 @@ pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use log::info;
 use sc_client_api::backend;
 use sp_core::ShufflingSeed;
-use sp_runtime::traits::BlakeTwo256;
+use sp_ver::{extract_inherent_data, CompatibleDigestItemVer, PreDigestVer};
 
 /// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
 ///
@@ -348,6 +348,9 @@ where
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
+        let mut digest = header.digest_mut();
+        let prev_extrinsics = DigestItemFor::<Block>::ver_pre_digest(PreDigestVer::<Block>{prev_extrisnics: self.extrinsics.clone()});
+        digest.push(prev_extrinsics);
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
@@ -364,7 +367,7 @@ where
 		inherent_data: sp_inherents::InherentData,
 	) -> Result<(ShufflingSeed, Vec<Block::Extrinsic>), Error> {
 		let block_id = self.block_id;
-		let seed = sp_ver::extract_inherent_data(&inherent_data).map_err(|_| {
+		let seed = extract_inherent_data(&inherent_data).map_err(|_| {
 			sp_blockchain::Error::Backend(String::from(
 				"cannot read random seed from inherents data",
 			))
