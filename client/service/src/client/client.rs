@@ -1087,7 +1087,6 @@ where
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
 		self.executor
 			.prove_execution(id, method, call_data)
-			.map(|(r, p)| (r, StorageProof::merge(vec![p, code_proof])))
 	}
 
 	fn read_proof_collection(
