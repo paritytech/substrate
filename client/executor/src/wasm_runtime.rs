@@ -446,11 +446,7 @@ fn create_versioned_wasm_runtime(
 	let mut instances = Vec::with_capacity(max_instances);
 	instances.resize_with(max_instances, || Mutex::new(None));
 
-	Ok(VersionedRuntime {
-		module: runtime,
-		version,
-		instances: Arc::new(instances),
-	})
+	Ok(VersionedRuntime { module: runtime, version, instances: Arc::new(instances) })
 }
 
 #[cfg(test)]
