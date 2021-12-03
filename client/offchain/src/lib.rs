@@ -90,7 +90,6 @@ where
 	}
 }
 
-<<<<<<< HEAD
 /// Counts number of concurrently running workers
 /// and makes sure it does not go above configured limit.
 struct MaxRunning {
@@ -198,7 +197,12 @@ where
 		err => {
 			let help =
 				"Consider turning off offchain workers if they are not part of your runtime.";
-			log::error!("Unsupported Offchain Worker API version: {:?}. {}.", err, help);
+			tracing::error!(
+				target: LOG_TARGET,
+				"Unsupported Offchain Worker API version: {:?}. {}.",
+				err,
+				help
+			);
 			0
 		},
 	}
@@ -221,17 +225,29 @@ where
 		let runtime = self.client.runtime_api();
 		let at = BlockId::hash(header.hash());
 		let version = ocw_api_version(&at, runtime);
-		log::debug!("Checking finality offchain workers at {:?}: version: {:?}", at, version);
+		tracing::debug!(
+			target: LOG_TARGET,
+			"Checking finality offchain workers at {:?}: version:{}",
+			at,
+			version
+		);
 		if version < 3 {
 			let msg = "Skipping running finality offchain workers, because they are not supported by current runtime";
-			log::trace!("{}. Version: {} < 3", msg, version);
+			tracing::error!(
+				target: LOG_TARGET,
+				"{}. Version: {} < 3",
+				msg,
+				version
+			);
+
 			return Either::Right(future::ready(()))
 		}
 
 		let guard = match self.finality_limit.try_run() {
 			Ok(guard) => guard,
 			Err(()) => {
-				log::debug!(
+				tracing::debug!(
+					target: LOG_TARGET,
 					"Skipping running finality offchain workers at {:?}: limit reached.",
 					at
 				);
@@ -240,22 +256,28 @@ where
 		};
 
 		let (api, runner) =
-			api::AsyncApi::new(network_provider, is_validator, self.shared_client.clone());
-		log::debug!("Spawning finality offchain workers at {:?}", at);
+			api::AsyncApi::new(network_provider, is_validator, self.shared_http_client.clone());
+		tracing::debug!(target: LOG_TARGET, "Spawning finality offchain workers at {:?}", at);
 		let header = header.clone();
 		let client = self.client.clone();
 		self.spawn_worker(move || {
 			let runtime = client.runtime_api();
 			let api = Box::new(api);
-			log::debug!("Running finality offchain workers at {:?}", at);
+			tracing::debug!(target: LOG_TARGET, "Running finality offchain workers at {:?}", at);
 			let context =
 				ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all())));
 			let run = runtime.offchain_worker_with_context(&at, context, &header, true);
 			if let Err(e) = run {
-				log::error!("Error running finality offchain workers at {:?}: {:?}", at, e);
+				tracing::error!(
+					target: LOG_TARGET,
+					"Error running offchain finality workers at {:?}: {:?}",
+					at,
+					e
+				);
 			}
 			std::mem::drop(guard);
 		});
+
 		Either::Left(runner.process())
 	}
 
@@ -277,14 +299,6 @@ where
 			version
 		);
 		if version == 0 {
-			let help =
-				"Consider turning off offchain workers if they are not part of your runtime.";
-			tracing::error!(
-				target: LOG_TARGET,
-				"Unsupported Offchain Worker API version: {:?}. {}.",
-				err,
-				help
-			);
 			return Either::Right(future::ready(()))
 		}
 
@@ -292,8 +306,8 @@ where
 			Ok(guard) => guard,
 			Err(()) => {
 				tracing::debug!(
-					target: LOG_TARGET
-					"Skipping running finality offchain workers at {:?}: limit reached.",
+					target: LOG_TARGET,
+					"Skipping running regular offchain workers at {:?}: limit reached.",
 					at
 				);
 				return Either::Right(future::ready(()))
@@ -337,9 +351,7 @@ where
 			std::mem::drop(guard);
 		});
 
-		async move {
-			futures::future::OptionFuture::from(process).await;
-		}
+		Either::Left(runner.process())
 	}
 
 	/// Spawns a new offchain worker.
@@ -402,6 +414,7 @@ pub async fn notification_future<Client, Block, Spawner>(
 		let finality = client.finality_notification_stream().for_each(move |n| {
 			spawner1.spawn(
 				"offchain-on-finality",
+				Some("offchain-worker"),
 				offchain1
 					.on_block_finalized(&n.header, network_provider1.clone(), is_validator)
 					.boxed(),
