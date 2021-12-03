@@ -24,7 +24,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch,
-	traits::{FindAuthor, Get, VerifySeal},
+	traits::{FindAuthor, Get, VerifySeal, ConstU64},
 };
 use sp_authorship::{InherentError, UnclesInherentData, INHERENT_IDENTIFIER};
 use sp_runtime::traits::{Header as HeaderT, One, Saturating};
@@ -448,7 +448,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = frame_support::traits::ConstU64<250>;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -461,7 +461,7 @@ mod tests {
 
 	impl pallet::Config for Test {
 		type FindAuthor = AuthorGiven;
-		type UncleGenerations = frame_support::traits::ConstU64<5>;
+		type UncleGenerations = ConstU64<5>;
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}

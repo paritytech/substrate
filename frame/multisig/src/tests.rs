@@ -22,7 +22,7 @@
 use super::*;
 
 use crate as pallet_multisig;
-use frame_support::{assert_noop, assert_ok, parameter_types, traits::Contains};
+use frame_support::{assert_noop, assert_ok, parameter_types, traits::{Contains, ConstU16, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -64,7 +64,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = frame_support::traits::ConstU64<250>;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -74,9 +74,7 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -84,15 +82,11 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-parameter_types! {
-	pub const DepositBase: u64 = 1;
-	pub const DepositFactor: u64 = 1;
-	pub const MaxSignatories: u16 = 3;
-}
+
 pub struct TestBaseCallFilter;
 impl Contains<Call> for TestBaseCallFilter {
 	fn contains(c: &Call) -> bool {
@@ -108,9 +102,9 @@ impl Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
-	type DepositBase = DepositBase;
-	type DepositFactor = DepositFactor;
-	type MaxSignatories = MaxSignatories;
+	type DepositBase = ConstU64<1>;
+	type DepositFactor = ConstU64<1>;
+	type MaxSignatories = ConstU16<3>;
 	type WeightInfo = ();
 }
 

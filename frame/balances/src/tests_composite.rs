@@ -23,6 +23,7 @@ use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
 	parameter_types,
 	weights::{DispatchInfo, IdentityFee, Weight},
+	traits::{ConstU8, ConstU32, ConstU64},
 };
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
@@ -63,7 +64,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = frame_support::traits::ConstU64<250>;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = super::AccountData<u64>;
@@ -73,20 +74,13 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
-parameter_types! {
-	pub const TransactionByteFee: u64 = 1;
-	pub const OperationalFeeMultiplier: u8 = 5;
-}
+
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
-	type TransactionByteFee = TransactionByteFee;
-	type OperationalFeeMultiplier = OperationalFeeMultiplier;
+	type TransactionByteFee = ConstU64<1>;
+	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
-}
-
-parameter_types! {
-	pub const MaxReserves: u32 = 2;
 }
 
 impl Config for Test {
@@ -96,7 +90,7 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();
-	type MaxReserves = MaxReserves;
+	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }

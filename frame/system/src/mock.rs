@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{self as frame_system, *};
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::{ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -100,7 +100,7 @@ impl Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = frame_support::traits::ConstU64<10>;
+	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
 	type Version = Version;
 	type PalletInfo = PalletInfo;

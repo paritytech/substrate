@@ -3,7 +3,7 @@
 use super::*;
 use crate as pallet_atomic_swap;
 
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::{ConstU32, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -44,7 +44,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = frame_support::traits::ConstU64<250>;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -62,7 +62,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -70,7 +70,7 @@ impl pallet_balances::Config for Test {
 impl Config for Test {
 	type Event = Event;
 	type SwapAction = BalanceSwapAction<u64, Balances>;
-	type ProofLimit = frame_support::traits::ConstU32<1024>;
+	type ProofLimit = ConstU32<1024>;
 }
 
 const A: u64 = 1;

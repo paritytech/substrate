@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use crate::{self as pallet_indices, Config};
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::{ConstU64}};
 use sp_core::H256;
 use sp_runtime::testing::Header;
 
@@ -59,7 +59,7 @@ impl frame_system::Config for Test {
 	type Lookup = Indices;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = frame_support::traits::ConstU64<250>;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -70,10 +70,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
-
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -81,19 +77,15 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const Deposit: u64 = 1;
 }
 
 impl Config for Test {
 	type AccountIndex = u64;
 	type Currency = Balances;
-	type Deposit = Deposit;
+	type Deposit = ConstU64<1>;
 	type Event = Event;
 	type WeightInfo = ();
 }
