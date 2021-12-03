@@ -70,7 +70,13 @@ pub trait Ext<T: Config> {
 	/// around depending on whether `amount` constitues a `Charge` or a `Refund`.
 	/// It is garantueed that that this succeeds because no more balance then returned by
 	/// `check_limit` is ever charged. This is why this function is infallible.
-	fn charge(origin: &T::AccountId, contract: &T::AccountId, amount: &DepositOf<T>);
+	// `terminated` designates whether the `contract` was terminated.
+	fn charge(
+		origin: &T::AccountId,
+		contract: &T::AccountId,
+		amount: &DepositOf<T>,
+		terminated: bool,
+	);
 }
 
 /// This [`Ext`] is used for actual on-chain execution when balance needs to be charged.
@@ -101,6 +107,8 @@ pub struct RawMeter<T: Config, E: Ext<T>, S: State> {
 	total_deposit: DepositOf<T>,
 	/// The amount of balance that was used in this meter alone.
 	own_deposit: DepositOf<T>,
+	/// Only when a contract was terminated we allow it to drop below the minimum balance.
+	terminated: bool,
 	/// Type parameters are only used in impls.
 	_phantom: PhantomData<(E, S)>,
 }
@@ -170,12 +178,7 @@ where
 	/// usage for this sub call separately. This is necessary because we want to exchange balance
 	/// with the current contract we are interacting with.
 	pub fn nested(&self) -> RawMeter<T, E, Nested> {
-		RawMeter {
-			limit: self.available(),
-			total_deposit: Default::default(),
-			own_deposit: Default::default(),
-			_phantom: PhantomData,
-		}
+		RawMeter { limit: self.available(), ..Default::default() }
 	}
 
 	/// Absorb a child that was spawned to handle a sub call.
@@ -227,7 +230,7 @@ where
 
 		self.total_deposit = self.total_deposit.saturating_add(&absorbed.total_deposit);
 		if !absorbed.own_deposit.is_zero() {
-			E::charge(origin, &contract, &absorbed.own_deposit);
+			E::charge(origin, &contract, &absorbed.own_deposit, absorbed.terminated);
 		}
 	}
 
@@ -253,12 +256,7 @@ where
 		min_leftover: BalanceOf<T>,
 	) -> Result<Self, DispatchError> {
 		let limit = E::check_limit(&origin, limit, min_leftover)?;
-		Ok(Self {
-			limit,
-			total_deposit: Default::default(),
-			own_deposit: Default::default(),
-			_phantom: PhantomData,
-		})
+		Ok(Self { limit, ..Default::default() })
 	}
 
 	/// The total amount of deposit that should change hands as result of the execution
@@ -281,6 +279,7 @@ where
 {
 	/// Try to charge the `diff` from the meter. Fails if this would exceed the original limit.
 	pub fn charge(&mut self, diff: &Diff) -> Result<DepositOf<T>, DispatchError> {
+		debug_assert!(!self.terminated);
 		let deposit = diff.to_deposit::<T>();
 		let total_deposit = self.total_deposit.saturating_add(&deposit);
 		if let Deposit::Charge(amount) = total_deposit {
@@ -302,6 +301,7 @@ where
 		contract: &T::AccountId,
 		info: &mut ContractInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
+		debug_assert!(!self.terminated);
 		let deposit = Diff {
 			bytes_added: info.encoded_size() as u32,
 			items_added: 1,
@@ -324,7 +324,7 @@ where
 		if !deposit.is_zero() {
 			// We need to charge immediatly so that the account is created before the `value`
 			// is transferred from the caller to the contract.
-			E::charge(origin, contract, &deposit);
+			E::charge(origin, contract, &deposit, false);
 		}
 		Ok(deposit)
 	}
@@ -334,6 +334,7 @@ where
 	/// This will manipulate the meter so that all storage deposit accumulated in
 	/// `contract_info` will be refunded to the `origin` of the meter.
 	pub fn terminate(&mut self, contract_info: &ContractInfo<T>) {
+		debug_assert!(!self.terminated);
 		let refund = Deposit::Refund(contract_info.storage_deposit);
 
 		// The deposit for `own_deposit` isn't persisted into the contract info until the current
@@ -342,6 +343,7 @@ where
 		self.total_deposit =
 			self.total_deposit.saturating_add(&refund).saturating_sub(&self.own_deposit);
 		self.own_deposit = refund;
+		self.terminated = true;
 	}
 }
 
@@ -361,7 +363,12 @@ impl<T: Config> Ext<T> for ReservingExt {
 		}
 	}
 
-	fn charge(origin: &T::AccountId, contract: &T::AccountId, amount: &DepositOf<T>) {
+	fn charge(
+		origin: &T::AccountId,
+		contract: &T::AccountId,
+		amount: &DepositOf<T>,
+		terminated: bool,
+	) {
 		// There is nothing we can do when this fails as this constitutes a bug in the runtime:
 		// Either the runtime does not hold up the invariant of never deleting a contract's account
 		// or it does not honor reserved balances. We need to settle for emitting an error log
@@ -397,12 +404,16 @@ impl<T: Config> Ext<T> for ReservingExt {
 			// enough reserved balance because we track it in the `ContractInfo` and never send more
 			// back than we have.
 			Deposit::Refund(amount) => {
-				let result = T::Currency::repatriate_reserved(
-					contract,
-					origin,
-					*amount,
-					BalanceStatus::Free,
-				);
+				let amount = if terminated {
+					*amount
+				} else {
+					*amount.min(
+						&T::Currency::reserved_balance(contract)
+							.saturating_sub(T::Currency::minimum_balance()),
+					)
+				};
+				let result =
+					T::Currency::repatriate_reserved(contract, origin, amount, BalanceStatus::Free);
 				if matches!(result, Ok(val) if !val.is_zero()) || matches!(result, Err(_)) {
 					log::warn!(
 						target: "runtime::contracts",
@@ -449,6 +460,7 @@ mod tests {
 		origin: AccountIdOf<Test>,
 		contract: AccountIdOf<Test>,
 		amount: DepositOf<Test>,
+		terminated: bool,
 	}
 
 	#[derive(Default, Debug, PartialEq, Eq)]
@@ -485,12 +497,14 @@ mod tests {
 			origin: &AccountIdOf<Test>,
 			contract: &AccountIdOf<Test>,
 			amount: &DepositOf<Test>,
+			terminated: bool,
 		) {
 			TEST_EXT.with(|ext| {
 				ext.borrow_mut().charges.push(Charge {
 					origin: origin.clone(),
 					contract: contract.clone(),
 					amount: amount.clone(),
+					terminated,
 				})
 			});
 		}
@@ -575,6 +589,7 @@ mod tests {
 						origin: ALICE,
 						contract: BOB,
 						amount: Deposit::Charge(<Test as Config>::Currency::minimum_balance() * 2),
+						terminated: false,
 					}],
 					..Default::default()
 				}
@@ -628,9 +643,24 @@ mod tests {
 				TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![
-						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(10) },
-						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(4) },
-						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(2) }
+						Charge {
+							origin: ALICE,
+							contract: CHARLIE,
+							amount: Deposit::Refund(10),
+							terminated: false
+						},
+						Charge {
+							origin: ALICE,
+							contract: CHARLIE,
+							amount: Deposit::Refund(4),
+							terminated: false
+						},
+						Charge {
+							origin: ALICE,
+							contract: BOB,
+							amount: Deposit::Charge(2),
+							terminated: false
+						}
 					],
 					..Default::default()
 				}
@@ -673,8 +703,18 @@ mod tests {
 				TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![
-						Charge { origin: ALICE, contract: CHARLIE, amount: Deposit::Refund(400) },
-						Charge { origin: ALICE, contract: BOB, amount: Deposit::Charge(12) }
+						Charge {
+							origin: ALICE,
+							contract: CHARLIE,
+							amount: Deposit::Refund(400),
+							terminated: true
+						},
+						Charge {
+							origin: ALICE,
+							contract: BOB,
+							amount: Deposit::Charge(12),
+							terminated: false
+						}
 					],
 					..Default::default()
 				}

@@ -731,7 +731,7 @@ fn cannot_self_destruct_through_draning() {
 }
 
 #[test]
-fn cannot_self_destruct_through_storage_refund() {
+fn cannot_self_destruct_through_storage_refund_after_price_change() {
 	let (wasm, code_hash) = compile_module::<Test>("store").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -780,6 +780,84 @@ fn cannot_self_destruct_through_storage_refund() {
 		assert_eq!(
 			<Test as Config>::Currency::total_balance(&addr),
 			<Test as Config>::Currency::minimum_balance(),
+		);
+	});
+}
+
+#[test]
+fn cannot_self_destruct_by_refund_after_slash() {
+	let (wasm, code_hash) = compile_module::<Test>("store").unwrap();
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// create 100 more reserved balance
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			98u32.encode(),
+		));
+
+		// Drop previous events
+		initialize_block(2);
+
+		// slash parts of the 100 so that the next refund ould remove the account
+		// because it the value it stored for `storage_deposit` becomes out of sync
+		let _ = <Test as Config>::Currency::slash(&addr, 90);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance + 10);
+
+		// trigger a refund of 50 which would bring the contract below min when actually refunded
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			48u32.encode(),
+		));
+
+		// Make sure the account kept the minimum balance and was not destroyed
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
+
+		// even though it was not charged it is still substracted from the storage deposit tracker
+		assert_eq!(ContractInfoOf::<Test>::get(&addr).unwrap().storage_deposit, 550);
+
+		assert_eq!(
+			System::events(),
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Slashed {
+						who: addr.clone(),
+						amount: 90,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
+						from: addr.clone(),
+						to: ALICE,
+						amount: 10,
+						destination_status: BalanceStatus::Free,
+					}),
+					topics: vec![],
+				},
+			]
 		);
 	});
 }
@@ -2614,6 +2692,114 @@ fn storage_deposit_works() {
 						to: ALICE,
 						amount: refunded0,
 						destination_status: BalanceStatus::Free,
+					}),
+					topics: vec![],
+				},
+			]
+		);
+	});
+}
+
+#[test]
+fn call_after_killed_accout_needs_funding() {
+	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			700,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Drop previous events
+		initialize_block(2);
+
+		// Destroy the account of the contract by slashing.
+		// Slashing can actually happen if the contract takes part in staking.
+		// It is a corner case and we except the destruction of the account.
+		let _ = <Test as Config>::Currency::slash(
+			&addr,
+			<Test as Config>::Currency::total_balance(&addr),
+		);
+
+		// Sending below the minimum balance will fail the call because it needs to create the
+		// account in order to send balance there.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				min_balance - 1,
+				GAS_LIMIT,
+				None,
+				vec![],
+			),
+			<Error<Test>>::TransferFailed
+		);
+
+		// Sending zero should work as it does not do a transfer
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![],
+		));
+
+		// Sending minimum balance should work
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			min_balance,
+			GAS_LIMIT,
+			None,
+			vec![],
+		));
+
+		assert_eq!(
+			System::events(),
+			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::System(frame_system::Event::KilledAccount {
+						account: addr.clone()
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Slashed {
+						who: addr.clone(),
+						amount: min_balance + 700
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Endowed {
+						account: addr.clone(),
+						free_balance: min_balance
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: min_balance
 					}),
 					topics: vec![],
 				},
