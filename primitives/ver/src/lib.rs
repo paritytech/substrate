@@ -3,7 +3,7 @@
 use codec::{Codec, Decode, Encode};
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
-use sp_runtime::{RuntimeString, DigestItem, traits::{Block as BlockT}, ConsensusEngineId};
+use sp_runtime::{RuntimeString, DigestItem, traits::{Header, Block as BlockT, One, Zero}, ConsensusEngineId};
 use sp_std::vec::Vec;
 
 // originally in sp-module
@@ -34,6 +34,26 @@ where
 	fn as_ver_pre_digest(&self) -> Option<PreDigestVer<B>>{
 		self.pre_runtime_try_to(&VER_ENGINE_ID)
 	}
+}
+
+/// Extract the BABE pre digest from the given header. Pre-runtime digests are
+/// mandatory, the function will return `Err` if none is found.
+pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Option<PreDigestVer<B>> {
+	// genesis block doesn't contain a pre digest so let's generate a
+	// dummy one to not break any invariants in the rest of the code
+	if header.number().is_zero() || header.number().is_one() {
+        return Some(PreDigestVer{prev_extrisnics: vec![]});
+	}
+
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		match (log.as_ver_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => {return None;},
+			(s, false) => pre_digest = s,
+			(None, _) => {},
+		}
+	};
+	pre_digest
 }
 
 

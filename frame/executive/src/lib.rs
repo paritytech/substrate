@@ -449,6 +449,9 @@ where
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
+
+            for log in header.digest().logs(){
+            }
            
             let extrinsics_with_author: Vec<_> = extrinsics.into_iter().map(|e| 
                     (     
