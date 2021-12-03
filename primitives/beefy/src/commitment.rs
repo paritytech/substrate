@@ -164,15 +164,25 @@ const CONTAINER_BIT_SIZE: usize = 8;
 /// Compressed representation of [`SignedCommitment`], used for encoding efficiency.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 struct CompactSignedCommitment<TCommitment> {
-	/// The commitment signatures, as is.
+	/// The commitment, unchanged compared to regular [`SignedCommitment`].
 	commitment: TCommitment,
-	/// A `Vec<u8>`, where each bit in a `u8` represents an `Option<Signature>`
-	/// in the uncompressed GRANDPA validators' signatures.
+	/// A bitfield representing presence of a signature coming from a validator at some index.
+	///
+	/// The bit at index `0` is set to `1` in case we have a signature coming from a validator at
+	/// index `0` in in the original validator set. In case the [`SignedCommitment`] does not
+	/// contain that signature the `bit` will be set to `0`. Bits are packed into `Vec<u8>`
 	signatures_from: BitField,
-	/// Length of the `Vec` containing uncompressed GRANDPA validators' signatures.
-	signatures_len: u32,
-	/// A `Vec` containing all `Signature` values present in the uncompressed
-	/// GRANDPA validators' signatures.
+	/// Number of validators in the Validator Set and hence number of significant bits in the
+	/// [`signatures_from`] collection.
+	///
+	/// Note this might be smaller than the size of `signatures_compact` in case some signatures
+	/// are missing.
+	validator_set_len: u32,
+	/// A `Vec` containing all `Signature`s present in the original [`SignedCommitment`].
+	///
+	/// Note that in order to associate a `Signature` from this `Vec` with a validator, one needs
+	/// to look at the `signatures_from` bitfield, since some validators might have not produced a
+	/// signature.
 	signatures_compact: Vec<Signature>,
 }
 
@@ -181,7 +191,7 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 	/// efficient network transport.
 	fn pack(signed_commitment: &'a SignedCommitment<TBlockNumber>) -> Self {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
-		let signatures_len = signatures.len() as u32;
+		let validator_set_len = signatures.len() as u32;
 		let mut signatures_from: BitField = vec![];
 		let mut signatures_compact: Vec<Signature> = vec![];
 
@@ -196,7 +206,8 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 			signatures.iter().map(|x| if x.is_some() { 1 } else { 0 }).collect();
 
 		// Resize with excess bits for placement purposes
-		let excess_bits_len = CONTAINER_BIT_SIZE - (signatures_len as usize % CONTAINER_BIT_SIZE);
+		let excess_bits_len =
+			CONTAINER_BIT_SIZE - (validator_set_len as usize % CONTAINER_BIT_SIZE);
 		bits.resize(bits.len() + excess_bits_len, 0);
 
 		let chunks = bits.chunks(CONTAINER_BIT_SIZE);
@@ -212,7 +223,7 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 			signatures_from.push(v);
 		}
 
-		Self { commitment, signatures_from, signatures_len, signatures_compact }
+		Self { commitment, signatures_from, validator_set_len, signatures_compact }
 	}
 
 	/// Unpacks a `CompactSignedCommitment` into the uncompressed `SignedCommitment` form.
@@ -222,7 +233,7 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 		let CompactSignedCommitment {
 			commitment,
 			signatures_from,
-			signatures_len,
+			validator_set_len,
 			signatures_compact,
 		} = temporary_signatures;
 		let mut bits: Vec<u8> = vec![];
@@ -233,7 +244,7 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 			}
 		}
 
-		bits.truncate(signatures_len as usize);
+		bits.truncate(validator_set_len as usize);
 
 		let mut next_signature = signatures_compact.into_iter();
 		let signatures: Vec<Option<Signature>> = bits
