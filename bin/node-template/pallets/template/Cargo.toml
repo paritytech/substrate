@@ -1,10 +1,10 @@
 [package]
-name = 'pallet-template'
+name = "pallet-template"
 version = "3.0.0"
 description = "FRAME pallet template for defining custom runtime logic."
-authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
-edition = '2018'
+edition = "2021"
 license = "Unlicense"
 publish = false
 repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
@@ -27,13 +27,13 @@ sp-io = { default-features = false, version = "4.0.0-dev", path = "../../../../p
 sp-runtime = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-	'codec/std',
-	'scale-info/std',
-	'frame-support/std',
-	'frame-system/std',
-	'frame-benchmarking/std',
+	"codec/std",
+	"scale-info/std",
+	"frame-support/std",
+	"frame-system/std",
+	"frame-benchmarking/std",
 ]
 
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
