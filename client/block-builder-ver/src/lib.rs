@@ -310,11 +310,6 @@ where
 		}
 	}
 
-	/// backward compaitbility
-	pub fn build(self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-		self.build_with_seed(Default::default())
-	}
-
 	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.
 	///
 	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
