@@ -201,12 +201,7 @@ where
 	/// get their own proof from scratch.
 	pub fn execute_and_prove<'a, R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
 		let proving_backend = InMemoryProvingBackend::new(&self.backend);
-		let mut proving_ext = Ext::new(
-			&mut self.overlay,
-			&mut self.storage_transaction_cache,
-			&proving_backend,
-			Some(&mut self.extensions),
-		);
+		let mut proving_ext = self.proving_ext(&proving_backend);
 
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
 		let proof = proving_backend.extract_proof();
