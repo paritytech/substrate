@@ -486,7 +486,7 @@ where
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
+		let (block, storage_changes, proof) = block_builder.build_with_seed(seed)?.into_inner();
 
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);

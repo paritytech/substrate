@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
 use codec::{Codec, Decode, Encode};
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
 use sp_runtime::{RuntimeString, DigestItem, traits::{Block as BlockT}, ConsensusEngineId};
+use sp_std::vec::Vec;
 
 // originally in sp-module
 pub const RANDOM_SEED_INHERENT_IDENTIFIER: InherentIdentifier = *b"blckseed";
@@ -12,7 +12,7 @@ pub const VER_ENGINE_ID: ConsensusEngineId = *b"_VER";
 
 #[derive(Clone, Encode, Decode)]
 pub struct PreDigestVer<Block: BlockT>{
-    pub prev_extrisnics: Vec<Block::Extrinsic>
+    pub prev_extrisnics: Vec<<Block as BlockT>::Extrinsic>
 }
 
 pub trait CompatibleDigestItemVer<B: BlockT>: Sized {
