@@ -136,7 +136,8 @@ where
 /// A commitment with matching GRANDPA validators' signatures.
 ///
 /// Note that SCALE-encoding of the structure is optimized for size efficiency over the wire,
-/// please take a look at custom [`Encode`] and [`Decode`] implementations and [`CompactSignedCommitment`] struct.
+/// please take a look at custom [`Encode`] and [`Decode`] implementations and
+/// [`CompactSignedCommitment`] struct.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignedCommitment<TBlockNumber> {
 	/// The commitment signatures are collected for.
@@ -176,7 +177,8 @@ struct CompactSignedCommitment<TCommitment> {
 }
 
 impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
-	/// Packs a `SignedCommitment` into the compressed `CompactSignedCommitment` format for efficient network transport.
+	/// Packs a `SignedCommitment` into the compressed `CompactSignedCommitment` format for
+	/// efficient network transport.
 	fn pack(signed_commitment: &'a SignedCommitment<TBlockNumber>) -> Self {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let signatures_len = signatures.len() as u32;
