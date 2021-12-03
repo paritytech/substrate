@@ -1133,7 +1133,11 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}

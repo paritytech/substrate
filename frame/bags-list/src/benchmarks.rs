@@ -35,7 +35,8 @@ frame_benchmarking::benchmarks! {
 		//   node in the destination in addition to the work we do otherwise. (2 W/R)
 
 		// clear any pre-existing storage.
-		List::<T>::clear(None);
+		// NOTE: safe to call outside block production
+		List::<T>::unsafe_clear();
 
 		// define our origin and destination thresholds.
 		let origin_bag_thresh = T::BagThresholds::get()[0];
@@ -94,7 +95,8 @@ frame_benchmarking::benchmarks! {
 		//   node in the destination in addition to the work we do otherwise. (2 W/R)
 
 		// clear any pre-existing storage.
-		List::<T>::clear(None);
+		// NOTE: safe to call outside block production
+		List::<T>::unsafe_clear();
 
 		// define our origin and destination thresholds.
 		let origin_bag_thresh = T::BagThresholds::get()[0];
