@@ -141,7 +141,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
 	backend: &'a B,
-	previous_block_applied: bool,
+	previous_block_extrinsics: Option<Vec<<Block as BlockT>::Extrinsic>>,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
 }
@@ -194,7 +194,7 @@ where
 			api,
 			block_id,
 			backend,
-			previous_block_applied: false,
+			previous_block_extrinsics: None,
 			estimated_header_size,
 		})
 	}
@@ -273,7 +273,9 @@ where
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
 
-		match self.backend.blockchain().body(BlockId::Hash(parent_hash)).unwrap() {
+        self.previous_block_extrinsics = self.backend.blockchain().body(BlockId::Hash(parent_hash)).unwrap();
+
+		match self.previous_block_extrinsics.clone() {
 			Some(previous_block_extrinsics) => {
 				log::debug!(target: "block_builder", "transaction count {}", previous_block_extrinsics.len());
 				let shuffled_extrinsics = if previous_block_extrinsics.len() <= 1 {
@@ -306,10 +308,10 @@ where
 				info!("No extrinsics found for previous block");
 			},
 		}
-		self.previous_block_applied = true;
 	}
 
-	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
+	/// backward compaitbility
+	pub fn build(self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		self.build_with_seed(Default::default())
 	}
 
@@ -322,7 +324,7 @@ where
 		mut self,
 		seed: ShufflingSeed,
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-		if !self.previous_block_applied {
+		if let None = self.previous_block_extrinsics {
 			self.apply_previous_block(seed.clone())
 		}
 		let mut header = self
@@ -348,9 +350,12 @@ where
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
-        let mut digest = header.digest_mut();
-        let prev_extrinsics = DigestItemFor::<Block>::ver_pre_digest(PreDigestVer::<Block>{prev_extrisnics: self.extrinsics.clone()});
-        digest.push(prev_extrinsics);
+
+        if let Some(txs) = self.previous_block_extrinsics{
+            let digest = header.digest_mut();
+            let prev_extrinsics = DigestItemFor::<Block>::ver_pre_digest(PreDigestVer::<Block>{prev_extrisnics: txs.clone()});
+            digest.push(prev_extrinsics);
+        }
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),

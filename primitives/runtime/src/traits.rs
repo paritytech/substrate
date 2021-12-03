@@ -785,6 +785,7 @@ pub trait Checkable<Context>: Sized {
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
+/// Provides information about author
 pub trait HasAddress{
 	/// Returned if `check` succeeds.
 	type AccountId;

@@ -4,14 +4,11 @@
 use codec::{Codec, Decode, Encode};
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
-use sp_runtime::{RuntimeString, DigestItem, traits::{Block as BlockT, DigestItemFor}, ConsensusEngineId};
+use sp_runtime::{RuntimeString, DigestItem, traits::{Block as BlockT}, ConsensusEngineId};
 
 // originally in sp-module
 pub const RANDOM_SEED_INHERENT_IDENTIFIER: InherentIdentifier = *b"blckseed";
 pub const VER_ENGINE_ID: ConsensusEngineId = *b"_VER";
-
-// pub type VerDigestItemFor<B> = <DigestItemFor<B> as CompatibleDigestItemVer<B>>;
-        // digest.push(::ver_pre_digest(self.extrinsics.clone()));
 
 #[derive(Clone, Encode, Decode)]
 pub struct PreDigestVer<Block: BlockT>{
