@@ -136,7 +136,7 @@ parameter_types! {
 	pub const BountyUpdatePeriod: u32 = 10;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 5;
-	pub const MaximumReasonLength: u32 = 16384;
+	pub const MaximumReasonLength: u32 = 300;
 }
 impl pallet_bounties::Config for Test {
 	type Event = Event;
