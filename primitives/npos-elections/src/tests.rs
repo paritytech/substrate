@@ -199,9 +199,9 @@ fn voter_normalize_ops_works() {
 		let c2 = Candidate { who: 20, elected: false, ..Default::default() };
 		let c3 = Candidate { who: 30, elected: false, ..Default::default() };
 
-		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
-		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
-		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+		let e1 = Edge::new(c1, 30);
+		let e2 = Edge::new(c2, 33);
+		let e3 = Edge::new(c3, 30);
 
 		let mut v = Voter { who: 1, budget: 100, edges: vec![e1, e2, e3], ..Default::default() };
 
@@ -214,9 +214,9 @@ fn voter_normalize_ops_works() {
 		let c2 = Candidate { who: 20, elected: true, ..Default::default() };
 		let c3 = Candidate { who: 30, elected: true, ..Default::default() };
 
-		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
-		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
-		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+		let e1 = Edge::new(c1, 30);
+		let e2 = Edge::new(c2, 33);
+		let e3 = Edge::new(c3, 30);
 
 		let mut v = Voter { who: 1, budget: 100, edges: vec![e1, e2, e3], ..Default::default() };
 

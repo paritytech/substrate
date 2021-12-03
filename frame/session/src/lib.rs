@@ -313,8 +313,9 @@ impl<AId> SessionHandler<AId> for Tuple {
 			#(
 				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
 					.filter_map(|k|
-						(&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)))
-					);
+						k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID).map(|k1| (&k.0, k1))
+					)
+				);
 
 				Tuple::on_genesis_session(our_keys);
 			)*
@@ -330,12 +331,12 @@ impl<AId> SessionHandler<AId> for Tuple {
 			#(
 				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
 					.filter_map(|k|
-						(&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)))
-					);
+						k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID).map(|k1| (&k.0, k1))
+					));
 				let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
 					.filter_map(|k|
-						(&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)))
-					);
+						k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID).map(|k1| (&k.0, k1))
+					));
 				Tuple::on_new_session(changed, our_keys, queued_keys);
 			)*
 		)
