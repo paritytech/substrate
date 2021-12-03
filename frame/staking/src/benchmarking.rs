@@ -842,7 +842,7 @@ benchmarks! {
 		assert_eq!(targets.len() as u32, v);
 	}
 
-	set_staking_limits {
+	set_staking_configs {
 		// This function always does the same thing... just write to 4 storage items.
 	}: _(
 		RawOrigin::Root,
@@ -850,13 +850,15 @@ benchmarks! {
 		BalanceOf::<T>::max_value(),
 		Some(u32::MAX),
 		Some(u32::MAX),
-		Some(Percent::max_value())
+		Some(Percent::max_value()),
+		Perbill::max_value()
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
+		assert_eq!(MinCommission::<T>::get(), Perbill::from_percent(100));
 	}
 
 	chill_other {
@@ -872,13 +874,14 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		Staking::<T>::set_staking_limits(
+		Staking::<T>::set_staking_configs(
 			RawOrigin::Root.into(),
 			BalanceOf::<T>::max_value(),
 			BalanceOf::<T>::max_value(),
 			Some(0),
 			Some(0),
-			Some(Percent::from_percent(0))
+			Some(Percent::from_percent(0)),
+			Zero::zero(),
 		)?;
 
 		let caller = whitelisted_caller();
