@@ -617,6 +617,7 @@ check-dependent-polkadot:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
+    CARGO_UPDATE_CRATES: "sp-io"
 
 check-dependent-cumulus:
   <<: *check-dependent-project
