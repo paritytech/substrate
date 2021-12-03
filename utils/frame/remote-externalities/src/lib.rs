@@ -539,7 +539,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	/// `top_kv` need not be only child-bearing top keys. It should be all of the top keys that are
 	/// included thus far.
 	async fn load_child_remote(&self, top_kv: &[KeyValue]) -> Result<ChildKeyValues, &'static str> {
-		let child_bearing_top_keys = top_kv
+		let child_roots = top_kv
 			.iter()
 			.filter_map(|(k, _)| is_default_child_storage_key(k.as_ref()).then(|| k))
 			.collect::<Vec<_>>();
@@ -547,11 +547,11 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		info!(
 			target: LOG_TARGET,
 			"👩‍👦 scraping child-tree data from {} top keys",
-			child_bearing_top_keys.len()
+			child_roots.len()
 		);
 
 		let mut child_kv = vec![];
-		for prefixed_top_key in child_bearing_top_keys {
+		for prefixed_top_key in child_roots {
 			let at = self.as_online().at.expect("at must be initialized in online mode.");
 			let child_keys =
 				self.rpc_child_get_keys(prefixed_top_key, StorageKey(vec![]), at).await?;
