@@ -1085,8 +1085,7 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		self.executor
-			.prove_execution(id, method, call_data)
+		self.executor.prove_execution(id, method, call_data)
 	}
 
 	fn read_proof_collection(
