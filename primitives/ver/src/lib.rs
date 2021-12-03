@@ -1,20 +1,48 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use codec::Decode;
-use codec::Encode;
+use codec::{Codec, Decode, Encode};
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
-use sp_runtime::RuntimeString;
+use sp_runtime::{RuntimeString, DigestItem, traits::Block as BlockT, ConsensusEngineId};
 
 // originally in sp-module
 pub const RANDOM_SEED_INHERENT_IDENTIFIER: InherentIdentifier = *b"blckseed";
+pub const VER_ENGINE_ID: ConsensusEngineId = *b"_VER";
+
+#[derive(Clone, Encode, Decode)]
+pub struct PreDigestVer<Block: BlockT>{
+    pub prev_extrisnics: Vec<Block::Extrinsic>
+}
+
+pub trait CompatibleDigestItemVer<B: BlockT>: Sized {
+	/// Construct a digest item which contains a BABE pre-digest.
+	fn ver_pre_digest(seal: PreDigestVer<B>) -> Self;
+
+	/// If this item is an BABE pre-digest, return it.
+	fn as_ver_pre_digest(&self) -> Option<PreDigestVer<B>>;
+}
+
+impl<Hash, B: BlockT> CompatibleDigestItemVer<B> for DigestItem<Hash>
+where
+	Hash: Send + Sync + Eq + Clone + Codec + 'static,
+{
+	fn ver_pre_digest(digest: PreDigestVer<B>) -> Self{
+		DigestItem::PreRuntime(VER_ENGINE_ID, digest.encode())
+	}
+
+	fn as_ver_pre_digest(&self) -> Option<PreDigestVer<B>>{
+		self.pre_runtime_try_to(&VER_ENGINE_ID)
+	}
+}
+
 
 #[derive(Encode, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum RandomSeedInherentError {
 	Other(RuntimeString),
 }
+
 
 impl RandomSeedInherentError {
 	/// Try to create an instance ouf of the given identifier and data.
