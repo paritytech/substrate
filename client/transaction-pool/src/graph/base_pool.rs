@@ -20,7 +20,7 @@
 //!
 //! For a more full-featured pool, have a look at the `pool` module.
 
-use std::{collections::HashSet, fmt, hash, sync::Arc};
+use std::{cmp::Ordering, collections::HashSet, fmt, hash, sync::Arc};
 
 use log::{debug, trace, warn};
 use sc_transaction_pool_api::{error, InPoolTransaction, PoolStatus};
@@ -36,7 +36,7 @@ use sp_runtime::{
 
 use super::{
 	future::{FutureTransactions, WaitingTransaction},
-	ready::{BestIterator, ReadyTransactions},
+	ready::{BestIterator, ReadyTransactions, TransactionRef},
 };
 
 /// Successful import result.
@@ -384,8 +384,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	///
 	/// Removes and returns worst transactions from the queues and all transactions that depend on
 	/// them. Technically the worst transaction should be evaluated by computing the entire pending
-	/// set. We use a simplified approach to remove the transaction that occupies the pool for the
-	/// longest time.
+	/// set. We use a simplified approach to remove transactions with the lowest priority first or
+	/// those that occupy the pool for the longest time in case priority is the same.
 	pub fn enforce_limits(
 		&mut self,
 		ready: &Limit,
@@ -395,18 +395,30 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 
 		while ready.is_exceeded(self.ready.len(), self.ready.bytes()) {
 			// find the worst transaction
-			let minimal = self.ready.fold(|minimal, current| {
+			let worst = self.ready.fold::<TransactionRef<Hash, Ex>, _>(|worst, current| {
 				let transaction = &current.transaction;
-				match minimal {
-					None => Some(transaction.clone()),
-					Some(ref tx) if tx.insertion_id > transaction.insertion_id =>
-						Some(transaction.clone()),
-					other => other,
-				}
+				worst
+					.map(|worst| {
+						// Here we don't use `TransactionRef`'s ordering implementation because
+						// while it prefers priority like need here, it also prefers older
+						// transactions for inclusion purposes and limit enforcement needs to prefer
+						// newer transactions instead and drop the older ones.
+						match worst.transaction.priority.cmp(&transaction.transaction.priority) {
+							Ordering::Less => worst,
+							Ordering::Equal =>
+								if worst.insertion_id > transaction.insertion_id {
+									transaction.clone()
+								} else {
+									worst
+								},
+							Ordering::Greater => transaction.clone(),
+						}
+					})
+					.or_else(|| Some(transaction.clone()))
 			});
 
-			if let Some(minimal) = minimal {
-				removed.append(&mut self.remove_subtree(&[minimal.transaction.hash.clone()]))
+			if let Some(worst) = worst {
+				removed.append(&mut self.remove_subtree(&[worst.transaction.hash.clone()]))
 			} else {
 				break
 			}
@@ -414,14 +426,14 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 
 		while future.is_exceeded(self.future.len(), self.future.bytes()) {
 			// find the worst transaction
-			let minimal = self.future.fold(|minimal, current| match minimal {
+			let worst = self.future.fold(|worst, current| match worst {
 				None => Some(current.clone()),
 				Some(ref tx) if tx.imported_at > current.imported_at => Some(current.clone()),
 				other => other,
 			});
 
-			if let Some(minimal) = minimal {
-				removed.append(&mut self.remove_subtree(&[minimal.transaction.hash.clone()]))
+			if let Some(worst) = worst {
+				removed.append(&mut self.remove_subtree(&[worst.transaction.hash.clone()]))
 			} else {
 				break
 			}
