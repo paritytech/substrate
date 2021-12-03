@@ -18,8 +18,8 @@ sp-runtime = { version = "4.0.0-dev", path = "../runtime", default-features = fa
 sp-std = { version = "4.0.0-dev", path = "../std", default-features = false }
 
 [dev-dependencies]
+hex = "0.4.3"
 hex-literal = "0.3"
-
 sp-keystore = { version = "0.10.0-dev", path = "../keystore" }
 
 [features]
