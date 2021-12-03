@@ -931,6 +931,150 @@ fn child_bounty_active_unassign_curator() {
 }
 
 #[test]
+fn parent_bounty_inactive_unassign_curator_child_bounty() {
+	// Unassign curator when parent bounty in not in active state.
+	// This can happen when the curator of parent bounty has been unassigned.
+	new_test_ext().execute_with(|| {
+		// Make the parent bounty.
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		// Bounty curator initial balance.
+		Balances::make_free_balance_be(&4, 101); // Parent-bounty curator 1.
+		Balances::make_free_balance_be(&5, 101); // Parent-bounty curator 2.
+		Balances::make_free_balance_be(&6, 101); // Child-bounty curator 1.
+		Balances::make_free_balance_be(&7, 101); // Child-bounty curator 2.
+		Balances::make_free_balance_be(&8, 101); // Child-bounty curator 3.
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 6));
+		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
+
+		// Create Child-bounty.
+		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
+		assert_eq!(last_event(), ChildBountiesEvent::Added { index: 0, child_index: 0 });
+
+		System::set_block_number(3);
+		<Treasury as OnInitialize<u64>>::on_initialize(3);
+
+		// Propose and accept curator for child-bounty.
+		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
+		assert_ok!(ChildBounties::accept_curator(Origin::signed(8), 0, 0));
+
+		assert_eq!(
+			ChildBounties::child_bounties(0, 0).unwrap(),
+			ChildBounty {
+				parent_bounty: 0,
+				value: 10,
+				fee: 2,
+				curator_deposit: 1,
+				status: ChildBountyStatus::Active { curator: 8 },
+			}
+		);
+
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
+
+		// Unassign parent bounty curator.
+		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
+
+		System::set_block_number(5);
+		<Treasury as OnInitialize<u64>>::on_initialize(5);
+
+		// Try unassign child-bounty curator - from non curator; non reject
+		// origin; some random guy. Bounty update period is not yet complete.
+		assert_noop!(
+			ChildBounties::unassign_curator(Origin::signed(3), 0, 0),
+			Error::<Test>::ParentBountyNotActive
+		);
+
+		// Unassign curator - from reject origin.
+		assert_ok!(ChildBounties::unassign_curator(Origin::root(), 0, 0));
+
+		// Verify updated child-bounty status.
+		assert_eq!(
+			ChildBounties::child_bounties(0, 0).unwrap(),
+			ChildBounty {
+				parent_bounty: 0,
+				value: 10,
+				fee: 2,
+				curator_deposit: 0,
+				status: ChildBountyStatus::Added,
+			}
+		);
+
+		// Ensure child-bounty curator was slashed.
+		assert_eq!(Balances::free_balance(8), 100);
+		assert_eq!(Balances::reserved_balance(8), 0); // slashed
+
+		System::set_block_number(6);
+		<Treasury as OnInitialize<u64>>::on_initialize(6);
+
+		// Propose and accept curator for parent-bounty again.
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 5, 6));
+		assert_ok!(Bounties::accept_curator(Origin::signed(5), 0));
+
+		System::set_block_number(7);
+		<Treasury as OnInitialize<u64>>::on_initialize(7);
+
+		// Propose and accept curator for child-bounty again.
+		assert_ok!(ChildBounties::propose_curator(Origin::signed(5), 0, 0, 7, 2));
+		assert_ok!(ChildBounties::accept_curator(Origin::signed(7), 0, 0));
+
+		assert_eq!(
+			ChildBounties::child_bounties(0, 0).unwrap(),
+			ChildBounty {
+				parent_bounty: 0,
+				value: 10,
+				fee: 2,
+				curator_deposit: 1,
+				status: ChildBountyStatus::Active { curator: 7 },
+			}
+		);
+
+		System::set_block_number(8);
+		<Treasury as OnInitialize<u64>>::on_initialize(8);
+
+		assert_noop!(
+			ChildBounties::unassign_curator(Origin::signed(3), 0, 0),
+			BountiesError::Premature
+		);
+
+		// Unassign parent bounty curator again.
+		assert_ok!(Bounties::unassign_curator(Origin::signed(5), 0));
+
+		System::set_block_number(9);
+		<Treasury as OnInitialize<u64>>::on_initialize(9);
+
+		// Unassign curator again - from master curator.
+		assert_ok!(ChildBounties::unassign_curator(Origin::signed(7), 0, 0));
+
+		// Verify updated child-bounty status.
+		assert_eq!(
+			ChildBounties::child_bounties(0, 0).unwrap(),
+			ChildBounty {
+				parent_bounty: 0,
+				value: 10,
+				fee: 2,
+				curator_deposit: 0,
+				status: ChildBountyStatus::Added,
+			}
+		);
+
+		// Ensure child-bounty curator was not slashed.
+		assert_eq!(Balances::free_balance(7), 101);
+		assert_eq!(Balances::reserved_balance(7), 0); // slashed
+	});
+}
+
+#[test]
 fn close_parent_with_child_bounty() {
 	new_test_ext().execute_with(|| {
 		// Make the parent bounty.
