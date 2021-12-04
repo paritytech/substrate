@@ -23,7 +23,7 @@ use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call,
+	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call_with_proof,
 	SharedParams, State, LOG_TARGET,
 };
 
@@ -69,7 +69,7 @@ where
 		.await;
 	}
 
-	let (_, encoded_result) = state_machine_call::<Block, ExecDispatch>(
+	let (_, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
 		&ext,
 		&executor,
 		execution,
