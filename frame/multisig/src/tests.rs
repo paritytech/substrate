@@ -706,7 +706,14 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
 		System::assert_last_event(
-			pallet_multisig::Event::MultisigExecuted(3, now(), multi, hash, Err(err)).into(),
+			pallet_multisig::Event::MultisigExecuted {
+				approving: 3,
+				timepoint: now(),
+				multisig: multi,
+				call_hash: hash,
+				result: Err(err),
+			}
+			.into(),
 		);
 	});
 }
@@ -846,7 +853,7 @@ fn multisig_filters() {
 		let call = Box::new(Call::System(frame_system::Call::set_code { code: vec![] }));
 		assert_noop!(
 			Multisig::as_multi_threshold_1(Origin::signed(1), vec![2], call.clone()),
-			DispatchError::BadOrigin,
+			DispatchError::from(frame_system::Error::<Test>::CallFiltered),
 		);
 	});
 }

@@ -1094,10 +1094,7 @@ mod tests {
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
-	use sp_runtime::{
-		traits::{BadOrigin, Hash},
-		DispatchError,
-	};
+	use sp_runtime::{traits::Hash, DispatchError};
 	use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 	type System = frame_system::Pallet<Test>;
@@ -2092,7 +2089,10 @@ mod tests {
 				System::events(),
 				vec![EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+					event: MetaEvent::System(frame_system::Event::Remarked {
+						sender: BOB,
+						hash: remark_hash
+					}),
 					topics: vec![],
 				},]
 			);
@@ -2114,7 +2114,10 @@ mod tests {
 			let forbidden_call = Call::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
 
 			// simple cases: direct call
-			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin);
+			assert_err!(
+				ctx.ext.call_runtime(forbidden_call.clone()),
+				frame_system::Error::<Test>::CallFiltered
+			);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
 			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch {
@@ -2147,7 +2150,10 @@ mod tests {
 				vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+						event: MetaEvent::System(frame_system::Event::Remarked {
+							sender: BOB,
+							hash: remark_hash
+						}),
 						topics: vec![],
 					},
 					EventRecord {
@@ -2157,10 +2163,10 @@ mod tests {
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted(
-							1,
-							BadOrigin.into()
-						),),
+						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted {
+							index: 1,
+							error: frame_system::Error::<Test>::CallFiltered.into()
+						},),
 						topics: vec![],
 					},
 				]

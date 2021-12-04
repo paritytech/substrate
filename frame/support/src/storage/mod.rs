@@ -1133,7 +1133,11 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
@@ -1223,7 +1227,7 @@ mod private {
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
-	impl<Hash: Encode> Sealed for Digest<Hash> {}
+	impl Sealed for Digest {}
 	impl<T, S> Sealed for BoundedVec<T, S> {}
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
@@ -1263,7 +1267,7 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
 /// format ever changes, we need to remove this here.
-impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+impl StorageAppend<DigestItem> for Digest {}
 
 /// Marker trait that is implemented for types that support the `storage::append` api with a limit
 /// on the number of element.
@@ -1400,7 +1404,6 @@ mod test {
 	use super::*;
 	use crate::{assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
-	use core::convert::{TryFrom, TryInto};
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
@@ -1485,8 +1488,8 @@ mod test {
 	fn digest_storage_append_works_as_expected() {
 		TestExternalities::default().execute_with(|| {
 			struct Storage;
-			impl generator::StorageValue<Digest<u32>> for Storage {
-				type Query = Digest<u32>;
+			impl generator::StorageValue<Digest> for Storage {
+				type Query = Digest;
 
 				fn module_prefix() -> &'static [u8] {
 					b"MyModule"
@@ -1496,23 +1499,20 @@ mod test {
 					b"Storage"
 				}
 
-				fn from_optional_value_to_query(v: Option<Digest<u32>>) -> Self::Query {
+				fn from_optional_value_to_query(v: Option<Digest>) -> Self::Query {
 					v.unwrap()
 				}
 
-				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest<u32>> {
+				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest> {
 					Some(v)
 				}
 			}
 
-			Storage::append(DigestItem::ChangesTrieRoot(1));
 			Storage::append(DigestItem::Other(Vec::new()));
 
 			let value = unhashed::get_raw(&Storage::storage_value_final_key()).unwrap();
 
-			let expected = Digest {
-				logs: vec![DigestItem::ChangesTrieRoot(1), DigestItem::Other(Vec::new())],
-			};
+			let expected = Digest { logs: vec![DigestItem::Other(Vec::new())] };
 			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
 		});
 	}

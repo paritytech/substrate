@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 use crate::{
-	columns, light,
+	columns,
 	utils::{DatabaseType, NUM_COLUMNS},
 };
 /// A `Database` adapter for parity-db.
@@ -60,10 +60,6 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 			state_col.ref_counted = true;
 			state_col.preimage = true;
 			state_col.uniform = true;
-		},
-		DatabaseType::Light => {
-			config.columns[light::columns::HEADER as usize].compression =
-				parity_db::CompressionType::Lz4;
 		},
 	}
 

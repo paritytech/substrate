@@ -3,7 +3,7 @@ name = "sc-consensus-slots"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
@@ -31,7 +31,7 @@ sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.11"
-thiserror = "1.0.21"
+thiserror = "1.0.30"
 async-trait = "0.1.50"
 
 [dev-dependencies]
