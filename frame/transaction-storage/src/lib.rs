@@ -210,7 +210,7 @@ pub mod pallet {
 				});
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Stored(index));
+			Self::deposit_event(Event::Stored { index });
 			Ok(())
 		}
 
@@ -251,7 +251,7 @@ pub mod pallet {
 				});
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Renewed(index));
+			Self::deposit_event(Event::Renewed { index });
 			Ok(().into())
 		}
 
@@ -313,9 +313,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Stored data under specified index.
-		Stored(u32),
+		Stored { index: u32 },
 		/// Renewed data under specified index.
-		Renewed(u32),
+		Renewed { index: u32 },
 		/// Storage proof was successfully checked.
 		ProofChecked,
 	}

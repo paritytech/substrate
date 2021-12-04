@@ -34,7 +34,10 @@ use serde::de::DeserializeOwned;
 use sp_core::{
 	hashing::twox_128,
 	hexdisplay::HexDisplay,
-	storage::{StorageData, StorageKey},
+	storage::{
+		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
+		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
+	},
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::traits::Block as BlockT;
@@ -45,7 +48,9 @@ use std::{
 
 pub mod rpc_api;
 
-type KeyPair = (StorageKey, StorageData);
+type KeyValue = (StorageKey, StorageData);
+type TopKeyValues = Vec<KeyValue>;
+type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
@@ -53,6 +58,22 @@ const BATCH_SIZE: usize = 1000;
 
 #[rpc(client)]
 pub trait RpcApi<Hash> {
+	#[method(name = "childstate_getKeys")]
+	fn child_get_keys(
+		&self,
+		child_key: PrefixedStorageKey,
+		prefix: StorageKey,
+		hash: Option<Hash>,
+	) -> Result<Vec<StorageKey>, RpcError>;
+
+	#[method(name = "childstate_getStorage")]
+	fn child_get_storage(
+		&self,
+		child_key: PrefixedStorageKey,
+		prefix: StorageKey,
+		hash: Option<Hash>,
+	) -> Result<StorageData, RpcError>;
+
 	#[method(name = "state_getStorage")]
 	fn get_storage(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<StorageData, RpcError>;
 
@@ -180,7 +201,7 @@ impl Default for SnapshotConfig {
 pub struct Builder<B: BlockT> {
 	/// Custom key-pairs to be injected into the externalities. The *hashed* keys and values must
 	/// be given.
-	hashed_key_values: Vec<KeyPair>,
+	hashed_key_values: Vec<KeyValue>,
 	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must
 	/// be given.
 	hashed_prefixes: Vec<Vec<u8>>,
@@ -234,21 +255,22 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	) -> Result<StorageData, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: get_storage");
 		self.as_online().rpc_client().get_storage(key, maybe_at).await.map_err(|e| {
-			error!("Error = {:?}", e);
+			error!(target: LOG_TARGET, "Error = {:?}", e);
 			"rpc get_storage failed."
 		})
 	}
+
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
 		self.as_online().rpc_client().finalized_head().await.map_err(|e| {
-			error!("Error = {:?}", e);
+			error!(target: LOG_TARGET, "Error = {:?}", e);
 			"rpc finalized_head failed."
 		})
 	}
 
 	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
-	async fn get_keys_paged(
+	async fn rpc_get_keys_paged(
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
@@ -277,7 +299,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 					all_keys.last().expect("all_keys is populated; has .last(); qed");
 				log::debug!(
 					target: LOG_TARGET,
-					"new total = {}, full page received: {:?}",
+					"new total = {}, full page received: {}",
 					all_keys.len(),
 					HexDisplay::from(new_last_key)
 				);
@@ -296,12 +318,12 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
-	) -> Result<Vec<KeyPair>, &'static str> {
-		let keys = self.get_keys_paged(prefix, at).await?;
+	) -> Result<Vec<KeyValue>, &'static str> {
+		let keys = self.rpc_get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
 		log::debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
-		let mut key_values: Vec<KeyPair> = vec![];
+		let mut key_values: Vec<KeyValue> = vec![];
 		let client = self.as_online().rpc_client();
 		for chunk_keys in keys.chunks(BATCH_SIZE) {
 			let batch = chunk_keys
@@ -318,7 +340,9 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				);
 				"batch failed."
 			})?;
+
 			assert_eq!(chunk_keys.len(), values.len());
+
 			for (idx, key) in chunk_keys.into_iter().enumerate() {
 				let maybe_value = values[idx].clone();
 				let value = maybe_value.unwrap_or_else(|| {
@@ -341,26 +365,216 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		Ok(key_values)
 	}
+
+	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
+	pub(crate) async fn rpc_child_get_storage_paged(
+		&self,
+		prefixed_top_key: &StorageKey,
+		child_keys: Vec<StorageKey>,
+		at: B::Hash,
+	) -> Result<Vec<KeyValue>, &'static str> {
+		let mut child_kv_inner = vec![];
+		for batch_child_key in child_keys.chunks(BATCH_SIZE) {
+			let batch_request = batch_child_key
+				.iter()
+				.cloned()
+				.map(|key| {
+					(
+						"childstate_getStorage",
+						rpc_params![
+							PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
+							key,
+							at
+						],
+					)
+				})
+				.collect::<Vec<_>>();
+
+			let batch_response = self
+				.as_online()
+				.rpc_client()
+				.batch_request::<Option<StorageData>>(batch_request)
+				.await
+				.map_err(|e| {
+					log::error!(
+						target: LOG_TARGET,
+						"failed to execute batch: {:?}. Error: {:?}",
+						batch_child_key,
+						e
+					);
+					"batch failed."
+				})?;
+
+			assert_eq!(batch_child_key.len(), batch_response.len());
+
+			for (idx, key) in batch_child_key.into_iter().enumerate() {
+				let maybe_value = batch_response[idx].clone();
+				let value = maybe_value.unwrap_or_else(|| {
+					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					StorageData(vec![])
+				});
+				child_kv_inner.push((key.clone(), value));
+			}
+		}
+
+		Ok(child_kv_inner)
+	}
+
+	pub(crate) async fn rpc_child_get_keys(
+		&self,
+		prefixed_top_key: &StorageKey,
+		child_prefix: StorageKey,
+		at: B::Hash,
+	) -> Result<Vec<StorageKey>, &'static str> {
+		let child_keys = self
+			.as_online()
+			.rpc_client()
+			.child_get_keys(
+				PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
+				child_prefix,
+				Some(at),
+			)
+			.await
+			.map_err(|e| {
+				error!(target: LOG_TARGET, "Error = {:?}", e);
+				"rpc child_get_keys failed."
+			})?;
+
+		debug!(
+			target: LOG_TARGET,
+			"scraped {} child-keys of the child-bearing top key: {}",
+			child_keys.len(),
+			HexDisplay::from(prefixed_top_key)
+		);
+
+		Ok(child_keys)
+	}
 }
 
 // Internal methods
 impl<B: BlockT + DeserializeOwned> Builder<B> {
-	/// Save the given data as state snapshot.
-	fn save_state_snapshot(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
-		log::debug!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
-		fs::write(path, data.encode()).map_err(|_| "fs::write failed.")?;
+	/// Save the given data to the top keys snapshot.
+	fn save_top_snapshot(&self, data: &[KeyValue], path: &PathBuf) -> Result<(), &'static str> {
+		let mut path = path.clone();
+		let encoded = data.encode();
+		path.set_extension("top");
+		debug!(
+			target: LOG_TARGET,
+			"writing {} bytes to state snapshot file {:?}",
+			encoded.len(),
+			path
+		);
+		fs::write(path, encoded).map_err(|_| "fs::write failed.")?;
 		Ok(())
 	}
 
-	/// initialize `Self` from state snapshot. Panics if the file does not exist.
-	fn load_state_snapshot(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
-		log::info!(target: LOG_TARGET, "scraping key-pairs from state snapshot {:?}", path);
+	/// Save the given data to the child keys snapshot.
+	fn save_child_snapshot(
+		&self,
+		data: &ChildKeyValues,
+		path: &PathBuf,
+	) -> Result<(), &'static str> {
+		let mut path = path.clone();
+		path.set_extension("child");
+		let encoded = data.encode();
+		debug!(
+			target: LOG_TARGET,
+			"writing {} bytes to state snapshot file {:?}",
+			encoded.len(),
+			path
+		);
+		fs::write(path, encoded).map_err(|_| "fs::write failed.")?;
+		Ok(())
+	}
+
+	fn load_top_snapshot(&self, path: &PathBuf) -> Result<TopKeyValues, &'static str> {
+		let mut path = path.clone();
+		path.set_extension("top");
+		info!(target: LOG_TARGET, "loading top key-pairs from snapshot {:?}", path);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
-		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
+		Decode::decode(&mut &*bytes).map_err(|e| {
+			log::error!(target: LOG_TARGET, "{:?}", e);
+			"decode failed"
+		})
+	}
+
+	fn load_child_snapshot(&self, path: &PathBuf) -> Result<ChildKeyValues, &'static str> {
+		let mut path = path.clone();
+		path.set_extension("child");
+		info!(target: LOG_TARGET, "loading child key-pairs from snapshot {:?}", path);
+		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
+		Decode::decode(&mut &*bytes).map_err(|e| {
+			log::error!(target: LOG_TARGET, "{:?}", e);
+			"decode failed"
+		})
+	}
+
+	/// Load all the `top` keys from the remote config, and maybe write then to cache.
+	async fn load_top_remote_and_maybe_save(&self) -> Result<TopKeyValues, &'static str> {
+		let top_kv = self.load_top_remote().await?;
+		if let Some(c) = &self.as_online().state_snapshot {
+			self.save_top_snapshot(&top_kv, &c.path)?;
+		}
+		Ok(top_kv)
+	}
+
+	/// Load all of the child keys from the remote config, given the already scraped list of top key
+	/// pairs.
+	///
+	/// Stores all values to cache as well, if provided.
+	async fn load_child_remote_and_maybe_save(
+		&self,
+		top_kv: &[KeyValue],
+	) -> Result<ChildKeyValues, &'static str> {
+		let child_kv = self.load_child_remote(&top_kv).await?;
+		if let Some(c) = &self.as_online().state_snapshot {
+			self.save_child_snapshot(&child_kv, &c.path)?;
+		}
+		Ok(child_kv)
+	}
+
+	/// Load all of the child keys from the remote config, given the already scraped list of top key
+	/// pairs.
+	///
+	/// `top_kv` need not be only child-bearing top keys. It should be all of the top keys that are
+	/// included thus far.
+	async fn load_child_remote(&self, top_kv: &[KeyValue]) -> Result<ChildKeyValues, &'static str> {
+		let child_roots = top_kv
+			.iter()
+			.filter_map(|(k, _)| is_default_child_storage_key(k.as_ref()).then(|| k))
+			.collect::<Vec<_>>();
+
+		info!(
+			target: LOG_TARGET,
+			"👩‍👦 scraping child-tree data from {} top keys",
+			child_roots.len()
+		);
+
+		let mut child_kv = vec![];
+		for prefixed_top_key in child_roots {
+			let at = self.as_online().at.expect("at must be initialized in online mode.");
+			let child_keys =
+				self.rpc_child_get_keys(prefixed_top_key, StorageKey(vec![]), at).await?;
+			let child_kv_inner =
+				self.rpc_child_get_storage_paged(prefixed_top_key, child_keys, at).await?;
+
+			let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
+			let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
+				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
+				None => {
+					log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
+					return Err("Invalid child key")
+				},
+			};
+
+			child_kv.push((ChildInfo::new_default(&un_prefixed), child_kv_inner));
+		}
+
+		Ok(child_kv)
 	}
 
 	/// Build `Self` from a network node denoted by `uri`.
-	async fn load_remote(&self) -> Result<Vec<KeyPair>, &'static str> {
+	async fn load_top_remote(&self) -> Result<TopKeyValues, &'static str> {
 		let config = self.as_online();
 		let at = self
 			.as_online()
@@ -371,17 +585,17 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		let mut keys_and_values = if config.pallets.len() > 0 {
 			let mut filtered_kv = vec![];
-			for f in config.pallets.iter() {
-				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
-				let module_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
+			for p in config.pallets.iter() {
+				let hashed_prefix = StorageKey(twox_128(p.as_bytes()).to_vec());
+				let pallet_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
 				log::info!(
 					target: LOG_TARGET,
-					"downloaded data for module {} (count: {} / prefix: {:?}).",
-					f,
-					module_kv.len(),
+					"downloaded data for module {} (count: {} / prefix: {}).",
+					p,
+					pallet_kv.len(),
 					HexDisplay::from(&hashed_prefix),
 				);
-				filtered_kv.extend(module_kv);
+				filtered_kv.extend(pallet_kv);
 			}
 			filtered_kv
 		} else {
@@ -423,7 +637,10 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			.max_request_body_size(u32::MAX)
 			.build(&online.transport.uri)
 			.await
-			.map_err(|_| "failed to build ws client")?;
+			.map_err(|e| {
+				log::error!(target: LOG_TARGET, "error: {:?}", e);
+				"failed to build ws client"
+			})?;
 		online.transport.client = Some(ws_client);
 
 		// Then, if `at` is not set, set it.
@@ -435,27 +652,21 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		Ok(())
 	}
 
-	pub(crate) async fn pre_build(mut self) -> Result<Vec<KeyPair>, &'static str> {
-		let mut base_kv = match self.mode.clone() {
-			Mode::Offline(config) => self.load_state_snapshot(&config.state_snapshot.path)?,
-			Mode::Online(config) => {
+	pub(crate) async fn pre_build(
+		mut self,
+	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
+		let mut top_kv = match self.mode.clone() {
+			Mode::Offline(config) => self.load_top_snapshot(&config.state_snapshot.path)?,
+			Mode::Online(_) => {
 				self.init_remote_client().await?;
-				let kp = self.load_remote().await?;
-				if let Some(c) = config.state_snapshot {
-					self.save_state_snapshot(&kp, &c.path)?;
-				}
-				kp
+				self.load_top_remote_and_maybe_save().await?
 			},
-			Mode::OfflineOrElseOnline(offline_config, online_config) => {
-				if let Ok(kv) = self.load_state_snapshot(&offline_config.state_snapshot.path) {
+			Mode::OfflineOrElseOnline(offline_config, _) => {
+				if let Ok(kv) = self.load_top_snapshot(&offline_config.state_snapshot.path) {
 					kv
 				} else {
 					self.init_remote_client().await?;
-					let kp = self.load_remote().await?;
-					if let Some(c) = online_config.state_snapshot {
-						self.save_state_snapshot(&kp, &c.path)?;
-					}
-					kp
+					self.load_top_remote_and_maybe_save().await?
 				}
 			},
 		};
@@ -467,7 +678,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
 			);
-			base_kv.extend(self.hashed_key_values.clone());
+			top_kv.extend(self.hashed_key_values.clone());
 		}
 
 		// exclude manual key values.
@@ -477,10 +688,30 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				"excluding externalities from {} keys",
 				self.hashed_blacklist.len()
 			);
-			base_kv.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
+			top_kv.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
 		}
 
-		Ok(base_kv)
+		let child_kv = match self.mode.clone() {
+			Mode::Online(_) => self.load_child_remote_and_maybe_save(&top_kv).await?,
+			Mode::OfflineOrElseOnline(offline_config, _) =>
+				if let Ok(kv) = self.load_child_snapshot(&offline_config.state_snapshot.path) {
+					kv
+				} else {
+					self.load_child_remote_and_maybe_save(&top_kv).await?
+				},
+			Mode::Offline(ref config) => self
+				.load_child_snapshot(&config.state_snapshot.path)
+				.map_err(|why| {
+					log::warn!(
+						target: LOG_TARGET,
+						"failed to load child-key file due to {:?}.",
+						why
+					)
+				})
+				.unwrap_or_default(),
+		};
+
+		Ok((top_kv, child_kv))
 	}
 }
 
@@ -492,18 +723,35 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	/// Inject a manual list of key and values to the storage.
-	pub fn inject_hashed_key_value(mut self, injections: &[KeyPair]) -> Self {
+	pub fn inject_hashed_key_value(mut self, injections: &[KeyValue]) -> Self {
 		for i in injections {
 			self.hashed_key_values.push(i.clone());
 		}
 		self
 	}
+
 	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
 	///
 	/// This should be used to inject a "PREFIX", like a storage (double) map.
 	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
 		self.hashed_prefixes.push(hashed.to_vec());
 		self
+	}
+
+	/// Just a utility wrapper of [`inject_hashed_prefix`] that injects
+	/// [`DEFAULT_CHILD_STORAGE_KEY_PREFIX`] as a prefix.
+	///
+	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
+	///
+	/// This is not needed if the entire state is being downloaded.
+	///
+	/// Otherwise, the only other way to make sure a child-tree is manually included is to inject
+	/// its root (`DEFAULT_CHILD_STORAGE_KEY_PREFIX`, plus some other postfix) into
+	/// [`inject_hashed_key`]. Unfortunately, there's no federated way of managing child tree roots
+	/// as of now and each pallet does its own thing. Therefore, it is not possible for this library
+	/// to automatically include child trees of pallet X, when its top keys are included.
+	pub fn inject_default_child_tree_prefix(self) -> Self {
+		self.inject_hashed_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
 	}
 
 	/// Inject a hashed key to scrape. This is treated as-is, and should be pre-hashed.
@@ -540,15 +788,36 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
-		let kv = self.pre_build().await?;
-		let mut ext = TestExternalities::new_empty();
+		let (top_kv, child_kv) = self.pre_build().await?;
+		let mut ext = TestExternalities::new_with_code(Default::default(), Default::default());
 
-		log::info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
-		for (k, v) in kv {
-			let (k, v) = (k.0, v.0);
-			// Insert the key,value pair into the test trie backend
-			ext.insert(k, v);
+		info!(target: LOG_TARGET, "injecting a total of {} top keys", top_kv.len());
+		for (k, v) in top_kv {
+			// skip writing the child root data.
+			if is_default_child_storage_key(k.as_ref()) {
+				continue
+			}
+			ext.insert(k.0, v.0);
 		}
+
+		info!(
+			target: LOG_TARGET,
+			"injecting a total of {} child keys",
+			child_kv.iter().map(|(_, kv)| kv).flatten().count()
+		);
+
+		for (info, key_values) in child_kv {
+			for (k, v) in key_values {
+				ext.insert_child(info.clone(), k.0, v.0);
+			}
+		}
+
+		ext.commit_all().unwrap();
+		info!(
+			target: LOG_TARGET,
+			"initialized state externalities with storage root {:?}",
+			ext.as_backend().root()
+		);
 
 		Ok(ext)
 	}
@@ -621,7 +890,6 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-	use pallet_elections_phragmen::Members;
 	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
@@ -631,11 +899,11 @@ mod remote_tests {
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
 				OfflineConfig {
-					state_snapshot: SnapshotConfig::new("test_snapshot_to_remove.bin"),
+					state_snapshot: SnapshotConfig::new("offline_else_online_works_data"),
 				},
 				OnlineConfig {
 					pallets: vec!["Proxy".to_owned()],
-					state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
+					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
 					..Default::default()
 				},
 			))
@@ -648,11 +916,11 @@ mod remote_tests {
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
 				OfflineConfig {
-					state_snapshot: SnapshotConfig::new("test_snapshot_to_remove.bin"),
+					state_snapshot: SnapshotConfig::new("offline_else_online_works_data"),
 				},
 				OnlineConfig {
 					pallets: vec!["Proxy".to_owned()],
-					state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
+					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
 					transport: "ws://non-existent:666".to_owned().into(),
 					..Default::default()
 				},
@@ -661,14 +929,56 @@ mod remote_tests {
 			.await
 			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
+
+		let to_delete = std::fs::read_dir(Path::new("."))
+			.unwrap()
+			.into_iter()
+			.map(|d| d.unwrap())
+			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "offline_else_online_works_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
+			})
+			.collect::<Vec<_>>();
+		assert!(to_delete.len() > 0);
+		for d in to_delete {
+			std::fs::remove_file(d.path()).unwrap();
+		}
 	}
 
 	#[tokio::test]
-	async fn can_build_one_pallet() {
+	#[ignore = "too slow"]
+	async fn can_build_one_big_pallet() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["Proxy".to_owned()],
+				pallets: vec!["System".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+	}
+
+	#[tokio::test]
+	async fn can_build_one_small_pallet() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://kusama-rpc.polkadot.io:443".to_owned().into(),
+				pallets: vec!["Council".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
+				pallets: vec!["Council".to_owned()],
 				..Default::default()
 			}))
 			.build()
@@ -682,6 +992,18 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://kusama-rpc.polkadot.io:443".to_owned().into(),
+				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
 				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
 				..Default::default()
 			}))
@@ -692,46 +1014,11 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	async fn sanity_check_decoding() {
-		use sp_core::crypto::Ss58Codec;
-
-		type AccountId = sp_runtime::AccountId32;
-		type Balance = u128;
-		frame_support::generate_storage_alias!(
-			PhragmenElection,
-			Members =>
-			Value<Vec<SeatHolder<AccountId, Balance>>>
-		);
-
+	async fn can_create_top_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["PhragmenElection".to_owned()],
-				..Default::default()
-			}))
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {
-				// Gav's polkadot account. 99% this will be in the council.
-				let gav_polkadot =
-					AccountId::from_ss58check("13RDY9nrJpyTDBSUdBw12dGwhk19sGwsrVZ2bxkzYHBSagP2")
-						.unwrap();
-				let members = Members::get();
-				assert!(members
-					.iter()
-					.map(|s| s.who.clone())
-					.find(|a| a == &gav_polkadot)
-					.is_some());
-			});
-	}
-
-	#[tokio::test]
-	async fn can_create_state_snapshot() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
+				state_snapshot: Some(SnapshotConfig::new("can_create_top_snapshot_data")),
 				pallets: vec!["Proxy".to_owned()],
 				..Default::default()
 			}))
@@ -744,24 +1031,118 @@ mod remote_tests {
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
-			.filter(|p| p.path().extension().unwrap_or_default() == "bin")
+			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "can_create_top_snapshot_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
+			})
 			.collect::<Vec<_>>();
 
 		assert!(to_delete.len() > 0);
 
 		for d in to_delete {
+			use std::os::unix::fs::MetadataExt;
+			if d.path().extension().unwrap_or_default() == "top" {
+				// if this is the top snapshot it must not be empty.
+				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
+			} else {
+				// the child is empty for this pallet.
+				assert!(std::fs::metadata(d.path()).unwrap().size() == 1);
+			}
 			std::fs::remove_file(d.path()).unwrap();
 		}
 	}
 
 	#[tokio::test]
-	#[ignore = "takes too much time on average."]
-	async fn can_fetch_all() {
+	async fn can_build_child_tree() {
 		init_logger();
 		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
+				pallets: vec!["Crowdloan".to_owned()],
+				..Default::default()
+			}))
 			.build()
 			.await
 			.expect(REMOTE_INACCESSIBLE)
 			.execute_with(|| {});
+	}
+
+	#[tokio::test]
+	async fn can_create_child_snapshot() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				state_snapshot: Some(SnapshotConfig::new("can_create_child_snapshot_data")),
+				pallets: vec!["Crowdloan".to_owned()],
+				..Default::default()
+			}))
+			.inject_default_child_tree_prefix()
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+		let to_delete = std::fs::read_dir(Path::new("."))
+			.unwrap()
+			.into_iter()
+			.map(|d| d.unwrap())
+			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "can_create_child_snapshot_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
+			})
+			.collect::<Vec<_>>();
+
+		assert!(to_delete.len() > 0);
+
+		for d in to_delete {
+			use std::os::unix::fs::MetadataExt;
+			// if this is the top snapshot it must not be empty
+			if d.path().extension().unwrap_or_default() == "child" {
+				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
+			} else {
+				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
+			}
+			std::fs::remove_file(d.path()).unwrap();
+		}
+	}
+
+	#[tokio::test]
+	async fn can_fetch_all() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				state_snapshot: Some(SnapshotConfig::new("can_fetch_all_data")),
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
+
+		let to_delete = std::fs::read_dir(Path::new("."))
+			.unwrap()
+			.into_iter()
+			.map(|d| d.unwrap())
+			.filter(|p| {
+				p.path().file_name().unwrap_or_default() == "can_fetch_all_data" ||
+					p.path().extension().unwrap_or_default() == "top" ||
+					p.path().extension().unwrap_or_default() == "child"
+			})
+			.collect::<Vec<_>>();
+
+		assert!(to_delete.len() > 0);
+
+		for d in to_delete {
+			use std::os::unix::fs::MetadataExt;
+			// if we download everything, child tree must also be filled.
+			if d.path().extension().unwrap_or_default() == "child" {
+				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
+			} else {
+				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
+			}
+			std::fs::remove_file(d.path()).unwrap();
+		}
 	}
 }
