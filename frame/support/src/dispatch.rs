@@ -280,7 +280,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 ///
 /// The following are reserved function signatures:
 ///
-/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
+/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.io/v3/runtime/events-and-errors).
 /// The default behavior is to call `deposit_event` from the [System
 /// module](../frame_system/index.html). However, you can write your own implementation for events
 /// in your runtime. To use the default behavior, add `fn deposit_event() = default;` to your
@@ -2151,6 +2151,34 @@ macro_rules! decl_module {
 					.expect("Pallet is part of the runtime because pallet `Config` trait is \
 						implemented by the runtime")
 			}
+
+			fn module_name() -> &'static str {
+				<
+					<$trait_instance as $system::Config>::PalletInfo as $crate::traits::PalletInfo
+				>::module_name::<Self>()
+					.expect("Pallet is part of the runtime because pallet `Config` trait is \
+						implemented by the runtime")
+			}
+
+			fn crate_version() -> $crate::traits::CrateVersion {
+				$crate::crate_to_crate_version!()
+			}
+		}
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::PalletsInfoAccess
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn count() -> usize { 1 }
+			fn accumulate(acc: &mut $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData>) {
+				use $crate::traits::PalletInfoAccess;
+				let item = $crate::traits::PalletInfoData {
+					index: Self::index(),
+					name: Self::name(),
+					module_name: Self::module_name(),
+					crate_version: Self::crate_version(),
+				};
+				acc.push(item);
+			}
 		}
 
 		// Implement GetCallName for the Call.
@@ -2529,8 +2557,8 @@ mod tests {
 	use crate::{
 		metadata::*,
 		traits::{
-			Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize, OnRuntimeUpgrade,
-			PalletInfo,
+			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
+			OnRuntimeUpgrade, PalletInfo,
 		},
 		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};
@@ -2629,6 +2657,22 @@ mod tests {
 			let type_id = sp_std::any::TypeId::of::<P>();
 			if type_id == sp_std::any::TypeId::of::<Test>() {
 				return Some("Test")
+			}
+
+			None
+		}
+		fn module_name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some("tests")
+			}
+
+			None
+		}
+		fn crate_version<P: 'static>() -> Option<CrateVersion> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some(frame_support::crate_to_crate_version!())
 			}
 
 			None

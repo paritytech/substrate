@@ -67,7 +67,6 @@ where
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
-	#[allow(deprecated)]
 	assert_eq!(blockchain.leaves().unwrap(), vec![a2.hash()]);
 
 	// A2 -> A3

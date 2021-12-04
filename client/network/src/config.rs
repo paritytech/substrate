@@ -23,7 +23,6 @@
 
 pub use crate::{
 	chain::Client,
-	on_demand_layer::{AlwaysBadChecker, OnDemand},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -82,11 +81,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
-
-	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
-	/// If `Some`, the network worker will process these requests and answer them.
-	/// Normally used only for light clients.
-	pub on_demand: Option<Arc<OnDemand<B>>>,
 
 	/// Pool of transactions.
 	///
@@ -155,14 +149,14 @@ pub enum Role {
 }
 
 impl Role {
-	/// True for `Role::Authority`
+	/// True for [`Role::Authority`].
 	pub fn is_authority(&self) -> bool {
-		matches!(self, Role::Authority { .. })
+		matches!(self, Self::Authority { .. })
 	}
 
-	/// True for `Role::Light`
+	/// True for [`Role::Light`].
 	pub fn is_light(&self) -> bool {
-		matches!(self, Role::Light { .. })
+		matches!(self, Self::Light { .. })
 	}
 }
 
@@ -329,7 +323,7 @@ impl FromStr for MultiaddrWithPeerId {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let (peer_id, multiaddr) = parse_str_addr(s)?;
-		Ok(MultiaddrWithPeerId { peer_id, multiaddr })
+		Ok(Self { peer_id, multiaddr })
 	}
 }
 

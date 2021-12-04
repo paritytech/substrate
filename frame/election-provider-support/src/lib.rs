@@ -364,15 +364,23 @@ pub trait SortedListProvider<AccountId> {
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///
 	/// This should typically only be used at a runtime upgrade.
-	fn regenerate(
+	///
+	/// ## WARNING
+	///
+	/// This function should be called with care, regenerate will remove the current list write the
+	/// new list, which can lead to too many storage accesses, exhausting the block weight.
+	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = AccountId>,
 		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
 	) -> u32;
 
-	/// Remove `maybe_count` number of items from the list. Returns the number of items actually
-	/// removed. WARNING: removes all items if `maybe_count` is `None`, which should never be done
-	/// in production settings because it can lead to an unbounded amount of storage accesses.
-	fn clear(maybe_count: Option<u32>) -> u32;
+	/// Remove all items from the list.
+	///
+	/// ## WARNING
+	///
+	/// This function should never be called in production settings because it can lead to an
+	/// unbounded amount of storage accesses.
+	fn unsafe_clear();
 
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
@@ -415,7 +423,7 @@ pub trait NposSolver {
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 }
 
-/// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`super::NposSolver`]. See the
+/// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
 /// documentation of [`sp_npos_elections::seq_phragmen`] for more info.
 pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
@@ -439,8 +447,8 @@ impl<
 	}
 }
 
-/// A wrapper for [`sp_npos_elections::phragmms`] that implements [`NposSolver`]. See the
-/// documentation of [`sp_npos_elections::phragmms`] for more info.
+/// A wrapper for [`sp_npos_elections::phragmms()`] that implements [`NposSolver`]. See the
+/// documentation of [`sp_npos_elections::phragmms()`] for more info.
 pub struct PhragMMS<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
 );

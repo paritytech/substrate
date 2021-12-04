@@ -318,9 +318,8 @@ macro_rules! impl_traits_for_arrays {
 				type SelfInstance = [u8; $n];
 
 				fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<[u8; $n]> {
-					let data = context.read_memory(Pointer::new(arg), $n)?;
 					let mut res = [0u8; $n];
-					res.copy_from_slice(&data);
+					context.read_memory_into(Pointer::new(arg), &mut res)?;
 					Ok(res)
 				}
 			}
@@ -514,10 +513,8 @@ macro_rules! for_u128_i128 {
 			type SelfInstance = $type;
 
 			fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<$type> {
-				let data =
-					context.read_memory(Pointer::new(arg), mem::size_of::<$type>() as u32)?;
 				let mut res = [0u8; mem::size_of::<$type>()];
-				res.copy_from_slice(&data);
+				context.read_memory_into(Pointer::new(arg), &mut res)?;
 				Ok(<$type>::from_le_bytes(res))
 			}
 		}

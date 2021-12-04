@@ -41,7 +41,8 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
+	Digest, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -57,6 +58,8 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 /// transferred to other nodes.
 pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
+const DEFAULT_SOFT_DEADLINE_PERCENT: Percent = Percent::from_percent(50);
+
 /// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -71,6 +74,14 @@ pub struct ProposerFactory<A, B, C, PR> {
 	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size
 	/// limit will be used.
 	default_block_size_limit: usize,
+	/// Soft deadline percentage of hard deadline.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	soft_deadline_percent: Percent,
 	telemetry: Option<TelemetryHandle>,
 	/// When estimating the block size, should the proof be included?
 	include_proof_in_block_size_estimation: bool,
@@ -95,6 +106,7 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
 			telemetry,
 			client,
 			include_proof_in_block_size_estimation: false,
@@ -123,6 +135,7 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
 			telemetry,
 			include_proof_in_block_size_estimation: true,
 			_phantom: PhantomData,
@@ -145,6 +158,22 @@ impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// will be used.
 	pub fn set_default_block_size_limit(&mut self, limit: usize) {
 		self.default_block_size_limit = limit;
+	}
+
+	/// Set soft deadline percentage.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	///
+	/// Setting the value too low will significantly limit the amount of transactions
+	/// we try in case they exhaust resources. Setting the value too high can
+	/// potentially open a DoS vector, where many "exhaust resources" transactions
+	/// are being tried with no success, hence block producer ends up creating an empty block.
+	pub fn set_soft_deadline(&mut self, percent: Percent) {
+		self.soft_deadline_percent = percent;
 	}
 }
 
@@ -183,6 +212,7 @@ where
 			now,
 			metrics: self.metrics.clone(),
 			default_block_size_limit: self.default_block_size_limit,
+			soft_deadline_percent: self.soft_deadline_percent,
 			telemetry: self.telemetry.clone(),
 			_phantom: PhantomData,
 			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
@@ -228,6 +258,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	metrics: PrometheusMetrics,
 	default_block_size_limit: usize,
 	include_proof_in_block_size_estimation: bool,
+	soft_deadline_percent: Percent,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<(B, PR)>,
 }
@@ -261,7 +292,7 @@ where
 	fn propose(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		max_duration: time::Duration,
 		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
@@ -270,6 +301,7 @@ where
 
 		spawn_handle.spawn_blocking(
 			"basic-authorship-proposer",
+			None,
 			Box::pin(async move {
 				// leave some time for evaluation and block finalization (33%)
 				let deadline = (self.now)() + max_duration - max_duration / 3;
@@ -285,6 +317,11 @@ where
 		async move { rx.await? }.boxed()
 	}
 }
+
+/// If the block is full we will attempt to push at most
+/// this number of transactions before quitting for real.
+/// It allows us to increase block utilization.
+const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
 impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 where
@@ -304,20 +341,28 @@ where
 	async fn propose_with(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
-		/// If the block is full we will attempt to push at most
-		/// this number of transactions before quitting for real.
-		/// It allows us to increase block utilization.
-		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
-
+		let propose_with_start = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
-		for inherent in block_builder.create_inherents(inherent_data)? {
+		let create_inherents_start = time::Instant::now();
+		let inherents = block_builder.create_inherents(inherent_data)?;
+		let create_inherents_end = time::Instant::now();
+
+		self.metrics.report(|metrics| {
+			metrics.create_inherents_time.observe(
+				create_inherents_end
+					.saturating_duration_since(create_inherents_start)
+					.as_secs_f64(),
+			);
+		});
+
+		for inherent in inherents {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
@@ -336,6 +381,12 @@ where
 		}
 
 		// proceed with transactions
+		// We calculate soft deadline used only in case we start skipping transactions.
+		let now = (self.now)();
+		let left = deadline.saturating_duration_since(now);
+		let left_micros: u64 = left.as_micros().saturated_into();
+		let soft_deadline =
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -344,7 +395,7 @@ where
 		let mut t2 =
 			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
 
-		let pending_iterator = select! {
+		let mut pending_iterator = select! {
 			res = t1 => res,
 			_ = t2 => {
 				log::warn!(
@@ -363,8 +414,9 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
-		for pending_tx in pending_iterator {
-			if (self.now)() > deadline {
+		while let Some(pending_tx) = pending_iterator.next() {
+			let now = (self.now)();
+			if now > deadline {
 				debug!(
 					"Consensus deadline reached when pushing block transactions, \
 					proceeding with proposing."
@@ -378,12 +430,20 @@ where
 			let block_size =
 				block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
 			if block_size + pending_tx_data.encoded_size() > block_size_limit {
+				pending_iterator.report_invalid(&pending_tx);
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
 					debug!(
 						"Transaction would overflow the block size limit, \
 						 but will try {} more transactions before quitting.",
 						MAX_SKIPPED_TRANSACTIONS - skipped,
+					);
+					continue
+				} else if now < soft_deadline {
+					debug!(
+						"Transaction would overflow the block size limit, \
+						 but we still have time before the soft deadline, so \
+						 we will try a bit more."
 					);
 					continue
 				} else {
@@ -400,11 +460,17 @@ where
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
+					pending_iterator.report_invalid(&pending_tx);
 					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
 						debug!(
 							"Block seems full, but will try {} more transactions before quitting.",
 							MAX_SKIPPED_TRANSACTIONS - skipped,
+						);
+					} else if (self.now)() < soft_deadline {
+						debug!(
+							"Block seems full, but we still have time before the soft deadline, \
+							 so we will try a bit more before quitting."
 						);
 					} else {
 						debug!("Block is full, proceed with proposing.");
@@ -412,6 +478,7 @@ where
 					}
 				},
 				Err(e) if skipped > 0 => {
+					pending_iterator.report_invalid(&pending_tx);
 					trace!(
 						"[{:?}] Ignoring invalid transaction when skipping: {}",
 						pending_tx_hash,
@@ -419,6 +486,7 @@ where
 					);
 				},
 				Err(e) => {
+					pending_iterator.report_invalid(&pending_tx);
 					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
 					unqueue_invalid.push(pending_tx_hash);
 				},
@@ -442,8 +510,9 @@ where
 		});
 
 		info!(
-			"🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
+			block_timer.elapsed().as_millis(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
 			block.extrinsics().len(),
@@ -473,6 +542,14 @@ where
 
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+
+		let propose_with_end = time::Instant::now();
+		self.metrics.report(|metrics| {
+			metrics.create_block_proposal_time.observe(
+				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
+			);
+		});
+
 		Ok(Proposal { block, proof, storage_changes })
 	}
 }
@@ -489,6 +566,7 @@ mod tests {
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
+	use sp_core::Pair;
 	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client::{
 		prelude::*,
@@ -506,6 +584,19 @@ mod tests {
 			to: Default::default(),
 		}
 		.into_signed_tx()
+	}
+
+	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
+		let pair = AccountKeyring::numeric(who);
+		let transfer = Transfer {
+			// increase the amount to bump priority
+			amount: 1,
+			nonce: 0,
+			from: pair.public(),
+			to: Default::default(),
+		};
+		let signature = pair.sign(&transfer.encode()).into();
+		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
 	}
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
@@ -553,7 +644,7 @@ mod tests {
 					return value.1
 				}
 				let old = value.1;
-				let new = old + time::Duration::from_secs(2);
+				let new = old + time::Duration::from_secs(1);
 				*value = (true, new);
 				old
 			}),
@@ -654,13 +745,8 @@ mod tests {
 		api.execute_block(&block_id, proposal.block).unwrap();
 
 		let state = backend.state_at(block_id).unwrap();
-		let changes_trie_state =
-			backend::changes_tries_state_at_block(&block_id, backend.changes_trie_storage())
-				.unwrap();
 
-		let storage_changes = api
-			.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
-			.unwrap();
+		let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,
@@ -718,7 +804,7 @@ mod tests {
 			);
 
 			// when
-			let deadline = time::Duration::from_secs(9);
+			let deadline = time::Duration::from_secs(900);
 			let block =
 				block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
 					.map(|r| r.block)
@@ -726,8 +812,8 @@ mod tests {
 
 			// then
 			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
 			assert_eq!(txpool.ready().count(), expected_pool_transactions);
+			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
 
 			block
 		};
@@ -740,6 +826,7 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
+		assert_eq!(txpool.ready().count(), 7);
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
@@ -753,6 +840,7 @@ mod tests {
 					.expect("there should be header"),
 			)),
 		);
+		assert_eq!(txpool.ready().count(), 5);
 
 		// now let's make sure that we can still make some progress
 		let block = propose_block(&client, 1, 2, 5);
@@ -844,5 +932,143 @@ mod tests {
 		// The block limit didn't changed, but we now include the proof in the estimation of the
 		// block size and thus, one less transaction should fit into the limit.
 		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
+	}
+
+	#[test]
+	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
+				(0..MAX_SKIPPED_TRANSACTIONS * 2)
+					.into_iter()
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let cell = Mutex::new(time::Instant::now());
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let old = *value;
+				*value = old + time::Duration::from_secs(1);
+				old
+			}),
+		);
+
+		// when
+		// give it enough time so that deadline is never triggered.
+		let deadline = time::Duration::from_secs(900);
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then block should have all non-exhaust resources extrinsics (+ the first one).
+		assert_eq!(block.extrinsics().len(), MAX_SKIPPED_TRANSACTIONS + 1);
+	}
+
+	#[test]
+	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				(0..MAX_SKIPPED_TRANSACTIONS + 2)
+					.into_iter()
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let deadline = time::Duration::from_secs(600);
+		let cell = Arc::new(Mutex::new((0, time::Instant::now())));
+		let cell2 = cell.clone();
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let (called, old) = *value;
+				// add time after deadline is calculated internally (hence 1)
+				let increase = if called == 1 {
+					// we start after the soft_deadline should have already been reached.
+					deadline / 2
+				} else {
+					// but we make sure to never reach the actual deadline
+					time::Duration::from_millis(0)
+				};
+				*value = (called + 1, old + increase);
+				old
+			}),
+		);
+
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then the block should have no transactions despite some in the pool
+		assert_eq!(block.extrinsics().len(), 1);
+		assert!(
+			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
+			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
+		);
 	}
 }

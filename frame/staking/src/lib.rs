@@ -157,17 +157,25 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! use frame_system::ensure_signed;
 //! use pallet_staking::{self as staking};
 //!
-//! pub trait Config: staking::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//! 	use super::*;
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
 //!
-//! decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
+//!
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config + staking::Config {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
 //!         /// Reward a validator.
-//!         #[weight = 0]
-//!         pub fn reward_myself(origin) -> dispatch::DispatchResult {
+//!         #[pallet::weight(0)]
+//!         pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
 //!             let reported = ensure_signed(origin)?;
 //!             <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
 //!             Ok(())
@@ -272,6 +280,7 @@
 //!   validators is stored in the Session pallet's `Validators` at the end of each era.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit = "256"]
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
@@ -293,7 +302,7 @@ mod pallet;
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::ElectionProvider;
 use frame_support::{
-	traits::{Currency, Get},
+	traits::{ConstU32, Currency, Get},
 	weights::Weight,
 };
 use scale_info::TypeInfo;
@@ -485,7 +494,9 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 	}
 
 	/// Re-bond funds that were scheduled for unlocking.
-	fn rebond(mut self, value: Balance) -> Self {
+	///
+	/// Returns the updated ledger, and the amount actually rebonded.
+	fn rebond(mut self, value: Balance) -> (Self, Balance) {
 		let mut unlocking_balance: Balance = Zero::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
@@ -506,7 +517,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
 			}
 		}
 
-		self
+		(self, unlocking_balance)
 	}
 }
 
@@ -623,12 +634,9 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 ///
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `pallet_session::Config`
 pub trait SessionInterface<AccountId>: frame_system::Config {
-	/// Disable a given validator by stash ID.
-	///
-	/// Returns `true` if new era should be forced at the end of this session.
-	/// This allows preventing a situation where there is too many validators
-	/// disabled and block production stalls.
-	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
+	/// Disable the validator at the given index, returns `false` if the validator was already
+	/// disabled or the index is out of bounds.
+	fn disable_validator(validator_index: u32) -> bool;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -649,8 +657,8 @@ where
 		Option<<T as frame_system::Config>::AccountId>,
 	>,
 {
-	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> Result<bool, ()> {
-		<pallet_session::Pallet<T>>::disable(validator)
+	fn disable_validator(validator_index: u32) -> bool {
+		<pallet_session::Pallet<T>>::disable_index(validator_index)
 	}
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
@@ -805,4 +813,24 @@ where
 	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
+}
+
+/// Configurations of the benchmarking of the pallet.
+pub trait BenchmarkingConfig {
+	/// The maximum number of validators to use.
+	type MaxValidators: Get<u32>;
+	/// The maximum number of nominators to use.
+	type MaxNominators: Get<u32>;
+}
+
+/// A mock benchmarking config for pallet-staking.
+///
+/// Should only be used for testing.
+#[cfg(feature = "std")]
+pub struct TestBenchmarkingConfig;
+
+#[cfg(feature = "std")]
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	type MaxValidators = ConstU32<100>;
+	type MaxNominators = ConstU32<100>;
 }

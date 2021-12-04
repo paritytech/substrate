@@ -266,8 +266,7 @@ fn create_project_cargo_toml(
 	let mut package = Table::new();
 	package.insert("name".into(), format!("{}-wasm", crate_name).into());
 	package.insert("version".into(), "1.0.0".into());
-	package.insert("edition".into(), "2018".into());
-	package.insert("resolver".into(), "2".into());
+	package.insert("edition".into(), "2021".into());
 
 	wasm_workspace_toml.insert("package".into(), package.into());
 
@@ -436,6 +435,10 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 		// exclusive). The runner project is created in `CARGO_TARGET_DIR` and executing it will
 		// create a sub target directory inside of `CARGO_TARGET_DIR`.
 		.env_remove("CARGO_TARGET_DIR")
+		// As we are being called inside a build-script, this env variable is set. However, we set
+		// our own `RUSTFLAGS` and thus, we need to remove this. Otherwise cargo favors this
+		// env variable.
+		.env_remove("CARGO_ENCODED_RUSTFLAGS")
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 

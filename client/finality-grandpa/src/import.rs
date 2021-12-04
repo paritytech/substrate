@@ -19,7 +19,7 @@
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use log::debug;
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::Decode;
 
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sc_consensus::{
@@ -35,7 +35,7 @@ use sp_core::hashing::twox_128;
 use sp_finality_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
 
@@ -89,7 +89,6 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 	for GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	SC: SelectChain<Block>,
@@ -118,10 +117,10 @@ where
 						)
 						.await
 				} else {
-					Ok(Some(pending_change.canon_hash))
+					Ok(pending_change.canon_hash)
 				};
 
-				if let Ok(Some(hash)) = effective_block_hash {
+				if let Ok(hash) = effective_block_hash {
 					if let Ok(Some(header)) = self.inner.header(BlockId::Hash(hash)) {
 						if *header.number() == pending_change.effective_number() {
 							out.push((header.hash(), *header.number()));
@@ -229,7 +228,6 @@ pub fn find_forced_change<B: BlockT>(
 impl<BE, Block: BlockT, Client, SC> GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
@@ -515,7 +513,6 @@ where
 impl<BE, Block: BlockT, Client, SC> BlockImport<Block> for GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
@@ -549,6 +546,32 @@ where
 
 		if block.with_state() {
 			return self.import_state(block, new_cache).await
+		}
+
+		if number <= self.inner.info().finalized_number {
+			// Importing an old block. Just save justifications and authority set changes
+			if self.check_new_change(&block.header, hash).is_some() {
+				if block.justifications.is_none() {
+					return Err(ConsensusError::ClientImport(
+						"Justification required when importing \
+							an old block with authority set change."
+							.into(),
+					))
+				}
+				assert!(block.justifications.is_some());
+				let mut authority_set = self.authority_set.inner_locked();
+				authority_set.authority_set_changes.insert(number);
+				crate::aux_schema::update_authority_set::<Block, _, _>(
+					&authority_set,
+					None,
+					|insert| {
+						block
+							.auxiliary
+							.extend(insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
+					},
+				);
+			}
+			return (&*self.inner).import_block(block, new_cache).await
 		}
 
 		// on initial sync we will restrict logging under info to avoid spam.

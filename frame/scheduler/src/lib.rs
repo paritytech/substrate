@@ -58,7 +58,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime},
-		EnsureOrigin, Get, IsType, OriginTrait,
+		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -69,7 +69,7 @@ use sp_runtime::{
 	traits::{BadOrigin, One, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*};
+use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
@@ -160,6 +160,15 @@ pub mod pallet {
 		/// Required origin to schedule or cancel calls.
 		type ScheduleOrigin: EnsureOrigin<<Self as system::Config>::Origin>;
 
+		/// Compare the privileges of origins.
+		///
+		/// This will be used when canceling a task, to ensure that the origin that tries
+		/// to cancel has greater or equal privileges as the origin that created the scheduled task.
+		///
+		/// For simplicity the [`EqualPrivilegeOnly`](frame_support::traits::EqualPrivilegeOnly) can
+		/// be used. This will only check if two given origins are equal.
+		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
+
 		/// The maximum number of scheduled calls in the queue for a single block.
 		/// Not strictly enforced, but used for weight estimation.
 		#[pallet::constant]
@@ -194,12 +203,16 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Scheduled some task. \[when, index\]
-		Scheduled(T::BlockNumber, u32),
-		/// Canceled some task. \[when, index\]
-		Canceled(T::BlockNumber, u32),
-		/// Dispatched some task. \[task, id, result\]
-		Dispatched(TaskAddress<T::BlockNumber>, Option<Vec<u8>>, DispatchResult),
+		/// Scheduled some task.
+		Scheduled { when: T::BlockNumber, index: u32 },
+		/// Canceled some task.
+		Canceled { when: T::BlockNumber, index: u32 },
+		/// Dispatched some task.
+		Dispatched {
+			task: TaskAddress<T::BlockNumber>,
+			id: Option<Vec<u8>>,
+			result: DispatchResult,
+		},
 	}
 
 	#[pallet::error]
@@ -234,16 +247,6 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute the scheduled calls
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - N = Named scheduled calls
-		/// - P = Periodic Calls
-		/// - Base Weight: 9.243 + 23.45 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda + Lookup * N + Agenda(Future) * P
-		///     - Write: Agenda + Lookup * N  + Agenda(future) * P
-		/// # </weight>
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let limit = T::MaximumWeight::get();
 			let mut queued = Agenda::<T>::take(now)
@@ -320,11 +323,11 @@ pub mod pallet {
 								Lookup::<T>::remove(id);
 							}
 						}
-						Self::deposit_event(Event::Dispatched(
-							(now, index),
-							maybe_id,
-							r.map(|_| ()).map_err(|e| e.error),
-						));
+						Self::deposit_event(Event::Dispatched {
+							task: (now, index),
+							id: maybe_id,
+							result: r.map(|_| ()).map_err(|e| e.error),
+						});
 						total_weight = cumulative_weight;
 						None
 					} else {
@@ -343,15 +346,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Anonymously schedule a task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 22.29 + .126 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda
-		///     - Write: Agenda
-		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule(
 			origin: OriginFor<T>,
@@ -373,15 +367,6 @@ pub mod pallet {
 		}
 
 		/// Cancel an anonymously scheduled task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 22.15 + 2.869 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -391,15 +376,6 @@ pub mod pallet {
 		}
 
 		/// Schedule a named task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 29.6 + .159 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named(
 			origin: OriginFor<T>,
@@ -423,15 +399,6 @@ pub mod pallet {
 		}
 
 		/// Cancel a named scheduled task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 24.91 + 2.907 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -600,7 +567,7 @@ impl<T: Config> Pallet<T> {
 				expected from the runtime configuration. An update might be needed.",
 			);
 		}
-		Self::deposit_event(Event::Scheduled(when, index));
+		Self::deposit_event(Event::Scheduled { when, index });
 
 		Ok((when, index))
 	}
@@ -614,7 +581,10 @@ impl<T: Config> Pallet<T> {
 				Ok(None),
 				|s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-						if *o != s.origin {
+						if matches!(
+							T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
+							Some(Ordering::Less) | None
+						) {
 							return Err(BadOrigin.into())
 						}
 					};
@@ -626,7 +596,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
-			Self::deposit_event(Event::Canceled(when, index));
+			Self::deposit_event(Event::Canceled { when, index });
 			Ok(())
 		} else {
 			Err(Error::<T>::NotFound)?
@@ -651,8 +621,8 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-		Self::deposit_event(Event::Canceled(when, index));
-		Self::deposit_event(Event::Scheduled(new_time, new_index));
+		Self::deposit_event(Event::Canceled { when, index });
+		Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
 
 		Ok((new_time, new_index))
 	}
@@ -697,7 +667,7 @@ impl<T: Config> Pallet<T> {
 		}
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
-		Self::deposit_event(Event::Scheduled(when, index));
+		Self::deposit_event(Event::Scheduled { when, index });
 
 		Ok(address)
 	}
@@ -709,7 +679,10 @@ impl<T: Config> Pallet<T> {
 				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
 					if let Some(s) = agenda.get_mut(i) {
 						if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-							if *o != s.origin {
+							if matches!(
+								T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
+								Some(Ordering::Less) | None
+							) {
 								return Err(BadOrigin.into())
 							}
 						}
@@ -717,7 +690,7 @@ impl<T: Config> Pallet<T> {
 					}
 					Ok(())
 				})?;
-				Self::deposit_event(Event::Canceled(when, index));
+				Self::deposit_event(Event::Canceled { when, index });
 				Ok(())
 			} else {
 				Err(Error::<T>::NotFound)?
@@ -749,8 +722,8 @@ impl<T: Config> Pallet<T> {
 				})?;
 
 				let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-				Self::deposit_event(Event::Canceled(when, index));
-				Self::deposit_event(Event::Scheduled(new_time, new_index));
+				Self::deposit_event(Event::Canceled { when, index });
+				Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
 
 				*lookup = Some((new_time, new_index));
 
@@ -832,11 +805,11 @@ mod tests {
 	use crate as scheduler;
 	use frame_support::{
 		assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{Contains, OnFinalize, OnInitialize},
+		traits::{Contains, EnsureOneOf, EqualPrivilegeOnly, OnFinalize, OnInitialize},
 		weights::constants::RocksDbWeight,
 		Hashable,
 	};
-	use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+	use frame_system::{EnsureRoot, EnsureSignedBy};
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
@@ -977,9 +950,10 @@ mod tests {
 		type PalletsOrigin = OriginCaller;
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
-		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+		type ScheduleOrigin = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
+		type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	}
 
 	pub type LoggerCall = logger::Call<Test>;

@@ -159,6 +159,9 @@ parameter_types! {
 	pub static EpochLength: u64 = 30;
 	// by default we stick to 3 pages to host our 12 voters.
 	pub static VoterSnapshotPerBlock: VoterIndex = 4;
+	pub static TargetSnapshotPerBlock: TargetIndex = 8; // TODO: test
+	pub static Lookahead: BlockNumber = 0; // TODO: test
+
 	// we have 12 voters in the default setting, this should be enough to make sure they are not
 	// trimmed accidentally in any test.
 	pub static MaxBackingCountPerTarget: u32 = 12;
@@ -275,7 +278,9 @@ impl crate::Config for Runtime {
 	type DataProvider = MockStaking;
 	type BenchmarkingConfig = ();
 	type Fallback = MockFallback;
+	type TargetSnapshotPerBlock = TargetSnapshotPerBlock;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
+	type Lookahead = Lookahead;
 	type Solution = TestNposSolution;
 	type WeightInfo = DualMockWeightInfo;
 	type Verifier = VerifierPallet;

@@ -78,10 +78,12 @@ impl frame_system::Config for Test {
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
+	pub const OperationalFeeMultiplier: u8 = 5;
 }
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
+	type OperationalFeeMultiplier = OperationalFeeMultiplier;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
@@ -161,9 +163,9 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(
 			events(),
 			[
-				Event::System(system::Event::NewAccount(1)),
-				Event::Balances(crate::Event::Endowed(1, 100)),
-				Event::Balances(crate::Event::BalanceSet(1, 100, 0)),
+				Event::System(system::Event::NewAccount { account: 1 }),
+				Event::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
+				Event::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
 			]
 		);
 
@@ -171,7 +173,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(res, (NegativeImbalance::new(98), 0));
 
 		// no events
-		assert_eq!(events(), []);
+		assert_eq!(events(), [Event::Balances(crate::Event::Slashed { who: 1, amount: 98 })]);
 
 		let res = Balances::slash(&1, 1);
 		assert_eq!(res, (NegativeImbalance::new(1), 0));
@@ -179,8 +181,9 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(
 			events(),
 			[
-				Event::System(system::Event::KilledAccount(1)),
-				Event::Balances(crate::Event::DustLost(1, 1)),
+				Event::System(system::Event::KilledAccount { account: 1 }),
+				Event::Balances(crate::Event::DustLost { account: 1, amount: 1 }),
+				Event::Balances(crate::Event::Slashed { who: 1, amount: 1 })
 			]
 		);
 	});

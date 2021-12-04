@@ -44,7 +44,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		details.owner = dest;
 		Asset::<T, I>::insert(&class, &instance, &details);
 
-		Self::deposit_event(Event::Transferred(class, instance, origin, details.owner));
+		Self::deposit_event(Event::Transferred {
+			class,
+			instance,
+			from: origin,
+			to: details.owner,
+		});
 		Ok(())
 	}
 
@@ -80,6 +85,41 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub(super) fn do_destroy_class(
+		class: T::ClassId,
+		witness: DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> Result<DestroyWitness, DispatchError> {
+		Class::<T, I>::try_mutate_exists(class, |maybe_details| {
+			let class_details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
+			if let Some(check_owner) = maybe_check_owner {
+				ensure!(class_details.owner == check_owner, Error::<T, I>::NoPermission);
+			}
+			ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
+			ensure!(
+				class_details.instance_metadatas == witness.instance_metadatas,
+				Error::<T, I>::BadWitness
+			);
+			ensure!(class_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
+
+			for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
+				Account::<T, I>::remove((&details.owner, &class, &instance));
+			}
+			InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
+			ClassMetadataOf::<T, I>::remove(&class);
+			Attribute::<T, I>::remove_prefix((&class,), None);
+			T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
+
+			Self::deposit_event(Event::Destroyed { class });
+
+			Ok(DestroyWitness {
+				instances: class_details.instances,
+				instance_metadatas: class_details.instance_metadatas,
+				attributes: class_details.attributes,
+			})
+		})
+	}
+
 	pub(super) fn do_mint(
 		class: T::ClassId,
 		instance: T::InstanceId,
@@ -111,7 +151,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		Self::deposit_event(Event::Issued(class, instance, owner));
+		Self::deposit_event(Event::Issued { class, instance, owner });
 		Ok(())
 	}
 
@@ -139,7 +179,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Asset::<T, I>::remove(&class, &instance);
 		Account::<T, I>::remove((&owner, &class, &instance));
 
-		Self::deposit_event(Event::Burned(class, instance, owner));
+		Self::deposit_event(Event::Burned { class, instance, owner });
 		Ok(())
 	}
 }

@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	state_machine_call, SharedParams, State, LOG_TARGET,
+	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
 };
 use remote_externalities::rpc_api;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -143,7 +143,7 @@ where
 
 		let builder = if command.overwrite_wasm_code {
 			let (code_key, code) = extract_code(&config.chain_spec)?;
-			builder.inject_key_value(&[(code_key, code)])
+			builder.inject_hashed_key_value(&[(code_key, code)])
 		} else {
 			builder.inject_hashed_key(well_known_keys::CODE)
 		};
@@ -167,7 +167,7 @@ where
 	)
 	.await;
 
-	let _ = state_machine_call::<Block, ExecDispatch>(
+	let _ = state_machine_call_with_proof::<Block, ExecDispatch>(
 		&ext,
 		&executor,
 		execution,

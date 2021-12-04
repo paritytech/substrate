@@ -1,14 +1,14 @@
 [package]
 name = "node-template"
 version = "3.0.0"
-authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 description = "A fresh FRAME-based Substrate node, ready for hacking."
-edition = "2018"
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+homepage = "https://substrate.io/"
+edition = "2021"
 license = "Unlicense"
-build = "build.rs"
-homepage = "https://substrate.dev"
-repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 publish = false
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+build = "build.rs"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 name = "node-template"
 
 [dependencies]
-structopt = "0.3.8"
+structopt = "0.3.25"
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }

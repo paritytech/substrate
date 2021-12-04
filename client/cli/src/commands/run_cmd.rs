@@ -58,7 +58,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
@@ -89,7 +89,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
@@ -126,6 +126,10 @@ pub struct RunCmd {
 	/// Maximum number of WS RPC server connections.
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
+
+	/// Set the the maximum WebSocket output buffer size in MiB. Default is 16.
+	#[structopt(long = "ws-max-out-buffer-capacity")]
+	pub ws_max_out_buffer_capacity: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	///
@@ -241,6 +245,8 @@ pub struct RunCmd {
 	///
 	/// Note: the directory is random per process execution. This directory is used as base path
 	/// which includes: database, node key and keystore.
+	///
+	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
 }
@@ -432,6 +438,10 @@ impl CliConfiguration for RunCmd {
 		Ok(self.rpc_max_payload)
 	}
 
+	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
+		Ok(self.ws_max_out_buffer_capacity)
+	}
+
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		Ok(self.pool_config.transaction_pool())
 	}
@@ -444,7 +454,12 @@ impl CliConfiguration for RunCmd {
 		Ok(if self.tmp {
 			Some(BasePath::new_temp_dir()?)
 		} else {
-			self.shared_params().base_path()
+			match self.shared_params().base_path() {
+				Some(r) => Some(r),
+				// If `dev` is enabled, we use the temp base path.
+				None if self.shared_params().is_dev() => Some(BasePath::new_temp_dir()?),
+				None => None,
+			}
 		})
 	}
 }

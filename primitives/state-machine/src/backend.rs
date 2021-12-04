@@ -21,9 +21,9 @@ use crate::{
 	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage, ChildStorageCollection,
 	StorageCollection, StorageKey, StorageValue, UsageInfo,
 };
-use codec::{Decode, Encode};
+use codec::Encode;
 use hash_db::Hasher;
-use sp_core::storage::{well_known_keys, ChildInfo, TrackedStorageKey};
+use sp_core::storage::{ChildInfo, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
@@ -292,32 +292,6 @@ impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMem
 	}
 }
 
-/// Insert input pairs into memory db.
-#[cfg(test)]
-pub(crate) fn insert_into_memory_db<H, I>(
-	mdb: &mut sp_trie::MemoryDB<H>,
-	input: I,
-) -> Option<H::Out>
-where
-	H: Hasher,
-	I: IntoIterator<Item = (StorageKey, StorageValue)>,
-{
-	use sp_trie::{trie_types::TrieDBMut, TrieMut};
-
-	let mut root = <H as Hasher>::Out::default();
-	{
-		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
-		for (key, value) in input {
-			if let Err(e) = trie.insert(&key, &value) {
-				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None
-			}
-		}
-	}
-
-	Some(root)
-}
-
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
 #[cfg(feature = "std")]
 pub struct BackendRuntimeCode<'a, B, H> {
@@ -330,7 +304,11 @@ impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
 	for BackendRuntimeCode<'a, B, H>
 {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
-		self.backend.storage(well_known_keys::CODE).ok().flatten().map(Into::into)
+		self.backend
+			.storage(sp_core::storage::well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.map(Into::into)
 	}
 }
 
@@ -348,17 +326,17 @@ where
 	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
 		let hash = self
 			.backend
-			.storage_hash(well_known_keys::CODE)
+			.storage_hash(sp_core::storage::well_known_keys::CODE)
 			.ok()
 			.flatten()
 			.ok_or("`:code` hash not found")?
 			.encode();
 		let heap_pages = self
 			.backend
-			.storage(well_known_keys::HEAP_PAGES)
+			.storage(sp_core::storage::well_known_keys::HEAP_PAGES)
 			.ok()
 			.flatten()
-			.and_then(|d| Decode::decode(&mut &d[..]).ok());
+			.and_then(|d| codec::Decode::decode(&mut &d[..]).ok());
 
 		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
 	}

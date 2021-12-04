@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, OnFinalize, OnInitialize};
 use frame_system::{EventRecord, Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One, Zero};
@@ -109,7 +109,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
 	verify {
 		assert!(!BlockTransactions::<T>::get().is_empty());
-		assert_last_event::<T>(Event::Stored(0).into());
+		assert_last_event::<T>(Event::Stored { index: 0 }.into());
 	}
 
 	renew {
@@ -122,7 +122,7 @@ benchmarks! {
 		run_to_block::<T>(1u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
 	verify {
-		assert_last_event::<T>(Event::Renewed(0).into());
+		assert_last_event::<T>(Event::Renewed { index: 0 }.into());
 	}
 
 	check_proof_max {
@@ -143,6 +143,6 @@ benchmarks! {
 	verify {
 		assert_last_event::<T>(Event::ProofChecked.into());
 	}
-}
 
-impl_benchmark_test_suite!(TransactionStorage, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(TransactionStorage, crate::mock::new_test_ext(), crate::mock::Test);
+}

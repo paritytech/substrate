@@ -710,8 +710,7 @@ impl<B: BlockT> Protocol<B> {
 		match self.sync.on_state_data(&peer_id, response) {
 			Ok(sync::OnStateData::Import(origin, block)) =>
 				CustomMessageOutcome::BlockImport(origin, vec![block]),
-			Ok(sync::OnStateData::Request(peer, req)) =>
-				prepare_state_request::<B>(&mut self.peers, peer, req),
+			Ok(sync::OnStateData::Continue) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -728,10 +727,7 @@ impl<B: BlockT> Protocol<B> {
 		response: crate::warp_request_handler::EncodedProof,
 	) -> CustomMessageOutcome<B> {
 		match self.sync.on_warp_sync_data(&peer_id, response) {
-			Ok(sync::OnWarpSyncData::WarpProofRequest(peer, req)) =>
-				prepare_warp_sync_request::<B>(&mut self.peers, peer, req),
-			Ok(sync::OnWarpSyncData::StateRequest(peer, req)) =>
-				prepare_state_request::<B>(&mut self.peers, peer, req),
+			Ok(()) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -1106,7 +1102,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Returns the list of reserved peers.
@@ -1116,12 +1112,26 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
 	}
 
 	/// Sets the list of reserved peers for syncing purposes.
 	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers.clone());
+		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers);
+	}
+
+	/// Sets the list of reserved peers for the given protocol/peerset.
+	pub fn set_reserved_peerset_peers(&self, protocol: Cow<'static, str>, peers: HashSet<PeerId>) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.peerset_handle
+				.set_reserved_peers(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peers);
+		} else {
+			error!(
+				target: "sub-libp2p",
+				"set_reserved_peerset_peers with unknown protocol: {}",
+				protocol
+			);
+		}
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
@@ -1352,8 +1362,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
-		self.behaviour.inject_connection_established(peer_id, conn, endpoint)
+		self.behaviour
+			.inject_connection_established(peer_id, conn, endpoint, failed_addresses)
 	}
 
 	fn inject_connection_closed(
@@ -1361,8 +1373,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
-		self.behaviour.inject_connection_closed(peer_id, conn, endpoint)
+		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler)
 	}
 
 	fn inject_connected(&mut self, peer_id: &PeerId) {
@@ -1386,12 +1399,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent
-		>
-	>{
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
@@ -1552,10 +1560,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+			Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
+			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 					peer_id,
@@ -1768,17 +1776,13 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		Poll::Pending
 	}
 
-	fn inject_addr_reach_failure(
+	fn inject_dial_failure(
 		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn std::error::Error,
+		peer_id: Option<PeerId>,
+		handler: Self::ProtocolsHandler,
+		error: &libp2p::swarm::DialError,
 	) {
-		self.behaviour.inject_addr_reach_failure(peer_id, addr, error)
-	}
-
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_dial_failure(peer_id)
+		self.behaviour.inject_dial_failure(peer_id, handler, error);
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {

@@ -18,6 +18,7 @@
 //! Traits and associated utilities for scheduling dispatchables in FRAME.
 
 use codec::{Codec, Decode, Encode, EncodeLike};
+use scale_info::TypeInfo;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -31,7 +32,7 @@ pub type Period<BlockNumber> = (BlockNumber, u32);
 pub type Priority = u8;
 
 /// The dispatch time of a scheduled task.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum DispatchTime<BlockNumber> {
 	/// At specified block.
 	At(BlockNumber),

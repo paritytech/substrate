@@ -27,9 +27,9 @@
 //! started via the [`start_mining_worker`] function. It returns a worker
 //! handle together with a future. The future must be pulled. Through
 //! the worker handle, you can pull the metadata needed to start the
-//! mining process via [`MiningWorker::metadata`], and then do the actual
+//! mining process via [`MiningHandle::metadata`], and then do the actual
 //! mining on a standalone thread. Finally, when a seal is found, call
-//! [`MiningWorker::submit`] to build the block.
+//! [`MiningHandle::submit`] to build the block.
 //!
 //! The auxiliary storage for PoW engine only stores the total difficulty.
 //! For other storage requirements for particular PoW algorithm (such as
@@ -41,13 +41,12 @@
 
 mod worker;
 
-pub use crate::worker::{MiningBuild, MiningMetadata, MiningWorker};
+pub use crate::worker::{MiningBuild, MiningHandle, MiningMetadata};
 
 use crate::worker::UntilImportedOrTimeout;
 use codec::{Decode, Encode};
 use futures::{Future, StreamExt};
 use log::*;
-use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use sc_client_api::{self, backend::AuxStore, BlockOf, BlockchainEvents};
 use sc_consensus::{
@@ -56,7 +55,7 @@ use sc_consensus::{
 };
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};
+use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend};
 use sp_consensus::{
 	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
@@ -241,7 +240,7 @@ where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
-	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
@@ -320,7 +319,7 @@ where
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	S: SelectChain<B>,
-	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
 	Algorithm::Difficulty: 'static + Send,
@@ -426,10 +425,7 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 		Self { algorithm, _marker: PhantomData }
 	}
 
-	fn check_header(
-		&self,
-		mut header: B::Header,
-	) -> Result<(B::Header, DigestItem<B::Hash>), Error<B>>
+	fn check_header(&self, mut header: B::Header) -> Result<(B::Header, DigestItem), Error<B>>
 	where
 		Algorithm: PowAlgorithm<B>,
 	{
@@ -525,7 +521,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 	build_time: Duration,
 	can_author_with: CAW,
 ) -> (
-	Arc<Mutex<MiningWorker<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>>>,
+	MiningHandle<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>,
 	impl Future<Output = ()>,
 )
 where
@@ -543,12 +539,7 @@ where
 	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 {
 	let mut timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
-	let worker = Arc::new(Mutex::new(MiningWorker {
-		build: None,
-		algorithm: algorithm.clone(),
-		block_import,
-		justification_sync_link,
-	}));
+	let worker = MiningHandle::new(algorithm.clone(), block_import, justification_sync_link);
 	let worker_ret = worker.clone();
 
 	let task = async move {
@@ -559,7 +550,7 @@ where
 
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
-				worker.lock().on_major_syncing();
+				worker.on_major_syncing();
 				continue
 			}
 
@@ -587,7 +578,7 @@ where
 				continue
 			}
 
-			if worker.lock().best_hash() == Some(best_hash) {
+			if worker.best_hash() == Some(best_hash) {
 				continue
 			}
 
@@ -636,7 +627,7 @@ where
 				},
 			};
 
-			let mut inherent_digest = Digest::<Block::Hash>::default();
+			let mut inherent_digest = Digest::default();
 			if let Some(pre_runtime) = &pre_runtime {
 				inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, pre_runtime.to_vec()));
 			}
@@ -682,7 +673,7 @@ where
 				proposal,
 			};
 
-			worker.lock().on_build(build);
+			worker.on_build(build);
 		}
 	};
 
@@ -708,10 +699,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 }
 
 /// Fetch PoW seal.
-fn fetch_seal<B: BlockT>(
-	digest: Option<&DigestItem<B::Hash>>,
-	hash: B::Hash,
-) -> Result<Vec<u8>, Error<B>> {
+fn fetch_seal<B: BlockT>(digest: Option<&DigestItem>, hash: B::Hash) -> Result<Vec<u8>, Error<B>> {
 	match digest {
 		Some(DigestItem::Seal(id, seal)) =>
 			if id == &POW_ENGINE_ID {

@@ -59,7 +59,7 @@ where
 		Some(module) => increment_64(&mut module.refcount),
 		None => {
 			*existing = Some(prefab_module);
-			Contracts::<T>::deposit_event(Event::CodeStored(code_hash))
+			Contracts::<T>::deposit_event(Event::CodeStored { code_hash })
 		},
 	});
 }
@@ -170,7 +170,7 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	<PristineCode<T>>::remove(code_hash);
-	Contracts::<T>::deposit_event(Event::CodeRemoved(code_hash))
+	Contracts::<T>::deposit_event(Event::CodeRemoved { code_hash })
 }
 
 /// Increment the refcount panicking if it should ever overflow (which will not happen).

@@ -27,29 +27,25 @@ use sc_client_db::{
 use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
 };
-use sc_service::client::{self, new_in_mem, Client, LocalCallExecutor};
+use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
-use sp_core::{blake2_256, testing::TaskExecutor, ChangesTrieConfiguration, H256};
+use sp_core::{testing::TaskExecutor, H256};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
-	ConsensusEngineId, DigestItem, Justifications,
+	ConsensusEngineId, Justifications,
 };
 use sp_state_machine::{
 	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
 };
 use sp_storage::{ChildInfo, StorageKey};
 use sp_trie::{trie_types::Layout, TrieConfiguration};
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{
-		self,
 		genesismap::{insert_genesis_block, GenesisConfig},
 		Block, BlockNumber, Digest, Hash, Header, RuntimeApi, Transfer,
 	},
@@ -58,7 +54,6 @@ use substrate_test_runtime_client::{
 };
 
 mod db;
-mod light;
 
 const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
@@ -78,86 +73,6 @@ impl sc_executor::NativeExecutionDispatch for ExecutorDispatch {
 
 fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
 	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
-}
-
-pub fn prepare_client_with_key_changes() -> (
-	client::Client<
-		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::ExecutorDispatch,
-		Block,
-		RuntimeApi,
-	>,
-	Vec<H256>,
-	Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
-) {
-	// prepare block structure
-	let blocks_transfers = vec![
-		vec![
-			(AccountKeyring::Alice, AccountKeyring::Dave),
-			(AccountKeyring::Bob, AccountKeyring::Dave),
-		],
-		vec![(AccountKeyring::Charlie, AccountKeyring::Eve)],
-		vec![],
-		vec![(AccountKeyring::Alice, AccountKeyring::Dave)],
-	];
-
-	// prepare client ang import blocks
-	let mut local_roots = Vec::new();
-	let config = Some(ChangesTrieConfiguration::new(4, 2));
-	let mut remote_client = TestClientBuilder::new().changes_trie_config(config).build();
-	let mut nonces: HashMap<_, u64> = Default::default();
-	for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
-		let mut builder = remote_client.new_block(Default::default()).unwrap();
-		for (from, to) in block_transfers {
-			builder
-				.push_transfer(Transfer {
-					from: from.into(),
-					to: to.into(),
-					amount: 1,
-					nonce: *nonces.entry(from).and_modify(|n| *n = *n + 1).or_default(),
-				})
-				.unwrap();
-		}
-		let block = builder.build().unwrap().block;
-		block_on(remote_client.import(BlockOrigin::Own, block)).unwrap();
-
-		let header = remote_client.header(&BlockId::Number(i as u64 + 1)).unwrap().unwrap();
-		let trie_root = header
-			.digest()
-			.log(DigestItem::as_changes_trie_root)
-			.map(|root| H256::from_slice(root.as_ref()))
-			.unwrap();
-		local_roots.push(trie_root);
-	}
-
-	// prepare test cases
-	let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
-	let bob = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
-	let charlie =
-		blake2_256(&runtime::system::balance_of_key(AccountKeyring::Charlie.into())).to_vec();
-	let dave = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
-	let eve = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
-	let ferdie =
-		blake2_256(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
-	let test_cases = vec![
-		(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
-		(1, 3, alice.clone(), vec![(1, 0)]),
-		(2, 4, alice.clone(), vec![(4, 0)]),
-		(2, 3, alice.clone(), vec![]),
-		(1, 4, bob.clone(), vec![(1, 1)]),
-		(1, 1, bob.clone(), vec![(1, 1)]),
-		(2, 4, bob.clone(), vec![]),
-		(1, 4, charlie.clone(), vec![(2, 0)]),
-		(1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
-		(1, 1, dave.clone(), vec![(1, 1), (1, 0)]),
-		(3, 4, dave.clone(), vec![(4, 0)]),
-		(1, 4, eve.clone(), vec![(2, 0)]),
-		(1, 1, eve.clone(), vec![]),
-		(3, 4, eve.clone(), vec![]),
-		(1, 4, ferdie.clone(), vec![]),
-	];
-
-	(remote_client, local_roots, test_cases)
 }
 
 fn construct_block(
@@ -187,7 +102,6 @@ fn construct_block(
 
 	StateMachine::new(
 		backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_initialize_block",
@@ -202,7 +116,6 @@ fn construct_block(
 	for tx in transactions.iter() {
 		StateMachine::new(
 			backend,
-			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_apply_extrinsic",
@@ -217,7 +130,6 @@ fn construct_block(
 
 	let ret_data = StateMachine::new(
 		backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"BlockBuilder_finalize_block",
@@ -251,7 +163,6 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 #[test]
 fn construct_genesis_should_work_with_native() {
 	let mut storage = GenesisConfig::new(
-		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000,
@@ -270,7 +181,6 @@ fn construct_genesis_should_work_with_native() {
 
 	let _ = StateMachine::new(
 		&backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_execute_block",
@@ -286,7 +196,6 @@ fn construct_genesis_should_work_with_native() {
 #[test]
 fn construct_genesis_should_work_with_wasm() {
 	let mut storage = GenesisConfig::new(
-		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000,
@@ -305,7 +214,6 @@ fn construct_genesis_should_work_with_wasm() {
 
 	let _ = StateMachine::new(
 		&backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_execute_block",
@@ -321,7 +229,6 @@ fn construct_genesis_should_work_with_wasm() {
 #[test]
 fn construct_genesis_with_bad_transaction_should_panic() {
 	let mut storage = GenesisConfig::new(
-		None,
 		vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		68,
@@ -340,7 +247,6 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 
 	let r = StateMachine::new(
 		&backend,
-		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
 		&executor(),
 		"Core_execute_block",
@@ -481,25 +387,7 @@ fn best_containing_with_genesis_block() {
 
 	assert_eq!(
 		genesis_hash.clone(),
-		block_on(longest_chain_select.finality_target(genesis_hash.clone(), None))
-			.unwrap()
-			.unwrap(),
-	);
-}
-
-#[test]
-fn best_containing_with_hash_not_found() {
-	// block tree:
-	// G
-
-	let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
-
-	let uninserted_block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-
-	assert_eq!(
-		None,
-		block_on(longest_chain_select.finality_target(uninserted_block.hash().clone(), None))
-			.unwrap(),
+		block_on(longest_chain_select.finality_target(genesis_hash.clone(), None)).unwrap(),
 	);
 }
 
@@ -675,22 +563,10 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 
 	assert_eq!(
 		a2.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, None))
-			.unwrap()
-			.unwrap()
+		block_on(longest_chain_select.finality_target(genesis_hash, None)).unwrap()
 	);
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(a1.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(a2.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
+	assert_eq!(a2.hash(), block_on(longest_chain_select.finality_target(a1.hash(), None)).unwrap());
+	assert_eq!(a2.hash(), block_on(longest_chain_select.finality_target(a2.hash(), None)).unwrap());
 }
 
 #[test]
@@ -819,343 +695,101 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	assert!(leaves.contains(&d2.hash()));
 	assert_eq!(leaves.len(), 4);
 
+	let finality_target = |target_hash, number| {
+		block_on(longest_chain_select.finality_target(target_hash, number)).unwrap()
+	};
+
 	// search without restriction
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a1.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a2.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a3.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a4.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a5.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b2.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b3.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b4.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		c3.hash(),
-		block_on(longest_chain_select.finality_target(c3.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		d2.hash(),
-		block_on(longest_chain_select.finality_target(d2.hash(), None))
-			.unwrap()
-			.unwrap()
-	);
+	assert_eq!(a5.hash(), finality_target(genesis_hash, None));
+	assert_eq!(a5.hash(), finality_target(a1.hash(), None));
+	assert_eq!(a5.hash(), finality_target(a2.hash(), None));
+	assert_eq!(a5.hash(), finality_target(a3.hash(), None));
+	assert_eq!(a5.hash(), finality_target(a4.hash(), None));
+	assert_eq!(a5.hash(), finality_target(a5.hash(), None));
+	assert_eq!(b4.hash(), finality_target(b2.hash(), None));
+	assert_eq!(b4.hash(), finality_target(b3.hash(), None));
+	assert_eq!(b4.hash(), finality_target(b4.hash(), None));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), None));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), None));
 
 	// search only blocks with number <= 5. equivalent to without restriction for this scenario
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a1.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a2.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a3.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a4.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a5.hash(),
-		block_on(longest_chain_select.finality_target(a5.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b2.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b3.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b4.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		c3.hash(),
-		block_on(longest_chain_select.finality_target(c3.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		d2.hash(),
-		block_on(longest_chain_select.finality_target(d2.hash(), Some(5)))
-			.unwrap()
-			.unwrap()
-	);
+	assert_eq!(a5.hash(), finality_target(genesis_hash, Some(5)));
+	assert_eq!(a5.hash(), finality_target(a1.hash(), Some(5)));
+	assert_eq!(a5.hash(), finality_target(a2.hash(), Some(5)));
+	assert_eq!(a5.hash(), finality_target(a3.hash(), Some(5)));
+	assert_eq!(a5.hash(), finality_target(a4.hash(), Some(5)));
+	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(5)));
+	assert_eq!(b4.hash(), finality_target(b2.hash(), Some(5)));
+	assert_eq!(b4.hash(), finality_target(b3.hash(), Some(5)));
+	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(5)));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(5)));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(5)));
 
 	// search only blocks with number <= 4
-	assert_eq!(
-		a4.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a4.hash(),
-		block_on(longest_chain_select.finality_target(a1.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a4.hash(),
-		block_on(longest_chain_select.finality_target(a2.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a4.hash(),
-		block_on(longest_chain_select.finality_target(a3.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a4.hash(),
-		block_on(longest_chain_select.finality_target(a4.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a5.hash(), Some(4))).unwrap());
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b2.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b3.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b4.hash(),
-		block_on(longest_chain_select.finality_target(b4.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		c3.hash(),
-		block_on(longest_chain_select.finality_target(c3.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		d2.hash(),
-		block_on(longest_chain_select.finality_target(d2.hash(), Some(4)))
-			.unwrap()
-			.unwrap()
-	);
+	assert_eq!(a4.hash(), finality_target(genesis_hash, Some(4)));
+	assert_eq!(a4.hash(), finality_target(a1.hash(), Some(4)));
+	assert_eq!(a4.hash(), finality_target(a2.hash(), Some(4)));
+	assert_eq!(a4.hash(), finality_target(a3.hash(), Some(4)));
+	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(4)));
+	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(4)));
+	assert_eq!(b4.hash(), finality_target(b2.hash(), Some(4)));
+	assert_eq!(b4.hash(), finality_target(b3.hash(), Some(4)));
+	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(4)));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(4)));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(4)));
 
 	// search only blocks with number <= 3
-	assert_eq!(
-		a3.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(3)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a3.hash(),
-		block_on(longest_chain_select.finality_target(a1.hash(), Some(3)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a3.hash(),
-		block_on(longest_chain_select.finality_target(a2.hash(), Some(3)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a3.hash(),
-		block_on(longest_chain_select.finality_target(a3.hash(), Some(3)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a4.hash(), Some(3))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a5.hash(), Some(3))).unwrap());
-	assert_eq!(
-		b3.hash(),
-		block_on(longest_chain_select.finality_target(b2.hash(), Some(3)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		b3.hash(),
-		block_on(longest_chain_select.finality_target(b3.hash(), Some(3)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b4.hash(), Some(3))).unwrap());
-	assert_eq!(
-		c3.hash(),
-		block_on(longest_chain_select.finality_target(c3.hash(), Some(3)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		d2.hash(),
-		block_on(longest_chain_select.finality_target(d2.hash(), Some(3)))
-			.unwrap()
-			.unwrap()
-	);
+	assert_eq!(a3.hash(), finality_target(genesis_hash, Some(3)));
+	assert_eq!(a3.hash(), finality_target(a1.hash(), Some(3)));
+	assert_eq!(a3.hash(), finality_target(a2.hash(), Some(3)));
+	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(3)));
+	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(3)));
+	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(3)));
+	assert_eq!(b3.hash(), finality_target(b2.hash(), Some(3)));
+	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(3)));
+	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(3)));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(3)));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(3)));
 
 	// search only blocks with number <= 2
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(2)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(a1.hash(), Some(2)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a2.hash(),
-		block_on(longest_chain_select.finality_target(a2.hash(), Some(2)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a3.hash(), Some(2))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a4.hash(), Some(2))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a5.hash(), Some(2))).unwrap());
-	assert_eq!(
-		b2.hash(),
-		block_on(longest_chain_select.finality_target(b2.hash(), Some(2)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b3.hash(), Some(2))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b4.hash(), Some(2))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(c3.hash(), Some(2))).unwrap());
-	assert_eq!(
-		d2.hash(),
-		block_on(longest_chain_select.finality_target(d2.hash(), Some(2)))
-			.unwrap()
-			.unwrap()
-	);
+	assert_eq!(a2.hash(), finality_target(genesis_hash, Some(2)));
+	assert_eq!(a2.hash(), finality_target(a1.hash(), Some(2)));
+	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(2)));
+	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(2)));
+	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(2)));
+	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(2)));
+	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(2)));
+	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(2)));
+	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(2)));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(2)));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(2)));
 
 	// search only blocks with number <= 1
-	assert_eq!(
-		a1.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(1)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(
-		a1.hash(),
-		block_on(longest_chain_select.finality_target(a1.hash(), Some(1)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a2.hash(), Some(1))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a3.hash(), Some(1))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a4.hash(), Some(1))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a5.hash(), Some(1))).unwrap());
+	assert_eq!(a1.hash(), finality_target(genesis_hash, Some(1)));
+	assert_eq!(a1.hash(), finality_target(a1.hash(), Some(1)));
+	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(1)));
+	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(1)));
+	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(1)));
+	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(1)));
 
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b2.hash(), Some(1))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b3.hash(), Some(1))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b4.hash(), Some(1))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(c3.hash(), Some(1))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(d2.hash(), Some(1))).unwrap());
+	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(1)));
+	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(1)));
+	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(1)));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(1)));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(1)));
 
 	// search only blocks with number <= 0
-	assert_eq!(
-		genesis_hash,
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(0)))
-			.unwrap()
-			.unwrap()
-	);
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a1.hash(), Some(0))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a2.hash(), Some(0))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a3.hash(), Some(0))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a4.hash(), Some(0))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(a5.hash(), Some(0))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b2.hash(), Some(0))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b3.hash(), Some(0))).unwrap());
-	assert_eq!(None, block_on(longest_chain_select.finality_target(b4.hash(), Some(0))).unwrap());
-	assert_eq!(
-		None,
-		block_on(longest_chain_select.finality_target(c3.hash().clone(), Some(0))).unwrap(),
-	);
-	assert_eq!(
-		None,
-		block_on(longest_chain_select.finality_target(d2.hash().clone(), Some(0))).unwrap(),
-	);
+	assert_eq!(genesis_hash, finality_target(genesis_hash, Some(0)));
+	assert_eq!(a1.hash(), finality_target(a1.hash(), Some(0)));
+	assert_eq!(a2.hash(), finality_target(a2.hash(), Some(0)));
+	assert_eq!(a3.hash(), finality_target(a3.hash(), Some(0)));
+	assert_eq!(a4.hash(), finality_target(a4.hash(), Some(0)));
+	assert_eq!(a5.hash(), finality_target(a5.hash(), Some(0)));
+	assert_eq!(b2.hash(), finality_target(b2.hash(), Some(0)));
+	assert_eq!(b3.hash(), finality_target(b3.hash(), Some(0)));
+	assert_eq!(b4.hash(), finality_target(b4.hash(), Some(0)));
+	assert_eq!(c3.hash(), finality_target(c3.hash(), Some(0)));
+	assert_eq!(d2.hash(), finality_target(d2.hash(), Some(0)));
 }
 
 #[test]
@@ -1177,27 +811,8 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 
 	assert_eq!(
 		a2.hash(),
-		block_on(longest_chain_select.finality_target(genesis_hash, Some(10)))
-			.unwrap()
-			.unwrap(),
+		block_on(longest_chain_select.finality_target(genesis_hash, Some(10))).unwrap(),
 	);
-}
-
-#[test]
-fn key_changes_works() {
-	let (client, _, test_cases) = prepare_client_with_key_changes();
-
-	for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
-		let end = client.block_hash(end).unwrap().unwrap();
-		let actual_result =
-			client.key_changes(begin, BlockId::Hash(end), None, &StorageKey(key)).unwrap();
-		if actual_result != expected_result {
-			panic!(
-				"Failed test {}: actual = {:?}, expected = {:?}",
-				index, actual_result, expected_result,
-			);
-		}
-	}
 }
 
 #[test]
@@ -1506,12 +1121,8 @@ fn doesnt_import_blocks_that_revert_finality() {
 	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 	let import_err = block_on(client.import(BlockOrigin::Own, b3)).err().unwrap();
-	let expected_err = ConsensusError::ClientImport(
-		sp_blockchain::Error::RuntimeApiError(sp_api::ApiError::Application(Box::new(
-			sp_blockchain::Error::NotInFinalizedChain,
-		)))
-		.to_string(),
-	);
+	let expected_err =
+		ConsensusError::ClientImport(sp_blockchain::Error::NotInFinalizedChain.to_string());
 
 	assert_eq!(import_err.to_string(), expected_err.to_string());
 
@@ -1814,152 +1425,6 @@ fn returns_status_for_pruned_blocks() {
 }
 
 #[test]
-fn imports_blocks_with_changes_tries_config_change() {
-	// create client with initial 4^2 configuration
-	let mut client = TestClientBuilder::with_default_backend()
-		.changes_trie_config(Some(ChangesTrieConfiguration {
-			digest_interval: 4,
-			digest_levels: 2,
-		}))
-		.build();
-
-	// ===================================================================
-	// blocks 1,2,3,4,5,6,7,8,9,10 are empty
-	// block 11 changes the key
-	// block 12 is the L1 digest that covers this change
-	// blocks 13,14,15,16,17,18,19,20,21,22 are empty
-	// block 23 changes the configuration to 5^1 AND is skewed digest
-	// ===================================================================
-	// blocks 24,25 are changing the key
-	// block 26 is empty
-	// block 27 changes the key
-	// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to
-	// `3^1`
-	// ===================================================================
-	// block 29 is empty
-	// block 30 changes the key
-	// block 31 is L1 digest that covers this change
-	// ===================================================================
-	(1..11).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(11..12).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(12..23).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(23..24).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_changes_trie_configuration_update(Some(ChangesTrieConfiguration {
-				digest_interval: 5,
-				digest_levels: 1,
-			}))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(24..26).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(26..27).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(27..28).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(28..29).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_changes_trie_configuration_update(Some(ChangesTrieConfiguration {
-				digest_interval: 3,
-				digest_levels: 1,
-			}))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(29..30).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(30..31).for_each(|number| {
-		let mut block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap();
-		block
-			.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec()))
-			.unwrap();
-		let block = block.build().unwrap().block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-	(31..32).for_each(|number| {
-		let block = client
-			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
-			.unwrap()
-			.build()
-			.unwrap()
-			.block;
-		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-	});
-
-	// now check that configuration cache works
-	assert_eq!(
-		client.key_changes(1, BlockId::Number(31), None, &StorageKey(vec![42])).unwrap(),
-		vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
-	);
-}
-
-#[test]
 fn storage_keys_iter_prefix_and_start_key_works() {
 	let child_info = ChildInfo::new_default(b"child");
 	let client = TestClientBuilder::new()
@@ -2033,12 +1498,21 @@ fn storage_keys_iter_works() {
 	let res: Vec<_> = client
 		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
 		.unwrap()
-		.take(2)
-		.map(|x| x.0)
+		.take(8)
+		.map(|x| hex::encode(&x.0))
 		.collect();
 	assert_eq!(
 		res,
-		[hex!("0befda6e1ca4ef40219d588a727f1271").to_vec(), hex!("3a636f6465").to_vec()]
+		[
+			"00c232cf4e70a5e343317016dc805bf80a6a8cd8ad39958d56f99891b07851e0",
+			"085b2407916e53a86efeb8b72dbe338c4b341dab135252f96b6ed8022209b6cb",
+			"0befda6e1ca4ef40219d588a727f1271",
+			"1a560ecfd2a62c2b8521ef149d0804eb621050e3988ed97dca55f0d7c3e6aa34",
+			"1d66850d32002979d67dd29dc583af5b2ae2a1f71c1f35ad90fff122be7a3824",
+			"237498b98d8803334286e9f0483ef513098dd3c1c22ca21c4dc155b4ef6cc204",
+			"29b9db10ec5bf7907d8f74b5e60aa8140c4fbdd8127a1ee5600cb98e5ec01729",
+			"3a636f6465",
+		]
 	);
 
 	let res: Vec<_> = client
@@ -2048,15 +1522,19 @@ fn storage_keys_iter_works() {
 			Some(&StorageKey(hex!("3a636f6465").to_vec())),
 		)
 		.unwrap()
-		.take(3)
-		.map(|x| x.0)
+		.take(7)
+		.map(|x| hex::encode(&x.0))
 		.collect();
 	assert_eq!(
 		res,
 		[
-			hex!("3a686561707061676573").to_vec(),
-			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
-			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
+			"3a686561707061676573",
+			"52008686cc27f6e5ed83a216929942f8bcd32a396f09664a5698f81371934b56",
+			"5348d72ac6cc66e5d8cbecc27b0e0677503b845fe2382d819f83001781788fd5",
+			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
+			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
+			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
+			"79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d",
 		]
 	);
 
@@ -2069,12 +1547,18 @@ fn storage_keys_iter_works() {
 			)),
 		)
 		.unwrap()
-		.take(1)
-		.map(|x| x.0)
+		.take(5)
+		.map(|x| hex::encode(x.0))
 		.collect();
 	assert_eq!(
 		res,
-		[hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]
+		[
+			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
+			"811ecfaadcf5f2ee1d67393247e2f71a1662d433e8ce7ff89fb0d4aa9561820b",
+			"a93d74caa7ec34ea1b04ce1e5c090245f867d333f0f88278a451e45299654dc5",
+			"a9ee1403384afbfc13f13be91ff70bfac057436212e53b9733914382ac942892",
+			"cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f",
+		]
 	);
 }
 
@@ -2085,12 +1569,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	// NOTE: we need to build the client here instead of using the client
 	// provided by test_runtime_client otherwise we can't access the private
 	// `import_notification_sinks` and `finality_notification_sinks` fields.
-	let mut client = new_in_mem::<
-		_,
-		substrate_test_runtime_client::runtime::Block,
-		_,
-		substrate_test_runtime_client::runtime::RuntimeApi,
-	>(
+	let mut client = new_in_mem::<_, Block, _, RuntimeApi>(
 		substrate_test_runtime_client::new_native_executor(),
 		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 		None,
@@ -2108,8 +1587,8 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			in_mem::Backend<Block>,
 			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
 		>,
-		substrate_test_runtime_client::runtime::Block,
-		substrate_test_runtime_client::runtime::RuntimeApi,
+		Block,
+		RuntimeApi,
 	>;
 
 	let import_notif1 = client.import_notification_stream();
