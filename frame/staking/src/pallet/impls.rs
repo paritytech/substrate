@@ -952,8 +952,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Validators<T>>::remove_all();
 		<Nominators<T>>::remove_all();
 
-		<CounterForNominators<T>>::kill();
-		<CounterForValidators<T>>::kill();
 		T::SortedListProvider::unsafe_clear();
 	}
 
@@ -1296,8 +1294,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn unsafe_clear() {
 		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
 		// condition of SortedListProvider::unsafe_clear.
-		Nominators::<T>::remove_all(None);
-		CounterForNominators::<T>::take();
-
+		Nominators::<T>::remove_all();
 	}
 }
