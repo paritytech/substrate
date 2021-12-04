@@ -42,7 +42,7 @@ std = [
 	"frame-benchmarking/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 ]

@@ -285,7 +285,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
-use sp_state_machine::{OverlayedChanges, StateMachine};
+use sp_state_machine::{InMemoryProvingBackend, OverlayedChanges, StateMachine};
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
@@ -462,6 +462,14 @@ pub enum State {
 		/// The pallets to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
 		pallets: Option<Vec<String>>,
+
+		/// Fetch the child-keys as well.
+		///
+		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other
+		/// words, if you scrape the whole state the child tree data is included out of the box.
+		/// Otherwise, it must be enabled explicitly using this flag.
+		#[structopt(long, require_delimiter = true)]
+		child_tree: bool,
 	},
 }
 
@@ -477,21 +485,26 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live { snapshot_path, pallets, uri, at } => {
+			State::Live { snapshot_path, pallets, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
 				};
-				Builder::<Block>::new()
+				let mut builder = Builder::<Block>::new()
 					.mode(Mode::Online(OnlineConfig {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallets.to_owned().unwrap_or_default(),
+						pallets: pallets.clone().unwrap_or_default(),
 						at,
+						..Default::default()
 					}))
 					.inject_hashed_key(
 						&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
-					)
+					);
+				if *child_tree {
+					builder = builder.inject_default_child_tree_prefix();
+				}
+				builder
 			},
 		})
 	}
@@ -694,6 +707,85 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
+	Ok((changes, encoded_results))
+}
+
+/// Same as [`state_machine_call`], but it also computes and prints the storage proof in different
+/// size and formats.
+///
+/// Make sure [`LOG_TARGET`] is enabled in logging.
+pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDispatch + 'static>(
+	ext: &TestExternalities,
+	executor: &NativeElseWasmExecutor<D>,
+	execution: sc_cli::ExecutionStrategy,
+	method: &'static str,
+	data: &[u8],
+	extensions: Extensions,
+) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
+	use parity_scale_codec::Encode;
+	use sp_core::hexdisplay::HexDisplay;
+
+	let mut changes = Default::default();
+	let backend = ext.backend.clone();
+	let proving_backend = InMemoryProvingBackend::new(&backend);
+
+	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
+	let runtime_code = runtime_code_backend.runtime_code()?;
+
+	let pre_root = backend.root().clone();
+
+	let encoded_results = StateMachine::new(
+		&proving_backend,
+		&mut changes,
+		executor,
+		method,
+		data,
+		extensions,
+		&runtime_code,
+		sp_core::testing::TaskExecutor::new(),
+	)
+	.execute(execution.into())
+	.map_err(|e| format!("failed to execute {}: {:?}", method, e))
+	.map_err::<sc_cli::Error, _>(Into::into)?;
+
+	let proof = proving_backend.extract_proof();
+	let proof_size = proof.encoded_size();
+	let compact_proof = proof
+		.clone()
+		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
+		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
+
+	let compact_proof_size = compact_proof.encoded_size();
+	let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0)
+		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
+
+	let proof_nodes = proof.into_nodes();
+
+	let humanize = |s| {
+		if s < 1024 * 1024 {
+			format!("{:.2} KB ({} bytes)", s as f64 / 1024f64, s)
+		} else {
+			format!(
+				"{:.2} MB ({} KB) ({} bytes)",
+				s as f64 / (1024f64 * 1024f64),
+				s as f64 / 1024f64,
+				s
+			)
+		}
+	};
+	log::info!(
+		target: LOG_TARGET,
+		"proof: {} / {} nodes",
+		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
+		proof_nodes.len()
+	);
+	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
+	log::info!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
+	log::info!(
+		target: LOG_TARGET,
+		"zstd-compressed compact proof {}",
+		humanize(compressed_proof.len()),
+	);
 	Ok((changes, encoded_results))
 }
 

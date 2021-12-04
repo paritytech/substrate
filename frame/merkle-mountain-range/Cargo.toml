@@ -46,5 +46,5 @@ std = [
 	"frame-system/std",
 	"pallet-mmr-primitives/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

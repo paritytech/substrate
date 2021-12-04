@@ -33,7 +33,7 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-featu
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking", "hex-literal"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "hex-literal"]
 std = [
 	"serde",
 	"codec/std",
