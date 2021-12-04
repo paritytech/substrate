@@ -29,7 +29,7 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, Zero},
+	traits::{Bounded, One, StaticLookup, Zero, TrailingZeroInput},
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
@@ -669,7 +669,7 @@ benchmarks! {
 		let e in 1 .. 100;
 		HistoryDepth::<T>::put(e);
 		CurrentEra::<T>::put(e);
-		let dummy = || -> AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
+		let dummy = || -> T::AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
 		for i in 0 .. e {
 			<ErasStakers<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
 			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
