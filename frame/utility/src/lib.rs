@@ -109,14 +109,14 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
-		/// well as the error. \[index, error\]
-		BatchInterrupted(u32, DispatchError),
+		/// well as the error.
+		BatchInterrupted { index: u32, error: DispatchError },
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
-		/// A call was dispatched. \[result\]
-		DispatchedAs(DispatchResult),
+		/// A call was dispatched.
+		DispatchedAs { result: DispatchResult },
 	}
 
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
@@ -217,7 +217,10 @@ pub mod pallet {
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
-					Self::deposit_event(Event::BatchInterrupted(index as u32, e.error));
+					Self::deposit_event(Event::BatchInterrupted {
+						index: index as u32,
+						error: e.error,
+					});
 					// Take the weight of this function itself into account.
 					let base_weight = T::WeightInfo::batch(index.saturating_add(1) as u32);
 					// Return the actual used weight + base_weight of this call.
@@ -377,7 +380,9 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter((*as_origin).into());
 
-			Self::deposit_event(Event::DispatchedAs(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::DispatchedAs {
+				result: res.map(|_| ()).map_err(|e| e.error),
+			});
 			Ok(())
 		}
 	}

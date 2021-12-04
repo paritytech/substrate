@@ -127,7 +127,7 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 /// Meaning that fees can change by around ~23% per day, given extreme congestion.
 ///
 /// More info can be found at:
-/// <https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html>
+/// <https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html>
 pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
 
 /// Something that can convert the current multiplier to the next one.
@@ -1363,11 +1363,15 @@ mod tests {
 				));
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
-				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer(
-					2, 3, 80,
-				)));
+				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer {
+					from: 2,
+					to: 3,
+					amount: 80,
+				}));
 				// Killed Event
-				System::assert_has_event(Event::System(system::Event::KilledAccount(2)));
+				System::assert_has_event(Event::System(system::Event::KilledAccount {
+					account: 2,
+				}));
 			});
 	}
 

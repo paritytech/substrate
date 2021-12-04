@@ -36,7 +36,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
@@ -971,7 +971,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		<Nominators<T>>::remove_all(None);
 		<CounterForNominators<T>>::kill();
 		<CounterForValidators<T>>::kill();
-		let _ = T::SortedListProvider::clear(None);
+		T::SortedListProvider::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1137,6 +1137,7 @@ where
 		>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
+		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight: Weight = 0;
@@ -1206,6 +1207,7 @@ where
 				window_start,
 				now: active_era,
 				reward_proportion,
+				disable_strategy,
 			});
 
 			if let Some(mut unapplied) = unapplied {
@@ -1297,7 +1299,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn on_remove(_: &T::AccountId) {
 		// nothing to do on remove.
 	}
-	fn regenerate(
+	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
 		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
@@ -1307,13 +1309,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-	fn clear(maybe_count: Option<u32>) -> u32 {
-		Nominators::<T>::remove_all(maybe_count);
-		if let Some(count) = maybe_count {
-			CounterForNominators::<T>::mutate(|noms| *noms - count);
-			count
-		} else {
-			CounterForNominators::<T>::take()
-		}
+	fn unsafe_clear() {
+		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
+		// condition of SortedListProvider::unsafe_clear.
+		Nominators::<T>::remove_all(None);
+		CounterForNominators::<T>::take();
 	}
 }

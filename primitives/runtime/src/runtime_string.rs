@@ -92,6 +92,18 @@ impl AsRef<[u8]> for RuntimeString {
 	}
 }
 
+#[cfg(feature = "std")]
+impl std::ops::Deref for RuntimeString {
+	type Target = str;
+
+	fn deref(&self) -> &str {
+		match self {
+			Self::Borrowed(val) => &val,
+			Self::Owned(val) => &val,
+		}
+	}
+}
+
 impl Encode for RuntimeString {
 	fn encode(&self) -> Vec<u8> {
 		match self {

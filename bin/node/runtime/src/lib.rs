@@ -26,7 +26,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		Currency, EnsureOneOf, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
+		ConstU32, Currency, EnsureOneOf, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
 		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
@@ -87,7 +87,7 @@ pub use sp_runtime::BuildStorage;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::Author;
+use impls::{Author, CreditToBlockAuthor};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -432,6 +432,14 @@ impl pallet_transaction_payment::Config for Runtime {
 		TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
 }
 
+impl pallet_asset_tx_payment::Config for Runtime {
+	type Fungibles = Assets;
+	type OnChargeAssetTransaction = pallet_asset_tx_payment::FungiblesAdapter<
+		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
+		CreditToBlockAuthor,
+	>;
+}
+
 parameter_types! {
 	pub const MinimumPeriod: Moment = SLOT_DURATION / 2;
 }
@@ -507,6 +515,12 @@ impl onchain::Config for Runtime {
 	type DataProvider = Staking;
 }
 
+pub struct StakingBenchmarkingConfig;
+impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
+	type MaxNominators = ConstU32<1000>;
+	type MaxValidators = ConstU32<1000>;
+}
+
 impl pallet_staking::Config for Runtime {
 	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
 	type Currency = Balances;
@@ -535,6 +549,7 @@ impl pallet_staking::Config for Runtime {
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
+	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
 
 parameter_types! {
@@ -582,8 +597,8 @@ pub const MAX_NOMINATIONS: u32 = <NposSolution16 as sp_npos_elections::NposSolut
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
 /// to ensure election snapshot will not run out of memory. For now, we set them to smaller values
 /// since the staking is bounded and the weight pipeline takes hours for this single pallet.
-pub struct BenchmarkConfig;
-impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfig {
+pub struct ElectionProviderBenchmarkConfig;
+impl pallet_election_provider_multi_phase::BenchmarkingConfig for ElectionProviderBenchmarkConfig {
 	const VOTERS: [u32; 2] = [1000, 2000];
 	const TARGETS: [u32; 2] = [500, 1000];
 	const ACTIVE_VOTERS: [u32; 2] = [500, 800];
@@ -648,7 +663,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	>;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
-	type BenchmarkingConfig = BenchmarkConfig;
+	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 }
 
@@ -964,7 +979,7 @@ where
 			frame_system::CheckEra::<Runtime>::from(era),
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+			pallet_asset_tx_payment::ChargeAssetTxPayment::<Runtime>::from(tip, None),
 		);
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
@@ -1163,7 +1178,7 @@ parameter_types! {
 
 impl pallet_assets::Config for Runtime {
 	type Event = Event;
-	type Balance = u64;
+	type Balance = u128;
 	type AssetId = u32;
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
@@ -1248,10 +1263,13 @@ construct_runtime!(
 		Utility: pallet_utility,
 		Babe: pallet_babe,
 		Timestamp: pallet_timestamp,
+		// Authorship must be before session in order to note author in the correct session and era
+		// for im-online and staking.
 		Authorship: pallet_authorship,
 		Indices: pallet_indices,
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
+		AssetTxPayment: pallet_asset_tx_payment,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
 		Staking: pallet_staking,
 		Session: pallet_session,
@@ -1310,7 +1328,7 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
-	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+	pallet_asset_tx_payment::ChargeAssetTxPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
@@ -1324,7 +1342,7 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllPallets,
+	AllPalletsWithSystem,
 	pallet_bags_list::migrations::CheckCounterPrefix<Runtime>,
 >;
 
@@ -1545,7 +1563,7 @@ impl_runtime_apis! {
 		Block,
 		mmr::Hash,
 	> for Runtime {
-		fn generate_proof(leaf_index: u64)
+		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
 			Mmr::generate_proof(leaf_index)

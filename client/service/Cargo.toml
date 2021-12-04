@@ -34,7 +34,7 @@ exit-future = "0.2.0"
 pin-project = "1.0.8"
 hash-db = "0.15.2"
 serde = "1.0.126"
-serde_json = "1.0.68"
+serde_json = "1.0.71"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
@@ -78,7 +78,7 @@ parity-util-mem = { version = "0.10.2", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.50"
-tokio = { version = "1.10", features = ["time", "rt-multi-thread"] }
+tokio = { version = "1.13", features = ["time", "rt-multi-thread"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
 

@@ -41,6 +41,7 @@ sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = 
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
+sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
@@ -94,6 +95,7 @@ pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-utility = { version = "4.0.0-dev", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/asset-tx-payment/" }
 pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-storage" }
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
@@ -174,7 +176,7 @@ std = [
   "sp-io/std"
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-election-provider-multi-phase/runtime-benchmarks",
@@ -257,3 +259,8 @@ try-runtime = [
 # Make contract callable functions marked as __unstable__ available. Do not enable
 # on live chains as those are subject to change.
 contracts-unstable-interface = ["pallet-contracts/unstable-interface"]
+# Force `sp-sandbox` to call into the host resident executor. One still need to make sure
+# that `sc-executor` gets the `wasmer-sandbox` feature which happens automatically when
+# specified on the command line.
+# Don't use that on a production chain.
+wasmer-sandbox = ["sp-sandbox/wasmer-sandbox"]

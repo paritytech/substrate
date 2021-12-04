@@ -57,36 +57,6 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 	}
 }
 
-/// The "AND gate" implementation of `EnsureOrigin`.
-///
-/// Origin check will pass if `L` and `R` origin check passes. `L` is tested first.
-pub struct EnsureBothOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
-impl<OuterOrigin: Clone, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
-	EnsureOrigin<OuterOrigin> for EnsureBothOf<L, R>
-{
-	type Success = (L::Success, R::Success);
-	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
-		L::try_origin(o.clone()).map_or_else(|o| Err(o), |l| R::try_origin(o).map(|r| (l, r)))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		Self::try_origin(L::successful_origin()).map_or_else(
-			|_| L::successful_origin(),
-			|_| {
-				Self::try_origin(R::successful_origin()).map_or_else(
-					|_| R::successful_origin(),
-					|_| {
-						panic!(
-							"It is impossible to generate successful origin from the provided ones"
-						)
-					},
-				)
-			},
-		)
-	}
-}
-
 /// Type that can be dispatched with an origin but without checking the origin filter.
 ///
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
@@ -144,6 +114,26 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 }
 
+/// The "OR gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+
+impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
+	EnsureOrigin<OuterOrigin> for EnsureOneOf<L, R>
+{
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o)
+			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		L::successful_origin()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -157,7 +147,7 @@ mod tests {
 			Ok(())
 		}
 		#[cfg(feature = "runtime-benchmarks")]
-		fn successful_origin() -> OuterOrigin {
+		fn successful_origin() -> () {
 			()
 		}
 	}
@@ -168,7 +158,7 @@ mod tests {
 			Err(())
 		}
 		#[cfg(feature = "runtime-benchmarks")]
-		fn successful_origin() -> OuterOrigin {
+		fn successful_origin() -> () {
 			()
 		}
 	}
@@ -179,13 +169,5 @@ mod tests {
 		assert!(<EnsureOneOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_ok());
 		assert!(<EnsureOneOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_ok());
 		assert!(<EnsureOneOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
-	}
-
-	#[test]
-	fn ensure_both_of_test() {
-		assert!(<EnsureBothOf<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
-		assert!(<EnsureBothOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_err());
-		assert!(<EnsureBothOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_err());
-		assert!(<EnsureBothOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
 	}
 }

@@ -928,7 +928,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NotCallable`
-	[__unstable__] seal_call(
+	[seal1] seal_call(
 		ctx,
 		flags: u32,
 		callee_ptr: u32,
@@ -940,7 +940,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| "used rerved bit in CallFlags")?,
+			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
 			callee_ptr,
 			gas,
 			value_ptr,
