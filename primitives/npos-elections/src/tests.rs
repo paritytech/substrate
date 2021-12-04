@@ -900,8 +900,12 @@ mod solution_type {
 		use crate::generate_solution_type;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy =
-	sp_runtime::Percent>(12) 	);
+			struct InnerTestSolutionIsolated::<
+				VoterIndex = u32,
+				TargetIndex = u8,
+				Accuracy = sp_runtime::Percent
+			>(12)
+		);
 	}
 
 	#[test]

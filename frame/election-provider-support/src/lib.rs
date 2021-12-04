@@ -298,6 +298,18 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error>;
+
+	/// The index of the most significant page of the election result that is to be returned. This
+	/// is typically [`Pages`] minus one, but is left open.
+	fn msp() -> PageIndex {
+		Self::Pages::get().saturating_sub(1)
+	}
+
+	/// The index of the least significant page of the election result that is to be returned. This
+	/// is typically 0, but is left open.
+	fn lsp() -> PageIndex {
+		0
+	}
 }
 
 #[cfg(feature = "std")]
@@ -392,7 +404,7 @@ pub trait NposSolver {
 	/// The accuracy of this solver. This will affect the accuracy of the output.
 	type Accuracy: PerThing128;
 	/// The error type of this implementation.
-	type Error: sp_std::fmt::Debug + sp_std::cmp::PartialEq;
+	type Error: sp_std::fmt::Debug + sp_std::cmp::PartialEq + Clone;
 
 	/// Solve an NPoS solution with the given `voters`, `targets`, and select `to_elect` count
 	/// of `targets`.

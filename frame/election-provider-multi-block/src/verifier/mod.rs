@@ -41,9 +41,6 @@ pub enum FeasibilityError {
 	/// Kinda defensive: The pallet should technically never attempt to do a feasibility check
 	/// when no snapshot is present.
 	SnapshotUnavailable,
-	/// Internal error from the election crate.
-	#[codec(skip)]
-	NposElection(sp_npos_elections::Error),
 	/// A vote is invalid.
 	InvalidVote,
 	/// A voter is invalid.
@@ -58,6 +55,9 @@ pub enum FeasibilityError {
 	ScoreTooLow,
 	/// A single target has too many backings
 	TooManyBackings,
+	/// Internal error from the election crate.
+	#[codec(skip)]
+	NposElection(sp_npos_elections::Error),
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {

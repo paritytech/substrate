@@ -4049,56 +4049,90 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn estimate_next_election_works() {
-		ExtBuilder::default().session_per_era(5).period(5).build_and_execute(|| {
-			// first session is always length 0.
-			for b in 1..20 {
-				run_to_block(b);
-				assert_eq!(Staking::next_election_prediction(System::block_number()), 20);
-			}
+	fn estimate_next_election_works_single_page() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.election_pages(1)
+			.period(5)
+			.build_and_execute(|| {
+				// first session is always length 0, first era technically has 4 sessions, aka 20
+				// blocks.
+				let pages: BlockNumber = PagesOf::<Test>::get().into();
+				let first_election_start = 20 - pages;
+				let first_election_end = 20;
+				let second_election_start = 45 - pages;
+				let second_election_end = 45;
+				for b in 1..=first_election_start {
+					run_to_block(b);
+					assert_eq!(
+						Staking::next_election_prediction(System::block_number()),
+						first_election_start
+					);
+				}
 
-			// election
-			run_to_block(20);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
-			assert_eq!(staking_events().len(), 1);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+				// election
+				run_to_block(first_election_end);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					second_election_start
+				);
+				assert_eq!(staking_events().len(), 1);
+				assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 
-			for b in 21..45 {
-				run_to_block(b);
-				assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
-			}
+				for b in first_election_end + 1..=second_election_start {
+					run_to_block(b);
+					assert_eq!(
+						Staking::next_election_prediction(System::block_number()),
+						second_election_start
+					);
+				}
 
-			// election
-			run_to_block(45);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
-			assert_eq!(staking_events().len(), 3);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+				// election
+				run_to_block(second_election_end);
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 69);
+				assert_eq!(staking_events().len(), 3);
+				assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 
-			Staking::force_no_eras(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
+				Staking::force_no_eras(Origin::root()).unwrap();
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					u64::MAX - pages
+				);
 
-			Staking::force_new_era_always(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+				Staking::force_new_era_always(Origin::root()).unwrap();
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					second_election_end + 5 - pages
+				);
 
-			Staking::force_new_era(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+				Staking::force_new_era(Origin::root()).unwrap();
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					second_election_end + 5 - pages
+				);
 
-			// Do a fail election
-			MinimumValidatorCount::<Test>::put(1000);
-			run_to_block(50);
-			// Election: failed, next session is a new election
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
-			// The new era is still forced until a new era is planned.
-			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+				// Do a fail election
+				MinimumValidatorCount::<Test>::put(1000);
+				run_to_block(50);
+				// Election: failed, next session is a new election
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					50 + 5 - pages
+				);
+				// The new era is still forced until a new era is planned.
+				assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
 
-			MinimumValidatorCount::<Test>::put(2);
-			run_to_block(55);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
-			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
-			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
-			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
-		})
+				MinimumValidatorCount::<Test>::put(2);
+				run_to_block(55);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					55 + 25 - pages
+				);
+				assert_eq!(staking_events().len(), 6);
+				assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+				// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
+				assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
+			})
 	}
 }
 

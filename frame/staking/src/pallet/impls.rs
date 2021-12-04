@@ -268,13 +268,8 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 
-			// we should be able to detect that now is `T::ElectionProvider::PAGES` blocks before
-			// the next call to `try_trigger_new_era`. At this point, given `x =
-			// T::ElectionProvider::PAGES`, start calling `T::ElectionProvider::elect(x)`, then `x -
-			// 1`, all the way to `0`, and store the results in some map.
-
 			// New era.
-			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
+			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis, current_era);
 			if maybe_new_era_validators.is_some() &&
 				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
@@ -283,9 +278,7 @@ impl<T: Config> Pallet<T> {
 
 			maybe_new_era_validators
 		} else {
-			// Set initial era.
-			log!(debug, "Starting the first era.");
-			Self::try_trigger_new_era(session_index, is_genesis)
+			Self::try_trigger_new_era(session_index, is_genesis, 0)
 		}
 	}
 
@@ -413,6 +406,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn try_trigger_new_era(
 		start_session_index: SessionIndex,
 		is_genesis: bool,
+		maybe_starting_era: EraIndex,
 	) -> Option<Vec<T::AccountId>> {
 		log!(
 			info,
@@ -440,7 +434,9 @@ impl<T: Config> Pallet<T> {
 			log!(
 				warn,
 				"chain does not have enough staking candidates to operate for era {:?} ({} \
-					elected, minimum is {})",
+					elected, minimum {}). This will not trigger a potentially very expensive \
+					cleanup operation. THIS SHOULD NOT HAPPEN FREQUENTLY. The election provider \
+					must make sure that it is returning enough",
 				CurrentEra::<T>::get(),
 				stashes.len(),
 				Self::minimum_validator_count(),
@@ -456,6 +452,14 @@ impl<T: Config> Pallet<T> {
 				},
 				_ => (),
 			}
+
+			/// Clear all storage items that may have bene written to during
+			// `store_intermediary_staker_info`, and `finalize_staker_info_collection`. This will be
+			//  expensive, but extremely rare to happen.
+			<ErasStakers<T>>::remove_prefix(maybe_starting_era, None);
+			<ErasStakersClipped<T>>::remove_prefix(maybe_starting_era, None);
+			<ErasValidatorPrefs<T>>::remove_prefix(maybe_starting_era, None);
+			<ErasTotalStake<T>>::remove(maybe_starting_era);
 
 			Self::deposit_event(Event::StakingElectionFailed);
 			return None
@@ -520,10 +524,10 @@ impl<T: Config> Pallet<T> {
 					let first_page = <T::ElectionProvider as ElectionProvider<
 						T::AccountId,
 						T::BlockNumber,
-					>>::Pages::get()
-					.saturating_sub(1);
+					>>::msp();
+
 					let supports = T::ElectionProvider::elect(first_page)
-						.map_err(|_| "non-first elect page failed")?;
+						.map_err(|_| "first elect page failed")?;
 					let _leftover = proceed_page(supports, first_page);
 					log!(
 						info,
@@ -541,6 +545,7 @@ impl<T: Config> Pallet<T> {
 		Ok(did_collect)
 	}
 
+	/// Write the `exposures` for era `new_planned_era`.
 	pub(crate) fn store_intermediary_staker_info(
 		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
 		new_planned_era: EraIndex,
@@ -555,6 +560,11 @@ impl<T: Config> Pallet<T> {
 				(*current_exposure).total = current_exposure.total.saturating_add(exposure.total);
 				// defensive-only: `own` should only ever be incremented once, not much we can do
 				// about it if otherwise.
+				// THIS is the root of the evil for now, if we go over a set, and then we don't have
+				// enough winners, then we are kinda fucked. I think a reasonable thing to do is to,
+				// for now assume that this will never happen since the election provider guarantees
+				// to select enough winners. If it happens to do, then we stall the election, or
+				// something.
 				debug_assert!(current_exposure.own.is_zero() || exposure.own.is_zero());
 				current_exposure.own = current_exposure.own.saturating_add(exposure.own);
 				current_exposure.others.extend(exposure.others.into_iter());

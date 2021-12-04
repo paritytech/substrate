@@ -31,16 +31,32 @@
 //! with large enough blocks (in a dedicated parachain), the number of voters included in the NPoS
 //! system can grow significantly (yet, obviously not indefinitely).
 //!
+//! Note that this pallet does not consider how the recipient is processing the results. To ensure
+//! scalability, of course, the recipient of this pallet's data (i.e. `pallet-staking`) must also be
+//! capable of pagination and multi-block processing.
+//!
 //! ## Companion pallets
+//!
+//! This pallet is essentially hiererichal. This particular one is the top level one. It contains
+//! the shared information that all child pallets use. All child pallets can depend on on the top
+//! level pallet, or each other, but not the other way around. For those cases, traits are used.
 //!
 //! This pallet will only function in a sensible way if it is peered with its companion pallets.
 //!
-//! - The [`verifier`] module provides a standard implementation of the [`verifier::Verifier`]. This
+//! - The [`verifier`] pallet provides a standard implementation of the [`verifier::Verifier`]. This
 //!   pallet is mandatory.
 //! - The [`unsigned`] module provides the implementation of unsigned submission by validators. If
 //!   this pallet is included, then [`Config::UnsignedPhase`] will determine its duration.
 //! - TODO: signed phase
 //! - TODO: emergency phase.
+//!
+//! ## Pagination
+//!
+//! Most of the external APIs of this pallet are paginated. All pagination follow a patter where if
+//! `N` pages exist, the first paginated call is `function(N-1)` and the last one is `function(0)`.
+//! For example, with 3 pages, the `elect` of [`ElectionProvider`] is expected to be called as
+//! `elect(2) -> elect(1) -> elect(0)`. In essence, calling a paginated function with index 0 is
+//! always a signal of termination, meaning that no further calls will follow.
 //!
 //! ## Phases
 //!
@@ -58,6 +74,12 @@
 //! ```
 //!
 //! The duration of both phases are configurable, and their existence is optional.
+//!
+//! Note that the prediction of the election is assume to be the **first call** to elect. For
+//! example, with 3 pages, the prediction must point to the `elect(2)`. Note that this pallet could
+//! be configured to always keep itself prepare for an election a number of blocks ahead of time.
+//! This will make sure that the data needed for the first call to `elect` is always ready a number
+//! of blocks ahead of time, potentially compensating for erronenous predictions.
 //!
 //! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
 //! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens. If
@@ -327,12 +349,14 @@ pub mod pallet {
 
 		/// The number of snapshot voters to fetch per block.
 		///
-		/// In the future, this value will make more sense with multi-block snapshot.
-		///
-		/// Also, note the data type: If the voters are represented by a `u32` in `type
-		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
+		/// Note the data type: If the voters are represented by a `u32` in `type CompactSolution`,
+		/// the same `u32` is used here to ensure bounds are respected.
 		#[pallet::constant]
 		type VoterSnapshotPerBlock: Get<SolutionVoterIndexOf<Self>>;
+
+		/// The number of snapshot targets to fetch per block.
+		#[pallet::constant]
+		type TargetSnapshotPerBlock: Get<SolutionTargetIndexOf<Self>>;
 
 		/// The number of pages.
 		///
@@ -357,6 +381,10 @@ pub mod pallet {
 			+ NposSolution
 			+ scale_info::TypeInfo;
 
+		/// The fallback type used for the election.
+		///
+		/// This type is only used on the last page of the election, therefore it may at most have
+		/// 1 pages.
 		type Fallback: ElectionProvider<
 			Self::AccountId,
 			Self::BlockNumber,
@@ -369,7 +397,20 @@ pub mod pallet {
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
 
+		/// The verifier pallet's interface.
 		type Verifier: verifier::Verifier<Solution = SolutionOf<Self>, AccountId = Self::AccountId>;
+
+		/// The number of blocks ahead of time to try and have the election results ready by.
+		type Lookahead: Get<Self::BlockNumber>;
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
+		pub fn manage(origin: OriginFor<T>, maybe_force_phase: Option<Phase<T::BlockNumber>>, kill_verifier: bool) -> DispatchResultWithPostInfo {
+			// TODO: reset everything, this should only be called in emergencies.
+			todo!();
+		}
 	}
 
 	#[pallet::hooks]
@@ -388,11 +429,7 @@ pub mod pallet {
 				signed_deadline.saturating_sub(T::Pages::get().into());
 			let last_unsigned_verification_deadline: T::BlockNumber = T::Pages::get().into();
 
-			// TODO: my assumption is that `next_election_prediction` is still the prediction of the
-			// FIRST call to `elect`, so staking should be configured to call us AT LEAST `T::Pages`
-			// blocks ahead of time.
-
-			let next_election = T::DataProvider::next_election_prediction(now).max(now);
+			let next_election = T::DataProvider::next_election_prediction(now).max(now).saturating_sub(T::Lookahead::get());
 			let remaining_blocks = next_election - now;
 			let current_phase = Self::current_phase();
 
@@ -407,7 +444,7 @@ pub mod pallet {
 			match current_phase {
 				// from Off to snapshot
 				Phase::Off if remaining_blocks <= snapshot_deadline => {
-					let remaining_pages = T::Pages::get().saturating_sub(One::one());
+					let remaining_pages = Self::msp();
 					log!(info, "starting snapshot creation, remaining block: {}", remaining_pages);
 					let _ = Self::create_targets_snapshot().unwrap();
 					let _ = Self::create_voters_snapshot_paged(remaining_pages).unwrap();
@@ -465,11 +502,15 @@ pub mod pallet {
 			let pages_bn: T::BlockNumber = T::Pages::get().into();
 			// pages must be at least 1.
 			assert!(T::Pages::get() > 0);
-			// pages shall not be more than the length of any phase
-			assert!(pages_bn < T::SignedPhase::get());
-			assert!(pages_bn < T::UnsignedPhase::get());
 
-			// ----------------------------
+			// pages + the amount of Lookahead that we expect shall not be more than the length of
+			// any phase.
+			let lookahead = T::Lookahead::get();
+			assert!(pages_bn + lookahead < T::SignedPhase::get());
+			assert!(pages_bn + lookahead < T::UnsignedPhase::get());
+
+			assert_eq!(<T::Fallback as ElectionProvider<T::AccountId, T::BlockNumber>>::Pages::get(), 1, "fallback may only have 1 page");
+
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
 			let max_vote: usize = <SolutionOf<T> as NposSolution>::LIMIT;
 
@@ -517,6 +558,22 @@ pub mod pallet {
 		WeakSubmission,
 		/// Wrong number of pages in the solution.
 		WrongPageCount,
+		/// Wrong number of winners presented.
+		WrongWinnerCount,
+	}
+
+	impl<T: Config> PartialEq for Error<T> {
+		fn eq(&self, other: &Self) -> bool {
+			use Error::*;
+			match (self, other) {
+				(EarlySubmission, EarlySubmission) |
+				(WrongRound, WrongRound) |
+				(WeakSubmission, WeakSubmission) |
+				(WrongWinnerCount, WrongWinnerCount) |
+				(WrongPageCount, WrongPageCount) => true,
+				_ => false,
+			}
+		}
 	}
 
 	#[pallet::type_value]
@@ -690,6 +747,14 @@ pub mod pallet {
 		pub fn remove_target_page(page: PageIndex) {
 			PagedTargetSnapshot::<T>::remove(page);
 		}
+
+		pub fn remove_target(at: usize) {
+			PagedTargetSnapshot::<T>::mutate(crate::Pallet::<T>::lsp(), |maybe_targets| {
+				if let Some(targets) = maybe_targets {
+					targets.remove(at);
+				}
+			})
+		}
 	}
 
 	/// The metadata of the [`RoundSnapshot`]
@@ -715,30 +780,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Perform all the basic checks that are independent of the snapshot.
-	pub(crate) fn snapshot_independent_checks(
-		paged_solution: &PagedRawSolution<T>,
-	) -> sp_runtime::DispatchResult {
-		// ensure round is current
-		ensure!(Self::round() == paged_solution.round, Error::<T>::WrongRound);
-
-		// ensure score is being improved, if the claim is even correct.
-		ensure!(
-			<T::Verifier as Verifier>::check_claimed_score(paged_solution.score),
-			Error::<T>::WeakSubmission,
-		);
-
-		// ensure solution pages are no more than the snapshot
-		ensure!(
-			paged_solution.solution_pages.len().saturated_into::<PageIndex>() <= T::Pages::get(),
-			Error::<T>::WrongPageCount
-		);
-
-		// TODO: check the hash of snapshot.
-
-		Ok(())
-	}
-
 	/// Returns the most significant page of the snapshot.
 	///
 	/// Based on the contract of `ElectionDataProvider`, this is the first page that is filled.
@@ -757,6 +798,47 @@ impl<T: Config> Pallet<T> {
 		Zero::zero()
 	}
 
+	/// Perform all the basic checks that are independent of the snapshot.
+	///
+	/// A sneaky detail is that this does check the `DesiredTargets` aspect of the snapshot, but
+	/// neither of the large storage items.
+	///
+	/// These compliment a feasibility-check, which is exactly the opposite: snapshot-dependent
+	/// checks.
+	pub(crate) fn snapshot_independent_checks(
+		// Note that the order of these checks are critical for the correctness of
+		// `restore_or_compute_then_maybe_submit`. We want to make sure that we always check round
+		// first, so that if it has a wrong round, we can detect and delete it from the cache.
+		paged_solution: &PagedRawSolution<T>,
+	) -> Result<(), Error<T>> {
+		// ensure round is current
+		ensure!(Self::round() == paged_solution.round, Error::<T>::WrongRound);
+
+		// ensure score is being improved, if the claim is even correct.
+		ensure!(
+			<T::Verifier as Verifier>::check_claimed_score(paged_solution.score),
+			Error::<T>::WeakSubmission,
+		);
+
+		// ensure solution pages are no more than the snapshot
+		ensure!(
+			paged_solution.solution_pages.len().saturated_into::<PageIndex>() <= T::Pages::get(),
+			Error::<T>::WrongPageCount
+		);
+
+		// TODO: check the hash of snapshot.
+
+		// finally, check the winner count being correct.
+		if let Some(desired_targets) = Snapshot::<T>::desired_targets() {
+			ensure!(
+				desired_targets == paged_solution.winner_count_single_page_target_snapshot() as u32,
+				Error::<T>::WrongWinnerCount
+			)
+		}
+
+		Ok(())
+	}
+
 	/// Creates the target snapshot. Writes new data to:
 	///
 	/// Returns `Ok(num_created)` if operation is okay.
@@ -766,13 +848,11 @@ impl<T: Config> Pallet<T> {
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?,
 		);
 
-		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		let targets =
-			T::DataProvider::targets(Some(target_limit), 0).map_err(ElectionError::DataProvider)?;
+		let limit = T::TargetSnapshotPerBlock::get().saturated_into::<usize>();
+		let targets = T::DataProvider::targets(Some(limit), 0).map_err(ElectionError::DataProvider)?;
 
 		let length = targets.len();
-		if length > target_limit {
-			debug_assert!(false, "Snapshot limit has not been respected.");
+		if length > limit {
 			return Err(ElectionError::DataProvider("Snapshot too big."))
 		}
 
@@ -787,13 +867,12 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(num_created)` if operation is okay.
 	pub fn create_voters_snapshot_paged(remaining: PageIndex) -> Result<u32, ElectionError<T>> {
-		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
-		let voters = T::DataProvider::voters(Some(voter_limit), remaining)
+		let limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
+		let voters = T::DataProvider::voters(Some(limit), remaining)
 			.map_err(ElectionError::DataProvider)?;
 
 		// Defensive-only.
-		if voters.len() > voter_limit {
-			debug_assert!(false, "Snapshot limit has not been respected.");
+		if voters.len() > limit {
 			return Err(ElectionError::DataProvider("Snapshot too big."))
 		}
 
@@ -847,7 +926,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 			.or_else(|err| {
 				// if this is the last page, we might use the fallback to recover something.
 				if remaining.is_zero() {
-					T::Fallback::elect(remaining).map_err(|fe| ElectionError::<T>::Fallback(fe))
+					T::Fallback::elect(0).map_err(|fe| ElectionError::<T>::Fallback(fe))
 				} else {
 					Err(err)
 				}
@@ -875,7 +954,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 }
 
 #[cfg(test)]
-mod tests {
+mod phase_rotation {
 	use super::{Event, *};
 	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
 	use frame_election_provider_support::ElectionProvider;
@@ -1131,6 +1210,20 @@ mod tests {
 	}
 
 	#[test]
+	fn phase_rotation_multi_with_lookahead() {
+		todo!();
+	}
+}
+
+#[cfg(test)]
+mod election_provider {
+	use super::{Event, *};
+	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
+	use frame_election_provider_support::ElectionProvider;
+	use frame_support::{assert_noop, assert_ok};
+	use sp_npos_elections::Support;
+
+	#[test]
 	fn multi_page_elect_works() {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
@@ -1250,6 +1343,7 @@ mod tests {
 		});
 	}
 
+	#[test]
 	fn elect_does_not_finish_without_call_of_page_0() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
@@ -1323,7 +1417,18 @@ mod tests {
 	}
 
 	#[test]
-	fn multi_page_elect_fallback_works() {}
+	fn multi_page_elect_fallback_works() {
+		todo!()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{Event, *};
+	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
+	use frame_election_provider_support::ElectionProvider;
+	use frame_support::{assert_noop, assert_ok};
+	use sp_npos_elections::Support;
 
 	/*
 	#[test]

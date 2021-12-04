@@ -83,6 +83,8 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			Eq,
 			Clone,
 			Debug,
+			PartialOrd,
+			Ord,
 			_npos::codec::Encode,
 			_npos::codec::Decode,
 			_npos::scale_info::TypeInfo,

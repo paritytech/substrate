@@ -71,111 +71,8 @@ pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 
 sp_npos_elections::generate_solution_type!(
-	#[compact]
 	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
 );
-
-/// get the events of the multi-block pallet.
-pub fn multi_block_events() -> Vec<crate::Event<Runtime>> {
-	System::events()
-		.into_iter()
-		.map(|r| r.event)
-		.filter_map(|e| if let Event::MultiBlock(inner) = e { Some(inner) } else { None })
-		.collect::<Vec<_>>()
-}
-
-/// get the events of the verifier pallet.
-pub fn verifier_events() -> Vec<crate::verifier::Event<Runtime>> {
-	System::events()
-		.into_iter()
-		.map(|r| r.event)
-		.filter_map(|e| if let Event::VerifierPallet(inner) = e { Some(inner) } else { None })
-		.collect::<Vec<_>>()
-}
-
-/// proceed block number to `n`.
-pub fn roll_to(n: BlockNumber) {
-	let now = System::block_number();
-	for i in now + 1..=n {
-		System::set_block_number(i);
-		MultiBlock::on_initialize(i);
-		VerifierPallet::on_initialize(i);
-		UnsignedPallet::on_initialize(i);
-	}
-}
-
-/// proceed block number to whenever the snapshot is fully created (`Phase::Snapshot(0)`).
-pub fn roll_to_snapshot_created() {
-	let mut now = System::block_number() + 1;
-	while !matches!(MultiBlock::current_phase(), Phase::Snapshot(0)) {
-		System::set_block_number(now);
-		MultiBlock::on_initialize(now);
-		VerifierPallet::on_initialize(now);
-		UnsignedPallet::on_initialize(now);
-		now += 1;
-	}
-}
-
-/// proceed block number to whenever the unsigned phase is open (`Phase::Unsigned(_)`).
-pub fn roll_to_unsigned_open() {
-	let mut now = System::block_number() + 1;
-	while !matches!(MultiBlock::current_phase(), Phase::Unsigned(_)) {
-		System::set_block_number(now);
-		MultiBlock::on_initialize(now);
-		VerifierPallet::on_initialize(now);
-		UnsignedPallet::on_initialize(now);
-		now += 1;
-	}
-}
-
-/// proceed block number to `n`, while running all offchain workers as well.
-pub fn roll_to_with_ocw(n: BlockNumber) {
-	let now = System::block_number();
-	for i in now + 1..=n {
-		System::set_block_number(i);
-		MultiBlock::on_initialize(i);
-		VerifierPallet::on_initialize(i);
-		UnsignedPallet::on_initialize(i);
-
-		MultiBlock::offchain_worker(i);
-		VerifierPallet::offchain_worker(i);
-		UnsignedPallet::offchain_worker(i);
-	}
-}
-
-/// Creates a nested vec where the index of the first vec is the same as the key of the snapshot.
-fn nested_voter_snapshot() -> Vec<Vec<VoterOf<Runtime>>> {
-	let mut flatten: Vec<Vec<VoterOf<Runtime>>> = Vec::with_capacity(Pages::get() as usize);
-	flatten.resize(Pages::get() as usize, vec![]);
-	let voter_snapshot = crate::Snapshot::<Runtime>::voters_iter().collect::<Vec<_>>();
-	for (page, voters) in voter_snapshot {
-		flatten[page as usize] = voters
-	}
-
-	flatten
-}
-
-/// An invalid solution with any scorre.
-pub fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
-	PagedRawSolution { score, solution_pages: vec![Default::default()], ..Default::default() }
-}
-
-/// A real solution that's valid, but has a really bad score.
-pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
-	PagedRawSolution {
-		solution_pages: vec![TestNposSolution {
-			// 2 targets, both voting for themselves
-			votes1: vec![(0, 0), (1, 2)],
-			..Default::default()
-		}],
-		round: 1,
-		score: [
-			10,  // lowest staked
-			20,  // total staked
-			200, // sum of stakes squared
-		],
-	}
-}
 
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
@@ -515,63 +412,67 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 pub struct ExtBuilder {}
 
 impl ExtBuilder {
-	pub fn max_backing_per_target(self, c: u32) -> Self {
+	pub(crate) fn max_backing_per_target(self, c: u32) -> Self {
 		<MaxBackingCountPerTarget>::set(c);
 		self
 	}
-	pub fn miner_tx_priority(self, p: u64) -> Self {
+	pub(crate) fn miner_tx_priority(self, p: u64) -> Self {
 		<MinerTxPriority>::set(p);
 		self
 	}
-	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
+	pub(crate) fn solution_improvement_threshold(self, p: Perbill) -> Self {
 		<SolutionImprovementThreshold>::set(p);
 		self
 	}
-	pub fn phases(self, signed: u64, unsigned: u64) -> Self {
+	pub(crate) fn phases(self, signed: u64, unsigned: u64) -> Self {
 		<SignedPhase>::set(signed);
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn pages(self, pages: PageIndex) -> Self {
+	pub(crate) fn pages(self, pages: PageIndex) -> Self {
 		<Pages>::set(pages);
 		self
 	}
-	pub fn voter_per_page(self, count: u32) -> Self {
+	pub(crate) fn voter_per_page(self, count: u32) -> Self {
 		<VoterSnapshotPerBlock>::set(count);
 		self
 	}
-	pub fn miner_weight(self, weight: Weight) -> Self {
+	pub(crate) fn miner_weight(self, weight: Weight) -> Self {
 		<MinerMaxWeight>::set(weight);
 		self
 	}
-	pub fn mock_weight_info(self, mock: bool) -> Self {
+	pub(crate) fn miner_length(self, len: u32) -> Self {
+		<MinerMaxLength>::set(len);
+		self
+	}
+	pub(crate) fn mock_weight_info(self, mock: bool) -> Self {
 		<MockWeightInfo>::set(mock);
 		self
 	}
-	pub fn desired_targets(self, t: u32) -> Self {
+	pub(crate) fn desired_targets(self, t: u32) -> Self {
 		<DesiredTargets>::set(t);
 		self
 	}
-	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
+	pub(crate) fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
 		self
 	}
-	pub fn signed_max_submission(self, count: u32) -> Self {
+	pub(crate) fn signed_max_submission(self, count: u32) -> Self {
 		<SignedMaxSubmissions>::set(count);
 		self
 	}
-	pub fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
+	pub(crate) fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
 		<SignedDepositBase>::set(base);
 		<SignedDepositByte>::set(byte);
 		<SignedDepositWeight>::set(weight);
 		self
 	}
-	pub fn signed_weight(self, weight: Weight) -> Self {
+	pub(crate) fn signed_weight(self, weight: Weight) -> Self {
 		<SignedMaxWeight>::set(weight);
 		self
 	}
 
-	pub fn build_unchecked(self) -> sp_io::TestExternalities {
+	pub(crate) fn build_unchecked(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
@@ -590,7 +491,7 @@ impl ExtBuilder {
 	}
 
 	/// Warning: this does not execute the post-sanity-checks.
-	pub fn build_offchainify(
+	pub(crate) fn build_offchainify(
 		self,
 		iters: u32,
 	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
@@ -610,10 +511,20 @@ impl ExtBuilder {
 	}
 
 	/// Build the externalities, and execute the given  s`test` closure with it.
-	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+	pub(crate) fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		let mut ext = self.build_unchecked();
-		ext.execute_with(test);
-		ext.execute_with(sanity_checks);
+		ext.execute_with_sanity_checks(test);
+	}
+}
+
+pub trait ExecuteWithSanityChecks {
+	fn execute_with_sanity_checks(&mut self, test: impl FnOnce() -> ());
+}
+
+impl ExecuteWithSanityChecks for sp_io::TestExternalities {
+	fn execute_with_sanity_checks(&mut self, test: impl FnOnce() -> ()) {
+		self.execute_with(test);
+		self.execute_with(sanity_checks)
 	}
 }
 
@@ -734,6 +645,122 @@ pub fn ensure_voters(pages: PageIndex, count: usize) {
 pub fn ensure_targets(pages: PageIndex, count: usize) {
 	assert_eq!(crate::Snapshot::<Runtime>::target_pages(), pages);
 	assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), count);
+}
+
+/// get the events of the multi-block pallet.
+pub fn multi_block_events() -> Vec<crate::Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::MultiBlock(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>()
+}
+
+/// get the events of the verifier pallet.
+pub fn verifier_events() -> Vec<crate::verifier::Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::VerifierPallet(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>()
+}
+
+/// proceed block number to `n`.
+pub fn roll_to(n: BlockNumber) {
+	let now = System::block_number();
+	for i in now + 1..=n {
+		System::set_block_number(i);
+		MultiBlock::on_initialize(i);
+		VerifierPallet::on_initialize(i);
+		UnsignedPallet::on_initialize(i);
+	}
+}
+
+/// proceed block number to whenever the snapshot is fully created (`Phase::Snapshot(0)`).
+pub fn roll_to_snapshot_created() {
+	let mut now = System::block_number() + 1;
+	while !matches!(MultiBlock::current_phase(), Phase::Snapshot(0)) {
+		System::set_block_number(now);
+		MultiBlock::on_initialize(now);
+		VerifierPallet::on_initialize(now);
+		UnsignedPallet::on_initialize(now);
+		now += 1;
+	}
+}
+
+/// proceed block number to whenever the unsigned phase is open (`Phase::Unsigned(_)`).
+pub fn roll_to_unsigned_open() {
+	let mut now = System::block_number() + 1;
+	while !matches!(MultiBlock::current_phase(), Phase::Unsigned(_)) {
+		System::set_block_number(now);
+		MultiBlock::on_initialize(now);
+		VerifierPallet::on_initialize(now);
+		UnsignedPallet::on_initialize(now);
+		now += 1;
+	}
+}
+
+/// proceed block number to `n`, while running all offchain workers as well.
+pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>>>) {
+	use sp_runtime::traits::Dispatchable;
+	let now = System::block_number();
+	for i in now + 1..=n {
+		// check the offchain transaction pool, and if anything's there, submit it.
+		if let Some(ref pool) = maybe_pool {
+			pool.read()
+				.transactions
+				.clone()
+				.into_iter()
+				.map(|uxt| <Extrinsic as codec::Decode>::decode(&mut &*uxt).unwrap())
+				.for_each(|xt| {
+					xt.call.dispatch(frame_system::RawOrigin::None.into());
+				});
+			pool.try_write().unwrap().transactions.clear();
+		}
+		System::set_block_number(i);
+		MultiBlock::on_initialize(i);
+		VerifierPallet::on_initialize(i);
+		UnsignedPallet::on_initialize(i);
+
+		MultiBlock::offchain_worker(i);
+		VerifierPallet::offchain_worker(i);
+		UnsignedPallet::offchain_worker(i);
+	}
+}
+
+/// Creates a nested vec where the index of the first vec is the same as the key of the snapshot.
+fn nested_voter_snapshot() -> Vec<Vec<VoterOf<Runtime>>> {
+	let mut flatten: Vec<Vec<VoterOf<Runtime>>> = Vec::with_capacity(Pages::get() as usize);
+	flatten.resize(Pages::get() as usize, vec![]);
+	let voter_snapshot = crate::Snapshot::<Runtime>::voters_iter().collect::<Vec<_>>();
+	for (page, voters) in voter_snapshot {
+		flatten[page as usize] = voters
+	}
+
+	flatten
+}
+
+/// An invalid solution with any score.
+pub fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
+	PagedRawSolution { score, solution_pages: vec![Default::default()], ..Default::default() }
+}
+
+/// A real solution that's valid, but has a really bad score.
+// TODO: we could deprecate this in favour of `raw_paged_from_supports`.
+pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
+	PagedRawSolution {
+		solution_pages: vec![TestNposSolution {
+			// 2 targets, both voting for themselves
+			votes1: vec![(0, 0), (1, 2)],
+			..Default::default()
+		}],
+		round: 1,
+		score: [
+			10,  // lowest staked
+			20,  // total staked
+			200, // sum of stakes squared
+		],
+	}
 }
 
 #[test]

@@ -131,6 +131,8 @@ mod pallet {
 			let valid_score = supports.clone().evaluate();
 			assert_eq!(valid_score, paged_solution.score, "{}", error_message);
 
+			log!(info, "queued an unsigned solution with score {:?}", valid_score);
+
 			// all good, now we write this to the verifier directly.
 			T::Verifier::force_set_single_page_verified_solution(supports, valid_score);
 
@@ -210,9 +212,6 @@ mod pallet {
 		}
 	}
 
-	#[pallet::error]
-	pub enum Error<T> {}
-
 	impl<T: Config> Pallet<T> {
 		/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 		/// acquired with success.
@@ -256,12 +255,15 @@ mod pallet {
 		) -> DispatchResult {
 			Self::unsigned_specific_checks(paged_solution)
 				.and(crate::Pallet::<T>::snapshot_independent_checks(paged_solution))
+				.map_err(Into::into)
 		}
 
 		/// The checks that are specific to the (this) unsigned pallet.
 		///
 		/// ensure solution has the correct phase, and it has only 1 page.
-		pub fn unsigned_specific_checks(paged_solution: &PagedRawSolution<T>) -> DispatchResult {
+		pub fn unsigned_specific_checks(
+			paged_solution: &PagedRawSolution<T>,
+		) -> Result<(), crate::Error<T>> {
 			ensure!(
 				crate::Pallet::<T>::current_phase().is_unsigned_open(),
 				crate::Error::<T>::EarlySubmission
@@ -281,6 +283,7 @@ mod pallet {
 
 #[cfg(test)]
 mod validate_unsigned {
+	use frame_election_provider_support::Support;
 	use frame_support::{
 		pallet_prelude::InvalidTransaction,
 		unsigned::{TransactionSource, TransactionValidityError, ValidateUnsigned},
@@ -290,7 +293,7 @@ mod validate_unsigned {
 	use crate::{mock::*, types::*, verifier::Verifier, PagedRawSolution};
 
 	#[test]
-	fn retracts_weak_score() {
+	fn retracts_weak_score_accepts_threshold_better() {
 		ExtBuilder::default()
 			.solution_improvement_threshold(sp_runtime::Perbill::from_percent(10))
 			.build_and_execute(|| {
@@ -328,10 +331,19 @@ mod validate_unsigned {
 					TransactionValidityError::Invalid(InvalidTransaction::Custom(2)),
 				);
 
+				// note that we now have to use a solution with 2 winners, just to pass all of the
+				// snapshot independent checks.
+				let mut paged = raw_paged_from_supports(
+					vec![vec![
+						(40, Support { total: 10, voters: vec![(3, 5)] }),
+						(30, Support { total: 10, voters: vec![(3, 5)] }),
+					]],
+					1,
+				);
 				let sufficient_improvement = 55 * 115 / 100;
-				let attempt = fake_unsigned_solution([sufficient_improvement, 0, 0]);
+				paged.score = [sufficient_improvement, 0, 0];
 				let call = super::Call::submit_unsigned {
-					paged_solution: Box::new(attempt),
+					paged_solution: Box::new(paged),
 					witness: witness(),
 				};
 				assert!(UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).is_ok());
@@ -340,31 +352,90 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_wrong_round() {
-		todo!()
-	}
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_unsigned_open();
 
-	#[test]
-	fn retracts_wrong_snapshot_hash() {
-		todo!()
+			let mut attempt = fake_unsigned_solution([5, 0, 0]);
+			attempt.round += 1;
+			let call = super::Call::submit_unsigned {
+				paged_solution: Box::new(attempt),
+				witness: witness(),
+			};
+
+			assert_eq!(
+				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
+				// WrongRound is index 1
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(1)),
+			);
+		})
 	}
 
 	#[test]
 	fn retracts_too_many_pages_unsigned() {
-		// NOTE: unsigned solutions should have just 1 page, regardless of the configured
-		// page count.
-		todo!()
+		ExtBuilder::default().pages(3).build_and_execute(|| {
+			// NOTE: unsigned solutions should have just 1 page, regardless of the configured
+			// page count.
+			roll_to_unsigned_open();
+			let mut attempt = mine_full_solution().unwrap();
+			let call = super::Call::submit_unsigned {
+				paged_solution: Box::new(attempt),
+				witness: witness(),
+			};
+
+			assert_eq!(
+				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
+				// WrongPageCount is index 3
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(3)),
+			);
+
+			let mut attempt = mine_solution(2).unwrap();
+			let call = super::Call::submit_unsigned {
+				paged_solution: Box::new(attempt),
+				witness: witness(),
+			};
+
+			assert_eq!(
+				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(3)),
+			);
+
+			let mut attempt = mine_solution(1).unwrap();
+			let call = super::Call::submit_unsigned {
+				paged_solution: Box::new(attempt),
+				witness: witness(),
+			};
+
+			assert!(UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).is_ok(),);
+		})
 	}
 
 	#[test]
-	fn retracts_too_many_pages_signed() {
-		// TODO: move to base pallet
-		todo!()
+	fn retracts_wrong_winner_count() {
+		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
+			roll_to_unsigned_open();
+
+			let mut paged = raw_paged_from_supports(
+				vec![vec![(40, Support { total: 10, voters: vec![(3, 10)] })]],
+				1,
+			);
+
+			let call = super::Call::submit_unsigned {
+				paged_solution: Box::new(paged),
+				witness: witness(),
+			};
+
+			assert_eq!(
+				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
+				// WrongWinnerCount is index 4
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(4)),
+			);
+		});
 	}
 
 	#[test]
 	fn retracts_wrong_phase() {
 		ExtBuilder::default().build_and_execute(|| {
-			let solution = fake_unsigned_solution([5, 0, 0]);
+			let solution = raw_paged_solution_low_score();
 
 			let call = super::Call::submit_unsigned {
 				paged_solution: Box::new(solution.clone()),
@@ -460,7 +531,7 @@ mod validate_unsigned {
 }
 
 #[cfg(test)]
-mod tests {
+mod call {
 	use super::*;
 	use crate::{mock::*, AssignmentOf};
 	use frame_benchmarking::Zero;
@@ -474,405 +545,13 @@ mod tests {
 
 	type Assignment = AssignmentOf<Runtime>;
 
-	/*
 	#[test]
-	fn validate_unsigned_retracts_low_score() {
-		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
-			roll_to(25);
-			assert!(MultiBlock::current_phase().is_unsigned());
-
-			let solution =
-				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
-
-			// initial
-			assert!(<MultiBlock as ValidateUnsigned>::validate_unsigned(
-				TransactionSource::Local,
-				&call
-			)
-			.is_ok());
-			assert!(<MultiBlock as ValidateUnsigned>::pre_dispatch(&call).is_ok());
-
-			// set a better score
-			let ready = ReadySolution { score: [10, 0, 0], ..Default::default() };
-			<QueuedSolution<Runtime>>::put(ready);
-
-			// won't work anymore.
-			assert!(matches!(
-				<MultiBlock as ValidateUnsigned>::validate_unsigned(
-					TransactionSource::Local,
-					&call
-				)
-				.unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(2))
-			));
-			assert!(matches!(
-				<MultiBlock as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(2))
-			));
-		})
-	}
-
-	#[test]
-	fn validate_unsigned_retracts_incorrect_winner_count() {
-		ExtBuilder::default().desired_targets(1).build_and_execute(|| {
-			roll_to(25);
-			assert!(MultiBlock::current_phase().is_unsigned());
-
-			let raw = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(raw.clone()), witness());
-			assert_eq!(raw.solution.unique_targets().len(), 0);
-
-			// won't work anymore.
-			assert!(matches!(
-				<MultiBlock as ValidateUnsigned>::validate_unsigned(
-					TransactionSource::Local,
-					&call
-				)
-				.unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(1))
-			));
-		})
-	}
-
-	#[test]
-	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
-							   deprive validator from their authoring reward.: \
-							   Module { index: 2, error: 1, message: \
-							   Some(\"PreDispatchWrongWinnerCount\") }")]
 	fn unfeasible_solution_panics() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
-			assert!(MultiBlock::current_phase().is_unsigned());
-
-			// This is in itself an invalid BS solution.
-			let solution =
-				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
-			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(Origin::none());
-		})
+		todo!("basic test to show that the unsigned call panics.");
 	}
 
 	#[test]
-	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
-							   deprive validator from their authoring reward.")]
 	fn wrong_witness_panics() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
-			assert!(MultiBlock::current_phase().is_unsigned());
-
-			// This solution is unfeasible as well, but we won't even get there.
-			let solution =
-				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
-
-			let mut correct_witness = witness();
-			correct_witness.voters += 1;
-			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned(Box::new(solution.clone()), correct_witness);
-			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(Origin::none());
-		})
+		todo!("similarly, passing in bad witness must also be checked.")
 	}
-
-	#[test]
-	fn miner_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
-			assert!(MultiBlock::current_phase().is_unsigned());
-
-			// ensure we have snapshots in place.
-			assert!(MultiBlock::snapshot().is_some());
-			assert_eq!(MultiBlock::desired_targets().unwrap(), 2);
-
-			// mine seq_phragmen solution with 2 iters.
-			let (solution, witness) = MultiBlock::mine_solution(2).unwrap();
-
-			// ensure this solution is valid.
-			assert!(MultiBlock::queued_solution().is_none());
-			assert_ok!(MultiBlock::submit_unsigned(Origin::none(), Box::new(solution), witness));
-			assert!(MultiBlock::queued_solution().is_some());
-		})
-	}
-
-	#[test]
-	fn miner_trims_weight() {
-		ExtBuilder::default()
-			.miner_weight(100)
-			.mock_weight_info(true)
-			.build_and_execute(|| {
-				roll_to(25);
-				assert!(MultiBlock::current_phase().is_unsigned());
-
-				let (raw, witness) = MultiBlock::mine_solution(2).unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
-					witness.voters,
-					witness.targets,
-					raw.solution.voter_count() as u32,
-					raw.solution.unique_targets().len() as u32,
-				);
-				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 35);
-				assert_eq!(raw.solution.voter_count(), 5);
-
-				// now reduce the max weight
-				<MinerMaxWeight>::set(25);
-
-				let (raw, witness) = MultiBlock::mine_solution(2).unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
-					witness.voters,
-					witness.targets,
-					raw.solution.voter_count() as u32,
-					raw.solution.unique_targets().len() as u32,
-				);
-				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 25);
-				assert_eq!(raw.solution.voter_count(), 3);
-			})
-	}
-
-	#[test]
-	fn miner_will_not_submit_if_not_enough_winners() {
-		let (mut ext, _) = ExtBuilder::default().desired_targets(8).build_offchainify(0);
-		ext.execute_with(|| {
-			roll_to(25);
-			assert!(MultiBlock::current_phase().is_unsigned());
-
-			assert_eq!(
-				MultiBlock::mine_check_save_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed(DispatchError::Module {
-					index: 2,
-					error: 1,
-					message: Some("PreDispatchWrongWinnerCount"),
-				}),
-			);
-		})
-	}
-
-	#[test]
-	fn unsigned_per_dispatch_checks_can_only_submit_threshold_better() {
-		ExtBuilder::default()
-			.desired_targets(1)
-			.add_voter(7, 2, vec![10])
-			.add_voter(8, 5, vec![10])
-			.solution_improvement_threshold(Perbill::from_percent(50))
-			.build_and_execute(|| {
-				roll_to(25);
-				assert!(MultiBlock::current_phase().is_unsigned());
-				assert_eq!(MultiBlock::desired_targets().unwrap(), 1);
-
-				// an initial solution
-				let result = ElectionResult {
-					// note: This second element of backing stake is not important here.
-					winners: vec![(10, 10)],
-					assignments: vec![Assignment {
-						who: 10,
-						distribution: vec![(10, PerU16::one())],
-					}],
-				};
-				let (solution, witness) = MultiBlock::prepare_election_result(result).unwrap();
-				assert_ok!(MultiBlock::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(MultiBlock::submit_unsigned(
-					Origin::none(),
-					Box::new(solution),
-					witness
-				));
-				assert_eq!(MultiBlock::queued_solution().unwrap().score[0], 10);
-
-				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
-				let result = ElectionResult {
-					winners: vec![(10, 12)],
-					assignments: vec![
-						Assignment { who: 10, distribution: vec![(10, PerU16::one())] },
-						Assignment {
-							who: 7,
-							// note: this percent doesn't even matter, in solution it is 100%.
-							distribution: vec![(10, PerU16::one())],
-						},
-					],
-				};
-				let (solution, _) = MultiBlock::prepare_election_result(result).unwrap();
-				// 12 is not 50% more than 10
-				assert_eq!(solution.score[0], 12);
-				assert_noop!(
-					MultiBlock::unsigned_pre_dispatch_checks(&solution),
-					Error::<Runtime>::PreDispatchWeakSubmission,
-				);
-				// submitting this will actually panic.
-
-				// trial 2: a solution who's score is only 7, i.e. 70% better in the first element.
-				let result = ElectionResult {
-					winners: vec![(10, 12)],
-					assignments: vec![
-						Assignment { who: 10, distribution: vec![(10, PerU16::one())] },
-						Assignment { who: 7, distribution: vec![(10, PerU16::one())] },
-						Assignment {
-							who: 8,
-							// note: this percent doesn't even matter, in solution it is 100%.
-							distribution: vec![(10, PerU16::one())],
-						},
-					],
-				};
-				let (solution, witness) = MultiBlock::prepare_election_result(result).unwrap();
-				assert_eq!(solution.score[0], 17);
-
-				// and it is fine
-				assert_ok!(MultiBlock::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(MultiBlock::submit_unsigned(
-					Origin::none(),
-					Box::new(solution),
-					witness
-				));
-			})
-	}
-
-	#[test]
-	fn trim_assignments_length_does_not_modify_when_short_enough() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
-
-			// given
-			let TrimHelpers { mut assignments, encoded_size_of, .. } = trim_helpers();
-			let solution = SolutionOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
-			let encoded_len = solution.encoded_size() as u32;
-			let solution_clone = solution.clone();
-
-			// when
-			MultiBlock::trim_assignments_length(encoded_len, &mut assignments, encoded_size_of)
-				.unwrap();
-
-			// then
-			let solution = SolutionOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
-			assert_eq!(solution, solution_clone);
-		});
-	}
-
-	#[test]
-	fn trim_assignments_length_modifies_when_too_long() {
-		ExtBuilder::default().build().execute_with(|| {
-			roll_to(25);
-
-			// given
-			let TrimHelpers { mut assignments, encoded_size_of, .. } = trim_helpers();
-			let solution = SolutionOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
-			let encoded_len = solution.encoded_size();
-			let solution_clone = solution.clone();
-
-			// when
-			MultiBlock::trim_assignments_length(
-				encoded_len as u32 - 1,
-				&mut assignments,
-				encoded_size_of,
-			)
-			.unwrap();
-
-			// then
-			let solution = SolutionOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
-			assert_ne!(solution, solution_clone);
-			assert!(solution.encoded_size() < encoded_len);
-		});
-	}
-
-	#[test]
-	fn trim_assignments_length_trims_lowest_stake() {
-		ExtBuilder::default().build().execute_with(|| {
-			roll_to(25);
-
-			// given
-			let TrimHelpers { voters, mut assignments, encoded_size_of, voter_index } =
-				trim_helpers();
-			let solution = SolutionOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
-			let encoded_len = solution.encoded_size() as u32;
-			let count = assignments.len();
-			let min_stake_voter = voters
-				.iter()
-				.map(|(id, weight, _)| (weight, id))
-				.min()
-				.and_then(|(_, id)| voter_index(id))
-				.unwrap();
-
-			// when
-			MultiBlock::trim_assignments_length(encoded_len - 1, &mut assignments, encoded_size_of)
-				.unwrap();
-
-			// then
-			assert_eq!(assignments.len(), count - 1, "we must have removed exactly one assignment");
-			assert!(
-				assignments.iter().all(|IndexAssignment { who, .. }| *who != min_stake_voter),
-				"min_stake_voter must no longer be in the set of voters",
-			);
-		});
-	}
-
-	#[test]
-	fn trim_assignments_length_wont_panic() {
-		// we shan't panic if assignments are initially empty.
-		ExtBuilder::default().build_and_execute(|| {
-			let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
-				SolutionOf::<Runtime>::try_from(assignments).map(|solution| solution.encoded_size())
-			});
-
-			let mut assignments = vec![];
-
-			// since we have 16 fields, we need to store the length fields of 16 vecs, thus 16 bytes
-			// minimum.
-			let min_solution_size = encoded_size_of(&assignments).unwrap();
-			assert_eq!(min_solution_size, SolutionOf::<Runtime>::LIMIT);
-
-			// all of this should not panic.
-			MultiBlock::trim_assignments_length(0, &mut assignments, encoded_size_of.clone())
-				.unwrap();
-			MultiBlock::trim_assignments_length(1, &mut assignments, encoded_size_of.clone())
-				.unwrap();
-			MultiBlock::trim_assignments_length(
-				min_solution_size as u32,
-				&mut assignments,
-				encoded_size_of,
-			)
-			.unwrap();
-		});
-
-		// or when we trim it to zero.
-		ExtBuilder::default().build_and_execute(|| {
-			// we need snapshot for `trim_helpers` to work.
-			roll_to(25);
-			let TrimHelpers { mut assignments, encoded_size_of, .. } = trim_helpers();
-			assert!(assignments.len() > 0);
-
-			// trim to min solution size.
-			let min_solution_size = SolutionOf::<Runtime>::LIMIT as u32;
-			MultiBlock::trim_assignments_length(
-				min_solution_size,
-				&mut assignments,
-				encoded_size_of,
-			)
-			.unwrap();
-			assert_eq!(assignments.len(), 0);
-		});
-	}
-
-	// all the other solution-generation functions end up delegating to `mine_solution`, so if we
-	// demonstrate that `mine_solution` solutions are all trimmed to an acceptable length, then
-	// we know that higher-level functions will all also have short-enough solutions.
-	#[test]
-	fn mine_solution_solutions_always_within_acceptable_length() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
-
-			// how long would the default solution be?
-			let solution = MultiBlock::mine_solution(0).unwrap();
-			let max_length = <Runtime as Config>::MinerMaxLength::get();
-			let solution_size = solution.0.solution.encoded_size();
-			assert!(solution_size <= max_length as usize);
-
-			// now set the max size to less than the actual size and regenerate
-			<Runtime as Config>::MinerMaxLength::set(solution_size as u32 - 1);
-			let solution = MultiBlock::mine_solution(0).unwrap();
-			let max_length = <Runtime as Config>::MinerMaxLength::get();
-			let solution_size = solution.0.solution.encoded_size();
-			assert!(solution_size <= max_length as usize);
-		});
-	}
-
-	*/
 }

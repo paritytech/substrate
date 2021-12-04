@@ -1298,7 +1298,7 @@ pub mod pallet_prelude {
 			},
 		},
 		traits::{
-			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
+			ConstU32, ConstU8, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
 			PalletInfoAccess, StorageInfoTrait,
 		},
 		weights::{DispatchClass, Pays, Weight},

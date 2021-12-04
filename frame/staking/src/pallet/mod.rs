@@ -691,7 +691,7 @@ pub mod pallet {
 			// `on_initialize`.
 			let _ = Self::maybe_start_support_collection_for_era(now, next_era)
 				.map_err(|err| log!(error, "error in collection exposure task: {:?}", err))
-				.map(|outcome| log!(trace, "status of collection exposure = {:?}", outcome));
+				.map(|outcome| log!(trace, "status of exposure collection = {:?}", outcome));
 
 			// just return the weight of the on_finalize.
 			T::DbWeight::get().reads(1)

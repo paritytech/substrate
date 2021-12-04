@@ -972,7 +972,29 @@ mod feasibility_check {
 
 	#[test]
 	fn score() {
-		todo!()
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to_snapshot_created();
+			let mut paged = mine_full_solution().unwrap();
+
+			// just tweak score.
+			paged.score[0] += 1;
+			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+
+			load_solution_for_verification(paged);
+			roll_to_full_verification();
+
+			// nothing is verified.
+			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+			assert_eq!(
+				verifier_events(),
+				vec![
+					Event::<Runtime>::Verified(2),
+					Event::<Runtime>::Verified(1),
+					Event::<Runtime>::Verified(0),
+					Event::<Runtime>::VerificationFailed(0, FeasibilityError::InvalidScore)
+				]
+			);
+		})
 	}
 
 	#[test]
@@ -1555,7 +1577,8 @@ mod verifier_trait {
 		});
 	}
 
-	fn trying_to_use_set_pages_while_verifying_queued_errors() {
-		todo!();
+	fn rejects_new_verification_if_ongoing() {
+		todo!("if there's already some verification ongoing, then we don't accept new ones");
+		todo!("not sure what to do about force_set_single_page_valid");
 	}
 }

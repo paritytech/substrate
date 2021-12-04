@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use sp_std::{collections::btree_set::BTreeSet, fmt::Debug};
 
 use frame_election_provider_support::ElectionProvider;
 pub use frame_election_provider_support::{PageIndex, Supports};
@@ -92,6 +92,35 @@ impl<T> Pagify<T> for Vec<T> {
 impl<T: Config> Default for PagedRawSolution<T> {
 	fn default() -> Self {
 		Self { round: 1, score: Default::default(), solution_pages: Default::default() }
+	}
+}
+
+impl<T: Config> PagedRawSolution<T> {
+	/// Get the total number of voters, assuming that voters in each page are unique.
+	pub fn voter_count(&self) -> usize {
+		self.solution_pages
+			.iter()
+			.map(|page| page.voter_count())
+			.fold(0usize, |acc, x| acc.saturating_add(x))
+	}
+
+	/// Get the total number of winners, assuming that there's only a single page of targets.
+	pub fn winner_count_single_page_target_snapshot(&self) -> usize {
+		self.solution_pages
+			.iter()
+			.map(|page| page.unique_targets())
+			.into_iter()
+			.flatten()
+			.collect::<BTreeSet<_>>()
+			.len()
+	}
+
+	/// Get the total number of edges.
+	pub fn edge_count(&self) -> usize {
+		self.solution_pages
+			.iter()
+			.map(|page| page.edge_count())
+			.fold(0usize, |acc, x| acc.saturating_add(x))
 	}
 }
 
