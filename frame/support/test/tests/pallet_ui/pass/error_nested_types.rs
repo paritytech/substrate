@@ -35,7 +35,7 @@ pub struct MyStruct {
 }
 
 #[derive(Encode, Decode, CompactPalletError, scale_info::TypeInfo)]
-pub struct Wrapper(Option<bool>);
+pub struct Wrapper(bool);
 
 fn main() {
 }

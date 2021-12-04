@@ -50,23 +50,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	);
 
-	let as_u8_matches =
-		error
-			.variants
-			.iter()
-			.enumerate()
-			.map(|(i, (variant, field_ty, _))| match field_ty {
-				Some(VariantField { is_named: true, .. }) => {
-					quote::quote_spanned!(error.attr_span => Self::#variant { .. } => #i as u8,)
-				},
-				Some(VariantField { is_named: false, .. }) => {
-					quote::quote_spanned!(error.attr_span => Self::#variant(..) => #i as u8,)
-				},
-				None => {
-					quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,)
-				},
-			});
-
 	let as_str_matches = error.variants.iter().map(|(variant, field_ty, _)| {
 		let variant_str = format!("{}", variant);
 		match field_ty {
@@ -123,7 +106,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 					<
 						#error_ident<#type_use_gen> as #frame_support::traits::CompactPalletError
 					>::check_compactness(),
-					"Pallet error type is not the most compact possible"
+					"Pallet error enum is not the most compact possible"
 				);
 			}
 		}
@@ -139,13 +122,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		impl<#type_impl_gen> #error_ident<#type_use_gen> #config_where_clause {
-			pub fn as_u8(&self) -> u8 {
-				match &self {
-					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
-					#( #as_u8_matches )*
-				}
-			}
-
 			pub fn as_str(&self) -> &'static str {
 				match &self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
@@ -172,10 +148,12 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 					as #frame_support::traits::PalletInfo
 				>::index::<Pallet<#type_use_gen>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
+				let mut encoded = err.encode();
+				encoded.resize(#frame_support::MAX_NESTED_PALLET_ERROR_DEPTH, 0);
 
 				#frame_support::sp_runtime::DispatchError::Module {
 					index,
-					error: err.as_u8(),
+					error: encoded.try_into().expect("encoded error is resized to be equal to 4 bytes; qed"),
 					message: Some(err.as_str()),
 				}
 			}

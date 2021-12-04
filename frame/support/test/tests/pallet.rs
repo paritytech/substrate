@@ -230,9 +230,11 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
+	#[derive(PartialEq, Eq)]
 	pub enum Error<T> {
 		/// doc comment put into metadata
 		InsufficientProposersBalance,
+		Code(u8),
 	}
 
 	#[pallet::event]
@@ -651,6 +653,7 @@ fn call_expand() {
 
 #[test]
 fn error_expand() {
+	use codec::Decode;
 	assert_eq!(
 		format!("{:?}", pallet::Error::<Runtime>::InsufficientProposersBalance),
 		String::from("InsufficientProposersBalance"),
@@ -661,7 +664,15 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module {
+			index: 1,
+			error: [0, 0, 0, 0],
+			message: Some("InsufficientProposersBalance")
+		},
+	);
+	assert_eq!(
+		pallet::Error::<Runtime>::decode(&mut &[1, 4, 0, 0][..]),
+		Ok(pallet::Error::<Runtime>::Code(4)),
 	);
 }
 

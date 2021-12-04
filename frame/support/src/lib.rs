@@ -93,7 +93,9 @@ pub use self::{
 		StorageMap, StorageNMap, StoragePrefixedMap, StorageValue,
 	},
 };
-pub use sp_runtime::{self, print, traits::Printable, ConsensusEngineId};
+pub use sp_runtime::{
+	self, print, traits::Printable, ConsensusEngineId, MAX_NESTED_PALLET_ERROR_DEPTH,
+};
 
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -1339,6 +1341,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
+		MAX_NESTED_PALLET_ERROR_DEPTH,
 	};
 	pub use sp_std::marker::PhantomData;
 }

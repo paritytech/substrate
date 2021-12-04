@@ -21,6 +21,12 @@ use sp_std::marker::PhantomData;
 
 /// Trait denoting that the implementing type has the most compact encoded size that is fit to be
 /// included as a field in a variant of the `#[pallet::error]` enum type.
+///
+/// ## Notes
+/// The pallet error enum has a maximum nested depth as defined by
+/// [`frame_support::MAX_NESTED_PALLET_ERROR_DEPTH`]. If the pallet error type exceeds this size
+/// limit, the encoded representation of it will truncate any excess bytes when setting the error
+/// field during the creation of the [`DispatchError`] type.
 pub trait CompactPalletError: Encode + Decode {
 	/// Function that checks whether implementing types are either 1 bytes in size, or that its
 	/// nested types are 1 bytes in size, i.e. whether they are as memory efficient as possible.
