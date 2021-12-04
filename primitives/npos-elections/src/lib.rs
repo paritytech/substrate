@@ -193,6 +193,15 @@ pub struct Edge<AccountId> {
 	weight: ExtendedBalance,
 }
 
+#[cfg(test)]
+impl<AccountId: Clone> Edge<AccountId> {
+	fn new(candidate: Candidate<AccountId>, weight: ExtendedBalance) -> Self {
+		let who = candidate.who.clone();
+		let candidate = Rc::new(RefCell::new(candidate));
+		Self { weight, who, candidate, load: Default::default() }
+	}
+}
+
 #[cfg(feature = "std")]
 impl<A: IdentifierT> sp_std::fmt::Debug for Edge<A> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
@@ -223,7 +232,12 @@ impl<A: IdentifierT> std::fmt::Debug for Voter<A> {
 impl<AccountId: IdentifierT> Voter<AccountId> {
 	/// Create a new `Voter`.
 	pub fn new(who: AccountId) -> Self {
-		Self { who, edges: Default::default(), budget: Default::default(), load: Default::default() }
+		Self {
+			who,
+			edges: Default::default(),
+			budget: Default::default(),
+			load: Default::default(),
+		}
 	}
 
 	/// Returns `true` if `self` votes for `target`.
@@ -350,10 +364,7 @@ pub struct Support<AccountId> {
 
 impl<AccountId> Default for Support<AccountId> {
 	fn default() -> Self {
-		Self {
-			total: Default::default(),
-			voters: vec![],
-		}
+		Self { total: Default::default(), voters: vec![] }
 	}
 }
 
@@ -477,7 +488,8 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 				backed_stake: Default::default(),
 				elected: Default::default(),
 				round: Default::default(),
-			}.to_ptr()
+			}
+			.to_ptr()
 		})
 		.collect::<Vec<CandidatePtr<AccountId>>>();
 

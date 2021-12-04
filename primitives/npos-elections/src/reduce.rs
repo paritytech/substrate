@@ -355,7 +355,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 				.or_insert_with(|| Node::new(target_id).into_ref())
 				.clone();
 
-			// If one exists but the other one doesn't, or if both does not, then set the existing
+			// If one exists but the other one doesn't, or if both do not, then set the existing
 			// one as the parent of the non-existing one and move on. Else, continue with the rest
 			// of the code.
 			match (voter_exists, target_exists) {
@@ -389,39 +389,43 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 				let common_count = trailing_common(&voter_root_path, &target_root_path);
 
 				// because roots are the same.
-				#[cfg(feature = "std")]
 				debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
+				// the common path must be non-void..
 				debug_assert!(common_count > 0);
+				// and smaller than btoh
+				debug_assert!(common_count <= voter_root_path.len());
+				debug_assert!(common_count <= target_root_path.len());
 
 				// cycle part of each path will be `path[path.len() - common_count - 1 : 0]`
 				// NOTE: the order of chaining is important! it is always build from [target, ...,
 				// voter]
 				let cycle = target_root_path
 					.iter()
-					.take(target_root_path.len() - common_count + 1)
+					.take(target_root_path.len().saturating_sub(common_count).saturating_add(1))
 					.cloned()
 					.chain(
 						voter_root_path
 							.iter()
-							.take(voter_root_path.len() - common_count)
+							.take(voter_root_path.len().saturating_sub(common_count))
 							.rev()
 							.cloned(),
 					)
 					.collect::<Vec<NodeRef<A>>>();
 
 				// a cycle's length shall always be multiple of two.
-				#[cfg(feature = "std")]
 				debug_assert_eq!(cycle.len() % 2, 0);
 
 				// find minimum of cycle.
 				let mut min_value: ExtendedBalance = Bounded::max_value();
-				// The voter and the target pair that create the min edge.
-				let mut min_target: Option<A> = None;
-				let mut min_voter: Option<A> = None;
+				// The voter and the target pair that create the min edge. These MUST be set by the
+				// end of this code block, otherwise we skip.
+				let mut maybe_min_target: Option<A> = None;
+				let mut maybe_min_voter: Option<A> = None;
 				// The index of the min in opaque cycle list.
-				let mut min_index = 0usize;
+				let mut maybe_min_index: Option<usize> = None;
 				// 1 -> next // 0 -> prev
-				let mut min_direction = 0u32;
+				let mut maybe_min_direction: Option<u32> = None;
+
 				// helpers
 				let next_index = |i| {
 					if i < (cycle.len() - 1) {
@@ -437,6 +441,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 						cycle.len() - 1
 					}
 				};
+
 				for i in 0..cycle.len() {
 					if cycle[i].borrow().id.role == NodeRole::Voter {
 						// NOTE: sadly way too many clones since I don't want to make A: Copy
@@ -447,10 +452,10 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 							ass.distribution.iter().find(|d| d.0 == next).map(|(_, w)| {
 								if *w < min_value {
 									min_value = *w;
-									min_target = Some(next.clone());
-									min_voter = Some(current.clone());
-									min_index = i;
-									min_direction = 1;
+									maybe_min_target = Some(next.clone());
+									maybe_min_voter = Some(current.clone());
+									maybe_min_index = Some(i);
+									maybe_min_direction = Some(1);
 								}
 							})
 						});
@@ -458,15 +463,38 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 							ass.distribution.iter().find(|d| d.0 == prev).map(|(_, w)| {
 								if *w < min_value {
 									min_value = *w;
-									min_target = Some(prev.clone());
-									min_voter = Some(current.clone());
-									min_index = i;
-									min_direction = 0;
+									maybe_min_target = Some(prev.clone());
+									maybe_min_voter = Some(current.clone());
+									maybe_min_index = Some(i);
+									maybe_min_direction = Some(0);
 								}
 							})
 						});
 					}
 				}
+
+				// all of these values must be set by now, we assign them to un-mut values, no
+				// longer being optional either.
+				let (min_value, min_target, min_voter, min_index, min_direction) =
+					match (
+						min_value,
+						maybe_min_target,
+						maybe_min_voter,
+						maybe_min_index,
+						maybe_min_direction,
+					) {
+						(
+							min_value,
+							Some(min_target),
+							Some(min_voter),
+							Some(min_index),
+							Some(min_direction),
+						) => (min_value, min_target, min_voter, min_index, min_direction),
+						_ => {
+							sp_runtime::print("UNREACHABLE code reached in `reduce` algorithm. This must be a bug.");
+							break
+						},
+					};
 
 				// if the min edge is in the voter's sub-chain.
 				// [target, ..., X, Y, ... voter]
@@ -577,7 +605,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 
 				// re-org.
 				if should_reorg {
-					let min_edge = min_voter.into_iter().chain(min_target.into_iter()).collect::<Vec<_>>();
+					let min_edge = vec![min_voter, min_target];
 					if min_chain_in_voter {
 						// NOTE: safe; voter_root_path is always bigger than 1 element.
 						for i in 0..voter_root_path.len() - 1 {
@@ -623,8 +651,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 	num_changed
 }
 
-/// Reduce the given [`Vec<StakedAssignment<IdentifierT>>`]. This removes redundant edges from
-/// without changing the overall backing of any of the elected candidates.
+/// Reduce the given [`Vec<StakedAssignment<IdentifierT>>`]. This removes redundant edges without
+/// changing the overall backing of any of the elected candidates.
 ///
 /// Returns the number of edges removed.
 ///
