@@ -949,9 +949,12 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	fn clear() {
 		<Bonded<T>>::remove_all(None);
 		<Ledger<T>>::remove_all(None);
-		<Validators<T>>::remove_all(None);
-		<Nominators<T>>::remove_all(None);
-		let _ = T::SortedListProvider::clear(None);
+		<Validators<T>>::remove_all();
+		<Nominators<T>>::remove_all();
+
+		<CounterForNominators<T>>::kill();
+		<CounterForValidators<T>>::kill();
+		T::SortedListProvider::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1279,7 +1282,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn on_remove(_: &T::AccountId) {
 		// nothing to do on remove.
 	}
-	fn regenerate(
+	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
 		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
@@ -1289,10 +1292,12 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-	fn clear(maybe_count: Option<u32>) -> u32 {
-		let count_before = Nominators::<T>::count();
-		Nominators::<T>::remove_all(maybe_count);
-		let count_after = Nominators::<T>::count();
-		count_before.saturating_sub(count_after)
+
+	fn unsafe_clear() {
+		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
+		// condition of SortedListProvider::unsafe_clear.
+		Nominators::<T>::remove_all(None);
+		CounterForNominators::<T>::take();
+
 	}
 }

@@ -41,7 +41,9 @@ pub fn clear_validators_and_nominators<T: Config>() {
 	// whenever we touch nominators counter we should update `T::SortedListProvider` as well.
 	Nominators::<T>::remove_all(None);
 
-	let _ = T::SortedListProvider::clear(None);
+	CounterForNominators::<T>::kill();
+	// NOTE: safe to call outside block production
+	T::SortedListProvider::unsafe_clear();
 }
 
 /// Grab a funded user.

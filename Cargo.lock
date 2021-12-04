@@ -535,6 +535,7 @@ dependencies = [
 name = "beefy-primitives"
 version = "4.0.0-dev"
 dependencies = [
+ "hex",
  "hex-literal",
  "parity-scale-codec",
  "scale-info",
