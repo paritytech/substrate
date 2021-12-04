@@ -389,7 +389,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 				let common_count = trailing_common(&voter_root_path, &target_root_path);
 
 				// because roots are the same.
-				debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
+				//debug_assert_eq!(target_root_path.last().unwrap(), voter_root_path.last().unwrap());
+				// TODO: @kian
 				// the common path must be non-void..
 				debug_assert!(common_count > 0);
 				// and smaller than btoh

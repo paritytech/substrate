@@ -407,7 +407,7 @@ pub mod pallet {
 		type SessionHandler: SessionHandler<Self::ValidatorId>;
 
 		/// The keys.
-		type Keys: OpaqueKeys + Member + Parameter + Default + MaybeSerializeDeserialize;
+		type Keys: OpaqueKeys + Member + Parameter + MaybeSerializeDeserialize;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -480,7 +480,7 @@ pub mod pallet {
 			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
-				.map(|v| (v.clone(), <Pallet<T>>::load_keys(&v).unwrap_or_default()))
+				.filter_map(|v| Some((v.clone(), Pallet::<T>::load_keys(&v)?)))
 				.collect();
 
 			// Tell everyone about the genesis session keys
@@ -693,10 +693,10 @@ impl<T: Config> Pallet<T> {
 			};
 			let queued_amalgamated = next_validators
 				.into_iter()
-				.map(|a| {
-					let k = Self::load_keys(&a).unwrap_or_default();
+				.filter_map(|a| {
+					let k = Self::load_keys(&a)?;
 					check_next_changed(&k);
-					(a, k)
+					Some((a, k))
 				})
 				.collect::<Vec<_>>();
 

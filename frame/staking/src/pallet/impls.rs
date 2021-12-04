@@ -1262,8 +1262,10 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
-		let mut ledger = Self::ledger(who).unwrap_or_default();
-		ledger.active = active;
+		let ledger = match Self::ledger(who) {
+			None => StakingLedger::default_from(active),
+			Some(mut l) => { l.active = active; l },
+		};
 		<Ledger<T>>::insert(who, ledger);
 		<Bonded<T>>::insert(who, who);
 

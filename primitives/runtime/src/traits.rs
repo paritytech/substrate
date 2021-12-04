@@ -1213,6 +1213,11 @@ impl<'a> TrailingZeroInput<'a> {
 	pub fn new(data: &'a [u8]) -> Self {
 		Self(data)
 	}
+
+	/// Create a new instance which only contains zeroes as input.
+	pub fn zeroes() -> Self {
+		Self::new(&[][..])
+	}
 }
 
 impl<'a> codec::Input for TrailingZeroInput<'a> {
@@ -1318,7 +1323,7 @@ macro_rules! impl_opaque_keys_inner {
 	) => {
 		$( #[ $attr ] )*
 		#[derive(
-			Default, Clone, PartialEq, Eq,
+			Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
 			$crate::scale_info::TypeInfo,

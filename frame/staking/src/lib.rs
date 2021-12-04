@@ -442,7 +442,6 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-#[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -463,9 +462,19 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub claimed_rewards: Vec<EraIndex>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
+impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Zero>
 	StakingLedger<AccountId, Balance>
 {
+	pub fn default_from(stash: AccountId) -> Self {
+		Self {
+			stash,
+			total: Zero::zero(),
+			active: Zero::zero(),
+			unlocking: vec![],
+			claimed_rewards: vec![],
+		}
+	}
+
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
@@ -619,7 +628,7 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
-#[derive(Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 	/// The stash ID of the offending validator.
 	validator: AccountId,
@@ -631,6 +640,18 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 	reporters: Vec<AccountId>,
 	/// The amount of payout.
 	payout: Balance,
+}
+
+impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
+	fn default_from(validator: AccountId) -> Self {
+		Self {
+			validator,
+			own: Zero::zero(),
+			others: vec![],
+			reporters: vec![],
+			payout: Zero::zero(),
+		}
+	}
 }
 
 /// Means for interacting with a specialized version of the `session` trait.
