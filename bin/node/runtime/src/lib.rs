@@ -26,8 +26,9 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		ConstU32, Currency, EnsureOneOf, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		ConstU32, Currency, EnsureOneOfSameOrigin, EqualPrivilegeOnly, Everything, Imbalance,
+		InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
+		U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -534,7 +535,7 @@ impl pallet_staking::Config for Runtime {
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = SlashDeferDuration;
 	/// A super-majority of the council can cancel the slash.
-	type SlashCancelOrigin = EnsureOneOf<
+	type SlashCancelOrigin = EnsureOneOfSameOrigin<
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>,
 	>;
@@ -724,7 +725,7 @@ impl pallet_democracy::Config for Runtime {
 		pallet_collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilCollective>;
 	// To cancel a proposal before it has been passed, the technical committee must be unanimous or
 	// Root must agree.
-	type CancelProposalOrigin = EnsureOneOf<
+	type CancelProposalOrigin = EnsureOneOfSameOrigin<
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionAtLeast<_1, _1, AccountId, TechnicalCollective>,
 	>;
@@ -814,7 +815,7 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 }
 
-type EnsureRootOrHalfCouncil = EnsureOneOf<
+type EnsureRootOrHalfCouncil = EnsureOneOfSameOrigin<
 	EnsureRoot<AccountId>,
 	pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>,
 >;
@@ -853,11 +854,11 @@ parameter_types! {
 impl pallet_treasury::Config for Runtime {
 	type PalletId = TreasuryPalletId;
 	type Currency = Balances;
-	type ApproveOrigin = EnsureOneOf<
+	type ApproveOrigin = EnsureOneOfSameOrigin<
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionAtLeast<_3, _5, AccountId, CouncilCollective>,
 	>;
-	type RejectOrigin = EnsureOneOf<
+	type RejectOrigin = EnsureOneOfSameOrigin<
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>,
 	>;

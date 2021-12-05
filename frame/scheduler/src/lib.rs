@@ -805,7 +805,7 @@ mod tests {
 	use crate as scheduler;
 	use frame_support::{
 		assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{Contains, EnsureOneOf, EqualPrivilegeOnly, OnFinalize, OnInitialize},
+		traits::{Contains, EnsureOneOfSameOrigin, EqualPrivilegeOnly, OnFinalize, OnInitialize},
 		weights::constants::RocksDbWeight,
 		Hashable,
 	};
@@ -950,7 +950,7 @@ mod tests {
 		type PalletsOrigin = OriginCaller;
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
-		type ScheduleOrigin = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+		type ScheduleOrigin = EnsureOneOfSameOrigin<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
 		type OriginPrivilegeCmp = EqualPrivilegeOnly;

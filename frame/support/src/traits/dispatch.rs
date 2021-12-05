@@ -38,25 +38,6 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn successful_origin() -> OuterOrigin;
 }
 
-/// The "OR gate" implementation of `EnsureOrigin`.
-///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
-impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
-	EnsureOrigin<OuterOrigin> for EnsureOneOf<L, R>
-{
-	type Success = Either<L::Success, R::Success>;
-	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
-		L::try_origin(o)
-			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		L::successful_origin()
-	}
-}
-
 /// Type that can be dispatched with an origin but without checking the origin filter.
 ///
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
@@ -114,13 +95,14 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 }
 
-/// The "OR gate" implementation of `EnsureOrigin`.
+/// The "OR gate" implementation of `EnsureOrigin` from the same origin.
 ///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+/// Origin check will pass if `L` or `R` origin check passes from the same origin. `L` is tested
+/// first.
+pub struct EnsureOneOfSameOrigin<L, R>(sp_std::marker::PhantomData<(L, R)>);
 
 impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
-	EnsureOrigin<OuterOrigin> for EnsureOneOf<L, R>
+	EnsureOrigin<OuterOrigin> for EnsureOneOfSameOrigin<L, R>
 {
 	type Success = Either<L::Success, R::Success>;
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
@@ -134,12 +116,89 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 	}
 }
 
+/// The "OR gate" implementation of `EnsureOrigin` from the different origins.
+///
+/// Origin check will pass if `L` or `R` origin check passes from the different origins. `L` is
+/// tested first.
+pub struct EnsureOneOfDifferentOrigins<L, R>(sp_std::marker::PhantomData<(L, R)>);
+
+impl<OuterOrigin1, OuterOrigin2, L: EnsureOrigin<OuterOrigin1>, R: EnsureOrigin<OuterOrigin2>>
+	EnsureOrigin<(OuterOrigin1, OuterOrigin2)> for EnsureOneOfDifferentOrigins<L, R>
+{
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(
+		(o1, o2): (OuterOrigin1, OuterOrigin2),
+	) -> Result<Self::Success, (OuterOrigin1, OuterOrigin2)> {
+		L::try_origin(o1).map_or_else(
+			|o1| R::try_origin(o2).map(|r| Either::Right(r)).map_err(|o2| (o1, o2)),
+			|l| Ok(Either::Left(l)),
+		)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> (OuterOrigin1, OuterOrigin2) {
+		(L::successful_origin(), R::successful_origin())
+	}
+}
+
+/// The "OR gate" implementation of `EnsureOrigin` from the same origin.
+///
+/// Origin check will pass if `L` or `R` origin check passes from the same origin. `L` is
+/// tested first.
+pub struct EnsureBothOfSameOrigin<L, R>(sp_std::marker::PhantomData<(L, R)>);
+
+impl<OuterOrigin: Clone, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
+	EnsureOrigin<OuterOrigin> for EnsureBothOfSameOrigin<L, R>
+{
+	type Success = (L::Success, R::Success);
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o.clone()).map_or_else(|o| Err(o), |l| R::try_origin(o).map(|r| (l, r)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		/// It is not possible to implement a successful_origin() for any combination of "L" or "R"
+		/// types,  so please generate it manually
+		unimplemented!()
+	}
+}
+
+/// The "OR gate" implementation of `EnsureOrigin` from the different origins.
+///
+/// Origin check will pass if `L` or `R` origin check passes from the different origins. `L` is
+/// tested first.
+pub struct EnsureBothOfDifferentOrigins<L, R>(sp_std::marker::PhantomData<(L, R)>);
+
+impl<
+		OuterOrigin1: Clone,
+		OuterOrigin2: Clone,
+		L: EnsureOrigin<OuterOrigin1>,
+		R: EnsureOrigin<OuterOrigin2>,
+	> EnsureOrigin<(OuterOrigin1, OuterOrigin2)> for EnsureBothOfDifferentOrigins<L, R>
+{
+	type Success = (L::Success, R::Success);
+	fn try_origin(
+		(o1, o2): (OuterOrigin1, OuterOrigin2),
+	) -> Result<Self::Success, (OuterOrigin1, OuterOrigin2)> {
+		let l_suc = L::try_origin(o1.clone()).map_err(|o1| (o1, o2.clone()))?;
+		let r_suc = R::try_origin(o2).map_err(|o2| (o1, o2))?;
+		Ok((l_suc, r_suc))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		(L::successful_origin(), R::successful_origin())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	struct EnsureSuccess;
 	struct EnsureFail;
+
+	struct Ensure;
 
 	impl EnsureOrigin<()> for EnsureSuccess {
 		type Success = ();
@@ -163,11 +222,46 @@ mod tests {
 		}
 	}
 
+	impl EnsureOrigin<bool> for Ensure {
+		type Success = ();
+		fn try_origin(o: bool) -> Result<Self::Success, bool> {
+			if o {
+				Ok(())
+			} else {
+				Err(o)
+			}
+		}
+	}
+
 	#[test]
-	fn ensure_one_of_test() {
-		assert!(<EnsureOneOf<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
-		assert!(<EnsureOneOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_ok());
-		assert!(<EnsureOneOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_ok());
-		assert!(<EnsureOneOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	fn ensure_one_of_same_origin_test() {
+		assert!(<EnsureOneOfSameOrigin<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOfSameOrigin<EnsureSuccess, EnsureFail>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOfSameOrigin<EnsureFail, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOfSameOrigin<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	}
+
+	#[test]
+	fn ensure_one_of_different_origins_test() {
+		assert!(<EnsureOneOfDifferentOrigins<Ensure, Ensure>>::try_origin((true, true)).is_ok());
+		assert!(<EnsureOneOfDifferentOrigins<Ensure, Ensure>>::try_origin((true, false)).is_ok());
+		assert!(<EnsureOneOfDifferentOrigins<Ensure, Ensure>>::try_origin((false, true)).is_ok());
+		assert!(<EnsureOneOfDifferentOrigins<Ensure, Ensure>>::try_origin((false, false)).is_err());
+	}
+
+	#[test]
+	fn ensure_both_of_same_origin_test() {
+		assert!(<EnsureBothOfSameOrigin<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureBothOfSameOrigin<EnsureSuccess, EnsureFail>>::try_origin(()).is_err());
+		assert!(<EnsureBothOfSameOrigin<EnsureFail, EnsureSuccess>>::try_origin(()).is_err());
+		assert!(<EnsureBothOfSameOrigin<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	}
+
+	#[test]
+	fn ensure_both_of_different_origins_test() {
+		assert!(<EnsureBothOfDifferentOrigins<Ensure, Ensure>>::try_origin((true, true)).is_ok());
+		assert!(<EnsureBothOfDifferentOrigins<Ensure, Ensure>>::try_origin((true, false)).is_err());
+		assert!(<EnsureBothOfDifferentOrigins<Ensure, Ensure>>::try_origin((false, true)).is_err());
+		assert!(<EnsureBothOfDifferentOrigins<Ensure, Ensure>>::try_origin((false, false)).is_err());
 	}
 }

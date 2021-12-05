@@ -84,7 +84,10 @@ pub use storage::{
 };
 
 mod dispatch;
-pub use dispatch::{EnsureOneOf, EnsureOrigin, OriginTrait, UnfilteredDispatchable};
+pub use dispatch::{
+	EnsureBothOfDifferentOrigins, EnsureBothOfSameOrigin, EnsureOneOfDifferentOrigins,
+	EnsureOneOfSameOrigin, EnsureOrigin, OriginTrait, UnfilteredDispatchable,
+};
 
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
