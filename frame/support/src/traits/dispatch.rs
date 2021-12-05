@@ -155,10 +155,10 @@ impl<OuterOrigin: Clone, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrig
 		L::try_origin(o.clone()).map_or_else(|o| Err(o), |l| R::try_origin(o).map(|r| (l, r)))
 	}
 
+	/// It is not possible to implement a successful_origin() for any combination of "L" or "R"
+	/// types,  so please generate it manually
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
-		/// It is not possible to implement a successful_origin() for any combination of "L" or "R"
-		/// types,  so please generate it manually
 		unimplemented!()
 	}
 }
@@ -186,7 +186,7 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
+	fn successful_origin() -> (OuterOrigin1, OuterOrigin2) {
 		(L::successful_origin(), R::successful_origin())
 	}
 }
@@ -230,6 +230,10 @@ mod tests {
 			} else {
 				Err(o)
 			}
+		}
+		#[cfg(feature = "runtime-benchmarks")]
+		fn successful_origin() -> () {
+			()
 		}
 	}
 
