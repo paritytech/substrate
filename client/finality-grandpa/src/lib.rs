@@ -58,7 +58,7 @@
 
 use futures::{prelude::*, StreamExt};
 use log::{debug, error, info};
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::Decode;
 use parking_lot::RwLock;
 use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
@@ -68,6 +68,7 @@ use sc_client_api::{
 };
 use sc_consensus::BlockImport;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
@@ -76,9 +77,8 @@ use sp_core::crypto::Public;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, DigestFor, NumberFor, Zero},
+	traits::{Block as BlockT, NumberFor, Zero},
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 pub use finality_grandpa::BlockNumberOps;
 use finality_grandpa::{voter, voter_set::VoterSet, Error as GrandpaError};
@@ -718,7 +718,6 @@ where
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	DigestFor<Block>: Encode,
 	C: ClientForGrandpa<Block, BE> + 'static,
 	C::Api: GrandpaApi<Block>,
 {

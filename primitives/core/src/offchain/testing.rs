@@ -168,8 +168,8 @@ impl OffchainState {
 	/// Add expected HTTP request.
 	///
 	/// This method can be used to initialize expected HTTP requests and their responses
-	/// before running the actual code that utilizes them (for instance before calling into runtime).
-	/// Expected request has to be fulfilled before this struct is dropped,
+	/// before running the actual code that utilizes them (for instance before calling into
+	/// runtime). Expected request has to be fulfilled before this struct is dropped,
 	/// the `response` and `response_headers` fields will be used to return results to the callers.
 	/// Requests are expected to be performed in the insertion order.
 	pub fn expect_request(&mut self, expected: PendingRequest) {
@@ -300,8 +300,9 @@ impl offchain::Externalities for TestOffchainExt {
 
 		ids.iter()
 			.map(|id| match state.requests.get(id) {
-				Some(req) if req.response.is_none() =>
-					panic!("No `response` provided for request with id: {:?}", id),
+				Some(req) if req.response.is_none() => {
+					panic!("No `response` provided for request with id: {:?}", id)
+				},
 				None => RequestStatus::Invalid,
 				_ => RequestStatus::Finished(200),
 			})
@@ -340,7 +341,7 @@ impl offchain::Externalities for TestOffchainExt {
 				Ok(0)
 			} else {
 				let read = std::cmp::min(buffer.len(), response[req.read..].len());
-				buffer[0..read].copy_from_slice(&response[req.read..read]);
+				buffer[0..read].copy_from_slice(&response[req.read..req.read + read]);
 				req.read += read;
 				Ok(read)
 			}

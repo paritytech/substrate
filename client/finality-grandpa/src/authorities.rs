@@ -165,10 +165,10 @@ pub struct AuthoritySet<H, N> {
 	/// is lower than the last finalized block (as signaled in the forced
 	/// change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
-	/// Track at which blocks the set id changed. This is useful when we need to prove finality for a
-	/// given block since we can figure out what set the block belongs to and when the set
+	/// Track at which blocks the set id changed. This is useful when we need to prove finality for
+	/// a given block since we can figure out what set the block belongs to and when the set
 	/// started/ended.
-	authority_set_changes: AuthoritySetChanges<N>,
+	pub(crate) authority_set_changes: AuthoritySetChanges<N>,
 }
 
 impl<H, N> AuthoritySet<H, N>
@@ -657,16 +657,16 @@ impl<H, N: Add<Output = N> + Clone> PendingChange<H, N> {
 pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
 
 /// The response when querying for a set id for a specific block. Either we get a set id
-/// together with a block number for the last block in the set, or that the requested block is in the
-/// latest set, or that we don't know what set id the given block belongs to.
+/// together with a block number for the last block in the set, or that the requested block is in
+/// the latest set, or that we don't know what set id the given block belongs to.
 #[derive(Debug, PartialEq)]
 pub enum AuthoritySetChangeId<N> {
 	/// The requested block is in the latest set.
 	Latest,
 	/// Tuple containing the set id and the last block number of that set.
 	Set(SetId, N),
-	/// We don't know which set id the request block belongs to (this can only happen due to missing
-	/// data).
+	/// We don't know which set id the request block belongs to (this can only happen due to
+	/// missing data).
 	Unknown,
 }
 
@@ -712,6 +712,17 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		} else {
 			AuthoritySetChangeId::Unknown
 		}
+	}
+
+	pub(crate) fn insert(&mut self, block_number: N) {
+		let idx = self
+			.0
+			.binary_search_by_key(&block_number, |(_, n)| n.clone())
+			.unwrap_or_else(|b| b);
+
+		let set_id = if idx == 0 { 0 } else { self.0[idx - 1].0 + 1 };
+		assert!(idx == self.0.len() || self.0[idx].0 != set_id);
+		self.0.insert(idx, (set_id, block_number));
 	}
 
 	/// Returns an iterator over all historical authority set changes starting at the given block
@@ -912,7 +923,8 @@ mod tests {
 
 		assert_eq!(authorities.pending_changes().collect::<Vec<_>>(), vec![&change_a, &change_b]);
 
-		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out "hash_b"
+		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out
+		// "hash_b"
 		let status = authorities
 			.apply_standard_changes(
 				"hash_c",
@@ -1629,6 +1641,18 @@ mod tests {
 
 		assert_eq!(authorities.pending_forced_changes.len(), 1);
 		assert_eq!(authorities.pending_forced_changes.first().unwrap().canon_hash, "D");
+	}
+
+	#[test]
+	fn authority_set_changes_insert() {
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 41);
+		authority_set_changes.append(1, 81);
+		authority_set_changes.append(4, 121);
+
+		authority_set_changes.insert(101);
+		assert_eq!(authority_set_changes.get_set_id(100), AuthoritySetChangeId::Set(2, 101));
+		assert_eq!(authority_set_changes.get_set_id(101), AuthoritySetChangeId::Set(2, 101));
 	}
 
 	#[test]

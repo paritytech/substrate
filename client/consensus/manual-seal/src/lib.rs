@@ -94,8 +94,8 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, C
 	/// Shared reference to the transaction pool.
 	pub pool: Arc<TP>,
 
-	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
-	/// the authorship task.
+	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending
+	/// commands to the authorship task.
 	pub commands_stream: CS,
 
 	/// SelectChain strategy.
@@ -281,7 +281,8 @@ mod tests {
 			0,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
-		// this test checks that blocks are created as soon as transactions are imported into the pool.
+		// this test checks that blocks are created as soon as transactions are imported into the
+		// pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
 		let mut sender = Arc::new(Some(sender));
 		let commands_stream =
@@ -307,7 +308,7 @@ mod tests {
 			consensus_data_provider: None,
 		});
 		std::thread::spawn(|| {
-			let mut rt = tokio::runtime::Runtime::new().unwrap();
+			let rt = tokio::runtime::Runtime::new().unwrap();
 			// spawn the background authorship task
 			rt.block_on(future);
 		});
@@ -350,7 +351,8 @@ mod tests {
 			0,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
-		// this test checks that blocks are created as soon as an engine command is sent over the stream.
+		// this test checks that blocks are created as soon as an engine command is sent over the
+		// stream.
 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(ManualSealParams {
 			block_import: client.clone(),
@@ -363,7 +365,7 @@ mod tests {
 			create_inherent_data_providers: |_, _| async { Ok(()) },
 		});
 		std::thread::spawn(|| {
-			let mut rt = tokio::runtime::Runtime::new().unwrap();
+			let rt = tokio::runtime::Runtime::new().unwrap();
 			// spawn the background authorship task
 			rt.block_on(future);
 		});
@@ -427,7 +429,8 @@ mod tests {
 			0,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
-		// this test checks that blocks are created as soon as an engine command is sent over the stream.
+		// this test checks that blocks are created as soon as an engine command is sent over the
+		// stream.
 		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(ManualSealParams {
 			block_import: client.clone(),
@@ -440,7 +443,7 @@ mod tests {
 			create_inherent_data_providers: |_, _| async { Ok(()) },
 		});
 		std::thread::spawn(|| {
-			let mut rt = tokio::runtime::Runtime::new().unwrap();
+			let rt = tokio::runtime::Runtime::new().unwrap();
 			// spawn the background authorship task
 			rt.block_on(future);
 		});

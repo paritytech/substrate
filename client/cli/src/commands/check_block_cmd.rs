@@ -21,7 +21,7 @@ use crate::{
 	params::{BlockNumberOrHash, ImportParams, SharedParams},
 	CliConfiguration,
 };
-use sc_client_api::{BlockBackend, UsageProvider};
+use sc_client_api::{BlockBackend, HeaderBackend};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, str::FromStr, sync::Arc};
 use structopt::StructOpt;
@@ -53,7 +53,7 @@ impl CheckBlockCmd {
 	pub async fn run<B, C, IQ>(&self, client: Arc<C>, import_queue: IQ) -> error::Result<()>
 	where
 		B: BlockT + for<'de> serde::Deserialize<'de>,
-		C: BlockBackend<B> + UsageProvider<B> + Send + Sync + 'static,
+		C: BlockBackend<B> + HeaderBackend<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
 		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,

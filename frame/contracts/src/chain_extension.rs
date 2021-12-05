@@ -86,8 +86,8 @@ pub trait ChainExtension<C: Config> {
 	/// imported wasm function.
 	///
 	/// # Parameters
-	/// - `func_id`: The first argument to `seal_call_chain_extension`. Usually used to
-	/// 		determine which function to realize.
+	/// - `func_id`: The first argument to `seal_call_chain_extension`. Usually used to determine
+	///   which function to realize.
 	/// - `env`: Access to the remaining arguments and the execution environment.
 	///
 	/// # Return

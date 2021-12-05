@@ -21,7 +21,7 @@ use super::*;
 use crate as sudo;
 use frame_support::{
 	parameter_types,
-	traits::{Filter, GenesisBuild},
+	traits::{Contains, GenesisBuild},
 };
 use frame_system::limits;
 use sp_core::H256;
@@ -58,7 +58,7 @@ pub mod logger {
 			// Ensure that the `origin` is `Root`.
 			ensure_root(origin)?;
 			<I32Log<T>>::append(i);
-			Self::deposit_event(Event::AppendI32(i, weight));
+			Self::deposit_event(Event::AppendI32 { value: i, weight });
 			Ok(().into())
 		}
 
@@ -72,17 +72,16 @@ pub mod logger {
 			let sender = ensure_signed(origin)?;
 			<I32Log<T>>::append(i);
 			<AccountLog<T>>::append(sender.clone());
-			Self::deposit_event(Event::AppendI32AndAccount(sender, i, weight));
+			Self::deposit_event(Event::AppendI32AndAccount { sender, value: i, weight });
 			Ok(().into())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
-		AppendI32(i32, Weight),
-		AppendI32AndAccount(T::AccountId, i32, Weight),
+		AppendI32 { value: i32, weight: Weight },
+		AppendI32AndAccount { sender: T::AccountId, value: i32, weight: Weight },
 	}
 
 	#[pallet::storage]
@@ -115,8 +114,8 @@ parameter_types! {
 }
 
 pub struct BlockEverything;
-impl Filter<Call> for BlockEverything {
-	fn filter(_: &Call) -> bool {
+impl Contains<Call> for BlockEverything {
+	fn contains(_: &Call) -> bool {
 		false
 	}
 }

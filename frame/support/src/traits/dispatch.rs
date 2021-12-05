@@ -18,7 +18,7 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::DispatchResultWithPostInfo;
-use sp_runtime::traits::BadOrigin;
+use sp_runtime::{traits::BadOrigin, Either};
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -70,7 +70,10 @@ pub trait OriginTrait: Sized {
 	/// Replace the caller with caller from the other origin
 	fn set_caller_from(&mut self, other: impl Into<Self>);
 
-	/// Filter the call, if false then call is filtered out.
+	/// Filter the call if caller is not root, if false is returned then the call must be filtered
+	/// out.
+	///
+	/// For root origin caller, the filters are bypassed and true is returned.
 	fn filter_call(&self, call: &Self::Call) -> bool;
 
 	/// Get the caller.
@@ -82,12 +85,70 @@ pub trait OriginTrait: Sized {
 		f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
 	) -> Result<R, Self>;
 
-	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
+	/// Create with system none origin and `frame_system::Config::BaseCallFilter`.
 	fn none() -> Self;
 
-	/// Create with system root origin and no filter.
+	/// Create with system root origin and `frame_system::Config::BaseCallFilter`.
 	fn root() -> Self;
 
-	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
+	/// Create with system signed origin and `frame_system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
+}
+
+/// The "OR gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+
+impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
+	EnsureOrigin<OuterOrigin> for EnsureOneOf<L, R>
+{
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o)
+			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		L::successful_origin()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	struct EnsureSuccess;
+	struct EnsureFail;
+
+	impl EnsureOrigin<()> for EnsureSuccess {
+		type Success = ();
+		fn try_origin(_: ()) -> Result<Self::Success, ()> {
+			Ok(())
+		}
+		#[cfg(feature = "runtime-benchmarks")]
+		fn successful_origin() -> () {
+			()
+		}
+	}
+
+	impl EnsureOrigin<()> for EnsureFail {
+		type Success = ();
+		fn try_origin(_: ()) -> Result<Self::Success, ()> {
+			Err(())
+		}
+		#[cfg(feature = "runtime-benchmarks")]
+		fn successful_origin() -> () {
+			()
+		}
+	}
+
+	#[test]
+	fn ensure_one_of_test() {
+		assert!(<EnsureOneOf<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	}
 }

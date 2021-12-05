@@ -19,19 +19,15 @@
 //! Substrate state API.
 
 mod state_full;
-mod state_light;
 
 #[cfg(test)]
 mod tests;
 
+use futures::FutureExt;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
-use rpc::{
-	futures::{future::result, Future},
-	Result as RpcResult,
-};
+use rpc::Result as RpcResult;
 use std::sync::Arc;
 
-use sc_client_api::light::{Fetcher, RemoteBlockchain};
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};
 use sp_core::{
 	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
@@ -119,7 +115,8 @@ where
 	/// Get the runtime version.
 	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion>;
 
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	/// Query historical storage entries (by key) starting from a block given as the second
+	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
@@ -179,6 +176,7 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }
 
@@ -191,6 +189,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 where
 	Block: BlockT + 'static,
+	Block::Hash: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block>
 		+ StorageProvider<Block, BE>
@@ -213,44 +212,6 @@ where
 	));
 	let backend =
 		Box::new(self::state_full::FullState::new(client, subscriptions, rpc_max_payload));
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
-}
-
-/// Create new state API that works on light node.
-pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
-	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
-	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-	fetcher: Arc<F>,
-	deny_unsafe: DenyUnsafe,
-) -> (State<Block, Client>, ChildState<Block, Client>)
-where
-	Block: BlockT + 'static,
-	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block>
-		+ StorageProvider<Block, BE>
-		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
-		+ ProvideRuntimeApi<Block>
-		+ HeaderBackend<Block>
-		+ BlockchainEvents<Block>
-		+ Send
-		+ Sync
-		+ 'static,
-	F: Send + Sync + 'static,
-{
-	let child_backend = Box::new(self::state_light::LightState::new(
-		client.clone(),
-		subscriptions.clone(),
-		remote_blockchain.clone(),
-		fetcher.clone(),
-	));
-
-	let backend = Box::new(self::state_light::LightState::new(
-		client,
-		subscriptions,
-		remote_blockchain,
-		fetcher,
-	));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
@@ -286,7 +247,7 @@ where
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(result(Err(err.into())))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		self.backend.storage_pairs(block, key_prefix)
@@ -300,10 +261,10 @@ where
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
 		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
-			return Box::new(result(Err(Error::InvalidCount {
-				value: count,
-				max: STORAGE_KEYS_PAGED_MAX_COUNT,
-			})))
+			return async move {
+				Err(Error::InvalidCount { value: count, max: STORAGE_KEYS_PAGED_MAX_COUNT })
+			}
+			.boxed()
 		}
 		self.backend.storage_keys_paged(block, prefix, count, start_key)
 	}
@@ -343,7 +304,7 @@ where
 		to: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(result(Err(err.into())))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		self.backend.query_storage(from, to, keys)
@@ -412,12 +373,13 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(result(Err(err.into())))
+			return async move { Err(err.into()) }.boxed()
 		}
 
-		self.backend.trace_block(block, targets, storage_keys)
+		self.backend.trace_block(block, targets, storage_keys, methods)
 	}
 }
 
@@ -462,6 +424,14 @@ where
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
 
+	/// Returns child storage entries at a specific block's state.
+	fn storage_entries(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<Vec<Option<StorageData>>>;
+
 	/// Returns the hash of a child storage entry at a block's state.
 	fn storage_hash(
 		&self,
@@ -477,7 +447,9 @@ where
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
-		Box::new(self.storage(block, storage_key, key).map(|x| x.map(|x| x.0.len() as u64)))
+		self.storage(block, storage_key, key)
+			.map(|x| x.map(|r| r.map(|v| v.0.len() as u64)))
+			.boxed()
 	}
 }
 
@@ -509,6 +481,15 @@ where
 		block: Option<Block::Hash>,
 	) -> FutureResult<Option<StorageData>> {
 		self.backend.storage(block, storage_key, key)
+	}
+
+	fn storage_entries(
+		&self,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<Option<StorageData>>> {
+		self.backend.storage_entries(block, storage_key, keys)
 	}
 
 	fn storage_keys(

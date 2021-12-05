@@ -56,8 +56,8 @@ pub trait Currency<AccountId> {
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 
-	/// The minimum balance any single account may have. This is equivalent to the `Balances` module's
-	/// `ExistentialDeposit`.
+	/// The minimum balance any single account may have. This is equivalent to the `Balances`
+	/// module's `ExistentialDeposit`.
 	fn minimum_balance() -> Self::Balance;
 
 	/// Reduce the total issuance by `amount` and return the according imbalance. The imbalance will
@@ -192,8 +192,8 @@ pub trait Currency<AccountId> {
 	/// Ensure an account's free balance equals some value; this will create the account
 	/// if needed.
 	///
-	/// Returns a signed imbalance and status to indicate if the account was successfully updated or update
-	/// has led to killing of the account.
+	/// Returns a signed imbalance and status to indicate if the account was successfully updated or
+	/// update has led to killing of the account.
 	fn make_free_balance_be(
 		who: &AccountId,
 		balance: Self::Balance,

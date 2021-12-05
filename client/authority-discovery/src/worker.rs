@@ -91,7 +91,8 @@ pub enum Role {
 ///
 ///    4. Put addresses and signature as a record with the authority id as a key on a Kademlia DHT.
 ///
-/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Discover`] a [`Worker`] will
+/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Discover`] a [`Worker`]
+/// will
 ///
 ///    1. Retrieve the current and next set of authorities.
 ///
@@ -258,9 +259,9 @@ where
 					self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
 				);
 			},
-			ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
+			ServicetoWorkerMsg::GetAuthorityIdsByPeerId(peer_id, sender) => {
 				let _ = sender
-					.send(self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone));
+					.send(self.addr_cache.get_authority_ids_by_peer_id(&peer_id).map(Clone::clone));
 			},
 		}
 	}
@@ -288,7 +289,7 @@ where
 				if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
 					a
 				} else {
-					a.with(multiaddr::Protocol::P2p(peer_id.clone()))
+					a.with(multiaddr::Protocol::P2p(peer_id))
 				}
 			})
 	}
@@ -373,7 +374,7 @@ where
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.filter(|id| !local_keys.contains(id.as_ref()))
-			.collect();
+			.collect::<Vec<_>>();
 
 		self.addr_cache.retain_ids(&authorities);
 
@@ -547,7 +548,7 @@ where
 			if let Some(metrics) = &self.metrics {
 				metrics
 					.known_authorities_count
-					.set(self.addr_cache.num_ids().try_into().unwrap_or(std::u64::MAX));
+					.set(self.addr_cache.num_authority_ids().try_into().unwrap_or(std::u64::MAX));
 			}
 		}
 		Ok(())

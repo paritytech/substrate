@@ -26,27 +26,28 @@
 //!
 //! To give you some examples:
 //!
-//! - wasmi allows reaching to non-exported mutable globals so that we could reset them.
-//!   Wasmtime doesn’t support that.
+//! - wasmi allows reaching to non-exported mutable globals so that we could reset them. Wasmtime
+//!   doesn’t support that.
 //!
 //!   We need to reset the globals because when we
 //!   execute the Substrate Runtime, we do not drop and create the instance anew, instead
 //!   we restore some selected parts of the state.
 //!
-//! - stack depth metering can be performed via instrumentation or deferred to the engine and say
-//!   be added directly in machine code. Implementing this in machine code is rather cumbersome so
+//! - stack depth metering can be performed via instrumentation or deferred to the engine and say be
+//!   added directly in machine code. Implementing this in machine code is rather cumbersome so
 //!   instrumentation looks like a good solution.
 //!
 //!   Stack depth metering is needed to make a wasm blob
-//!   execution deterministic, which in turn is needed by the Parachain Validation Function in Polkadot.
+//!   execution deterministic, which in turn is needed by the Parachain Validation Function in
+//! Polkadot.
 //!
 //! ## Inspection
 //!
 //! Inspection of a wasm module may be needed to extract some useful information, such as to extract
 //! data segment snapshot, which is helpful for quickly restoring the initial state of instances.
 //! Inspection can be also useful to prove that a wasm module possesses some properties, such as,
-//! is free of any floating point operations, which is a useful step towards making instances produced
-//! from such a module deterministic.
+//! is free of any floating point operations, which is a useful step towards making instances
+//! produced from such a module deterministic.
 
 mod data_segments_snapshot;
 mod globals_snapshot;

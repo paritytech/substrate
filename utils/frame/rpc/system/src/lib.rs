@@ -19,18 +19,14 @@
 
 use std::sync::Arc;
 
-use codec::{self, Codec, Decode, Encode};
-use futures::future::{ready, TryFutureExt};
-use jsonrpc_core::{
-	futures::future::{self as rpc_future, result, Future},
-	Error as RpcError, ErrorCode,
-};
+use codec::{Codec, Decode, Encode};
+use futures::FutureExt;
+use jsonrpc_core::{Error as RpcError, ErrorCode};
 use jsonrpc_derive::rpc;
-use sc_client_api::light::{future_header, Fetcher, RemoteBlockchain, RemoteCallRequest};
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_block_builder::BlockBuilder;
-use sp_blockchain::{Error as ClientError, HeaderBackend};
+use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
 use sp_runtime::{generic::BlockId, traits};
 
@@ -38,7 +34,7 @@ pub use self::gen_client::Client as SystemClient;
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
 /// Future that resolves to account nonce.
-pub type FutureResult<T> = Box<dyn Future<Item = T, Error = RpcError> + Send>;
+type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, RpcError>>;
 
 /// System RPC methods.
 #[rpc]
@@ -116,7 +112,8 @@ where
 			Ok(adjust_nonce(&*self.pool, account, nonce))
 		};
 
-		Box::new(result(get_nonce()))
+		let res = get_nonce();
+		async move { res }.boxed()
 	}
 
 	fn dry_run(
@@ -125,7 +122,7 @@ where
 		at: Option<<Block as traits::Block>::Hash>,
 	) -> FutureResult<Bytes> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(rpc_future::err(err.into()))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		let dry_run = || {
@@ -150,90 +147,9 @@ where
 			Ok(Encode::encode(&result).into())
 		};
 
-		Box::new(result(dry_run()))
-	}
-}
+		let res = dry_run();
 
-/// An implementation of System-specific RPC methods on light client.
-pub struct LightSystem<P: TransactionPool, C, F, Block> {
-	client: Arc<C>,
-	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-	fetcher: Arc<F>,
-	pool: Arc<P>,
-}
-
-impl<P: TransactionPool, C, F, Block> LightSystem<P, C, F, Block> {
-	/// Create new `LightSystem`.
-	pub fn new(
-		client: Arc<C>,
-		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-		fetcher: Arc<F>,
-		pool: Arc<P>,
-	) -> Self {
-		LightSystem { client, remote_blockchain, fetcher, pool }
-	}
-}
-
-impl<P, C, F, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index>
-	for LightSystem<P, C, F, Block>
-where
-	P: TransactionPool + 'static,
-	C: HeaderBackend<Block>,
-	C: Send + Sync + 'static,
-	F: Fetcher<Block> + 'static,
-	Block: traits::Block,
-	AccountId: Clone + std::fmt::Display + Codec + Send + 'static,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
-{
-	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
-		let best_hash = self.client.info().best_hash;
-		let best_id = BlockId::hash(best_hash);
-		let future_best_header = future_header(&*self.remote_blockchain, &*self.fetcher, best_id);
-		let fetcher = self.fetcher.clone();
-		let call_data = account.encode();
-		let future_best_header = future_best_header.and_then(move |maybe_best_header| {
-			ready(
-				maybe_best_header
-					.ok_or_else(|| ClientError::UnknownBlock(format!("{}", best_hash))),
-			)
-		});
-		let future_nonce = future_best_header
-			.and_then(move |best_header| {
-				fetcher.remote_call(RemoteCallRequest {
-					block: best_hash,
-					header: best_header,
-					method: "AccountNonceApi_account_nonce".into(),
-					call_data,
-					retry_count: None,
-				})
-			})
-			.compat();
-		let future_nonce = future_nonce.and_then(|nonce| {
-			Decode::decode(&mut &nonce[..])
-				.map_err(|e| ClientError::CallResultDecode("Cannot decode account nonce", e))
-		});
-		let future_nonce = future_nonce.map_err(|e| RpcError {
-			code: ErrorCode::ServerError(Error::RuntimeError.into()),
-			message: "Unable to query nonce.".into(),
-			data: Some(format!("{:?}", e).into()),
-		});
-
-		let pool = self.pool.clone();
-		let future_nonce = future_nonce.map(move |nonce| adjust_nonce(&*pool, account, nonce));
-
-		Box::new(future_nonce)
-	}
-
-	fn dry_run(
-		&self,
-		_extrinsic: Bytes,
-		_at: Option<<Block as traits::Block>::Hash>,
-	) -> FutureResult<Bytes> {
-		Box::new(result(Err(RpcError {
-			code: ErrorCode::MethodNotFound,
-			message: "Unable to dry run extrinsic.".into(),
-			data: None,
-		})))
+		async move { res }.boxed()
 	}
 }
 
@@ -317,7 +233,7 @@ mod tests {
 		let nonce = accounts.nonce(AccountKeyring::Alice.into());
 
 		// then
-		assert_eq!(nonce.wait().unwrap(), 2);
+		assert_eq!(block_on(nonce).unwrap(), 2);
 	}
 
 	#[test]
@@ -336,7 +252,7 @@ mod tests {
 		let res = accounts.dry_run(vec![].into(), None);
 
 		// then
-		assert_eq!(res.wait(), Err(RpcError::method_not_found()));
+		assert_eq!(block_on(res), Err(RpcError::method_not_found()));
 	}
 
 	#[test]
@@ -363,7 +279,7 @@ mod tests {
 		let res = accounts.dry_run(tx.encode().into(), None);
 
 		// then
-		let bytes = res.wait().unwrap().0;
+		let bytes = block_on(res).unwrap().0;
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(apply_res, Ok(Ok(())));
 	}
@@ -392,7 +308,7 @@ mod tests {
 		let res = accounts.dry_run(tx.encode().into(), None);
 
 		// then
-		let bytes = res.wait().unwrap().0;
+		let bytes = block_on(res).unwrap().0;
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
 	}

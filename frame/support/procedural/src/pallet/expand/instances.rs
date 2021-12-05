@@ -18,6 +18,7 @@
 use crate::{pallet::Def, NUMBER_OF_INSTANCE};
 use proc_macro2::Span;
 
+///
 /// * Provide inherent instance to be used by construct_runtime
 /// * Provide Instance1 ..= Instance16 for instantiable pallet
 pub fn expand_instances(def: &mut Def) -> proc_macro2::TokenStream {

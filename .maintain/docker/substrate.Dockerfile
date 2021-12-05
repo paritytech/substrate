@@ -1,4 +1,4 @@
-FROM debian:stretch-slim
+FROM docker.io/library/ubuntu:20.04
 
 # metadata
 ARG VCS_REF
@@ -42,4 +42,3 @@ EXPOSE 30333 9933 9944
 VOLUME ["/substrate"]
 
 ENTRYPOINT ["/usr/local/bin/substrate"]
-

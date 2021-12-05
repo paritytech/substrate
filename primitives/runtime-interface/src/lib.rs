@@ -26,11 +26,12 @@
 //! # Using a type in a runtime interface
 //!
 //! Any type that should be used in a runtime interface as argument or return value needs to
-//! implement [`RIType`]. The associated type [`FFIType`](./trait.RIType.html#associatedtype.FFIType)
-//! is the type that is used in the FFI function to represent the actual type. For example `[T]` is
-//! represented by an `u64`. The slice pointer and the length will be mapped to an `u64` value.
-//! For more information see this [table](#ffi-type-and-conversion).
-//! The FFI function definition is used when calling from the wasm runtime into the node.
+//! implement [`RIType`]. The associated type
+//! [`FFIType`](./trait.RIType.html#associatedtype.FFIType) is the type that is used in the FFI
+//! function to represent the actual type. For example `[T]` is represented by an `u64`. The slice
+//! pointer and the length will be mapped to an `u64` value. For more information see this
+//! [table](#ffi-type-and-conversion). The FFI function definition is used when calling from the
+//! wasm runtime into the node.
 //!
 //! Traits are used to convert from a type to the corresponding
 //! [`RIType::FFIType`](./trait.RIType.html#associatedtype.FFIType).
@@ -93,13 +94,14 @@
 //! | `&str` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `&[u8]` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `Vec<u8>` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
-//! | `Vec<T> where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
-//! | `&[T] where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
-//! | `[u8; N]` | `u32` | `v.as_ptr()` |
-//! | `*const T` | `u32` | `Identity` |
-//! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
-//! | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner | Depends on inner |
-//! | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len() 32bit << 32 &#124;v.as_ptr() 32bit</code>|
+//! | `Vec<T> where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32
+//! &#124; e.as_ptr() 32bit</code> | | `&[T] where T: Encode` | `u64` | `let e =
+//! v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> | | `[u8; N]` |
+//! `u32` | `v.as_ptr()` | | `*const T` | `u32` | `Identity` |
+//! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr()
+//! 32bit</code> | | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner |
+//! Depends on inner | | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len()
+//! 32bit << 32 &#124;v.as_ptr() 32bit</code>|
 //!
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 
@@ -119,10 +121,10 @@ pub use sp_std;
 
 /// Attribute macro for transforming a trait declaration into a runtime interface.
 ///
-/// A runtime interface is a fixed interface between a Substrate compatible runtime and the native
-/// node. This interface is callable from a native and a wasm runtime. The macro will generate the
-/// corresponding code for the native implementation and the code for calling from the wasm
-/// side to the native implementation.
+/// A runtime interface is a fixed interface between a Substrate compatible runtime and the
+/// native node. This interface is callable from a native and a wasm runtime. The macro will
+/// generate the corresponding code for the native implementation and the code for calling from
+/// the wasm side to the native implementation.
 ///
 /// The macro expects the runtime interface declaration as trait declaration:
 ///
@@ -273,25 +275,25 @@ pub use sp_std;
 /// The macro supports any kind of argument type, as long as it implements [`RIType`] and the
 /// required `FromFFIValue`/`IntoFFIValue`. The macro will convert each
 /// argument to the corresponding FFI representation and will call into the host using this FFI
-/// representation. On the host each argument is converted back to the native representation and
-/// the native implementation is called. Any return value is handled in the same way.
+/// representation. On the host each argument is converted back to the native representation
+/// and the native implementation is called. Any return value is handled in the same way.
 ///
 /// # Wasm only interfaces
 ///
-/// Some interfaces are only required from within the wasm runtime e.g. the allocator interface.
-/// To support this, the macro can be called like `#[runtime_interface(wasm_only)]`. This instructs
-/// the macro to make two significant changes to the generated code:
+/// Some interfaces are only required from within the wasm runtime e.g. the allocator
+/// interface. To support this, the macro can be called like `#[runtime_interface(wasm_only)]`.
+/// This instructs the macro to make two significant changes to the generated code:
 ///
 /// 1. The generated functions are not callable from the native side.
-/// 2. The trait as shown above is not implemented for `Externalities` and is instead implemented
-///    for `FunctionExecutor` (from `sp-wasm-interface`).
+/// 2. The trait as shown above is not implemented for `Externalities` and is instead
+/// implemented    for `FunctionExecutor` (from `sp-wasm-interface`).
 ///
 /// # Disable tracing
 /// By addding `no_tracing` to the list of options you can prevent the wasm-side interface from
-/// generating the default `sp-tracing`-calls. Note that this is rarely needed but only meant for
-/// the case when that would create a circular dependency. You usually _do not_ want to add this
-/// flag, as tracing doesn't cost you anything by default anyways (it is added as a no-op) but is
-/// super useful for debugging later.
+/// generating the default `sp-tracing`-calls. Note that this is rarely needed but only meant
+/// for the case when that would create a circular dependency. You usually _do not_ want to add
+/// this flag, as tracing doesn't cost you anything by default anyways (it is added as a no-op)
+/// but is super useful for debugging later.
 pub use sp_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]

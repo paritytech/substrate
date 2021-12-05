@@ -69,7 +69,7 @@ fn memory_consumption(wasm_method: WasmExecutionMethod) {
 
 	let runtime = mk_test_runtime(wasm_method, 1024);
 
-	let instance = runtime.new_instance().unwrap();
+	let mut instance = runtime.new_instance().unwrap();
 	let heap_base = instance
 		.get_global_const("__heap_base")
 		.expect("`__heap_base` is valid")

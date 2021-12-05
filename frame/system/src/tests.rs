@@ -168,44 +168,44 @@ fn deposit_event_should_work() {
 		);
 
 		System::initialize(&2, &[0u8; 32].into(), &Default::default(), InitKind::Full);
-		System::deposit_event(SysEvent::NewAccount(32));
+		System::deposit_event(SysEvent::NewAccount { account: 32 });
 		System::note_finished_initialize();
-		System::deposit_event(SysEvent::KilledAccount(42));
+		System::deposit_event(SysEvent::KilledAccount { account: 42 });
 		System::note_applied_extrinsic(&Ok(().into()), Default::default());
 		System::note_applied_extrinsic(&Err(DispatchError::BadOrigin.into()), Default::default());
 		System::note_finished_extrinsics();
-		System::deposit_event(SysEvent::NewAccount(3));
+		System::deposit_event(SysEvent::NewAccount { account: 3 });
 		System::finalize();
 		assert_eq!(
 			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: SysEvent::NewAccount(32).into(),
+					event: SysEvent::NewAccount { account: 32 }.into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::KilledAccount(42).into(),
+					event: SysEvent::KilledAccount { account: 42 }.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess(Default::default()).into(),
+					event: SysEvent::ExtrinsicSuccess { dispatch_info: Default::default() }.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: SysEvent::ExtrinsicFailed(
-						DispatchError::BadOrigin.into(),
-						Default::default()
-					)
+					event: SysEvent::ExtrinsicFailed {
+						dispatch_error: DispatchError::BadOrigin.into(),
+						dispatch_info: Default::default()
+					}
 					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3).into(),
+					event: SysEvent::NewAccount { account: 3 }.into(),
 					topics: vec![]
 				},
 			]
@@ -234,37 +234,34 @@ fn deposit_event_uses_actual_weight() {
 			vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
-						weight: 300,
-						..Default::default()
-					},)
+					event: SysEvent::ExtrinsicSuccess {
+						dispatch_info: DispatchInfo { weight: 300, ..Default::default() },
+					}
 					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
-						weight: 1000,
-						..Default::default()
-					},)
+					event: SysEvent::ExtrinsicSuccess {
+						dispatch_info: DispatchInfo { weight: 1000, ..Default::default() },
+					}
 					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: SysEvent::ExtrinsicSuccess(DispatchInfo {
-						weight: 1000,
-						..Default::default()
-					},)
+					event: SysEvent::ExtrinsicSuccess {
+						dispatch_info: DispatchInfo { weight: 1000, ..Default::default() },
+					}
 					.into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(3),
-					event: SysEvent::ExtrinsicFailed(
-						DispatchError::BadOrigin.into(),
-						DispatchInfo { weight: 999, ..Default::default() },
-					)
+					event: SysEvent::ExtrinsicFailed {
+						dispatch_error: DispatchError::BadOrigin.into(),
+						dispatch_info: DispatchInfo { weight: 999, ..Default::default() },
+					}
 					.into(),
 					topics: vec![]
 				},
@@ -284,9 +281,9 @@ fn deposit_event_topics() {
 		let topics = vec![H256::repeat_byte(1), H256::repeat_byte(2), H256::repeat_byte(3)];
 
 		// We deposit a few events with different sets of topics.
-		System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1).into());
-		System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2).into());
-		System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3).into());
+		System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount { account: 1 }.into());
+		System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount { account: 2 }.into());
+		System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount { account: 3 }.into());
 
 		System::finalize();
 
@@ -296,17 +293,17 @@ fn deposit_event_topics() {
 			vec![
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(1).into(),
+					event: SysEvent::NewAccount { account: 1 }.into(),
 					topics: topics[0..3].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(2).into(),
+					event: SysEvent::NewAccount { account: 2 }.into(),
 					topics: topics[0..1].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3).into(),
+					event: SysEvent::NewAccount { account: 3 }.into(),
 					topics: topics[1..2].to_vec(),
 				}
 			]
@@ -390,9 +387,22 @@ fn set_code_checks_works() {
 		ext.execute_with(|| {
 			let res = System::set_code(RawOrigin::Root.into(), vec![1, 2, 3, 4]);
 
+			assert_runtime_updated_digest(if res.is_ok() { 1 } else { 0 });
 			assert_eq!(expected.map_err(DispatchErrorWithPostInfo::from), res);
 		});
 	}
+}
+
+fn assert_runtime_updated_digest(num: usize) {
+	assert_eq!(
+		System::digest()
+			.logs
+			.into_iter()
+			.filter(|item| *item == generic::DigestItem::RuntimeEnvironmentUpdated)
+			.count(),
+		num,
+		"Incorrect number of Runtime Updated digest items",
+	);
 }
 
 #[test]
@@ -452,17 +462,6 @@ fn events_not_emitted_during_genesis() {
 }
 
 #[test]
-fn ensure_one_of_works() {
-	fn ensure_root_or_signed(o: RawOrigin<u64>) -> Result<Either<(), u64>, Origin> {
-		EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
-	}
-
-	assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
-	assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
-	assert!(ensure_root_or_signed(RawOrigin::None).is_err());
-}
-
-#[test]
 fn extrinsics_root_is_calculated_correctly() {
 	new_test_ext().execute_with(|| {
 		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
@@ -476,5 +475,14 @@ fn extrinsics_root_is_calculated_correctly() {
 
 		let ext_root = extrinsics_data_root::<BlakeTwo256>(vec![vec![1], vec![2]]);
 		assert_eq!(ext_root, *header.extrinsics_root());
+	});
+}
+
+#[test]
+fn runtime_updated_digest_emitted_when_heap_pages_changed() {
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::set_heap_pages(RawOrigin::Root.into(), 5).unwrap();
+		assert_runtime_updated_digest(1);
 	});
 }

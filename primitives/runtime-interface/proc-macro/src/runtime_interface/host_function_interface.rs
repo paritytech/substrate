@@ -184,8 +184,8 @@ fn generate_host_functions_struct(
 	})
 }
 
-/// Generates the host function struct that implements `wasm_interface::Function` and returns a static
-/// reference to this struct.
+/// Generates the host function struct that implements `wasm_interface::Function` and returns a
+/// static reference to this struct.
 ///
 /// When calling from wasm into the host, we will call the `execute` function that calls the native
 /// implementation of the function.

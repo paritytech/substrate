@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::{
-	hash::{StorageHasher, Twox128},
 	storage::{self, unhashed, StorageAppend},
 	Never,
 };
@@ -46,10 +45,7 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Generate the full key used in top storage.
 	fn storage_value_final_key() -> [u8; 32] {
-		let mut final_key = [0u8; 32];
-		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
-		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
-		final_key
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 }
 

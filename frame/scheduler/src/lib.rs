@@ -40,12 +40,11 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a
-//!   specified block and with a specified priority.
-//! * `cancel` - cancel a scheduled dispatch, specified by block number and
-//!   index.
-//! * `schedule_named` - augments the `schedule` interface with an additional
-//!   `Vec<u8>` parameter that can be used for identification.
+//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a specified block and
+//!   with a specified priority.
+//! * `cancel` - cancel a scheduled dispatch, specified by block number and index.
+//! * `schedule_named` - augments the `schedule` interface with an additional `Vec<u8>` parameter
+//!   that can be used for identification.
 //! * `cancel_named` - the named complement to the cancel function.
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -59,17 +58,18 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime},
-		EnsureOrigin, Get, IsType, OriginTrait,
+		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system, ensure_signed};
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BadOrigin, One, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*};
+use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
@@ -88,7 +88,7 @@ struct ScheduledV1<Call, BlockNumber> {
 
 /// Information regarding an item to be executed in the future.
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
 	maybe_id: Option<Vec<u8>>,
@@ -110,7 +110,7 @@ pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
 // A value placed in storage that represents the current version of the Scheduler storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 enum Releases {
 	V1,
 	V2,
@@ -144,7 +144,7 @@ pub mod pallet {
 			+ IsType<<Self as system::Config>::Origin>;
 
 		/// The caller origin, overarching type of all pallets origins.
-		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
+		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq + TypeInfo;
 
 		/// The aggregated call type.
 		type Call: Parameter
@@ -152,13 +152,22 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ From<system::Call<Self>>;
 
-		/// The maximum weight that may be scheduled per block for any dispatchables of less priority
-		/// than `schedule::HARD_DEADLINE`.
+		/// The maximum weight that may be scheduled per block for any dispatchables of less
+		/// priority than `schedule::HARD_DEADLINE`.
 		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 
 		/// Required origin to schedule or cancel calls.
 		type ScheduleOrigin: EnsureOrigin<<Self as system::Config>::Origin>;
+
+		/// Compare the privileges of origins.
+		///
+		/// This will be used when canceling a task, to ensure that the origin that tries
+		/// to cancel has greater or equal privileges as the origin that created the scheduled task.
+		///
+		/// For simplicity the [`EqualPrivilegeOnly`](frame_support::traits::EqualPrivilegeOnly) can
+		/// be used. This will only check if two given origins are equal.
+		type OriginPrivilegeCmp: PrivilegeCmp<Self::PalletsOrigin>;
 
 		/// The maximum number of scheduled calls in the queue for a single block.
 		/// Not strictly enforced, but used for weight estimation.
@@ -193,14 +202,17 @@ pub mod pallet {
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::BlockNumber = "BlockNumber", TaskAddress<T::BlockNumber> = "TaskAddress<BlockNumber>")]
 	pub enum Event<T: Config> {
-		/// Scheduled some task. \[when, index\]
-		Scheduled(T::BlockNumber, u32),
-		/// Canceled some task. \[when, index\]
-		Canceled(T::BlockNumber, u32),
-		/// Dispatched some task. \[task, id, result\]
-		Dispatched(TaskAddress<T::BlockNumber>, Option<Vec<u8>>, DispatchResult),
+		/// Scheduled some task.
+		Scheduled { when: T::BlockNumber, index: u32 },
+		/// Canceled some task.
+		Canceled { when: T::BlockNumber, index: u32 },
+		/// Dispatched some task.
+		Dispatched {
+			task: TaskAddress<T::BlockNumber>,
+			id: Option<Vec<u8>>,
+			result: DispatchResult,
+		},
 	}
 
 	#[pallet::error]
@@ -235,16 +247,6 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute the scheduled calls
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - N = Named scheduled calls
-		/// - P = Periodic Calls
-		/// - Base Weight: 9.243 + 23.45 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda + Lookup * N + Agenda(Future) * P
-		///     - Write: Agenda + Lookup * N  + Agenda(future) * P
-		/// # </weight>
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let limit = T::MaximumWeight::get();
 			let mut queued = Agenda::<T>::take(now)
@@ -321,11 +323,11 @@ pub mod pallet {
 								Lookup::<T>::remove(id);
 							}
 						}
-						Self::deposit_event(Event::Dispatched(
-							(now, index),
-							maybe_id,
-							r.map(|_| ()).map_err(|e| e.error),
-						));
+						Self::deposit_event(Event::Dispatched {
+							task: (now, index),
+							id: maybe_id,
+							result: r.map(|_| ()).map_err(|e| e.error),
+						});
 						total_weight = cumulative_weight;
 						None
 					} else {
@@ -344,15 +346,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Anonymously schedule a task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 22.29 + .126 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda
-		///     - Write: Agenda
-		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule(
 			origin: OriginFor<T>,
@@ -374,15 +367,6 @@ pub mod pallet {
 		}
 
 		/// Cancel an anonymously scheduled task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 22.15 + 2.869 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -392,15 +376,6 @@ pub mod pallet {
 		}
 
 		/// Schedule a named task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 29.6 + .159 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named(
 			origin: OriginFor<T>,
@@ -424,15 +399,6 @@ pub mod pallet {
 		}
 
 		/// Cancel a named scheduled task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 24.91 + 2.907 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -601,7 +567,7 @@ impl<T: Config> Pallet<T> {
 				expected from the runtime configuration. An update might be needed.",
 			);
 		}
-		Self::deposit_event(Event::Scheduled(when, index));
+		Self::deposit_event(Event::Scheduled { when, index });
 
 		Ok((when, index))
 	}
@@ -615,7 +581,10 @@ impl<T: Config> Pallet<T> {
 				Ok(None),
 				|s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-						if *o != s.origin {
+						if matches!(
+							T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
+							Some(Ordering::Less) | None
+						) {
 							return Err(BadOrigin.into())
 						}
 					};
@@ -627,7 +596,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
-			Self::deposit_event(Event::Canceled(when, index));
+			Self::deposit_event(Event::Canceled { when, index });
 			Ok(())
 		} else {
 			Err(Error::<T>::NotFound)?
@@ -652,8 +621,8 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-		Self::deposit_event(Event::Canceled(when, index));
-		Self::deposit_event(Event::Scheduled(new_time, new_index));
+		Self::deposit_event(Event::Canceled { when, index });
+		Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
 
 		Ok((new_time, new_index))
 	}
@@ -698,7 +667,7 @@ impl<T: Config> Pallet<T> {
 		}
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
-		Self::deposit_event(Event::Scheduled(when, index));
+		Self::deposit_event(Event::Scheduled { when, index });
 
 		Ok(address)
 	}
@@ -710,7 +679,10 @@ impl<T: Config> Pallet<T> {
 				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
 					if let Some(s) = agenda.get_mut(i) {
 						if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-							if *o != s.origin {
+							if matches!(
+								T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
+								Some(Ordering::Less) | None
+							) {
 								return Err(BadOrigin.into())
 							}
 						}
@@ -718,7 +690,7 @@ impl<T: Config> Pallet<T> {
 					}
 					Ok(())
 				})?;
-				Self::deposit_event(Event::Canceled(when, index));
+				Self::deposit_event(Event::Canceled { when, index });
 				Ok(())
 			} else {
 				Err(Error::<T>::NotFound)?
@@ -750,8 +722,8 @@ impl<T: Config> Pallet<T> {
 				})?;
 
 				let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-				Self::deposit_event(Event::Canceled(when, index));
-				Self::deposit_event(Event::Scheduled(new_time, new_index));
+				Self::deposit_event(Event::Canceled { when, index });
+				Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
 
 				*lookup = Some((new_time, new_index));
 
@@ -833,11 +805,11 @@ mod tests {
 	use crate as scheduler;
 	use frame_support::{
 		assert_err, assert_noop, assert_ok, ord_parameter_types, parameter_types,
-		traits::{Filter, OnFinalize, OnInitialize},
+		traits::{Contains, EnsureOneOf, EqualPrivilegeOnly, OnFinalize, OnInitialize},
 		weights::constants::RocksDbWeight,
 		Hashable,
 	};
-	use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+	use frame_system::{EnsureRoot, EnsureSignedBy};
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
@@ -925,9 +897,9 @@ mod tests {
 
 	// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 	pub struct BaseFilter;
-	impl Filter<Call> for BaseFilter {
-		fn filter(call: &Call) -> bool {
-			!matches!(call, Call::Logger(LoggerCall::log(_, _)))
+	impl Contains<Call> for BaseFilter {
+		fn contains(call: &Call) -> bool {
+			!matches!(call, Call::Logger(LoggerCall::log { .. }))
 		}
 	}
 
@@ -978,9 +950,10 @@ mod tests {
 		type PalletsOrigin = OriginCaller;
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
-		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+		type ScheduleOrigin = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
+		type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	}
 
 	pub type LoggerCall = logger::Call<Test>;
@@ -1005,8 +978,8 @@ mod tests {
 	#[test]
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
-			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -1021,8 +994,8 @@ mod tests {
 	fn schedule_after_works() {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
-			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
 			run_to_block(5);
@@ -1038,8 +1011,8 @@ mod tests {
 	fn schedule_after_zero_works() {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
-			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call));
 			// Will trigger on the next block.
 			run_to_block(3);
@@ -1058,7 +1031,7 @@ mod tests {
 				Some((3, 3)),
 				127,
 				root(),
-				Call::Logger(logger::Call::log(42, 1000))
+				Call::Logger(logger::Call::log { i: 42, weight: 1000 })
 			));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -1080,8 +1053,8 @@ mod tests {
 	#[test]
 	fn reschedule_works() {
 		new_test_ext().execute_with(|| {
-			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(),
 				(4, 0)
@@ -1111,8 +1084,8 @@ mod tests {
 	#[test]
 	fn reschedule_named_works() {
 		new_test_ext().execute_with(|| {
-			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule_named(
 					1u32.encode(),
@@ -1153,8 +1126,8 @@ mod tests {
 	#[test]
 	fn reschedule_named_perodic_works() {
 		new_test_ext().execute_with(|| {
-			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
+			let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 			assert_eq!(
 				Scheduler::do_schedule_named(
 					1u32.encode(),
@@ -1215,7 +1188,7 @@ mod tests {
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(69, 1000)),
+				Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 			)
 			.unwrap();
 			let i = Scheduler::do_schedule(
@@ -1223,7 +1196,7 @@ mod tests {
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(42, 1000)),
+				Call::Logger(LoggerCall::log { i: 42, weight: 1000 }),
 			)
 			.unwrap();
 			run_to_block(3);
@@ -1245,7 +1218,7 @@ mod tests {
 				Some((3, 3)),
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(42, 1000)),
+				Call::Logger(LoggerCall::log { i: 42, weight: 1000 }),
 			)
 			.unwrap();
 			// same id results in error.
@@ -1255,7 +1228,7 @@ mod tests {
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(69, 1000))
+				Call::Logger(LoggerCall::log { i: 69, weight: 1000 })
 			)
 			.is_err());
 			// different id is ok.
@@ -1265,7 +1238,7 @@ mod tests {
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(69, 1000)),
+				Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 			)
 			.unwrap();
 			run_to_block(3);
@@ -1287,14 +1260,14 @@ mod tests {
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(42, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 })
 			));
 			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(69, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
 			));
 			// 69 and 42 do not fit together
 			run_to_block(4);
@@ -1312,16 +1285,17 @@ mod tests {
 				None,
 				0,
 				root(),
-				Call::Logger(LoggerCall::log(42, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 })
 			));
 			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				0,
 				root(),
-				Call::Logger(LoggerCall::log(69, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
 			));
-			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
+			// With base weights, 69 and 42 should not fit together, but do because of hard
+			// deadlines
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
 		});
@@ -1335,14 +1309,14 @@ mod tests {
 				None,
 				1,
 				root(),
-				Call::Logger(LoggerCall::log(42, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 2 })
 			));
 			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				0,
 				root(),
-				Call::Logger(LoggerCall::log(69, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
 			));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 69u32), (root(), 42u32)]);
@@ -1357,21 +1331,24 @@ mod tests {
 				None,
 				255,
 				root(),
-				Call::Logger(LoggerCall::log(42, MaximumSchedulerWeight::get() / 3))
+				Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 3 })
 			));
 			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(69, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
 			));
 			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				126,
 				root(),
-				Call::Logger(LoggerCall::log(2600, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log {
+					i: 2600,
+					weight: MaximumSchedulerWeight::get() / 2
+				})
 			));
 
 			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
@@ -1400,7 +1377,7 @@ mod tests {
 				None,
 				255,
 				root(),
-				Call::Logger(LoggerCall::log(3, MaximumSchedulerWeight::get() / 3))
+				Call::Logger(LoggerCall::log { i: 3, weight: MaximumSchedulerWeight::get() / 3 })
 			));
 			// Anon Periodic
 			assert_ok!(Scheduler::do_schedule(
@@ -1408,7 +1385,7 @@ mod tests {
 				Some((1000, 3)),
 				128,
 				root(),
-				Call::Logger(LoggerCall::log(42, MaximumSchedulerWeight::get() / 3))
+				Call::Logger(LoggerCall::log { i: 42, weight: MaximumSchedulerWeight::get() / 3 })
 			));
 			// Anon
 			assert_ok!(Scheduler::do_schedule(
@@ -1416,7 +1393,7 @@ mod tests {
 				None,
 				127,
 				root(),
-				Call::Logger(LoggerCall::log(69, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log { i: 69, weight: MaximumSchedulerWeight::get() / 2 })
 			));
 			// Named Periodic
 			assert_ok!(Scheduler::do_schedule_named(
@@ -1425,7 +1402,10 @@ mod tests {
 				Some((1000, 3)),
 				126,
 				root(),
-				Call::Logger(LoggerCall::log(2600, MaximumSchedulerWeight::get() / 2))
+				Call::Logger(LoggerCall::log {
+					i: 2600,
+					weight: MaximumSchedulerWeight::get() / 2
+				})
 			));
 
 			// Will include the named periodic only
@@ -1469,8 +1449,8 @@ mod tests {
 	#[test]
 	fn root_calls_works() {
 		new_test_ext().execute_with(|| {
-			let call = Box::new(Call::Logger(LoggerCall::log(69, 1000)));
-			let call2 = Box::new(Call::Logger(LoggerCall::log(42, 1000)));
+			let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }));
+			let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }));
 			assert_ok!(Scheduler::schedule_named(
 				Origin::root(),
 				1u32.encode(),
@@ -1497,8 +1477,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(3);
 
-			let call = Box::new(Call::Logger(LoggerCall::log(69, 1000)));
-			let call2 = Box::new(Call::Logger(LoggerCall::log(42, 1000)));
+			let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }));
+			let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }));
 
 			assert_err!(
 				Scheduler::schedule_named(Origin::root(), 1u32.encode(), 2, None, 127, call),
@@ -1520,8 +1500,8 @@ mod tests {
 	#[test]
 	fn should_use_orign() {
 		new_test_ext().execute_with(|| {
-			let call = Box::new(Call::Logger(LoggerCall::log(69, 1000)));
-			let call2 = Box::new(Call::Logger(LoggerCall::log(42, 1000)));
+			let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }));
+			let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }));
 			assert_ok!(Scheduler::schedule_named(
 				system::RawOrigin::Signed(1).into(),
 				1u32.encode(),
@@ -1552,8 +1532,8 @@ mod tests {
 	#[test]
 	fn should_check_orign() {
 		new_test_ext().execute_with(|| {
-			let call = Box::new(Call::Logger(LoggerCall::log(69, 1000)));
-			let call2 = Box::new(Call::Logger(LoggerCall::log(42, 1000)));
+			let call = Box::new(Call::Logger(LoggerCall::log { i: 69, weight: 1000 }));
+			let call2 = Box::new(Call::Logger(LoggerCall::log { i: 42, weight: 1000 }));
 			assert_noop!(
 				Scheduler::schedule_named(
 					system::RawOrigin::Signed(2).into(),
@@ -1575,8 +1555,10 @@ mod tests {
 	#[test]
 	fn should_check_orign_for_cancel() {
 		new_test_ext().execute_with(|| {
-			let call = Box::new(Call::Logger(LoggerCall::log_without_filter(69, 1000)));
-			let call2 = Box::new(Call::Logger(LoggerCall::log_without_filter(42, 1000)));
+			let call =
+				Box::new(Call::Logger(LoggerCall::log_without_filter { i: 69, weight: 1000 }));
+			let call2 =
+				Box::new(Call::Logger(LoggerCall::log_without_filter { i: 42, weight: 1000 }));
 			assert_ok!(Scheduler::schedule_named(
 				system::RawOrigin::Signed(1).into(),
 				1u32.encode(),
@@ -1626,14 +1608,14 @@ mod tests {
 					Some(ScheduledV1 {
 						maybe_id: None,
 						priority: i as u8 + 10,
-						call: Call::Logger(LoggerCall::log(96, 100)),
+						call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 						maybe_periodic: None,
 					}),
 					None,
 					Some(ScheduledV1 {
 						maybe_id: Some(b"test".to_vec()),
 						priority: 123,
-						call: Call::Logger(LoggerCall::log(69, 1000)),
+						call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 						maybe_periodic: Some((456u64, 10)),
 					}),
 				];
@@ -1653,7 +1635,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: None,
 								priority: 10,
-								call: Call::Logger(LoggerCall::log(96, 100)),
+								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 								maybe_periodic: None,
 								origin: root(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1662,7 +1644,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
-								call: Call::Logger(LoggerCall::log(69, 1000)),
+								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 								maybe_periodic: Some((456u64, 10)),
 								origin: root(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1675,7 +1657,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: None,
 								priority: 11,
-								call: Call::Logger(LoggerCall::log(96, 100)),
+								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 								maybe_periodic: None,
 								origin: root(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1684,7 +1666,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
-								call: Call::Logger(LoggerCall::log(69, 1000)),
+								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 								maybe_periodic: Some((456u64, 10)),
 								origin: root(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1697,7 +1679,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: None,
 								priority: 12,
-								call: Call::Logger(LoggerCall::log(96, 100)),
+								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 								maybe_periodic: None,
 								origin: root(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1706,7 +1688,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
-								call: Call::Logger(LoggerCall::log(69, 1000)),
+								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 								maybe_periodic: Some((456u64, 10)),
 								origin: root(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1729,7 +1711,7 @@ mod tests {
 					Some(Scheduled {
 						maybe_id: None,
 						priority: i as u8 + 10,
-						call: Call::Logger(LoggerCall::log(96, 100)),
+						call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 						origin: 3u32,
 						maybe_periodic: None,
 						_phantom: Default::default(),
@@ -1739,7 +1721,7 @@ mod tests {
 						maybe_id: Some(b"test".to_vec()),
 						priority: 123,
 						origin: 2u32,
-						call: Call::Logger(LoggerCall::log(69, 1000)),
+						call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 						maybe_periodic: Some((456u64, 10)),
 						_phantom: Default::default(),
 					}),
@@ -1768,7 +1750,7 @@ mod tests {
 							Some(ScheduledV2::<_, _, OriginCaller, u64> {
 								maybe_id: None,
 								priority: 10,
-								call: Call::Logger(LoggerCall::log(96, 100)),
+								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 								maybe_periodic: None,
 								origin: system::RawOrigin::Root.into(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1777,7 +1759,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
-								call: Call::Logger(LoggerCall::log(69, 1000)),
+								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 								maybe_periodic: Some((456u64, 10)),
 								origin: system::RawOrigin::None.into(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1790,7 +1772,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: None,
 								priority: 11,
-								call: Call::Logger(LoggerCall::log(96, 100)),
+								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 								maybe_periodic: None,
 								origin: system::RawOrigin::Root.into(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1799,7 +1781,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
-								call: Call::Logger(LoggerCall::log(69, 1000)),
+								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 								maybe_periodic: Some((456u64, 10)),
 								origin: system::RawOrigin::None.into(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1812,7 +1794,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: None,
 								priority: 12,
-								call: Call::Logger(LoggerCall::log(96, 100)),
+								call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
 								maybe_periodic: None,
 								origin: system::RawOrigin::Root.into(),
 								_phantom: PhantomData::<u64>::default(),
@@ -1821,7 +1803,7 @@ mod tests {
 							Some(ScheduledV2 {
 								maybe_id: Some(b"test".to_vec()),
 								priority: 123,
-								call: Call::Logger(LoggerCall::log(69, 1000)),
+								call: Call::Logger(LoggerCall::log { i: 69, weight: 1000 }),
 								maybe_periodic: Some((456u64, 10)),
 								origin: system::RawOrigin::None.into(),
 								_phantom: PhantomData::<u64>::default(),

@@ -76,7 +76,7 @@ type BalanceOf<T> =
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
 
-#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct LotteryConfig<BlockNumber, Balance> {
 	/// Price per entry.
 	price: Balance,
@@ -115,8 +115,8 @@ impl<T: Config> ValidateCall<T> for Pallet<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Weight, Parameter};
-	use frame_system::{ensure_signed, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -170,16 +170,15 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// A lottery has been started!
 		LotteryStarted,
 		/// A new set of calls have been set!
 		CallsUpdated,
 		/// A winner has been chosen!
-		Winner(T::AccountId, BalanceOf<T>),
+		Winner { winner: T::AccountId, lottery_balance: BalanceOf<T> },
 		/// A ticket has been bought!
-		TicketBought(T::AccountId, CallIndex),
+		TicketBought { who: T::AccountId, call_index: CallIndex },
 	}
 
 	#[pallet::error]
@@ -251,7 +250,7 @@ pub mod pallet {
 						);
 						debug_assert!(res.is_ok());
 
-						Self::deposit_event(Event::<T>::Winner(winner, lottery_balance));
+						Self::deposit_event(Event::<T>::Winner { winner, lottery_balance });
 
 						TicketsCount::<T>::kill();
 
@@ -266,9 +265,9 @@ pub mod pallet {
 							*lottery = None;
 							return T::WeightInfo::on_initialize_end()
 						}
-						// We choose not need to kill Participants and Tickets to avoid a large number
-						// of writes at one time. Instead, data persists between lotteries, but is not used
-						// if it is not relevant.
+						// We choose not need to kill Participants and Tickets to avoid a large
+						// number of writes at one time. Instead, data persists between lotteries,
+						// but is not used if it is not relevant.
 					}
 				}
 				return T::DbWeight::get().reads(1)
@@ -453,7 +452,7 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		Self::deposit_event(Event::<T>::TicketBought(caller.clone(), call_index));
+		Self::deposit_event(Event::<T>::TicketBought { who: caller.clone(), call_index });
 
 		Ok(())
 	}

@@ -26,6 +26,8 @@ extern crate test;
 
 #[doc(hidden)]
 pub use codec;
+#[doc(hidden)]
+pub use scale_info;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
@@ -50,6 +52,7 @@ use sp_core::{
 use sp_std::{convert::TryFrom, prelude::*};
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 
 pub mod curve;
 pub mod generic;
@@ -220,7 +223,7 @@ pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -288,7 +291,7 @@ impl Default for MultiSignature {
 }
 
 /// Public key for any known crypto algorithm.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
@@ -463,7 +466,7 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a dispatch call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug)]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
@@ -544,7 +547,7 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 }
 
 /// Description of what went wrong when trying to complete an operation on a token.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
@@ -584,7 +587,7 @@ impl From<TokenError> for DispatchError {
 }
 
 /// Arithmetic errors.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ArithmeticError {
 	/// Underflow.
@@ -728,10 +731,10 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be
-///   included in the next block if it has enough spare weight available.
-/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
-///   a transaction in the block doesn't make sense.
+///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be included in
+///   the next block if it has enough spare weight available.
+/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such a
+///   transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
 pub type ApplyExtrinsicResult =
 	Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
@@ -913,9 +916,13 @@ impl<R> TransactionOutcome<R> {
 
 #[cfg(test)]
 mod tests {
+	use crate::traits::BlakeTwo256;
+
 	use super::*;
 	use codec::{Decode, Encode};
 	use sp_core::crypto::Pair;
+	use sp_io::TestExternalities;
+	use sp_state_machine::create_proof_check_backend;
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
@@ -1014,6 +1021,49 @@ mod tests {
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
 			panic!("Hey, I'm an error");
+		});
+	}
+
+	#[test]
+	fn execute_and_generate_proof_works() {
+		use codec::Encode;
+		use sp_state_machine::Backend;
+		let mut ext = TestExternalities::default();
+
+		ext.insert(b"a".to_vec(), vec![1u8; 33]);
+		ext.insert(b"b".to_vec(), vec![2u8; 33]);
+		ext.insert(b"c".to_vec(), vec![3u8; 33]);
+		ext.insert(b"d".to_vec(), vec![4u8; 33]);
+
+		let pre_root = ext.backend.root().clone();
+		let (_, proof) = ext.execute_and_prove(|| {
+			sp_io::storage::get(b"a");
+			sp_io::storage::get(b"b");
+			sp_io::storage::get(b"v");
+			sp_io::storage::get(b"d");
+		});
+
+		let compact_proof = proof.clone().into_compact_proof::<BlakeTwo256>(pre_root).unwrap();
+		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+
+		// just an example of how you'd inspect the size of the proof.
+		println!("proof size: {:?}", proof.encoded_size());
+		println!("compact proof size: {:?}", compact_proof.encoded_size());
+		println!("zstd-compressed compact proof size: {:?}", &compressed_proof.len());
+
+		// create a new trie-backed from the proof and make sure it contains everything
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(pre_root, proof).unwrap();
+		assert_eq!(proof_check.storage(b"a",).unwrap().unwrap(), vec![1u8; 33]);
+
+		let _ = ext.execute_and_prove(|| {
+			sp_io::storage::set(b"a", &vec![1u8; 44]);
+		});
+
+		// ensure that these changes are propagated to the backend.
+
+		ext.execute_with(|| {
+			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
+			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
 		});
 	}
 }

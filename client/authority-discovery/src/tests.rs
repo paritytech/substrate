@@ -29,7 +29,7 @@ use libp2p::core::{
 	multiaddr::{Multiaddr, Protocol},
 	PeerId,
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use sp_authority_discovery::AuthorityId;
 use sp_core::crypto::key_types;
@@ -56,7 +56,7 @@ fn get_addresses_and_authority_id() {
 	let remote_addr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 		.parse::<Multiaddr>()
 		.unwrap()
-		.with(Protocol::P2p(remote_peer_id.clone().into()));
+		.with(Protocol::P2p(remote_peer_id.into()));
 
 	let test_api = Arc::new(TestApi { authorities: vec![] });
 
@@ -73,12 +73,12 @@ fn get_addresses_and_authority_id() {
 
 	pool.run_until(async {
 		assert_eq!(
-			Some(vec![remote_addr]),
+			Some(HashSet::from([remote_addr])),
 			service.get_addresses_by_authority_id(remote_authority_id.clone()).await,
 		);
 		assert_eq!(
-			Some(remote_authority_id),
-			service.get_authority_id_by_peer_id(remote_peer_id).await,
+			Some(HashSet::from([remote_authority_id])),
+			service.get_authority_ids_by_peer_id(remote_peer_id).await,
 		);
 	});
 }

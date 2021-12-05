@@ -164,7 +164,7 @@ impl TimestampInherentData for InherentData {
 /// This timestamp is the time since the UNIX epoch.
 #[cfg(feature = "std")]
 fn current_timestamp() -> std::time::Duration {
-	use wasm_timer::SystemTime;
+	use std::time::SystemTime;
 
 	let now = SystemTime::now();
 	now.duration_since(SystemTime::UNIX_EPOCH)
@@ -198,8 +198,8 @@ impl InherentDataProvider {
 	/// By default the maximum drift is 60 seconds.
 	///
 	/// The maximum drift is used when checking the inherents of a runtime. If the current timestamp
-	/// plus the maximum drift is smaller than the timestamp in the block, the block will be rejected
-	/// as being too far in the future.
+	/// plus the maximum drift is smaller than the timestamp in the block, the block will be
+	/// rejected as being too far in the future.
 	pub fn with_max_drift(mut self, max_drift: std::time::Duration) -> Self {
 		self.max_drift = max_drift.into();
 		self

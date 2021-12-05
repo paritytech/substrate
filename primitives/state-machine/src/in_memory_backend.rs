@@ -74,8 +74,9 @@ where
 
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
-		self.backend_storage_mut().consolidate(transaction);
-		self.essence.set_root(root);
+		let mut storage = sp_std::mem::take(self).into_storage();
+		storage.consolidate(transaction);
+		*self = TrieBackend::new(storage, root);
 	}
 
 	/// Compare with another in-memory backend.
@@ -175,7 +176,7 @@ mod tests {
 		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
-		let mut storage = storage
+		let storage = storage
 			.update(vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])]);
 		let trie_backend = storage.as_trie_backend().unwrap();
 		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(), Some(b"3".to_vec()));

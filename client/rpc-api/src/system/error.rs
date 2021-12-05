@@ -25,16 +25,15 @@ use jsonrpc_core as rpc;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// System RPC errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Provided block range couldn't be resolved to a list of blocks.
-	#[display(fmt = "Node is not fully functional: {}", _0)]
+	#[error("Node is not fully functional: {}", .0)]
 	NotHealthy(Health),
 	/// Peer argument is malformatted.
+	#[error("{0}")]
 	MalformattedPeerArg(String),
 }
-
-impl std::error::Error for Error {}
 
 /// Base code for all system errors.
 const BASE_ERROR: i64 = 2000;

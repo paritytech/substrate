@@ -28,7 +28,7 @@ use self::common::*;
 
 #[test]
 fn should_submit_unsigned_transaction() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -42,7 +42,7 @@ fn should_submit_unsigned_transaction() {
 			validators_len: 0,
 		};
 
-		let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
+		let call = pallet_im_online::Call::heartbeat { heartbeat: heartbeat_data, signature };
 		SubmitTransaction::<Runtime, pallet_im_online::Call<Runtime>>::submit_unsigned_transaction(
 			call.into(),
 		)
@@ -56,7 +56,7 @@ const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put c
 
 #[test]
 fn should_submit_signed_transaction() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -84,7 +84,10 @@ fn should_submit_signed_transaction() {
 	t.execute_with(|| {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer(Default::default(), Default::default())
+				pallet_balances::Call::transfer {
+					dest: Default::default(),
+					value: Default::default(),
+				}
 			});
 
 		let len = results.len();
@@ -96,7 +99,7 @@ fn should_submit_signed_transaction() {
 
 #[test]
 fn should_submit_signed_twice_from_the_same_account() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -118,7 +121,10 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.execute_with(|| {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer(Default::default(), Default::default())
+				pallet_balances::Call::transfer {
+					dest: Default::default(),
+					value: Default::default(),
+				}
 			});
 
 		assert!(result.is_some());
@@ -127,7 +133,10 @@ fn should_submit_signed_twice_from_the_same_account() {
 		// submit another one from the same account. The nonce should be incremented.
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer(Default::default(), Default::default())
+				pallet_balances::Call::transfer {
+					dest: Default::default(),
+					value: Default::default(),
+				}
 			});
 
 		assert!(result.is_some());
@@ -147,7 +156,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 #[test]
 fn should_submit_signed_twice_from_all_accounts() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -163,7 +172,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer(Default::default(), Default::default())
+				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -174,7 +183,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		// submit another one from the same account. The nonce should be incremented.
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer(Default::default(), Default::default())
+				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -211,7 +220,7 @@ fn submitted_transaction_should_be_valid() {
 		transaction_validity::{TransactionSource, TransactionTag},
 	};
 
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -227,7 +236,10 @@ fn submitted_transaction_should_be_valid() {
 	t.execute_with(|| {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
-				pallet_balances::Call::transfer(Default::default(), Default::default())
+				pallet_balances::Call::transfer {
+					dest: Default::default(),
+					value: Default::default(),
+				}
 			});
 		let len = results.len();
 		assert_eq!(len, 1);
@@ -237,7 +249,7 @@ fn submitted_transaction_should_be_valid() {
 	// check that transaction is valid, but reset environment storage,
 	// since CreateTransaction increments the nonce
 	let tx0 = state.read().transactions[0].clone();
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	t.execute_with(|| {
 		let source = TransactionSource::External;
 		let extrinsic = UncheckedExtrinsic::decode(&mut &*tx0).unwrap();

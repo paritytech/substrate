@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::Pallet as Proxy;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
 
@@ -83,10 +83,10 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
-		assert_last_event::<T>(Event::ProxyExecuted(Ok(())).into())
+		assert_last_event::<T>(Event::ProxyExecuted { result: Ok(()) }.into())
 	}
 
 	proxy_announced {
@@ -98,7 +98,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(delegate.clone()).into(),
 			real.clone(),
@@ -107,7 +107,7 @@ benchmarks! {
 		add_announcements::<T>(a, Some(delegate.clone()), None)?;
 	}: _(RawOrigin::Signed(caller), delegate, real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
-		assert_last_event::<T>(Event::ProxyExecuted(Ok(())).into())
+		assert_last_event::<T>(Event::ProxyExecuted { result: Ok(()) }.into())
 	}
 
 	remove_announcement {
@@ -118,7 +118,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -139,7 +139,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -161,11 +161,11 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
 	verify {
-		assert_last_event::<T>(Event::Announced(real, caller, call_hash).into());
+		assert_last_event::<T>(Event::Announced { real, proxy: caller, call_hash }.into());
 	}
 
 	add_proxy {
@@ -216,12 +216,12 @@ benchmarks! {
 	)
 	verify {
 		let anon_account = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
-		assert_last_event::<T>(Event::AnonymousCreated(
-			anon_account,
-			caller,
-			T::ProxyType::default(),
-			0,
-		).into());
+		assert_last_event::<T>(Event::AnonymousCreated {
+			anonymous: anon_account,
+			who: caller,
+			proxy_type: T::ProxyType::default(),
+			disambiguation_index: 0,
+		}.into());
 	}
 
 	kill_anonymous {
@@ -245,6 +245,6 @@ benchmarks! {
 	verify {
 		assert!(!Proxies::<T>::contains_key(&anon));
 	}
-}
 
-impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);
+}

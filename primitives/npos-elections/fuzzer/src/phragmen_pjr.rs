@@ -21,17 +21,17 @@
 //! ## Running a single iteration
 //!
 //! Honggfuzz shuts down each individual loop iteration after a configurable time limit.
-//! It can be helpful to run a single iteration on your hardware to help benchmark how long that time
-//! limit should reasonably be. Simply run the program without the `fuzzing` configuration to run a
-//! single iteration: `cargo run --bin phragmen_pjr`.
+//! It can be helpful to run a single iteration on your hardware to help benchmark how long that
+//! time limit should reasonably be. Simply run the program without the `fuzzing` configuration to
+//! run a single iteration: `cargo run --bin phragmen_pjr`.
 //!
 //! ## Running
 //!
 //! Run with `HFUZZ_RUN_ARGS="-t 10" cargo hfuzz run phragmen_pjr`.
 //!
-//! Note the environment variable: by default, `cargo hfuzz` shuts down each iteration after 1 second
-//! of runtime. We significantly increase that to ensure that the fuzzing gets a chance to complete.
-//! Running a single iteration can help determine an appropriate value for this parameter.
+//! Note the environment variable: by default, `cargo hfuzz` shuts down each iteration after 1
+//! second of runtime. We significantly increase that to ensure that the fuzzing gets a chance to
+//! complete. Running a single iteration can help determine an appropriate value for this parameter.
 //!
 //! ## Debugging a panic
 //!

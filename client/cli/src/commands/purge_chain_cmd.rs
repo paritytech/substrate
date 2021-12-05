@@ -21,7 +21,7 @@ use crate::{
 	params::{DatabaseParams, SharedParams},
 	CliConfiguration,
 };
-use sc_service::DatabaseConfig;
+use sc_service::DatabaseSource;
 use std::{
 	fmt::Debug,
 	fs,
@@ -47,7 +47,7 @@ pub struct PurgeChainCmd {
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run(&self, database_config: DatabaseConfig) -> error::Result<()> {
+	pub fn run(&self, database_config: DatabaseSource) -> error::Result<()> {
 		let db_path = database_config.path().ok_or_else(|| {
 			error::Error::Input("Cannot purge custom database implementation".into())
 		})?;

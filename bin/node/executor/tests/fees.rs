@@ -36,7 +36,7 @@ use self::common::{sign, *};
 
 #[test]
 fn fee_multiplier_increases_and_decreases_on_big_weight() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 
 	// initial fee multiplier must be one.
 	let mut prev_multiplier = Multiplier::one();
@@ -45,7 +45,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
 	});
 
-	let mut tt = new_test_ext(compact_code_unwrap(), false);
+	let mut tt = new_test_ext(compact_code_unwrap());
 
 	let time1 = 42 * 1000;
 	// big one in terms of weight.
@@ -56,11 +56,13 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time1)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time1 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(60))),
+				function: Call::System(frame_system::Call::fill_block {
+					ratio: Perbill::from_percent(60),
+				}),
 			},
 		],
 		(time1 / SLOT_DURATION).into(),
@@ -75,11 +77,11 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time2)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time2 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::System(frame_system::Call::remark(vec![0; 1])),
+				function: Call::System(frame_system::Call::remark { remark: vec![0; 1] }),
 			},
 		],
 		(time2 / SLOT_DURATION).into(),
@@ -149,7 +151,7 @@ fn transaction_fee_is_correct() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(alice()), new_account_info(100));
 	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(bob()), new_account_info(10));
 	t.insert(
@@ -224,9 +226,9 @@ fn block_weight_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	// setup ext.
-	let mut tt = new_test_ext(compact_code_unwrap(), false);
+	let mut tt = new_test_ext(compact_code_unwrap());
 
 	let factor = 50;
 	let mut time = 10;
@@ -239,7 +241,10 @@ fn block_weight_capacity_report() {
 		let mut xts = (0..num_transfers)
 			.map(|i| CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 0)),
+				function: Call::Balances(pallet_balances::Call::transfer {
+					dest: bob().into(),
+					value: 0,
+				}),
 			})
 			.collect::<Vec<CheckedExtrinsic>>();
 
@@ -247,7 +252,7 @@ fn block_weight_capacity_report() {
 			0,
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 			},
 		);
 
@@ -298,9 +303,9 @@ fn block_length_capacity_report() {
 	use node_primitives::Index;
 
 	// execution ext.
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	// setup ext.
-	let mut tt = new_test_ext(compact_code_unwrap(), false);
+	let mut tt = new_test_ext(compact_code_unwrap());
 
 	let factor = 256 * 1024;
 	let mut time = 10;
@@ -317,15 +322,13 @@ fn block_length_capacity_report() {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(pallet_timestamp::Call::set(time * 1000)),
+					function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),
-					function: Call::System(frame_system::Call::remark(vec![
-						0u8;
-						(block_number * factor)
-							as usize
-					])),
+					function: Call::System(frame_system::Call::remark {
+						remark: vec![0u8; (block_number * factor) as usize],
+					}),
 				},
 			],
 			(time * 1000 / SLOT_DURATION).into(),

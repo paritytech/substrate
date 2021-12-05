@@ -181,6 +181,7 @@ pub struct BlockExecutor<Block: BlockT, Client> {
 	block: Block::Hash,
 	targets: Option<String>,
 	storage_keys: Option<String>,
+	methods: Option<String>,
 	rpc_max_payload: usize,
 }
 
@@ -201,12 +202,13 @@ where
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
+		methods: Option<String>,
 		rpc_max_payload: Option<usize>,
 	) -> Self {
 		let rpc_max_payload = rpc_max_payload
 			.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-		Self { client, block, targets, storage_keys, rpc_max_payload }
+		Self { client, block, targets, storage_keys, methods, rpc_max_payload }
 	}
 
 	/// Execute block, record all spans and events belonging to `Self::targets`
@@ -274,7 +276,13 @@ where
 			.filter(|e| {
 				self.storage_keys
 					.as_ref()
-					.map(|keys| event_key_filter(e, keys))
+					.map(|keys| event_values_filter(e, "key", keys))
+					.unwrap_or(false)
+			})
+			.filter(|e| {
+				self.methods
+					.as_ref()
+					.map(|methods| event_values_filter(e, "method", methods))
 					.unwrap_or(false)
 			})
 			.map(|s| s.into())
@@ -292,6 +300,7 @@ where
 				parent_hash: block_id_as_string(parent_id),
 				tracing_targets: targets.to_string(),
 				storage_keys: self.storage_keys.clone().unwrap_or_default(),
+				methods: self.methods.clone().unwrap_or_default(),
 				spans,
 				events,
 			})
@@ -301,12 +310,12 @@ where
 	}
 }
 
-fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
+fn event_values_filter(event: &TraceEvent, filter_kind: &str, values: &str) -> bool {
 	event
 		.values
 		.string_values
-		.get("key")
-		.and_then(|key| Some(check_target(storage_keys, key, &event.level)))
+		.get(filter_kind)
+		.and_then(|value| Some(check_target(values, value, &event.level)))
 		.unwrap_or(false)
 }
 

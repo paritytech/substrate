@@ -56,11 +56,6 @@ where
 		self.essence.backend_storage()
 	}
 
-	/// Get backend storage reference.
-	pub fn backend_storage_mut(&mut self) -> &mut S {
-		self.essence.backend_storage_mut()
-	}
-
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
@@ -253,7 +248,7 @@ where
 		(root, is_default, write_overlay)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		Some(self)
 	}
 
@@ -286,8 +281,8 @@ pub mod tests {
 		{
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(b"value3", &[142]).expect("insert failed");
-			trie.insert(b"value4", &[124]).expect("insert failed");
+			trie.insert(b"value3", &[142; 33]).expect("insert failed");
+			trie.insert(b"value4", &[124; 33]).expect("insert failed");
 		};
 
 		{
@@ -324,7 +319,7 @@ pub mod tests {
 			test_trie
 				.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3")
 				.unwrap(),
-			Some(vec![142u8]),
+			Some(vec![142u8; 33]),
 		);
 		// Change cache entry to check that caching is active.
 		test_trie

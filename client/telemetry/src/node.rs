@@ -39,14 +39,14 @@ pub(crate) fn connection_notifier_channel() -> (ConnectionNotifierSender, Connec
 /// Handler for a single telemetry node.
 ///
 /// This is a wrapper `Sink` around a network `Sink` with 3 particularities:
-///  -  It is infallible: if the connection stops, it will reconnect automatically when the server
-///     becomes available again.
-///  -  It holds a list of "connection messages" which are sent automatically when the connection is
-///     (re-)established. This is used for the "system.connected" message that needs to be send for
-///     every substrate node that connects.
-///  -  It doesn't stay in pending while waiting for connection. Instead, it moves data into the
-///     void if the connection could not be established. This is important for the `Dispatcher`
-///     `Sink` which we don't want to block if one connection is broken.
+///  - It is infallible: if the connection stops, it will reconnect automatically when the server
+///    becomes available again.
+///  - It holds a list of "connection messages" which are sent automatically when the connection is
+///    (re-)established. This is used for the "system.connected" message that needs to be send for
+///    every substrate node that connects.
+///  - It doesn't stay in pending while waiting for connection. Instead, it moves data into the void
+///    if the connection could not be established. This is important for the `Dispatcher` `Sink`
+///    which we don't want to block if one connection is broken.
 #[derive(Debug)]
 pub(crate) struct Node<TTrans: Transport> {
 	/// Address of the node.

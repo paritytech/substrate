@@ -139,22 +139,10 @@ impl MutItemAttrs for syn::ItemMod {
 	}
 }
 
-/// Return all doc attributes literals found.
-pub fn get_doc_literals(attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
-	attrs
-		.iter()
-		.filter_map(|attr| {
-			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
-				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-					Some(meta.lit)
-				} else {
-					None
-				}
-			} else {
-				None
-			}
-		})
-		.collect()
+impl MutItemAttrs for syn::ImplItemMethod {
+	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
+		Some(&mut self.attrs)
+	}
 }
 
 /// Parse for `()`

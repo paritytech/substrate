@@ -183,7 +183,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		{
 			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
 				#crate_::MAX_EXTRINSIC_DEPTH,
-				&mut &#crate_::Encode::encode(input)[..],
+				&#crate_::Encode::encode(input)[..],
 			).map_err(map_error)
 		}
 	));
@@ -380,6 +380,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 		// Generate the generator function
 		result.push(quote!(
 			#[cfg(any(feature = "std", test))]
+			#[allow(clippy::too_many_arguments)]
 			pub fn #fn_name<
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
@@ -785,7 +786,7 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	quote!(
 		#[cfg(any(feature = "std", test))]
 		impl < #( #impl_generics, )* > #crate_::RuntimeApiInfo
-			for #trait_name < #( #ty_generics, )* >
+			for dyn #trait_name < #( #ty_generics, )* >
 		{
 			#id
 			#version

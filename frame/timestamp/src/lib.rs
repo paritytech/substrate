@@ -27,13 +27,14 @@
 //!
 //! The Timestamp pallet allows the validators to set and validate a timestamp with each block.
 //!
-//! It uses inherents for timestamp data, which is provided by the block author and validated/verified
-//! by other validators. The timestamp can be set only once per block and must be set each block.
-//! There could be a constraint on how much time must pass before setting the new timestamp.
+//! It uses inherents for timestamp data, which is provided by the block author and
+//! validated/verified by other validators. The timestamp can be set only once per block and must be
+//! set each block. There could be a constraint on how much time must pass before setting the new
+//! timestamp.
 //!
-//! **NOTE:** The Timestamp pallet is the recommended way to query the on-chain time instead of using
-//! an approach based on block numbers. The block number based time measurement can cause issues
-//! because of cumulative calculation errors and hence should be avoided.
+//! **NOTE:** The Timestamp pallet is the recommended way to query the on-chain time instead of
+//! using an approach based on block numbers. The block number based time measurement can cause
+//! issues because of cumulative calculation errors and hence should be avoided.
 //!
 //! ## Interface
 //!
@@ -52,7 +53,8 @@
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the Timestamp pallet in your custom pallet to query the current timestamp.
+//! The following example shows how to use the Timestamp pallet in your custom pallet to query the
+//! current timestamp.
 //!
 //! ### Prerequisites
 //!
@@ -62,18 +64,26 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! # use pallet_timestamp as timestamp;
-//! use frame_system::ensure_signed;
+//! use pallet_timestamp::{self as timestamp};
 //!
-//! pub trait Config: timestamp::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//! 	use super::*;
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
 //!
-//! decl_module! {
-//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//! 		pub fn get_time(origin) -> dispatch::DispatchResult {
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
+//!
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config + timestamp::Config {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//! 		pub fn get_time(origin: OriginFor<T>) -> DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
+//! 			let _now = <timestamp::Pallet<T>>::get();
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -118,15 +128,17 @@ pub mod pallet {
 			+ AtLeast32Bit
 			+ Scale<Self::BlockNumber, Output = Self::Moment>
 			+ Copy
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ scale_info::StaticTypeInfo;
 
-		/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
+		/// Something which can be notified when the timestamp is set. Set this to `()` if not
+		/// needed.
 		type OnTimestampSet: OnTimestampSet<Self::Moment>;
 
-		/// The minimum period between blocks. Beware that this is different to the *expected* period
-		/// that the block production apparatus provides. Your chosen consensus system will generally
-		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
-		/// period on default settings.
+		/// The minimum period between blocks. Beware that this is different to the *expected*
+		/// period that the block production apparatus provides. Your chosen consensus system will
+		/// generally work with this to determine a sensible block time. e.g. For Aura, it will be
+		/// double this period on default settings.
 		#[pallet::constant]
 		type MinimumPeriod: Get<Self::Moment>;
 
@@ -179,7 +191,8 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - `O(1)` (Note that implementations of `OnTimestampSet` must also be `O(1)`)
-		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
+		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in
+		///   `on_finalize`)
 		/// - 1 event handler `on_timestamp_set`. Must be `O(1)`.
 		/// # </weight>
 		#[pallet::weight((
@@ -217,7 +230,7 @@ pub mod pallet {
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-			Some(Call::set(next_time.into()))
+			Some(Call::set { now: next_time.into() })
 		}
 
 		fn check_inherent(
@@ -228,7 +241,7 @@ pub mod pallet {
 				sp_timestamp::Timestamp::new(30 * 1000);
 
 			let t: u64 = match call {
-				Call::set(ref t) => t.clone().saturated_into::<u64>(),
+				Call::set { ref now } => now.clone().saturated_into::<u64>(),
 				_ => return Ok(()),
 			};
 
@@ -248,7 +261,7 @@ pub mod pallet {
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::set(_))
+			matches!(call, Call::set { .. })
 		}
 	}
 }
@@ -336,7 +349,7 @@ mod tests {
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();

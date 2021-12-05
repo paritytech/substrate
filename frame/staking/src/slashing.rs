@@ -47,7 +47,7 @@
 //! has multiple misbehaviors. However, accounting for such cases is necessary
 //! to deter a class of "rage-quit" attacks.
 //!
-//! Based on research at <https://w3f-research.readthedocs.io/en/latest/polkadot/slashing/npos.html>
+//! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
 	BalanceOf, Config, EraIndex, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill,
@@ -56,12 +56,14 @@ use crate::{
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	traits::{Currency, Imbalance, OnUnbalanced},
+	traits::{Currency, Get, Imbalance, OnUnbalanced},
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchResult, RuntimeDebug,
 };
+use sp_staking::offence::DisableStrategy;
 use sp_std::vec::Vec;
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
@@ -72,7 +74,7 @@ const REWARD_F1: Perbill = Perbill::from_percent(50);
 pub type SpanIndex = u32;
 
 // A range of start..end eras for a slashing span.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, TypeInfo)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub(crate) struct SlashingSpan {
 	pub(crate) index: SpanIndex,
@@ -87,7 +89,7 @@ impl SlashingSpan {
 }
 
 /// An encoding of all of a nominator's slashing spans.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct SlashingSpans {
 	// the index of the current slashing span of the nominator. different for
 	// every stash, resets when the account hits free balance 0.
@@ -180,7 +182,7 @@ impl SlashingSpans {
 }
 
 /// A slashing-span record for a particular stash.
-#[derive(Encode, Decode, Default)]
+#[derive(Encode, Decode, Default, TypeInfo)]
 pub(crate) struct SpanRecord<Balance> {
 	slashed: Balance,
 	paid_out: Balance,
@@ -189,7 +191,7 @@ pub(crate) struct SpanRecord<Balance> {
 impl<Balance> SpanRecord<Balance> {
 	/// The value of stash balance slashed in this span.
 	#[cfg(test)]
-	pub(crate) fn amount_slashed(&self) -> &Balance {
+	pub(crate) fn amount(&self) -> &Balance {
 		&self.slashed
 	}
 }
@@ -212,6 +214,8 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The maximum percentage of a slash that ever gets paid out.
 	/// This is f_inf in the paper.
 	pub(crate) reward_proportion: Perbill,
+	/// When to disable offenders.
+	pub(crate) disable_strategy: DisableStrategy,
 }
 
 /// Computes a slash of a validator and nominators. It returns an unapplied
@@ -223,15 +227,12 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 pub(crate) fn compute_slash<T: Config>(
 	params: SlashParams<T>,
 ) -> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>> {
-	let SlashParams { stash, slash, exposure, slash_era, window_start, now, reward_proportion } =
-		params.clone();
-
 	let mut reward_payout = Zero::zero();
 	let mut val_slashed = Zero::zero();
 
 	// is the slash amount here a maximum for the era?
-	let own_slash = slash * exposure.own;
-	if slash * exposure.total == Zero::zero() {
+	let own_slash = params.slash * params.exposure.own;
+	if params.slash * params.exposure.total == Zero::zero() {
 		// kick out the validator even if they won't be slashed,
 		// as long as the misbehavior is from their most recent slashing span.
 		kick_out_if_recent::<T>(params);
@@ -239,13 +240,17 @@ pub(crate) fn compute_slash<T: Config>(
 	}
 
 	let (prior_slash_p, _era_slash) =
-		<Pallet<T> as Store>::ValidatorSlashInEra::get(&slash_era, stash)
+		<Pallet<T> as Store>::ValidatorSlashInEra::get(&params.slash_era, params.stash)
 			.unwrap_or((Perbill::zero(), Zero::zero()));
 
 	// compare slash proportions rather than slash values to avoid issues due to rounding
 	// error.
-	if slash.deconstruct() > prior_slash_p.deconstruct() {
-		<Pallet<T> as Store>::ValidatorSlashInEra::insert(&slash_era, stash, &(slash, own_slash));
+	if params.slash.deconstruct() > prior_slash_p.deconstruct() {
+		<Pallet<T> as Store>::ValidatorSlashInEra::insert(
+			&params.slash_era,
+			params.stash,
+			&(params.slash, own_slash),
+		);
 	} else {
 		// we slash based on the max in era - this new event is not the max,
 		// so neither the validator or any nominators will need an update.
@@ -260,14 +265,14 @@ pub(crate) fn compute_slash<T: Config>(
 	// apply slash to validator.
 	{
 		let mut spans = fetch_spans::<T>(
-			stash,
-			window_start,
+			params.stash,
+			params.window_start,
 			&mut reward_payout,
 			&mut val_slashed,
-			reward_proportion,
+			params.reward_proportion,
 		);
 
-		let target_span = spans.compare_and_update_span_slash(slash_era, own_slash);
+		let target_span = spans.compare_and_update_span_slash(params.slash_era, own_slash);
 
 		if target_span == Some(spans.span_index()) {
 			// misbehavior occurred within the current slashing span - take appropriate
@@ -275,22 +280,19 @@ pub(crate) fn compute_slash<T: Config>(
 
 			// chill the validator - it misbehaved in the current span and should
 			// not continue in the next election. also end the slashing span.
-			spans.end_span(now);
-			<Pallet<T>>::chill_stash(stash);
-
-			// make sure to disable validator till the end of this session
-			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
-				// force a new era, to select a new validator set
-				<Pallet<T>>::ensure_new_era()
-			}
+			spans.end_span(params.now);
+			<Pallet<T>>::chill_stash(params.stash);
 		}
 	}
 
+	let disable_when_slashed = params.disable_strategy != DisableStrategy::Never;
+	add_offending_validator::<T>(params.stash, disable_when_slashed);
+
 	let mut nominators_slashed = Vec::new();
-	reward_payout += slash_nominators::<T>(params, prior_slash_p, &mut nominators_slashed);
+	reward_payout += slash_nominators::<T>(params.clone(), prior_slash_p, &mut nominators_slashed);
 
 	Some(UnappliedSlash {
-		validator: stash.clone(),
+		validator: params.stash.clone(),
 		own: val_slashed,
 		others: nominators_slashed,
 		reporters: Vec::new(),
@@ -315,13 +317,52 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 	if spans.era_span(params.slash_era).map(|s| s.index) == Some(spans.span_index()) {
 		spans.end_span(params.now);
 		<Pallet<T>>::chill_stash(params.stash);
-
-		// make sure to disable validator till the end of this session
-		if T::SessionInterface::disable_validator(params.stash).unwrap_or(false) {
-			// force a new era, to select a new validator set
-			<Pallet<T>>::ensure_new_era()
-		}
 	}
+
+	let disable_without_slash = params.disable_strategy == DisableStrategy::Always;
+	add_offending_validator::<T>(params.stash, disable_without_slash);
+}
+
+/// Add the given validator to the offenders list and optionally disable it.
+/// If after adding the validator `OffendingValidatorsThreshold` is reached
+/// a new era will be forced.
+fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
+	<Pallet<T> as Store>::OffendingValidators::mutate(|offending| {
+		let validators = T::SessionInterface::validators();
+		let validator_index = match validators.iter().position(|i| i == stash) {
+			Some(index) => index,
+			None => return,
+		};
+
+		let validator_index_u32 = validator_index as u32;
+
+		match offending.binary_search_by_key(&validator_index_u32, |(index, _)| *index) {
+			// this is a new offending validator
+			Err(index) => {
+				offending.insert(index, (validator_index_u32, disable));
+
+				let offending_threshold =
+					T::OffendingValidatorsThreshold::get() * validators.len() as u32;
+
+				if offending.len() >= offending_threshold as usize {
+					// force a new era, to select a new validator set
+					<Pallet<T>>::ensure_new_era()
+				}
+
+				if disable {
+					T::SessionInterface::disable_validator(validator_index_u32);
+				}
+			},
+			Ok(index) => {
+				if disable && !offending[index].1 {
+					// the validator had previously offended without being disabled,
+					// let's make sure we disable it now
+					offending[index].1 = true;
+					T::SessionInterface::disable_validator(validator_index_u32);
+				}
+			},
+		}
+	});
 }
 
 /// Slash nominators. Accepts general parameters and the prior slash percentage of the validator.
@@ -332,13 +373,10 @@ fn slash_nominators<T: Config>(
 	prior_slash_p: Perbill,
 	nominators_slashed: &mut Vec<(T::AccountId, BalanceOf<T>)>,
 ) -> BalanceOf<T> {
-	let SlashParams { stash: _, slash, exposure, slash_era, window_start, now, reward_proportion } =
-		params;
-
 	let mut reward_payout = Zero::zero();
 
-	nominators_slashed.reserve(exposure.others.len());
-	for nominator in &exposure.others {
+	nominators_slashed.reserve(params.exposure.others.len());
+	for nominator in &params.exposure.others {
 		let stash = &nominator.who;
 		let mut nom_slashed = Zero::zero();
 
@@ -346,15 +384,16 @@ fn slash_nominators<T: Config>(
 		// had a new max slash for the era.
 		let era_slash = {
 			let own_slash_prior = prior_slash_p * nominator.value;
-			let own_slash_by_validator = slash * nominator.value;
+			let own_slash_by_validator = params.slash * nominator.value;
 			let own_slash_difference = own_slash_by_validator.saturating_sub(own_slash_prior);
 
-			let mut era_slash = <Pallet<T> as Store>::NominatorSlashInEra::get(&slash_era, stash)
-				.unwrap_or_else(|| Zero::zero());
+			let mut era_slash =
+				<Pallet<T> as Store>::NominatorSlashInEra::get(&params.slash_era, stash)
+					.unwrap_or_else(|| Zero::zero());
 
 			era_slash += own_slash_difference;
 
-			<Pallet<T> as Store>::NominatorSlashInEra::insert(&slash_era, stash, &era_slash);
+			<Pallet<T> as Store>::NominatorSlashInEra::insert(&params.slash_era, stash, &era_slash);
 
 			era_slash
 		};
@@ -363,18 +402,18 @@ fn slash_nominators<T: Config>(
 		{
 			let mut spans = fetch_spans::<T>(
 				stash,
-				window_start,
+				params.window_start,
 				&mut reward_payout,
 				&mut nom_slashed,
-				reward_proportion,
+				params.reward_proportion,
 			);
 
-			let target_span = spans.compare_and_update_span_slash(slash_era, era_slash);
+			let target_span = spans.compare_and_update_span_slash(params.slash_era, era_slash);
 
 			if target_span == Some(spans.span_index()) {
 				// End the span, but don't chill the nominator. its nomination
 				// on this validator will be ignored in the future.
-				spans.end_span(now);
+				spans.end_span(params.now);
 			}
 		}
 

@@ -221,6 +221,11 @@ where
 	pub fn estimate_encoded_size(&self) -> usize {
 		self.0.essence().backend_storage().proof_recorder.estimate_encoded_size()
 	}
+
+	/// Clear the proof recorded data.
+	pub fn clear_recorder(&self) {
+		self.0.essence().backend_storage().proof_recorder.reset()
+	}
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
@@ -358,7 +363,9 @@ where
 	}
 }
 
-/// Create proof check backend.
+/// Create a backend used for checking the proof., using `H` as hasher.
+///
+/// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
@@ -433,7 +440,7 @@ mod tests {
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(vec![(None, contents)]);
+		let in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -464,7 +471,7 @@ mod tests {
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(contents);
+		let in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory
 			.full_storage_root(

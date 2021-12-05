@@ -24,12 +24,8 @@ use crate::{
 use codec::{Decode, Encode, KeyedVec};
 use frame_support::{decl_module, decl_storage, storage};
 use frame_system::Config;
-use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
-use sp_io::{
-	hashing::blake2_256,
-	storage::{changes_root as storage_changes_root, root as storage_root},
-	trie,
-};
+use sp_core::storage::well_known_keys;
+use sp_io::{hashing::blake2_256, storage::root as storage_root, trie};
 use sp_runtime::{
 	generic,
 	traits::Header as _,
@@ -54,7 +50,6 @@ decl_storage! {
 		Number get(fn number): Option<BlockNumber>;
 		ParentHash get(fn parent_hash): Hash;
 		NewAuthorities get(fn new_authorities): Option<Vec<AuthorityId>>;
-		NewChangesTrieConfig get(fn new_changes_trie_config): Option<Option<ChangesTrieConfiguration>>;
 		StorageDigest get(fn storage_digest): Option<Digest>;
 		Authorities get(fn authorities) config(): Vec<AuthorityId>;
 	}
@@ -207,28 +202,15 @@ pub fn finalize_block() -> Header {
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
-	let new_changes_trie_config = <NewChangesTrieConfig>::take();
 
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root =
 		Hash::decode(&mut &storage_root()[..]).expect("`storage_root` is a valid hash");
-	let storage_changes_root = storage_changes_root(&parent_hash.encode())
-		.map(|r| Hash::decode(&mut &r[..]).expect("`storage_changes_root` is a valid hash"));
-
-	if let Some(storage_changes_root) = storage_changes_root {
-		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
-	}
 
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
-	}
-
-	if let Some(new_config) = new_changes_trie_config {
-		digest.push(generic::DigestItem::ChangesTrieSignal(
-			generic::ChangesTrieSignal::NewConfiguration(new_config),
-		));
 	}
 
 	Header { number, extrinsics_root, state_root: storage_root, parent_hash, digest }
@@ -251,8 +233,6 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 		Extrinsic::IncludeData(_) => Ok(Ok(())),
 		Extrinsic::StorageChange(key, value) =>
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
-		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
-			execute_changes_trie_config_update(new_config.clone()),
 		Extrinsic::OffchainIndexSet(key, value) => {
 			sp_io::offchain_index::set(&key, &value);
 			Ok(Ok(()))
@@ -311,18 +291,6 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicRes
 	Ok(Ok(()))
 }
 
-fn execute_changes_trie_config_update(
-	new_config: Option<ChangesTrieConfiguration>,
-) -> ApplyExtrinsicResult {
-	match new_config.clone() {
-		Some(new_config) =>
-			storage::unhashed::put_raw(well_known_keys::CHANGES_TRIE_CONFIG, &new_config.encode()),
-		None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
-	}
-	<NewChangesTrieConfig>::put(new_config);
-	Ok(Ok(()))
-}
-
 #[cfg(feature = "std")]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use sp_core::hexdisplay::HexDisplay;
@@ -349,7 +317,7 @@ mod tests {
 	use super::*;
 
 	use crate::{wasm_binary_unwrap, Header, Transfer};
-	use sc_executor::{native_executor_instance, NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use sp_core::{
 		map,
 		traits::{CodeExecutor, RuntimeCode},
@@ -359,10 +327,22 @@ mod tests {
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 
 	// Declare an instance of the native executor dispatch for the test runtime.
-	native_executor_instance!(NativeDispatch, crate::api::dispatch, crate::native_version);
+	pub struct NativeDispatch;
 
-	fn executor() -> NativeExecutor<NativeDispatch> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+	impl sc_executor::NativeExecutionDispatch for NativeDispatch {
+		type ExtendHostFunctions = ();
+
+		fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+			crate::api::dispatch(method, data)
+		}
+
+		fn native_version() -> sc_executor::NativeVersion {
+			crate::native_version()
+		}
+	}
+
+	fn executor() -> NativeElseWasmExecutor<NativeDispatch> {
+		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	fn new_test_ext() -> TestExternalities {

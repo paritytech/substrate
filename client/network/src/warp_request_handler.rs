@@ -23,9 +23,10 @@ use futures::{
 	stream::StreamExt,
 };
 use log::debug;
-use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::Block as BlockT;
 use std::{sync::Arc, time::Duration};
+
+pub use sp_finality_grandpa::{AuthorityList, SetId};
 
 /// Scale-encoded warp sync proof response.
 pub struct EncodedProof(pub Vec<u8>);
@@ -49,23 +50,26 @@ pub enum VerificationResult<Block: BlockT> {
 
 /// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
 pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
-	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof size is reached.
+	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof
+	/// size is reached.
 	fn generate(
 		&self,
 		start: B::Hash,
 	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>>;
-	/// Verify warp proof agains current set of authorities.
+	/// Verify warp proof against current set of authorities.
 	fn verify(
 		&self,
 		proof: &EncodedProof,
 		set_id: SetId,
 		authorities: AuthorityList,
 	) -> Result<VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>;
-	/// Get current list of authorities. This is supposed to be genesis authorities when starting sync.
+	/// Get current list of authorities. This is supposed to be genesis authorities when starting
+	/// sync.
 	fn current_authorities(&self) -> AuthorityList;
 }
 
-/// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing incoming requests.
+/// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing
+/// incoming requests.
 pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {
 	RequestResponseConfig {
 		name: generate_protocol_name(protocol_id).into(),
@@ -132,8 +136,9 @@ impl<TBlock: BlockT> RequestHandler<TBlock> {
 			let IncomingRequest { peer, payload, pending_response } = request;
 
 			match self.handle_request(payload, pending_response) {
-				Ok(()) =>
-					debug!(target: "sync", "Handled grandpa warp sync request from {}.", peer),
+				Ok(()) => {
+					debug!(target: "sync", "Handled grandpa warp sync request from {}.", peer)
+				},
 				Err(e) => debug!(
 					target: "sync",
 					"Failed to handle grandpa warp sync request from {}: {}",

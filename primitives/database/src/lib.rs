@@ -103,6 +103,13 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
 		self.get(col, key).map(|v| f(&v));
 	}
+
+	/// Check if database supports internal ref counting for state data.
+	///
+	/// For backwards compatibility returns `false` by default.
+	fn supports_ref_counting(&self) -> bool {
+		false
+	}
 }
 
 impl<H> std::fmt::Debug for dyn Database<H> {

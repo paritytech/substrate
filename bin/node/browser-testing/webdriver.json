@@ -1,7 +1,0 @@
-{
-  "goog:chromeOptions": {
-    "args": [
-      "--whitelisted-ips=127.0.0.1"
-    ]
-  }
-}

@@ -17,12 +17,12 @@
 
 //! # I'm online Pallet
 //!
-//! If the local node is a validator (i.e. contains an authority key), this module
+//! If the local node is a validator (i.e. contains an authority key), this pallet
 //! gossips a heartbeat transaction with each new session. The heartbeat functions
 //! as a simple mechanism to signal that the node is online in the current era.
 //!
 //! Received heartbeats are tracked for one era and reset with each new era. The
-//! module exposes two public functions to query if a heartbeat has been received
+//! pallet exposes two public functions to query if a heartbeat has been received
 //! in the current era or session.
 //!
 //! The heartbeat is a signed transaction, which was signed using the session key
@@ -43,16 +43,24 @@
 //! ## Usage
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! use frame_system::ensure_signed;
 //! use pallet_im_online::{self as im_online};
 //!
-//! pub trait Config: im_online::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//! 	use super::*;
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
 //!
-//! decl_module! {
-//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
+//!
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config + im_online::Config {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//! 		pub fn is_online(origin: OriginFor<T>, authority_index: u32) -> DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Pallet<T>>::is_online(authority_index);
 //! 			Ok(())
@@ -64,7 +72,7 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [Session module](../pallet_session/index.html).
+//! This pallet depends on the [Session pallet](../pallet_session/index.html).
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -74,12 +82,17 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::{Decode, Encode};
-use frame_support::traits::{
-	EstimateNextSessionRotation, OneSessionHandler, ValidatorSet, ValidatorSetWithIdentification,
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{
+	traits::{
+		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
+		ValidatorSetWithIdentification, WrapperOpaque,
+	},
+	BoundedSlice, WeakBoundedVec,
 };
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::offchain::OpaqueNetworkState;
 use sp_runtime::{
@@ -140,7 +153,7 @@ const INCLUDE_THRESHOLD: u32 = 3;
 /// This stores the block number at which heartbeat was requested and when the worker
 /// has actually managed to produce it.
 /// Note we store such status for every `authority_index` separately.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 struct HeartbeatStatus<BlockNumber> {
 	/// An index of the session that we are supposed to send heartbeat for.
 	pub session_index: SessionIndex,
@@ -185,10 +198,12 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match *self {
 			OffchainErr::TooEarly => write!(fmt, "Too early to send heartbeat."),
-			OffchainErr::WaitingForInclusion(ref block) =>
-				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block),
-			OffchainErr::AlreadyOnline(auth_idx) =>
-				write!(fmt, "Authority {} is already online", auth_idx),
+			OffchainErr::WaitingForInclusion(ref block) => {
+				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block)
+			},
+			OffchainErr::AlreadyOnline(auth_idx) => {
+				write!(fmt, "Authority {} is already online", auth_idx)
+			},
 			OffchainErr::FailedSigning => write!(fmt, "Failed to sign heartbeat"),
 			OffchainErr::FailedToAcquireLock => write!(fmt, "Failed to acquire lock"),
 			OffchainErr::NetworkState => write!(fmt, "Failed to fetch network state"),
@@ -200,7 +215,7 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 pub type AuthIndex = u32;
 
 /// Heartbeat which is sent/received.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Heartbeat<BlockNumber>
 where
 	BlockNumber: PartialEq + Eq + Decode + Encode,
@@ -217,12 +232,72 @@ where
 	pub validators_len: u32,
 }
 
+/// A type that is the same as [`OpaqueNetworkState`] but with [`Vec`] replaced with
+/// [`WeakBoundedVec<Limit>`] where Limit is the respective size limit
+/// `PeerIdEncodingLimit` represents the size limit of the encoding of `PeerId`
+/// `MultiAddrEncodingLimit` represents the size limit of the encoding of `MultiAddr`
+/// `AddressesLimit` represents the size limit of the vector of peers connected
+#[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[codec(mel_bound(PeerIdEncodingLimit: Get<u32>,
+  	MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>))]
+#[scale_info(skip_type_params(PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit))]
+pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
+where
+	PeerIdEncodingLimit: Get<u32>,
+	MultiAddrEncodingLimit: Get<u32>,
+	AddressesLimit: Get<u32>,
+{
+	/// PeerId of the local node in SCALE encoded.
+	pub peer_id: WeakBoundedVec<u8, PeerIdEncodingLimit>,
+	/// List of addresses the node knows it can be reached as.
+	pub external_addresses:
+		WeakBoundedVec<WeakBoundedVec<u8, MultiAddrEncodingLimit>, AddressesLimit>,
+}
+
+impl<PeerIdEncodingLimit: Get<u32>, MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>>
+	BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
+{
+	fn force_from(ons: &OpaqueNetworkState) -> Self {
+		let peer_id = WeakBoundedVec::<_, PeerIdEncodingLimit>::force_from(
+			ons.peer_id.0.clone(),
+			Some(
+				"Warning: The size of the encoding of PeerId \
+  				is bigger than expected. A runtime configuration \
+  				adjustment may be needed.",
+			),
+		);
+
+		let external_addresses = WeakBoundedVec::<_, AddressesLimit>::force_from(
+			ons.external_addresses
+				.iter()
+				.map(|x| {
+					WeakBoundedVec::<_, MultiAddrEncodingLimit>::force_from(
+						x.0.clone(),
+						Some(
+							"Warning: The size of the encoding of MultiAddr \
+  							is bigger than expected. A runtime configuration \
+  							adjustment may be needed.",
+						),
+					)
+				})
+				.collect(),
+			Some(
+				"Warning: The network has more peers than expected \
+  				A runtime configuration adjustment may be needed.",
+			),
+		);
+
+		Self { peer_id, external_addresses }
+	}
+}
+
 /// A type for representing the validator id in a session.
 pub type ValidatorId<T> = <<T as Config>::ValidatorSet as ValidatorSet<
 	<T as frame_system::Config>::AccountId,
 >>::ValidatorId;
 
-/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
+/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of
+/// `ValidatorId`.
 pub type IdentificationTuple<T> = (
 	ValidatorId<T>,
 	<<T as Config>::ValidatorSet as ValidatorSetWithIdentification<
@@ -235,18 +310,12 @@ type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::B
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::Get, Parameter};
-	use frame_system::{ensure_none, pallet_prelude::*};
-	use sp_runtime::{
-		traits::{MaybeSerializeDeserialize, Member},
-		transaction_validity::{
-			InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
-			ValidTransaction,
-		},
-	};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -257,7 +326,18 @@ pub mod pallet {
 			+ RuntimeAppPublic
 			+ Default
 			+ Ord
-			+ MaybeSerializeDeserialize;
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
+
+		/// The maximum number of keys that can be added.
+		type MaxKeys: Get<u32>;
+
+		/// The maximum number of peers to be stored in `ReceivedHeartbeats`
+		type MaxPeerInHeartbeats: Get<u32>;
+
+		/// The maximum size of the encoding of `PeerId` and `MultiAddr` that are coming
+		/// from the hearbeat
+		type MaxPeerDataEncodingSize: Get<u32>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -294,14 +374,13 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AuthorityId = "AuthorityId", Vec<IdentificationTuple<T>> = "Vec<IdentificationTuple>")]
 	pub enum Event<T: Config> {
-		/// A new heartbeat was received from `AuthorityId` \[authority_id\]
-		HeartbeatReceived(T::AuthorityId),
+		/// A new heartbeat was received from `AuthorityId`.
+		HeartbeatReceived { authority_id: T::AuthorityId },
 		/// At the end of the session, no offence was committed.
 		AllGood,
-		/// At the end of the session, at least one validator was found to be \[offline\].
-		SomeOffline(Vec<IdentificationTuple<T>>),
+		/// At the end of the session, at least one validator was found to be offline.
+		SomeOffline { offline: Vec<IdentificationTuple<T>> },
 	}
 
 	#[pallet::error]
@@ -330,14 +409,27 @@ pub mod pallet {
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
 	#[pallet::getter(fn keys)]
-	pub(crate) type Keys<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(crate) type Keys<T: Config> =
+		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
-	/// For each session index, we keep a mapping of `AuthIndex` to
-	/// `offchain::OpaqueNetworkState`.
+	/// For each session index, we keep a mapping of `SessionIndex` and `AuthIndex` to
+	/// `WrapperOpaque<BoundedOpaqueNetworkState>`.
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
-	pub(crate) type ReceivedHeartbeats<T> =
-		StorageDoubleMap<_, Twox64Concat, SessionIndex, Twox64Concat, AuthIndex, Vec<u8>>;
+	pub(crate) type ReceivedHeartbeats<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		SessionIndex,
+		Twox64Concat,
+		AuthIndex,
+		WrapperOpaque<
+			BoundedOpaqueNetworkState<
+				T::MaxPeerDataEncodingSize,
+				T::MaxPeerDataEncodingSize,
+				T::MaxPeerInHeartbeats,
+			>,
+		>,
+	>;
 
 	/// For each session index, we keep a mapping of `ValidatorId<T>` to the
 	/// number of blocks authored by the given authority.
@@ -375,8 +467,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len)
-		///   and E is length of `heartbeat.network_state.external_address`
+		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len) and E is
+		///   length of `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
 		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
@@ -404,13 +496,17 @@ pub mod pallet {
 			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (false, Some(public)) = (exists, public) {
-				Self::deposit_event(Event::<T>::HeartbeatReceived(public.clone()));
+				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
 
-				let network_state = heartbeat.network_state.encode();
+				let network_state_bounded = BoundedOpaqueNetworkState::<
+					T::MaxPeerDataEncodingSize,
+					T::MaxPeerDataEncodingSize,
+					T::MaxPeerInHeartbeats,
+				>::force_from(&heartbeat.network_state);
 				ReceivedHeartbeats::<T>::insert(
 					&current_session,
 					&heartbeat.authority_index,
-					&network_state,
+					WrapperOpaque::from(network_state_bounded),
 				);
 
 				Ok(())
@@ -447,7 +543,8 @@ pub mod pallet {
 		}
 	}
 
-	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
+	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is
+	/// incorrect.
 	pub(crate) const INVALID_VALIDATORS_LEN: u8 = 10;
 
 	#[pallet::validate_unsigned]
@@ -455,7 +552,7 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::heartbeat(heartbeat, signature) = call {
+			if let Call::heartbeat { heartbeat, signature } = call {
 				if <Pallet<T>>::is_online(heartbeat.authority_index) {
 					// we already received a heartbeat for this authority
 					return InvalidTransaction::Stale.into()
@@ -627,7 +724,7 @@ impl<T: Config> Pallet<T> {
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
 			let network_state =
 				sp_io::offchain::network_state().map_err(|_| OffchainErr::NetworkState)?;
-			let heartbeat_data = Heartbeat {
+			let heartbeat = Heartbeat {
 				block_number,
 				network_state,
 				session_index,
@@ -635,9 +732,9 @@ impl<T: Config> Pallet<T> {
 				validators_len,
 			};
 
-			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
+			let signature = key.sign(&heartbeat.encode()).ok_or(OffchainErr::FailedSigning)?;
 
-			Ok(Call::heartbeat(heartbeat_data, signature))
+			Ok(Call::heartbeat { heartbeat, signature })
 		};
 
 		if Self::is_online(authority_index) {
@@ -735,13 +832,17 @@ impl<T: Config> Pallet<T> {
 	fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put(keys);
+			let bounded_keys = <BoundedSlice<'_, _, T::MaxKeys>>::try_from(keys)
+				.expect("More than the maximum number of keys provided");
+			Keys::<T>::put(bounded_keys);
 		}
 	}
 
 	#[cfg(test)]
 	fn set_keys(keys: Vec<T::AuthorityId>) {
-		Keys::<T>::put(&keys)
+		let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::try_from(keys)
+			.expect("More than the maximum number of keys provided");
+		Keys::<T>::put(bounded_keys);
 	}
 }
 
@@ -772,7 +873,15 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
-		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
+		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+		let bounded_keys = WeakBoundedVec::<_, T::MaxKeys>::force_from(
+			keys,
+			Some(
+				"Warning: The session has more keys than expected. \
+  				A runtime configuration adjustment may be needed.",
+			),
+		);
+		Keys::<T>::put(bounded_keys);
 	}
 
 	fn on_before_session_ending() {
@@ -800,7 +909,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if offenders.is_empty() {
 			Self::deposit_event(Event::<T>::AllGood);
 		} else {
-			Self::deposit_event(Event::<T>::SomeOffline(offenders.clone()));
+			Self::deposit_event(Event::<T>::SomeOffline { offline: offenders.clone() });
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
@@ -810,13 +919,13 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		}
 	}
 
-	fn on_disabled(_i: usize) {
+	fn on_disabled(_i: u32) {
 		// ignore
 	}
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
-#[derive(RuntimeDebug)]
+#[derive(RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.

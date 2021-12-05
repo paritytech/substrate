@@ -266,8 +266,7 @@ fn create_project_cargo_toml(
 	let mut package = Table::new();
 	package.insert("name".into(), format!("{}-wasm", crate_name).into());
 	package.insert("version".into(), "1.0.0".into());
-	package.insert("edition".into(), "2018".into());
-	package.insert("resolver".into(), "2".into());
+	package.insert("edition".into(), "2021".into());
 
 	wasm_workspace_toml.insert("package".into(), package.into());
 
@@ -432,10 +431,14 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 		.args(&["rustc", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
 		.env("RUSTFLAGS", rustflags)
-		// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir exclusive).
-		// The runner project is created in `CARGO_TARGET_DIR` and executing it will create a sub target
-		// directory inside of `CARGO_TARGET_DIR`.
+		// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir
+		// exclusive). The runner project is created in `CARGO_TARGET_DIR` and executing it will
+		// create a sub target directory inside of `CARGO_TARGET_DIR`.
 		.env_remove("CARGO_TARGET_DIR")
+		// As we are being called inside a build-script, this env variable is set. However, we set
+		// our own `RUSTFLAGS` and thus, we need to remove this. Otherwise cargo favors this
+		// env variable.
+		.env_remove("CARGO_ENCODED_RUSTFLAGS")
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
@@ -642,8 +645,9 @@ fn package_rerun_if_changed(package: &DeduplicatePackage) {
 		.into_iter()
 		.filter_entry(|p| {
 			// Ignore this entry if it is a directory that contains a `Cargo.toml` that is not the
-			// `Cargo.toml` related to the current package. This is done to ignore sub-crates of a crate.
-			// If such a sub-crate is a dependency, it will be processed independently anyway.
+			// `Cargo.toml` related to the current package. This is done to ignore sub-crates of a
+			// crate. If such a sub-crate is a dependency, it will be processed independently
+			// anyway.
 			p.path() == manifest_path || !p.path().is_dir() || !p.path().join("Cargo.toml").exists()
 		})
 		.filter_map(|p| p.ok().map(|p| p.into_path()))

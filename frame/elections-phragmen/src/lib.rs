@@ -108,6 +108,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use scale_info::TypeInfo;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
@@ -135,7 +136,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 
 /// An indication that the renouncing account currently has which of the below roles.
-#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Renouncing {
 	/// A member is renouncing.
 	Member,
@@ -146,7 +147,7 @@ pub enum Renouncing {
 }
 
 /// An active voter.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct Voter<AccountId, Balance> {
 	/// The members being backed.
 	pub votes: Vec<AccountId>,
@@ -159,7 +160,7 @@ pub struct Voter<AccountId, Balance> {
 }
 
 /// A holder of a seat as either a member or a runner-up.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct SeatHolder<AccountId, Balance> {
 	/// The holder.
 	pub who: AccountId,
@@ -401,9 +402,9 @@ pub mod pallet {
 		///   origin is removed as a runner-up.
 		/// - `origin` is a current member. In this case, the deposit is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
-		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists,
-		///   they are immediately used. If the prime is renouncing, then no prime will exist until
-		///   the next round.
+		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists, they
+		///   are immediately used. If the prime is renouncing, then no prime will exist until the
+		///   next round.
 		///
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
 		///
@@ -424,7 +425,7 @@ pub mod pallet {
 				Renouncing::Member => {
 					let _ = Self::remove_and_replace_member(&who, false)
 						.map_err(|_| Error::<T>::InvalidRenouncing)?;
-					Self::deposit_event(Event::Renounced(who));
+					Self::deposit_event(Event::Renounced { candidate: who });
 				},
 				Renouncing::RunnerUp => {
 					<RunnersUp<T>>::try_mutate::<_, Error<T>, _>(|runners_up| {
@@ -436,7 +437,7 @@ pub mod pallet {
 						let SeatHolder { deposit, .. } = runners_up.remove(index);
 						let _remainder = T::Currency::unreserve(&who, deposit);
 						debug_assert!(_remainder.is_zero());
-						Self::deposit_event(Event::Renounced(who));
+						Self::deposit_event(Event::Renounced { candidate: who });
 						Ok(())
 					})?;
 				},
@@ -449,7 +450,7 @@ pub mod pallet {
 						let (_removed, deposit) = candidates.remove(index);
 						let _remainder = T::Currency::unreserve(&who, deposit);
 						debug_assert!(_remainder.is_zero());
-						Self::deposit_event(Event::Renounced(who));
+						Self::deposit_event(Event::Renounced { candidate: who });
 						Ok(())
 					})?;
 				},
@@ -474,7 +475,7 @@ pub mod pallet {
 		#[pallet::weight(if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::BlockWeights::get().max_block
+			T::WeightInfo::remove_member_without_replacement()
 		})]
 		pub fn remove_member(
 			origin: OriginFor<T>,
@@ -495,7 +496,7 @@ pub mod pallet {
 
 			let had_replacement = Self::remove_and_replace_member(&who, true)?;
 			debug_assert_eq!(has_replacement, had_replacement);
-			Self::deposit_event(Event::MemberKicked(who.clone()));
+			Self::deposit_event(Event::MemberKicked { member: who.clone() });
 
 			if !had_replacement {
 				Self::do_phragmen();
@@ -531,36 +532,34 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(
-		<T as frame_system::Config>::AccountId = "AccountId",
-		BalanceOf<T> = "Balance",
-		Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T>)> = "Vec<(AccountId, Balance)>",
-	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new term with \[new_members\]. This indicates that enough candidates existed to run
+		/// A new term with new_members. This indicates that enough candidates existed to run
 		/// the election, not that enough have has been elected. The inner value must be examined
 		/// for this purpose. A `NewTerm(\[\])` indicates that some candidates got their bond
 		/// slashed and none were elected, whilst `EmptyTerm` means that no candidates existed to
 		/// begin with.
-		NewTerm(Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T>)>),
+		NewTerm { new_members: Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T>)> },
 		/// No (or not enough) candidates existed for this round. This is different from
 		/// `NewTerm(\[\])`. See the description of `NewTerm`.
 		EmptyTerm,
 		/// Internal error happened while trying to perform election.
 		ElectionError,
-		/// A \[member\] has been removed. This should always be followed by either `NewTerm` or
+		/// A member has been removed. This should always be followed by either `NewTerm` or
 		/// `EmptyTerm`.
-		MemberKicked(<T as frame_system::Config>::AccountId),
+		MemberKicked { member: <T as frame_system::Config>::AccountId },
 		/// Someone has renounced their candidacy.
-		Renounced(<T as frame_system::Config>::AccountId),
-		/// A \[candidate\] was slashed by \[amount\] due to failing to obtain a seat as member or
+		Renounced { candidate: <T as frame_system::Config>::AccountId },
+		/// A candidate was slashed by amount due to failing to obtain a seat as member or
 		/// runner-up.
 		///
 		/// Note that old members and runners-up are also candidates.
-		CandidateSlashed(<T as frame_system::Config>::AccountId, BalanceOf<T>),
-		/// A \[seat holder\] was slashed by \[amount\] by being forcefully removed from the set.
-		SeatHolderSlashed(<T as frame_system::Config>::AccountId, BalanceOf<T>),
+		CandidateSlashed { candidate: <T as frame_system::Config>::AccountId, amount: BalanceOf<T> },
+		/// A seat holder was slashed by amount by being forcefully removed from the set.
+		SeatHolderSlashed {
+			seat_holder: <T as frame_system::Config>::AccountId,
+			amount: BalanceOf<T>,
+		},
 	}
 
 	#[deprecated(note = "use `Event` instead")]
@@ -673,13 +672,15 @@ pub mod pallet {
 						"Genesis member does not have enough stake.",
 					);
 
-					// Note: all members will only vote for themselves, hence they must be given exactly
-					// their own stake as total backing. Any sane election should behave as such.
-					// Nonetheless, stakes will be updated for term 1 onwards according to the election.
+					// Note: all members will only vote for themselves, hence they must be given
+					// exactly their own stake as total backing. Any sane election should behave as
+					// such. Nonetheless, stakes will be updated for term 1 onwards according to the
+					// election.
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
-							Ok(_) =>
-								panic!("Duplicate member in elections-phragmen genesis: {}", member),
+							Ok(_) => {
+								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+							},
 							Err(pos) => members.insert(
 								pos,
 								SeatHolder {
@@ -692,9 +693,9 @@ pub mod pallet {
 					});
 
 					// set self-votes to make persistent. Genesis voters don't have any bond, nor do
-					// they have any lock. NOTE: this means that we will still try to remove a lock once
-					// this genesis voter is removed, and for now it is okay because remove_lock is noop
-					// if lock is not there.
+					// they have any lock. NOTE: this means that we will still try to remove a lock
+					// once this genesis voter is removed, and for now it is okay because
+					// remove_lock is noop if lock is not there.
 					<Voting<T>>::insert(
 						&member,
 						Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
@@ -750,7 +751,10 @@ impl<T: Config> Pallet<T> {
 				let (imbalance, _remainder) = T::Currency::slash_reserved(who, removed.deposit);
 				debug_assert!(_remainder.is_zero());
 				T::LoserCandidate::on_unbalanced(imbalance);
-				Self::deposit_event(Event::SeatHolderSlashed(who.clone(), removed.deposit));
+				Self::deposit_event(Event::SeatHolderSlashed {
+					seat_holder: who.clone(),
+					amount: removed.deposit,
+				});
 			} else {
 				T::Currency::unreserve(who, removed.deposit);
 			}
@@ -1003,7 +1007,10 @@ impl<T: Config> Pallet<T> {
 				{
 					let (imbalance, _) = T::Currency::slash_reserved(c, *d);
 					T::LoserCandidate::on_unbalanced(imbalance);
-					Self::deposit_event(Event::CandidateSlashed(c.clone(), *d));
+					Self::deposit_event(Event::CandidateSlashed {
+						candidate: c.clone(),
+						amount: *d,
+					});
 				}
 			});
 
@@ -1043,7 +1050,7 @@ impl<T: Config> Pallet<T> {
 			// clean candidates.
 			<Candidates<T>>::kill();
 
-			Self::deposit_event(Event::NewTerm(new_members_sorted_by_id));
+			Self::deposit_event(Event::NewTerm { new_members: new_members_sorted_by_id });
 			<ElectionRounds<T>>::mutate(|v| *v += 1);
 		})
 		.map_err(|e| {
@@ -1120,7 +1127,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::AllowAll;
+		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();
@@ -2149,10 +2156,9 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm(vec![
-				(4, 40),
-				(5, 50),
-			])));
+			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![(4, 40), (5, 50)],
+			}));
 
 			assert_eq!(members_and_stake(), vec![(4, 40), (5, 50)]);
 			assert_eq!(runners_up_and_stake(), vec![]);
@@ -2163,7 +2169,9 @@ mod tests {
 			System::set_block_number(10);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm(vec![])));
+			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![],
+			}));
 
 			// outgoing have lost their bond.
 			assert_eq!(balances(&4), (37, 0));
@@ -2233,7 +2241,9 @@ mod tests {
 			assert_eq!(Elections::election_rounds(), 1);
 			assert!(members_ids().is_empty());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm(vec![])));
+			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![],
+			}));
 		});
 	}
 
@@ -2585,10 +2595,9 @@ mod tests {
 			// 5 is an outgoing loser. will also get slashed.
 			assert_eq!(balances(&5), (45, 2));
 
-			System::assert_has_event(Event::Elections(super::Event::NewTerm(vec![
-				(4, 40),
-				(5, 50),
-			])));
+			System::assert_has_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![(4, 40), (5, 50)],
+			}));
 		})
 	}
 

@@ -78,10 +78,13 @@ fn session_keys(
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
+	#[rustfmt::skip]
 	// stash, controller, session-key
 	// generated with secret:
 	// for i in 1 2 3 4 ; do for j in stash controller; do subkey inspect "$secret"/fir/$j/$i; done; done
+	//
 	// and
+	//
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
 	let initial_authorities: Vec<(
@@ -262,7 +265,7 @@ pub fn testnet_genesis(
 		.map(|x| &x.0)
 		.chain(initial_nominators.iter())
 		.for_each(|x| {
-			if !endowed_accounts.contains(&x) {
+			if !endowed_accounts.contains(x) {
 				endowed_accounts.push(x.clone())
 			}
 		});
@@ -292,10 +295,7 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
-		system: SystemConfig {
-			code: wasm_binary_unwrap().to_vec(),
-			changes_trie_config: Default::default(),
-		},
+		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
 		},
@@ -358,8 +358,11 @@ pub fn testnet_genesis(
 			max_members: 999,
 		},
 		vesting: Default::default(),
+		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
+		scheduler: Default::default(),
+		transaction_payment: Default::default(),
 	}
 }
 
@@ -414,7 +417,7 @@ pub fn local_testnet_config() -> ChainSpec {
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::service::{new_full_base, new_light_base, NewFullBase};
+	use crate::service::{new_full_base, NewFullBase};
 	use sc_service_test;
 	use sp_runtime::BuildStorage;
 
@@ -460,28 +463,18 @@ pub(crate) mod tests {
 	#[test]
 	#[ignore]
 	fn test_connectivity() {
-		sc_service_test::connectivity(
-			integration_test_config_with_two_authorities(),
-			|config| {
-				let NewFullBase { task_manager, client, network, transaction_pool, .. } =
-					new_full_base(config, |_, _| ())?;
-				Ok(sc_service_test::TestNetComponents::new(
-					task_manager,
-					client,
-					network,
-					transaction_pool,
-				))
-			},
-			|config| {
-				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
-				Ok(sc_service_test::TestNetComponents::new(
-					keep_alive,
-					client,
-					network,
-					transaction_pool,
-				))
-			},
-		);
+		sp_tracing::try_init_simple();
+
+		sc_service_test::connectivity(integration_test_config_with_two_authorities(), |config| {
+			let NewFullBase { task_manager, client, network, transaction_pool, .. } =
+				new_full_base(config, |_, _| ())?;
+			Ok(sc_service_test::TestNetComponents::new(
+				task_manager,
+				client,
+				network,
+				transaction_pool,
+			))
+		});
 	}
 
 	#[test]

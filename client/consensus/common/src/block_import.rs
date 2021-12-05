@@ -1,26 +1,27 @@
 // This file is part of Substrate.
 
 // Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// 	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Block import helpers.
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Block as BlockT, DigestItemFor, HashFor, Header as HeaderT, NumberFor},
-	Justification, Justifications,
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	DigestItem, Justification, Justifications,
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -73,7 +74,7 @@ impl ImportResult {
 		&self,
 		hash: &B::Hash,
 		number: NumberFor<B>,
-		justification_sync_link: &mut dyn JustificationSyncLink<B>,
+		justification_sync_link: &dyn JustificationSyncLink<B>,
 	) where
 		B: BlockT,
 	{
@@ -121,7 +122,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 /// Precomputed storage.
 pub enum StorageChanges<Block: BlockT, Transaction> {
 	/// Changes coming from block execution.
-	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
@@ -132,7 +133,7 @@ pub struct ImportedState<B: BlockT> {
 	/// Target block hash.
 	pub block: B::Hash,
 	/// State keys and values.
-	pub state: Vec<(Vec<u8>, Vec<u8>)>,
+	pub state: sp_state_machine::KeyValueStates,
 }
 
 impl<B: BlockT> std::fmt::Debug for ImportedState<B> {
@@ -174,7 +175,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub justifications: Option<Justifications>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
-	pub post_digests: Vec<DigestItemFor<Block>>,
+	pub post_digests: Vec<DigestItem>,
 	/// The body of the block.
 	pub body: Option<Vec<Block::Extrinsic>>,
 	/// Indexed transaction body of the block.
@@ -250,8 +251,8 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Auxiliary function for "converting" the transaction type.
 	///
-	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that `Self` now
-	/// uses a different transaction type.
+	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that
+	/// `Self` now uses a different transaction type.
 	pub fn clear_storage_changes_and_mutate<Transaction2>(
 		self,
 	) -> BlockImportParams<Block, Transaction2> {

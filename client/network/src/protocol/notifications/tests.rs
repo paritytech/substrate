@@ -29,8 +29,8 @@ use libp2p::{
 	},
 	identity, noise,
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-		ProtocolsHandler, Swarm,
+		DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+		ProtocolsHandler, Swarm, SwarmEvent,
 	},
 	yamux, Multiaddr, PeerId, Transport,
 };
@@ -68,7 +68,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				in_peers: 25,
 				out_peers: 25,
 				bootnodes: if index == 0 {
-					keypairs.iter().skip(1).map(|keypair| keypair.public().into_peer_id()).collect()
+					keypairs.iter().skip(1).map(|keypair| keypair.public().to_peer_id()).collect()
 				} else {
 					vec![]
 				},
@@ -92,7 +92,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.enumerate()
 				.filter_map(|(n, a)| {
 					if n != index {
-						Some((keypairs[n].public().into_peer_id(), a.clone()))
+						Some((keypairs[n].public().to_peer_id(), a.clone()))
 					} else {
 						None
 					}
@@ -100,7 +100,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				.collect(),
 		};
 
-		let mut swarm = Swarm::new(transport, behaviour, keypairs[index].public().into_peer_id());
+		let mut swarm = Swarm::new(transport, behaviour, keypairs[index].public().to_peer_id());
 		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
@@ -163,8 +163,10 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
-		self.inner.inject_connection_established(peer_id, conn, endpoint)
+		self.inner
+			.inject_connection_established(peer_id, conn, endpoint, failed_addresses)
 	}
 
 	fn inject_connection_closed(
@@ -172,8 +174,9 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
-		self.inner.inject_connection_closed(peer_id, conn, endpoint)
+		self.inner.inject_connection_closed(peer_id, conn, endpoint, handler)
 	}
 
 	fn inject_event(
@@ -188,27 +191,18 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 	fn poll(
 		&mut self,
 		cx: &mut Context,
-		params: &mut impl PollParameters
-	) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent
-		>
-	>{
+		params: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		self.inner.poll(cx, params)
 	}
 
-	fn inject_addr_reach_failure(
+	fn inject_dial_failure(
 		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn std::error::Error,
+		peer_id: Option<PeerId>,
+		handler: Self::ProtocolsHandler,
+		error: &DialError,
 	) {
-		self.inner.inject_addr_reach_failure(peer_id, addr, error)
-	}
-
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		self.inner.inject_dial_failure(peer_id)
+		self.inner.inject_dial_failure(peer_id, handler, error)
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {
@@ -262,8 +256,8 @@ fn reconnect_after_disconnect() {
 		loop {
 			// Grab next event from services.
 			let event = {
-				let s1 = service1.next();
-				let s2 = service2.next();
+				let s1 = service1.select_next_some();
+				let s2 = service2.select_next_some();
 				futures::pin_mut!(s1, s2);
 				match future::select(s1, s2).await {
 					future::Either::Left((ev, _)) => future::Either::Left(ev),
@@ -272,48 +266,52 @@ fn reconnect_after_disconnect() {
 			};
 
 			match event {
-				future::Either::Left(NotificationsOut::CustomProtocolOpen { .. }) =>
-					match service1_state {
-						ServiceState::NotConnected => {
-							service1_state = ServiceState::FirstConnec;
-							if service2_state == ServiceState::FirstConnec {
-								service1.behaviour_mut().disconnect_peer(
-									Swarm::local_peer_id(&service2),
-									sc_peerset::SetId::from(0),
-								);
-							}
-						},
-						ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
-						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
+				future::Either::Left(SwarmEvent::Behaviour(
+					NotificationsOut::CustomProtocolOpen { .. },
+				)) => match service1_state {
+					ServiceState::NotConnected => {
+						service1_state = ServiceState::FirstConnec;
+						if service2_state == ServiceState::FirstConnec {
+							service1.behaviour_mut().disconnect_peer(
+								Swarm::local_peer_id(&service2),
+								sc_peerset::SetId::from(0),
+							);
+						}
 					},
-				future::Either::Left(NotificationsOut::CustomProtocolClosed { .. }) =>
-					match service1_state {
-						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
-						ServiceState::ConnectedAgain |
-						ServiceState::NotConnected |
-						ServiceState::Disconnected => panic!(),
+					ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
+					ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
+				},
+				future::Either::Left(SwarmEvent::Behaviour(
+					NotificationsOut::CustomProtocolClosed { .. },
+				)) => match service1_state {
+					ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
+					ServiceState::ConnectedAgain |
+					ServiceState::NotConnected |
+					ServiceState::Disconnected => panic!(),
+				},
+				future::Either::Right(SwarmEvent::Behaviour(
+					NotificationsOut::CustomProtocolOpen { .. },
+				)) => match service2_state {
+					ServiceState::NotConnected => {
+						service2_state = ServiceState::FirstConnec;
+						if service1_state == ServiceState::FirstConnec {
+							service1.behaviour_mut().disconnect_peer(
+								Swarm::local_peer_id(&service2),
+								sc_peerset::SetId::from(0),
+							);
+						}
 					},
-				future::Either::Right(NotificationsOut::CustomProtocolOpen { .. }) =>
-					match service2_state {
-						ServiceState::NotConnected => {
-							service2_state = ServiceState::FirstConnec;
-							if service1_state == ServiceState::FirstConnec {
-								service1.behaviour_mut().disconnect_peer(
-									Swarm::local_peer_id(&service2),
-									sc_peerset::SetId::from(0),
-								);
-							}
-						},
-						ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,
-						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
-					},
-				future::Either::Right(NotificationsOut::CustomProtocolClosed { .. }) =>
-					match service2_state {
-						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
-						ServiceState::ConnectedAgain |
-						ServiceState::NotConnected |
-						ServiceState::Disconnected => panic!(),
-					},
+					ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,
+					ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
+				},
+				future::Either::Right(SwarmEvent::Behaviour(
+					NotificationsOut::CustomProtocolClosed { .. },
+				)) => match service2_state {
+					ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
+					ServiceState::ConnectedAgain |
+					ServiceState::NotConnected |
+					ServiceState::Disconnected => panic!(),
+				},
 				_ => {},
 			}
 
@@ -331,8 +329,8 @@ fn reconnect_after_disconnect() {
 		loop {
 			// Grab next event from services.
 			let event = {
-				let s1 = service1.next();
-				let s2 = service2.next();
+				let s1 = service1.select_next_some();
+				let s2 = service2.select_next_some();
 				futures::pin_mut!(s1, s2);
 				match future::select(future::select(s1, s2), &mut delay).await {
 					future::Either::Right(_) => break, // success
@@ -342,8 +340,8 @@ fn reconnect_after_disconnect() {
 			};
 
 			match event {
-				NotificationsOut::CustomProtocolOpen { .. } |
-				NotificationsOut::CustomProtocolClosed { .. } => panic!(),
+				SwarmEvent::Behaviour(NotificationsOut::CustomProtocolOpen { .. }) |
+				SwarmEvent::Behaviour(NotificationsOut::CustomProtocolClosed { .. }) => panic!(),
 				_ => {},
 			}
 		}

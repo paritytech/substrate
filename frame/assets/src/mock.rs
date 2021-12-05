@@ -20,7 +20,7 @@
 use super::*;
 use crate as pallet_assets;
 
-use frame_support::{construct_runtime, parameter_types};
+use frame_support::{construct_runtime, parameter_types, traits::GenesisBuild};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -46,7 +46,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -144,9 +144,26 @@ pub(crate) fn hooks() -> Vec<Hook> {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let mut ext = sp_io::TestExternalities::new(t);
+	let config: pallet_assets::GenesisConfig<Test> = pallet_assets::GenesisConfig {
+		assets: vec![
+			// id, owner, is_sufficient, min_balance
+			(999, 0, true, 1),
+		],
+		metadata: vec![
+			// id, name, symbol, decimals
+			(999, "Token Name".into(), "TOKEN".into(), 10),
+		],
+		accounts: vec![
+			// id, account_id, balance
+			(999, 1, 100),
+		],
+	};
+
+	config.assimilate_storage(&mut storage).unwrap();
+
+	let mut ext: sp_io::TestExternalities = storage.into();
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

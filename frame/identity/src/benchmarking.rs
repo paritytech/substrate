@@ -22,7 +22,7 @@
 use super::*;
 
 use crate::Pallet as Identity;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
@@ -77,7 +77,7 @@ fn create_sub_accounts<T: Config>(
 	// Set identity so `set_subs` does not fail.
 	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value());
 	let info = create_identity_info::<T>(1);
-	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
+	Identity::<T>::set_identity(who_origin.clone().into(), Box::new(info))?;
 
 	Ok(subs)
 }
@@ -137,7 +137,7 @@ benchmarks! {
 
 			// Add an initial identity
 			let initial_info = create_identity_info::<T>(1);
-			Identity::<T>::set_identity(caller_origin.clone(), initial_info)?;
+			Identity::<T>::set_identity(caller_origin.clone(), Box::new(initial_info))?;
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
@@ -151,9 +151,9 @@ benchmarks! {
 			}
 			caller
 		};
-	}: _(RawOrigin::Signed(caller.clone()), create_identity_info::<T>(x))
+	}: _(RawOrigin::Signed(caller.clone()), Box::new(create_identity_info::<T>(x)))
 	verify {
-		assert_last_event::<T>(Event::<T>::IdentitySet(caller).into());
+		assert_last_event::<T>(Event::<T>::IdentitySet { who: caller }.into());
 	}
 
 	// We need to split `set_subs` into two benchmarks to accurately isolate the potential
@@ -204,7 +204,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		// User requests judgement from all the registrars, and they approve
@@ -233,11 +233,11 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
 	verify {
-		assert_last_event::<T>(Event::<T>::JudgementRequested(caller, r-1).into());
+		assert_last_event::<T>(Event::<T>::JudgementRequested { who: caller, registrar_index: r-1 }.into());
 	}
 
 	cancel_request {
@@ -251,13 +251,13 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller.clone()), r - 1)
 	verify {
-		assert_last_event::<T>(Event::<T>::JudgementUnrequested(caller, r-1).into());
+		assert_last_event::<T>(Event::<T>::JudgementUnrequested { who: caller, registrar_index: r-1 }.into());
 	}
 
 	set_fee {
@@ -321,14 +321,14 @@ benchmarks! {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			let info = create_identity_info::<T>(x);
-			Identity::<T>::set_identity(user_origin.clone(), info)?;
+			Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
 		};
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 	verify {
-		assert_last_event::<T>(Event::<T>::JudgementGiven(user, r).into())
+		assert_last_event::<T>(Event::<T>::JudgementGiven { target: user, registrar_index: r }.into())
 	}
 
 	kill_identity {
@@ -342,7 +342,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
 		let info = create_identity_info::<T>(x);
-		Identity::<T>::set_identity(target_origin.clone(), info)?;
+		Identity::<T>::set_identity(target_origin.clone(), Box::new(info))?;
 		let _ = add_sub_accounts::<T>(&target, s)?;
 
 		// User requests judgement from all the registrars, and they approve
@@ -411,6 +411,5 @@ benchmarks! {
 		ensure!(!SuperOf::<T>::contains_key(&caller), "Sub not removed");
 	}
 
+	impl_benchmark_test_suite!(Identity, crate::tests::new_test_ext(), crate::tests::Test);
 }
-
-impl_benchmark_test_suite!(Identity, crate::tests::new_test_ext(), crate::tests::Test);

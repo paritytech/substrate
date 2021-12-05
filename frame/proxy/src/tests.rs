@@ -24,7 +24,8 @@ use super::*;
 use crate as proxy;
 use codec::{Decode, Encode};
 use frame_support::{
-	assert_noop, assert_ok, dispatch::DispatchError, parameter_types, traits::Filter, RuntimeDebug,
+	assert_noop, assert_ok, dispatch::DispatchError, parameter_types, traits::Contains,
+	RuntimeDebug,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -95,6 +96,7 @@ impl pallet_balances::Config for Test {
 impl pallet_utility::Config for Test {
 	type Event = Event;
 	type Call = Call;
+	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
 parameter_types! {
@@ -106,7 +108,17 @@ parameter_types! {
 	pub const AnnouncementDepositFactor: u64 = 1;
 }
 #[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, MaxEncodedLen,
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	MaxEncodedLen,
+	scale_info::TypeInfo,
 )]
 pub enum ProxyType {
 	Any,
@@ -122,9 +134,10 @@ impl InstanceFilter<Call> for ProxyType {
 	fn filter(&self, c: &Call) -> bool {
 		match self {
 			ProxyType::Any => true,
-			ProxyType::JustTransfer =>
-				matches!(c, Call::Balances(pallet_balances::Call::transfer(..))),
-			ProxyType::JustUtility => matches!(c, Call::Utility(..)),
+			ProxyType::JustTransfer => {
+				matches!(c, Call::Balances(pallet_balances::Call::transfer { .. }))
+			},
+			ProxyType::JustUtility => matches!(c, Call::Utility { .. }),
 		}
 	}
 	fn is_superset(&self, o: &Self) -> bool {
@@ -132,11 +145,11 @@ impl InstanceFilter<Call> for ProxyType {
 	}
 }
 pub struct BaseFilter;
-impl Filter<Call> for BaseFilter {
-	fn filter(c: &Call) -> bool {
+impl Contains<Call> for BaseFilter {
+	fn contains(c: &Call) -> bool {
 		match *c {
 			// Remark is used as a no-op call in the benchmarking
-			Call::System(SystemCall::remark(_)) => true,
+			Call::System(SystemCall::remark { .. }) => true,
 			Call::System(_) => false,
 			_ => true,
 		}
@@ -161,6 +174,8 @@ use super::{Call as ProxyCall, Event as ProxyEvent};
 use frame_system::Call as SystemCall;
 use pallet_balances::{Call as BalancesCall, Error as BalancesError, Event as BalancesEvent};
 use pallet_utility::{Call as UtilityCall, Event as UtilityEvent};
+
+type SystemError = frame_system::Error<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -188,10 +203,23 @@ fn expect_events(e: Vec<Event>) {
 	assert_eq!(last_events(e.len()), e);
 }
 
+fn call_transfer(dest: u64, value: u64) -> Call {
+	Call::Balances(BalancesCall::transfer { dest, value })
+}
+
 #[test]
 fn announcement_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any, 1));
+		System::assert_last_event(
+			ProxyEvent::ProxyAdded {
+				delegator: 1,
+				delegatee: 3,
+				proxy_type: ProxyType::Any,
+				delay: 1,
+			}
+			.into(),
+		);
 		assert_ok!(Proxy::add_proxy(Origin::signed(2), 3, ProxyType::Any, 1));
 		assert_eq!(Balances::reserved_balance(3), 0);
 
@@ -269,7 +297,7 @@ fn announcer_must_be_proxy() {
 fn delayed_requires_pre_announcement() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::Any, 1));
-		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		let call = Box::new(call_transfer(6, 1));
 		let e = Error::<Test>::Unannounced;
 		assert_noop!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()), e);
 		let e = Error::<Test>::Unannounced;
@@ -286,7 +314,7 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any, 1));
 		assert_ok!(Proxy::add_proxy(Origin::signed(2), 3, ProxyType::Any, 1));
-		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		let call = Box::new(call_transfer(6, 1));
 		let call_hash = BlakeTwo256::hash_of(&call);
 		assert_ok!(Proxy::announce(Origin::signed(3), 1, call_hash));
 		assert_ok!(Proxy::announce(Origin::signed(3), 2, call_hash));
@@ -310,64 +338,82 @@ fn filtering_works() {
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::JustTransfer, 0));
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 4, ProxyType::JustUtility, 0));
 
-		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		let call = Box::new(call_transfer(6, 1));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Ok(())).into());
+		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Ok(())).into());
+		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
 
 		let derivative_id = Utility::derivative_account_id(1, 0);
 		assert!(Balances::mutate_account(&derivative_id, |a| a.free = 1000).is_ok());
-		let inner = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		let inner = Box::new(call_transfer(6, 1));
 
-		let call = Box::new(Call::Utility(UtilityCall::as_derivative(0, inner.clone())));
+		let call =
+			Box::new(Call::Utility(UtilityCall::as_derivative { index: 0, call: inner.clone() }));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Ok(())).into());
+		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
 
-		let call = Box::new(Call::Utility(UtilityCall::batch(vec![*inner])));
-		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		expect_events(vec![
-			UtilityEvent::BatchCompleted.into(),
-			ProxyEvent::ProxyExecuted(Ok(())).into(),
-		]);
-		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
-		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
-		expect_events(vec![
-			UtilityEvent::BatchInterrupted(0, DispatchError::BadOrigin).into(),
-			ProxyEvent::ProxyExecuted(Ok(())).into(),
-		]);
-
-		let inner = Box::new(Call::Proxy(ProxyCall::add_proxy(5, ProxyType::Any, 0)));
-		let call = Box::new(Call::Utility(UtilityCall::batch(vec![*inner])));
+		let call = Box::new(Call::Utility(UtilityCall::batch { calls: vec![*inner] }));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_events(vec![
 			UtilityEvent::BatchCompleted.into(),
-			ProxyEvent::ProxyExecuted(Ok(())).into(),
+			ProxyEvent::ProxyExecuted { result: Ok(()) }.into(),
 		]);
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_events(vec![
-			UtilityEvent::BatchInterrupted(0, DispatchError::BadOrigin).into(),
-			ProxyEvent::ProxyExecuted(Ok(())).into(),
+			UtilityEvent::BatchInterrupted { index: 0, error: SystemError::CallFiltered.into() }
+				.into(),
+			ProxyEvent::ProxyExecuted { result: Ok(()) }.into(),
 		]);
 
-		let call = Box::new(Call::Proxy(ProxyCall::remove_proxies()));
-		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
-		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
+		let inner =
+			Box::new(Call::Proxy(ProxyCall::new_call_variant_add_proxy(5, ProxyType::Any, 0)));
+		let call = Box::new(Call::Utility(UtilityCall::batch { calls: vec![*inner] }));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_events(vec![
-			BalancesEvent::<Test>::Unreserved(1, 5).into(),
-			ProxyEvent::ProxyExecuted(Ok(())).into(),
+			UtilityEvent::BatchCompleted.into(),
+			ProxyEvent::ProxyExecuted { result: Ok(()) }.into(),
+		]);
+		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
+		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
+		expect_events(vec![
+			UtilityEvent::BatchInterrupted { index: 0, error: SystemError::CallFiltered.into() }
+				.into(),
+			ProxyEvent::ProxyExecuted { result: Ok(()) }.into(),
+		]);
+
+		let call = Box::new(Call::Proxy(ProxyCall::remove_proxies {}));
+		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
+		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
+		expect_events(vec![
+			BalancesEvent::<Test>::Unreserved { who: 1, amount: 5 }.into(),
+			ProxyEvent::ProxyExecuted { result: Ok(()) }.into(),
 		]);
 	});
 }
@@ -428,7 +474,7 @@ fn proxying_works() {
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any, 0));
 
-		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		let call = Box::new(call_transfer(6, 1));
 		assert_noop!(
 			Proxy::proxy(Origin::signed(4), 1, None, call.clone()),
 			Error::<Test>::NotProxy
@@ -438,20 +484,24 @@ fn proxying_works() {
 			Error::<Test>::NotProxy
 		);
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Ok(())).into());
+		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);
 
-		let call = Box::new(Call::System(SystemCall::set_code(vec![])));
+		let call = Box::new(Call::System(SystemCall::set_code { code: vec![] }));
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
-
-		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));
-		assert_ok!(
-			Call::Proxy(super::Call::proxy(1, None, call.clone())).dispatch(Origin::signed(2))
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
 		);
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(DispatchError::BadOrigin)).into());
+
+		let call =
+			Box::new(Call::Balances(BalancesCall::transfer_keep_alive { dest: 6, value: 1 }));
+		assert_ok!(Call::Proxy(super::Call::new_call_variant_proxy(1, None, call.clone()))
+			.dispatch(Origin::signed(2)));
+		System::assert_last_event(
+			ProxyEvent::ProxyExecuted { result: Err(SystemError::CallFiltered.into()) }.into(),
+		);
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Ok(())).into());
+		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 2);
 	});
 }
@@ -462,7 +512,13 @@ fn anonymous_works() {
 		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0, 0));
 		let anon = Proxy::anonymous_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
-			ProxyEvent::AnonymousCreated(anon.clone(), 1, ProxyType::Any, 0).into(),
+			ProxyEvent::AnonymousCreated {
+				anonymous: anon.clone(),
+				who: 1,
+				proxy_type: ProxyType::Any,
+				disambiguation_index: 0,
+			}
+			.into(),
 		);
 
 		// other calls to anonymous allowed as long as they're not exactly the same.
@@ -480,16 +536,22 @@ fn anonymous_works() {
 		System::set_block_number(2);
 		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0, 0));
 
-		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		let call = Box::new(call_transfer(6, 1));
 		assert_ok!(Balances::transfer(Origin::signed(3), anon, 5));
 		assert_ok!(Proxy::proxy(Origin::signed(1), anon, None, call));
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Ok(())).into());
+		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);
 
-		let call = Box::new(Call::Proxy(ProxyCall::kill_anonymous(1, ProxyType::Any, 0, 1, 0)));
+		let call = Box::new(Call::Proxy(ProxyCall::new_call_variant_kill_anonymous(
+			1,
+			ProxyType::Any,
+			0,
+			1,
+			0,
+		)));
 		assert_ok!(Proxy::proxy(Origin::signed(2), anon2, None, call.clone()));
 		let de = DispatchError::from(Error::<Test>::NoPermission).stripped();
-		System::assert_last_event(ProxyEvent::ProxyExecuted(Err(de)).into());
+		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Err(de) }.into());
 		assert_noop!(
 			Proxy::kill_anonymous(Origin::signed(1), 1, ProxyType::Any, 0, 1, 0),
 			Error::<Test>::NoPermission

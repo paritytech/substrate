@@ -73,8 +73,8 @@ mod tests;
 // - remove inactive voter (either you or the target is removed; if the target, you get their
 //   "voter" bond back; O(1); one fewer DB entry, one DB change)
 // - submit candidacy (you pay a "candidate" bond; O(1); one extra DB entry, two DB changes)
-// - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation
-//   is invalid; O(voters) compute; ) protected operations:
+// - present winner/runner-up (you may pay a "presentation" bond of O(voters) if the presentation is
+//   invalid; O(voters) compute; ) protected operations:
 // - remove candidacy (remove all votes for a candidate) (one fewer DB entry, two DB changes)
 
 // to avoid a potentially problematic case of not-enough approvals prior to voting causing a
@@ -111,7 +111,9 @@ mod tests;
 // entries before they increase the capacity.
 
 /// The activity status of a voter.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default, RuntimeDebug)]
+#[derive(
+	PartialEq, Eq, Copy, Clone, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo,
+)]
 pub struct VoterInfo<Balance> {
 	/// Last VoteIndex in which this voter assigned (or initialized) approvals.
 	last_active: VoteIndex,
@@ -128,8 +130,8 @@ pub struct VoterInfo<Balance> {
 /// Used to demonstrate the status of a particular index in the global voter list.
 #[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CellStatus {
-	/// Any out of bound index. Means a push a must happen to the chunk pointed by `NextVoterSet<T>`.
-	/// Voting fee is applied in case a new chunk is created.
+	/// Any out of bound index. Means a push a must happen to the chunk pointed by
+	/// `NextVoterSet<T>`. Voting fee is applied in case a new chunk is created.
 	Head,
 	/// Already occupied by another voter. Voting fee is applied.
 	Occupied,
@@ -462,17 +464,15 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", Vec<T::AccountId> = "Vec<AccountId>")]
 	pub enum Event<T: Config> {
-		/// Reaped \[voter, reaper\].
-		VoterReaped(T::AccountId, T::AccountId),
-		/// Slashed \[reaper\].
-		BadReaperSlashed(T::AccountId),
-		/// A tally (for approval votes of \[seats\]) has started.
-		TallyStarted(u32),
+		/// Reaped
+		VoterReaped { voter: T::AccountId, reaper: T::AccountId },
+		/// Slashed
+		BadReaperSlashed { reaper: T::AccountId },
+		/// A tally (for approval votes of seats) has started.
+		TallyStarted { seats: u32 },
 		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
-		/// \[incoming, outgoing\]
-		TallyFinalized(Vec<T::AccountId>, Vec<T::AccountId>),
+		TallyFinalized { incoming: Vec<T::AccountId>, outgoing: Vec<T::AccountId> },
 	}
 
 	#[pallet::call]
@@ -589,11 +589,11 @@ pub mod pallet {
 					T::VotingBond::get(),
 					BalanceStatus::Free,
 				)?;
-				Self::deposit_event(Event::<T>::VoterReaped(who, reporter));
+				Self::deposit_event(Event::<T>::VoterReaped { voter: who, reaper: reporter });
 			} else {
 				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
 				T::BadReaper::on_unbalanced(imbalance);
-				Self::deposit_event(Event::<T>::BadReaperSlashed(reporter));
+				Self::deposit_event(Event::<T>::BadReaperSlashed { reaper: reporter });
 			}
 			Ok(())
 		}
@@ -850,13 +850,14 @@ impl<T: Config> Pallet<T> {
 			None
 		} else {
 			let c = Self::members();
-			let (next_possible, count, coming) =
-				if let Some((tally_end, comers, leavers)) = Self::next_finalize() {
-					// if there's a tally in progress, then next tally can begin immediately afterwards
-					(tally_end, c.len() - leavers.len() + comers as usize, comers)
-				} else {
-					(<frame_system::Pallet<T>>::block_number(), c.len(), 0)
-				};
+			let (next_possible, count, coming) = if let Some((tally_end, comers, leavers)) =
+				Self::next_finalize()
+			{
+				// if there's a tally in progress, then next tally can begin immediately afterwards
+				(tally_end, c.len() - leavers.len() + comers as usize, comers)
+			} else {
+				(<frame_system::Pallet<T>>::block_number(), c.len(), 0)
+			};
 			if count < desired_seats as usize {
 				Some(next_possible)
 			} else {
@@ -1022,7 +1023,7 @@ impl<T: Config> Pallet<T> {
 				leaderboard_size
 			]);
 
-			Self::deposit_event(Event::<T>::TallyStarted(empty_seats as u32));
+			Self::deposit_event(Event::<T>::TallyStarted { seats: empty_seats as u32 });
 		}
 	}
 
@@ -1116,7 +1117,7 @@ impl<T: Config> Pallet<T> {
 			new_candidates.truncate(last_index + 1);
 		}
 
-		Self::deposit_event(Event::<T>::TallyFinalized(incoming, outgoing));
+		Self::deposit_event(Event::<T>::TallyFinalized { incoming, outgoing });
 
 		<Candidates<T>>::put(new_candidates);
 		CandidateCount::<T>::put(count);
