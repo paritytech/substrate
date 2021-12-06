@@ -520,16 +520,14 @@ pub mod pallet {
 								Some(sender) => {
 									let (parent_curator, update_due) =
 										Self::ensure_bounty_active(parent_bounty_id)?;
-									if sender == parent_curator {
-										// The call is made by the parent-bounty curator, so slash
-										// the child-bounty curator.
-										slash_curator(curator, &mut child_bounty.curator_deposit);
-									} else if update_due < frame_system::Pallet::<T>::block_number()
+									if sender == parent_curator ||
+										update_due < frame_system::Pallet::<T>::block_number()
 									{
-										// Call is made by any signed origin. Check for expiry, if
-										// the curator is inactive, slash the curator deposit.
+										// Slash the child-bounty curator if
+										// + the call is made by the parent-bounty curator.
+										// + or the curator is inactive.
 										slash_curator(curator, &mut child_bounty.curator_deposit);
-										// Continue to change child-bounty status below.
+										// Continue to change bounty status below.
 									} else {
 										// Curator has more time to give an update.
 										return Err(BountiesError::<T>::Premature.into())
