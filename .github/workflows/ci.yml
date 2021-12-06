@@ -28,15 +28,16 @@ on:
 jobs:
   test:
     runs-on: self-hosted
-    container:
-      image: "paritytech/ci-linux:production"
     steps:
+      - uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
       - uses: actions/checkout@v2.4.0
-      # - uses: actions-rs/toolchain@v1
-      #   with:
-      #     profile: minimal
-      #     toolchain: nightly-2021-11-08
-      #     target: wasm32-unknown-unknown
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2021-11-08
+          target: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v1
       - run: cargo test --workspace --locked --release --verbose
         env:
