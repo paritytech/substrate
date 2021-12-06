@@ -35,11 +35,6 @@ jobs:
         with:
           access_token: ${{ github.token }}
 
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 100
-
       - name: Install dependencies
         run: apt-get install -y clang libssl-dev pkg-config git-restore-mtime
         # run: sudo apt-get install -y clang libssl-dev pkg-config git-restore-mtime
@@ -51,16 +46,10 @@ jobs:
           toolchain: nightly-2021-11-08
           target: wasm32-unknown-unknown
 
-      - name: Setup caching for rust/cargo
-        uses: actions/cache@v2
+      - name: Checkout
+        uses: actions/checkout@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          fetch-depth: 100
 
       # this is needed to make sure that cargo uses the cached target files,
       # which will have an older date than the checked out source code.
@@ -71,6 +60,17 @@ jobs:
           find . -exec touch -t 202005260100 {} +
           # restore mtime based on git commit log
           git restore-mtime
+
+      - name: Setup caching for rust/cargo
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo test suite
         run: cargo test --workspace --locked --release --verbose
