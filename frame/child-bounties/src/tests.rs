@@ -713,6 +713,9 @@ fn child_bounty_curator_proposed_unassign_curator() {
 			}
 		);
 
+		// Random account cannot unassign the curator when in proposed state.
+		assert_noop!(ChildBounties::unassign_curator(Origin::signed(99), 0, 0), BadOrigin);
+
 		// Unassign curator.
 		assert_ok!(ChildBounties::unassign_curator(Origin::signed(4), 0, 0));
 
