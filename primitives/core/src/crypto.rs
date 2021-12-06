@@ -460,6 +460,7 @@ pub trait Public:
 	fn as_slice(&self) -> &[u8] {
 		self.as_ref()
 	}
+
 	/// Return `CryptoTypePublicPair` from public key.
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair;
 }
