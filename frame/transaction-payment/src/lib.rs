@@ -53,7 +53,7 @@ use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SaturatedConversion, Saturating,
-		SignedExtension, Zero,
+		SignedExtension, Zero, One,
 	},
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
@@ -651,7 +651,7 @@ where
 
 		// To distribute no-tip transactions a little bit, we set the minimal tip as `1`.
 		// This means that given two transactions without a tip, smaller one will be preferred.
-		let tip = tip.max(1.saturated_into());
+		let tip = tip.saturating_add(One::one());
 		let scaled_tip = max_reward(tip);
 
 		match info.class {
@@ -1480,14 +1480,14 @@ mod tests {
 				.unwrap()
 				.priority;
 
-			assert_eq!(priority, 50);
+			assert_eq!(priority, 60);
 
 			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
 				.priority;
 
-			assert_eq!(priority, 100);
+			assert_eq!(priority, 110);
 		});
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
@@ -1500,13 +1500,13 @@ mod tests {
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 5800);
+			assert_eq!(priority, 5810);
 
 			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 6100);
+			assert_eq!(priority, 6110);
 		});
 	}
 
@@ -1537,6 +1537,36 @@ mod tests {
 				.unwrap()
 				.priority;
 			assert_eq!(priority, 5510);
+		});
+	}
+
+	#[test]
+	fn one_tip_has_more_priority() {
+		let tip = 1;
+		let len = 10;
+
+		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+			let normal =
+				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let priority = ChargeTransactionPayment::<Runtime>(tip)
+				.validate(&2, CALL, &normal, len)
+				.unwrap()
+				.priority;
+
+			assert_eq!(priority, 20);
+		});
+
+		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+			let op = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+			};
+			let priority = ChargeTransactionPayment::<Runtime>(tip)
+				.validate(&2, CALL, &op, len)
+				.unwrap()
+				.priority;
+			assert_eq!(priority, 5570);
 		});
 	}
 
