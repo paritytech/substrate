@@ -78,6 +78,11 @@ pub struct WorkerConfig {
 	///
 	/// Defaults to `true` to avoid the surprise factor.
 	pub publish_non_global_ips: bool,
+
+	/// Reject authority discovery records that are not signed by their network identity (PeerId)
+	///
+	/// Defaults to `false` to provide compatibility with old versions
+	pub strict_record_validation: bool,
 }
 
 impl Default for WorkerConfig {
@@ -98,6 +103,7 @@ impl Default for WorkerConfig {
 			// `authority_discovery_dht_event_received`.
 			max_query_interval: Duration::from_secs(10 * 60),
 			publish_non_global_ips: true,
+			strict_record_validation: false,
 		}
 	}
 }
