@@ -1042,17 +1042,22 @@ mod tests {
 	impl<'a> TryFrom<&'a [u8]> for TestPublic {
 		type Error = ();
 
-		fn try_from(_: &'a [u8]) -> Result<Self, ()> {
-			Ok(Self)
+		fn try_from(data: &'a [u8]) -> Result<Self, ()> {
+			Self::from_slice(data)
 		}
 	}
 	impl CryptoType for TestPublic {
 		type Pair = TestPair;
 	}
 	impl Derive for TestPublic {}
-	impl Public for TestPublic {
-		fn from_slice(_bytes: &[u8]) -> Self {
-			Self
+	impl ByteArray for TestPublic {
+		const LEN: usize = 0;
+		fn from_slice(bytes: &[u8]) -> Result<Self, ()> {
+			if bytes.len() == 0 {
+				Ok(Self)
+			} else {
+				Err(())
+			}
 		}
 		fn as_slice(&self) -> &[u8] {
 			&[]
@@ -1060,6 +1065,8 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
+	}
+	impl Public for TestPublic {
 		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), self.to_raw_vec())
 		}

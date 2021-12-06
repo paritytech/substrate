@@ -587,9 +587,10 @@ mod tests {
 	}
 
 	fn uxt(transfer: Transfer) -> Extrinsic {
+		let signature = TryFrom::try_from(&[0; 64][..]).unwrap();
 		Extrinsic::Transfer {
 			transfer,
-			signature: Default::default(),
+			signature,
 			exhaust_resources_when_not_first: false,
 		}
 	}

@@ -329,6 +329,12 @@ impl sp_std::hash::Hash for Signature {
 	}
 }
 
+impl UncheckedFrom<[u8; 65]> for Signature {
+	fn unchecked_from(data: [u8; 65]) -> Signature {
+		Signature(data)
+	}
+}
+
 impl Signature {
 	/// A new instance from the given 65-byte `data`.
 	///

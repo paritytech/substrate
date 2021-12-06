@@ -1622,7 +1622,7 @@ pub trait BlockNumberProvider {
 mod tests {
 	use super::*;
 	use crate::codec::{Decode, Encode, Input};
-	use sp_core::{crypto::Pair, ecdsa};
+	use sp_core::{crypto::{Pair, UncheckedFrom}, ecdsa};
 
 	mod t {
 		use sp_application_crypto::{app_crypto, sr25519};
@@ -1635,8 +1635,8 @@ mod tests {
 		use super::AppVerify;
 		use t::*;
 
-		let s = Signature::default();
-		let _ = s.verify(&[0u8; 100][..], &Public::default());
+		let s = Signature::try_from(vec![0; 64]).unwrap();
+		let _ = s.verify(&[0u8; 100][..], &Public::unchecked_from([0; 32]));
 	}
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]

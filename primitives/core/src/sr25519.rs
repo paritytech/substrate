@@ -334,6 +334,12 @@ pub struct LocalizedSignature {
 	pub signature: Signature,
 }
 
+impl UncheckedFrom<[u8; 64]> for Signature {
+	fn unchecked_from(data: [u8; 64]) -> Signature {
+		Signature(data)
+	}
+}
+
 impl Signature {
 	/// A new instance from the given 64-byte `data`.
 	///

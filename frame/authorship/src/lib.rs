@@ -688,7 +688,7 @@ mod tests {
 			header.digest_mut().pop(); // pop the seal off.
 			System::initialize(&1, &Default::default(), header.digest(), Default::default());
 
-			assert_eq!(Authorship::author(), author);
+			assert_eq!(Authorship::author(), Some(author));
 		});
 	}
 

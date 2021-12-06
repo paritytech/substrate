@@ -913,7 +913,7 @@ impl<R> TransactionOutcome<R> {
 mod tests {
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_core::crypto::Pair;
+	use sp_core::crypto::{Pair, UncheckedFrom};
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
@@ -997,7 +997,9 @@ mod tests {
 
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
-			sp_io::crypto::sr25519_verify(&Default::default(), &Vec::new(), &Default::default());
+			let dummy = UncheckedFrom::unchecked_from([1; 32]);
+			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
+			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
 		});
 	}
 

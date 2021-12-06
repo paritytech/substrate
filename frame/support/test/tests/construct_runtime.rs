@@ -229,6 +229,10 @@ pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
+fn test_pub() -> AccountId {
+	AccountId::from_raw([0; 32])
+}
+
 impl system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
@@ -451,13 +455,13 @@ fn event_codec() {
 	let event = system::Event::<Runtime>::ExtrinsicSuccess;
 	assert_eq!(Event::from(event).encode()[0], 30);
 
-	let event = module1::Event::<Runtime, module1::Instance1>::A(Default::default());
+	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
 	assert_eq!(Event::from(event).encode()[0], 31);
 
 	let event = module2::Event::A;
 	assert_eq!(Event::from(event).encode()[0], 32);
 
-	let event = module1::Event::<Runtime, module1::Instance2>::A(Default::default());
+	let event = module1::Event::<Runtime, module1::Instance2>::A(test_pub());
 	assert_eq!(Event::from(event).encode()[0], 33);
 
 	let event = nested::module3::Event::A;
@@ -466,19 +470,19 @@ fn event_codec() {
 	let event = module3::Event::A;
 	assert_eq!(Event::from(event).encode()[0], 35);
 
-	let event = module1::Event::<Runtime, module1::Instance5>::A(Default::default());
+	let event = module1::Event::<Runtime, module1::Instance5>::A(test_pub());
 	assert_eq!(Event::from(event).encode()[0], 4);
 
-	let event = module1::Event::<Runtime, module1::Instance6>::A(Default::default());
+	let event = module1::Event::<Runtime, module1::Instance6>::A(test_pub());
 	assert_eq!(Event::from(event).encode()[0], 1);
 
-	let event = module1::Event::<Runtime, module1::Instance7>::A(Default::default());
+	let event = module1::Event::<Runtime, module1::Instance7>::A(test_pub());
 	assert_eq!(Event::from(event).encode()[0], 2);
 
-	let event = module1::Event::<Runtime, module1::Instance8>::A(Default::default());
+	let event = module1::Event::<Runtime, module1::Instance8>::A(test_pub());
 	assert_eq!(Event::from(event).encode()[0], 12);
 
-	let event = module1::Event::<Runtime, module1::Instance9>::A(Default::default());
+	let event = module1::Event::<Runtime, module1::Instance9>::A(test_pub());
 	assert_eq!(Event::from(event).encode()[0], 13);
 }
 

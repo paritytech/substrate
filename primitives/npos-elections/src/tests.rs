@@ -192,7 +192,6 @@ fn balancing_core_works() {
 #[test]
 fn voter_normalize_ops_works() {
 	use crate::{Candidate, Edge};
-	use sp_std::{cell::RefCell, rc::Rc};
 	// normalize
 	{
 		let c1 = Candidate { who: 10, elected: false, ..Default::default() };

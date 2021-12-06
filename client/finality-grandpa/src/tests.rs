@@ -1671,7 +1671,7 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 
 	// if we set the equivocation offender to another id for which we don't have
 	// keys it should work
-	equivocation.identity = Default::default();
+	equivocation.identity = TryFrom::try_from(&[1; 32][..]).unwrap();
 	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
 	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }

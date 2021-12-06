@@ -36,7 +36,7 @@ use libp2p::{core::multiaddr, kad, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
-use sp_core::crypto::Public;
+use sp_core::crypto::ByteArray;
 use sp_keystore::{testing::KeyStore, CryptoStore};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use substrate_test_runtime_client::runtime::Block;
