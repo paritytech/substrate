@@ -1,0 +1,44 @@
+# This file is part of Substrate.
+#
+# Copyright (C) 2019-2021  Parity Technologies (UK) Ltd.
+# SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+name: continuous-integration
+
+on:
+  pull_request:
+  push:
+    # Running the CI on the master branch is important in order to fill the
+    # caches that pull requests will pick up.
+    branches:
+      - master
+jobs:
+  test:
+    runs-on: self-hosted
+    container:
+      image: "paritytech/ci-linux:production"
+    steps:
+      - uses: actions/checkout@v2.4.0
+      # - uses: actions-rs/toolchain@v1
+      #   with:
+      #     profile: minimal
+      #     toolchain: nightly-2021-11-08
+      #     target: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo test --workspace --locked --release --verbose
+        env:
+          RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+          RUST_BACKTRACE: 1
