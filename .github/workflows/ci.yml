@@ -27,7 +27,8 @@ on:
       - master
 jobs:
   test:
-    runs-on: self-hosted
+    # runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Cancel previous runs
         uses: styfle/cancel-workflow-action@0.9.1
@@ -38,7 +39,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install dependencies
-        run: apt-get install -y clang libssl-dev pkg-config
+        run: sudo apt-get install -y clang libssl-dev pkg-config
 
       - name: Install rust toolchain
         uses: actions-rs/toolchain@v1
