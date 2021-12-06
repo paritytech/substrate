@@ -1570,7 +1570,6 @@ mod tests {
 			(priority1, priority2)
 		};
 
-
 		let mut prev_priorities = get_priorities(0);
 
 		for tip in 1..3 {
