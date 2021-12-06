@@ -492,13 +492,17 @@ pub mod pallet {
 							// A child-bounty curator has been proposed, but not accepted yet.
 							// Either `RejectOrigin`, parent-bounty curator or the proposed
 							// child-bounty curator can unassign the child-bounty curator.
-							maybe_sender.map_or(true, |sender| {
-								sender == *curator ||
-									Self::ensure_bounty_active(parent_bounty_id)
-										.map_or(false, |(parent_curator, _)| {
-											sender == parent_curator
-										})
-							});
+							ensure!(
+								maybe_sender.map_or(true, |sender| {
+									sender == *curator ||
+										Self::ensure_bounty_active(parent_bounty_id)
+											.map_or(false, |(parent_curator, _)| {
+												sender == parent_curator
+											})
+								}),
+								BadOrigin
+							);
+							// Continue to change bounty status below.
 						},
 						ChildBountyStatus::Active { ref curator } => {
 							// The child-bounty is active.
