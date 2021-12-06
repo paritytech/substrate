@@ -1085,18 +1085,7 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
-		// backwards compatible.
-		//
-		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
-		let code_proof = self.read_proof(
-			id,
-			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
-		)?;
-
-		self.executor
-			.prove_execution(id, method, call_data)
-			.map(|(r, p)| (r, StorageProof::merge(vec![p, code_proof])))
+		self.executor.prove_execution(id, method, call_data)
 	}
 
 	fn read_proof_collection(

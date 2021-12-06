@@ -23,8 +23,8 @@ use std::{
 };
 
 use crate::{
-	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue,
+	backend::Backend, ext::Ext, InMemoryBackend, InMemoryProvingBackend, OverlayedChanges,
+	StorageKey, StorageTransactionCache, StorageValue,
 };
 
 use hash_db::Hasher;
@@ -38,6 +38,7 @@ use sp_core::{
 	traits::TaskExecutorExt,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
+use sp_trie::StorageProof;
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher>
@@ -122,6 +123,13 @@ where
 		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
 	}
 
+	/// Insert key/value into backend.
+	///
+	/// This only supports inserting keys in child tries.
+	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
+		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])]);
+	}
+
 	/// Registers the given extension for this instance.
 	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.register(ext);
@@ -171,9 +179,29 @@ where
 		sp_externalities::set_and_run_with_externalities(&mut ext, execute)
 	}
 
+	/// Execute the given closure while `self`, with `proving_backend` as backend, is set as
+	/// externalities.
+	///
+	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
+	/// get their own proof from scratch.
+	pub fn execute_and_prove<'a, R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
+		let proving_backend = InMemoryProvingBackend::new(&self.backend);
+		let mut proving_ext = Ext::new(
+			&mut self.overlay,
+			&mut self.storage_transaction_cache,
+			&proving_backend,
+			Some(&mut self.extensions),
+		);
+
+		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
+		let proof = proving_backend.extract_proof();
+
+		(outcome, proof)
+	}
+
 	/// Execute the given closure while `self` is set as externalities.
 	///
-	/// Returns the result of the given closure, if no panics occured.
+	/// Returns the result of the given closure, if no panics occurred.
 	/// Otherwise, returns `Err`.
 	pub fn execute_with_safe<R>(
 		&mut self,
