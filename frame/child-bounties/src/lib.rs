@@ -489,11 +489,9 @@ pub mod pallet {
 							return Err(BountiesError::<T>::UnexpectedStatus.into())
 						},
 						ChildBountyStatus::CuratorProposed { ref curator } => {
-							// A child-bounty curator has been proposed, but not
-							// accepted yet. Either `RejectOrigin`,
-							// parent-bounty curator or the proposed
-							// child-bounty curator can unassign the
-							// child-bounty curator.
+							// A child-bounty curator has been proposed, but not accepted yet.
+							// Either `RejectOrigin`, parent-bounty curator or the proposed
+							// child-bounty curator can unassign the child-bounty curator.
 							maybe_sender.map_or(true, |sender| {
 								sender == *curator ||
 									Self::ensure_bounty_active(parent_bounty_id)
@@ -505,16 +503,15 @@ pub mod pallet {
 						ChildBountyStatus::Active { ref curator } => {
 							// The child-bounty is active.
 							match maybe_sender {
-								// If the `RejectOrigin` is calling this
-								// function, slash the curator deposit.
+								// If the `RejectOrigin` is calling this function, slash the curator
+								// deposit.
 								None => {
 									slash_curator(curator, &mut child_bounty.curator_deposit);
 									// Continue to change child-bounty status below.
 								},
 								Some(sender) if sender == *curator => {
-									// This is the child-bounty curator,
-									// willingly giving up their role. Give
-									// back their deposit.
+									// This is the child-bounty curator, willingly giving up their
+									// role. Give back their deposit.
 									T::Currency::unreserve(&curator, child_bounty.curator_deposit);
 									// Reset curator deposit.
 									child_bounty.curator_deposit = Zero::zero();
@@ -523,28 +520,19 @@ pub mod pallet {
 								Some(sender) => {
 									let (parent_curator, update_due) =
 										Self::ensure_bounty_active(parent_bounty_id)?;
-									// If the call is made by the
-									// parent-bounty curator, slash the
-									// child-bounty curator.
 									if sender == parent_curator {
+										// The call is made by the parent-bounty curator, so slash
+										// the child-bounty curator.
 										slash_curator(curator, &mut child_bounty.curator_deposit);
-									} else {
-										// Call is made by any signed origin.
-										// Check for expiry, if the curator
-										// is inactive, slash the curator
-										// deposit.
-										let block_number =
-											frame_system::Pallet::<T>::block_number();
-										if update_due < block_number {
-											slash_curator(
-												curator,
-												&mut child_bounty.curator_deposit,
-											);
+									} else if update_due < frame_system::Pallet::<T>::block_number()
+									{
+										// Call is made by any signed origin. Check for expiry, if
+										// the curator is inactive, slash the curator deposit.
+										slash_curator(curator, &mut child_bounty.curator_deposit);
 										// Continue to change child-bounty status below.
-										} else {
-											// Curator has more time to give an update.
-											return Err(BountiesError::<T>::Premature.into())
-										}
+									} else {
+										// Curator has more time to give an update.
+										return Err(BountiesError::<T>::Premature.into())
 									}
 								},
 							}
