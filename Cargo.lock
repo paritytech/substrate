@@ -9653,6 +9653,7 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-runtime-client",
+ "zstd",
 ]
 
 [[package]]
@@ -10928,6 +10929,7 @@ dependencies = [
  "sp-state-machine",
  "sp-version",
  "structopt",
+ "zstd",
 ]
 
 [[package]]
