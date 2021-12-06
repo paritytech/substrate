@@ -1541,33 +1541,44 @@ mod tests {
 	}
 
 	#[test]
-	fn one_tip_has_more_priority() {
-		let tip = 1;
-		let len = 10;
+	fn higher_tip_have_higher_priority() {
+		let get_priorities = |tip: u64| {
+			let mut priority1 = 0;
+			let mut priority2 = 0;
+			let len = 10;
+			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+				let normal =
+					DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				priority1 = ChargeTransactionPayment::<Runtime>(tip)
+					.validate(&2, CALL, &normal, len)
+					.unwrap()
+					.priority;
+			});
 
-		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-			let priority = ChargeTransactionPayment::<Runtime>(tip)
-				.validate(&2, CALL, &normal, len)
-				.unwrap()
-				.priority;
+			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+				let op = DispatchInfo {
+					weight: 100,
+					class: DispatchClass::Operational,
+					pays_fee: Pays::Yes,
+				};
+				priority2 = ChargeTransactionPayment::<Runtime>(tip)
+					.validate(&2, CALL, &op, len)
+					.unwrap()
+					.priority;
+			});
 
-			assert_eq!(priority, 20);
-		});
+			(priority1, priority2)
+		};
 
-		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-			let op = DispatchInfo {
-				weight: 100,
-				class: DispatchClass::Operational,
-				pays_fee: Pays::Yes,
-			};
-			let priority = ChargeTransactionPayment::<Runtime>(tip)
-				.validate(&2, CALL, &op, len)
-				.unwrap()
-				.priority;
-			assert_eq!(priority, 5570);
-		});
+
+		let mut prev_priorities = get_priorities(0);
+
+		for tip in 1..3 {
+			let priorities = get_priorities(tip);
+			assert!(prev_priorities.0 < priorities.0);
+			assert!(prev_priorities.1 < priorities.1);
+			prev_priorities = priorities;
+		}
 	}
 
 	#[test]
