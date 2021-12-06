@@ -37,6 +37,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 100
 
       - name: Install dependencies
         run: apt-get install -y clang libssl-dev pkg-config git-restore-mtime
@@ -67,7 +69,7 @@ jobs:
           # set all dirs and files mtime to the fixed timestamp, this one was chosen
           # symbolically as polkadot genesis block date
           find . -exec touch -t 202005260100 {} +
-          # restore mtime based on git commit log (with depth of `git clone` above)
+          # restore mtime based on git commit log
           git restore-mtime
 
       - name: Run cargo test suite
