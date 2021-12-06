@@ -31,7 +31,6 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
-use sp_arithmetic::traits::Bounded;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -263,10 +262,12 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all(maybe_limit: Option<u32>) {
-		let leftover = Self::count().saturating_sub(maybe_limit.unwrap_or_else(Bounded::max_value));
-		CounterFor::<Prefix>::set(leftover);
-		<Self as MapWrapper>::Map::remove_all(maybe_limit);
+	pub fn remove_all() {
+		// NOTE: it is not possible to remove up to some limit because
+		// `sp_io::storage::clear_prefix` and `StorageMap::remove_all` don't give the number of
+		// value removed from the overlay.
+		CounterFor::<Prefix>::set(0u32);
+		<Self as MapWrapper>::Map::remove_all(None);
 	}
 
 	/// Iter over all value of the storage.
@@ -678,7 +679,7 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			// Remove all.
-			A::remove_all(None);
+			A::remove_all();
 
 			assert_eq!(A::count(), 0);
 			assert_eq!(A::initialize_counter(), 0);
@@ -909,7 +910,7 @@ mod test {
 			assert_eq!(B::count(), 2);
 
 			// Remove all.
-			B::remove_all(None);
+			B::remove_all();
 
 			assert_eq!(B::count(), 0);
 			assert_eq!(B::initialize_counter(), 0);

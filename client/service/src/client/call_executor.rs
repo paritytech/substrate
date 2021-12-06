@@ -38,7 +38,7 @@ use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 pub struct LocalCallExecutor<Block: BlockT, B, E> {
 	backend: Arc<B>,
 	executor: E,
-	wasm_override: Option<WasmOverride>,
+	wasm_override: Arc<Option<WasmOverride>>,
 	wasm_substitutes: WasmSubstitutes<Block, E, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig<Block>,
@@ -71,7 +71,7 @@ where
 		Ok(LocalCallExecutor {
 			backend,
 			executor,
-			wasm_override,
+			wasm_override: Arc::new(wasm_override),
 			spawn_handle,
 			client_config,
 			wasm_substitutes,
@@ -90,16 +90,19 @@ where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let spec = self.runtime_version(id)?.spec_version;
+		let spec = self.runtime_version(id)?;
 		let code = if let Some(d) = self
 			.wasm_override
 			.as_ref()
-			.map(|o| o.get(&spec, onchain_code.heap_pages))
+			.as_ref()
+			.map(|o| o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name))
 			.flatten()
 		{
 			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
 			d
-		} else if let Some(s) = self.wasm_substitutes.get(spec, onchain_code.heap_pages, id) {
+		} else if let Some(s) =
+			self.wasm_substitutes.get(spec.spec_version, onchain_code.heap_pages, id)
+		{
 			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
 			s
 		} else {
@@ -395,7 +398,7 @@ mod tests {
 		let call_executor = LocalCallExecutor {
 			backend: backend.clone(),
 			executor: executor.clone(),
-			wasm_override: Some(overrides),
+			wasm_override: Arc::new(Some(overrides)),
 			spawn_handle: Box::new(TaskExecutor::new()),
 			client_config,
 			wasm_substitutes: WasmSubstitutes::new(
