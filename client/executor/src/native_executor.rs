@@ -650,7 +650,7 @@ mod tests {
 			8,
 		);
 
-		fn extract_host_functions<H>(_: &WasmExecutor<H>) -> Vec<&'static dyn Function>
+		fn extract_host_functions<H>(_: &WasmExecutor<H>) -> Vec<&'static dyn sp_wasm_interface::Function>
 		where
 			H: HostFunctions,
 		{
