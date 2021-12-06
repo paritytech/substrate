@@ -52,8 +52,8 @@ use scale_info::TypeInfo;
 
 use sp_runtime::{
 	traits::{
-		Convert, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SaturatedConversion, Saturating,
-		SignedExtension, Zero, One,
+		Convert, DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SaturatedConversion,
+		Saturating, SignedExtension, Zero,
 	},
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
