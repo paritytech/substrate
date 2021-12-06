@@ -29,17 +29,29 @@ jobs:
   test:
     runs-on: self-hosted
     steps:
-      - uses: styfle/cancel-workflow-action@0.9.1
+      - name: Cancel previous runs
+        uses: styfle/cancel-workflow-action@0.9.1
         with:
           access_token: ${{ github.token }}
-      - uses: actions/checkout@v2.4.0
-      - uses: actions-rs/toolchain@v1
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: apt-get install -y libssl-dev
+
+      - name: Install rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly-2021-11-08
           target: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v1
-      - run: cargo test --workspace --locked --release --verbose
+
+      - name: Setup caching for rust/cargo
+        uses: Swatinem/rust-cache@v1
+
+      - name: Run cargo test suite
+        run: cargo test --workspace --locked --release --verbose
         env:
           RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
           RUST_BACKTRACE: 1
