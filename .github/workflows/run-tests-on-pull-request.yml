@@ -43,7 +43,7 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_CHANNEL: e2e-test-results
-          SLACK_COLOR: ${{ job.status }}
+          SLACK_COLOR: "#00FF00"
           SLACK_MESSAGE: 'Run integration tests on branch "${{ github.sha }}".'
           SLACK_TITLE: 'Test Results for "${{github.repository}}"'
           SLACK_USERNAME: pos-network-node-tests-bot
@@ -54,8 +54,8 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_CHANNEL: e2e-test-results
           SLACK_LINK_NAMES: true
-          SLACK_COLOR: ${{ job.status }}
-          SLACK_MESSAGE: 'Run integration tests on branch "${{ github.sha }}". Responsible persons: <@U011DQ8QZD4>, <@UM0FVG0CD>'
+          SLACK_COLOR: "#FF0000"
+          SLACK_MESSAGE: 'Run integration tests on branch "${{ github.sha }}". Responsible persons: <@U011DQ8QZD4>, <@UM0FVG0CD>.'
           SLACK_TITLE: 'Test Results for "${{github.repository}}"'
           SLACK_USERNAME: pos-network-node-tests-bot
       - name: Free space
