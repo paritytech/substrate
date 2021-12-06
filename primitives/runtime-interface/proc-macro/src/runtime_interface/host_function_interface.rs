@@ -188,7 +188,9 @@ fn generate_host_functions_struct(
 			}
 
 			#crate_::sp_wasm_interface::if_wasmtime_is_enabled! {
-				fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error> where T: #crate_::sp_wasm_interface::HostFunctionRegistry {
+				fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+					where T: #crate_::sp_wasm_interface::HostFunctionRegistry
+				{
 					#(#register_bodies)*
 					Ok(())
 				}
@@ -235,7 +237,10 @@ fn generate_host_function_implementation(
 		ffi_args_prototype.push(quote! { #ffi_name: #ffi_ty });
 		ffi_names.push(quote! { #ffi_name });
 
-		let convert_arg_error = format!("could not marshal the '{}' argument through the WASM FFI boundary while executing '{}' from interface '{}'", host_name_ident, method.sig.ident, trait_name);
+		let convert_arg_error = format!(
+			"could not marshal the '{}' argument through the WASM FFI boundary while executing '{}' from interface '{}'",
+			host_name_ident, method.sig.ident, trait_name
+		);
 		convert_args_static_ffi_to_host.push(quote! {
 			let mut #host_name = <#host_ty as #crate_::host::FromFFIValue>::from_ffi_value(__function_context__, #ffi_name)
 				.map_err(|err| format!("{}: {}", err, #convert_arg_error))?;
@@ -256,10 +261,14 @@ fn generate_host_function_implementation(
 			});
 		}
 
-		let arg_count_mismatch_error = format!("number of arguments given to '{}' from interface '{}' does not match the expected number of arguments!", method.sig.ident, trait_name);
-		convert_args_dynamic_ffi_to_static_ffi.push(quote!{
+		let arg_count_mismatch_error = format!(
+			"number of arguments given to '{}' from interface '{}' does not match the expected number of arguments!",
+			method.sig.ident, trait_name
+		);
+		convert_args_dynamic_ffi_to_static_ffi.push(quote! {
 			let #ffi_name = args.next().ok_or_else(|| #arg_count_mismatch_error.to_owned())?;
-			let #ffi_name: #ffi_ty = #crate_::sp_wasm_interface::TryFromValue::try_from_value(#ffi_name).ok_or_else(|| #convert_arg_error.to_owned())?;
+			let #ffi_name: #ffi_ty = #crate_::sp_wasm_interface::TryFromValue::try_from_value(#ffi_name)
+				.ok_or_else(|| #convert_arg_error.to_owned())?;
 		});
 	}
 
@@ -342,7 +351,9 @@ fn generate_host_function_implementation(
 	let register_body = quote! {
 		registry.register_static(
 			#crate_::sp_wasm_interface::Function::name(&#struct_name),
-			|mut caller: #crate_::sp_wasm_interface::wasmtime::Caller<T::State>, #(#ffi_args_prototype),*| -> std::result::Result<#ffi_return_ty, #crate_::sp_wasm_interface::wasmtime::Trap> {
+			|mut caller: #crate_::sp_wasm_interface::wasmtime::Caller<T::State>, #(#ffi_args_prototype),*|
+				-> std::result::Result<#ffi_return_ty, #crate_::sp_wasm_interface::wasmtime::Trap>
+			{
 				T::with_function_context(caller, move |__function_context__| {
 					#struct_name::call(
 						__function_context__,

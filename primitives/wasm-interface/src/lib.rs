@@ -362,8 +362,15 @@ if_wasmtime_is_enabled! {
 		type State;
 		type Error;
 		type FunctionContext: FunctionContext;
-		fn with_function_context<R>(caller: wasmtime::Caller<Self::State>, callback: impl FnOnce(&mut dyn FunctionContext) -> R) -> R;
-		fn register_static<Params, Results>(&mut self, fn_name: &str, func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static) -> core::result::Result<(), Self::Error>;
+		fn with_function_context<R>(
+			caller: wasmtime::Caller<Self::State>,
+			callback: impl FnOnce(&mut dyn FunctionContext) -> R,
+		) -> R;
+		fn register_static<Params, Results>(
+			&mut self,
+			fn_name: &str,
+			func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static,
+		) -> core::result::Result<(), Self::Error>;
 	}
 }
 
@@ -374,7 +381,9 @@ pub trait HostFunctions: 'static + Send + Sync {
 
 	if_wasmtime_is_enabled! {
 		/// Statically registers the host functions.
-		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error> where T: HostFunctionRegistry;
+		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+		where
+			T: HostFunctionRegistry;
 	}
 }
 
@@ -423,22 +432,38 @@ where
 	}
 
 	if_wasmtime_is_enabled! {
-		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error> where T: HostFunctionRegistry {
-			struct Proxy<'a, T> where T: HostFunctionRegistry {
+		fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+		where
+			T: HostFunctionRegistry,
+		{
+			struct Proxy<'a, T>
+			where
+				T: HostFunctionRegistry,
+			{
 				registry: &'a mut T,
-				seen: std::collections::HashSet<String>
+				seen: std::collections::HashSet<String>,
 			}
-			impl<'a, T> HostFunctionRegistry for Proxy<'a, T> where T: HostFunctionRegistry {
+			impl<'a, T> HostFunctionRegistry for Proxy<'a, T>
+			where
+				T: HostFunctionRegistry,
+			{
 				type State = T::State;
 				type Error = T::Error;
 				type FunctionContext = T::FunctionContext;
-				fn with_function_context<R>(caller: wasmtime::Caller<Self::State>, callback: impl FnOnce(&mut dyn FunctionContext) -> R) -> R {
+				fn with_function_context<R>(
+					caller: wasmtime::Caller<Self::State>,
+					callback: impl FnOnce(&mut dyn FunctionContext) -> R,
+				) -> R {
 					T::with_function_context(caller, callback)
 				}
 
-				fn register_static<Params, Results>(&mut self, fn_name: &str, func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static) -> core::result::Result<(), Self::Error> {
+				fn register_static<Params, Results>(
+					&mut self,
+					fn_name: &str,
+					func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static,
+				) -> core::result::Result<(), Self::Error> {
 					if self.seen.contains(fn_name) {
-						return Ok(());
+						return Ok(())
 					}
 
 					self.seen.insert(fn_name.to_owned());
