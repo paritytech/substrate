@@ -27,8 +27,8 @@ on:
       - master
 jobs:
   test:
-    # runs-on: self-hosted
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    # runs-on: ubuntu-latest
     steps:
       - name: Cancel previous runs
         uses: styfle/cancel-workflow-action@0.9.1
@@ -39,7 +39,8 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install dependencies
-        run: sudo apt-get install -y clang libssl-dev pkg-config git-restore-mtime
+        run: apt-get install -y clang libssl-dev pkg-config git-restore-mtime
+        # run: sudo apt-get install -y clang libssl-dev pkg-config git-restore-mtime
 
       - name: Install rust toolchain
         uses: actions-rs/toolchain@v1
