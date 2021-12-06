@@ -531,7 +531,7 @@ pub mod pallet {
 										// + the call is made by the parent-bounty curator.
 										// + or the curator is inactive.
 										slash_curator(curator, &mut child_bounty.curator_deposit);
-										// Continue to change bounty status below.
+									// Continue to change bounty status below.
 									} else {
 										// Curator has more time to give an update.
 										return Err(BountiesError::<T>::Premature.into())
