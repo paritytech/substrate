@@ -503,6 +503,9 @@ enum CodeSupplyMode<'a> {
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
+///
+/// The `H` generic parameter is used to statically pass a set of host functions which are exposed
+/// to the runtime.
 pub fn create_runtime<H>(
 	blob: RuntimeBlob,
 	config: Config,
