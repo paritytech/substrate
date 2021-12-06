@@ -649,7 +649,7 @@ where
 			.saturated_into::<BalanceOf<T>>();
 		let max_reward = |val: BalanceOf<T>| val.saturating_mul(max_tx_per_block);
 
-		// To distribute no-tip transactions a little bit, we set the minimal tip as `1`.
+		// To distribute no-tip transactions a little bit, we increase the tip value by one.
 		// This means that given two transactions without a tip, smaller one will be preferred.
 		let tip = tip.saturating_add(One::one());
 		let scaled_tip = max_reward(tip);
