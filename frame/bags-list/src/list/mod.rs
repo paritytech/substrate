@@ -430,8 +430,8 @@ impl<T: Config> List<T> {
 		node.next = Some(at.id().clone());
 		at.prev = Some(node.id().clone());
 
-		if at.is_terminal() || node.is_terminal() {
-			// `at` is the tail and/or `node` is the head, so we make sure the bag is updated. Note,
+		if node.is_terminal() {
+			// `node` is the new head, so we make sure the bag is updated. Note,
 			// since `node` is always in front of `at` we know that 1) there is always at least 2
 			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
 			// tail.
@@ -442,12 +442,9 @@ impl<T: Config> List<T> {
 				bag.head = Some(node.id().clone())
 			}
 
-			if at.next == None {
-				bag.tail = Some(at.id().clone())
-			}
-
 			bag.put()
 		};
+
 
 		// write the updated nodes to storage.
 		at.put();
