@@ -46,10 +46,18 @@ pub enum Error {
 	EncodingDecodingScale(codec::Error),
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
+	/// Failed to parse a libp2p key.
+	ParsingLibp2pIdentity(sc_network::DecodingError),
 	/// Failed to sign using a specific public key.
 	MissingSignature(CryptoTypePublicPair),
 	/// Failed to sign using all public keys.
 	Signing,
 	/// Failed to register Prometheus metric.
 	Prometheus(prometheus_endpoint::PrometheusError),
+	/// Received authority record that contains addresses with multiple peer ids
+	ReceivingDhtValueFoundEventWithDifferentPeerIds,
+	/// Received authority record without any addresses having a peer id
+	ReceivingDhtValueFoundEventWithNoPeerIds,
+	/// Received authority record without a valid signature for the remote peer id.
+	MissingPeerIdSignature,
 }

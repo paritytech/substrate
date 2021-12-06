@@ -76,19 +76,15 @@ pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
-	/// Remove all data associated with the list from storage. Parameter `items` is the number of
-	/// items to clear from the list.
+	/// Remove all data associated with the list from storage.
 	///
 	/// ## WARNING
 	///
-	/// `None` will clear all items and should generally not be used in production as it could lead
-	/// to a very large number of storage accesses.
-	pub(crate) fn clear(maybe_count: Option<u32>) -> u32 {
-		crate::ListBags::<T>::remove_all(maybe_count);
-		let pre = crate::ListNodes::<T>::count();
-		crate::ListNodes::<T>::remove_all(maybe_count);
-		let post = crate::ListNodes::<T>::count();
-		pre.saturating_sub(post)
+	/// this function should generally not be used in production as it could lead to a very large
+	/// number of storage accesses.
+	pub(crate) fn unsafe_clear() {
+		crate::ListBags::<T>::remove_all(None);
+		crate::ListNodes::<T>::remove_all();
 	}
 
 	/// Regenerate all of the data from the given ids.
@@ -100,11 +96,14 @@ impl<T: Config> List<T> {
 	/// pallet using this `List`.
 	///
 	/// Returns the number of ids migrated.
-	pub fn regenerate(
+	pub fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
-		Self::clear(None);
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		Self::unsafe_clear();
 		Self::insert_many(all, weight_of)
 	}
 
