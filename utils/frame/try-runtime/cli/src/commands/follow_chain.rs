@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, local_spec, parse,
-	state_machine_call, SharedParams, LOG_TARGET,
+	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
 use jsonrpsee::{
 	types::{traits::SubscriptionClient, Subscription},
@@ -139,7 +139,7 @@ where
 		let state_ext =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-		let (mut changes, encoded_result) = state_machine_call::<Block, ExecDispatch>(
+		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
 			&state_ext,
 			&executor,
 			execution,

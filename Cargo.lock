@@ -1958,7 +1958,9 @@ dependencies = [
  "paste 1.0.6",
  "scale-info",
  "sp-api",
+ "sp-application-crypto",
  "sp-io",
+ "sp-keystore",
  "sp-runtime",
  "sp-runtime-interface",
  "sp-std",
@@ -9650,6 +9652,7 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-runtime-client",
+ "zstd",
 ]
 
 [[package]]
@@ -10925,6 +10928,7 @@ dependencies = [
  "sp-state-machine",
  "sp-version",
  "structopt",
+ "zstd",
 ]
 
 [[package]]
