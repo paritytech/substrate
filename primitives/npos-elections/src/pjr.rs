@@ -294,7 +294,8 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 				score: Default::default(),
 				approval_stake: Default::default(),
 				round: Default::default(),
-			}.to_ptr()
+			}
+			.to_ptr()
 		})
 		.collect::<Vec<_>>();
 
@@ -322,7 +323,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 						who: t,
 						candidate: Rc::clone(&candidates[*idx]),
 						weight,
-        				load: Default::default(),
+						load: Default::default(),
 					});
 				}
 			}
@@ -453,7 +454,8 @@ mod tests {
 			approval_stake: Default::default(),
 			backed_stake: Default::default(),
 			round: Default::default(),
-		}.to_ptr();
+		}
+		.to_ptr();
 		let score = pre_score(unelected, &vec![v1, v2, v3], 15);
 
 		assert_eq!(score, 15);

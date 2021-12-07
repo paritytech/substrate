@@ -109,11 +109,9 @@ impl EnlistedParticipant {
 		use sp_runtime::traits::Verify;
 
 		match sp_core::sr25519::Signature::try_from(&self.signature[..]) {
-			Ok(signature) => {
-				match sp_core::sr25519::Public::from_slice(self.account.as_ref()) {
-					Err(()) => false,
-					Ok(signer) => signature.verify(event_id, &signer),
-				}
+			Ok(signature) => match sp_core::sr25519::Public::from_slice(self.account.as_ref()) {
+				Err(()) => false,
+				Ok(signer) => signature.verify(event_id, &signer),
 			},
 			_ => false,
 		}

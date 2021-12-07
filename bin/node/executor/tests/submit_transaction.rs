@@ -33,7 +33,8 @@ fn should_submit_unsigned_transaction() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	t.execute_with(|| {
-		let signature = pallet_im_online::sr25519::AuthoritySignature::try_from(vec![0; 64]).unwrap();
+		let signature =
+			pallet_im_online::sr25519::AuthoritySignature::try_from(vec![0; 64]).unwrap();
 		let heartbeat_data = pallet_im_online::Heartbeat {
 			block_number: 1,
 			network_state: Default::default(),

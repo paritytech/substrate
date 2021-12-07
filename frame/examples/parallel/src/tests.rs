@@ -98,8 +98,7 @@ fn it_can_enlist() {
 
 		let event_name = b"test";
 
-		Example::run_event(test_origin(1), event_name.to_vec())
-			.expect("Failed to enlist");
+		Example::run_event(test_origin(1), event_name.to_vec()).expect("Failed to enlist");
 
 		let participants = vec![
 			EnlistedParticipant {
@@ -130,8 +129,7 @@ fn one_wrong_will_not_enlist_anyone() {
 
 		let event_name = b"test";
 
-		Example::run_event(test_origin(1), event_name.to_vec())
-			.expect("Failed to enlist");
+		Example::run_event(test_origin(1), event_name.to_vec()).expect("Failed to enlist");
 
 		let participants = vec![
 			EnlistedParticipant {
@@ -149,8 +147,7 @@ fn one_wrong_will_not_enlist_anyone() {
 			},
 		];
 
-		Example::enlist_participants(test_origin(1), participants)
-			.expect("Failed to enlist");
+		Example::enlist_participants(test_origin(1), participants).expect("Failed to enlist");
 
 		assert_eq!(Example::participants().len(), 0);
 	});

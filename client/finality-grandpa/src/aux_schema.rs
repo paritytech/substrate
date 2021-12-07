@@ -498,7 +498,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode + Clone + Ord>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_core::{H256, crypto::UncheckedFrom};
+	use sp_core::{crypto::UncheckedFrom, H256};
 	use sp_finality_grandpa::AuthorityId;
 	use substrate_test_runtime_client;
 

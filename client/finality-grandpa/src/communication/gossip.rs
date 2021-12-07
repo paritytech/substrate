@@ -2555,7 +2555,8 @@ mod tests {
 
 		assert_eq!(val.inner().read().authorities, a1);
 
-		let a2 = vec![UncheckedFrom::unchecked_from([1; 32]), UncheckedFrom::unchecked_from([2; 32])];
+		let a2 =
+			vec![UncheckedFrom::unchecked_from([1; 32]), UncheckedFrom::unchecked_from([2; 32])];
 		val.note_set(SetId(1), a2.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a2);

@@ -310,7 +310,10 @@ impl<T: Config> Pallet<T> {
 
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-		T::FindAuthor::find_author(pre_runtime_digests).map(|a| { <Author<T>>::put(&a); a })
+		T::FindAuthor::find_author(pre_runtime_digests).map(|a| {
+			<Author<T>>::put(&a);
+			a
+		})
 	}
 
 	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {

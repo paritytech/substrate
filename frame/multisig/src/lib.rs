@@ -63,7 +63,10 @@ use frame_support::{
 use frame_system::{self as system, RawOrigin};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{DispatchError, traits::{Dispatchable, TrailingZeroInput, Zero}};
+use sp_runtime::{
+	traits::{Dispatchable, TrailingZeroInput, Zero},
+	DispatchError,
+};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 

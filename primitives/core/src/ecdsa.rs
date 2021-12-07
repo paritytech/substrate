@@ -27,7 +27,8 @@ use sp_std::cmp::Ordering;
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
-	CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic, UncheckedFrom, ByteArray
+	ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
+	UncheckedFrom,
 };
 #[cfg(feature = "full_crypto")]
 use crate::{

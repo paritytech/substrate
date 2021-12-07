@@ -22,7 +22,10 @@
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
-use crate::{crypto::ByteArray, hash::{H256, H512}};
+use crate::{
+	crypto::ByteArray,
+	hash::{H256, H512},
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 

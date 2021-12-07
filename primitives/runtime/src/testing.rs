@@ -30,7 +30,7 @@ use crate::{
 };
 use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
 use sp_core::{
-	crypto::{key_types, CryptoType, Dummy, ByteArray},
+	crypto::{key_types, ByteArray, CryptoType, Dummy},
 	U256,
 };
 pub use sp_core::{sr25519, H256};

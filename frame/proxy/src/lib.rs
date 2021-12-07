@@ -44,7 +44,10 @@ use frame_support::{
 use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{DispatchResult, traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero}};
+use sp_runtime::{
+	traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero},
+	DispatchResult,
+};
 use sp_std::{convert::TryInto, prelude::*};
 pub use weights::WeightInfo;
 

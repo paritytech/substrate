@@ -278,7 +278,8 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 			return Err(PublicError::InvalidChecksum)
 		}
 
-		let result = Self::from_slice(&data[prefix_len..body_len + prefix_len]).map_err(|()| PublicError::BadLength)?;
+		let result = Self::from_slice(&data[prefix_len..body_len + prefix_len])
+			.map_err(|()| PublicError::BadLength)?;
 		Ok((result, format))
 	}
 
@@ -475,8 +476,6 @@ impl UncheckedFrom<crate::hash::H256> for AccountId32 {
 
 impl ByteArray for AccountId32 {
 	const LEN: usize = 32;
-
-
 }
 
 #[cfg(feature = "std")]

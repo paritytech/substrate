@@ -24,7 +24,7 @@ use futures::executor;
 use sc_transaction_pool::{BasicPool, FullChainApi};
 use sp_core::{
 	blake2_256,
-	crypto::{CryptoTypePublicPair, Pair, ByteArray},
+	crypto::{ByteArray, CryptoTypePublicPair, Pair},
 	ed25519,
 	hexdisplay::HexDisplay,
 	sr25519,
@@ -40,8 +40,12 @@ use substrate_test_runtime_client::{
 };
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
-	let tx =
-		Transfer { amount: Default::default(), nonce, from: sender.into(), to: AccountKeyring::Bob.into() };
+	let tx = Transfer {
+		amount: Default::default(),
+		nonce,
+		from: sender.into(),
+		to: AccountKeyring::Bob.into(),
+	};
 	tx.into_signed_tx()
 }
 

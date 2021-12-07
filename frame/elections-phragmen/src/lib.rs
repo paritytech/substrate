@@ -161,11 +161,7 @@ pub struct Voter<AccountId, Balance> {
 
 impl<AccountId, Balance: Default> Default for Voter<AccountId, Balance> {
 	fn default() -> Self {
-		Self {
-			votes: vec![],
-			stake: Default::default(),
-			deposit: Default::default(),
-		}
+		Self { votes: vec![], stake: Default::default(), deposit: Default::default() }
 	}
 }
 

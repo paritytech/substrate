@@ -1622,7 +1622,10 @@ pub trait BlockNumberProvider {
 mod tests {
 	use super::*;
 	use crate::codec::{Decode, Encode, Input};
-	use sp_core::{crypto::{Pair, UncheckedFrom}, ecdsa};
+	use sp_core::{
+		crypto::{Pair, UncheckedFrom},
+		ecdsa,
+	};
 
 	mod t {
 		use sp_application_crypto::{app_crypto, sr25519};

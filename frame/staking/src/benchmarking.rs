@@ -29,7 +29,7 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, Zero, TrailingZeroInput},
+	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;

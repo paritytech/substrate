@@ -27,7 +27,10 @@ pub use sp_core::crypto::{DeriveJunction, Pair, SecretStringError, Ss58Codec};
 #[doc(hidden)]
 pub use sp_core::{
 	self,
-	crypto::{CryptoType, CryptoTypePublicPair, Derive, IsWrappedBy, Public, Wraps, ByteArray, UncheckedFrom},
+	crypto::{
+		ByteArray, CryptoType, CryptoTypePublicPair, Derive, IsWrappedBy, Public, UncheckedFrom,
+		Wraps,
+	},
 	RuntimeDebug,
 };
 

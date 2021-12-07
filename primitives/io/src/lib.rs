@@ -1516,8 +1516,10 @@ pub type SubstrateHostFunctions = (
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{map, storage::Storage, testing::TaskExecutor, traits::TaskExecutorExt};
-	use sp_core::crypto::UncheckedInto;
+	use sp_core::{
+		crypto::UncheckedInto, map, storage::Storage, testing::TaskExecutor,
+		traits::TaskExecutorExt,
+	};
 	use sp_state_machine::BasicExternalities;
 	use std::any::TypeId;
 

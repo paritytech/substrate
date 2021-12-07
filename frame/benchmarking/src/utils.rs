@@ -322,11 +322,7 @@ pub trait BenchmarkingSetup<T, I = ()> {
 }
 
 /// Grab an account, seeded by a name and index.
-pub fn account<AccountId: Decode>(
-	name: &'static str,
-	index: u32,
-	seed: u32,
-) -> AccountId {
+pub fn account<AccountId: Decode>(name: &'static str, index: u32, seed: u32) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 		.expect("infinite length input; no invalid inputs for type; qed")

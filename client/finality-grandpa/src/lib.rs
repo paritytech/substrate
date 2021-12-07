@@ -763,7 +763,8 @@ where
 			let events = telemetry_on_connect.for_each(move |_| {
 				let current_authorities = authorities.current_authorities();
 				let set_id = authorities.set_id();
-				let maybe_authority_id = local_authority_id(&current_authorities, conf.keystore.as_ref());
+				let maybe_authority_id =
+					local_authority_id(&current_authorities, conf.keystore.as_ref());
 
 				let authorities =
 					current_authorities.iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
@@ -916,7 +917,8 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let maybe_authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref());
+		let maybe_authority_id =
+			local_authority_id(&self.env.voters, self.env.config.keystore.as_ref());
 		let authority_id = maybe_authority_id.map_or("".into(), |s| s.to_string());
 
 		telemetry!(

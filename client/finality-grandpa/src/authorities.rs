@@ -1493,8 +1493,10 @@ mod tests {
 			None,
 		);
 
-		let invalid_authorities_weight =
-			vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 5), (AuthorityId::from_slice(&[2; 32]).unwrap(), 0)];
+		let invalid_authorities_weight = vec![
+			(AuthorityId::from_slice(&[1; 32]).unwrap(), 5),
+			(AuthorityId::from_slice(&[2; 32]).unwrap(), 0),
+		];
 
 		// authority weight of zero is invalid
 		assert_eq!(AuthoritySet::<(), ()>::genesis(invalid_authorities_weight.clone()), None);
@@ -1510,7 +1512,8 @@ mod tests {
 		);
 
 		let mut authority_set =
-			AuthoritySet::<(), u64>::genesis(vec![(AuthorityId::unchecked_from([1; 32]), 5)]).unwrap();
+			AuthoritySet::<(), u64>::genesis(vec![(AuthorityId::unchecked_from([1; 32]), 5)])
+				.unwrap();
 
 		let invalid_change_empty_authorities = PendingChange {
 			next_authorities: vec![],

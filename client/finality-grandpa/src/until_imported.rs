@@ -562,8 +562,8 @@ mod tests {
 	use futures_timer::Delay;
 	use sc_client_api::BlockImportNotification;
 	use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-	use sp_core::crypto::UncheckedFrom;
 	use sp_consensus::BlockOrigin;
+	use sp_core::crypto::UncheckedFrom;
 	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
 
 	#[derive(Clone)]

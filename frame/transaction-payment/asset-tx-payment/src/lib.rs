@@ -265,7 +265,8 @@ where
 				let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
 					len as u32, info, post_info, tip,
 				);
-				let who = who.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(255)))?;
+				let who =
+					who.ok_or(TransactionValidityError::Invalid(InvalidTransaction::Custom(255)))?;
 				T::OnChargeAssetTransaction::correct_and_deposit_fee(
 					&who,
 					info,

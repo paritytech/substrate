@@ -60,7 +60,10 @@ mod tests;
 pub mod migrations;
 pub mod weights;
 
-use sp_runtime::{Percent, RuntimeDebug, traits::{AccountIdConversion, BadOrigin, Hash, TrailingZeroInput, Zero}};
+use sp_runtime::{
+	traits::{AccountIdConversion, BadOrigin, Hash, TrailingZeroInput, Zero},
+	Percent, RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 use codec::{Decode, Encode};
@@ -577,7 +580,8 @@ impl<T: Config> Pallet<T> {
 
 		use frame_support::{migration::storage_key_iter, Twox64Concat};
 
-		let zero_account = T::AccountId::decode(&mut TrailingZeroInput::new(&[][..])).expect("infinite input; qed");
+		let zero_account = T::AccountId::decode(&mut TrailingZeroInput::new(&[][..]))
+			.expect("infinite input; qed");
 
 		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
