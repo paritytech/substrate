@@ -693,7 +693,6 @@ check-rustdoc:
     - time cargo +nightly doc --workspace --all-features --verbose --no-deps
     - sccache -s
 
-
 build-rustdoc:
   stage:                           build
   <<:                              *docker-env
