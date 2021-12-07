@@ -551,9 +551,11 @@ pub struct AuthoritySetHardFork<Block: BlockT> {
 	pub block: (Block::Hash, NumberFor<Block>),
 	/// The authorities in the new set.
 	pub authorities: AuthorityList,
-	/// The last finalized block number by the network. If defined, then the
-	/// authority set change will be forced, i.e. the node won't wait for the
-	/// block above to be finalized before enacting it.
+	/// The latest block number that was finalized before this authority set
+	/// hard fork. When defined, the authority set change will be forced, i.e.
+	/// the node won't wait for the block above to be finalized before enacting
+	/// the change, and the given finalized number will be used as a base for
+	/// voting.
 	pub last_finalized: Option<NumberFor<Block>>,
 }
 
