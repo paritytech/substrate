@@ -445,7 +445,6 @@ impl<T: Config> List<T> {
 			bag.put()
 		};
 
-
 		// write the updated nodes to storage.
 		at.put();
 		node.put();
