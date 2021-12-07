@@ -2,7 +2,7 @@
 name = "pallet-transaction-storage"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Unlicense"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.126", optional = true }
-hex-literal = { version = "0.3.3", optional = true }
+hex-literal = { version = "0.3.4", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -33,7 +33,7 @@ sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-featu
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking", "hex-literal"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "hex-literal"]
 std = [
 	"serde",
 	"codec/std",

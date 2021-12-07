@@ -500,7 +500,12 @@ fn transferring_less_than_one_unit_is_fine() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 0));
-		System::assert_last_event(mock::Event::Assets(crate::Event::Transferred(0, 1, 2, 0)));
+		System::assert_last_event(mock::Event::Assets(crate::Event::Transferred {
+			asset_id: 0,
+			from: 1,
+			to: 2,
+			amount: 0,
+		}));
 	});
 }
 

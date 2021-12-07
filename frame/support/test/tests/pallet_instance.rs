@@ -302,13 +302,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Instance1Example: pallet::<Instance1>::{
-			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
-		},
-		Example2: pallet2::{Pallet, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Event<T>, Config<T>, Storage},
+		// Exclude part `Storage` in order not to check its metadata in tests.
+		System: frame_system exclude_parts { Storage },
+		Example: pallet,
+		Instance1Example: pallet::<Instance1>,
+		Example2: pallet2,
+		Instance1Example2: pallet2::<Instance1>,
 	}
 );
 
@@ -552,35 +551,34 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 21);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
 
-		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Instance1Example(pallet::Event::Something(11)),
-		);
-		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[1].event,
 			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Instance1Example(pallet::Event::Something(21)),
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[3].event,
+			frame_system::Pallet::<Runtime>::events()[2].event,
 			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Instance1Example(pallet::Event::Something(21)),
+		);
+		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Instance1Example(pallet::Event::Something(31)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Example(pallet::Event::Something(30)),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }
@@ -601,7 +599,7 @@ fn metadata() {
 	let system_pallet_metadata = PalletMetadata {
 		index: 0,
 		name: "System",
-		storage: None,
+		storage: None, // The storage metadatas have been excluded.
 		calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata {
 			ty: scale_info::meta_type::<frame_system::Event<Runtime>>(),
