@@ -36,8 +36,8 @@ use sp_runtime::{
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet,
-	VersionedCommitment, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
+	ValidatorSet, VersionedCommitment, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 use crate::{
@@ -79,7 +79,7 @@ where
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
-	rounds: round::Rounds<MmrRootHash, NumberFor<B>>,
+	rounds: round::Rounds<Payload, NumberFor<B>>,
 	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block: NumberFor<B>,
@@ -262,8 +262,9 @@ where
 					return
 				};
 
+			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 			let commitment = Commitment {
-				payload: mmr_root,
+				payload,
 				block_number: notification.header.number(),
 				validator_set_id: self.rounds.validator_set_id(),
 			};
@@ -301,10 +302,10 @@ where
 		}
 	}
 
-	fn handle_vote(&mut self, round: (MmrRootHash, NumberFor<B>), vote: (Public, Signature)) {
+	fn handle_vote(&mut self, round: (Payload, NumberFor<B>), vote: (Public, Signature)) {
 		self.gossip_validator.note_round(round.1);
 
-		let vote_added = self.rounds.add_vote(round, vote);
+		let vote_added = self.rounds.add_vote(&round, vote);
 
 		if vote_added && self.rounds.is_done(&round) {
 			if let Some(signatures) = self.rounds.drop(&round) {
@@ -352,7 +353,7 @@ where
 			|notification| async move {
 				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
-				VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(
+				VoteMessage::<NumberFor<B>, Public, Signature>::decode(
 					&mut &notification.message[..],
 				)
 				.ok()

@@ -21,8 +21,10 @@ use super::*;
 use crate as pallet_identity;
 
 use codec::{Decode, Encode};
-use frame_support::{assert_noop, assert_ok, ord_parameter_types, parameter_types, BoundedVec};
-use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+use frame_support::{
+	assert_noop, assert_ok, ord_parameter_types, parameter_types, traits::EnsureOneOf, BoundedVec,
+};
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -100,8 +102,8 @@ ord_parameter_types! {
 	pub const One: u64 = 1;
 	pub const Two: u64 = 2;
 }
-type EnsureOneOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-type EnsureTwoOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
+type EnsureOneOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+type EnsureTwoOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 impl pallet_identity::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
