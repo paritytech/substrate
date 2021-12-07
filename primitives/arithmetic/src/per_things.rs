@@ -833,6 +833,16 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		impl $crate::traits::Zero for $name {
+			fn zero() -> Self {
+				Self::zero()
+			}
+
+			fn is_zero(&self) -> bool {
+				self == &Self::zero()
+			}
+		}
+
 
 		#[cfg(test)]
 		mod $test_mod {

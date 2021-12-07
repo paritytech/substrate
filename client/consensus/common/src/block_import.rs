@@ -190,8 +190,9 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// rejects block import if there are still intermediate values that remain unhandled.
 	pub intermediates: HashMap<Cow<'static, [u8]>, Box<dyn Any + Send>>,
 	/// Auxiliary consensus data produced by the block.
-	/// Contains a list of key-value pairs. If values are `None`, the keys
-	/// will be deleted.
+	/// Contains a list of key-value pairs. If values are `None`, the keys will be deleted. These
+	/// changes will be applied to `AuxStore` database all as one batch, which is more efficient
+	/// than updating `AuxStore` directly.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	/// Fork choice strategy of this import. This should only be set by a
 	/// synchronous import, otherwise it may race against other imports.
