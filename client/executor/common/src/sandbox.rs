@@ -29,13 +29,13 @@ use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 use std::{collections::HashMap, rc::Rc};
 use wasmi::{
-	memory_units::Pages, Externals, ImportResolver, MemoryInstance, Module, ModuleInstance,
+	memory_units::Pages, Externals, MemoryInstance, Module, ModuleInstance,
 	RuntimeArgs, RuntimeValue, Trap, TrapKind,
 };
 
 #[cfg(feature = "wasmer-sandbox")]
 use crate::util::wasmer::MemoryWrapper as WasmerMemoryWrapper;
-use crate::util::wasmi::MemoryWrapper as WasmiMemoryWrapper;
+use crate::wasmi_backend::MemoryWrapper as WasmiMemoryWrapper;
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
 
@@ -56,7 +56,7 @@ impl From<SupervisorFuncIndex> for usize {
 ///
 /// This index is supposed to be used as index for `Externals`.
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct GuestFuncIndex(usize);
+pub(crate) struct GuestFuncIndex(pub(crate) usize);
 
 /// This struct holds a mapping from guest index space to supervisor.
 struct GuestToSupervisorFunctionMapping {
@@ -87,7 +87,7 @@ impl GuestToSupervisorFunctionMapping {
 }
 
 /// Holds sandbox function and memory imports and performs name resolution
-struct Imports {
+pub(crate) struct Imports {
 	/// Maps qualified function name to its guest function index
 	func_map: HashMap<(Vec<u8>, Vec<u8>), GuestFuncIndex>,
 
@@ -96,73 +96,16 @@ struct Imports {
 }
 
 impl Imports {
-	fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
+	pub(crate) fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
 		self.func_map
 			.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned()))
 			.cloned()
 	}
 
-	fn memory_by_name(&self, module_name: &str, memory_name: &str) -> Option<Memory> {
+	pub(crate) fn memory_by_name(&self, module_name: &str, memory_name: &str) -> Option<Memory> {
 		self.memories_map
 			.get(&(module_name.as_bytes().to_owned(), memory_name.as_bytes().to_owned()))
 			.cloned()
-	}
-}
-
-impl ImportResolver for Imports {
-	fn resolve_func(
-		&self,
-		module_name: &str,
-		field_name: &str,
-		signature: &::wasmi::Signature,
-	) -> std::result::Result<wasmi::FuncRef, wasmi::Error> {
-		let idx = self.func_by_name(module_name, field_name).ok_or_else(|| {
-			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
-		})?;
-
-		Ok(wasmi::FuncInstance::alloc_host(signature.clone(), idx.0))
-	}
-
-	fn resolve_memory(
-		&self,
-		module_name: &str,
-		field_name: &str,
-		_memory_type: &::wasmi::MemoryDescriptor,
-	) -> std::result::Result<wasmi::MemoryRef, wasmi::Error> {
-		let mem = self.memory_by_name(module_name, field_name).ok_or_else(|| {
-			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
-		})?;
-
-		let wrapper = mem.as_wasmi().ok_or_else(|| {
-			wasmi::Error::Instantiation(format!(
-				"Unsupported non-wasmi export {}:{}",
-				module_name, field_name
-			))
-		})?;
-
-		// Here we use inner memory reference only to resolve
-		// the imports without accessing the memory contents.
-		let mem = unsafe { wrapper.clone_inner() };
-
-		Ok(mem)
-	}
-
-	fn resolve_global(
-		&self,
-		module_name: &str,
-		field_name: &str,
-		_global_type: &::wasmi::GlobalDescriptor,
-	) -> std::result::Result<wasmi::GlobalRef, wasmi::Error> {
-		Err(wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name)))
-	}
-
-	fn resolve_table(
-		&self,
-		module_name: &str,
-		field_name: &str,
-		_table_type: &::wasmi::TableDescriptor,
-	) -> std::result::Result<wasmi::TableRef, wasmi::Error> {
-		Err(wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name)))
 	}
 }
 

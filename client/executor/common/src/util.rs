@@ -18,7 +18,7 @@
 
 //! Utilities used by all backends
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use sp_wasm_interface::Pointer;
 use std::ops::Range;
 
@@ -49,67 +49,6 @@ pub trait MemoryTransfer {
 	///
 	/// Returns an error if the write would go out of the memory bounds.
 	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()>;
-}
-
-/// Safe wrapper over wasmi memory reference
-pub mod wasmi {
-	use super::*;
-
-	/// Wasmi provides direct access to its memory using slices.
-	///
-	/// This wrapper limits the scope where the slice can be taken to
-	#[derive(Debug, Clone)]
-	pub struct MemoryWrapper(::wasmi::MemoryRef);
-
-	impl MemoryWrapper {
-		/// Take ownership of the memory region and return a wrapper object
-		pub fn new(memory: ::wasmi::MemoryRef) -> Self {
-			Self(memory)
-		}
-
-		/// Clone the underlying memory object
-		///
-		/// # Safety
-		///
-		/// The sole purpose of `MemoryRef` is to protect the memory from uncontrolled
-		/// access. By returning the memory object "as is" we bypass all of the checks.
-		///
-		/// Intended to use only during module initialization.
-		pub unsafe fn clone_inner(&self) -> ::wasmi::MemoryRef {
-			self.0.clone()
-		}
-	}
-
-	impl super::MemoryTransfer for MemoryWrapper {
-		fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
-			self.0.with_direct_access(|source| {
-				let range = checked_range(source_addr.into(), size, source.len())
-					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-
-				Ok(Vec::from(&source[range]))
-			})
-		}
-
-		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
-			self.0.with_direct_access(|source| {
-				let range = checked_range(source_addr.into(), destination.len(), source.len())
-					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-
-				destination.copy_from_slice(&source[range]);
-				Ok(())
-			})
-		}
-
-		fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
-			self.0.with_direct_access_mut(|destination| {
-				let range = checked_range(dest_addr.into(), source.len(), destination.len())
-					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-
-				destination[range].copy_from_slice(source);
-				Ok(())
-			})
-		}
-	}
 }
 
 // Routines specific to Wasmer runtime. Since sandbox can be invoked from both
