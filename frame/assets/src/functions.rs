@@ -387,6 +387,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						account.balance.saturating_accrue(amount);
 					},
 					maybe_account @ None => {
+						// Note this should never fail as it's already checked by `can_increase`.
 						ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: amount,
