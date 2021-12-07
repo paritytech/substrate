@@ -89,11 +89,10 @@ where
 
 	/// Update a storage entry into a contract's kv storage.
 	///
-	/// If the `opt_new_value` is `None` then the kv pair is removed.
+	/// If the `new_value` is `None` then the kv pair is removed.
 	///
-	/// This function also updates the bookkeeping info such as: number of total non-empty pairs a
-	/// contract owns, the last block the storage was written to, etc. That's why, in contrast to
-	/// `read`, this function also requires the `account` ID.
+	/// This function also records how much storage was created or removed if a `storage_meter`
+	/// is supplied. It should only be absent for testing or benchmarking code.
 	pub fn write(
 		trie_id: &TrieId,
 		key: &StorageKey,
