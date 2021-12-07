@@ -2514,7 +2514,6 @@ mod tests {
 				7
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { 10 }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
@@ -2690,7 +2689,7 @@ mod tests {
 	#[test]
 	fn on_runtime_upgrade_should_work() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
+			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 0)
 		});
 	}
 

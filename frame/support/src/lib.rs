@@ -1520,14 +1520,11 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion:
 ///
-/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
-/// `OffchainWorker`, `IntegrityTest` using `Hooks` implementation.
-///
-/// NOTE: OnRuntimeUpgrade is implemented with `Hooks::on_runtime_upgrade` and some additional
-/// logic. E.g. logic to write pallet version into storage.
+/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OffchainWorker`,
+/// `IntegrityTest` using `Hooks` implementation.
 ///
 /// NOTE: The macro also adds some tracing logic when implementing the above traits. The
-/// following  hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
+/// following  hooks emit traces: `on_initialize` and `on_finalize`.
 ///
 /// # Call: `#[pallet::call]` optional
 ///
@@ -1990,7 +1987,7 @@ pub mod pallet_prelude {
 /// 			unimplemented!();
 /// 		}
 ///
-/// 		// can implement also: on_finalize, on_runtime_upgrade, offchain_worker, ...
+/// 		// can implement also: on_finalize, offchain_worker, ...
 /// 		// see `Hooks` trait
 /// 	}
 ///
@@ -2321,7 +2318,9 @@ pub mod pallet_prelude {
 /// 	}
 /// 	```
 /// 	and write inside
-/// 	`on_initialize`, `on_finalize`, `on_runtime_upgrade`, `offchain_worker`, `integrity_test`.
+/// 	`on_initialize`, `on_finalize`, `offchain_worker`, `integrity_test`.
+/// 	`on_runtime_upgrade` can't be declared at the pallet level anymore. Make sure to notify
+/// 	pallet's users.
 ///
 /// 	then write:
 /// 	```ignore
@@ -2417,8 +2416,10 @@ pub mod pallet_prelude {
 /// 	* `ValidateUnsigned` is moved inside the macro under `#[pallet::validate_unsigned)]` if it
 ///    exists
 /// 	* `ProvideInherent` is moved inside macro under `#[pallet::inherent)]` if it exists
-/// 	* `on_initialize`/`on_finalize`/`on_runtime_upgrade`/`offchain_worker` are moved to
+/// 	* `on_initialize`/`on_finalize`/`offchain_worker` are moved to
 ///    `Hooks`
+/// 	* `on_runtime_upgrade` removal is documented and acknowledged.
+///
 /// 		implementation
 /// 	* storages with `config(..)` are converted to `GenesisConfig` field, and their default is
 /// 		`= $expr;` if the storage have default value
