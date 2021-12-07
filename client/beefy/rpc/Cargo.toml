@@ -12,7 +12,7 @@ futures = "0.3.16"
 log = "0.4"
 serde = { version = "1.0.130", features = ["derive"] }
 
-jsonrpsee = { version = "0.6.0", features = ["server", "macros"] }
+jsonrpsee = { version = "0.6.1", features = ["server", "macros"] }
 
 codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
 

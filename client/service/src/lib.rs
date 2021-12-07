@@ -37,7 +37,7 @@ mod task_manager;
 use std::{collections::HashMap, net::SocketAddr, pin::Pin, task::Poll};
 
 use codec::{Decode, Encode};
-use futures::{stream, FutureExt, Stream, StreamExt};
+use futures::{channel::mpsc, stream, FutureExt, Stream, StreamExt};
 use jsonrpsee::RpcModule;
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
@@ -87,14 +87,18 @@ pub struct RpcHandlers(Arc<RpcModule<()>>);
 impl RpcHandlers {
 	/// Starts an RPC query.
 	///
-	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
-	/// would for example send.
+	/// The query is passed as a method name and params, the params must be serialized as array.
 	///
-	/// Returns a `Future` that contains the optional response.
-	//
-	// TODO(niklasad1): support subscriptions?!.
-	pub async fn rpc_query<T: Serialize>(&self, method: &str, params: Vec<T>) -> Option<String> {
-		self.0.call_with(method, params).await
+	/// Returns a `Future` that contains the optional response and a stream.
+	///
+	/// If the request subscribes you to events, the `stream` can be used to
+	/// retrieve the events.
+	pub async fn rpc_query<T: Serialize>(
+		&self,
+		method: &str,
+		params: Vec<T>,
+	) -> Option<(String, mpsc::UnboundedReceiver<String>)> {
+		self.0.call_and_subscribe(method, params).await
 	}
 
 	/// Provides access to the underlying `RpcModule`
