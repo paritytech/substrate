@@ -2360,7 +2360,7 @@ fn remove_code_in_use() {
 		initialize_block(2);
 
 		assert_noop!(
-			Contracts::remove_code(Origin::signed(BOB), code_hash),
+			Contracts::remove_code(Origin::signed(ALICE), code_hash),
 			<Error<Test>>::CodeInUse,
 		);
 
@@ -2701,7 +2701,7 @@ fn storage_deposit_works() {
 }
 
 #[test]
-fn call_after_killed_accout_needs_funding() {
+fn call_after_killed_account_needs_funding() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
