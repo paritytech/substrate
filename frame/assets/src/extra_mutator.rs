@@ -88,7 +88,7 @@ impl<T: Config<I>, I: 'static> ExtraMutator<T, I> {
 	/// Revert any changes, even those already committed by `self` and drop self.
 	pub fn revert(mut self) -> Result<(), ()> {
 		self.pending = None;
-		Account::<T, I>::try_mutate_exists(self.id, self.who.borrow(), |maybe_account| {
+		Account::<T, I>::try_mutate(self.id, self.who.borrow(), |maybe_account| {
 			maybe_account
 				.as_mut()
 				.ok_or(())

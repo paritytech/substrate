@@ -36,7 +36,7 @@ impl<T: Config<I>, I: 'static> StoredMap<(T::AssetId, T::AccountId), T::Extra> f
 		// If the account existed and they want to write a value, then we write.
 		// If the account didn't exist and they want to delete it, then we let it pass.
 		// Otherwise, we fail.
-		Account::<T, I>::try_mutate_exists(id, who, |maybe_account| {
+		Account::<T, I>::try_mutate(id, who, |maybe_account| {
 			if let Some(extra) = maybe_extra {
 				// They want to write a value. Let this happen only if the account actually exists.
 				if let Some(ref mut account) = maybe_account {
