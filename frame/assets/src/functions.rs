@@ -647,7 +647,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			for (who, v) in Account::<T, I>::drain_prefix(id) {
 				// We have to force this as it's destroying the entire asset class.
-				// This could mean that means that some accounts now have irreversibly reserved
+				// This could mean that some accounts now have irreversibly reserved
 				// funds.
 				let _ = Self::dead_account(id, &who, &mut details, &v.reason, true);
 			}

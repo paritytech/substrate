@@ -702,8 +702,6 @@ pub mod pallet {
 		///
 		/// - `id`: The identifier of the asset for the account to be created.
 		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
-		/// This will be needed unless the asset is a provider and the balance is greater than the
-		/// asset's minimum balance.
 		///
 		/// Emits `Refunded` event when successful.
 		#[pallet::weight(T::WeightInfo::mint())]
