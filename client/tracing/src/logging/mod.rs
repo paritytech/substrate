@@ -192,7 +192,10 @@ where
 /// A builder that is used to initialize the global logger.
 pub struct LoggerBuilder {
 	directives: String,
+	/// Requires wasm tracing feature (`with-tracing`).
 	profiling: Option<(crate::TracingReceiver, String)>,
+	/// Custom profilers built on top of wasm tracing infrastructure.
+	custom_profilers: Vec<Box<dyn crate::TraceHandler>>,
 	log_reloading: bool,
 	force_colors: Option<bool>,
 	detailed_output: bool,
@@ -204,6 +207,7 @@ impl LoggerBuilder {
 		Self {
 			directives: directives.into(),
 			profiling: None,
+			custom_profilers: Vec::new(),
 			log_reloading: false,
 			force_colors: None,
 			detailed_output: false,
@@ -217,6 +221,15 @@ impl LoggerBuilder {
 		profiling_targets: S,
 	) -> &mut Self {
 		self.profiling = Some((tracing_receiver, profiling_targets.into()));
+		self
+	}
+
+	/// Setup custom profiling.
+	pub fn with_custom_profiling(
+		&mut self,
+		custom_profilers: Vec<Box<dyn crate::TraceHandler>>,
+	) -> &mut Self {
+		self.custom_profilers = custom_profilers;
 		self
 	}
 
@@ -256,7 +269,12 @@ impl LoggerBuilder {
 					self.detailed_output,
 					|builder| enable_log_reloading!(builder),
 				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				let mut profiling =
+					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+
+				self.custom_profilers
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
@@ -269,7 +287,12 @@ impl LoggerBuilder {
 					self.detailed_output,
 					|builder| builder,
 				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				let mut profiling =
+					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+
+				self.custom_profilers
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 

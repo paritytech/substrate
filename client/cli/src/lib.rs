@@ -223,11 +223,17 @@ pub trait SubstrateCli: Sized {
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		command.init::<Self>()?;
+	fn create_runner<T: CliConfiguration, F>(
+		&self,
+		command: &T,
+		logger_hook: F,
+	) -> error::Result<Runner<Self>>
+	where
+		F: FnOnce(&mut LoggerBuilder),
+	{
+		command.init(&Self::support_url(), &Self::impl_version(), logger_hook)?;
 		Runner::new(self, command)
 	}
-
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
