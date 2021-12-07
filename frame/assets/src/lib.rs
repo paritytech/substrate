@@ -255,18 +255,6 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// The number of consumer asset-accounts being held. If this is some, the it implies a
-	pub(super) type ConsumerAccounts<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		u32,
-		OptionQuery,
-		GetDefault,
-		ConstU32<300_000>,
-	>;
-
-	#[pallet::storage]
 	/// The holdings of a specific account for a specific asset.
 	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
