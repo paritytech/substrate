@@ -22,6 +22,7 @@ sp-runtime-interface = { version = "4.0.0-dev", path = "../../primitives/runtime
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime", default-features = false }
 sp-std = { version = "4.0.0-dev", path = "../../primitives/std", default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
+sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto", default-features = false }
 sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -29,6 +30,7 @@ log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3.4"
+sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]
