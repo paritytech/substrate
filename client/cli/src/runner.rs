@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error::Error as CliError, CliConfiguration, Result, SubstrateCli};
+use crate::{error::Error as CliError, Result, SubstrateCli};
 use chrono::prelude::*;
 use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;

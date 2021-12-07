@@ -83,7 +83,7 @@ pub trait TraceHandler: Send + Sync {
 }
 
 /// Represents a tracing event, complete with values
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TraceEvent {
 	/// Name of the event.
 	pub name: String,
@@ -98,7 +98,7 @@ pub struct TraceEvent {
 }
 
 /// Represents a single instance of a tracing span
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SpanDatum {
 	/// id for this span
 	pub id: Id,
@@ -470,12 +470,12 @@ mod tests {
 	}
 
 	impl TraceHandler for TestTraceHandler {
-		fn handle_span(&self, sd: SpanDatum) {
-			self.spans.lock().push(sd);
+		fn handle_span(&self, sd: &SpanDatum) {
+			self.spans.lock().push(sd.clone());
 		}
 
-		fn handle_event(&self, event: TraceEvent) {
-			self.events.lock().push(event);
+		fn handle_event(&self, event: &TraceEvent) {
+			self.events.lock().push(event.clone());
 		}
 	}
 

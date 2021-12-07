@@ -223,7 +223,20 @@ pub trait SubstrateCli: Sized {
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runner<T: CliConfiguration, F>(
+	fn create_runner<T: CliConfiguration>(
+		&self,
+		command: &T,
+	) -> error::Result<Runner<Self>> {
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
+		Runner::new(config, tokio_runtime)
+	}
+
+	/// Create a runner for the command provided in argument. This will create a Configuration and
+	/// a tokio runtime and apply the specified `logger_hook` closure.
+	fn create_runner_with_logger_hook<T: CliConfiguration, F>(
 		&self,
 		command: &T,
 		logger_hook: F,
