@@ -242,7 +242,7 @@ benchmarks! {
 
 		let addresses = (0..v)
 			.into_iter()
-			.map(|i| account("blacklist", i, SEED))
+			.map(|i| account::<T::AccountId>("blacklist", i, SEED))
 			.collect::<Vec<_>>();
 		Blacklist::<T>::insert(
 			proposal_hash,
@@ -297,7 +297,7 @@ benchmarks! {
 
 		let mut vetoers: Vec<T::AccountId> = Vec::new();
 		for i in 0 .. v {
-			vetoers.push(account("vetoer", i, SEED));
+			vetoers.push(account::<T::AccountId>("vetoer", i, SEED));
 		}
 		vetoers.sort();
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
