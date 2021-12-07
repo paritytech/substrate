@@ -569,7 +569,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 1. Sets the panic handler
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<F>(&self, support_url: &String, impl_version: &String, logger_hook: F, config: &Configuration) -> Result<()>
+	fn init<F>(
+		&self,
+		support_url: &String,
+		impl_version: &String,
+		logger_hook: F,
+		config: &Configuration,
+	) -> Result<()>
 	where
 		F: FnOnce(&mut LoggerBuilder, &Configuration),
 	{

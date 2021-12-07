@@ -113,11 +113,7 @@ pub struct Runner<C: SubstrateCli> {
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
 	pub fn new(config: Configuration, tokio_runtime: tokio::runtime::Runtime) -> Result<Runner<C>> {
-		Ok(Runner {
-			config,
-			tokio_runtime,
-			phantom: PhantomData,
-		})
+		Ok(Runner { config, tokio_runtime, phantom: PhantomData })
 	}
 
 	/// Log information about the node itself.
