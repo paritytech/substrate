@@ -1093,7 +1093,14 @@ impl<T: Config> SortedMembers<T::AccountId> for Pallet<T> {
 	fn add(who: &T::AccountId) {
 		Members::<T>::mutate(|members| match members.binary_search_by(|m| m.who.cmp(who)) {
 			Ok(_) => (),
-			Err(pos) => members.insert(pos, SeatHolder { who: who.clone(), ..Default::default() }),
+			Err(pos) => {
+				let s = SeatHolder {
+					who: who.clone(),
+					stake: Default::default(),
+					deposit: Default::default(),
+				};
+				members.insert(pos, s)
+			},
 		})
 	}
 }

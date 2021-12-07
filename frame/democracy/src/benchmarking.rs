@@ -239,9 +239,14 @@ benchmarks! {
 		let origin = T::ExternalOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
 		// Add proposal to blacklist with block number 0
+
+		let addresses = (0..v)
+			.into_iter()
+			.map(|i| account("blacklist", i, SEED))
+			.collect::<Vec<_>>();
 		Blacklist::<T>::insert(
 			proposal_hash,
-			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
+			(T::BlockNumber::zero(), addresses),
 		);
 	}: _<T::Origin>(origin, proposal_hash)
 	verify {
