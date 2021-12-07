@@ -1,0 +1,11 @@
+error: `on_runtime_upgrade` can't be implemented anymore. The runtime upgrade must be defined at the runtime level.
+ --> tests/decl_module_ui/on_runtime_upgrade.rs:1:1
+  |
+1 | / frame_support::decl_module! {
+2 | |     pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
+3 | |         fn on_runtime_upgrade() -> Weight { 0 }
+4 | |     }
+5 | | }
+  | |_^
+  |
+  = note: this error originates in the macro `$crate::decl_module` (in Nightly builds, run with -Z macro-backtrace for more info)

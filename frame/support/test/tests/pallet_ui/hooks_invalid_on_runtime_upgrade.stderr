@@ -1,0 +1,5 @@
+error[E0407]: method `on_runtime_upgrade` is not a member of trait `Hooks`
+  --> tests/pallet_ui/hooks_invalid_on_runtime_upgrade.rs:14:3
+   |
+14 |         fn on_runtime_upgrade() -> Weight { 0 }
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not a member of trait `Hooks`
