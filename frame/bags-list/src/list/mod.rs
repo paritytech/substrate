@@ -404,7 +404,12 @@ impl<T: Config> List<T> {
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
-		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
+		let lighter_node = Node::<T>::get(&lighter_id).ok_or_else(|| {
+			debug_assert!(false, "id that should exist cannot be found");
+			crate::log!(warn, "id that should exist cannot be found");
+			pallet::Error::IdNotFound
+		})?;
+
 		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
 		// in storage and update the node counter.
 		Self::insert_at_unchecked(lighter_node, heavier_node);
