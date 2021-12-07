@@ -265,8 +265,7 @@ where
 	/// This drops the root meter in order to make sure it is only called when the whole
 	/// execution did finish.
 	pub fn into_deposit(self) -> DepositOf<T> {
-		// Clone is necessary because of the drop implementation.
-		self.total_deposit.clone()
+		self.total_deposit
 	}
 }
 
