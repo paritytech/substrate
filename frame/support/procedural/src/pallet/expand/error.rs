@@ -15,12 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{parse::error::VariantField, Def};
+use crate::{
+	pallet::{parse::error::VariantField, Def},
+	COUNTER,
+};
 use frame_support_procedural_tools::get_doc_literals;
+use syn::spanned::Spanned;
 
 ///
 /// * impl various trait on Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
+	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
+	let error_token_unique_id =
+		syn::Ident::new(&format!("__tt_error_token_{}", count), def.item.span());
+
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
 	let pallet_ident = &def.pallet_struct.pallet;
@@ -32,6 +40,22 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		error
 	} else {
 		return quote::quote! {
+
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #error_token_unique_id {
+				{
+					$caller:tt
+					frame_support = [{ $($frame_support:ident)::* }]
+				} => {
+					$($frame_support::)*tt_return! {
+						$caller
+					}
+				};
+			}
+
+			pub use #error_token_unique_id as tt_error_token;
+
 			impl<#pallet_type_impl_gen> #frame_support::traits::ErrorCompactnessTest
 				for #pallet_ident<#pallet_type_use_gen> #config_where_clause {}
 		}
@@ -143,6 +167,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn from(err: #error_ident<#type_use_gen>) -> Self {
+				use #frame_support::codec::Encode;
 				let index = <
 					<T as #frame_system::Config>::PalletInfo
 					as #frame_support::traits::PalletInfo
@@ -158,5 +183,21 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				}
 			}
 		}
+
+		#[macro_export]
+		#[doc(hidden)]
+		macro_rules! #error_token_unique_id {
+			{
+				$caller:tt
+				frame_support = [{ $($frame_support:ident)::* }]
+			} => {
+				$($frame_support::)*tt_return! {
+					$caller
+					error = [{ #error_ident }]
+				}
+			};
+		}
+
+		pub use #error_token_unique_id as tt_error_token;
 	)
 }

@@ -153,7 +153,7 @@ use parse::{
 };
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{Ident, Result};
 
 /// The fixed name of the system pallet.
@@ -241,6 +241,7 @@ fn construct_runtime_final_expansion(
 		expand::expand_outer_inherent(&name, &block, &unchecked_extrinsic, &pallets, &scrate);
 	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
+	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
 	let res = quote!(
 		#scrate_decl
@@ -282,6 +283,8 @@ fn construct_runtime_final_expansion(
 		#validate_unsigned
 
 		#integrity_test
+
+		#static_assertions
 	);
 
 	Ok(res)
@@ -475,4 +478,43 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 			}
 		}
 	)
+}
+
+fn decl_static_assertions(
+	runtime: &Ident,
+	pallet_decls: &[Pallet],
+	scrate: &TokenStream2,
+) -> TokenStream2 {
+	let error_encoded_size_check = pallet_decls.iter().map(|decl| {
+		let name = &decl.name;
+		let path = &decl.path;
+		let assert_macro_name = format_ident!("assert_error_encoded_size_for_{}", name);
+
+		quote! {
+			#scrate::tt_call! {
+				macro = [{ #path::tt_error_token }]
+				frame_support = [{ #scrate }]
+				~~> #assert_macro_name
+			}
+
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #assert_macro_name {
+				{
+					error = [{ $error:ident }]
+				} => {
+					#scrate::const_assert! {
+						<
+							#path::$error<#runtime> as #scrate::traits::CompactPalletError
+						>::MAX_ENCODED_SIZE <= #scrate::MAX_NESTED_PALLET_ERROR_DEPTH
+					}
+				};
+				{} => {};
+			}
+		}
+	});
+
+	quote! {
+		#(#error_encoded_size_check)*
+	}
 }

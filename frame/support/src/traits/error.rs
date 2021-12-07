@@ -28,6 +28,12 @@ use sp_std::marker::PhantomData;
 /// limit, the encoded representation of it will truncate any excess bytes when setting the error
 /// field during the creation of the [`DispatchError`] type.
 pub trait CompactPalletError: Encode + Decode {
+	/// The maximum encoded size for the implementing type.
+	///
+	/// This will be used to check whether the pallet error type is less than or equal to
+	/// [`frame_support::MAX_NESTED_PALLET_ERROR_DEPTH`], and if it is, a compile error will be
+	/// thrown.
+	const MAX_ENCODED_SIZE: usize;
 	/// Function that checks whether implementing types are either 1 bytes in size, or that its
 	/// nested types are 1 bytes in size, i.e. whether they are as memory efficient as possible.
 	///
@@ -39,18 +45,20 @@ pub trait CompactPalletError: Encode + Decode {
 }
 
 macro_rules! impl_for_types {
-    ($($typ:ty),+) => {
-        $(
-            impl CompactPalletError for $typ {
-                fn check_compactness() -> bool { true }
-            }
-        )+
-    };
+	($($typ:ty),+) => {
+		$(
+			impl CompactPalletError for $typ {
+				const MAX_ENCODED_SIZE: usize = 1;
+				fn check_compactness() -> bool { true }
+			}
+		)+
+	};
 }
 
 impl_for_types!(u8, i8, bool, OptionBool);
 
 impl<T> CompactPalletError for PhantomData<T> {
+	const MAX_ENCODED_SIZE: usize = 0;
 	fn check_compactness() -> bool {
 		true
 	}

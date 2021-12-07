@@ -32,7 +32,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 	let frame_support = &frame_support;
 	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-	let compactness_check = match data {
+	let (max_encoded_size, compactness_check) = match data {
 		syn::Data::Struct(syn::DataStruct { struct_token, fields, .. }) => {
 			if fields.len() > 1 {
 				let msg = "Cannot derive `CompactPalletError` for structs with more than 1 field";
@@ -42,21 +42,35 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 			match fields {
 				syn::Fields::Named(mut f) if f.named.len() == 1 => {
 					let field_ty = f.named.pop().unwrap().into_value().ty;
-					quote::quote! {
-						<
-							#field_ty as #frame_support::traits::CompactPalletError
-						>::check_compactness()
-					}
+					(
+						quote::quote! {
+							<
+								#field_ty as #frame_support::traits::CompactPalletError
+							>::MAX_ENCODED_SIZE
+						},
+						quote::quote! {
+							<
+								#field_ty as #frame_support::traits::CompactPalletError
+							>::check_compactness()
+						},
+					)
 				},
 				syn::Fields::Unnamed(mut f) if f.unnamed.len() == 1 => {
 					let field_ty = f.unnamed.pop().unwrap().into_value().ty;
-					quote::quote! {
-						<
-							#field_ty as #frame_support::traits::CompactPalletError
-						>::check_compactness()
-					}
+					(
+						quote::quote! {
+							<
+								#field_ty as #frame_support::traits::CompactPalletError
+							>::MAX_ENCODED_SIZE
+						},
+						quote::quote! {
+							<
+								#field_ty as #frame_support::traits::CompactPalletError
+							>::check_compactness()
+						},
+					)
 				},
-				_ => quote::quote!(true),
+				_ => (quote::quote!(1), quote::quote!(true)),
 			}
 		},
 		syn::Data::Enum(syn::DataEnum { variants, .. }) => {
@@ -109,15 +123,28 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 			};
 
 			if field_tys.is_empty() {
-				quote::quote!(true)
+				(quote::quote!(1), quote::quote!(true))
 			} else {
-				quote::quote! {
-					#(
-						<
-							#field_tys as #frame_support::traits::CompactPalletError
-						>::check_compactness()
-					)&&*
-				}
+				(
+					quote::quote! {{
+						let mut size = 1;
+						let mut tmp: usize;
+						#(
+							tmp = 1 + <
+								#field_tys as #frame_support::traits::CompactPalletError
+							>::MAX_ENCODED_SIZE;
+							size = if tmp > size { tmp } else { size };
+						)*
+						size
+					}},
+					quote::quote! {
+						#(
+							<
+								#field_tys as #frame_support::traits::CompactPalletError
+							>::check_compactness()
+						)&&*
+					},
+				)
 			}
 		},
 		syn::Data::Union(syn::DataUnion { union_token, .. }) => {
@@ -131,6 +158,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 			impl #impl_generics #frame_support::traits::CompactPalletError
 				for #name #ty_generics #where_clause
 			{
+				const MAX_ENCODED_SIZE: usize = #max_encoded_size;
 				fn check_compactness() -> bool {
 					#compactness_check
 				}
