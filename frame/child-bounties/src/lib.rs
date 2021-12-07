@@ -427,28 +427,28 @@ pub mod pallet {
 
 		/// Unassign curator from a child-bounty.
 		///
-		/// The dispatch origin for this call can be either `RejectOrigin` or
-		/// the curator of the parent bounty or any signed origin.
+		/// The dispatch origin for this call can be either `RejectOrigin`, or
+		/// the curator of the parent bounty, or any signed origin.
 		///
-		/// For the origin other than T::RejectOrigin, parent-bounty must be in
-		/// active state, for this call to work. For origin T::RejectOrigin
-		/// execution is forced by ignoring the state of parent bounty.
+		/// For the origin other than T::RejectOrigin and the child-bounty
+		/// curator, parent-bounty must be in active state, for this call to
+		/// work. We allow child-bounty curator and T::RejectOrigin to execute
+		/// this call irrespective of the parent-bounty state.
 		///
-		/// If this function is called by the `RejectOrigin` or the parent
-		/// curator, we assume that the child-bounty curator is malicious or
-		/// inactive.
-		///
-		/// As a result, child-bounty curator deposit may be slashed.
+		/// If this function is called by the `RejectOrigin` or the
+		/// parent-bounty curator, we assume that the child-bounty curator is
+		/// malicious or inactive. As a result, child-bounty curator deposit is
+		/// slashed.
 		///
 		/// If the origin is the child-bounty curator, we take this as a sign
-		/// they are unable to do their job, and they willingly give up. We
-		/// could slash the deposit, but for now we allow them to unreserve
+		/// that they are unable to do their job, and are willingly giving up.
+		/// We could slash the deposit, but for now we allow them to unreserve
 		/// their deposit and exit without issue. (We may want to change this if
 		/// it is abused.)
 		///
-		/// Finally, the origin can be anyone if and only if the child-bounty
-		/// curator is "inactive". Expiry update due of parent bounty is used to
-		/// estimate mature or inactive state of child-bounty curator.
+		/// Finally, the origin can be anyone iff the child-bounty curator is
+		/// "inactive". Expiry update due of parent bounty is used to estimate
+		/// inactive state of child-bounty curator.
 		///
 		/// This allows anyone in the community to call out that a child-bounty
 		/// curator is not doing their due diligence, and we should pick a new
