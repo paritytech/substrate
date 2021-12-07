@@ -108,7 +108,7 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of
-	/// value transferred from this to the newly created account (also known as value).
+	/// value transferred from this to the newly created account.
 	///
 	/// # Return Value
 	///
@@ -155,7 +155,7 @@ pub trait Ext: sealing::Sealed {
 	/// The `value_transferred` is already added.
 	fn balance(&self) -> BalanceOf<Self::T>;
 
-	/// Returns the value transferred along with this call or as value.
+	/// Returns the value transferred along with this call.
 	fn value_transferred(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a reference to the timestamp of the current block
@@ -667,7 +667,7 @@ where
 		let entry_point = self.top_frame().entry_point;
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
-			// it can create the account incase the initial transfer is < ed.
+			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
 				let top_frame = top_frame_mut!(self);
 				top_frame.nested_storage.charge_instantiate(

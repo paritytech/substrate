@@ -51,7 +51,7 @@ pub trait Ext<T: Config> {
 	///
 	/// It is necessary to do this check beforehand so that the charge won't fail later on.
 	///
-	/// `origin`: The origin of the call stack from which is reponsible for putting down a deposit.
+	/// `origin`: The origin of the call stack from which is responsible for putting down a deposit.
 	/// `limit`: The limit with which the meter was constructed.
 	/// `min_leftover`: How much `free_balance` in addition to the ed should be left inside the
 	/// `origin` account.
@@ -70,7 +70,7 @@ pub trait Ext<T: Config> {
 	/// around depending on whether `amount` constitues a `Charge` or a `Refund`.
 	/// It is garantueed that that this succeeds because no more balance then returned by
 	/// `check_limit` is ever charged. This is why this function is infallible.
-	// `terminated` designates whether the `contract` was terminated.
+	/// `terminated` designates whether the `contract` was terminated.
 	fn charge(
 		origin: &T::AccountId,
 		contract: &T::AccountId,
@@ -194,7 +194,7 @@ where
 	///
 	/// `absorbed`: The child storage meter that should be absorbed.
 	/// `origin`: The origin that spawned the original root meter.
-	/// `contract`: The contract that this sub call belings to.
+	/// `contract`: The contract that this sub call belongs to.
 	/// `info`: The info of the contract in question. `None` if the contract was terminated.
 	pub fn absorb(
 		&mut self,
@@ -203,7 +203,7 @@ where
 		contract: &T::AccountId,
 		info: Option<&mut ContractInfo<T>>,
 	) {
-		// Absorbing from an exisiting (non terminated) contract.
+		// Absorbing from an existing (non terminated) contract.
 		if let Some(info) = info {
 			match &mut absorbed.own_deposit {
 				Deposit::Charge(amount) =>
@@ -294,7 +294,7 @@ where
 
 	/// Charge from `origin` a storage deposit for contract instantiation.
 	///
-	/// This immediatly transfers the balance in order to create the account.
+	/// This immediately transfers the balance in order to create the account.
 	pub fn charge_instantiate(
 		&mut self,
 		origin: &T::AccountId,
@@ -322,7 +322,7 @@ where
 		}
 		self.total_deposit = total_deposit;
 		if !deposit.is_zero() {
-			// We need to charge immediatly so that the account is created before the `value`
+			// We need to charge immediately so that the account is created before the `value`
 			// is transferred from the caller to the contract.
 			E::charge(origin, contract, &deposit, false);
 		}
