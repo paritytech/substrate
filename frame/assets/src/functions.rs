@@ -470,7 +470,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				account.balance = account.balance.saturating_sub(actual);
 				if account.balance < details.min_balance {
 					debug_assert!(account.balance.is_zero(), "checked in prep; qed");
-					if let Remove = Self::dead_account(id, target, &mut details, &account.reason, false) {
+					if let Remove =
+						Self::dead_account(id, target, &mut details, &account.reason, false)
+					{
 						return Ok(())
 					}
 				};
@@ -569,7 +571,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Remove source account if it's now dead.
 			if source_account.balance < details.min_balance {
 				debug_assert!(source_account.balance.is_zero(), "checked in prep; qed");
-				if let Remove = Self::dead_account(id, &source, details, &source_account.reason, false) {
+				if let Remove =
+					Self::dead_account(id, &source, details, &source_account.reason, false)
+				{
 					Account::<T, I>::remove(id, &source);
 					return Ok(())
 				}
