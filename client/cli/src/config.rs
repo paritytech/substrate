@@ -569,9 +569,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 1. Sets the panic handler
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<F>(&self, support_url: &String, impl_version: &String, logger_hook: F) -> Result<()>
+	fn init<F>(&self, support_url: &String, impl_version: &String, logger_hook: F, config: &Configuration) -> Result<()>
 	where
-		F: FnOnce(&mut LoggerBuilder),
+		F: FnOnce(&mut LoggerBuilder, &Configuration),
 	{
 		sp_panic_handler::set(support_url, impl_version);
 
@@ -589,7 +589,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			logger.with_colors(false);
 		}
 
-		logger_hook(&mut logger);
+		// Call hook for custom profiling setup.
+		logger_hook(&mut logger, &config);
 
 		logger.init()?;
 

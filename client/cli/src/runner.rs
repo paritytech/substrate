@@ -112,12 +112,9 @@ pub struct Runner<C: SubstrateCli> {
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
-		let tokio_runtime = build_runtime()?;
-		let runtime_handle = tokio_runtime.handle().clone();
-
+	pub fn new(config: Configuration, tokio_runtime: tokio::runtime::Runtime) -> Result<Runner<C>> {
 		Ok(Runner {
-			config: command.create_configuration(cli, runtime_handle)?,
+			config,
 			tokio_runtime,
 			phantom: PhantomData,
 		})

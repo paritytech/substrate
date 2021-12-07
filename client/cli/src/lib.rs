@@ -229,10 +229,13 @@ pub trait SubstrateCli: Sized {
 		logger_hook: F,
 	) -> error::Result<Runner<Self>>
 	where
-		F: FnOnce(&mut LoggerBuilder),
+		F: FnOnce(&mut LoggerBuilder, &Configuration),
 	{
-		command.init(&Self::support_url(), &Self::impl_version(), logger_hook)?;
-		Runner::new(self, command)
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
+		Runner::new(config, tokio_runtime)
 	}
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
