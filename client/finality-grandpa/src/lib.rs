@@ -546,15 +546,15 @@ where
 /// (hence the hard fork).
 pub struct AuthoritySetHardFork<Block: BlockT> {
 	/// The new authority set id.
-	set_id: SetId,
+	pub set_id: SetId,
 	/// The block hash and number at which the hard fork should be applied.
-	block: (Block::Hash, NumberFor<Block>),
+	pub block: (Block::Hash, NumberFor<Block>),
 	/// The authorities in the new set.
-	authorities: AuthorityList,
+	pub authorities: AuthorityList,
 	/// The last finalized block number by the network. If defined, then the
 	/// authority set change will be forced, i.e. the node won't wait for the
 	/// block above to be finalized before enacting it.
-	last_finalized: Option<NumberFor<Block>>,
+	pub last_finalized: Option<NumberFor<Block>>,
 }
 
 /// Make block importer and link half necessary to tie the background voter to
