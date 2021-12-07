@@ -176,12 +176,6 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(20));
 		}
-		fn on_runtime_upgrade() -> Weight {
-			let _ = T::AccountId::from(SomeType1); // Test for where clause
-			let _ = T::AccountId::from(SomeType2); // Test for where clause
-			Self::deposit_event(Event::Something(30));
-			30
-		}
 		fn integrity_test() {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
@@ -463,10 +457,6 @@ pub mod pallet2 {
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			Self::deposit_event(Event::Something(21));
-		}
-		fn on_runtime_upgrade() -> Weight {
-			Self::deposit_event(Event::Something(31));
-			0
 		}
 	}
 
@@ -979,7 +969,7 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 0);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -1018,7 +1008,7 @@ fn all_pallets_type_reversed_order_is_correct() {
 			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
 			AllPalletsWithoutSystemReversed::on_finalize(1);
 
-			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
+			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 0);
 		}
 
 		assert_eq!(

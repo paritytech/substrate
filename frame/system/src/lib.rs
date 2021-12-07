@@ -314,15 +314,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedToTripleRefCount::<T>::get() {
-				UpgradedToTripleRefCount::<T>::put(true);
-				migrations::migrate_to_triple_ref_count::<T>()
-			} else {
-				0
-			}
-		}
-
 		fn integrity_test() {
 			T::BlockWeights::get().validate().expect("The weights are invalid.");
 		}

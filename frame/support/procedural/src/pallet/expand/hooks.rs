@@ -20,14 +20,13 @@ use crate::pallet::Def;
 ///
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
-	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
+	let (where_clause, span) = match def.hooks.as_ref() {
 		Some(hooks) => {
 			let where_clause = hooks.where_clause.clone();
 			let span = hooks.attr_span;
-			let has_runtime_upgrade = hooks.has_runtime_upgrade;
-			(where_clause, span, has_runtime_upgrade)
+			(where_clause, span)
 		},
-		None => (None, def.pallet_struct.attr_span, false),
+		None => (None, def.pallet_struct.attr_span),
 	};
 
 	let frame_support = &def.frame_support;
@@ -35,29 +34,6 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let type_use_gen = &def.type_use_generics(span);
 	let pallet_ident = &def.pallet_struct.pallet;
 	let frame_system = &def.frame_system;
-
-	let log_runtime_upgrade = if has_runtime_upgrade {
-		// a migration is defined here.
-		quote::quote! {
-			#frame_support::log::info!(
-				target: #frame_support::LOG_TARGET,
-				"⚠️ {} declares internal migrations (which *might* execute). \
-				 On-chain `{:?}` vs current storage version `{:?}`",
-				pallet_name,
-				<Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version(),
-				<Self as #frame_support::traits::GetStorageVersion>::current_storage_version(),
-			);
-		}
-	} else {
-		// default.
-		quote::quote! {
-			#frame_support::log::info!(
-				target: #frame_support::LOG_TARGET,
-				"✅ no migration for {}",
-				pallet_name,
-			);
-		}
-	};
 
 	let hooks_impl = if def.hooks.is_none() {
 		let frame_system = &def.frame_system;
@@ -128,41 +104,18 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
-				#frame_support::sp_tracing::enter_span!(
-					#frame_support::sp_tracing::trace_span!("on_runtime_update")
-				);
-
-				// log info about the upgrade.
-				let pallet_name = <
-					<T as #frame_system::Config>::PalletInfo
-					as
-					#frame_support::traits::PalletInfo
-				>::name::<Self>().unwrap_or("<unknown pallet name>");
-				#log_runtime_upgrade
-
-				<
-					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
-					>
-				>::on_runtime_upgrade()
+				// NOTE: This is no-op. All runtime upgrade our now defined in at the runtime level
+				0
 			}
 
 			#[cfg(feature = "try-runtime")]
 			fn pre_upgrade() -> Result<(), &'static str> {
-				<
-					Self
-					as
-					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				>::pre_upgrade()
+				Ok(())
 			}
 
 			#[cfg(feature = "try-runtime")]
 			fn post_upgrade() -> Result<(), &'static str> {
-				<
-					Self
-					as
-					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				>::post_upgrade()
+				Ok(())
 			}
 		}
 

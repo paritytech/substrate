@@ -65,15 +65,6 @@ pub mod pallet {
 				Self::deposit_event(Event::Something(21));
 			}
 		}
-		fn on_runtime_upgrade() -> Weight {
-			if TypeId::of::<I>() == TypeId::of::<()>() {
-				Self::deposit_event(Event::Something(30));
-				30
-			} else {
-				Self::deposit_event(Event::Something(31));
-				31
-			}
-		}
 		fn integrity_test() {}
 	}
 
@@ -554,7 +545,7 @@ fn pallet_hooks_expand() {
 		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 0);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,

@@ -234,40 +234,6 @@ pub trait Hooks<BlockNumber> {
 		0
 	}
 
-	/// Perform a module upgrade.
-	///
-	/// NOTE: this doesn't include all pallet logic triggered on runtime upgrade. For instance it
-	/// doesn't include the write of the pallet version in storage. The final complete logic
-	/// triggered on runtime upgrade is given by implementation of `OnRuntimeUpgrade` trait by
-	/// `Pallet`.
-	///
-	/// # Warning
-	///
-	/// This function will be called before we initialized any runtime state, aka `on_initialize`
-	/// wasn't called yet. So, information like the block number and any other
-	/// block local data are not accessible.
-	///
-	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
-	}
-
-	/// Execute some pre-checks prior to a runtime upgrade.
-	///
-	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
-
-	/// Execute some post-checks after a runtime upgrade.
-	///
-	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
-
 	/// Implementing this function on a module allows you to perform long-running tasks
 	/// that make (by default) validators generate transactions that feed results
 	/// of those long-running computations back on chain.

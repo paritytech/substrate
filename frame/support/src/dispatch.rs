@@ -289,12 +289,6 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// The following reserved functions also take the block number (with type `T::BlockNumber`) as an
 /// optional input:
 ///
-/// * `on_runtime_upgrade`: Executes at the beginning of a block prior to on_initialize when there
-/// is a runtime upgrade. This allows each module to upgrade its storage before the storage items
-/// are used. As such, **calling other modules must be avoided**!! Using this function will
-/// implement the [`OnRuntimeUpgrade`](../sp_runtime/traits/trait.OnRuntimeUpgrade.html) trait.
-/// Function signature must be `fn on_runtime_upgrade() -> frame_support::weights::Weight`.
-///
 /// * `on_initialize`: Executes at the beginning of a block. Using this function will
 /// implement the [`OnInitialize`](./trait.OnInitialize.html) trait.
 /// Function signature can be either:
@@ -348,7 +342,6 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
-			{}
 			[]
 			$($t)*
 		);
@@ -385,7 +378,6 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
-			{}
 			[]
 			$($t)*
 		);
@@ -399,7 +391,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{}
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -419,7 +410,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $vis fn deposit_event() = default; }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -438,7 +428,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{}
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -465,7 +454,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )+ }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -488,7 +476,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{}
 		{ $( $offchain:tt )* }
@@ -508,7 +495,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{
 				fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* }
@@ -530,7 +516,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{}
 		{ $( $offchain:tt )* }
@@ -546,7 +531,7 @@ macro_rules! decl_module {
 	) => {
 		compile_error!(
 			"`on_finalize` can't be given weight attribute anymore, weight must be returned by \
-			`on_initialize` or `on_runtime_upgrade` instead"
+			`on_initialize` instead"
 		);
 	};
 	// Compile error on `on_finalize` being added a second time.
@@ -559,7 +544,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )+ }
 		{ $( $offchain:tt )* }
@@ -584,7 +568,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{}
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -604,7 +587,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{
 				fn on_idle( $param_name1: $param1, $param_name2: $param2 ) -> $return { $( $impl )* }
 			}
@@ -628,7 +610,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
+		{}
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -654,7 +636,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{}
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -668,7 +649,8 @@ macro_rules! decl_module {
 		$($rest:tt)*
 	) => {
 		compile_error!(
-			"`on_runtime_upgrade` must return Weight, signature has changed."
+			"`on_runtime_upgrade` can't be implemented anymore. The runtime upgrade must be \
+			defined at the runtime level."
 		);
 	};
 	// compile_error on_runtime_upgrade, given weight removed syntax.
@@ -681,7 +663,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{}
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -696,11 +677,11 @@ macro_rules! decl_module {
 		$($rest:tt)*
 	) => {
 		compile_error!(
-			"`on_runtime_upgrade` can't be given weight attribute anymore, weight must be returned \
-			by the function directly."
+			"`on_runtime_upgrade` can't be implemented anymore. The runtime upgrade must be \
+			defined at the runtime level."
 		);
 	};
-	// Add on_runtime_upgrade
+	// Compile_error on_runtime_upgrade is no longer implementable.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
@@ -710,7 +691,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{}
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -720,28 +700,12 @@ macro_rules! decl_module {
 		{ $( $storage_version:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
+		fn on_runtime_upgrade
 		$($rest:tt)*
 	) => {
-		$crate::decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $other_where_bounds )* }
-			{ $( $deposit_event )* }
-			{ $( $on_initialize )* }
-			{
-				fn on_runtime_upgrade( $( $param_name : $param ),* ) -> $return { $( $impl )* }
-			}
-			{ $( $on_idle )* }
-			{ $( $on_finalize )* }
-			{ $( $offchain )* }
-			{ $( $constants )* }
-			{ $( $error_type )* }
-			{ $( $integrity_test )* }
-			{ $( $storage_version )* }
-			[ $( $dispatchables )* ]
-			$($rest)*
+		compile_error!(
+			"`on_runtime_upgrade` can't be implemented anymore. The runtime upgrade must be \
+			defined at the runtime level."
 		);
 	};
 	// Compile error on `on_runtime_upgrade` being added a second time.
@@ -754,7 +718,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )+ }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -767,7 +730,10 @@ macro_rules! decl_module {
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		compile_error!("`on_runtime_upgrade` can only be passed once as input.");
+		compile_error!(
+			"`on_runtime_upgrade` can't be implemented anymore. The runtime upgrade must be \
+			defined at the runtime level."
+		);
 	};
 	// Add integrity_test
 	(@normalize
@@ -779,7 +745,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -799,7 +764,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -824,7 +788,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -849,7 +812,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{}
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -876,7 +838,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{}
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -905,7 +866,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{}
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -927,7 +887,6 @@ macro_rules! decl_module {
 			{
 				fn on_initialize( $( $param_name : $param ),* ) -> $return { $( $impl )* }
 			}
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -949,7 +908,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )+ }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -974,7 +932,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ }
@@ -996,7 +953,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
@@ -1018,7 +974,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )+ }
@@ -1044,7 +999,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1067,7 +1021,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -1095,7 +1048,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1117,7 +1069,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -1140,7 +1091,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1160,7 +1110,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -1184,7 +1133,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1206,7 +1154,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -1230,7 +1177,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1256,7 +1202,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -1288,7 +1233,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1318,7 +1262,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1348,7 +1291,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1378,7 +1320,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1409,7 +1350,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1428,7 +1368,6 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
 			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -1519,48 +1458,7 @@ macro_rules! decl_module {
 		{}
 	};
 
-	(@impl_on_runtime_upgrade
-		{ $system:ident }
-		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
-		{ $( $other_where_bounds:tt )* }
-		fn on_runtime_upgrade() -> $return:ty { $( $impl:tt )* }
-	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnRuntimeUpgrade
-			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn on_runtime_upgrade() -> $return {
-				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
-				let pallet_name = <<
-					$trait_instance
-					as
-					$system::Config
-				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
-
-				$crate::log::info!(
-					target: $crate::LOG_TARGET,
-					"⚠️ {} declares internal migrations (which *might* execute). \
-					 On-chain `{:?}` vs current storage version `{:?}`",
-					pallet_name,
-					<Self as $crate::traits::GetStorageVersion>::on_chain_storage_version(),
-					<Self as $crate::traits::GetStorageVersion>::current_storage_version(),
-				);
-
-				(|| { $( $impl )* })()
-			}
-
-			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
-				Ok(())
-			}
-
-			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
-				Ok(())
-			}
-		}
-	};
-
+	// Implement OnRuntimeUpgrade trait with no-op
 	(@impl_on_runtime_upgrade
 		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
@@ -1571,19 +1469,6 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
-				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
-				let pallet_name = <<
-					$trait_instance
-					as
-					$system::Config
-				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
-
-				$crate::log::info!(
-					target: $crate::LOG_TARGET,
-					"✅ no migration for {}",
-					pallet_name,
-				);
-
 				0
 			}
 
@@ -1955,7 +1840,6 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
-		{ $( $on_runtime_upgrade:tt )* }
 		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -1993,7 +1877,6 @@ macro_rules! decl_module {
 			{ $system }
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			{ $( $other_where_bounds )* }
-			$( $on_runtime_upgrade )*
 		}
 
 		$crate::decl_module! {

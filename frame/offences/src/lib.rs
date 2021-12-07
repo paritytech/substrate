@@ -110,13 +110,6 @@ pub mod pallet {
 		/// \[kind, timeslot\].
 		Offence { kind: Kind, timeslot: OpaqueTimeSlot },
 	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migration::remove_deferred_storage::<T>()
-		}
-	}
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>>
