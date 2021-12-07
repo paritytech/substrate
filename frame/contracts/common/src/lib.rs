@@ -202,11 +202,11 @@ impl<Balance: Zero> Default for StorageDeposit<Balance> {
 	}
 }
 
-impl<Balance: Zero> StorageDeposit<Balance> {
+impl<Balance: Zero + Copy> StorageDeposit<Balance> {
 	/// Returns how much balance is charged or `0` in case of a refund.
-	pub fn charge_or_zero(self) -> Balance {
+	pub fn charge_or_zero(&self) -> Balance {
 		match self {
-			Self::Charge(amount) => amount,
+			Self::Charge(amount) => *amount,
 			Self::Refund(_) => Zero::zero(),
 		}
 	}

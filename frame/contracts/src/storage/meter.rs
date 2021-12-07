@@ -309,6 +309,7 @@ where
 			..Default::default()
 		}
 		.to_deposit::<T>();
+		debug_assert!(matches!(deposit, Deposit::Charge(_)));
 		// We do not increase `own_deposit` because this will be charged later when the contract
 		// execution does conclude.
 		let total_deposit = self.total_deposit.saturating_add(&deposit);
@@ -317,9 +318,7 @@ where
 				return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 			}
 		}
-		if let Deposit::Charge(amount) = &deposit {
-			info.storage_deposit = info.storage_deposit.saturating_add(*amount);
-		}
+		info.storage_deposit = info.storage_deposit.saturating_add(deposit.charge_or_zero());
 		self.total_deposit = total_deposit;
 		if !deposit.is_zero() {
 			// We need to charge immediately so that the account is created before the `value`
