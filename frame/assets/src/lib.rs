@@ -670,37 +670,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Create an asset account for non-provider assets.
-		///
-		/// A deposit will be taken from the signer account.
-		///
-		/// - `origin`: Must be Signed; the signer account must have sufficient funds for a deposit
-		///   to be taken.
-		/// - `id`: The identifier of the asset for the account to be created.
-		///
-		/// Emits `Touched` event when successful.
-		#[pallet::weight(T::WeightInfo::mint())]
-		pub fn touch(origin: OriginFor<T>, #[pallet::compact] id: T::AssetId) -> DispatchResult {
-			Self::do_touch(id, ensure_signed(origin)?)
-		}
-
-		/// Return the deposit (if any) of an asset account.
-		///
-		/// The origin must be Signed.
-		///
-		/// - `id`: The identifier of the asset for the account to be created.
-		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
-		///
-		/// Emits `Refunded` event when successful.
-		#[pallet::weight(T::WeightInfo::mint())]
-		pub fn refund(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-			allow_burn: bool,
-		) -> DispatchResult {
-			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
-		}
-
 		/// Move some assets from the sender account to another.
 		///
 		/// Origin must be Signed.
@@ -1319,6 +1288,37 @@ pub mod pallet {
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
 			Self::do_transfer_approved(id, &owner, &delegate, &destination, amount)
+		}
+
+		/// Create an asset account for non-provider assets.
+		///
+		/// A deposit will be taken from the signer account.
+		///
+		/// - `origin`: Must be Signed; the signer account must have sufficient funds for a deposit
+		///   to be taken.
+		/// - `id`: The identifier of the asset for the account to be created.
+		///
+		/// Emits `Touched` event when successful.
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn touch(origin: OriginFor<T>, #[pallet::compact] id: T::AssetId) -> DispatchResult {
+			Self::do_touch(id, ensure_signed(origin)?)
+		}
+
+		/// Return the deposit (if any) of an asset account.
+		///
+		/// The origin must be Signed.
+		///
+		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
+		///
+		/// Emits `Refunded` event when successful.
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn refund(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			allow_burn: bool,
+		) -> DispatchResult {
+			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
 		}
 	}
 }

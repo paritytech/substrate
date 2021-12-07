@@ -161,7 +161,7 @@ pub trait FrozenBalance<AssetId, AccountId, Balance> {
 	/// withdrawable.
 	///
 	/// In reality, the balance of every account must be at least the sum of this (if `Some`) and
-	/// the asset's minimum_balance, since there may be complications to destroying an asset's
+	/// the asset's `minimum_balance`, since there may be complications to destroying an asset's
 	/// account completely.
 	///
 	/// If `None` is returned, then nothing special is enforced.
