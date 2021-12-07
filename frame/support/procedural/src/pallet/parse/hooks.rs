@@ -67,11 +67,6 @@ impl HooksDef {
 			return Err(syn::Error::new(item_trait.span(), msg))
 		}
 
-		Ok(Self {
-			attr_span,
-			index,
-			instances,
-			where_clause: item.generics.where_clause.clone(),
-		})
+		Ok(Self { attr_span, index, instances, where_clause: item.generics.where_clause.clone() })
 	}
 }

@@ -2416,8 +2416,7 @@ pub mod pallet_prelude {
 /// 	* `ValidateUnsigned` is moved inside the macro under `#[pallet::validate_unsigned)]` if it
 ///    exists
 /// 	* `ProvideInherent` is moved inside macro under `#[pallet::inherent)]` if it exists
-/// 	* `on_initialize`/`on_finalize`/`offchain_worker` are moved to
-///    `Hooks`
+/// 	* `on_initialize`/`on_finalize`/`offchain_worker` are moved to `Hooks`
 /// 	* `on_runtime_upgrade` removal is documented and acknowledged.
 ///
 /// 		implementation
