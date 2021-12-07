@@ -87,7 +87,7 @@
 mod gas;
 mod benchmarking;
 mod exec;
-mod migration;
+pub mod migration;
 mod schedule;
 mod storage;
 mod wasm;

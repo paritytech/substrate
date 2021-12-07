@@ -45,7 +45,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod migrations;
+pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
