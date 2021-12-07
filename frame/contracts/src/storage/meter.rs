@@ -68,7 +68,7 @@ pub trait Ext<T: Config> {
 	///
 	/// The balance transfer can either flow from `origin` to `contract` or the other way
 	/// around depending on whether `amount` constitues a `Charge` or a `Refund`.
-	/// It is garantueed that that this succeeds because no more balance then returned by
+	/// It is garantueed that that this succeeds because no more balance than returned by
 	/// `check_limit` is ever charged. This is why this function is infallible.
 	/// `terminated` designates whether the `contract` was terminated.
 	fn charge(
@@ -390,7 +390,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 				)
 				.and_then(|_| T::Currency::reserve(contract, *amount));
 				if let Err(err) = result {
-					log::warn!(
+					log::error!(
 						target: "runtime::contracts",
 						"Failed to transfer storage deposit {:?} from origin {:?} to contract {:?}: {:?}",
 						amount, origin, contract, err,
@@ -407,6 +407,10 @@ impl<T: Config> Ext<T> for ReservingExt {
 				let amount = if terminated {
 					*amount
 				} else {
+					// This is necessary when the `storage_deposit` tracked inside the account
+					// info is out of sync with the actual balance. That can only happen due to
+					// slashing. We make sure to never dust the contract's account through a
+					// refund because we consider this unexpected behaviour.
 					*amount.min(
 						&T::Currency::reserved_balance(contract)
 							.saturating_sub(T::Currency::minimum_balance()),
@@ -415,7 +419,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 				let result =
 					T::Currency::repatriate_reserved(contract, origin, amount, BalanceStatus::Free);
 				if matches!(result, Ok(val) if !val.is_zero()) || matches!(result, Err(_)) {
-					log::warn!(
+					log::error!(
 						target: "runtime::contracts",
 						"Failed to repatriate storage deposit {:?} from contract {:?} to origin {:?}: {:?}",
 						amount, contract, origin, result,
