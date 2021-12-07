@@ -33,7 +33,7 @@ use scale_info::TypeInfo;
 /// Trait for accessing reference to `SecretString`.
 pub use secrecy::ExposeSecret;
 /// A store for sensitive data.
-#[cfg(feature = "full_crypto")]
+#[cfg(feature = "std")]
 pub use secrecy::SecretString;
 use sp_runtime_interface::pass_by::PassByInner;
 #[doc(hidden)]
@@ -771,7 +771,7 @@ mod dummy {
 /// assert_eq!("0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a", suri.phrase.expose_secret());
 /// assert!(suri.password.is_none());
 /// ```
-#[cfg(feature = "full_crypto")]
+#[cfg(feature = "std")]
 pub struct SecretUri {
 	/// The phrase to derive the private key.
 	///
@@ -783,7 +783,7 @@ pub struct SecretUri {
 	pub junctions: Vec<DeriveJunction>,
 }
 
-#[cfg(feature = "full_crypto")]
+#[cfg(feature = "std")]
 impl sp_std::str::FromStr for SecretUri {
 	type Err = SecretStringError;
 

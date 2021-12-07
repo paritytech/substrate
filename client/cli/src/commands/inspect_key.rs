@@ -21,7 +21,7 @@ use crate::{
 	utils::{self, print_from_public, print_from_uri},
 	with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams, NetworkSchemeFlag, OutputTypeFlag,
 };
-use sp_core::crypto::{ExposeSecret, Pair, Public, SecretString, SecretUri, Ss58Codec};
+use sp_core::crypto::{ExposeSecret, SecretString, SecretUri, Ss58Codec};
 use std::str::FromStr;
 use structopt::StructOpt;
 
