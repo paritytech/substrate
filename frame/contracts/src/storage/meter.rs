@@ -67,8 +67,8 @@ pub trait Ext<T: Config> {
 	/// some interaction of the `origin` with a `contract`.
 	///
 	/// The balance transfer can either flow from `origin` to `contract` or the other way
-	/// around depending on whether `amount` constitues a `Charge` or a `Refund`.
-	/// It is garantueed that that this succeeds because no more balance than returned by
+	/// around depending on whether `amount` constitutes a `Charge` or a `Refund`.
+	/// It is guaranteed that that this succeeds because no more balance than returned by
 	/// `check_limit` is ever charged. This is why this function is infallible.
 	/// `terminated` designates whether the `contract` was terminated.
 	fn charge(
