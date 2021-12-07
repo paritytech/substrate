@@ -117,7 +117,7 @@ pub struct AssetAccount<Balance, DepositBalance, Extra> {
 	pub(super) balance: Balance,
 	/// Whether the account is frozen.
 	pub(super) is_frozen: bool,
-	/// `true` if this balance gave the account a self-sufficient reference.
+	/// The reason for the existence of the account.
 	pub(super) reason: ExistenceReason<DepositBalance>,
 	/// Additional "sidecar" data, in case some other pallet wants to use this storage item.
 	pub(super) extra: Extra,
