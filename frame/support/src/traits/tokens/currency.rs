@@ -200,6 +200,7 @@ pub trait Currency<AccountId> {
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
 }
 
+#[cfg(feature = "std")]
 impl<AccountId> Currency<AccountId> for () {
 	type Balance = u32;
 	type PositiveImbalance = ();
