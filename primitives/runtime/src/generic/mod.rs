@@ -24,6 +24,7 @@ mod checked_extrinsic;
 mod digest;
 mod era;
 mod header;
+mod header_ver;
 #[cfg(test)]
 mod tests;
 mod unchecked_extrinsic;
@@ -34,5 +35,6 @@ pub use self::{
 	digest::{ChangesTrieSignal, Digest, DigestItem, DigestItemRef, OpaqueDigestItemId},
 	era::{Era, Phase},
 	header::Header,
+	header_ver::Header as HeaderVer,
 	unchecked_extrinsic::{SignedPayload, UncheckedExtrinsic},
 };
