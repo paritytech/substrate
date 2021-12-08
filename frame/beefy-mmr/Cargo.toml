@@ -21,10 +21,10 @@ pallet-mmr = { version = "4.0.0-dev", path = "../merkle-mountain-range", default
 pallet-mmr-primitives = { version = "4.0.0-dev", path = "../merkle-mountain-range/primitives", default-features = false }
 pallet-session = { version = "4.0.0-dev", path = "../session", default-features = false }
 
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+sp-core = { version = "4.0.0", path = "../../primitives/core", default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime", default-features = false }
-sp-std = { version = "4.0.0-dev", path = "../../primitives/std", default-features = false }
+sp-std = { version = "4.0.0", path = "../../primitives/std", default-features = false }
 
 beefy-merkle-tree = { version = "4.0.0-dev", path = "./primitives", default-features = false }
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy", default-features = false }
