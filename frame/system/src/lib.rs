@@ -115,7 +115,8 @@ mod tests;
 pub mod weights;
 
 pub use extensions::{
-	check_genesis::CheckGenesis, check_mortality::CheckMortality, check_nonce::CheckNonce,
+	check_genesis::CheckGenesis, check_mortality::CheckMortality,
+	check_non_zero_sender::CheckNonZeroSender, check_nonce::CheckNonce,
 	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
 	check_weight::CheckWeight,
 };
