@@ -32,5 +32,5 @@ wasmtime = { version = "0.31.0", default-features = false, features = [
 
 [dev-dependencies]
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+sp-io = { version = "4.0.0", path = "../../../primitives/io" }
 wat = "1.0"
