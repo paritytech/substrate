@@ -259,6 +259,10 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 }
 
 /// Provides access to an auxiliary database.
+///
+/// This is a simple global database not aware of forks. Can be used for storing auxiliary
+/// information like total block weight/difficulty for fork resolution purposes as a common use
+/// case.
 pub trait AuxStore {
 	/// Insert auxiliary data into key-value store.
 	///

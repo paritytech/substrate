@@ -128,6 +128,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum acceptable reason length.
+		///
+		/// Benchmarks depend on this value, be sure to update weights file when changing this value
 		#[pallet::constant]
 		type MaximumReasonLength: Get<u32>;
 
@@ -150,7 +152,8 @@ pub mod pallet {
 		/// Origin from which tippers must come.
 		///
 		/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy
-		/// operation).
+		/// operation). Benchmarks depend on the value of `ContainsLengthBound::max_len` be sure to
+		/// update weights file when altering this method.
 		type Tippers: SortedMembers<Self::AccountId> + ContainsLengthBound;
 
 		/// Weight information for extrinsics in this pallet.

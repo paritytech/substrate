@@ -1,0 +1,54 @@
+[package]
+name = "pallet-child-bounties"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet to manage child bounties"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../treasury" }
+pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../bounties" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.14", default-features = false }
+
+[dev-dependencies]
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"sp-core/std",
+	"sp-io/std",
+	"scale-info/std",
+	"sp-std/std",
+	"sp-runtime/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-treasury/std",
+	"pallet-bounties/std",
+	"log/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
+try-runtime = ["frame-support/try-runtime"]

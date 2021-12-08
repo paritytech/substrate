@@ -277,14 +277,22 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Scheduled some task. \[when, index\]
-		Scheduled(T::BlockNumber, u32),
-		/// Canceled some task. \[when, index\]
-		Canceled(T::BlockNumber, u32),
-		/// Dispatched some task. \[task, id, result\]
-		Dispatched(TaskAddress<T::BlockNumber>, Option<Vec<u8>>, DispatchResult),
+		/// Scheduled some task.
+		Scheduled { when: T::BlockNumber, index: u32 },
+		/// Canceled some task.
+		Canceled { when: T::BlockNumber, index: u32 },
+		/// Dispatched some task.
+		Dispatched {
+			task: TaskAddress<T::BlockNumber>,
+			id: Option<Vec<u8>>,
+			result: DispatchResult,
+		},
 		/// The call for the provided hash was not found so the task has been aborted.
-		CallLookupFailed(TaskAddress<T::BlockNumber>, Option<Vec<u8>>, LookupError),
+		CallLookupFailed {
+			task: TaskAddress<T::BlockNumber>,
+			id: Option<Vec<u8>>,
+			error: LookupError,
+		},
 	}
 
 	#[pallet::error]
@@ -419,7 +427,11 @@ pub mod pallet {
 				total_weight.saturating_accrue(item_weight);
 				total_weight.saturating_accrue(actual_call_weight);
 
-				Self::deposit_event(Event::Dispatched((now, index), s.maybe_id.clone(), result));
+				Self::deposit_event(Event::Dispatched {
+					task: (now, index),
+					id: s.maybe_id.clone(),
+					result,
+				});
 
 				if let &Some((period, count)) = &s.maybe_periodic {
 					if count > 1 {
@@ -443,15 +455,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Anonymously schedule a task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 22.29 + .126 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda
-		///     - Write: Agenda
-		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule(
 			origin: OriginFor<T>,
@@ -473,15 +476,6 @@ pub mod pallet {
 		}
 
 		/// Cancel an anonymously scheduled task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 22.15 + 2.869 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -491,15 +485,6 @@ pub mod pallet {
 		}
 
 		/// Schedule a named task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 29.6 + .159 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named(
 			origin: OriginFor<T>,
@@ -523,15 +508,6 @@ pub mod pallet {
 		}
 
 		/// Cancel a named scheduled task.
-		///
-		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 24.91 + 2.907 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
-		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
@@ -749,7 +725,7 @@ impl<T: Config> Pallet<T> {
 				expected from the runtime configuration. An update might be needed.",
 			);
 		}
-		Self::deposit_event(Event::Scheduled(when, index));
+		Self::deposit_event(Event::Scheduled { when, index });
 
 		Ok((when, index))
 	}
@@ -779,7 +755,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
-			Self::deposit_event(Event::Canceled(when, index));
+			Self::deposit_event(Event::Canceled { when, index });
 			Ok(())
 		} else {
 			Err(Error::<T>::NotFound)?
@@ -804,8 +780,8 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-		Self::deposit_event(Event::Canceled(when, index));
-		Self::deposit_event(Event::Scheduled(new_time, new_index));
+		Self::deposit_event(Event::Canceled { when, index });
+		Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
 
 		Ok((new_time, new_index))
 	}
@@ -852,7 +828,7 @@ impl<T: Config> Pallet<T> {
 		}
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
-		Self::deposit_event(Event::Scheduled(when, index));
+		Self::deposit_event(Event::Scheduled { when, index });
 
 		Ok(address)
 	}
@@ -876,7 +852,7 @@ impl<T: Config> Pallet<T> {
 					}
 					Ok(())
 				})?;
-				Self::deposit_event(Event::Canceled(when, index));
+				Self::deposit_event(Event::Canceled { when, index });
 				Ok(())
 			} else {
 				Err(Error::<T>::NotFound)?
@@ -908,8 +884,8 @@ impl<T: Config> Pallet<T> {
 				})?;
 
 				let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-				Self::deposit_event(Event::Canceled(when, index));
-				Self::deposit_event(Event::Scheduled(new_time, new_index));
+				Self::deposit_event(Event::Canceled { when, index });
+				Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
 
 				*lookup = Some((new_time, new_index));
 
