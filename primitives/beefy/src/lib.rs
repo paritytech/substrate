@@ -89,11 +89,6 @@ pub struct ValidatorSet<AuthorityId> {
 }
 
 impl<AuthorityId> ValidatorSet<AuthorityId> {
-	/// Return an empty validator set with id of 0.
-	pub fn empty() -> Self {
-		Self { validators: Default::default(), id: Default::default() }
-	}
-
 	/// Return a validator set with the given validators and set id.
 	pub fn new<I>(validators: I, id: ValidatorSetId) -> Option<Self>
 	where
