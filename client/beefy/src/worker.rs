@@ -190,9 +190,9 @@ where
 	fn verify_validator_set(
 		&self,
 		block: &NumberFor<B>,
-		mut active: ValidatorSet<Public>,
+		active: &ValidatorSet<Public>,
 	) -> Result<(), error::Error> {
-		let active: BTreeSet<Public> = active.validators.drain(..).collect();
+		let active: BTreeSet<Public> = active.validators().clone().drain(..).collect();
 
 		let store: BTreeSet<Public> = self.key_store.public_keys()?.drain(..).collect();
 
@@ -217,23 +217,24 @@ where
 			// TODO: (adoerr) Enacting a new authority set will also implicitly 'conclude'
 			// the currently active BEEFY voting round by starting a new one. This is
 			// temporary and needs to be replaced by proper round life cycle handling.
-			if active.id != self.rounds.validator_set_id() ||
-				(active.id == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
+			if active.id() != self.rounds.validator_set_id() ||
+				(active.id() == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
 			{
 				debug!(target: "beefy", "🥩 New active validator set id: {:?}", active);
-				metric_set!(self, beefy_validator_set_id, active.id);
+				metric_set!(self, beefy_validator_set_id, active.id());
 
 				// BEEFY should produce a signed commitment for each session
-				if active.id != self.last_signed_id + 1 && active.id != GENESIS_AUTHORITY_SET_ID {
+				if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID
+				{
 					metric_inc!(self, beefy_skipped_sessions);
 				}
 
 				// verify the new validator set
-				let _ = self.verify_validator_set(notification.header.number(), active.clone());
+				let _ = self.verify_validator_set(notification.header.number(), &active);
 
 				self.rounds = round::Rounds::new(active.clone());
 
-				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", active.id);
+				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", active.id());
 
 				self.best_beefy_block = Some(*notification.header.number());
 
