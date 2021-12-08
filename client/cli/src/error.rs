@@ -40,6 +40,9 @@ pub enum Error {
 	Client(#[from] sp_blockchain::Error),
 
 	#[error(transparent)]
+	RuntimeApi(#[from] sp_api::ApiError),
+
+	#[error(transparent)]
 	Codec(#[from] parity_scale_codec::Error),
 
 	#[error("Invalid input: {0}")]

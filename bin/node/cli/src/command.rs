@@ -144,6 +144,13 @@ pub fn run() -> Result<()> {
 				Ok((cmd.run(client, backend), task_manager))
 			})
 		},
+		Some(Subcommand::MetadataDump(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.sync_run(|config| {
+				let PartialComponents { client, .. } = new_partial(&config)?;
+				cmd.run(client)
+			})
+		},
 		#[cfg(feature = "try-runtime")]
 		Some(Subcommand::TryRuntime(cmd)) => {
 			let runner = cli.create_runner(cmd)?;

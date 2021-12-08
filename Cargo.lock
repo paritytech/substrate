@@ -7705,6 +7705,7 @@ dependencies = [
  "sc-utils",
  "serde",
  "serde_json",
+ "sp-api",
  "sp-blockchain",
  "sp-core",
  "sp-keyring",
