@@ -25,8 +25,9 @@ use sp_std::marker::PhantomData;
 /// ## Notes
 /// The pallet error enum has a maximum encoded size as defined by
 /// [`frame_support::MAX_PALLET_ERROR_ENCODED_SIZE`]. If the pallet error type exceeds this size
-/// limit, the encoded representation of it will truncate any excess bytes when setting the error
-/// field during the creation of the [`DispatchError`] type.
+/// limit, a static assertion during compilation will fail. The compilation error will be in the
+/// format of `error[E0080]: evaluation of constant value failed` due to the usage of
+/// [`static_assertions::const_assert`].
 pub trait CompactPalletError: Encode + Decode {
 	/// The maximum encoded size for the implementing type.
 	///
@@ -61,29 +62,5 @@ impl<T> CompactPalletError for PhantomData<T> {
 	const MAX_ENCODED_SIZE: usize = 0;
 	fn check_compactness() -> bool {
 		true
-	}
-}
-
-/// Trait for testing the pallet's error enum compactness.
-pub trait ErrorCompactnessTest {
-	/// The function that gets called during integrity testing to check for the compactness
-	/// of the pallet's error enum type.
-	fn error_compactness_test() {}
-}
-
-// This can happen in tests where no additional pallets aside from the System pallet is included
-// in the runtime
-impl ErrorCompactnessTest for () {}
-
-impl<A: ErrorCompactnessTest> ErrorCompactnessTest for (A,) {
-	fn error_compactness_test() {
-		A::error_compactness_test();
-	}
-}
-
-impl<A: ErrorCompactnessTest, B: ErrorCompactnessTest> ErrorCompactnessTest for (A, B) {
-	fn error_compactness_test() {
-		A::error_compactness_test();
-		B::error_compactness_test();
 	}
 }

@@ -406,7 +406,6 @@ fn check_modules_error_type() {
 #[test]
 fn integrity_test_works() {
 	__construct_runtime_integrity_test::runtime_integrity_tests();
-	__construct_runtime_integrity_test::error_compactness_tests();
 	assert_eq!(INTEGRITY_TEST_EXEC.with(|i| *i.borrow()), 2);
 }
 

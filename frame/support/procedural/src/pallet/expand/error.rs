@@ -31,9 +31,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let pallet_ident = &def.pallet_struct.pallet;
-	let pallet_type_impl_gen = &def.type_impl_generics(def.pallet_struct.attr_span);
-	let pallet_type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
 	let config_where_clause = &def.config.where_clause;
 
 	let error = if let Some(error) = &def.error {
@@ -55,9 +52,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			pub use #error_token_unique_id as tt_error_token;
-
-			impl<#pallet_type_impl_gen> #frame_support::traits::ErrorCompactnessTest
-				for #pallet_ident<#pallet_type_use_gen> #config_where_clause {}
 		}
 	};
 
@@ -122,19 +116,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	}
 
 	quote::quote_spanned!(error.attr_span =>
-		impl<#pallet_type_impl_gen> #frame_support::traits::ErrorCompactnessTest
-			for #pallet_ident<#pallet_type_use_gen> #config_where_clause
-		{
-			fn error_compactness_test() {
-				assert!(
-					<
-						#error_ident<#type_use_gen> as #frame_support::traits::CompactPalletError
-					>::check_compactness(),
-					"Pallet error enum is not the most compact possible"
-				);
-			}
-		}
-
 		impl<#type_impl_gen> #frame_support::sp_std::fmt::Debug for #error_ident<#type_use_gen>
 			#config_where_clause
 		{

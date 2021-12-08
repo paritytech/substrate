@@ -609,11 +609,6 @@ fn _ensure_call_is_correctly_excluded_and_included(call: Call) {
 }
 
 #[test]
-fn error_compactness_test() {
-	__construct_runtime_integrity_test::error_compactness_tests();
-}
-
-#[test]
 fn transactional_works() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
