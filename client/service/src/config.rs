@@ -187,11 +187,11 @@ pub struct PrometheusConfig {
 impl PrometheusConfig {
 	/// Create a new config using the default registry.
 	///
-	/// The default registry prefixes metrics with `substrate`.
-	pub fn new_with_default_registry(port: SocketAddr) -> Self {
+	/// The default registry prefixes metrics with `substrate` (see struct `sc_cli::RunCmd`).
+	pub fn new_with_default_registry(port: SocketAddr, metric_prefix: &'static str) -> Self {
 		Self {
 			port,
-			registry: Registry::new_custom(Some("substrate".into()), None)
+			registry: Registry::new_custom(Some(metric_prefix.into()), None)
 				.expect("this can only fail if the prefix is empty"),
 		}
 	}
