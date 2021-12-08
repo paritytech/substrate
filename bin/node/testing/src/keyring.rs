@@ -70,6 +70,7 @@ pub fn to_session_keys(
 /// Returns transaction extra.
 pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 	(
+		frame_system::CheckNonZeroSender::new(),
 		frame_system::CheckSpecVersion::new(),
 		frame_system::CheckTxVersion::new(),
 		frame_system::CheckGenesis::new(),

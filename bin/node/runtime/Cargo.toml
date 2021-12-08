@@ -30,8 +30,8 @@ sp-block-builder = { path = "../../../primitives/block-builder", default-feature
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-core = { version = "4.0.0", default-features = false, path = "../../../primitives/core" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
@@ -59,6 +59,7 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../.
 pallet-bags-list = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bags-list" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
 pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bounties" }
+pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
 pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts/common/" }
@@ -173,10 +174,11 @@ std = [
 	"log/std",
 	"frame-try-runtime/std",
 	"sp-npos-elections/std",
-  "sp-io/std"
+  	"sp-io/std",
+	"pallet-child-bounties/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-election-provider-multi-phase/runtime-benchmarks",
@@ -186,6 +188,7 @@ runtime-benchmarks = [
 	"pallet-bags-list/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-bounties/runtime-benchmarks",
+	"pallet-child-bounties/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"pallet-contracts/runtime-benchmarks",
 	"pallet-democracy/runtime-benchmarks",
@@ -225,6 +228,7 @@ try-runtime = [
 	"pallet-babe/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-bounties/try-runtime",
+	"pallet-child-bounties/try-runtime",
 	"pallet-collective/try-runtime",
 	"pallet-contracts/try-runtime",
 	"pallet-democracy/try-runtime",
