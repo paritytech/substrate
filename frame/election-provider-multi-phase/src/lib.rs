@@ -1517,7 +1517,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	let error_number = match error {
-		DispatchError::Module { error, .. } => error,
+		DispatchError::Module { error, .. } => error[0],
 		_ => 0,
 	};
 	InvalidTransaction::Custom(error_number)
