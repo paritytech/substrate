@@ -178,6 +178,7 @@ pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	fn peek(&self) -> Balance;
 }
 
+#[cfg(feature = "std")]
 impl<Balance: Default> Imbalance<Balance> for () {
 	type Opposite = ();
 	fn zero() -> Self {

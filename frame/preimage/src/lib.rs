@@ -219,7 +219,7 @@ impl<T: Config> Pallet<T> {
 			(Some(RequestStatus::Unrequested(..)), _) => Err(Error::<T>::AlreadyNoted)?,
 			(None, None) => {
 				StatusFor::<T>::insert(hash, RequestStatus::Unrequested(None));
-				true
+				false
 			},
 			(None, Some(depositor)) => {
 				let length = preimage.len() as u32;
