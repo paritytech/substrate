@@ -19,8 +19,8 @@
 use codec::{Decode, Encode, OptionBool};
 use sp_std::marker::PhantomData;
 
-/// Trait denoting that the implementing type has the most compact encoded size that is fit to be
-/// included as a field in a variant of the `#[pallet::error]` enum type.
+/// Trait indicating that the implementing type is going to be included as a field in a variant of
+/// the `#[pallet::error]` enum type.
 ///
 /// ## Notes
 /// The pallet error enum has a maximum encoded size as defined by
@@ -28,11 +28,11 @@ use sp_std::marker::PhantomData;
 /// limit, a static assertion during compilation will fail. The compilation error will be in the
 /// format of `error[E0080]: evaluation of constant value failed` due to the usage of
 /// [`static_assertions::const_assert`].
-pub trait CompactPalletError: Encode + Decode {
+pub trait PalletError: Encode + Decode {
 	/// The maximum encoded size for the implementing type.
 	///
 	/// This will be used to check whether the pallet error type is less than or equal to
-	/// [`frame_support::MAX_PALLET_ERROR_ENCODED_SIZE`], and if it is, a compile error will be
+	/// [`frame_support::MAX_PALLET_ERROR_ENCODED_SIZE`], and if it is, a compilation error will be
 	/// thrown.
 	const MAX_ENCODED_SIZE: usize;
 }
@@ -40,7 +40,7 @@ pub trait CompactPalletError: Encode + Decode {
 macro_rules! impl_for_types {
 	($($typ:ty),+) => {
 		$(
-			impl CompactPalletError for $typ {
+			impl PalletError for $typ {
 				const MAX_ENCODED_SIZE: usize = 1;
 			}
 		)+
@@ -49,6 +49,6 @@ macro_rules! impl_for_types {
 
 impl_for_types!(u8, i8, bool, OptionBool);
 
-impl<T> CompactPalletError for PhantomData<T> {
+impl<T> PalletError for PhantomData<T> {
 	const MAX_ENCODED_SIZE: usize = 0;
 }

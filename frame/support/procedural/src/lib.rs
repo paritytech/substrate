@@ -20,7 +20,7 @@
 #![recursion_limit = "512"]
 
 mod clone_no_bound;
-mod compact_pallet_error;
+mod pallet_error;
 mod construct_runtime;
 mod crate_version;
 mod debug_no_bound;
@@ -564,7 +564,7 @@ pub fn match_and_insert(input: TokenStream) -> TokenStream {
 	match_and_insert::match_and_insert(input)
 }
 
-#[proc_macro_derive(CompactPalletError)]
-pub fn derive_compact_pallet_error(input: TokenStream) -> TokenStream {
-	compact_pallet_error::derive_compact_pallet_error(input)
+#[proc_macro_derive(PalletError)]
+pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
+	pallet_error::derive_pallet_error(input)
 }

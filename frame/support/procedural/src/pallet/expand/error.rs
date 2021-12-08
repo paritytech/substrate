@@ -99,7 +99,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::codec::Encode,
 			#frame_support::codec::Decode,
 			#frame_support::scale_info::TypeInfo,
-			#frame_support::CompactPalletError,
+			#frame_support::PalletError,
 		)]
 	});
 	error_item.attrs.push(syn::parse_quote!(

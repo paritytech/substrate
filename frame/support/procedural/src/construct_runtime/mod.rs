@@ -500,7 +500,7 @@ fn decl_static_assertions(
 				} => {
 					#scrate::const_assert! {
 						<
-							#path::$error<#runtime> as #scrate::traits::CompactPalletError
+							#path::$error<#runtime> as #scrate::traits::PalletError
 						>::MAX_ENCODED_SIZE <= #scrate::MAX_PALLET_ERROR_ENCODED_SIZE
 					}
 				};

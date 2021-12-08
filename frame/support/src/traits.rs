@@ -46,7 +46,7 @@ pub use validation::{
 };
 
 mod error;
-pub use error::CompactPalletError;
+pub use error::PalletError;
 
 mod filter;
 pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};

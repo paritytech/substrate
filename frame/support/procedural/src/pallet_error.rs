@@ -18,8 +18,8 @@
 use frame_support_procedural_tools::generate_crate_access_2018;
 use std::convert::identity;
 
-// Derive `CompactPalletError`
-pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+// Derive `PalletError`
+pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let syn::DeriveInput { ident: name, generics, data, .. } = match syn::parse(input) {
 		Ok(input) => input,
 		Err(e) => return e.to_compile_error().into(),
@@ -35,7 +35,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 	let max_encoded_size = match data {
 		syn::Data::Struct(syn::DataStruct { struct_token, fields, .. }) => {
 			if fields.len() > 1 {
-				let msg = "Cannot derive `CompactPalletError` for structs with more than 1 field";
+				let msg = "Cannot derive `PalletError` for structs with more than 1 field";
 				return syn::Error::new(struct_token.span, msg).into_compile_error().into()
 			}
 
@@ -44,7 +44,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 					let field_ty = f.named.pop().unwrap().into_value().ty;
 					quote::quote! {
 						<
-							#field_ty as #frame_support::traits::CompactPalletError
+							#field_ty as #frame_support::traits::PalletError
 						>::MAX_ENCODED_SIZE
 					}
 				},
@@ -52,7 +52,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 					let field_ty = f.unnamed.pop().unwrap().into_value().ty;
 					quote::quote! {
 						<
-							#field_ty as #frame_support::traits::CompactPalletError
+							#field_ty as #frame_support::traits::PalletError
 						>::MAX_ENCODED_SIZE
 					}
 				},
@@ -65,7 +65,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 				.map(|variant| {
 					let span = variant.ident.span();
 					let make_err = || {
-						let msg = "Cannot derive `CompactPalletError` for enum with variants \
+						let msg = "Cannot derive `PalletError` for enum with variants \
 							containing more than 1 field";
 						let err = syn::Error::new(span, msg);
 						Err(err)
@@ -116,7 +116,7 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 					let mut tmp: usize;
 					#(
 						tmp = 1 + <
-							#field_tys as #frame_support::traits::CompactPalletError
+							#field_tys as #frame_support::traits::PalletError
 						>::MAX_ENCODED_SIZE;
 						size = if tmp > size { tmp } else { size };
 					)*
@@ -125,14 +125,14 @@ pub fn derive_compact_pallet_error(input: proc_macro::TokenStream) -> proc_macro
 			}
 		},
 		syn::Data::Union(syn::DataUnion { union_token, .. }) => {
-			let msg = "Cannot derive `CompactPalletError` for union; please implement it directly";
+			let msg = "Cannot derive `PalletError` for union; please implement it directly";
 			return syn::Error::new(union_token.span, msg).into_compile_error().into()
 		},
 	};
 
 	quote::quote!(
 		const _: () = {
-			impl #impl_generics #frame_support::traits::CompactPalletError
+			impl #impl_generics #frame_support::traits::PalletError
 				for #name #ty_generics #where_clause
 			{
 				const MAX_ENCODED_SIZE: usize = #max_encoded_size;
