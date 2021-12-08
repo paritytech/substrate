@@ -81,6 +81,7 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	) -> Result<Self::Balance, DispatchError>;
 }
 
+#[cfg(feature = "std")]
 impl<AccountId> ReservableCurrency<AccountId> for () {
 	fn can_reserve(_: &AccountId, _: Self::Balance) -> bool {
 		true
