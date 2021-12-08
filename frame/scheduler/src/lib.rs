@@ -362,7 +362,7 @@ pub mod pallet {
 				let call = match s.call.as_value().cloned() {
 					Some(c) => c,
 					None => {
-						// Preimage not available - postpone until next block.
+						// Preimage not available - postpone until some block.
 						total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
 						if let Some(delay) = T::NoPreimagePostponement::get() {
 							let until = now.saturating_add(delay);
