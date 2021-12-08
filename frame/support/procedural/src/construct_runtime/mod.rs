@@ -144,6 +144,7 @@
 mod expand;
 mod parse;
 
+use crate::COUNTER;
 use frame_support_procedural_tools::{
 	generate_crate_access, generate_crate_access_2018, generate_hidden_includes,
 };
@@ -481,9 +482,9 @@ fn decl_static_assertions(
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
 	let error_encoded_size_check = pallet_decls.iter().map(|decl| {
-		let name = &decl.name;
+		let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 		let path = &decl.path;
-		let assert_macro_name = format_ident!("assert_error_encoded_size_for_{}", name);
+		let assert_macro_name = format_ident!("assert_error_encoded_size_{}", count);
 
 		quote! {
 			#scrate::tt_call! {
