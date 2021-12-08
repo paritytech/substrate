@@ -35,14 +35,6 @@ pub trait CompactPalletError: Encode + Decode {
 	/// [`frame_support::MAX_PALLET_ERROR_ENCODED_SIZE`], and if it is, a compile error will be
 	/// thrown.
 	const MAX_ENCODED_SIZE: usize;
-	/// Function that checks whether implementing types are either 1 bytes in size, or that its
-	/// nested types are 1 bytes in size, i.e. whether they are as memory efficient as possible.
-	///
-	/// It is up to the implementing type to prove that it is maximally compact, thus this
-	/// function defaults to false.
-	fn check_compactness() -> bool {
-		false
-	}
 }
 
 macro_rules! impl_for_types {
@@ -50,7 +42,6 @@ macro_rules! impl_for_types {
 		$(
 			impl CompactPalletError for $typ {
 				const MAX_ENCODED_SIZE: usize = 1;
-				fn check_compactness() -> bool { true }
 			}
 		)+
 	};
@@ -60,7 +51,4 @@ impl_for_types!(u8, i8, bool, OptionBool);
 
 impl<T> CompactPalletError for PhantomData<T> {
 	const MAX_ENCODED_SIZE: usize = 0;
-	fn check_compactness() -> bool {
-		true
-	}
 }

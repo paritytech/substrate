@@ -12,7 +12,7 @@ mod pallet {
 	}
 }
 
-#[derive(scale_info::TypeInfo)]
+#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode)]
 enum MyError {}
 
 fn main() {
