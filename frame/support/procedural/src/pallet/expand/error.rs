@@ -174,7 +174,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				>::index::<Pallet<#type_use_gen>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 				let mut encoded = err.encode();
-				encoded.resize(#frame_support::MAX_NESTED_PALLET_ERROR_DEPTH, 0);
+				encoded.resize(#frame_support::MAX_PALLET_ERROR_ENCODED_SIZE, 0);
 
 				#frame_support::sp_runtime::DispatchError::Module {
 					index,

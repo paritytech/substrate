@@ -96,7 +96,7 @@ pub use self::{
 	},
 };
 pub use sp_runtime::{
-	self, print, traits::Printable, ConsensusEngineId, MAX_NESTED_PALLET_ERROR_DEPTH,
+	self, print, traits::Printable, ConsensusEngineId, MAX_PALLET_ERROR_ENCODED_SIZE,
 };
 
 use codec::{Decode, Encode};
@@ -1343,7 +1343,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
-		MAX_NESTED_PALLET_ERROR_DEPTH,
+		MAX_PALLET_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
 }

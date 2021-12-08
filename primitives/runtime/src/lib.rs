@@ -97,7 +97,7 @@ pub use sp_arithmetic::{
 pub use either::Either;
 
 /// The maximum depth for a nested pallet error enum.
-pub const MAX_NESTED_PALLET_ERROR_DEPTH: usize = 4;
+pub const MAX_PALLET_ERROR_ENCODED_SIZE: usize = 4;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -487,7 +487,7 @@ pub enum DispatchError {
 		/// Module index, matching the metadata module index.
 		index: u8,
 		/// Module specific error value.
-		error: [u8; MAX_NESTED_PALLET_ERROR_DEPTH],
+		error: [u8; MAX_PALLET_ERROR_ENCODED_SIZE],
 		/// Optional error message.
 		#[codec(skip)]
 		#[cfg_attr(feature = "std", serde(skip_deserializing))]
