@@ -77,7 +77,7 @@ where
 		self.validator_set.id()
 	}
 
-	pub(crate) fn validators(&self) -> &Vec<Public> {
+	pub(crate) fn validators(&self) -> &[Public] {
 		self.validator_set.validators()
 	}
 

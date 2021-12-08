@@ -20,7 +20,7 @@ use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
@@ -192,9 +192,10 @@ where
 		block: &NumberFor<B>,
 		active: &ValidatorSet<Public>,
 	) -> Result<(), error::Error> {
-		let active: BTreeSet<Public> = active.validators().clone().drain(..).collect();
+		let active: BTreeSet<&Public> = active.validators().iter().collect();
 
-		let store: BTreeSet<Public> = self.key_store.public_keys()?.drain(..).collect();
+		let public_keys = self.key_store.public_keys()?;
+		let store: BTreeSet<&Public> = public_keys.iter().collect();
 
 		let missing: Vec<_> = store.difference(&active).cloned().collect();
 
@@ -230,8 +231,10 @@ where
 					metric_inc!(self, beefy_skipped_sessions);
 				}
 
-				// verify the new validator set
-				let _ = self.verify_validator_set(notification.header.number(), &active);
+				if log_enabled!(log::Level::Debug) {
+					// verify the new validator set - only do it if we're also logging the warning
+					let _ = self.verify_validator_set(notification.header.number(), &active);
+				}
 
 				let id = active.id();
 				self.rounds = Some(round::Rounds::new(active));

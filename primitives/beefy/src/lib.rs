@@ -104,7 +104,7 @@ impl<AuthorityId> ValidatorSet<AuthorityId> {
 	}
 
 	/// Return a reference to the vec of validators.
-	pub fn validators(&self) -> &Vec<AuthorityId> {
+	pub fn validators(&self) -> &[AuthorityId] {
 		&self.validators
 	}
 
