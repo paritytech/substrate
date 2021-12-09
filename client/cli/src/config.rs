@@ -523,7 +523,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
-			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
+			prometheus_config: self
+				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
