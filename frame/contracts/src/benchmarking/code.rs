@@ -41,6 +41,14 @@ use sp_sandbox::{
 };
 use sp_std::{borrow::ToOwned, prelude::*};
 
+/// The location where to put the genrated code.
+pub enum Location {
+	/// Generate all code into the `call` exported function.
+	Call,
+	/// Generate all code into the `deploy` exported function.
+	Deploy,
+}
+
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
 /// This exists to have a more declarative way to describe a wasm module than to use
@@ -308,7 +316,8 @@ where
 	/// Creates a wasm module of `target_bytes` size. Used to benchmark the performance of
 	/// `instantiate_with_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
-	pub fn sized(target_bytes: u32) -> Self {
+	/// `code_location`: Whether to place the code into `deploy` or `call`.
+	pub fn sized(target_bytes: u32, code_location: Location) -> Self {
 		use self::elements::Instruction::{End, I32Const, If, Return};
 		// Base size of a contract is 63 bytes and each expansion adds 6 bytes.
 		// We do one expansion less to account for the code section and function body
@@ -317,12 +326,14 @@ where
 		// because of the maximum code size that is enforced by `instantiate_with_code`.
 		let expansions = (target_bytes.saturating_sub(63) / 6).saturating_sub(1);
 		const EXPANSION: [Instruction; 4] = [I32Const(0), If(BlockType::NoResult), Return, End];
-		ModuleDefinition {
-			call_body: Some(body::repeated(expansions, &EXPANSION)),
-			memory: Some(ImportedMemory::max::<T>()),
-			..Default::default()
+		let mut module =
+			ModuleDefinition { memory: Some(ImportedMemory::max::<T>()), ..Default::default() };
+		let body = Some(body::repeated(expansions, &EXPANSION));
+		match code_location {
+			Location::Call => module.call_body = body,
+			Location::Deploy => module.deploy_body = body,
 		}
-		.into()
+		module.into()
 	}
 
 	/// Creates a wasm module that calls the imported function named `getter_name` `repeat`
