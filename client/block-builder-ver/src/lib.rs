@@ -353,7 +353,7 @@ where
         // }
 
 		Ok(BuiltBlock {
-			block: <Block as BlockT>::new(header, self.extrinsics),
+			block: <Block as BlockT>::new_ver(header, self.extrinsics, Vec::new()),
 			storage_changes,
 			proof,
 		})

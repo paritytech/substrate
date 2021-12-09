@@ -714,9 +714,17 @@ pub trait Block:
 	/// Returns a reference to the list of extrinsics.
 	fn extrinsics(&self) -> &[Self::Extrinsic];
 	/// Split the block into header and list of extrinsics.
+	fn prev_extrinsics(&self) -> &[Self::Extrinsic]{
+        unimplemented!()
+    }
+	/// Split the block into header and list of extrinsics.
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 	/// Creates new block from header and extrinsics.
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
+	/// Returns the hash of the block.
+	fn new_ver(header: Self::Header, extrinsics: Vec<Self::Extrinsic>, prev_extrinsics: Vec<Self::Extrinsic>) -> Self{
+        unimplemented!()
+    }
 	/// Returns the hash of the block.
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
