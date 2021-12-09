@@ -70,6 +70,17 @@ pub mod crypto {
 	pub type AuthoritySignature = Signature;
 }
 
+pub mod bls_crypto {
+	use sp_application_crypto::{app_crypto, ecdsa};
+	app_crypto!(bls, crate::KEY_TYPE);
+
+	/// Identity of a BEEFY authority using ECDSA as its crypto.
+	pub type AuthorityId = Public;
+
+	/// Signature for a BEEFY authority using ECDSA as its crypto.
+	pub type AuthoritySignature = Signature;
+}
+
 /// The `ConsensusEngineId` of BEEFY.
 pub const BEEFY_ENGINE_ID: sp_runtime::ConsensusEngineId = *b"BEEF";
 
