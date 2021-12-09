@@ -645,9 +645,9 @@ mod tests {
 			let _recv3 = futures::executor::block_on_stream(notifications.listen(None, None));
 			let _recv4 =
 				futures::executor::block_on_stream(notifications.listen(None, Some(&child_filter)));
-			assert_eq!(notifications.listeners.len(), 2);
-			assert_eq!(notifications.wildcard_listeners.len(), 2);
-			assert_eq!(notifications.child_listeners.len(), 1);
+			assert_eq!(notifications.0.lock().listeners.len(), 2);
+			assert_eq!(notifications.0.lock().wildcard_listeners.len(), 2);
+			assert_eq!(notifications.0.lock().child_listeners.len(), 1);
 		}
 
 		// when
@@ -656,9 +656,9 @@ mod tests {
 		notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
 
 		// then
-		assert_eq!(notifications.listeners.len(), 0);
-		assert_eq!(notifications.wildcard_listeners.len(), 0);
-		assert_eq!(notifications.child_listeners.len(), 0);
+		assert_eq!(notifications.0.lock().listeners.len(), 0);
+		assert_eq!(notifications.0.lock().wildcard_listeners.len(), 0);
+		assert_eq!(notifications.0.lock().child_listeners.len(), 0);
 	}
 
 	#[test]
