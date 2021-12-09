@@ -17,14 +17,17 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 sp-core = { version = "4.0.0", default-features = false, path = "../../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/runtime" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/version" }
-support = { package = "frame-support", version = "4.0.0-dev", default-features = false, path = "../../" }
-system = { package = "frame-system", version = "4.0.0-dev", default-features = false, path = "../../../system" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../system" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
 	"scale-info/std",
-	"support/std",
-	"system/std",
+	"sp-core/std",
+	"sp-runtime/std",
+	"sp-version/std",
+	"frame-support/std",
+	"frame-system/std",
 ]
