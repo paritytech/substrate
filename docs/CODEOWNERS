@@ -41,10 +41,10 @@
 /primitives/consensus/pow/ @sorpaas
 
 # BEEFY
-/client/beefy/ @adoerr
-/frame/beefy/ @adoerr
-/frame/beefy-mmr/ @adoerr
-/primitives/beefy/ @adoerr
+#/client/beefy/
+#/frame/beefy/ 
+#/frame/beefy-mmr/ 
+#/primitives/beefy/
 
 # Contracts
 /frame/contracts/ @athei
