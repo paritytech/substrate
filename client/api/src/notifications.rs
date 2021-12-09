@@ -109,7 +109,13 @@ impl<H> Drop for StorageEventStream<H> {
 				storage_notifications.lock().remove_subscriber(self.id)
 			{
 				if !self.was_triggered {
-					log::trace!(target: "storage_notifications", "Listener was never triggered: id={}, keys={:?}, child_keys={:?}", self.id, PrintKeys(&keys), PrintChildKeys(&child_keys));
+					log::trace!(
+						target: "storage_notifications", 
+						"Listener was never triggered: id={}, keys={:?}, child_keys={:?}", 
+						self.id, 
+						PrintKeys(&keys), 
+						PrintChildKeys(&child_keys),
+					);
 				}
 			}
 		}
