@@ -69,7 +69,9 @@ pub(crate) mod tests;
 
 /// Name of the notifications protocol used by Grandpa. Must be registered towards the networking
 /// in order for Grandpa to properly function.
-pub const GRANDPA_PROTOCOL_NAME: &'static str = "/paritytech/grandpa/1";
+pub(crate) const GRANDPA_PROTOCOL_NAME: &'static str = "/substrate/grandpa/1";
+/// Old name for the notifications protocol, still used for backward compatibility.
+pub(crate) const GRANDPA_PROTOCOL_LEGACY: &'static str = "/paritytech/grandpa/1";
 
 // cost scalars for reporting peers.
 mod cost {
