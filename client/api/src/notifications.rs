@@ -662,6 +662,15 @@ mod tests {
 	}
 
 	#[test]
+	fn should_cleanup_subscriber_if_stream_is_dropped() {
+		let mut notifications = StorageNotifications::<Block>::default();
+		let stream = notifications.listen(None, None);
+		assert_eq!(notifications.0.lock().sinks.len(), 1);
+		std::mem::drop(stream);
+		assert_eq!(notifications.0.lock().sinks.len(), 0);
+	}
+
+	#[test]
 	fn should_not_send_empty_notifications() {
 		// given
 		let mut recv = {
