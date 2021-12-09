@@ -376,6 +376,84 @@ impl<T: Config> List<T> {
 		})
 	}
 
+	/// Put `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in the
+	/// same bag and the `weight_of` `lighter_id` must be less than that of `heavier_id`.
+	pub(crate) fn put_in_front_of(
+		lighter_id: &T::AccountId,
+		heavier_id: &T::AccountId,
+	) -> Result<(), crate::pallet::Error<T>> {
+		use crate::pallet;
+		use frame_support::ensure;
+
+		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
+		let heavier_node = Node::<T>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
+
+		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
+
+		// this is the most expensive check, so we do it last.
+		ensure!(
+			T::VoteWeightProvider::vote_weight(&heavier_id) >
+				T::VoteWeightProvider::vote_weight(&lighter_id),
+			pallet::Error::NotHeavier
+		);
+
+		// remove the heavier node from this list. Note that this removes the node from storage and
+		// decrements the node counter.
+		Self::remove(&heavier_id);
+
+		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
+		// was removed.
+		let lighter_node = Node::<T>::get(&lighter_id).ok_or_else(|| {
+			debug_assert!(false, "id that should exist cannot be found");
+			crate::log!(warn, "id that should exist cannot be found");
+			pallet::Error::IdNotFound
+		})?;
+
+		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
+		// in storage and update the node counter.
+		Self::insert_at_unchecked(lighter_node, heavier_node);
+
+		Ok(())
+	}
+
+	/// Insert `node` directly in front of `at`.
+	///
+	/// WARNINGS:
+	/// - this is a naive function in that it does not check if `node` belongs to the same bag as
+	/// `at`. It is expected that the call site will check preconditions.
+	/// - this will panic if `at.bag_upper` is not a bag that already exists in storage.
+	fn insert_at_unchecked(mut at: Node<T>, mut node: Node<T>) {
+		// connect `node` to its new `prev`.
+		node.prev = at.prev.clone();
+		if let Some(mut prev) = at.prev() {
+			prev.next = Some(node.id().clone());
+			prev.put()
+		}
+
+		// connect `node` and `at`.
+		node.next = Some(at.id().clone());
+		at.prev = Some(node.id().clone());
+
+		if node.is_terminal() {
+			// `node` is the new head, so we make sure the bag is updated. Note,
+			// since `node` is always in front of `at` we know that 1) there is always at least 2
+			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
+			// tail.
+			let mut bag = Bag::<T>::get(at.bag_upper)
+				.expect("given nodes must always have a valid bag. qed.");
+
+			if node.prev == None {
+				bag.head = Some(node.id().clone())
+			}
+
+			bag.put()
+		};
+
+		// write the updated nodes to storage.
+		at.put();
+		node.put();
+	}
+
 	/// Sanity check the list.
 	///
 	/// This should be called from the call-site, whenever one of the mutating apis (e.g. `insert`)

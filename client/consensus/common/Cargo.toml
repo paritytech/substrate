@@ -20,7 +20,7 @@ futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "3.0.1"
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { path = "../../../primitives/core", version = "4.0.0-dev" }
+sp-core = { path = "../../../primitives/core", version = "4.0.0" }
 sp-consensus = { path = "../../../primitives/consensus/common", version = "0.10.0-dev" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }

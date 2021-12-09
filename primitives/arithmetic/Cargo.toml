@@ -22,9 +22,9 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 integer-sqrt = "0.1.2"
 static_assertions = "1.1.0"
 num-traits = { version = "0.2.8", default-features = false }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 serde = { version = "1.0.126", optional = true, features = ["derive"] }
-sp-debug-derive = { version = "4.0.0-dev", default-features = false, path = "../debug-derive" }
+sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
 
 [dev-dependencies]
 rand = "0.7.2"

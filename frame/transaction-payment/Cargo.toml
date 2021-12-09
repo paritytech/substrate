@@ -20,10 +20,10 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 serde = { version = "1.0.126", optional = true }
 smallvec = "1.7.0"
 
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+sp-core = { version = "4.0.0", path = "../../primitives/core", default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }

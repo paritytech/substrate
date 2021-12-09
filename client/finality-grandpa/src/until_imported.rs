@@ -100,7 +100,7 @@ impl Metrics {
 		Ok(Self {
 			global_waiting_messages: register(
 				Gauge::new(
-					"finality_grandpa_until_imported_waiting_messages_number",
+					"substrate_finality_grandpa_until_imported_waiting_messages_number",
 					"Number of finality grandpa messages waiting within the until imported queue.",
 				)?,
 				registry,

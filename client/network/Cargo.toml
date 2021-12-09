@@ -53,7 +53,7 @@ sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
@@ -72,7 +72,7 @@ libp2p = { version = "0.40.0", default-features = false }
 quickcheck = "1.0.3"
 rand = "0.7.2"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 tempfile = "3.1.0"

@@ -15,8 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false }
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false }
-sp-std = { version = "4.0.0-dev", path = "../../std", default-features = false }
-sp-core = { version = "4.0.0-dev", path = "../../core", default-features = false }
+sp-std = { version = "4.0.0", path = "../../std", default-features = false }
+sp-core = { version = "4.0.0", path = "../../core", default-features = false }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
 
 [features]
