@@ -18,14 +18,14 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 ] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-authorship = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authorship" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]

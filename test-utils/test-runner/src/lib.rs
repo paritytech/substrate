@@ -106,6 +106,7 @@
 //! 		let nonce = frame_system::Pallet::<Self::Runtime>::account_nonce(from);
 //!
 //! 		(
+//! 			frame_system::CheckNonZeroSender::<Self::Runtime>::new(),
 //! 			frame_system::CheckSpecVersion::<Self::Runtime>::new(),
 //! 			frame_system::CheckTxVersion::<Self::Runtime>::new(),
 //! 			frame_system::CheckGenesis::<Self::Runtime>::new(),

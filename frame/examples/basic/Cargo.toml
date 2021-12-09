@@ -23,10 +23,10 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core", default-features = false }
+sp-core = { version = "4.0.0", path = "../../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]

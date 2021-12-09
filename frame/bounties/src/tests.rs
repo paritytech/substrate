@@ -147,6 +147,7 @@ impl Config for Test {
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
 	type WeightInfo = ();
+	type ChildBountyManager = ();
 }
 
 type TreasuryError = pallet_treasury::Error<Test>;

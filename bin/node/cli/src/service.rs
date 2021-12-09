@@ -83,6 +83,7 @@ pub fn create_extrinsic(
 		.unwrap_or(2) as u64;
 	let tip = 0;
 	let extra: node_runtime::SignedExtra = (
+		frame_system::CheckNonZeroSender::<node_runtime::Runtime>::new(),
 		frame_system::CheckSpecVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckTxVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckGenesis::<node_runtime::Runtime>::new(),
@@ -99,6 +100,7 @@ pub fn create_extrinsic(
 		function.clone(),
 		extra.clone(),
 		(
+			(),
 			node_runtime::VERSION.spec_version,
 			node_runtime::VERSION.transaction_version,
 			genesis_hash,
@@ -719,6 +721,7 @@ mod tests {
 				let function =
 					Call::Balances(BalancesCall::transfer { dest: to.into(), value: amount });
 
+				let check_non_zero_sender = frame_system::CheckNonZeroSender::new();
 				let check_spec_version = frame_system::CheckSpecVersion::new();
 				let check_tx_version = frame_system::CheckTxVersion::new();
 				let check_genesis = frame_system::CheckGenesis::new();
@@ -727,6 +730,7 @@ mod tests {
 				let check_weight = frame_system::CheckWeight::new();
 				let tx_payment = pallet_asset_tx_payment::ChargeAssetTxPayment::from(0, None);
 				let extra = (
+					check_non_zero_sender,
 					check_spec_version,
 					check_tx_version,
 					check_genesis,
@@ -738,7 +742,7 @@ mod tests {
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ()),
+					((), spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ()),
 				);
 				let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
 				let (function, extra, _) = raw_payload.deconstruct();
