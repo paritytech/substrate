@@ -21,7 +21,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-tracing = { version = "4.0.0", default-features = false, path = "../../primitives/tracing" }
-sp-core = { version = "4.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }

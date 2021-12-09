@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-tasks = { version = "4.0.0-dev", path = "../../primitives/tasks" }
 sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
