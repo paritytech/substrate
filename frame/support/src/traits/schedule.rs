@@ -49,8 +49,7 @@ pub const HARD_DEADLINE: Priority = 63;
 /// The lowest priority. Most stuff should be around here.
 pub const LOWEST_PRIORITY: Priority = 255;
 
-/// Type representing a call. Can be either the `Call` value itself or the hash of the encoded
-/// `Call`.
+/// Type representing an encodable value or the hash of the encoding of such a value.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum MaybeHashed<T, Hash> {
 	/// The value itself.
