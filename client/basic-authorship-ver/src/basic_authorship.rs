@@ -335,6 +335,7 @@ where
 		debug!(target:"block_builder", "found {} inherents", inherents.len());
 		for inherent in inherents {
 			debug!(target:"block_builder", "processing inherent");
+            // TODO now it actually commits changes
 			match block_builder.record_without_commiting_changes(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
@@ -349,7 +350,7 @@ where
 					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
 				},
 				Ok(_) => {
-					trace!(target:"block_builder", "inherent pushed into the block");
+					trace!(target:"block_builder", "inherent EXECUTED & pushed into the block");
 				},
 			}
 		}

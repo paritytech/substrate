@@ -448,7 +448,7 @@ where
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
 			let (header, extrinsics) = block.deconstruct();
-            let extrinsics = sp_ver::find_prev_extrinsics::<Block>(&header).unwrap(); 
+            // let extrinsics = sp_ver::find_prev_extrinsics::<Block>(&header).unwrap(); 
            
             let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e: Block::Extrinsic| 
                     (     

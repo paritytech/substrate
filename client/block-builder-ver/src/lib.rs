@@ -275,7 +275,7 @@ where
 
         self.previous_block_extrinsics = self.backend.blockchain().body(BlockId::Hash(parent_hash)).unwrap();
 
-		match self.previous_block_extrinsics.clone() {
+		match Some(self.extrinsics.clone()) {
 			Some(previous_block_extrinsics) => {
 				log::debug!(target: "block_builder", "transaction count {}", previous_block_extrinsics.len());
 				let shuffled_extrinsics = if previous_block_extrinsics.len() <= 1 {
@@ -346,11 +346,11 @@ where
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
 
-        if let Some(txs) = self.previous_block_extrinsics{
-            let digest = header.digest_mut();
-            let prev_extrinsics = DigestItemFor::<Block>::ver_pre_digest(PreDigestVer::<Block>{prev_extrisnics: txs.clone()});
-            digest.push(prev_extrinsics);
-        }
+        // if let Some(txs) = self.previous_block_extrinsics{
+        //     let digest = header.digest_mut();
+        //     let prev_extrinsics = DigestItemFor::<Block>::ver_pre_digest(PreDigestVer::<Block>{prev_extrisnics: txs.clone()});
+        //     digest.push(prev_extrinsics);
+        // }
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
