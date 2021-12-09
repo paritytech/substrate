@@ -336,7 +336,7 @@ where
 		for inherent in inherents {
 			debug!(target:"block_builder", "processing inherent");
             // TODO now it actually commits changes
-			match block_builder.record_without_commiting_changes(inherent) {
+			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
 				},
@@ -362,7 +362,7 @@ where
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		block_builder.apply_previous_block(seed.clone());
+		block_builder.apply_previous_block_extrinsics(seed.clone());
 
 		let api = self.client.runtime_api();
 

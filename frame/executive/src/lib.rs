@@ -135,7 +135,7 @@ use sp_core::{ShufflingSeed, crypto::UncheckedFrom, Hasher};
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, BlakeTwo256, CheckEqual, Checkable, Dispatchable, HasAddress, Header, NumberFor, One, Saturating,
+		self, Applyable, BlakeTwo256, CheckEqual, Checkable, Dispatchable, Extrinsic, HasAddress, Header, NumberFor, One, Saturating,
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
@@ -447,20 +447,26 @@ where
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
+            let previous = block.prev_extrinsics().iter().filter(|e| e.is_signed().unwrap()).cloned().collect::<Vec<_>>();
+            sp_runtime::print("PREVIOUS BLOCK EXTRINSICS COUNT");
+            sp_runtime::print(previous.len());
 			let (header, extrinsics) = block.deconstruct();
-            // let extrinsics = sp_ver::find_prev_extrinsics::<Block>(&header).unwrap(); 
            
-            let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e: Block::Extrinsic| 
-                    (     
-                        e.get_address().map(
-                            |addr| AccountId32::unchecked_from(BlakeTwo256::hash(&addr.encode()))
-                        ),
-                        e
-                    )
-            ).collect();
-            let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
+            // let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e: Block::Extrinsic| 
+            //         (     
+            //             e.get_address().map(
+            //                 |addr| AccountId32::unchecked_from(BlakeTwo256::hash(&addr.encode()))
+            //             ),
+            //             e
+            //         )
+            // ).collect();
+            // let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
             
-            Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
+            let inherents = extrinsics.into_iter().filter(|e| !e.is_signed().unwrap()).collect::<Vec<_>>();
+
+            Self::execute_extrinsics_with_book_keeping(inherents.into_iter().chain(previous.into_iter()).collect(), *header.number());
+            // Self::execute_extrinsics_with_book_keeping(inherents, *header.number());
+
 
 
 			if !signature_batching.verify() {
