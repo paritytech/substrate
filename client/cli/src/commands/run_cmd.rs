@@ -377,7 +377,7 @@ impl CliConfiguration for RunCmd {
 					interface.into(),
 					self.prometheus_port.unwrap_or(default_listen_port),
 				),
-				self.prometheus_metric_prefix,
+				self.shared_params.chain_id(self.shared_params.dev),
 			))
 		})
 	}

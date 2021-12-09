@@ -36,7 +36,7 @@ pub use sc_telemetry::TelemetryEndpoints;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sp_core::crypto::SecretString;
 use std::{
-	io,
+	io, iter,
 	net::SocketAddr,
 	path::{Path, PathBuf},
 };
@@ -187,11 +187,12 @@ pub struct PrometheusConfig {
 impl PrometheusConfig {
 	/// Create a new config using the default registry.
 	///
-	/// The default registry prefixes metrics with `substrate` (see struct `sc_cli::RunCmd`).
-	pub fn new_with_default_registry(port: SocketAddr, metric_prefix: &'static str) -> Self {
+	/// The default registry prefixes metrics with `substrate`.
+	pub fn new_with_default_registry(port: SocketAddr, chain_id: String) -> Self {
+		let param = iter::once((String::from("chain"), chain_id)).collect();
 		Self {
 			port,
-			registry: Registry::new_custom(Some(metric_prefix.into()), None)
+			registry: Registry::new_custom(None, Some(param))
 				.expect("this can only fail if the prefix is empty"),
 		}
 	}

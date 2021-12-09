@@ -1,6 +1,6 @@
 [package]
 name = "sp-core-hashing"
-version = "4.0.0-dev"
+version = "4.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sp-core-hashing"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
 byteorder = { version = "1.3.2", default-features = false }
 
 blake2-rfc = { version = "0.2.18", default-features = false }

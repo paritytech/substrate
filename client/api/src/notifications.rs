@@ -121,7 +121,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		let metrics = prometheus_registry.and_then(|r| {
 			CounterVec::new(
 				Opts::new(
-					"storage_notification_subscribers",
+					"substrate_storage_notification_subscribers",
 					"Number of subscribers in storage notification sytem",
 				),
 				&["action"], // added | removed

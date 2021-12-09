@@ -401,7 +401,7 @@ impl Metrics {
 			poll_duration: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
-						"tasks_polling_duration",
+						"substrate_tasks_polling_duration",
 						"Duration in seconds of each invocation of Future::poll"
 					),
 					buckets: exponential_buckets(0.001, 4.0, 9)
@@ -411,21 +411,21 @@ impl Metrics {
 			)?, registry)?,
 			poll_start: register(CounterVec::new(
 				Opts::new(
-					"tasks_polling_started_total",
+					"substrate_tasks_polling_started_total",
 					"Total number of times we started invoking Future::poll"
 				),
 				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_spawned: register(CounterVec::new(
 				Opts::new(
-					"tasks_spawned_total",
+					"substrate_tasks_spawned_total",
 					"Total number of tasks that have been spawned on the Service"
 				),
 				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_ended: register(CounterVec::new(
 				Opts::new(
-					"tasks_ended_total",
+					"substrate_tasks_ended_total",
 					"Total number of tasks for which Future::poll has returned Ready(()) or panicked"
 				),
 				&["task_name", "reason", "task_group"]

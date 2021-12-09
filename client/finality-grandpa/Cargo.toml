@@ -30,7 +30,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
@@ -56,6 +56,6 @@ sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 tokio = "1.13"
 tempfile = "3.1.0"
