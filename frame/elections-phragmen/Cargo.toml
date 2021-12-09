@@ -22,14 +22,14 @@ sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = ".
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "4.0.0", default-features = false, path = "../../primitives/core" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]

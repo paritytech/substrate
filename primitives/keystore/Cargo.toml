@@ -21,8 +21,8 @@ schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backen
 merlin = { version = "2.0", default-features = false }
 parking_lot = { version = "0.11.1", default-features = false }
 serde = { version = "1.0", optional = true}
-sp-core = { version = "4.0.0-dev", path = "../core" }
-sp-externalities = { version = "0.10.0-dev", path = "../externalities", default-features = false }
+sp-core = { version = "4.0.0", path = "../core" }
+sp-externalities = { version = "0.10.0", path = "../externalities", default-features = false }
 
 [dev-dependencies]
 rand = "0.7.2"
