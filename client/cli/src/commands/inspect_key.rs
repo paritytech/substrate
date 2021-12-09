@@ -65,7 +65,7 @@ pub struct InspectKeyCmd {
 
 	/// Expect that `--uri` has the given public key/account-id.
 	///
-	/// If `--uri` has any derivations, the public key is checked against the base `uri`, aka the
+	/// If `--uri` has any derivations, the public key is checked against the base `uri`, i.e. the
 	/// `uri` without any derivation applied. However, if `uri` has a password or there is one
 	/// given by `--password`, it will be used to decrypt `uri` before comparing the public
 	/// key/account-id.
@@ -117,7 +117,7 @@ impl InspectKeyCmd {
 /// Checks that `expect_public` is the public key of `suri`.
 ///
 /// If `suri` has any derivations, `expect_public` is checked against the public key of the "bare"
-/// `suri`, aka without any derivations.
+/// `suri`, i.e. without any derivations.
 ///
 /// Returns an error if the public key does not match.
 fn expect_public_from_phrase<Pair: sp_core::Pair>(
