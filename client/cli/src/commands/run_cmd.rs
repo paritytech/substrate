@@ -238,6 +238,10 @@ pub struct RunCmd {
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
 
+	/// Maximum number of different runtimes that can be cached.
+	#[structopt(long, default_value = "2")]
+	pub runtime_cache_size: u8,
+
 	/// Run a temporary node.
 	///
 	/// A temporary directory will be created to store the configuration and will be deleted
@@ -451,6 +455,10 @@ impl CliConfiguration for RunCmd {
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+	}
+
+	fn runtime_cache_size(&self) -> Result<u8> {
+		Ok(self.runtime_cache_size)
 	}
 
 	fn base_path(&self) -> Result<Option<BasePath>> {
