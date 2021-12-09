@@ -209,7 +209,11 @@ frame_benchmarking::benchmarks! {
 		let receiver = account("receiver", 0, SEED);
 		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
-		let ready: ReadySolution<T::AccountId> = account("ready", 0, SEED);
+		let ready = ReadySolution {
+			supports: vec![],
+			score: Default::default(),
+			compute: Default::default()
+		};
 		let deposit: BalanceOf<T> = 10u32.into();
 		let reward: BalanceOf<T> = 20u32.into();
 
