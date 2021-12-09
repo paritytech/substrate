@@ -270,7 +270,9 @@ impl LoggerBuilder {
 				let mut profiling =
 					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-				self.custom_profiler.into_iter().for_each(|profiler| profiling.add_handler(profiler));
+				self.custom_profiler
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
@@ -286,7 +288,9 @@ impl LoggerBuilder {
 				let mut profiling =
 					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-				self.custom_profiler.into_iter().for_each(|profiler| profiling.add_handler(profiler));
+				self.custom_profiler
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 

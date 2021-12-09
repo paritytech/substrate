@@ -265,7 +265,7 @@ impl ProfilingLayer {
 			},
 			TraceHandlerEvents::Event(event) => {
 				self.trace_handlers.iter().for_each(|handler| handler.handle_event(event));
-			}
+			},
 		}
 	}
 }

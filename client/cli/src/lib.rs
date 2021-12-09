@@ -233,23 +233,22 @@ pub trait SubstrateCli: Sized {
 
 	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
 	/// a custom profiler or update the logger configuration before it is initialized.
-	/// 
+	///
 	/// Example:
 	/// ```
 	/// struct TestProfiler;
-	/// 
+	///
 	/// impl sc_tracing::TraceHandler for TestProfiler {
 	///  	fn handle_span(&self, sd: &SpanDatum) {}
-	///		fn handle_event(&self, _event: &TraceEvent) {}
+	/// 		fn handle_event(&self, _event: &TraceEvent) {}
 	/// };
-	/// 
+	///
 	/// fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) -> () {
 	/// 	|logger_builder, config| {
-	///			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
+	/// 			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
 	/// 	}
 	/// }
 	/// ```
-	/// 
 	fn create_runner_with_logger_hook<T: CliConfiguration, F>(
 		&self,
 		command: &T,
