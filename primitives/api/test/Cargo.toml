@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-api = { version = "4.0.0-dev", path = "../" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sp-version = { version = "4.0.0-dev", path = "../../version" }
-sp-tracing = { version = "4.0.0-dev", path = "../../tracing" }
+sp-tracing = { version = "4.0.0", path = "../../tracing" }
 sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
 sp-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
@@ -28,7 +28,7 @@ rustversion = "1.0.5"
 criterion = "0.3.0"
 futures = "0.3.9"
 log = "0.4.14"
-sp-core = { version = "4.0.0-dev", path = "../../core" }
+sp-core = { version = "4.0.0", path = "../../core" }
 
 [[bench]]
 name = "bench"

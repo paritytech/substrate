@@ -17,12 +17,12 @@ sp-application-crypto = { version = "4.0.0-dev", default-features = false, path 
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 merlin = { version = "2.0", default-features = false }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-consensus = { version = "0.10.0-dev", optional = true, path = "../common" }
 sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
 sp-consensus-vrf = { version = "0.10.0-dev", path = "../vrf", default-features = false }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../core" }
+sp-core = { version = "4.0.0", default-features = false, path = "../../core" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../keystore", optional = true }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }

@@ -98,6 +98,17 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
+	/// The key used to store the counter of the map.
+	pub fn counter_storage_final_key() -> [u8; 32] {
+		CounterFor::<Prefix>::hashed_key()
+	}
+
+	/// The prefix used to generate the key of the map.
+	pub fn map_storage_final_prefix() -> Vec<u8> {
+		use crate::storage::generator::StorageMap;
+		<Self as MapWrapper>::Map::prefix_hash()
+	}
+
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Vec<u8> {
 		<Self as MapWrapper>::Map::hashed_key_for(key)
