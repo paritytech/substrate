@@ -1370,6 +1370,12 @@ impl<T: Config> Pallet<T> {
 		digest: &DigestOf<T>,
 		kind: InitKind,
 	) {
+		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..]).unwrap();
+        sp_runtime::print("INITIALIZE");
+        for i in storage_root.as_ref() {
+            sp_runtime::print(i);
+        }
+        // sp_runtime::print(&storage_root[..]);
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1436,6 +1442,7 @@ impl<T: Config> Pallet<T> {
 			);
 			digest.push(item);
 		}
+        sp_runtime::print("FINALIZE");
 
 		<T::Header as traits::Header>::new(
 			number,

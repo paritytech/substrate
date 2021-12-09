@@ -478,7 +478,9 @@ where
 		extrinsics: Vec<Block::Extrinsic>,
 		block_number: NumberFor<Block>,
 	) {
+        sp_runtime::print("EXECUTE_EXTRINSICS_WITH_BOOK_KEEPING");
 		extrinsics.into_iter().for_each(|e| {
+            sp_runtime::print("EXECUTE EXTRINSICS");
 			if let Err(e) = Self::apply_extrinsic(e) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
