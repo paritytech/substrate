@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
@@ -24,7 +24,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 
 [dev-dependencies]
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]

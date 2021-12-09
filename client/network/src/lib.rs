@@ -273,8 +273,9 @@ pub use protocol::{
 	PeerInfo,
 };
 pub use service::{
-	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
-	OutboundFailure, RequestFailure,
+	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
+	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
+	Signature, SigningError,
 };
 
 pub use sc_peerset::ReputationChange;

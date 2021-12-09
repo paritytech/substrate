@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package authority_discovery;
+package authority_discovery_v1;
 
 // First we need to serialize the addresses in order to be able to sign them.
 message AuthorityAddresses {

@@ -123,6 +123,15 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	status: BountyStatus<AccountId, BlockNumber>,
 }
 
+impl<AccountId: PartialEq + Clone + Ord + Default, Balance, BlockNumber: Clone>
+	Bounty<AccountId, Balance, BlockNumber>
+{
+	/// Getter for bounty status, to be used for child bounties.
+	pub fn get_status(&self) -> BountyStatus<AccountId, BlockNumber> {
+		self.status.clone()
+	}
+}
+
 /// The status of a bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BountyStatus<AccountId, BlockNumber> {
@@ -154,6 +163,15 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 		/// When the bounty can be claimed.
 		unlock_at: BlockNumber,
 	},
+}
+
+/// The child-bounty manager.
+pub trait ChildBountyManager<Balance> {
+	/// Get the active child-bounties for a parent bounty.
+	fn child_bounties_count(bounty_id: BountyIndex) -> BountyIndex;
+
+	/// Get total curator fees of children-bounty curators.
+	fn children_curator_fees(bounty_id: BountyIndex) -> Balance;
 }
 
 #[frame_support::pallet]
@@ -202,6 +220,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The child-bounty manager.
+		type ChildBountyManager: ChildBountyManager<BalanceOf<Self>>;
 	}
 
 	#[pallet::error]
@@ -225,6 +246,8 @@ pub mod pallet {
 		PendingPayout,
 		/// The bounties cannot be claimed/closed because it's still in the countdown period.
 		Premature,
+		/// The bounty cannot be closed because it has active child-bounties.
+		HasActiveChildBounty,
 	}
 
 	#[pallet::event]
@@ -512,6 +535,13 @@ pub mod pallet {
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+
+				// Ensure no active child-bounties before processing the call.
+				ensure!(
+					T::ChildBountyManager::child_bounties_count(bounty_id) == 0,
+					Error::<T>::HasActiveChildBounty
+				);
+
 				match &bounty.status {
 					BountyStatus::Active { curator, .. } => {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
@@ -563,7 +593,15 @@ pub mod pallet {
 					let payout = balance.saturating_sub(fee);
 					let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
 					debug_assert!(err_amount.is_zero());
-					let res = T::Currency::transfer(&bounty_account, &curator, fee, AllowDeath); // should not fail
+
+					// Get total child-bounties curator fees, and subtract it from master curator
+					// fee.
+					let children_fee = T::ChildBountyManager::children_curator_fees(bounty_id);
+					debug_assert!(children_fee <= fee);
+
+					let final_fee = fee.saturating_sub(children_fee);
+					let res =
+						T::Currency::transfer(&bounty_account, &curator, final_fee, AllowDeath); // should not fail
 					debug_assert!(res.is_ok());
 					let res =
 						T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
@@ -608,6 +646,12 @@ pub mod pallet {
 				bounty_id,
 				|maybe_bounty| -> DispatchResultWithPostInfo {
 					let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
+
+					// Ensure no active child-bounties before processing the call.
+					ensure!(
+						T::ChildBountyManager::child_bounties_count(bounty_id) == 0,
+						Error::<T>::HasActiveChildBounty
+					);
 
 					match &bounty.status {
 						BountyStatus::Proposed => {
@@ -811,5 +855,16 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Pallet<T> {
 		});
 
 		*total_weight += <T as Config>::WeightInfo::spend_funds(bounties_len);
+	}
+}
+
+// Default impl for when ChildBounties is not being used in the runtime.
+impl<Balance: Zero> ChildBountyManager<Balance> for () {
+	fn child_bounties_count(_bounty_id: BountyIndex) -> BountyIndex {
+		Default::default()
+	}
+
+	fn children_curator_fees(_bounty_id: BountyIndex) -> Balance {
+		Zero::zero()
 	}
 }
