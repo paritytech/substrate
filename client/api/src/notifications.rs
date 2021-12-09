@@ -21,7 +21,7 @@
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
-	sync::Arc,
+	sync::{Arc, Weak},
 	task::Poll,
 };
 
@@ -41,8 +41,8 @@ use sp_runtime::traits::Block as BlockT;
 pub struct StorageChangeSet {
 	changes: Arc<Vec<(StorageKey, Option<StorageData>)>>,
 	child_changes: Arc<Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>>,
-	filter: Option<HashSet<StorageKey>>,
-	child_filters: Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
+	filter: Keys,
+	child_filters: ChildKeys,
 }
 
 impl StorageChangeSet {
@@ -83,8 +83,9 @@ impl StorageChangeSet {
 /// Type that implements `futures::Stream` of storage change events.
 pub struct StorageEventStream<H> {
 	rx: TracingUnboundedReceiver<(H, StorageChangeSet)>,
-	unsubscribe: Option<Box<dyn FnOnce(bool) + Send + Sync>>,
+	storage_notifications: Weak<Mutex<StorageNotificationsImpl<H>>>,
 	was_triggered: bool,
+	id: u64,
 }
 
 impl<H> Stream for StorageEventStream<H> {
@@ -94,7 +95,7 @@ impl<H> Stream for StorageEventStream<H> {
 		cx: &mut std::task::Context<'_>,
 	) -> Poll<Option<Self::Item>> {
 		let result = Stream::poll_next(Pin::new(&mut self.rx), cx);
-		if matches!(result, Poll::Ready(..)) {
+		if result.is_ready() {
 			self.was_triggered = true;
 		}
 		result
@@ -103,8 +104,14 @@ impl<H> Stream for StorageEventStream<H> {
 
 impl<H> Drop for StorageEventStream<H> {
 	fn drop(&mut self) {
-		if let Some(unsubscribe) = self.unsubscribe.take() {
-			unsubscribe(self.was_triggered);
+		if let Some(storage_notifications) = self.storage_notifications.upgrade() {
+			if let Some((keys, child_keys)) =
+				storage_notifications.lock().remove_subscriber(self.id)
+			{
+				if !self.was_triggered {
+					log::trace!(target: "storage_notifications", "Listener was never triggered: id={}, keys={:?}, child_keys={:?}", self.id, PrintKeys(&keys), PrintChildKeys(&child_keys));
+				}
+			}
 		}
 	}
 }
@@ -115,10 +122,13 @@ type SubscribersGauge = CounterVec<U64>;
 
 /// Manages storage listeners.
 #[derive(Debug)]
-pub struct StorageNotifications<Block: BlockT>(Arc<Mutex<StorageNotificationsImpl<Block>>>);
+pub struct StorageNotifications<Block: BlockT>(Arc<Mutex<StorageNotificationsImpl<Block::Hash>>>);
+
+type Keys = Option<HashSet<StorageKey>>;
+type ChildKeys = Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>;
 
 #[derive(Debug)]
-struct StorageNotificationsImpl<Block: BlockT> {
+struct StorageNotificationsImpl<Hash> {
 	metrics: Option<SubscribersGauge>,
 	next_id: SubscriberId,
 	wildcard_listeners: FnvHashSet<SubscriberId>,
@@ -129,11 +139,7 @@ struct StorageNotificationsImpl<Block: BlockT> {
 	>,
 	sinks: FnvHashMap<
 		SubscriberId,
-		(
-			TracingUnboundedSender<(Block::Hash, StorageChangeSet)>,
-			Option<HashSet<StorageKey>>,
-			Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
-		),
+		(TracingUnboundedSender<(Hash, StorageChangeSet)>, Keys, ChildKeys),
 	>,
 }
 
@@ -143,7 +149,7 @@ impl<Block: BlockT> Default for StorageNotifications<Block> {
 	}
 }
 
-impl<Block: BlockT> Default for StorageNotificationsImpl<Block> {
+impl<Hash> Default for StorageNotificationsImpl<Hash> {
 	fn default() -> Self {
 		Self {
 			metrics: Default::default(),
@@ -156,42 +162,24 @@ impl<Block: BlockT> Default for StorageNotificationsImpl<Block> {
 	}
 }
 
-struct PrintKeys<'a>(&'a Option<HashSet<StorageKey>>);
-impl<'a> std::fmt::Display for PrintKeys<'a> {
+struct PrintKeys<'a>(&'a Keys);
+impl<'a> std::fmt::Debug for PrintKeys<'a> {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		if let Some(keys) = self.0.as_ref() {
-			write!(fmt, "[")?;
-			let mut is_first = true;
-			for key in keys {
-				if is_first {
-					is_first = false;
-				} else {
-					write!(fmt, ", ")?;
-				}
-				write!(fmt, "{}", HexDisplay::from(key))?;
-			}
-			write!(fmt, "]")
+		if let Some(keys) = self.0 {
+			fmt.debug_list().entries(keys.iter().map(HexDisplay::from)).finish()
 		} else {
 			write!(fmt, "None")
 		}
 	}
 }
 
-struct PrintChildKeys<'a>(&'a Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>);
-impl<'a> std::fmt::Display for PrintChildKeys<'a> {
+struct PrintChildKeys<'a>(&'a ChildKeys);
+impl<'a> std::fmt::Debug for PrintChildKeys<'a> {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		if let Some(child_keys) = self.0.as_ref() {
-			write!(fmt, "{{")?;
-			let mut is_first = true;
-			for (key, values) in child_keys {
-				if is_first {
-					is_first = false;
-				} else {
-					write!(fmt, ", ")?;
-				}
-				write!(fmt, "{}={}", HexDisplay::from(key), PrintKeys(values))?;
-			}
-			write!(fmt, "}}")
+		if let Some(map) = self.0 {
+			fmt.debug_map()
+				.entries(map.iter().map(|(key, values)| (HexDisplay::from(key), PrintKeys(values))))
+				.finish()
 		} else {
 			write!(fmt, "None")
 		}
@@ -230,26 +218,11 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	) -> StorageEventStream<Block::Hash> {
 		let (id, rx) = self.0.lock().listen(filter_keys, filter_child_keys);
 		let storage_notifications = Arc::downgrade(&self.0);
-		StorageEventStream {
-			rx,
-			unsubscribe: Some(Box::new(move |was_triggered| {
-				if let Some(storage_notifications) = storage_notifications.upgrade() {
-					if !was_triggered {
-						if let Some((_, keys, child_keys)) =
-							storage_notifications.lock().sinks.get(&id)
-						{
-							log::trace!(target: "storage_notifications", "Listener was never triggered: id={}, keys={}, child_keys={}", id, PrintKeys(keys), PrintChildKeys(child_keys));
-						}
-					}
-					storage_notifications.lock().remove_subscriber(id);
-				}
-			})),
-			was_triggered: false,
-		}
+		StorageEventStream { rx, storage_notifications, was_triggered: false, id }
 	}
 }
 
-impl<Block: BlockT> StorageNotificationsImpl<Block> {
+impl<Hash> StorageNotificationsImpl<Hash> {
 	fn new(prometheus_registry: Option<Registry>) -> Self {
 		let metrics = prometheus_registry.and_then(|r| {
 			CounterVec::new(
@@ -274,12 +247,14 @@ impl<Block: BlockT> StorageNotificationsImpl<Block> {
 	}
 	fn trigger(
 		&mut self,
-		hash: &Block::Hash,
+		hash: &Hash,
 		changeset: impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 		child_changeset: impl Iterator<
 			Item = (Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>),
 		>,
-	) {
+	) where
+		Hash: Clone,
+	{
 		let has_wildcard = !self.wildcard_listeners.is_empty();
 
 		// early exit if no listeners
@@ -373,7 +348,7 @@ impl<Block: BlockT> StorageNotificationsImpl<Block> {
 
 	fn remove_subscriber_from(
 		subscriber: &SubscriberId,
-		filters: &Option<HashSet<StorageKey>>,
+		filters: &Keys,
 		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
 		wildcards: &mut FnvHashSet<SubscriberId>,
 	) {
@@ -398,34 +373,35 @@ impl<Block: BlockT> StorageNotificationsImpl<Block> {
 		}
 	}
 
-	fn remove_subscriber(&mut self, subscriber: SubscriberId) {
-		if let Some((_, filters, child_filters)) = self.sinks.remove(&subscriber) {
-			Self::remove_subscriber_from(
-				&subscriber,
-				&filters,
-				&mut self.listeners,
-				&mut self.wildcard_listeners,
-			);
-			if let Some(child_filters) = child_filters.as_ref() {
-				for (c_key, filters) in child_filters {
-					if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
-						Self::remove_subscriber_from(
-							&subscriber,
-							&filters,
-							&mut *listeners,
-							&mut *wildcards,
-						);
+	fn remove_subscriber(&mut self, subscriber: SubscriberId) -> Option<(Keys, ChildKeys)> {
+		let (_, filters, child_filters) = self.sinks.remove(&subscriber)?;
+		Self::remove_subscriber_from(
+			&subscriber,
+			&filters,
+			&mut self.listeners,
+			&mut self.wildcard_listeners,
+		);
+		if let Some(child_filters) = child_filters.as_ref() {
+			for (c_key, filters) in child_filters {
+				if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
+					Self::remove_subscriber_from(
+						&subscriber,
+						&filters,
+						&mut *listeners,
+						&mut *wildcards,
+					);
 
-						if listeners.is_empty() && wildcards.is_empty() {
-							self.child_listeners.remove(&c_key);
-						}
+					if listeners.is_empty() && wildcards.is_empty() {
+						self.child_listeners.remove(&c_key);
 					}
 				}
 			}
-			if let Some(m) = self.metrics.as_ref() {
-				m.with_label_values(&[&"removed"]).inc();
-			}
 		}
+		if let Some(m) = self.metrics.as_ref() {
+			m.with_label_values(&[&"removed"]).inc();
+		}
+
+		Some((filters, child_filters))
 	}
 
 	fn listen_from(
@@ -433,7 +409,7 @@ impl<Block: BlockT> StorageNotificationsImpl<Block> {
 		filter_keys: &Option<impl AsRef<[StorageKey]>>,
 		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
 		wildcards: &mut FnvHashSet<SubscriberId>,
-	) -> Option<HashSet<StorageKey>> {
+	) -> Keys {
 		match filter_keys {
 			None => {
 				wildcards.insert(current_id);
@@ -458,7 +434,7 @@ impl<Block: BlockT> StorageNotificationsImpl<Block> {
 		&mut self,
 		filter_keys: Option<&[StorageKey]>,
 		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
-	) -> (u64, TracingUnboundedReceiver<(Block::Hash, StorageChangeSet)>) {
+	) -> (u64, TracingUnboundedReceiver<(Hash, StorageChangeSet)>) {
 		self.next_id += 1;
 		let current_id = self.next_id;
 
