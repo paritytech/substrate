@@ -241,10 +241,13 @@ mod tests {
 		let seed_with_password_and_derivation = format!("{}//test//account///{}", seed, password);
 
 		let valid_public_with_password_and_derivation =
-			sp_core::sr25519::Pair::from_string_with_seed(&seed_with_password_and_derivation, Some(password))
-				.expect("Valid")
-				.0
-				.public();
+			sp_core::sr25519::Pair::from_string_with_seed(
+				&seed_with_password_and_derivation,
+				Some(password),
+			)
+			.expect("Valid")
+			.0
+			.public();
 		let valid_public_hex_with_password_and_derivation =
 			format!("0x{}", hex::encode(&valid_public_with_password_and_derivation.as_slice()));
 
@@ -257,6 +260,10 @@ mod tests {
 		check_cmd(&seed_with_password_and_derivation, &valid_accountid, false);
 
 		// The public of the derived account should fail.
-		check_cmd(&seed_with_password_and_derivation, &valid_public_hex_with_password_and_derivation, false);
+		check_cmd(
+			&seed_with_password_and_derivation,
+			&valid_public_hex_with_password_and_derivation,
+			false,
+		);
 	}
 }
