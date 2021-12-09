@@ -567,8 +567,29 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// This method:
 	///
 	/// 1. Sets the panic handler
+	/// 2. Optionally customize logger/profiling
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
+	/// 
+	/// The `logger_hook` closure is executed before the logger is constructed
+	/// and initialized. It is useful for setting up a custom profiler.
+	/// 
+	/// Example:
+	/// ```
+	/// struct TestProfiler;
+	/// 
+	/// impl sc_tracing::TraceHandler for TestProfiler {
+	///  	fn handle_span(&self, sd: &SpanDatum) {}
+	///		fn handle_event(&self, _event: &TraceEvent) {}
+	/// };
+	/// 
+	/// fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) -> () {
+	/// 	|logger_builder, config| {
+	///			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
+	/// 	}
+	/// }
+	/// ```
+	/// 
 	fn init<F>(
 		&self,
 		support_url: &String,

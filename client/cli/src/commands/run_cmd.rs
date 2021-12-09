@@ -144,10 +144,6 @@ pub struct RunCmd {
 	#[structopt(long = "prometheus-port", value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
-	/// Default Prometheus metrics prefix.
-	#[structopt(skip = "substrate")]
-	pub prometheus_metric_prefix: &'static str,
-
 	/// Do not expose a Prometheus exporter endpoint.
 	///
 	/// Prometheus metric endpoint is enabled by default.

@@ -259,10 +259,14 @@ impl ProfilingLayer {
 
 	/// Sequentially dispatch a trace event to all handlers.
 	fn dispatch_event(&self, event: TraceHandlerEvents) {
-		self.trace_handlers.iter().for_each(|handler| match &event {
-			TraceHandlerEvents::Span(span_datum) => handler.handle_span(span_datum),
-			TraceHandlerEvents::Event(event) => handler.handle_event(event),
-		});
+		match &event {
+			TraceHandlerEvents::Span(span_datum) => {
+				self.trace_handlers.iter().for_each(|handler| handler.handle_span(span_datum));
+			},
+			TraceHandlerEvents::Event(event) => {
+				self.trace_handlers.iter().for_each(|handler| handler.handle_event(event));
+			}
+		}
 	}
 }
 
