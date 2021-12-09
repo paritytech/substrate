@@ -420,8 +420,6 @@ impl KeystoreInner {
 	/// Write the given `data` to `file`.
 	fn write_to_file(file: PathBuf, data: &str) -> Result<()> {
 		let mut file = File::create(file)?;
-		serde_json::to_writer(&file, data)?;
-		file.flush()?;
 
 		#[cfg(target_family = "unix")]
 		{
@@ -429,6 +427,8 @@ impl KeystoreInner {
 			file.set_permissions(fs::Permissions::from_mode(0o600))?;
 		}
 
+		serde_json::to_writer(&file, data)?;
+		file.flush()?;
 		Ok(())
 	}
 

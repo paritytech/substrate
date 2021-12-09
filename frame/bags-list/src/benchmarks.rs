@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::list::List;
-use frame_benchmarking::{account, whitelisted_caller};
+use frame_benchmarking::{account, whitelist_account, whitelisted_caller};
 use frame_election_provider_support::VoteWeightProvider;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
@@ -137,9 +137,41 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::ExtBuilder::default().build(),
-		crate::mock::Runtime,
-	)
+	put_in_front_of {
+		// The most expensive case for `put_in_front_of`:
+		//
+		// - both heavier's `prev` and `next` are nodes that will need to be read and written.
+		// - `lighter` is the bag's `head`, so the bag will need to be read and written.
+
+		let bag_thresh = T::BagThresholds::get()[0];
+
+		// insert the nodes in order
+		let lighter: T::AccountId = account("lighter", 0, 0);
+		assert_ok!(List::<T>::insert(lighter.clone(), bag_thresh));
+
+		let heavier_prev: T::AccountId = account("heavier_prev", 0, 0);
+		assert_ok!(List::<T>::insert(heavier_prev.clone(), bag_thresh));
+
+		let heavier: T::AccountId = account("heavier", 0, 0);
+		assert_ok!(List::<T>::insert(heavier.clone(), bag_thresh));
+
+		let heavier_next: T::AccountId = account("heavier_next", 0, 0);
+		assert_ok!(List::<T>::insert(heavier_next.clone(), bag_thresh));
+
+		T::VoteWeightProvider::set_vote_weight_of(&lighter, bag_thresh - 1);
+		T::VoteWeightProvider::set_vote_weight_of(&heavier, bag_thresh);
+
+		assert_eq!(
+			List::<T>::iter().map(|n| n.id().clone()).collect::<Vec<_>>(),
+			vec![lighter.clone(), heavier_prev.clone(), heavier.clone(), heavier_next.clone()]
+		);
+
+		whitelist_account!(heavier);
+	}: _(SystemOrigin::Signed(heavier.clone()), lighter.clone())
+	verify {
+		assert_eq!(
+			List::<T>::iter().map(|n| n.id().clone()).collect::<Vec<_>>(),
+			vec![heavier, lighter, heavier_prev, heavier_next]
+		)
+	}
 }

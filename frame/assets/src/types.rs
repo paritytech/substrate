@@ -122,20 +122,25 @@ pub struct DestroyWitness {
 /// `minimum_balance` of the asset. This is additive - the `minimum_balance` of the asset must be
 /// met *and then* anything here in addition.
 pub trait FrozenBalance<AssetId, AccountId, Balance> {
-	/// Return the frozen balance. Under normal behaviour, this amount should always be
-	/// withdrawable.
+	/// Return the frozen balance.
 	///
-	/// In reality, the balance of every account must be at least the sum of this (if `Some`) and
-	/// the asset's minimum_balance, since there may be complications to destroying an asset's
-	/// account completely.
+	/// Under normal behaviour, the account balance should not go below the sum of this (if `Some`)
+	/// and the asset's minimum balance.
+	/// But the account balance can be below this sum (e.g. if less than the sum has been
+	/// transfered to the account).
+	///
+	/// In special case (privileged intervention) the account balance can go below the sum.
 	///
 	/// If `None` is returned, then nothing special is enforced.
-	///
-	/// If any operation ever breaks this requirement (which will only happen through some sort of
-	/// privileged intervention), then `melted` is called to do any cleanup.
 	fn frozen_balance(asset: AssetId, who: &AccountId) -> Option<Balance>;
 
 	/// Called when an account has been removed.
+	///
+	/// # Warning
+	///
+	/// This function must never access storage of pallet asset. This function is called while some
+	/// change are pending. Calling into the pallet asset in this function can result in unexpected
+	/// state.
 	fn died(asset: AssetId, who: &AccountId);
 }
 
