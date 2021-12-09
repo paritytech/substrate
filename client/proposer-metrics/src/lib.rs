@@ -70,14 +70,14 @@ impl Metrics {
 			)?,
 			create_inherents_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_create_inherents_time",
+					"substrate_proposer_create_inherents_time",
 					"Histogram of time taken to execute create inherents",
 				))?,
 				registry,
 			)?,
 			create_block_proposal_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_block_proposal_time",
+					"substrate_proposer_block_proposal_time",
 					"Histogram of time taken to construct a block and prepare it for proposal",
 				))?,
 				registry,
