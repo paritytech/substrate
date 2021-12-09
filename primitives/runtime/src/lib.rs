@@ -53,8 +53,10 @@ use sp_std::{convert::TryFrom, prelude::*};
 
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use traits::{IdentifyAccount, Lazy, Verify};
 
 pub mod curve;
+pub mod extrinsic;
 pub mod generic;
 mod multiaddress;
 pub mod offchain;
@@ -95,6 +97,9 @@ pub use sp_arithmetic::{
 };
 
 pub use either::Either;
+
+#[cfg(feature = "std")]
+pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -162,12 +167,6 @@ impl From<Justification> for Justifications {
 		Self(vec![justification])
 	}
 }
-
-use traits::{Lazy, Verify};
-
-use crate::traits::IdentifyAccount;
-#[cfg(feature = "std")]
-pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -797,64 +796,6 @@ macro_rules! assert_eq_error_rate {
 			$error,
 		);
 	};
-}
-
-/// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
-/// correctly.
-#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-pub struct OpaqueExtrinsic(Vec<u8>);
-
-impl OpaqueExtrinsic {
-	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
-	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
-		Self::decode(&mut bytes)
-	}
-}
-
-#[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.0.size_of(ops)
-	}
-}
-
-impl sp_std::fmt::Debug for OpaqueExtrinsic {
-	#[cfg(feature = "std")]
-	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(fmt, "{}", sp_core::hexdisplay::HexDisplay::from(&self.0))
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-#[cfg(feature = "std")]
-impl ::serde::Serialize for OpaqueExtrinsic {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
-	where
-		S: ::serde::Serializer,
-	{
-		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
-	}
-}
-
-#[cfg(feature = "std")]
-impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
-	fn deserialize<D>(de: D) -> Result<Self, D::Error>
-	where
-		D: ::serde::Deserializer<'a>,
-	{
-		let r = ::sp_core::bytes::deserialize(de)?;
-		Decode::decode(&mut &r[..])
-			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
-	}
-}
-
-impl traits::Extrinsic for OpaqueExtrinsic {
-	type Call = ();
-	type SignaturePayload = ();
 }
 
 /// Print something that implements `Printable` from the runtime.
