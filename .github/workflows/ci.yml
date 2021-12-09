@@ -26,6 +26,10 @@ on:
     branches:
       - master
 jobs:
+  test-download:
+    runs-on: self-hosted
+    steps:
+      - run: curl https://releases.ubuntu.com/20.04.3/ubuntu-20.04.3-desktop-amd64.iso -o /dev/null
   test:
     runs-on: self-hosted
     # runs-on: ubuntu-latest
