@@ -236,6 +236,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// Example:
 	/// ```
+	/// use sc_tracing::{SpanDatum, TraceEvent};
 	/// struct TestProfiler;
 	///
 	/// impl sc_tracing::TraceHandler for TestProfiler {

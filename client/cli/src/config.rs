@@ -576,6 +576,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// Example:
 	/// ```
+	/// use sc_tracing::{SpanDatum, TraceEvent};
 	/// struct TestProfiler;
 	///
 	/// impl sc_tracing::TraceHandler for TestProfiler {
