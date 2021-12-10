@@ -97,7 +97,7 @@ impl GrandpaTestNet {
 impl GrandpaTestNet {
 	fn add_authority_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			notifications_protocols: vec![communication::grandpa_protocol_name("/test").into()],
 			is_authority: true,
 			..Default::default()
 		})
@@ -121,7 +121,7 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			notifications_protocols: vec![communication::grandpa_protocol_name("/test").into()],
 			is_authority: false,
 			..Default::default()
 		})
@@ -274,6 +274,7 @@ fn initialize_grandpa(
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name_prefix: "/test".into(),
 			},
 			link,
 			network: net_service,
@@ -423,6 +424,7 @@ fn finalize_3_voters_1_full_observer() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name_prefix: "/test".into(),
 			},
 			link,
 			network: net_service,
@@ -513,6 +515,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name_prefix: "/test".into(),
 			},
 			link,
 			network: net_service,
@@ -971,6 +974,7 @@ fn voter_persists_its_votes() {
 			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name_prefix: "/test".into(),
 		};
 
 		let set_state = {
@@ -1010,6 +1014,7 @@ fn voter_persists_its_votes() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name_prefix: "/test".into(),
 			},
 			link,
 			network: net_service,
@@ -1050,6 +1055,7 @@ fn voter_persists_its_votes() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name_prefix: "/test".into(),
 			},
 			link,
 			network: net_service,
@@ -1213,6 +1219,7 @@ fn finalize_3_voters_1_light_observer() {
 			local_role: Role::Full,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name_prefix: "/test".into(),
 		},
 		net.peers[3].data.lock().take().expect("link initialized at startup; qed"),
 		net.peers[3].network_service().clone(),
@@ -1259,6 +1266,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name_prefix: "/test".into(),
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
@@ -1376,6 +1384,7 @@ where
 		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
+		protocol_name_prefix: "/test".into(),
 	};
 
 	let network =

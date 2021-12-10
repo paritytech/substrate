@@ -1682,6 +1682,7 @@ mod tests {
 			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name_prefix: "/test".into(),
 		}
 	}
 

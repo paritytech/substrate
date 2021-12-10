@@ -326,8 +326,10 @@ pub fn new_full_base(
 
 	let shared_voter_state = rpc_setup;
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
+	// TODO: add genesis hash.
+	let chain_prefix = format!("/{}", config.protocol_id().as_ref());
 
-	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
+	config.network.extra_sets.push(grandpa::grandpa_peers_set_config(&chain_prefix));
 	let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 		backend.clone(),
 		import_setup.1.shared_authority_set().clone(),
@@ -488,6 +490,7 @@ pub fn new_full_base(
 		keystore,
 		local_role: role,
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
+		protocol_name_prefix: chain_prefix,
 	};
 
 	if enable_grandpa {

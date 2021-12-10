@@ -67,11 +67,14 @@ mod periodic;
 #[cfg(test)]
 pub(crate) mod tests;
 
-/// Name of the notifications protocol used by Grandpa. Must be registered towards the networking
-/// in order for Grandpa to properly function.
-pub(crate) const GRANDPA_PROTOCOL_NAME: &'static str = "/substrate/grandpa/1";
+const GRANDPA_PROTOCOL_NAME: &'static str = "/grandpa/1";
 /// Old name for the notifications protocol, still used for backward compatibility.
 pub(crate) const GRANDPA_PROTOCOL_LEGACY: &'static str = "/paritytech/grandpa/1";
+/// Name of the notifications protocol used by Grandpa. Must be registered towards the networking
+/// in order for Grandpa to properly function.
+pub(crate) fn grandpa_protocol_name(chain_prefix: &str) -> String {
+	format!("{}{}", chain_prefix, GRANDPA_PROTOCOL_NAME)
+}
 
 // cost scalars for reporting peers.
 mod cost {
@@ -222,13 +225,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		prometheus_registry: Option<&Registry>,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
+		let protocol = grandpa_protocol_name(&config.protocol_name_prefix);
 		let (validator, report_stream) =
 			GossipValidator::new(config, set_state.clone(), prometheus_registry, telemetry.clone());
 
 		let validator = Arc::new(validator);
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
-			GRANDPA_PROTOCOL_NAME,
+			protocol,
 			validator.clone(),
 			prometheus_registry,
 		)));
