@@ -22,7 +22,7 @@
 
 use crate::{
 	error::{Error, Result},
-	util,
+	util, wasmi_backend::with_context_store,
 };
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
@@ -36,8 +36,6 @@ use wasmi::{
 #[cfg(feature = "wasmer-sandbox")]
 use crate::util::wasmer::MemoryWrapper as WasmerMemoryWrapper;
 use crate::wasmi_backend::MemoryWrapper as WasmiMemoryWrapper;
-
-environmental::environmental!(SandboxContextStore: trait SandboxContext);
 
 /// Index of a function inside the supervisor.
 ///
@@ -59,7 +57,7 @@ impl From<SupervisorFuncIndex> for usize {
 pub(crate) struct GuestFuncIndex(pub(crate) usize);
 
 /// This struct holds a mapping from guest index space to supervisor.
-struct GuestToSupervisorFunctionMapping {
+pub(crate) struct GuestToSupervisorFunctionMapping {
 	/// Position of elements in this vector are interpreted
 	/// as indices of guest functions and are mapped to
 	/// corresponding supervisor function indices.
@@ -81,7 +79,7 @@ impl GuestToSupervisorFunctionMapping {
 	}
 
 	/// Find supervisor function index by its corresponding guest function index
-	fn func_by_guest_index(&self, guest_func_idx: GuestFuncIndex) -> Option<SupervisorFuncIndex> {
+	pub(crate) fn func_by_guest_index(&self, guest_func_idx: GuestFuncIndex) -> Option<SupervisorFuncIndex> {
 		self.funcs.get(guest_func_idx.0).cloned()
 	}
 }
@@ -142,18 +140,18 @@ pub trait SandboxContext {
 /// [`Externals`]: ../wasmi/trait.Externals.html
 pub struct GuestExternals<'a> {
 	/// Instance of sandboxed module to be dispatched
-	sandbox_instance: &'a SandboxInstance,
+	pub(crate) sandbox_instance: &'a SandboxInstance,
 
 	/// External state passed to guest environment, see the `instantiate` function
-	state: u32,
+	pub(crate) state: u32,
 }
 
 /// Construct trap error from specified message
-fn trap(msg: &'static str) -> Trap {
+pub(crate) fn trap(msg: &'static str) -> Trap {
 	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
 }
 
-fn deserialize_result(
+pub(crate) fn deserialize_result(
 	mut serialized_result: &[u8],
 ) -> std::result::Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::HostError;
@@ -170,103 +168,6 @@ fn deserialize_result(
 	}
 }
 
-impl<'a> Externals for GuestExternals<'a> {
-	fn invoke_index(
-		&mut self,
-		index: usize,
-		args: RuntimeArgs,
-	) -> std::result::Result<Option<RuntimeValue>, Trap> {
-		SandboxContextStore::with(|sandbox_context| {
-			// Make `index` typesafe again.
-			let index = GuestFuncIndex(index);
-
-			// Convert function index from guest to supervisor space
-			let func_idx = self.sandbox_instance
-				.guest_to_supervisor_mapping
-				.func_by_guest_index(index)
-				.expect(
-					"`invoke_index` is called with indexes registered via `FuncInstance::alloc_host`;
-					`FuncInstance::alloc_host` is called with indexes that were obtained from `guest_to_supervisor_mapping`;
-					`func_by_guest_index` called with `index` can't return `None`;
-					qed"
-				);
-
-			// Serialize arguments into a byte vector.
-			let invoke_args_data: Vec<u8> = args
-				.as_ref()
-				.iter()
-				.cloned()
-				.map(sp_wasm_interface::Value::from)
-				.collect::<Vec<_>>()
-				.encode();
-
-			let state = self.state;
-
-			// Move serialized arguments inside the memory, invoke dispatch thunk and
-			// then free allocated memory.
-			let invoke_args_len = invoke_args_data.len() as WordSize;
-			let invoke_args_ptr = sandbox_context
-				.supervisor_context()
-				.allocate_memory(invoke_args_len)
-				.map_err(|_| trap("Can't allocate memory in supervisor for the arguments"))?;
-
-			let deallocate = |supervisor_context: &mut dyn FunctionContext, ptr, fail_msg| {
-				supervisor_context.deallocate_memory(ptr).map_err(|_| trap(fail_msg))
-			};
-
-			if sandbox_context
-				.supervisor_context()
-				.write_memory(invoke_args_ptr, &invoke_args_data)
-				.is_err()
-			{
-				deallocate(
-					sandbox_context.supervisor_context(),
-					invoke_args_ptr,
-					"Failed dealloction after failed write of invoke arguments",
-				)?;
-				return Err(trap("Can't write invoke args into memory"))
-			}
-
-			let result = sandbox_context.invoke(
-				invoke_args_ptr,
-				invoke_args_len,
-				state,
-				func_idx,
-			);
-
-			deallocate(
-				sandbox_context.supervisor_context(),
-				invoke_args_ptr,
-				"Can't deallocate memory for dispatch thunk's invoke arguments",
-			)?;
-			let result = result?;
-
-			// dispatch_thunk returns pointer to serialized arguments.
-			// Unpack pointer and len of the serialized result data.
-			let (serialized_result_val_ptr, serialized_result_val_len) = {
-				// Cast to u64 to use zero-extension.
-				let v = result as u64;
-				let ptr = (v as u64 >> 32) as u32;
-				let len = (v & 0xFFFFFFFF) as u32;
-				(Pointer::new(ptr), len)
-			};
-
-			let serialized_result_val = sandbox_context
-				.supervisor_context()
-				.read_memory(serialized_result_val_ptr, serialized_result_val_len)
-				.map_err(|_| trap("Can't read the serialized result from dispatch thunk"));
-
-			deallocate(
-				sandbox_context.supervisor_context(),
-				serialized_result_val_ptr,
-				"Can't deallocate memory for dispatch thunk's result",
-			)
-			.and_then(|_| serialized_result_val)
-			.and_then(|serialized_result_val| deserialize_result(&serialized_result_val))
-		}).expect("SandboxContextStore is set when invoking sandboxed functions; qed")
-	}
-}
-
 fn with_guest_externals<R, F>(sandbox_instance: &SandboxInstance, state: u32, f: F) -> R
 where
 	F: FnOnce(&mut GuestExternals) -> R,
@@ -275,7 +176,7 @@ where
 }
 
 /// Module instance in terms of selected backend
-enum BackendInstance {
+pub(crate) enum BackendInstance {
 	/// Wasmi module instance
 	Wasmi(wasmi::ModuleRef),
 
@@ -299,8 +200,8 @@ enum BackendInstance {
 ///
 /// [`invoke`]: #method.invoke
 pub struct SandboxInstance {
-	backend_instance: BackendInstance,
-	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+	pub(crate) backend_instance: BackendInstance,
+	pub(crate) guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
 
 impl SandboxInstance {
@@ -326,14 +227,13 @@ impl SandboxInstance {
 		sandbox_context: &mut dyn SandboxContext,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
 		match &self.backend_instance {
-			BackendInstance::Wasmi(wasmi_instance) =>
+			BackendInstance::Wasmi(wasmi_instance) => {
 				with_guest_externals(self, state, |guest_externals| {
-					let wasmi_result = SandboxContextStore::using(sandbox_context, || {
+					with_context_store(sandbox_context, || {
 						wasmi_instance.invoke_export(export_name, args, guest_externals)
-					})?;
-
-					Ok(wasmi_result)
-				}),
+					})
+				})
+			},
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendInstance::Wasmer(wasmer_instance) => {
@@ -814,7 +714,7 @@ impl<DT> Store<DT> {
 		});
 
 		with_guest_externals(&sandbox_instance, state, |guest_externals| {
-			SandboxContextStore::using(sandbox_context, || {
+			with_context_store(sandbox_context, || {
 				wasmi_instance
 					.run_start(guest_externals)
 					.map_err(|_| InstantiationError::StartTrapped)

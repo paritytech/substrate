@@ -18,13 +18,18 @@
 
 //! Wasmi specific impls for sandbox
 
-use wasmi::ImportResolver;
-use sp_wasm_interface::Pointer;
+use sp_wasm_interface::{Pointer, WordSize, FunctionContext};
+use codec::{Decode, Encode};
+
+use wasmi::{
+	ImportResolver, memory_units::Pages, Externals, MemoryInstance, Module, ModuleInstance,
+	RuntimeArgs, RuntimeValue, Trap, TrapKind, ModuleRef,
+};
 
 use crate::{
 	util::{MemoryTransfer, checked_range},
 	error,
-	sandbox::Imports,
+	sandbox::{Imports, GuestExternals, trap, GuestFuncIndex, deserialize_result, SandboxContext, SandboxInstance},
 };
 
 impl ImportResolver for Imports {
@@ -139,4 +144,110 @@ impl MemoryTransfer for MemoryWrapper {
 			Ok(())
 		})
 	}
+}
+
+environmental::environmental!(SandboxContextStore: trait SandboxContext);
+
+impl<'a> wasmi::Externals for GuestExternals<'a> {
+	fn invoke_index(
+		&mut self,
+		index: usize,
+		args: RuntimeArgs,
+	) -> std::result::Result<Option<RuntimeValue>, Trap> {
+		SandboxContextStore::with(|sandbox_context| {
+			// Make `index` typesafe again.
+			let index = GuestFuncIndex(index);
+
+			// Convert function index from guest to supervisor space
+			let func_idx = self.sandbox_instance
+				.guest_to_supervisor_mapping
+				.func_by_guest_index(index)
+				.expect(
+					"`invoke_index` is called with indexes registered via `FuncInstance::alloc_host`;
+					`FuncInstance::alloc_host` is called with indexes that were obtained from `guest_to_supervisor_mapping`;
+					`func_by_guest_index` called with `index` can't return `None`;
+					qed"
+				);
+
+			// Serialize arguments into a byte vector.
+			let invoke_args_data: Vec<u8> = args
+				.as_ref()
+				.iter()
+				.cloned()
+				.map(sp_wasm_interface::Value::from)
+				.collect::<Vec<_>>()
+				.encode();
+
+			let state = self.state;
+
+			// Move serialized arguments inside the memory, invoke dispatch thunk and
+			// then free allocated memory.
+			let invoke_args_len = invoke_args_data.len() as WordSize;
+			let invoke_args_ptr = sandbox_context
+				.supervisor_context()
+				.allocate_memory(invoke_args_len)
+				.map_err(|_| trap("Can't allocate memory in supervisor for the arguments"))?;
+
+			let deallocate = |supervisor_context: &mut dyn FunctionContext, ptr, fail_msg| {
+				supervisor_context.deallocate_memory(ptr).map_err(|_| trap(fail_msg))
+			};
+
+			if sandbox_context
+				.supervisor_context()
+				.write_memory(invoke_args_ptr, &invoke_args_data)
+				.is_err()
+			{
+				deallocate(
+					sandbox_context.supervisor_context(),
+					invoke_args_ptr,
+					"Failed dealloction after failed write of invoke arguments",
+				)?;
+				return Err(trap("Can't write invoke args into memory"))
+			}
+
+			let result = sandbox_context.invoke(
+				invoke_args_ptr,
+				invoke_args_len,
+				state,
+				func_idx,
+			);
+
+			deallocate(
+				sandbox_context.supervisor_context(),
+				invoke_args_ptr,
+				"Can't deallocate memory for dispatch thunk's invoke arguments",
+			)?;
+			let result = result?;
+
+			// dispatch_thunk returns pointer to serialized arguments.
+			// Unpack pointer and len of the serialized result data.
+			let (serialized_result_val_ptr, serialized_result_val_len) = {
+				// Cast to u64 to use zero-extension.
+				let v = result as u64;
+				let ptr = (v as u64 >> 32) as u32;
+				let len = (v & 0xFFFFFFFF) as u32;
+				(Pointer::new(ptr), len)
+			};
+
+			let serialized_result_val = sandbox_context
+				.supervisor_context()
+				.read_memory(serialized_result_val_ptr, serialized_result_val_len)
+				.map_err(|_| trap("Can't read the serialized result from dispatch thunk"));
+
+			deallocate(
+				sandbox_context.supervisor_context(),
+				serialized_result_val_ptr,
+				"Can't deallocate memory for dispatch thunk's result",
+			)
+			.and_then(|_| serialized_result_val)
+			.and_then(|serialized_result_val| deserialize_result(&serialized_result_val))
+		}).expect("SandboxContextStore is set when invoking sandboxed functions; qed")
+	}
+}
+
+pub(crate) fn with_context_store<R, F>(sandbox_context: &mut dyn SandboxContext, f: F) -> R
+where
+	F: FnOnce() -> R,
+{
+	SandboxContextStore::using(sandbox_context, f)
 }
