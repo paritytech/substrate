@@ -77,7 +77,7 @@ where
 		module: WasmModule<T>,
 		data: Vec<u8>,
 	) -> Result<Contract<T>, &'static str> {
-		Self::with_caller(account("instantiator", index, 0), module, data)
+		Self::with_caller(account::<T>("instantiator", index, 0), module, data)
 	}
 
 	/// Create new contract and use the supplied `caller` as instantiator.
@@ -232,7 +232,7 @@ benchmarks! {
 	instrument {
 		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
-		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
+		Contracts::<T>::store_code_raw(code, whitelisted_caller::<T>())?;
 		let schedule = T::Schedule::get();
 		let mut gas_meter = GasMeter::new(Weight::MAX);
 		let mut module = PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?;
@@ -244,7 +244,7 @@ benchmarks! {
 	code_load {
 		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_bytes(c * 1024);
-		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
+		Contracts::<T>::store_code_raw(code, whitelisted_caller::<T>())?;
 		let schedule = T::Schedule::get();
 		let mut gas_meter = GasMeter::new(Weight::MAX);
 	}: {
@@ -267,7 +267,7 @@ benchmarks! {
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
 		let value = T::Currency::minimum_balance();
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
 		let origin = RawOrigin::Signed(caller.clone());
@@ -294,7 +294,7 @@ benchmarks! {
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
 		let value = T::Currency::minimum_balance();
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
@@ -320,7 +320,7 @@ benchmarks! {
 	call {
 		let data = vec![42u8; 1024];
 		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::dummy(), vec![],
+			whitelisted_caller::<T>(), WasmModule::dummy(), vec![],
 		)?;
 		let value = T::Currency::minimum_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -351,7 +351,7 @@ benchmarks! {
 	// to be larger than the maximum size **after instrumentation**.
 	upload_code {
 		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len / 1024);
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
 		let origin = RawOrigin::Signed(caller.clone());
@@ -366,7 +366,7 @@ benchmarks! {
 	// needed to verify the removal claim (refcount, owner) is stored in a separate storage
 	// item (`OwnerInfoOf`).
 	remove_code {
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
@@ -600,7 +600,7 @@ benchmarks! {
 	// The same argument as for `seal_return` is true here.
 	seal_terminate {
 		let r in 0 .. 1;
-		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
+		let beneficiary = account::<T>("beneficiary", 0, 0);
 		let beneficiary_bytes = beneficiary.encode();
 		let beneficiary_len = beneficiary_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -971,7 +971,7 @@ benchmarks! {
 	seal_transfer {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let accounts = (0..r * API_BENCHMARK_BATCH_SIZE)
-			.map(|i| account::<T::AccountId>("receiver", i, 0))
+			.map(|i| account::<T>("receiver", i, 0))
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let account_bytes = accounts.iter().flat_map(|x| x.encode()).collect();
@@ -1180,7 +1180,7 @@ benchmarks! {
 					])),
 					.. Default::default()
 				});
-				Contracts::<T>::store_code_raw(code.code, whitelisted_caller())?;
+				Contracts::<T>::store_code_raw(code.code, whitelisted_caller::<T>())?;
 				Ok(code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -1306,7 +1306,7 @@ benchmarks! {
 		let hash = callee_code.hash.clone();
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
-		Contracts::<T>::store_code_raw(callee_code.code, whitelisted_caller())?;
+		Contracts::<T>::store_code_raw(callee_code.code, whitelisted_caller::<T>())?;
 		let inputs = (0..API_BENCHMARK_BATCH_SIZE).map(|x| x.encode()).collect::<Vec<_>>();
 		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
@@ -2318,7 +2318,7 @@ benchmarks! {
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
 				[0x84, 0xa1, 0x5d, 0xa1],
-				account::<T::AccountId>("receiver", 0, 0),
+				account::<T>("receiver", 0, 0),
 				1u32.into(),
 			);
 			transfer.encode()
@@ -2345,7 +2345,7 @@ benchmarks! {
 		let g in 0 .. 1;
 		let gas_metering = if g == 0 { false } else { true };
 		let code = include_bytes!("../../benchmarks/solang_erc20.wasm");
-		let caller = account::<T::AccountId>("instantiator", 0, 0);
+		let caller = account::<T>("instantiator", 0, 0);
 		let mut balance = [0u8; 32];
 		balance[0] = 100;
 		let data = {
@@ -2365,7 +2365,7 @@ benchmarks! {
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, [u8; 32]) = (
 				[0x6a, 0x46, 0x73, 0x94],
-				account::<T::AccountId>("receiver", 0, 0),
+				account::<T>("receiver", 0, 0),
 				balance,
 			);
 			transfer.encode()

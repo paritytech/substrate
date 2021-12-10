@@ -51,7 +51,7 @@ pub fn create_funded_user<T: Config>(
 	n: u32,
 	balance_factor: u32,
 ) -> T::AccountId {
-	let user = account(string, n, SEED);
+	let user = account::<T>(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
 	let _ = T::Currency::make_free_balance_be(&user, balance);
 	user
@@ -63,7 +63,7 @@ pub fn create_funded_user_with_balance<T: Config>(
 	n: u32,
 	balance: BalanceOf<T>,
 ) -> T::AccountId {
-	let user = account(string, n, SEED);
+	let user = account::<T>(string, n, SEED);
 	let _ = T::Currency::make_free_balance_be(&user, balance);
 	user
 }

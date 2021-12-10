@@ -36,13 +36,13 @@ benchmarks! {
 	remark {
 		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), remark_message)
 
 	remark_with_event {
 		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), remark_message)
 
 	set_heap_pages {

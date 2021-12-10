@@ -145,7 +145,7 @@ mod benchmarks {
 
 		set_value {
 			let b in 1 .. 1000;
-			let caller = account::<T::AccountId>("caller", 0, 0);
+			let caller = account::<T>("caller", 0, 0);
 		}: _ (RawOrigin::Signed(caller), b.into())
 		verify {
 			assert_eq!(Value::<T>::get(), Some(b));
@@ -169,7 +169,7 @@ mod benchmarks {
 
 		bad_origin {
 			let b in 1 .. 1000;
-			let caller = account::<T::AccountId>("caller", 0, 0);
+			let caller = account::<T>("caller", 0, 0);
 		}: dummy (RawOrigin::Signed(caller), b.into())
 
 		bad_verify {
@@ -184,7 +184,7 @@ mod benchmarks {
 		}
 
 		no_components {
-			let caller = account::<T::AccountId>("caller", 0, 0);
+			let caller = account::<T>("caller", 0, 0);
 		}: set_value(RawOrigin::Signed(caller), 0)
 
 		variable_components {
@@ -194,7 +194,7 @@ mod benchmarks {
 		#[extra]
 		extra_benchmark {
 			let b in 1 .. 1000;
-			let caller = account::<T::AccountId>("caller", 0, 0);
+			let caller = account::<T>("caller", 0, 0);
 		}: set_value(RawOrigin::Signed(caller), b.into())
 		verify {
 			assert_eq!(Value::<T>::get(), Some(b));
@@ -203,7 +203,7 @@ mod benchmarks {
 		#[skip_meta]
 		skip_meta_benchmark {
 			let b in 1 .. 1000;
-			let caller = account::<T::AccountId>("caller", 0, 0);
+			let caller = account::<T>("caller", 0, 0);
 		}: set_value(RawOrigin::Signed(caller), b.into())
 		verify {
 			assert_eq!(Value::<T>::get(), Some(b));
@@ -211,7 +211,7 @@ mod benchmarks {
 
 		override_benchmark {
 			let b in 1 .. 1000;
-			let caller = account::<T::AccountId>("caller", 0, 0);
+			let caller = account::<T>("caller", 0, 0);
 		}: {
 			Err(BenchmarkError::Override(
 				BenchmarkResult {

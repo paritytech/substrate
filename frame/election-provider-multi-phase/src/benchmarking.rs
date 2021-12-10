@@ -53,7 +53,7 @@ fn solution_with_size<T: Config>(
 
 	// first generates random targets.
 	let targets: Vec<T::AccountId> = (0..size.targets)
-		.map(|i| frame_benchmarking::account("Targets", i, SEED))
+		.map(|i| frame_benchmarking::account::<T>("Targets", i, SEED))
 		.collect();
 
 	let mut rng = SmallRng::seed_from_u64(SEED.into());
@@ -74,7 +74,7 @@ fn solution_with_size<T: Config>(
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
 				.collect::<Vec<_>>();
-			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
+			let voter = frame_benchmarking::account::<T>("Voter", i, SEED);
 			(voter, stake, winner_votes)
 		})
 		.collect::<Vec<_>>();
@@ -91,7 +91,7 @@ fn solution_with_size<T: Config>(
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
 				.collect::<Vec<T::AccountId>>();
-			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
+			let voter = frame_benchmarking::account::<T>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
 		.collect::<Vec<_>>();
@@ -159,7 +159,7 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 	// fill targets.
 	let mut targets = (0..t)
 		.map(|i| {
-			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
+			let target = frame_benchmarking::account::<T>("Target", i, SEED);
 			T::DataProvider::add_target(target.clone());
 			target
 		})
@@ -170,7 +170,7 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 
 	// fill voters.
 	(0..v).for_each(|i| {
-		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
+		let voter = frame_benchmarking::account::<T>("Voter", i, SEED);
 		let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
 		T::DataProvider::add_voter(voter, weight, targets.clone());
 	});
@@ -206,7 +206,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	finalize_signed_phase_accept_solution {
-		let receiver = account("receiver", 0, SEED);
+		let receiver = account::<T>("receiver", 0, SEED);
 		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		let ready: ReadySolution<T::AccountId> = Default::default();
@@ -223,7 +223,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	finalize_signed_phase_reject_solution {
-		let receiver = account("receiver", 0, SEED);
+		let receiver = account::<T>("receiver", 0, SEED);
 		let initial_balance = T::Currency::minimum_balance().max(One::one()) * 10u32.into();
 		let deposit: BalanceOf<T> = 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
@@ -319,7 +319,7 @@ frame_benchmarking::benchmarks! {
 		}
 		signed_submissions.put();
 
-		let caller = frame_benchmarking::whitelisted_caller();
+		let caller = frame_benchmarking::whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
 
 	}: _(RawOrigin::Signed(caller), Box::new(solution), c)

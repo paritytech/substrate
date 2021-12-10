@@ -907,7 +907,7 @@ macro_rules! impl_bench_name_tests {
 // Every variant must implement [`BenchmarkingSetup`].
 //
 // ```nocompile
-// 
+//
 // struct Transfer;
 // impl BenchmarkingSetup for Transfer { ... }
 //
@@ -1017,7 +1017,7 @@ macro_rules! impl_benchmark {
 				let mut whitelist = whitelist.to_vec();
 				let whitelisted_caller_key =
 					<frame_system::Account::<T> as $crate::frame_support::storage::StorageMap<_,_>>::hashed_key_for(
-						$crate::whitelisted_caller::<T::AccountId>()
+						$crate::whitelisted_caller::<T>()
 					);
 				whitelist.push(whitelisted_caller_key.into());
 				$crate::benchmarking::set_whitelist(whitelist);

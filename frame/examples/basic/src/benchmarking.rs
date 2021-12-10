@@ -51,7 +51,7 @@ benchmarks! {
 	accumulate_dummy {
 		let b in 1 .. 1000;
 		// The caller account is whitelisted for DB reads/write by the benchmarking macro.
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), b.into())
 
 	// This will measure the execution time of sorting a vector.

@@ -37,7 +37,7 @@ benchmarks_instance_pallet! {
 	// * Transfer will create the recipient account.
 	transfer {
 		let existential_deposit = T::ExistentialDeposit::get();
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 
 		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
@@ -45,7 +45,7 @@ benchmarks_instance_pallet! {
 
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account,
 		// and reap this user.
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 	}: transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount)
@@ -58,8 +58,8 @@ benchmarks_instance_pallet! {
 	// * Both accounts exist and will continue to exist.
 	#[extra]
 	transfer_best_case {
-		let caller = whitelisted_caller();
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let caller = whitelisted_caller::<T>();
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
 		// Give the sender account max funds for transfer (their account will never reasonably be killed).
@@ -78,8 +78,8 @@ benchmarks_instance_pallet! {
 	// Benchmark `transfer_keep_alive` with the worst possible condition:
 	// * The recipient account is created.
 	transfer_keep_alive {
-		let caller = whitelisted_caller();
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let caller = whitelisted_caller::<T>();
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
 		// Give the sender account max funds, thus a transfer will not kill account.
@@ -94,7 +94,7 @@ benchmarks_instance_pallet! {
 
 	// Benchmark `set_balance` coming from ROOT account. This always creates an account.
 	set_balance_creating {
-		let user: T::AccountId = account("user", 0, SEED);
+		let user: T::AccountId = account::<T>("user", 0, SEED);
 		let user_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(user.clone());
 
 		// Give the user some initial balance.
@@ -109,7 +109,7 @@ benchmarks_instance_pallet! {
 
 	// Benchmark `set_balance` coming from ROOT account. This always kills an account.
 	set_balance_killing {
-		let user: T::AccountId = account("user", 0, SEED);
+		let user: T::AccountId = account::<T>("user", 0, SEED);
 		let user_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(user.clone());
 
 		// Give the user some initial balance.
@@ -126,7 +126,7 @@ benchmarks_instance_pallet! {
 	// * Transfer will create the recipient account.
 	force_transfer {
 		let existential_deposit = T::ExistentialDeposit::get();
-		let source: T::AccountId = account("source", 0, SEED);
+		let source: T::AccountId = account::<T>("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
 
 		// Give some multiple of the existential deposit
@@ -134,7 +134,7 @@ benchmarks_instance_pallet! {
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&source, balance);
 
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 	}: force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
@@ -151,7 +151,7 @@ benchmarks_instance_pallet! {
 		// 1_000 is not very much, but this upper bound can be controlled by the CLI.
 		let u in 0 .. 1_000;
 		let existential_deposit = T::ExistentialDeposit::get();
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 
 		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
@@ -159,7 +159,7 @@ benchmarks_instance_pallet! {
 
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account,
 		// and reap this user.
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 
@@ -167,7 +167,7 @@ benchmarks_instance_pallet! {
 		for i in 0 .. u {
 			// The `account` function uses `blake2_256` to generate unique accounts, so these
 			// should be quite random and evenly distributed in the trie.
-			let new_user: T::AccountId = account("new_user", i, SEED);
+			let new_user: T::AccountId = account::<T>("new_user", i, SEED);
 			let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&new_user, balance);
 		}
 	}: transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount)
@@ -180,8 +180,8 @@ benchmarks_instance_pallet! {
 	// * The recipient account is created
 	// * The sender is killed
 	transfer_all {
-		let caller = whitelisted_caller();
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let caller = whitelisted_caller::<T>();
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
 		// Give some multiple of the existential deposit
@@ -195,7 +195,7 @@ benchmarks_instance_pallet! {
 	}
 
 	force_unreserve {
-		let user: T::AccountId = account("user", 0, SEED);
+		let user: T::AccountId = account::<T>("user", 0, SEED);
 		let user_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(user.clone());
 
 		// Give some multiple of the existential deposit

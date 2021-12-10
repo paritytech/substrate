@@ -38,7 +38,7 @@ const SEED: u32 = 0;
 
 fn create_class<T: Config<I>, I: 'static>(
 ) -> (T::ClassId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
-	let caller: T::AccountId = whitelisted_caller();
+	let caller: T::AccountId = whitelisted_caller::<T>();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let class = Default::default();
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
@@ -54,7 +54,7 @@ fn create_class<T: Config<I>, I: 'static>(
 fn add_class_metadata<T: Config<I>, I: 'static>(
 ) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
-	if caller != whitelisted_caller() {
+	if caller != whitelisted_caller::<T>() {
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
@@ -72,7 +72,7 @@ fn mint_instance<T: Config<I>, I: 'static>(
 	index: u16,
 ) -> (T::InstanceId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().admin;
-	if caller != whitelisted_caller() {
+	if caller != whitelisted_caller::<T>() {
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
@@ -91,7 +91,7 @@ fn add_instance_metadata<T: Config<I>, I: 'static>(
 	instance: T::InstanceId,
 ) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
-	if caller != whitelisted_caller() {
+	if caller != whitelisted_caller::<T>() {
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
@@ -110,7 +110,7 @@ fn add_instance_attribute<T: Config<I>, I: 'static>(
 	instance: T::InstanceId,
 ) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
-	if caller != whitelisted_caller() {
+	if caller != whitelisted_caller::<T>() {
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
@@ -136,7 +136,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 
 benchmarks_instance_pallet! {
 	create {
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
@@ -145,7 +145,7 @@ benchmarks_instance_pallet! {
 	}
 
 	force_create {
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true)
 	verify {
@@ -194,7 +194,7 @@ benchmarks_instance_pallet! {
 		let (class, caller, caller_lookup) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(Default::default());
 
-		let target: T::AccountId = account("target", 0, SEED);
+		let target: T::AccountId = account::<T>("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, target_lookup)
 	verify {
@@ -259,7 +259,7 @@ benchmarks_instance_pallet! {
 
 	transfer_ownership {
 		let (class, caller, _) = create_class::<T, I>();
-		let target: T::AccountId = account("target", 0, SEED);
+		let target: T::AccountId = account::<T>("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 	}: _(SystemOrigin::Signed(caller), class, target_lookup)
@@ -269,16 +269,16 @@ benchmarks_instance_pallet! {
 
 	set_team {
 		let (class, caller, _) = create_class::<T, I>();
-		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
-		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
-		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
+		let target0 = T::Lookup::unlookup(account::<T>("target", 0, SEED));
+		let target1 = T::Lookup::unlookup(account::<T>("target", 1, SEED));
+		let target2 = T::Lookup::unlookup(account::<T>("target", 2, SEED));
 	}: _(SystemOrigin::Signed(caller), Default::default(), target0.clone(), target1.clone(), target2.clone())
 	verify {
 		assert_last_event::<T, I>(Event::TeamChanged{
 			class,
-			issuer: account("target", 0, SEED),
-			admin: account("target", 1, SEED),
-			freezer: account("target", 2, SEED),
+			issuer: account::<T>("target", 0, SEED),
+			admin: account::<T>("target", 1, SEED),
+			freezer: account::<T>("target", 2, SEED),
 		}.into());
 	}
 
@@ -360,7 +360,7 @@ benchmarks_instance_pallet! {
 	approve_transfer {
 		let (class, caller, _) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(0);
-		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate: T::AccountId = account::<T>("delegate", 0, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, delegate_lookup)
 	verify {
@@ -370,7 +370,7 @@ benchmarks_instance_pallet! {
 	cancel_approval {
 		let (class, caller, _) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(0);
-		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate: T::AccountId = account::<T>("delegate", 0, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		let origin = SystemOrigin::Signed(caller.clone()).into();
 		Uniques::<T, I>::approve_transfer(origin, class, instance, delegate_lookup.clone())?;

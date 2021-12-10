@@ -51,7 +51,7 @@ fn add_vesting_schedules<T: Config>(
 	let per_block = min_transfer;
 	let starting_block = 1u32;
 
-	let source: T::AccountId = account("source", 0, SEED);
+	let source: T::AccountId = account::<T>("source", 0, SEED);
 	let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
 	T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
 
@@ -80,7 +80,7 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
 
@@ -108,7 +108,7 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
 
@@ -136,7 +136,7 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
-		let other: T::AccountId = account("other", 0, SEED);
+		let other: T::AccountId = account::<T>("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
 
 		add_locks::<T>(&other, l as u8);
@@ -150,7 +150,7 @@ benchmarks! {
 			"Vesting schedule not added",
 		);
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
 	verify {
 		// Nothing happened since everything is still vested.
@@ -165,7 +165,7 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
-		let other: T::AccountId = account("other", 0, SEED);
+		let other: T::AccountId = account::<T>("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
 
 		add_locks::<T>(&other, l as u8);
@@ -179,7 +179,7 @@ benchmarks! {
 			"Vesting schedule still active",
 		);
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
 	verify {
 		// Vesting schedule is removed.
@@ -194,10 +194,10 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 0 .. T::MAX_VESTING_SCHEDULES - 1;
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let target: T::AccountId = account("target", 0, SEED);
+		let target: T::AccountId = account::<T>("target", 0, SEED);
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
@@ -231,11 +231,11 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 0 .. T::MAX_VESTING_SCHEDULES - 1;
 
-		let source: T::AccountId = account("source", 0, SEED);
+		let source: T::AccountId = account::<T>("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
 		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
 
-		let target: T::AccountId = account("target", 0, SEED);
+		let target: T::AccountId = account::<T>("target", 0, SEED);
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
@@ -269,7 +269,7 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 2 .. T::MAX_VESTING_SCHEDULES;
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = account::<T>("caller", 0, SEED);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		// Give target existing locks.
 		add_locks::<T>(&caller, l as u8);
@@ -317,9 +317,9 @@ benchmarks! {
 		let s in 2 .. T::MAX_VESTING_SCHEDULES;
 
 		// Destination used just for currency transfers in asserts.
-		let test_dest: T::AccountId = account("test_dest", 0, SEED);
+		let test_dest: T::AccountId = account::<T>("test_dest", 0, SEED);
 
-		let caller: T::AccountId = account("caller", 0, SEED);
+		let caller: T::AccountId = account::<T>("caller", 0, SEED);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		// Give target other locks.
 		add_locks::<T>(&caller, l as u8);

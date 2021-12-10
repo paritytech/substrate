@@ -173,7 +173,7 @@ impl<T: Config> ListScenario<T> {
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller1.clone()).into(),
 			// NOTE: these don't really need to be validators.
-			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
+			vec![T::Lookup::unlookup(account::<T>("random_validator", 0, SEED))],
 		)?;
 
 		let (_origin_stash2, origin_controller2) = create_stash_controller_with_balance::<T>(
@@ -183,7 +183,7 @@ impl<T: Config> ListScenario<T> {
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(origin_controller2.clone()).into(),
-			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))].clone(),
+			vec![T::Lookup::unlookup(account::<T>("random_validator", 0, SEED))].clone(),
 		)?;
 
 		// find a destination weight that will trigger the worst case scenario
@@ -203,7 +203,7 @@ impl<T: Config> ListScenario<T> {
 		)?;
 		Staking::<T>::nominate(
 			RawOrigin::Signed(dest_controller1).into(),
-			vec![T::Lookup::unlookup(account("random_validator", 0, SEED))],
+			vec![T::Lookup::unlookup(account::<T>("random_validator", 0, SEED))],
 		)?;
 
 		Ok(ListScenario { origin_stash1, origin_controller1, dest_weight })
@@ -502,7 +502,7 @@ benchmarks! {
 		let v in 0 .. MaxValidators::<T>::get();
 		let mut invulnerables = Vec::new();
 		for i in 0 .. v {
-			invulnerables.push(account("invulnerable", i, SEED));
+			invulnerables.push(account::<T>("invulnerable", i, SEED));
 		}
 	}: _(RawOrigin::Root, invulnerables)
 	verify {
@@ -559,7 +559,7 @@ benchmarks! {
 		// set the commission for this particular era as well.
 		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
 
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
 		let balance_before = T::Currency::free_balance(&validator_controller);
 		for (_, controller) in &nominators {
@@ -592,7 +592,7 @@ benchmarks! {
 		// set the commission for this particular era as well.
 		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
 
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		let balance_before = T::Currency::free_balance(&validator);
 		let mut nominator_balances_before = Vec::new();
 		for (stash, _) in &nominators {
@@ -763,7 +763,7 @@ benchmarks! {
 		let total_payout = T::Currency::minimum_balance() * 1000u32.into();
 		<ErasValidatorReward<T>>::insert(current_era, total_payout);
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		let origin = RawOrigin::Signed(caller);
 		let calls: Vec<_> = payout_calls_arg.iter().map(|arg|
 			Call::<T>::payout_stakers { validator_stash: arg.0.clone(), era: arg.1 }.encode()
@@ -884,7 +884,7 @@ benchmarks! {
 			Zero::zero(),
 		)?;
 
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), controller.clone())
 	verify {
 		assert!(!T::SortedListProvider::contains(&stash));

@@ -58,13 +58,13 @@ fn setup_bounty<T: Config>(
 	user: u32,
 	description: u32,
 ) -> (T::AccountId, T::AccountId, BalanceOf<T>, BalanceOf<T>, Vec<u8>) {
-	let caller = account("caller", user, SEED);
+	let caller = account::<T>("caller", user, SEED);
 	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
 	let fee = value / 2u32.into();
 	let deposit = T::BountyDepositBase::get() +
 		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
-	let curator = account("curator", user, SEED);
+	let curator = account::<T>("curator", user, SEED);
 	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
 	let reason = vec![0; description as usize];
 	(caller, curator, fee, value, reason)
@@ -72,7 +72,7 @@ fn setup_bounty<T: Config>(
 
 fn setup_child_bounty<T: Config>(user: u32, description: u32) -> BenchmarkChildBounty<T> {
 	let (caller, curator, fee, value, reason) = setup_bounty::<T>(user, description);
-	let child_curator = account("child-curator", user, SEED);
+	let child_curator = account::<T>("child-curator", user, SEED);
 	let _ = T::Currency::make_free_balance_be(&child_curator, fee / 2u32.into());
 	let child_bounty_value = (value - fee) / 4u32.into();
 	let child_bounty_fee = child_bounty_value / 2u32.into();
@@ -223,14 +223,14 @@ benchmarks! {
 		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), bounty_setup.bounty_id,
 			bounty_setup.child_bounty_id)
 
 	award_child_bounty {
 		setup_pot_account::<T>();
 		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
-		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
+		let beneficiary_account: T::AccountId = account::<T>("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 	}: _(RawOrigin::Signed(bounty_setup.child_curator), bounty_setup.bounty_id,
 			bounty_setup.child_bounty_id, beneficiary)
@@ -245,7 +245,7 @@ benchmarks! {
 	claim_child_bounty {
 		setup_pot_account::<T>();
 		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
-		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
+		let beneficiary_account: T::AccountId = account::<T>("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 
 		ChildBounties::<T>::award_child_bounty(
@@ -255,7 +255,7 @@ benchmarks! {
 			beneficiary
 		)?;
 
-		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
+		let beneficiary_account: T::AccountId = account::<T>("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 
 		frame_system::Pallet::<T>::set_block_number(T::BountyDepositPayoutDelay::get());

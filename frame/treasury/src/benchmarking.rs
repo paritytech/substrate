@@ -31,10 +31,10 @@ const SEED: u32 = 0;
 fn setup_proposal<T: Config<I>, I: 'static>(
 	u: u32,
 ) -> (T::AccountId, BalanceOf<T, I>, <T::Lookup as StaticLookup>::Source) {
-	let caller = account("caller", u, SEED);
+	let caller = account::<T>("caller", u, SEED);
 	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100u32.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
-	let beneficiary = account("beneficiary", u, SEED);
+	let beneficiary = account::<T>("beneficiary", u, SEED);
 	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
 	(caller, value, beneficiary_lookup)
 }

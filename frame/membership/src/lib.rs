@@ -379,9 +379,9 @@ mod benchmark {
 		add_member {
 			let m in 1 .. T::MaxMembers::get();
 
-			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let members = (0..m).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members.clone(), None);
-			let new_member = account::<T::AccountId>("add", m, SEED);
+			let new_member = account::<T>("add", m, SEED);
 		}: {
 			assert_ok!(<Membership<T, I>>::add_member(T::AddOrigin::successful_origin(), new_member.clone()));
 		}
@@ -395,7 +395,7 @@ mod benchmark {
 		remove_member {
 			let m in 2 .. T::MaxMembers::get();
 
-			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let members = (0..m).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 
 			let to_remove = members.first().cloned().unwrap();
@@ -412,9 +412,9 @@ mod benchmark {
 		swap_member {
 			let m in 2 .. T::MaxMembers::get();
 
-			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let members = (0..m).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
-			let add = account::<T::AccountId>("member", m, SEED);
+			let add = account::<T>("member", m, SEED);
 			let remove = members.first().cloned().unwrap();
 		}: {
 			assert_ok!(<Membership<T, I>>::swap_member(
@@ -434,9 +434,9 @@ mod benchmark {
 		reset_member {
 			let m in 1 .. T::MaxMembers::get();
 
-			let members = (1..m+1).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let members = (1..m+1).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
-			let mut new_members = (m..2*m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let mut new_members = (m..2*m).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 		}: {
 			assert_ok!(<Membership<T, I>>::reset_members(T::ResetOrigin::successful_origin(), new_members.clone()));
 		} verify {
@@ -451,11 +451,11 @@ mod benchmark {
 			let m in 1 .. T::MaxMembers::get();
 
 			// worse case would be to change the prime
-			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let members = (0..m).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			let prime = members.last().cloned().unwrap();
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 
-			let add = account::<T::AccountId>("member", m, SEED);
+			let add = account::<T>("member", m, SEED);
 			whitelist!(prime);
 		}: {
 			assert_ok!(<Membership<T, I>>::change_key(RawOrigin::Signed(prime.clone()).into(), add.clone()));
@@ -469,7 +469,7 @@ mod benchmark {
 
 		set_prime {
 			let m in 1 .. T::MaxMembers::get();
-			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let members = (0..m).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			let prime = members.last().cloned().unwrap();
 			set_members::<T, I>(members, None);
 		}: {
@@ -482,7 +482,7 @@ mod benchmark {
 
 		clear_prime {
 			let m in 1 .. T::MaxMembers::get();
-			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let members = (0..m).map(|i| account::<T>("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			let prime = members.last().cloned().unwrap();
 			set_members::<T, I>(members, None);
 		}: {

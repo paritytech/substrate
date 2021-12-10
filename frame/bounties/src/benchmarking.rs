@@ -48,13 +48,13 @@ fn setup_bounty<T: Config>(
 	u: u32,
 	d: u32,
 ) -> (T::AccountId, T::AccountId, BalanceOf<T>, BalanceOf<T>, Vec<u8>) {
-	let caller = account("caller", u, SEED);
+	let caller = account::<T>("caller", u, SEED);
 	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
 	let fee = value / 2u32.into();
 	let deposit = T::BountyDepositBase::get() +
 		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
-	let curator = account("curator", u, SEED);
+	let curator = account::<T>("curator", u, SEED);
 	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
 	let reason = vec![0; d as usize];
 	(caller, curator, fee, value, reason)
@@ -113,7 +113,7 @@ benchmarks! {
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::<T>::get() - 1;
 		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), bounty_id)
 
 	accept_curator {
@@ -135,7 +135,7 @@ benchmarks! {
 		let bounty_id = BountyCount::<T>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
 
-		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
+		let beneficiary = T::Lookup::unlookup(account::<T>("beneficiary", 0, SEED));
 	}: _(RawOrigin::Signed(curator), bounty_id, beneficiary)
 
 	claim_bounty {
@@ -146,7 +146,7 @@ benchmarks! {
 		let bounty_id = BountyCount::<T>::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
 
-		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
+		let beneficiary_account: T::AccountId = account::<T>("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 		Bounties::<T>::award_bounty(RawOrigin::Signed(curator.clone()).into(), bounty_id, beneficiary)?;
 

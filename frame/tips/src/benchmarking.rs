@@ -31,13 +31,13 @@ const SEED: u32 = 0;
 
 // Create the pre-requisite information needed to create a `report_awesome`.
 fn setup_awesome<T: Config>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
-	let caller = whitelisted_caller();
+	let caller = whitelisted_caller::<T>();
 	let value = T::TipReportDepositBase::get() +
 		T::DataDepositPerByte::get() * length.into() +
 		T::Currency::minimum_balance();
 	let _ = T::Currency::make_free_balance_be(&caller, value);
 	let reason = vec![0; length as usize];
-	let awesome_person = account("awesome", 0, SEED);
+	let awesome_person = account::<T>("awesome", 0, SEED);
 	(caller, reason, awesome_person)
 }
 
@@ -49,15 +49,15 @@ fn setup_tip<T: Config>(
 	let tippers_count = T::Tippers::count();
 
 	for i in 0..t {
-		let member = account("member", i, SEED);
+		let member = account::<T>("member", i, SEED);
 		T::Tippers::add(&member);
 		ensure!(T::Tippers::contains(&member), "failed to add tipper");
 	}
 
 	ensure!(T::Tippers::count() == tippers_count + t as usize, "problem creating tippers");
-	let caller = account("member", t - 1, SEED);
+	let caller = account::<T>("member", t - 1, SEED);
 	let reason = vec![0; r as usize];
-	let beneficiary = account("beneficiary", t, SEED);
+	let beneficiary = account::<T>("beneficiary", t, SEED);
 	let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 	Ok((caller, reason, beneficiary, value))
 }
@@ -66,7 +66,7 @@ fn setup_tip<T: Config>(
 // This function automatically makes the tip able to close.
 fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(), &'static str> {
 	for i in 0..t {
-		let caller = account("member", i, SEED);
+		let caller = account::<T>("member", i, SEED);
 		ensure!(T::Tippers::contains(&caller), "caller is not a tipper");
 		TipsMod::<T>::tip(RawOrigin::Signed(caller).into(), hash, value)?;
 	}
@@ -132,7 +132,7 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 		create_tips::<T>(t - 1, hash.clone(), value)?;
-		let caller = account("member", t - 1, SEED);
+		let caller = account::<T>("member", t - 1, SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
@@ -161,7 +161,7 @@ benchmarks! {
 
 		create_tips::<T>(t, hash.clone(), value)?;
 
-		let caller = account("caller", t, SEED);
+		let caller = account::<T>("caller", t, SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());

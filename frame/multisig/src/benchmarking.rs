@@ -34,7 +34,7 @@ fn setup_multi<T: Config>(
 ) -> Result<(Vec<T::AccountId>, OpaqueCall<T>), &'static str> {
 	let mut signatories: Vec<T::AccountId> = Vec::new();
 	for i in 0..s {
-		let signatory = account("signatory", i, SEED);
+		let signatory = account::<T>("signatory", i, SEED);
 		// Give them some balance for a possible deposit
 		let balance = BalanceOf::<T>::max_value();
 		T::Currency::make_free_balance_be(&signatory, balance);

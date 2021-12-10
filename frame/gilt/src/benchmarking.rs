@@ -38,7 +38,7 @@ type BalanceOf<T> =
 benchmarks! {
 	place_bid {
 		let l in 0..(T::MaxQueueLen::get() - 1);
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
 			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
@@ -49,7 +49,7 @@ benchmarks! {
 	}
 
 	place_bid_max {
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..T::MaxQueueLen::get() {
@@ -65,7 +65,7 @@ benchmarks! {
 
 	retract_bid {
 		let l in 1..T::MaxQueueLen::get();
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
 			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
@@ -81,7 +81,7 @@ benchmarks! {
 	verify {}
 
 	thaw {
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(3u32));
 		Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
 		Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
@@ -99,7 +99,7 @@ benchmarks! {
 		// bids taken
 		let b in 1..T::MaxQueueLen::get();
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(b + 1));
 
 		for _ in 0..b {
@@ -115,7 +115,7 @@ benchmarks! {
 		// total queues hit
 		let q in 1..T::QueueCount::get();
 
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(q + 1));
 
 		for i in 0..q {

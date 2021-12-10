@@ -321,18 +321,14 @@ pub trait BenchmarkingSetup<T, I = ()> {
 }
 
 /// Grab an account, seeded by a name and index.
-pub fn account<AccountId: Decode + Default>(
-	name: &'static str,
-	index: u32,
-	seed: u32,
-) -> AccountId {
+pub fn account<T: frame_system::Config>(name: &'static str, index: u32, seed: u32) -> T::AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
-	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
 
 /// This caller account is automatically whitelisted for DB reads/writes by the benchmarking macro.
-pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
-	account::<AccountId>("whitelisted_caller", 0, 0)
+pub fn whitelisted_caller<T: frame_system::Config>() -> T::AccountId {
+	account::<T>("whitelisted_caller", 0, 0)
 }
 
 #[macro_export]

@@ -31,7 +31,7 @@ const SEED: u32 = 0;
 benchmarks! {
 	claim {
 		let account_index = T::AccountIndex::from(SEED);
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), account_index)
 	verify {
@@ -41,9 +41,9 @@ benchmarks! {
 	transfer {
 		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
@@ -55,7 +55,7 @@ benchmarks! {
 	free {
 		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
@@ -67,9 +67,9 @@ benchmarks! {
 	force_transfer {
 		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
-		let original: T::AccountId = account("original", 0, SEED);
+		let original: T::AccountId = account::<T>("original", 0, SEED);
 		T::Currency::make_free_balance_be(&original, BalanceOf::<T>::max_value());
-		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient: T::AccountId = account::<T>("recipient", 0, SEED);
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(original).into(), account_index)?;
@@ -81,7 +81,7 @@ benchmarks! {
 	freeze {
 		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;

@@ -43,17 +43,17 @@ frame_benchmarking::benchmarks! {
 		let dest_bag_thresh = T::BagThresholds::get()[1];
 
 		// seed items in the origin bag.
-		let origin_head: T::AccountId = account("origin_head", 0, 0);
+		let origin_head: T::AccountId = account::<T>("origin_head", 0, 0);
 		assert_ok!(List::<T>::insert(origin_head.clone(), origin_bag_thresh));
 
-		let origin_middle: T::AccountId = account("origin_middle", 0, 0); // the node we rebag (_R_)
+		let origin_middle: T::AccountId = account::<T>("origin_middle", 0, 0); // the node we rebag (_R_)
 		assert_ok!(List::<T>::insert(origin_middle.clone(), origin_bag_thresh));
 
-		let origin_tail: T::AccountId  = account("origin_tail", 0, 0);
+		let origin_tail: T::AccountId  = account::<T>("origin_tail", 0, 0);
 		assert_ok!(List::<T>::insert(origin_tail.clone(), origin_bag_thresh));
 
 		// seed items in the destination bag.
-		let dest_head: T::AccountId  = account("dest_head", 0, 0);
+		let dest_head: T::AccountId  = account::<T>("dest_head", 0, 0);
 		assert_ok!(List::<T>::insert(dest_head.clone(), dest_bag_thresh));
 
 		// the bags are in the expected state after initial setup.
@@ -65,7 +65,7 @@ frame_benchmarking::benchmarks! {
 			]
 		);
 
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		// update the weight of `origin_middle` to guarantee it will be rebagged into the destination.
 		T::VoteWeightProvider::set_vote_weight_of(&origin_middle, dest_bag_thresh);
 	}: rebag(SystemOrigin::Signed(caller), origin_middle.clone())
@@ -103,14 +103,14 @@ frame_benchmarking::benchmarks! {
 		let dest_bag_thresh = T::BagThresholds::get()[1];
 
 		// seed items in the origin bag.
-		let origin_head: T::AccountId = account("origin_head", 0, 0);
+		let origin_head: T::AccountId = account::<T>("origin_head", 0, 0);
 		assert_ok!(List::<T>::insert(origin_head.clone(), origin_bag_thresh));
 
-		let origin_tail: T::AccountId  = account("origin_tail", 0, 0); // the node we rebag (_R_)
+		let origin_tail: T::AccountId  = account::<T>("origin_tail", 0, 0); // the node we rebag (_R_)
 		assert_ok!(List::<T>::insert(origin_tail.clone(), origin_bag_thresh));
 
 		// seed items in the destination bag.
-		let dest_head: T::AccountId  = account("dest_head", 0, 0);
+		let dest_head: T::AccountId  = account::<T>("dest_head", 0, 0);
 		assert_ok!(List::<T>::insert(dest_head.clone(), dest_bag_thresh));
 
 		// the bags are in the expected state after initial setup.
@@ -122,7 +122,7 @@ frame_benchmarking::benchmarks! {
 			]
 		);
 
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		// update the weight of `origin_tail` to guarantee it will be rebagged into the destination.
 		T::VoteWeightProvider::set_vote_weight_of(&origin_tail, dest_bag_thresh);
 	}: rebag(SystemOrigin::Signed(caller), origin_tail.clone())
@@ -146,16 +146,16 @@ frame_benchmarking::benchmarks! {
 		let bag_thresh = T::BagThresholds::get()[0];
 
 		// insert the nodes in order
-		let lighter: T::AccountId = account("lighter", 0, 0);
+		let lighter: T::AccountId = account::<T>("lighter", 0, 0);
 		assert_ok!(List::<T>::insert(lighter.clone(), bag_thresh));
 
-		let heavier_prev: T::AccountId = account("heavier_prev", 0, 0);
+		let heavier_prev: T::AccountId = account::<T>("heavier_prev", 0, 0);
 		assert_ok!(List::<T>::insert(heavier_prev.clone(), bag_thresh));
 
-		let heavier: T::AccountId = account("heavier", 0, 0);
+		let heavier: T::AccountId = account::<T>("heavier", 0, 0);
 		assert_ok!(List::<T>::insert(heavier.clone(), bag_thresh));
 
-		let heavier_next: T::AccountId = account("heavier_next", 0, 0);
+		let heavier_next: T::AccountId = account::<T>("heavier_next", 0, 0);
 		assert_ok!(List::<T>::insert(heavier_next.clone(), bag_thresh));
 
 		T::VoteWeightProvider::set_vote_weight_of(&lighter, bag_thresh - 1);

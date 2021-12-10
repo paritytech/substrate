@@ -48,7 +48,7 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 
 benchmarks! {
 	buy_ticket {
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		setup_lottery::<T>(false)?;
 		// force user to have a long vec of calls participating
@@ -103,7 +103,7 @@ benchmarks! {
 
 	on_initialize_end {
 		setup_lottery::<T>(false)?;
-		let winner = account("winner", 0, 0);
+		let winner = account::<T>("winner", 0, 0);
 		// User needs more than min balance to get ticket
 		T::Currency::make_free_balance_be(&winner, T::Currency::minimum_balance() * 10u32.into());
 		// Make sure lottery account has at least min balance too
@@ -134,7 +134,7 @@ benchmarks! {
 
 	on_initialize_repeat {
 		setup_lottery::<T>(true)?;
-		let winner = account("winner", 0, 0);
+		let winner = account::<T>("winner", 0, 0);
 		// User needs more than min balance to get ticket
 		T::Currency::make_free_balance_be(&winner, T::Currency::minimum_balance() * 10u32.into());
 		// Make sure lottery account has at least min balance too

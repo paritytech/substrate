@@ -38,14 +38,14 @@ benchmarks! {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
 		}
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), calls)
 	verify {
 		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
 
 	as_derivative {
-		let caller = account("caller", SEED, SEED);
+		let caller = account::<T>("caller", SEED, SEED);
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
@@ -59,14 +59,14 @@ benchmarks! {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
 		}
-		let caller = whitelisted_caller();
+		let caller = whitelisted_caller::<T>();
 	}: _(RawOrigin::Signed(caller), calls)
 	verify {
 		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
 
 	dispatch_as {
-		let caller = account("caller", SEED, SEED);
+		let caller = account::<T>("caller", SEED, SEED);
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 		let origin: T::Origin = RawOrigin::Signed(caller).into();
 		let pallets_origin: <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();

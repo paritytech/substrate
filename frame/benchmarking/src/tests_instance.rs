@@ -153,7 +153,7 @@ mod benchmarks {
 
 		set_value {
 			let b in 1 .. 1000;
-			let caller = account::<T::AccountId>("caller", 0, 0);
+			let caller = account::<T>("caller", 0, 0);
 		}: _ (RawOrigin::Signed(caller), b.into())
 		verify {
 			assert_eq!(Value::<pallet_test::DefaultInstance>::get(), Some(b));

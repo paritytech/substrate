@@ -97,8 +97,8 @@ fn bond_amount<T: Config>() -> BalanceOf<T> {
 }
 
 fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
-	let stash: T::AccountId = account("stash", n, SEED);
-	let controller: T::AccountId = account("controller", n, SEED);
+	let stash: T::AccountId = account::<T>("stash", n, SEED);
+	let controller: T::AccountId = account::<T>("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
 	let raw_amount = bond_amount::<T>();
@@ -122,9 +122,9 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	// Create n nominators
 	for i in 0..nominators {
 		let nominator_stash: T::AccountId =
-			account("nominator stash", n * MAX_NOMINATORS + i, SEED);
+			account::<T>("nominator stash", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller: T::AccountId =
-			account("nominator controller", n * MAX_NOMINATORS + i, SEED);
+			account::<T>("nominator controller", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller_lookup: LookupSourceOf<T> =
 			T::Lookup::unlookup(nominator_controller.clone());
 		T::Currency::make_free_balance_be(&nominator_stash, free_amount.into());
@@ -280,7 +280,7 @@ benchmarks! {
 		// Make r reporters
 		let mut reporters = vec![];
 		for i in 0 .. r {
-			let reporter = account("reporter", i, SEED);
+			let reporter = account::<T>("reporter", i, SEED);
 			reporters.push(reporter);
 		}
 
@@ -385,7 +385,7 @@ benchmarks! {
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = vec![account("reporter", 1, SEED)];
+		let reporters = vec![account::<T>("reporter", 1, SEED)];
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
@@ -420,7 +420,7 @@ benchmarks! {
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
-		let reporters = vec![account("reporter", 1, SEED)];
+		let reporters = vec![account::<T>("reporter", 1, SEED)];
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());

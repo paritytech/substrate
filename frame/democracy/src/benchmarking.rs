@@ -42,7 +42,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
-	let caller: T::AccountId = account(name, index, SEED);
+	let caller: T::AccountId = account::<T>(name, index, SEED);
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	caller
 }
@@ -292,7 +292,7 @@ benchmarks! {
 
 		let mut vetoers: Vec<T::AccountId> = Vec::new();
 		for i in 0 .. v {
-			vetoers.push(account("vetoer", i, SEED));
+			vetoers.push(account::<T>("vetoer", i, SEED));
 		}
 		vetoers.sort();
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));

@@ -38,7 +38,7 @@ type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// grab new account with infinite balance.
 fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
-	let account: T::AccountId = account(name, index, 0);
+	let account: T::AccountId = account::<T>(name, index, 0);
 	let amount = default_stake::<T>(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
 	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for

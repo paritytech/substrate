@@ -104,7 +104,7 @@ pub fn run_to_block<T: Config>(n: T::BlockNumber) {
 benchmarks! {
 	store {
 		let l in 1 .. MaxTransactionSize::<T>::get();
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
 	verify {
@@ -113,7 +113,7 @@ benchmarks! {
 	}
 
 	renew {
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		TransactionStorage::<T>::store(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -127,7 +127,7 @@ benchmarks! {
 
 	check_proof_max {
 		run_to_block::<T>(1u32.into());
-		let caller: T::AccountId = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller::<T>();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for _ in 0 .. MaxBlockTransactions::<T>::get() {
 			TransactionStorage::<T>::store(
