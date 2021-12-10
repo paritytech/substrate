@@ -27,7 +27,6 @@ use sp_std::prelude::*;
 
 use crate::{
 	commitment::{Commitment, SignedCommitment},
-	crypto::Signature,
 };
 
 /// A light form of [SignedCommitment].
@@ -60,12 +59,12 @@ impl<TBlockNumber, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TMerkleRoo
 	/// and a merkle root of all signatures.
 	///
 	/// Returns the full list of signatures along with the witness.
-	pub fn from_signed<TMerkelize>(
-		signed: SignedCommitment<TBlockNumber>,
+	pub fn from_signed<TMerkelize, TSignature>(
+		signed: SignedCommitment<TBlockNumber, TSignature>,
 		merkelize: TMerkelize,
-	) -> (Self, Vec<Option<Signature>>)
+	) -> (Self, Vec<Option<TSignature>>)
 	where
-		TMerkelize: FnOnce(&[Option<Signature>]) -> TMerkleRoot,
+		TMerkelize: FnOnce(&[Option<TSignature>]) -> TMerkleRoot,
 	{
 		let SignedCommitment { commitment, signatures } = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
@@ -86,12 +85,12 @@ mod tests {
 
 	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE};
 
-	type TestCommitment = Commitment<u128>;
-	type TestSignedCommitment = SignedCommitment<u128>;
+	type TestCommitment = Commitment<u128, Signature>;
+	type TestSignedCommitment = SignedCommitment<u128, Signature>;
 	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<Option<Signature>>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
+	fn mock_signatures() -> (Signature, Signature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();

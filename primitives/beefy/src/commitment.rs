@@ -18,7 +18,7 @@
 use codec::{Decode, Encode, Error, Input};
 use sp_std::{cmp, prelude::*};
 
-use crate::{crypto::Signature, ValidatorSetId};
+use crate::ValidatorSetId;
 
 /// Id of different payloads in the [`Commitment`] data
 pub type BeefyPayloadId = [u8; 2];
@@ -139,17 +139,17 @@ where
 /// please take a look at custom [`Encode`] and [`Decode`] implementations and
 /// [`CompactSignedCommitment`] struct.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SignedCommitment<TBlockNumber> {
+pub struct SignedCommitment<TBlockNumber, TSignature> {
 	/// The commitment signatures are collected for.
 	pub commitment: Commitment<TBlockNumber>,
 	/// GRANDPA validators' signatures for the commitment.
 	///
 	/// The length of this `Vec` must match number of validators in the current set (see
 	/// [Commitment::validator_set_id]).
-	pub signatures: Vec<Option<Signature>>,
+	pub signatures: Vec<Option<TSignature>>,
 }
 
-impl<TBlockNumber> SignedCommitment<TBlockNumber> {
+impl<TBlockNumber, TSignature> SignedCommitment<TBlockNumber, TSignature> {
 	/// Return the number of collected signatures.
 	pub fn no_of_signatures(&self) -> usize {
 		self.signatures.iter().filter(|x| x.is_some()).count()
@@ -163,9 +163,9 @@ const CONTAINER_BIT_SIZE: usize = 8;
 
 /// Compressed representation of [`SignedCommitment`], used for encoding efficiency.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-struct CompactSignedCommitment<TCommitment> {
+struct CompactSignedCommitment<TBlockNumber, TSignature> {
 	/// The commitment, unchanged compared to regular [`SignedCommitment`].
-	commitment: TCommitment,
+	commitment: Commitment<TBlockNumber>,
 	/// A bitfield representing presence of a signature coming from a validator at some index.
 	///
 	/// The bit at index `0` is set to `1` in case we have a signature coming from a validator at
@@ -183,27 +183,27 @@ struct CompactSignedCommitment<TCommitment> {
 	/// Note that in order to associate a `Signature` from this `Vec` with a validator, one needs
 	/// to look at the `signatures_from` bitfield, since some validators might have not produced a
 	/// signature.
-	signatures_compact: Vec<Signature>,
+	signatures_compact: Vec<TSignature>,
 }
 
-impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
+impl<'a, TBlockNumber: Clone, TSignature> CompactSignedCommitment<TBlockNumber, &'a TSignature> {
 	/// Packs a `SignedCommitment` into the compressed `CompactSignedCommitment` format for
 	/// efficient network transport.
-	fn pack(signed_commitment: &'a SignedCommitment<TBlockNumber>) -> Self {
+	fn pack(signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature>) -> Self {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let validator_set_len = signatures.len() as u32;
 		let mut signatures_from: BitField = vec![];
-		let mut signatures_compact: Vec<Signature> = vec![];
-
-		for signature in signatures {
-			match signature {
-				Some(value) => signatures_compact.push(value.clone()),
-				None => (),
-			}
-		}
+		let mut signatures_compact: Vec<&'a TSignature> = vec![];
 
 		let mut bits: Vec<u8> =
 			signatures.iter().map(|x| if x.is_some() { 1 } else { 0 }).collect();
+
+		for signature in signatures {
+			match signature {
+				Some(value) => signatures_compact.push(value),
+				None => (),
+			}
+		}
 
 		// Resize with excess bits for placement purposes
 		let excess_bits_len =
@@ -223,13 +223,13 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 			signatures_from.push(v);
 		}
 
-		Self { commitment, signatures_from, validator_set_len, signatures_compact }
+		Self { commitment: commitment.clone(), signatures_from, validator_set_len, signatures_compact }
 	}
 
 	/// Unpacks a `CompactSignedCommitment` into the uncompressed `SignedCommitment` form.
 	fn unpack(
-		temporary_signatures: CompactSignedCommitment<Commitment<TBlockNumber>>,
-	) -> SignedCommitment<TBlockNumber> {
+		temporary_signatures: CompactSignedCommitment<TBlockNumber, TSignature>,
+	) -> SignedCommitment<TBlockNumber, TSignature> {
 		let CompactSignedCommitment {
 			commitment,
 			signatures_from,
@@ -247,7 +247,7 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 		bits.truncate(validator_set_len as usize);
 
 		let mut next_signature = signatures_compact.into_iter();
-		let signatures: Vec<Option<Signature>> = bits
+		let signatures: Vec<Option<TSignature>> = bits
 			.iter()
 			.map(|&x| if x == 1 { next_signature.next() } else { None })
 			.collect();
@@ -256,9 +256,10 @@ impl<'a, TBlockNumber> CompactSignedCommitment<&'a Commitment<TBlockNumber>> {
 	}
 }
 
-impl<TBlockNumber> Encode for SignedCommitment<TBlockNumber>
+impl<TBlockNumber, TSignature> Encode for SignedCommitment<TBlockNumber, TSignature>
 where
-	TBlockNumber: Encode,
+	TBlockNumber: Encode + Clone,
+	TSignature: Encode,
 {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		let temp = CompactSignedCommitment::pack(self);
@@ -266,9 +267,10 @@ where
 	}
 }
 
-impl<TBlockNumber> Decode for SignedCommitment<TBlockNumber>
+impl<TBlockNumber, TSignature> Decode for SignedCommitment<TBlockNumber, TSignature>
 where
-	TBlockNumber: Decode,
+	TBlockNumber: Decode + Clone,
+	TSignature: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let temp = CompactSignedCommitment::decode(input)?;
@@ -280,11 +282,12 @@ where
 /// to the block justifications for the block for which the signed commitment
 /// has been generated.
 #[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-pub enum VersionedCommitment<N> {
+pub enum VersionedCommitment<N, S> {
 	#[codec(index = 1)]
 	/// Current active version
-	V1(SignedCommitment<N>),
+	V1(SignedCommitment<N, S>),
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -297,8 +300,8 @@ mod tests {
 
 	use crate::{crypto, KEY_TYPE};
 
-	type TestCommitment = Commitment<u128>;
-	type TestSignedCommitment = SignedCommitment<u128>;
+	type TestCommitment = Commitment<u128, crypto::Signature>;
+	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
 	type TestVersionedCommitment = VersionedCommitment<u128>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
