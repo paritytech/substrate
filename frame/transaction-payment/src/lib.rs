@@ -56,8 +56,7 @@ use sp_runtime::{
 		Saturating, SignedExtension, Zero,
 	},
 	transaction_validity::{
-		InvalidTransaction, TransactionPriority, TransactionValidity, TransactionValidityError,
-		ValidTransaction,
+		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 	FixedPointNumber, FixedPointOperand, FixedU128, Perquintill, RuntimeDebug,
 };
@@ -706,7 +705,7 @@ where
 		// tip
 		BalanceOf<T>,
 		// who paid the fee - this is an option to allow for a Default impl.
-		Option<Self::AccountId>,
+		Self::AccountId,
 		// imbalance resulting from withdrawing the fee
 		<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 	);
@@ -737,23 +736,22 @@ where
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		let (_fee, imbalance) = self.withdraw_fee(who, call, info, len)?;
-		Ok((self.0, Some(who.clone()), imbalance))
+		Ok((self.0, who.clone(), imbalance))
 	}
 
 	fn post_dispatch(
-		pre: Self::Pre,
+		maybe_pre: Option<Self::Pre>,
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
 		len: usize,
 		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		let (tip, who, imbalance) = pre;
-		let actual_fee = Pallet::<T>::compute_actual_fee(len as u32, info, post_info, tip);
-		let e = TransactionValidityError::Invalid(InvalidTransaction::Custom(255));
-		let who = who.clone().ok_or(e)?;
-		T::OnChargeTransaction::correct_and_deposit_fee(
-			&who, info, post_info, actual_fee, tip, imbalance,
-		)?;
+		if let Some((tip, who, imbalance)) = maybe_pre {
+			let actual_fee = Pallet::<T>::compute_actual_fee(len as u32, info, post_info, tip);
+			T::OnChargeTransaction::correct_and_deposit_fee(
+				&who, info, post_info, actual_fee, tip, imbalance,
+			)?;
+		}
 		Ok(())
 	}
 }
@@ -1017,7 +1015,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(5),
 					&default_post_info(),
 					len,
@@ -1035,7 +1033,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(50),
 					len,
@@ -1064,7 +1062,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 150 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(50),
 					len,
@@ -1359,7 +1357,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 0);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(50),
 					len,
@@ -1393,7 +1391,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(101),
 					len,
@@ -1421,7 +1419,7 @@ mod tests {
 					.unwrap();
 				assert_eq!(Balances::total_balance(&user), 0);
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&dispatch_info,
 					&default_post_info(),
 					len,
@@ -1453,7 +1451,7 @@ mod tests {
 					.unwrap();
 
 				ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info,
 					&post_info,
 					len,
@@ -1604,7 +1602,7 @@ mod tests {
 					.unwrap();
 
 				ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info,
 					&post_info,
 					len,
