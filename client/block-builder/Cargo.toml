@@ -18,7 +18,7 @@ sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-mach
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../primitives/core" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }

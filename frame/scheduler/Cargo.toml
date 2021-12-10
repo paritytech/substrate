@@ -15,14 +15,14 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 log = { version = "0.4.14", default-features = false }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+sp-core = { version = "4.0.0", path = "../../primitives/core", default-features = false }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 
 [features]

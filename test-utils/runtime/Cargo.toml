@@ -23,9 +23,9 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-keyring = { version = "4.0.0-dev", optional = true, path = "../../primitives/keyring" }
 memory-db = { version = "0.27.0", default-features = false }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime-interface" }
+sp-core = { version = "4.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime-interface = { version = "4.0.0", default-features = false, path = "../../primitives/runtime-interface" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
@@ -43,7 +43,7 @@ trie-db = { version = "0.22.6", default-features = false }
 parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
-sp-externalities = { version = "0.10.0-dev", default-features = false, path = "../../primitives/externalities" }
+sp-externalities = { version = "0.10.0", default-features = false, path = "../../primitives/externalities" }
 
 # 3rd party
 cfg-if = "1.0"
