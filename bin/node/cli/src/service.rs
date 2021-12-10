@@ -326,8 +326,8 @@ pub fn new_full_base(
 
 	let shared_voter_state = rpc_setup;
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
-	// TODO: add genesis hash.
-	let chain_prefix = format!("/{}", config.protocol_id().as_ref());
+	let genesis_hash = client.block_hash(0).ok().flatten().unwrap_or_default();
+	let chain_prefix = format!("/{}/{}", config.protocol_id().as_ref(), genesis_hash);
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config(&chain_prefix));
 	let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
