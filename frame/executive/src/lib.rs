@@ -447,6 +447,8 @@ where
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
+            sp_runtime::print("PREVIOUS BLOCK TX COUNT");
+            sp_runtime::print(block.prev_extrinsics().len());
             let previous = block.prev_extrinsics().iter().filter(|e| e.is_signed().unwrap()).cloned().collect::<Vec<_>>();
             sp_runtime::print("PREVIOUS BLOCK EXTRINSICS COUNT");
             sp_runtime::print(previous.len());

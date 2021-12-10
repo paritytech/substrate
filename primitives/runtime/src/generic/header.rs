@@ -160,14 +160,6 @@ where
 		&mut self.digest
 	}
 
-	fn seed(&self) -> &ShufflingSeed {
-		unimplemented!()
-	}
-
-	fn set_seed(&mut self, seed: ShufflingSeed) {
-		unimplemented!()
-	}
-
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,

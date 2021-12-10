@@ -54,6 +54,8 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	pub digest: Digest<Hash::Output>,
 	/// Previous block extrinsics shuffling seed
 	pub seed: ShufflingSeed,
+	/// Number of extrinsics in this block (rest comes from previous one)
+	pub count: Number,
 }
 
 #[cfg(feature = "std")]
@@ -69,7 +71,8 @@ where
 			self.state_root.size_of(ops) +
 			self.extrinsics_root.size_of(ops) +
 			self.digest.size_of(ops) +
-			self.seed.size_of(ops)
+			self.seed.size_of(ops) +
+			self.count.size_of(ops)
 	}
 }
 
@@ -171,6 +174,14 @@ where
 		self.seed = seed;
 	}
 
+	fn count(&self) -> &Number {
+		&self.count
+	}
+
+	fn set_count(&mut self, count: Number) {
+		self.count = count;
+	}
+
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
@@ -178,7 +189,7 @@ where
 		parent_hash: Self::Hash,
 		digest: Digest<Self::Hash>,
 	) -> Self {
-		Self { number, extrinsics_root, state_root, parent_hash, digest, seed: Default::default() }
+		Self { number, extrinsics_root, state_root, parent_hash, digest, seed: Default::default(), count: 0_u32.into() }
 	}
 }
 
