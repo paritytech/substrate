@@ -25,9 +25,7 @@
 
 use sp_std::prelude::*;
 
-use crate::{
-	commitment::{Commitment, SignedCommitment},
-};
+use crate::commitment::{Commitment, SignedCommitment};
 
 /// A light form of [SignedCommitment].
 ///
@@ -87,7 +85,8 @@ mod tests {
 
 	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
-	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
+	type TestSignedCommitmentWitness =
+		SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {

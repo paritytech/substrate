@@ -223,7 +223,12 @@ impl<'a, TBlockNumber: Clone, TSignature> CompactSignedCommitment<TBlockNumber, 
 			signatures_from.push(v);
 		}
 
-		Self { commitment: commitment.clone(), signatures_from, validator_set_len, signatures_compact }
+		Self {
+			commitment: commitment.clone(),
+			signatures_from,
+			validator_set_len,
+			signatures_compact,
+		}
 	}
 
 	/// Unpacks a `CompactSignedCommitment` into the uncompressed `SignedCommitment` form.
@@ -291,7 +296,6 @@ pub enum VersionedFinalityProof<N, S> {
 	/// Current active version
 	V1(SignedCommitment<N, S>),
 }
-
 
 #[cfg(test)]
 mod tests {
