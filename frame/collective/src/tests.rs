@@ -529,7 +529,7 @@ fn removal_of_old_voters_votes_works() {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash = BlakeTwo256::hash_of(&proposal);
-		let end = 4;
+		let end = 4u64;
 		assert_ok!(Collective::propose(
 			Origin::signed(1),
 			3,
