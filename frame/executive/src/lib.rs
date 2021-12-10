@@ -133,6 +133,7 @@ use schnorrkel::{
 use sp_core::{ShufflingSeed, crypto::UncheckedFrom, Hasher, U256};
 // use sp_keystore::vrf;
 use sp_runtime::{
+    SaturatedConversion,
 	generic::Digest,
 	traits::{
 		self, Applyable, BlakeTwo256, CheckEqual, Checkable, Dispatchable, Extrinsic, HasAddress, Header, NumberFor, One, Saturating,
@@ -142,6 +143,7 @@ use sp_runtime::{
 	AccountId32, ApplyExtrinsicResult,
 };
 use sp_std::{marker::PhantomData, prelude::*};
+use crate::traits::AtLeast32BitUnsigned;
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
@@ -229,6 +231,7 @@ impl<
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
+    <System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
     Block::Extrinsic: HasAddress<AccountId = System::AccountId> + Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -450,7 +453,7 @@ where
 			let (header, extrinsics) = block.deconstruct();
             sp_runtime::print("ALL TX COUNT");
             sp_runtime::print(extrinsics.len());
-            let count: usize = header.count().unique_saturaged_into();
+            let count: usize = header.count().clone().saturated_into::<usize>();
             sp_runtime::print("THIS BLOCK EXTRINSICS COUNT");
             sp_runtime::print(count);
 
