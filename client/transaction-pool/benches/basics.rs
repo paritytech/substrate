@@ -126,7 +126,8 @@ impl ChainApi for TestApi {
 fn uxt(transfer: Transfer) -> Extrinsic {
 	Extrinsic::Transfer {
 		transfer,
-		signature: Default::default(),
+		signature: Decode::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+			.expect("infinite input; no dead input space; qed"),
 		exhaust_resources_when_not_first: false,
 	}
 }
