@@ -17,8 +17,8 @@
 
 //! Implementation of a "bags list": a semi-sorted list where ordering granularity is dictated by
 //! configurable thresholds that delineate the boundaries of bags. It uses a pattern of composite
-//! data structures, where multiple storage items are masked by one outer API. See [`ListNodes`],
-//! [`CounterForListNodes`] and [`ListBags`] for more information.
+//! data structures, where multiple storage items are masked by one outer API. See
+//! [`crate::ListNodes`], [`crate::ListBags`] for more information.
 //!
 //! The outer API of this module is the [`List`] struct. It wraps all acceptable operations on top
 //! of the aggregate linked list. All operations with the bags list should happen through this
@@ -76,18 +76,15 @@ pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 pub struct List<T: Config>(PhantomData<T>);
 
 impl<T: Config> List<T> {
-	/// Remove all data associated with the list from storage. Parameter `items` is the number of
-	/// items to clear from the list. WARNING: `None` will clear all items and should generally not
-	/// be used in production as it could lead to an infinite number of storage accesses.
-	pub(crate) fn clear(maybe_count: Option<u32>) -> u32 {
-		crate::ListBags::<T>::remove_all(maybe_count);
-		crate::ListNodes::<T>::remove_all(maybe_count);
-		if let Some(count) = maybe_count {
-			crate::CounterForListNodes::<T>::mutate(|items| *items - count);
-			count
-		} else {
-			crate::CounterForListNodes::<T>::take()
-		}
+	/// Remove all data associated with the list from storage.
+	///
+	/// ## WARNING
+	///
+	/// this function should generally not be used in production as it could lead to a very large
+	/// number of storage accesses.
+	pub(crate) fn unsafe_clear() {
+		crate::ListBags::<T>::remove_all(None);
+		crate::ListNodes::<T>::remove_all();
 	}
 
 	/// Regenerate all of the data from the given ids.
@@ -99,11 +96,14 @@ impl<T: Config> List<T> {
 	/// pallet using this `List`.
 	///
 	/// Returns the number of ids migrated.
-	pub fn regenerate(
+	pub fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
-		Self::clear(None);
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		Self::unsafe_clear();
 		Self::insert_many(all, weight_of)
 	}
 
@@ -274,17 +274,13 @@ impl<T: Config> List<T> {
 		// new inserts are always the tail, so we must write the bag.
 		bag.put();
 
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_add(1)
-		});
-
 		crate::log!(
 			debug,
 			"inserted {:?} with weight {} into bag {:?}, new count is {}",
 			id,
 			weight,
 			bag_weight,
-			crate::CounterForListNodes::<T>::get(),
+			crate::ListNodes::<T>::count(),
 		);
 
 		Ok(())
@@ -330,10 +326,6 @@ impl<T: Config> List<T> {
 		for (_, bag) in bags {
 			bag.put();
 		}
-
-		crate::CounterForListNodes::<T>::mutate(|prev_count| {
-			*prev_count = prev_count.saturating_sub(count)
-		});
 
 		count
 	}
@@ -384,13 +376,91 @@ impl<T: Config> List<T> {
 		})
 	}
 
+	/// Put `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in the
+	/// same bag and the `weight_of` `lighter_id` must be less than that of `heavier_id`.
+	pub(crate) fn put_in_front_of(
+		lighter_id: &T::AccountId,
+		heavier_id: &T::AccountId,
+	) -> Result<(), crate::pallet::Error<T>> {
+		use crate::pallet;
+		use frame_support::ensure;
+
+		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
+		let heavier_node = Node::<T>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
+
+		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
+
+		// this is the most expensive check, so we do it last.
+		ensure!(
+			T::VoteWeightProvider::vote_weight(&heavier_id) >
+				T::VoteWeightProvider::vote_weight(&lighter_id),
+			pallet::Error::NotHeavier
+		);
+
+		// remove the heavier node from this list. Note that this removes the node from storage and
+		// decrements the node counter.
+		Self::remove(&heavier_id);
+
+		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
+		// was removed.
+		let lighter_node = Node::<T>::get(&lighter_id).ok_or_else(|| {
+			debug_assert!(false, "id that should exist cannot be found");
+			crate::log!(warn, "id that should exist cannot be found");
+			pallet::Error::IdNotFound
+		})?;
+
+		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
+		// in storage and update the node counter.
+		Self::insert_at_unchecked(lighter_node, heavier_node);
+
+		Ok(())
+	}
+
+	/// Insert `node` directly in front of `at`.
+	///
+	/// WARNINGS:
+	/// - this is a naive function in that it does not check if `node` belongs to the same bag as
+	/// `at`. It is expected that the call site will check preconditions.
+	/// - this will panic if `at.bag_upper` is not a bag that already exists in storage.
+	fn insert_at_unchecked(mut at: Node<T>, mut node: Node<T>) {
+		// connect `node` to its new `prev`.
+		node.prev = at.prev.clone();
+		if let Some(mut prev) = at.prev() {
+			prev.next = Some(node.id().clone());
+			prev.put()
+		}
+
+		// connect `node` and `at`.
+		node.next = Some(at.id().clone());
+		at.prev = Some(node.id().clone());
+
+		if node.is_terminal() {
+			// `node` is the new head, so we make sure the bag is updated. Note,
+			// since `node` is always in front of `at` we know that 1) there is always at least 2
+			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
+			// tail.
+			let mut bag = Bag::<T>::get(at.bag_upper)
+				.expect("given nodes must always have a valid bag. qed.");
+
+			if node.prev == None {
+				bag.head = Some(node.id().clone())
+			}
+
+			bag.put()
+		};
+
+		// write the updated nodes to storage.
+		at.put();
+		node.put();
+	}
+
 	/// Sanity check the list.
 	///
 	/// This should be called from the call-site, whenever one of the mutating apis (e.g. `insert`)
 	/// is being used, after all other staking data (such as counter) has been updated. It checks:
 	///
 	/// * there are no duplicate ids,
-	/// * length of this list is in sync with `CounterForListNodes`,
+	/// * length of this list is in sync with `ListNodes::count()`,
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(feature = "std")]
@@ -403,7 +473,7 @@ impl<T: Config> List<T> {
 		);
 
 		let iter_count = Self::iter().count() as u32;
-		let stored_count = crate::CounterForListNodes::<T>::get();
+		let stored_count = crate::ListNodes::<T>::count();
 		let nodes_count = crate::ListNodes::<T>::iter().count() as u32;
 		ensure!(iter_count == stored_count, "iter_count != stored_count");
 		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
@@ -467,7 +537,7 @@ impl<T: Config> List<T> {
 	}
 }
 
-/// A Bag is a doubly-linked list of ids, where each id is mapped to a [`ListNode`].
+/// A Bag is a doubly-linked list of ids, where each id is mapped to a [`Node`].
 ///
 /// Note that we maintain both head and tail pointers. While it would be possible to get away with
 /// maintaining only a head pointer and cons-ing elements onto the front of the list, it's more

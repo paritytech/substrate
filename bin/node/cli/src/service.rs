@@ -30,7 +30,7 @@ use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
 use sc_network::{Event, NetworkService};
-use sc_service::{config::Configuration, error::Error as ServiceError, TaskManager};
+use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -83,6 +83,7 @@ pub fn create_extrinsic(
 		.unwrap_or(2) as u64;
 	let tip = 0;
 	let extra: node_runtime::SignedExtra = (
+		frame_system::CheckNonZeroSender::<node_runtime::Runtime>::new(),
 		frame_system::CheckSpecVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckTxVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckGenesis::<node_runtime::Runtime>::new(),
@@ -92,13 +93,14 @@ pub fn create_extrinsic(
 		)),
 		frame_system::CheckNonce::<node_runtime::Runtime>::from(nonce),
 		frame_system::CheckWeight::<node_runtime::Runtime>::new(),
-		pallet_transaction_payment::ChargeTransactionPayment::<node_runtime::Runtime>::from(tip),
+		pallet_asset_tx_payment::ChargeAssetTxPayment::<node_runtime::Runtime>::from(tip, None),
 	);
 
 	let raw_payload = node_runtime::SignedPayload::from_raw(
 		function.clone(),
 		extra.clone(),
 		(
+			(),
 			node_runtime::VERSION.spec_version,
 			node_runtime::VERSION.transaction_version,
 			genesis_hash,
@@ -159,6 +161,7 @@ pub fn new_partial(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
+		config.runtime_cache_size,
 	);
 
 	let (client, backend, keystore_container, task_manager) =
@@ -170,7 +173,7 @@ pub fn new_partial(
 	let client = Arc::new(client);
 
 	let telemetry = telemetry.map(|(worker, telemetry)| {
-		task_manager.spawn_handle().spawn("telemetry", worker.run());
+		task_manager.spawn_handle().spawn("telemetry", None, worker.run());
 		telemetry
 	});
 
@@ -298,6 +301,8 @@ pub struct NewFullBase {
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	/// The transaction pool of the node.
 	pub transaction_pool: Arc<TransactionPool>,
+	/// The rpc handlers of the node.
+	pub rpc_handlers: RpcHandlers,
 }
 
 /// Creates a full service from the configuration.
@@ -336,7 +341,6 @@ pub fn new_full_base(
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
-			on_demand: None,
 			block_announce_validator_builder: None,
 			warp_sync: Some(warp_sync),
 		})?;
@@ -358,7 +362,7 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let _rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
+	let rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		config,
 		backend,
 		client: client.clone(),
@@ -367,8 +371,6 @@ pub fn new_full_base(
 		rpc_extensions_builder: Box::new(rpc_extensions_builder),
 		transaction_pool: transaction_pool.clone(),
 		task_manager: &mut task_manager,
-		on_demand: None,
-		remote_blockchain: None,
 		system_rpc_tx,
 		telemetry: telemetry.as_mut(),
 	})?;
@@ -434,7 +436,11 @@ pub fn new_full_base(
 		};
 
 		let babe = sc_consensus_babe::start_babe(babe_config)?;
-		task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", babe);
+		task_manager.spawn_essential_handle().spawn_blocking(
+			"babe-proposer",
+			Some("block-authoring"),
+			babe,
+		);
 	}
 
 	// Spawn authority discovery module.
@@ -461,9 +467,11 @@ pub fn new_full_base(
 				prometheus_registry.clone(),
 			);
 
-		task_manager
-			.spawn_handle()
-			.spawn("authority-discovery-worker", authority_discovery_worker.run());
+		task_manager.spawn_handle().spawn(
+			"authority-discovery-worker",
+			Some("networking"),
+			authority_discovery_worker.run(),
+		);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -501,13 +509,15 @@ pub fn new_full_base(
 
 		// the GRANDPA voter task is considered infallible, i.e.
 		// if it fails we take down the service with it.
-		task_manager
-			.spawn_essential_handle()
-			.spawn_blocking("grandpa-voter", grandpa::run_grandpa_voter(grandpa_config)?);
+		task_manager.spawn_essential_handle().spawn_blocking(
+			"grandpa-voter",
+			None,
+			grandpa::run_grandpa_voter(grandpa_config)?,
+		);
 	}
 
 	network_starter.start_network();
-	Ok(NewFullBase { task_manager, client, network, transaction_pool })
+	Ok(NewFullBase { task_manager, client, network, transaction_pool, rpc_handlers })
 }
 
 /// Builds a new service for a full client.
@@ -532,7 +542,7 @@ mod tests {
 	use sc_service_test::TestNetNode;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool};
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
-	use sp_core::{crypto::Pair as CryptoPair, Public, H256};
+	use sp_core::{crypto::Pair as CryptoPair, Public};
 	use sp_inherents::InherentDataProvider;
 	use sp_keyring::AccountKeyring;
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -611,7 +621,7 @@ mod tests {
 					None,
 				);
 
-				let mut digest = Digest::<H256>::default();
+				let mut digest = Digest::default();
 
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
@@ -712,26 +722,28 @@ mod tests {
 				let function =
 					Call::Balances(BalancesCall::transfer { dest: to.into(), value: amount });
 
+				let check_non_zero_sender = frame_system::CheckNonZeroSender::new();
 				let check_spec_version = frame_system::CheckSpecVersion::new();
 				let check_tx_version = frame_system::CheckTxVersion::new();
 				let check_genesis = frame_system::CheckGenesis::new();
 				let check_era = frame_system::CheckEra::from(Era::Immortal);
 				let check_nonce = frame_system::CheckNonce::from(index);
 				let check_weight = frame_system::CheckWeight::new();
-				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
+				let tx_payment = pallet_asset_tx_payment::ChargeAssetTxPayment::from(0, None);
 				let extra = (
+					check_non_zero_sender,
 					check_spec_version,
 					check_tx_version,
 					check_genesis,
 					check_era,
 					check_nonce,
 					check_weight,
-					payment,
+					tx_payment,
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ()),
+					((), spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ()),
 				);
 				let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
 				let (function, extra, _) = raw_payload.deconstruct();

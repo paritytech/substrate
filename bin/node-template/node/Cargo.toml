@@ -17,10 +17,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 name = "node-template"
 
 [dependencies]
-structopt = "0.3.8"
+structopt = "0.3.25"
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../../primitives/core" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = ["wasmtime"] }
 sc-service = { version = "0.10.0-dev", path = "../../../client/service", features = ["wasmtime"] }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }

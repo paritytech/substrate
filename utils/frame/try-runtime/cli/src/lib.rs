@@ -125,7 +125,7 @@
 //! #### Adding pre/post hooks
 //!
 //! One of the gems that come only in the `try-runtime` feature flag is the `pre_upgrade` and
-//! `post_upgrade` hooks for [`OnRuntimeUpgrade`]. This trait is implemented either inside the
+//! `post_upgrade` hooks for `OnRuntimeUpgrade`. This trait is implemented either inside the
 //! pallet, or manually in a runtime, to define a migration. In both cases, these functions can be
 //! added, given the right flag:
 //!
@@ -141,7 +141,7 @@
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
 //! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, [`OnRuntimeUpgradeHelpersExt`] can help with that.
+//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that.
 //!
 //! #### Logging
 //!
@@ -151,7 +151,7 @@
 //!
 //! #### Guarding migrations
 //!
-//! Always make sure that any migration code is guarded either by [`StorageVersion`], or by some
+//! Always make sure that any migration code is guarded either by `StorageVersion`, or by some
 //! custom storage item, so that it is NEVER executed twice, even if the code lives in two
 //! consecutive runtimes.
 //!
@@ -160,7 +160,7 @@
 //! Run the migrations of the local runtime on the state of polkadot, from the polkadot repo where
 //! we have `--chain polkadot-dev`, on the latest finalized block's state
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -174,7 +174,7 @@
 //! Same as previous one, but let's say we want to run this command from the substrate repo, where
 //! we don't have a matching spec name/version.
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -188,7 +188,7 @@
 //! Same as the previous one, but run it at specific block number's state. This means that this
 //! block hash's state shall not yet have been pruned in `rpc.polkadot.io`.
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -206,7 +206,7 @@
 //! First, let's assume you are in a branch that has the same spec name/version as the live polkadot
 //! network.
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -222,14 +222,14 @@
 //! change `--execution Wasm` to `--execution Native` to achieve this. Your logs of `executor=trace`
 //! should show something among the lines of:
 //!
-//! ```ignore
+//! ```text
 //! Request for native execution succeeded (native: polkadot-9900 (parity-polkadot-0.tx7.au0), chain: polkadot-9900 (parity-polkadot-0.tx7.au0))
 //! ```
 //!
 //! If you don't have matching spec versions, then are doomed to execute wasm. In this case, you can
 //! manually overwrite the wasm code with your local runtime:
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -242,12 +242,12 @@
 //! ```
 //!
 //! For all of these blocks, the block with hash `<block-hash>` is being used, and the initial state
-//! is the state of the parent hash. This is because by omitting [`ExecuteBlockCmd::block_at`], the
+//! is the state of the parent hash. This is because by omitting `ExecuteBlockCmd::block_at`, the
 //! `--at` is used for both. This should be good enough for 99% of the cases. The only case where
 //! you need to specify `block-at` and `block-ws-uri` is with snapshots. Let's say you have a file
 //! `snap` and you know it corresponds to the state of the parent block of `X`. Then you'd do:
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -281,8 +281,11 @@ use sp_core::{
 };
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
-use sp_state_machine::{OverlayedChanges, StateMachine};
+use sp_runtime::{
+	traits::{Block as BlockT, NumberFor},
+	DeserializeOwned,
+};
+use sp_state_machine::{InMemoryProvingBackend, OverlayedChanges, StateMachine};
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
@@ -303,7 +306,7 @@ pub enum Command {
 
 	/// Executes the given block against some state.
 	///
-	/// Unlike [`Command:::OnRuntimeUpgrade`], this command needs two inputs: the state, and the
+	/// Unlike [`Command::OnRuntimeUpgrade`], this command needs two inputs: the state, and the
 	/// block data. Since the state could be cached (see [`State::Snap`]), different flags are
 	/// provided for both. `--block-at` and `--block-uri`, if provided, are only used for fetching
 	/// the block. For convenience, these flags can be both emitted, if the [`State::Live`] is
@@ -311,7 +314,7 @@ pub enum Command {
 	///
 	/// Note that by default, this command does not overwrite the code, so in wasm execution, the
 	/// live chain's code is used. This can be disabled if desired, see
-	/// [`ExecuteBlockCmd::overwrite_wasm_code`].
+	/// `ExecuteBlockCmd::overwrite_wasm_code`.
 	///
 	/// Note that if you do overwrite the wasm code, or generally use the local runtime for this,
 	/// you might
@@ -323,7 +326,7 @@ pub enum Command {
 	///     different state transition function.
 	///
 	/// To make testing slightly more dynamic, you can disable the state root  check by enabling
-	/// [`ExecuteBlockCmd::no_check`]. If you get signature verification errors, you should
+	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should
 	/// manually tweak your local runtime's spec version to fix this.
 	///
 	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
@@ -332,19 +335,19 @@ pub enum Command {
 	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
 	///
 	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
-	/// [`ExecuteBlockCmd::no_check`] is set, it uses a custom, try-runtime-only runtime
+	/// `ExecuteBlockCmd::no_check` is set, it uses a custom, try-runtime-only runtime
 	/// api called `TryRuntime_execute_block_no_check`.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
 	///
-	/// Similar to [`Command:::ExecuteBlock`], this command needs two inputs: the state, and the
+	/// Similar to [`Command::ExecuteBlock`], this command needs two inputs: the state, and the
 	/// header data. Likewise, `--header-at` and `--header-uri` can be filled, or omitted if
 	/// [`State::Live`] is used.
 	///
-	/// Similar to [`Command:::ExecuteBlock`], this command does not overwrite the code, so in wasm
+	/// Similar to [`Command::ExecuteBlock`], this command does not overwrite the code, so in wasm
 	/// execution, the live chain's code is used. This can be disabled if desired, see
-	/// [`OffchainWorkerCmd::overwrite_wasm_code`].
+	/// `OffchainWorkerCmd::overwrite_wasm_code`.
 	///
 	/// This executes the same runtime api as normal block import, namely
 	/// `OffchainWorkerApi_offchain_worker`.
@@ -459,12 +462,20 @@ pub enum State {
 		/// The pallets to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
 		pallets: Option<Vec<String>>,
+
+		/// Fetch the child-keys as well.
+		///
+		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other
+		/// words, if you scrape the whole state the child tree data is included out of the box.
+		/// Otherwise, it must be enabled explicitly using this flag.
+		#[structopt(long, require_delimiter = true)]
+		child_tree: bool,
 	},
 }
 
 impl State {
 	/// Create the [`remote_externalities::Builder`] from self.
-	pub(crate) fn builder<Block: BlockT>(&self) -> sc_cli::Result<Builder<Block>>
+	pub(crate) fn builder<Block: BlockT + DeserializeOwned>(&self) -> sc_cli::Result<Builder<Block>>
 	where
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
@@ -474,21 +485,26 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live { snapshot_path, pallets, uri, at } => {
+			State::Live { snapshot_path, pallets, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
 				};
-				Builder::<Block>::new()
+				let mut builder = Builder::<Block>::new()
 					.mode(Mode::Online(OnlineConfig {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallets.to_owned().unwrap_or_default(),
+						pallets: pallets.clone().unwrap_or_default(),
 						at,
+						..Default::default()
 					}))
 					.inject_hashed_key(
 						&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
-					)
+					);
+				if *child_tree {
+					builder = builder.inject_default_child_tree_prefix();
+				}
+				builder
 			},
 		})
 	}
@@ -662,8 +678,14 @@ pub(crate) fn build_executor<D: NativeExecutionDispatch + 'static>(
 	let wasm_method = shared.wasm_method;
 	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 	let max_runtime_instances = config.max_runtime_instances;
+	let runtime_cache_size = config.runtime_cache_size;
 
-	NativeElseWasmExecutor::<D>::new(wasm_method.into(), heap_pages, max_runtime_instances)
+	NativeElseWasmExecutor::<D>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+		runtime_cache_size,
+	)
 }
 
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the
@@ -677,9 +699,8 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 	extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	let mut changes = Default::default();
-	let encoded_results = StateMachine::<_, _, NumberFor<Block>, _>::new(
+	let encoded_results = StateMachine::new(
 		&ext.backend,
-		None,
 		&mut changes,
 		executor,
 		method,
@@ -692,6 +713,85 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
+	Ok((changes, encoded_results))
+}
+
+/// Same as [`state_machine_call`], but it also computes and prints the storage proof in different
+/// size and formats.
+///
+/// Make sure [`LOG_TARGET`] is enabled in logging.
+pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDispatch + 'static>(
+	ext: &TestExternalities,
+	executor: &NativeElseWasmExecutor<D>,
+	execution: sc_cli::ExecutionStrategy,
+	method: &'static str,
+	data: &[u8],
+	extensions: Extensions,
+) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
+	use parity_scale_codec::Encode;
+	use sp_core::hexdisplay::HexDisplay;
+
+	let mut changes = Default::default();
+	let backend = ext.backend.clone();
+	let proving_backend = InMemoryProvingBackend::new(&backend);
+
+	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
+	let runtime_code = runtime_code_backend.runtime_code()?;
+
+	let pre_root = backend.root().clone();
+
+	let encoded_results = StateMachine::new(
+		&proving_backend,
+		&mut changes,
+		executor,
+		method,
+		data,
+		extensions,
+		&runtime_code,
+		sp_core::testing::TaskExecutor::new(),
+	)
+	.execute(execution.into())
+	.map_err(|e| format!("failed to execute {}: {:?}", method, e))
+	.map_err::<sc_cli::Error, _>(Into::into)?;
+
+	let proof = proving_backend.extract_proof();
+	let proof_size = proof.encoded_size();
+	let compact_proof = proof
+		.clone()
+		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
+		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
+
+	let compact_proof_size = compact_proof.encoded_size();
+	let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0)
+		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
+
+	let proof_nodes = proof.into_nodes();
+
+	let humanize = |s| {
+		if s < 1024 * 1024 {
+			format!("{:.2} KB ({} bytes)", s as f64 / 1024f64, s)
+		} else {
+			format!(
+				"{:.2} MB ({} KB) ({} bytes)",
+				s as f64 / (1024f64 * 1024f64),
+				s as f64 / 1024f64,
+				s
+			)
+		}
+	};
+	log::info!(
+		target: LOG_TARGET,
+		"proof: {} / {} nodes",
+		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
+		proof_nodes.len()
+	);
+	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
+	log::info!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
+	log::info!(
+		target: LOG_TARGET,
+		"zstd-compressed compact proof {}",
+		humanize(compressed_proof.len()),
+	);
 	Ok((changes, encoded_results))
 }
 

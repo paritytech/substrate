@@ -18,4 +18,4 @@ name = "subkey"
 
 [dependencies]
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
-structopt = "0.3.14"
+structopt = "0.3.25"

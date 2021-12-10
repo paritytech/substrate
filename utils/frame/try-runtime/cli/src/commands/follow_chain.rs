@@ -17,11 +17,11 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, local_spec, parse,
-	state_machine_call, SharedParams, LOG_TARGET,
+	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
-use jsonrpsee_ws_client::{
-	types::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription},
-	WsClientBuilder,
+use jsonrpsee::{
+	types::{traits::SubscriptionClient, Subscription},
+	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::Decode;
 use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
@@ -72,7 +72,7 @@ where
 
 	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
 	let mut subscription: Subscription<Block::Header> =
-		client.subscribe(&SUB, JsonRpcParams::NoParams, &UN_SUB).await.unwrap();
+		client.subscribe(&SUB, None, &UN_SUB).await.unwrap();
 
 	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
@@ -139,7 +139,7 @@ where
 		let state_ext =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-		let (mut changes, encoded_result) = state_machine_call::<Block, ExecDispatch>(
+		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
 			&state_ext,
 			&executor,
 			execution,
@@ -152,12 +152,7 @@ where
 			.map_err(|e| format!("failed to decode output: {:?}", e))?;
 
 		let storage_changes = changes
-			.drain_storage_changes::<_, _, NumberFor<Block>>(
-				&state_ext.backend,
-				None,
-				Default::default(),
-				&mut Default::default(),
-			)
+			.drain_storage_changes(&state_ext.backend, Default::default(), &mut Default::default())
 			.unwrap();
 		state_ext.backend.apply_transaction(
 			storage_changes.transaction_storage_root,

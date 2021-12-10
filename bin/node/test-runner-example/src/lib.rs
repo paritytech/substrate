@@ -69,6 +69,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 		from: <Self::Runtime as frame_system::Config>::AccountId,
 	) -> Self::SignedExtras {
 		(
+			frame_system::CheckNonZeroSender::<Self::Runtime>::new(),
 			frame_system::CheckSpecVersion::<Self::Runtime>::new(),
 			frame_system::CheckTxVersion::<Self::Runtime>::new(),
 			frame_system::CheckGenesis::<Self::Runtime>::new(),
@@ -77,7 +78,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 				frame_system::Pallet::<Self::Runtime>::account_nonce(from),
 			),
 			frame_system::CheckWeight::<Self::Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Self::Runtime>::from(0),
+			pallet_asset_tx_payment::ChargeAssetTxPayment::<Self::Runtime>::from(0, None),
 		)
 	}
 }
