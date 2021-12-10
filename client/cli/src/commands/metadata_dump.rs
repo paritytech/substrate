@@ -18,17 +18,19 @@
 
 //! Provides the [`MetadataDump`] command for dumping the runtime metadata.
 
-use crate::{
-	error,
-	params::SharedParams,
-	CliConfiguration,
-};
+use crate::{error, params::SharedParams, CliConfiguration};
 use log::info;
 use sc_client_api::UsageProvider;
-use sp_runtime::{traits::Block as BlockT, generic::BlockId};
-use std::{fmt::Debug, fs, io::{self, Write}, path::PathBuf, sync::Arc};
+use sp_api::{Metadata, ProvideRuntimeApi};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use std::{
+	fmt::Debug,
+	fs,
+	io::{self, Write},
+	path::PathBuf,
+	sync::Arc,
+};
 use structopt::StructOpt;
-use sp_api::{ProvideRuntimeApi, Metadata};
 
 /// The `metadata-dump` command used to dump the metadata of the runtime.
 #[derive(Debug, StructOpt, Clone)]
@@ -71,7 +73,8 @@ impl MetadataDump {
 			fs::write(output, metadata_output)
 		} else {
 			io::stdout().lock().write_all(&metadata_output)
-		}.map_err(Into::into)
+		}
+		.map_err(Into::into)
 	}
 }
 
