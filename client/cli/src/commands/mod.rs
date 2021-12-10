@@ -27,6 +27,7 @@ mod inspect_key;
 mod inspect_node_key;
 mod key;
 mod metadata_dump;
+mod metadata;
 mod purge_chain_cmd;
 mod revert_cmd;
 mod run_cmd;
@@ -41,5 +42,5 @@ pub use self::{
 	generate_node_key::GenerateNodeKeyCmd, import_blocks_cmd::ImportBlocksCmd,
 	insert_key::InsertKeyCmd, inspect_key::InspectKeyCmd, inspect_node_key::InspectNodeKeyCmd,
 	key::KeySubcommand, purge_chain_cmd::PurgeChainCmd, revert_cmd::RevertCmd, run_cmd::RunCmd,
-	sign::SignCmd, vanity::VanityCmd, verify::VerifyCmd, metadata_dump::MetadataDump,
+	sign::SignCmd, vanity::VanityCmd, verify::VerifyCmd, metadata_dump::MetadataDump, metadata::MetadataSubcommand,
 };

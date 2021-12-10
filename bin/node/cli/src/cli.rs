@@ -85,6 +85,6 @@ pub enum Subcommand {
 	/// Revert the chain to a previous state.
 	Revert(sc_cli::RevertCmd),
 
-	/// Dump metadata.
-	MetadataDump(sc_cli::MetadataDump),
+	/// Metadata subcommand.
+	Metadata(sc_cli::MetadataSubcommand),
 }
