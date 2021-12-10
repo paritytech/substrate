@@ -59,7 +59,7 @@ impl MetadataDump {
 
 		info!("Dumping metadata for block `{:?}`.", best_hash);
 
-		// Conver the metadata to the requested format
+		// Convert the metadata to the requested format
 		let metadata_output = if self.binary {
 			metadata.to_vec()
 		} else {
