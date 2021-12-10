@@ -1054,8 +1054,12 @@ where
 	) -> sp_blockchain::Result<StateVersion> {
 		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
 			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
-	//pub(crate) fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, spec_name: String) -> Self {
-			let code_fetcher = crate::client::wasm_override::WasmBlob::new(wasm.clone());
+			let code_fetcher = crate::client::wasm_override::WasmBlob::new(
+				wasm.clone(),
+				crate::client::wasm_override::make_hash(&wasm),
+				Default::default(),
+				Default::default(),
+			);
 			let runtime_code = code_fetcher.runtime_code(None);
 			let runtime_version =
 				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)

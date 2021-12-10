@@ -70,17 +70,17 @@ pub(crate) struct WasmBlob {
 }
 
 impl WasmBlob {
-	fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, spec_name: String) -> Self {
+	pub(crate) fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, spec_name: String) -> Self {
 		Self { code, hash, path, spec_name, last_warn: Default::default() }
 	}
 
-	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
+	pub(crate) fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
 		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages }
 	}
 }
 
 /// Make a hash out of a byte string using the default rust hasher
-fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> Vec<u8> {
+pub(crate) fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> Vec<u8> {
 	let mut state = DefaultHasher::new();
 	val.hash(&mut state);
 	state.finish().to_le_bytes().to_vec()
