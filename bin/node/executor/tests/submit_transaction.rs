@@ -21,6 +21,7 @@ use node_runtime::{Executive, Indices, Runtime, UncheckedExtrinsic};
 use sp_application_crypto::AppKey;
 use sp_core::offchain::{testing::TestTransactionPoolExt, TransactionPoolExt};
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
+use sp_keyring::sr25519::Keyring::Alice;
 use std::sync::Arc;
 
 pub mod common;
@@ -86,7 +87,7 @@ fn should_submit_signed_transaction() {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -123,7 +124,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -135,7 +136,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -173,7 +174,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
+				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -184,7 +185,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		// submit another one from the same account. The nonce should be incremented.
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
+				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -238,7 +239,7 @@ fn submitted_transaction_should_be_valid() {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
