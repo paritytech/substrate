@@ -172,7 +172,7 @@ where
 			Some(new)
 		} else {
 			let at = BlockId::hash(header.hash());
-			self.client.runtime_api().validator_set(&at).ok()
+			self.client.runtime_api().validator_set(&at).ok().flatten()
 		};
 
 		trace!(target: "beefy", "🥩 active validator set: {:?}", new);
@@ -215,9 +215,9 @@ where
 		if let Some(active) = self.validator_set(&notification.header) {
 			// Authority set change or genesis set id triggers new voting rounds
 			//
-			// TODO: (adoerr) Enacting a new authority set will also implicitly 'conclude'
-			// the currently active BEEFY voting round by starting a new one. This is
-			// temporary and needs to be replaced by proper round life cycle handling.
+			// TODO: (grandpa-bridge-gadget#366) Enacting a new authority set will also
+			// implicitly 'conclude' the currently active BEEFY voting round by starting a
+			// new one. This should be replaced by proper round life-cycle handling.
 			if self.rounds.is_none() ||
 				active.id() != self.rounds.as_ref().unwrap().validator_set_id() ||
 				(active.id() == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
@@ -231,7 +231,7 @@ where
 					metric_inc!(self, beefy_skipped_sessions);
 				}
 
-				if log_enabled!(log::Level::Debug) {
+				if log_enabled!(target: "beefy", log::Level::Debug) {
 					// verify the new validator set - only do it if we're also logging the warning
 					let _ = self.verify_validator_set(notification.header.number(), &active);
 				}

@@ -158,7 +158,7 @@ sp_api::decl_runtime_apis! {
 	pub trait BeefyApi
 	{
 		/// Return the current active BEEFY validator set
-		fn validator_set() -> ValidatorSet<crypto::AuthorityId>;
+		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
 	}
 }
 
