@@ -130,6 +130,7 @@ fn call_in_wasm<E: Externalities>(
 		HostFunctions::host_functions(),
 		8,
 		None,
+		2,
 	);
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
@@ -480,6 +481,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		HostFunctions::host_functions(),
 		8,
 		None,
+		2,
 	);
 
 	let err = executor
@@ -593,6 +595,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		HostFunctions::host_functions(),
 		8,
 		None,
+		2,
 	));
 	let threads: Vec<_> = (0..8)
 		.map(|_| {

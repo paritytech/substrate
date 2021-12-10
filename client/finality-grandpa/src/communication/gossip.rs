@@ -1299,7 +1299,7 @@ impl Metrics {
 			messages_validated: register(
 				CounterVec::new(
 					Opts::new(
-						"finality_grandpa_communication_gossip_validator_messages",
+						"substrate_finality_grandpa_communication_gossip_validator_messages",
 						"Number of messages validated by the finality grandpa gossip validator.",
 					),
 					&["message", "action"],
