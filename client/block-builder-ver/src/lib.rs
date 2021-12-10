@@ -349,14 +349,19 @@ where
 			.into_storage_changes(&state, changes_trie_state.as_ref(), parent_hash)
 			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 		// store hash of all extrinsics include in given bloack
+        //
+        let curr_block_extrinsics_count = self.extrinsics.len();
+        let all_extrinsics: Vec<_> = self.extrinsics.iter().chain(self.previous_block_extrinsics.unwrap().iter()).cloned().collect();
+
 		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
-			self.extrinsics.iter().map(Encode::encode).collect(),
+			all_extrinsics.iter().map(Encode::encode).collect(),
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
+		header.set_count(curr_block_extrinsics_count.into());
 
 		Ok(BuiltBlock {
-			block: <Block as BlockT>::new_ver(header, self.extrinsics, self.previous_block_extrinsics.unwrap()),
+			block: <Block as BlockT>::new(header, all_extrinsics),
 			storage_changes,
 			proof,
 		})

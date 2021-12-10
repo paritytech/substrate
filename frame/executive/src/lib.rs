@@ -130,7 +130,7 @@ use schnorrkel::{
 	vrf::{VRFOutput, VRFProof},
 	SignatureError,
 };
-use sp_core::{ShufflingSeed, crypto::UncheckedFrom, Hasher};
+use sp_core::{ShufflingSeed, crypto::UncheckedFrom, Hasher, U256};
 // use sp_keystore::vrf;
 use sp_runtime::{
 	generic::Digest,
@@ -447,12 +447,17 @@ where
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
-            sp_runtime::print("PREVIOUS BLOCK TX COUNT");
-            sp_runtime::print(block.prev_extrinsics().len());
-            let previous = block.prev_extrinsics().iter().filter(|e| e.is_signed().unwrap()).cloned().collect::<Vec<_>>();
-            sp_runtime::print("PREVIOUS BLOCK EXTRINSICS COUNT");
-            sp_runtime::print(previous.len());
 			let (header, extrinsics) = block.deconstruct();
+            sp_runtime::print("ALL TX COUNT");
+            sp_runtime::print(extrinsics.len());
+            let count: usize = header.count().unique_saturaged_into();
+            sp_runtime::print("THIS BLOCK EXTRINSICS COUNT");
+            sp_runtime::print(count);
+
+            assert!(extrinsics.len() > count);
+
+            let curr_block_txs = extrinsics.iter().take(count);
+            let prev_block_txs = extrinsics.iter().skip(count);
            
             // let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e: Block::Extrinsic| 
             //         (     
@@ -464,12 +469,11 @@ where
             // ).collect();
             // let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
             
-            let inherents = extrinsics.into_iter().filter(|e| !e.is_signed().unwrap()).collect::<Vec<_>>();
+            let curr_block_inherents = curr_block_txs.filter(|e| !e.is_signed().unwrap());
+            let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
+            let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect();
 
-            Self::execute_extrinsics_with_book_keeping(inherents.into_iter().chain(previous.into_iter()).collect(), *header.number());
-            // Self::execute_extrinsics_with_book_keeping(inherents, *header.number());
-
-
+            Self::execute_extrinsics_with_book_keeping(tx_to_be_executed, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");

@@ -174,11 +174,11 @@ where
 		self.seed = seed;
 	}
 
-	fn count(&self) -> &Number {
+	fn count(&self) -> &Self::Number {
 		&self.count
 	}
 
-	fn set_count(&mut self, count: Number) {
+	fn set_count(&mut self, count: Self::Number) {
 		self.count = count;
 	}
 

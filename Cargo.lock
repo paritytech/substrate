@@ -1994,6 +1994,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "schnorrkel",
+ "sp-arithmetic",
  "sp-core",
  "sp-inherents",
  "sp-io",
