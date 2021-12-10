@@ -484,6 +484,9 @@ pub enum InstantiationError {
 	/// Module is well-formed, instantiated and linked, but while executing the start function
 	/// a trap was generated.
 	StartTrapped,
+	/// The module was compiled with a CPU feature that is not available on
+    /// the current host.
+    CpuFeature(String),
 }
 
 fn decode_environment_definition(
@@ -661,9 +664,10 @@ impl BackendContext {
 			#[cfg(feature = "wasmer-sandbox")]
 			SandboxBackend::Wasmer | SandboxBackend::TryWasmer => {
 				let compiler = wasmer_compiler_singlepass::Singlepass::default();
+				let engine = wasmer_engine_universal::Universal::new(compiler).engine();
 
 				BackendContext::Wasmer(WasmerBackend {
-					store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()),
+					store: wasmer::Store::new(&engine),
 				})
 			},
 		}
@@ -972,6 +976,7 @@ impl<DT> Store<DT> {
 				wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
 				wasmer::InstantiationError::HostEnvInitialization(_) =>
 					InstantiationError::EnvironmentDefinitionCorrupted,
+				wasmer::InstantiationError::CpuFeature(msg) => InstantiationError::CpuFeature(msg),
 			})
 		})?;
 
