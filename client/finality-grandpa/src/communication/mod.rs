@@ -67,13 +67,23 @@ mod periodic;
 #[cfg(test)]
 pub(crate) mod tests;
 
-const GRANDPA_PROTOCOL_NAME: &'static str = "/grandpa/1";
-/// Old name for the notifications protocol, still used for backward compatibility.
-pub(crate) const GRANDPA_PROTOCOL_LEGACY: &'static str = "/paritytech/grandpa/1";
-/// Name of the notifications protocol used by Grandpa. Must be registered towards the networking
-/// in order for Grandpa to properly function.
-pub(crate) fn grandpa_protocol_name(chain_prefix: &str) -> String {
-	format!("{}{}", chain_prefix, GRANDPA_PROTOCOL_NAME)
+pub(crate) struct GrandpaProtocolName {}
+impl GrandpaProtocolName {
+	const NAME: &'static str = "/grandpa/1";
+	/// Old names for the notifications protocol, used for backward compatibility.
+	pub const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/grandpa/1"];
+
+	/// Name of the notifications protocol used by Grandpa.
+	/// Must be registered towards the networking in order for Grandpa to properly function.
+	pub fn with_prefix(prefix: &str) -> String {
+		format!("{}{}", prefix, Self::NAME)
+	}
+
+	#[cfg(test)]
+	/// Protocol name used in tests.
+	pub fn test_name() -> String {
+		format!("/test{}", Self::NAME)
+	}
 }
 
 // cost scalars for reporting peers.
@@ -225,7 +235,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		prometheus_registry: Option<&Registry>,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
-		let protocol = grandpa_protocol_name(&config.protocol_name_prefix);
+		let protocol = GrandpaProtocolName::with_prefix(&config.protocol_name_prefix);
 		let (validator, report_stream) =
 			GossipValidator::new(config, set_state.clone(), prometheus_registry, telemetry.clone());
 
