@@ -85,12 +85,12 @@ mod tests {
 
 	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE};
 
-	type TestCommitment = Commitment<u128, Signature>;
-	type TestSignedCommitment = SignedCommitment<u128, Signature>;
-	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<Option<Signature>>>;
+	type TestCommitment = Commitment<u128>;
+	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
+	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_signatures() -> (Signature, Signature) {
+	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();

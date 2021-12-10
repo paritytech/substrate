@@ -300,9 +300,9 @@ mod tests {
 
 	use crate::{crypto, KEY_TYPE};
 
-	type TestCommitment = Commitment<u128, crypto::Signature>;
+	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
-	type TestVersionedCommitment = VersionedCommitment<u128>;
+	type TestVersionedCommitment = VersionedCommitment<u128, crypto::Signature>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
