@@ -18,8 +18,10 @@
 use crate::{Config, Pallet};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::traits::{SignedExtension, DispatchInfoOf};
-use sp_runtime::transaction_validity::TransactionValidityError;
+use sp_runtime::{
+	traits::{DispatchInfoOf, SignedExtension},
+	transaction_validity::TransactionValidityError,
+};
 
 /// Ensure the runtime version registered in the transaction is the same as at present.
 ///

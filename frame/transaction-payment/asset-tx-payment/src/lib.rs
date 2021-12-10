@@ -275,10 +275,10 @@ where
 					)?;
 				},
 				InitialPayment::Nothing => {
-					// `actual_fee` should be zero here for any signed extrinsic. It would be non-zero
-					// here in case of unsigned extrinsics as they don't pay fees but
-					// `compute_actual_fee` is not aware of them. In both cases it's fine to just move
-					// ahead without adjusting the fee, though, so we do nothing.
+					// `actual_fee` should be zero here for any signed extrinsic. It would be
+					// non-zero here in case of unsigned extrinsics as they don't pay fees but
+					// `compute_actual_fee` is not aware of them. In both cases it's fine to just
+					// move ahead without adjusting the fee, though, so we do nothing.
 					debug_assert!(tip.is_zero(), "tip should be zero if initial fee was zero.");
 				},
 			}

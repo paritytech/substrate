@@ -83,7 +83,13 @@ where
 			Ok(info) => info,
 			Err(err) => err.post_info,
 		};
-		Extra::post_dispatch(maybe_pre, info, &post_info, len, &res.map(|_| ()).map_err(|e| e.error))?;
+		Extra::post_dispatch(
+			maybe_pre,
+			info,
+			&post_info,
+			len,
+			&res.map(|_| ()).map_err(|e| e.error),
+		)?;
 		Ok(res)
 	}
 }

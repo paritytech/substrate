@@ -364,7 +364,7 @@ mod tests {
 	use crate::{
 		codec::{Decode, Encode},
 		testing::TestSignature as TestSig,
-		traits::{IdentityLookup, SignedExtension, DispatchInfoOf},
+		traits::{DispatchInfoOf, IdentityLookup, SignedExtension},
 	};
 	use sp_io::hashing::blake2_256;
 

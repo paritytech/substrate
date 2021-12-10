@@ -921,9 +921,7 @@ pub trait SignedExtension:
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
-		Self::validate_unsigned(call, info, len)
-			.map(|_| ())
-			.map_err(Into::into)
+		Self::validate_unsigned(call, info, len).map(|_| ()).map_err(Into::into)
 	}
 
 	/// Do any post-flight stuff for an extrinsic.

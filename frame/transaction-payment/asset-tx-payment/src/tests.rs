@@ -726,7 +726,8 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 				CALL,
 				&info_from_weight(weight),
 				len,
-			).unwrap();
+			)
+			.unwrap();
 
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 
