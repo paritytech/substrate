@@ -18,7 +18,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use futures::{
 	executor::block_on,
 	future::{ready, Ready},
