@@ -71,7 +71,7 @@ pub mod crypto {
 }
 
 pub mod bls_crypto {
-	use sp_application_crypto::{app_crypto, ecdsa};
+	use sp_application_crypto::{app_crypto, bls};
 	app_crypto!(bls, crate::KEY_TYPE);
 
 	/// Identity of a BEEFY authority using ECDSA as its crypto.

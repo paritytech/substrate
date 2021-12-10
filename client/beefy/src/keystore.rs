@@ -26,6 +26,7 @@ use log::warn;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
+    bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
 	KEY_TYPE,
 };
 

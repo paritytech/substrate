@@ -15,18 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Ecdsa crypto types.
+//! bls crypto types.
 
 use crate::{KeyTypeId, RuntimePublic};
 
 use sp_std::vec::Vec;
 
-pub use sp_core::ecdsa::*;
+pub use sp_core::bls::*;
 
 mod app {
-	use sp_core::testing::ECDSA;
+	use sp_core::testing::BLS;
 
-	crate::app_crypto!(super, ECDSA);
+	crate::app_crypto!(super, BLS);
 
 	impl crate::traits::BoundToRuntimeAppPublic for Public {
 		type Public = Self;

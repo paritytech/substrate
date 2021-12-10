@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use futures::{executor::block_on, future::join_all};
 use sp_core::{
 	crypto::{CryptoTypePublicPair, KeyTypeId},
-	ecdsa, ed25519, sr25519,
+	ecdsa, ed25519, sr25519, bls
 };
 use std::sync::Arc;
 
