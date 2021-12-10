@@ -480,13 +480,15 @@ pub mod pallet {
 			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
-				.filter_map(|v| Some((v.clone(), Pallet::<T>::load_keys(&v)?)))
+				.filter_map(|v| Some((v.clone(), Pallet::<T>::load_keys(&v)
+					.expect("Validator in session 1 missing keys!")
+				)))
 				.collect();
 
 			// Tell everyone about the genesis session keys
 			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-			<Validators<T>>::put(initial_validators_0);
+			Validators::<T>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
 
 			T::SessionManager::start_session(0);
@@ -645,7 +647,7 @@ impl<T: Config> Pallet<T> {
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators =
 			session_keys.iter().map(|(validator, _)| validator.clone()).collect::<Vec<_>>();
-		<Validators<T>>::put(&validators);
+		Validators::<T>::put(&validators);
 
 		if changed {
 			// reset disabled validators
@@ -667,7 +669,7 @@ impl<T: Config> Pallet<T> {
 				// same as before, as underlying economic conditions may have changed.
 				(validators, true)
 			} else {
-				(<Validators<T>>::get(), false)
+				(Validators::<T>::get(), false)
 			};
 
 		// Queue next session keys.

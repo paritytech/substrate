@@ -380,7 +380,7 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
@@ -643,7 +643,7 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 }
 
 impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
-	fn default_from(validator: AccountId) -> Self {
+	pub fn default_from(validator: AccountId) -> Self {
 		Self {
 			validator,
 			own: Zero::zero(),
