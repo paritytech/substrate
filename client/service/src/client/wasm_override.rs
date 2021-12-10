@@ -282,6 +282,7 @@ mod tests {
 				WasmExecutionMethod::Interpreted,
 				Some(128),
 				1,
+				2,
 			);
 		let bytes = substrate_test_runtime::wasm_binary_unwrap();
 		let dir = tempfile::tempdir().expect("Create a temporary directory");
@@ -295,6 +296,7 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			Some(128),
 			1,
+			2,
 		);
 
 		let version = WasmOverride::runtime_version(

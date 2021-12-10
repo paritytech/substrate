@@ -48,6 +48,7 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 		host_functions,
 		8,
 		None,
+		2,
 	);
 	executor
 		.uncached_call(

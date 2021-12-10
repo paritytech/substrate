@@ -287,5 +287,10 @@ pub fn new() -> Client<Backend> {
 
 /// Create a new native executor.
 pub fn new_native_executor() -> sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch> {
-	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+	sc_executor::NativeElseWasmExecutor::new(
+		sc_executor::WasmExecutionMethod::Interpreted,
+		None,
+		8,
+		2,
+	)
 }
