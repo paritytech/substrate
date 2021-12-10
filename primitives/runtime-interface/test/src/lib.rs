@@ -42,7 +42,7 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 
 	let executor = sc_executor::WasmExecutor::<
 		ExtendedHostFunctions<sp_io::SubstrateHostFunctions, HF>,
-	>::new(sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None);
+	>::new(sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None, 2);
 
 	executor
 		.uncached_call(

@@ -309,6 +309,10 @@ pub mod pallet {
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
 		type OnSetCode: SetCode<Self>;
+
+		/// The maximum number of consumers allowed on a single account.
+		#[pallet::constant]
+		type MaxConsumers: Get<RefCount>;
 	}
 
 	#[pallet::pallet]
@@ -1107,8 +1111,12 @@ impl<T: Config> Pallet<T> {
 	pub fn inc_consumers(who: &T::AccountId) -> Result<(), DispatchError> {
 		Account::<T>::try_mutate(who, |a| {
 			if a.providers > 0 {
-				a.consumers = a.consumers.saturating_add(1);
-				Ok(())
+				if a.consumers < T::MaxConsumers::get() {
+					a.consumers = a.consumers.saturating_add(1);
+					Ok(())
+				} else {
+					Err(DispatchError::TooManyConsumers)
+				}
 			} else {
 				Err(DispatchError::NoProviders)
 			}
@@ -1148,7 +1156,8 @@ impl<T: Config> Pallet<T> {
 
 	/// True if the account has at least one provider reference.
 	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
-		Account::<T>::get(who).providers > 0
+		let a = Account::<T>::get(who);
+		a.providers > 0 && a.consumers < T::MaxConsumers::get()
 	}
 
 	/// Deposits an event into this block's event record.

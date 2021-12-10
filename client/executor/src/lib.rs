@@ -78,6 +78,7 @@ mod tests {
 			Some(8),
 			8,
 			None,
+			2,
 		);
 		let res = executor
 			.uncached_call(

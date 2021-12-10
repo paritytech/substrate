@@ -150,11 +150,16 @@ where
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,
+		runtime_cache_size: u8,
 	) -> Self {
 		WasmExecutor {
 			method,
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
-			cache: Arc::new(RuntimeCache::new(max_runtime_instances, cache_path.clone())),
+			cache: Arc::new(RuntimeCache::new(
+				max_runtime_instances,
+				cache_path.clone(),
+				runtime_cache_size,
+			)),
 			cache_path,
 			phantom: PhantomData,
 		}
@@ -361,9 +366,15 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
+		runtime_cache_size: u8,
 	) -> Self {
-		let wasm_executor =
-			WasmExecutor::new(fallback_method, default_heap_pages, max_runtime_instances, None);
+		let wasm_executor = WasmExecutor::new(
+			fallback_method,
+			default_heap_pages,
+			max_runtime_instances,
+			None,
+			runtime_cache_size,
+		);
 
 		NativeElseWasmExecutor {
 			_dummy: Default::default(),
@@ -648,6 +659,7 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			None,
 			8,
+			2,
 		);
 
 		fn extract_host_functions<H>(

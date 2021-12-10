@@ -123,7 +123,8 @@ fn call_in_wasm<E: Externalities>(
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
 ) -> Result<Vec<u8>, String> {
-	let executor = crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None);
+	let executor =
+		crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None, 2);
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
 		ext,
@@ -472,6 +473,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		Some(17), // `17` is the initial number of pages compiled into the binary.
 		8,
 		None,
+		2,
 	);
 
 	let err = executor
@@ -583,6 +585,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		Some(1024),
 		8,
 		None,
+		2,
 	));
 	let threads: Vec<_> = (0..8)
 		.map(|_| {

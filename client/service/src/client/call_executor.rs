@@ -360,6 +360,7 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			Some(128),
 			1,
+			2,
 		);
 
 		let overrides = crate::client::wasm_override::dummy_overrides();

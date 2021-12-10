@@ -494,6 +494,8 @@ pub enum DispatchError {
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
 	NoProviders,
+	/// There are too many consumers so the account cannot be created.
+	TooManyConsumers,
 	/// An error to do with tokens.
 	Token(TokenError),
 	/// An arithmetic error.
@@ -629,6 +631,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
+			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
 		}
@@ -660,6 +663,7 @@ impl traits::Printable for DispatchError {
 			},
 			Self::ConsumerRemaining => "Consumer remaining".print(),
 			Self::NoProviders => "No providers".print(),
+			Self::TooManyConsumers => "Too many consumers".print(),
 			Self::Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();

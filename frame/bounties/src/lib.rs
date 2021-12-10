@@ -453,6 +453,7 @@ pub mod pallet {
 									let err_amount =
 										T::Currency::unreserve(&curator, bounty.curator_deposit);
 									debug_assert!(err_amount.is_zero());
+									bounty.curator_deposit = Zero::zero();
 									// Continue to change bounty status below...
 								}
 							},
