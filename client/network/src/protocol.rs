@@ -132,21 +132,22 @@ impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			peers: {
-				let g = Gauge::new("sync_peers", "Number of peers we sync with")?;
+				let g = Gauge::new("substrate_sync_peers", "Number of peers we sync with")?;
 				register(g, r)?
 			},
 			queued_blocks: {
-				let g = Gauge::new("sync_queued_blocks", "Number of blocks in import queue")?;
+				let g =
+					Gauge::new("substrate_sync_queued_blocks", "Number of blocks in import queue")?;
 				register(g, r)?
 			},
 			fork_targets: {
-				let g = Gauge::new("sync_fork_targets", "Number of fork sync targets")?;
+				let g = Gauge::new("substrate_sync_fork_targets", "Number of fork sync targets")?;
 				register(g, r)?
 			},
 			justifications: {
 				let g = GaugeVec::new(
 					Opts::new(
-						"sync_extra_justifications",
+						"substrate_sync_extra_justifications",
 						"Number of extra justifications requests",
 					),
 					&["status"],
@@ -1362,8 +1363,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		failed_addresses: Option<&Vec<Multiaddr>>,
 	) {
-		self.behaviour.inject_connection_established(peer_id, conn, endpoint)
+		self.behaviour
+			.inject_connection_established(peer_id, conn, endpoint, failed_addresses)
 	}
 
 	fn inject_connection_closed(
@@ -1371,8 +1374,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
+		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
 	) {
-		self.behaviour.inject_connection_closed(peer_id, conn, endpoint)
+		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler)
 	}
 
 	fn inject_connected(&mut self, peer_id: &PeerId) {
@@ -1396,12 +1400,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent
-		>
-	>{
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
@@ -1562,10 +1561,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+			Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
+			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 					peer_id,
@@ -1778,17 +1777,13 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		Poll::Pending
 	}
 
-	fn inject_addr_reach_failure(
+	fn inject_dial_failure(
 		&mut self,
-		peer_id: Option<&PeerId>,
-		addr: &Multiaddr,
-		error: &dyn std::error::Error,
+		peer_id: Option<PeerId>,
+		handler: Self::ProtocolsHandler,
+		error: &libp2p::swarm::DialError,
 	) {
-		self.behaviour.inject_addr_reach_failure(peer_id, addr, error)
-	}
-
-	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_dial_failure(peer_id)
+		self.behaviour.inject_dial_failure(peer_id, handler, error);
 	}
 
 	fn inject_new_listener(&mut self, id: ListenerId) {

@@ -608,7 +608,7 @@ where
 							}
 						}
 
-						// This is use by fast sync so runtime version need to be resolve from
+						// This is use by fast sync for runtime version to be resolvable from
 						// changes.
 						let state_version =
 							Self::resolve_state_version_from_wasm(&storage, &self.executor)?;
@@ -1054,6 +1054,7 @@ where
 	) -> sp_blockchain::Result<StateVersion> {
 		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
 			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
+	//pub(crate) fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, spec_name: String) -> Self {
 			let code_fetcher = crate::client::wasm_override::WasmBlob::new(wasm.clone());
 			let runtime_code = code_fetcher.runtime_code(None);
 			let runtime_version =
@@ -1110,18 +1111,7 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
-		// backwards compatible.
-		//
-		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
-		let code_proof = self.read_proof(
-			id,
-			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
-		)?;
-
-		self.executor
-			.prove_execution(id, method, call_data)
-			.map(|(r, p)| (r, StorageProof::merge(vec![p, code_proof])))
+		self.executor.prove_execution(id, method, call_data)
 	}
 
 	fn read_proof_collection(

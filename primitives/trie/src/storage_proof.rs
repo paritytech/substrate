@@ -70,6 +70,7 @@ impl StorageProof {
 	pub fn into_nodes(self) -> Vec<Vec<u8>> {
 		self.trie_nodes
 	}
+
 	/// Creates a `MemoryDB` from `Self`.
 	pub fn into_memory_db<H: Hasher>(self) -> crate::MemoryDB<H> {
 		self.into()
@@ -103,8 +104,9 @@ impl StorageProof {
 
 	/// Returns the estimated encoded size of the compact proof.
 	///
-	/// Runing this operation is a slow operation (build the whole compact proof) and should only be
-	/// in non sensitive path.
+	/// Running this operation is a slow operation (build the whole compact proof) and should only
+	/// be in non sensitive path.
+	///
 	/// Return `None` on error.
 	pub fn encoded_compact_size<H: Hasher>(self, root: H::Out) -> Option<usize> {
 		let compact_proof = self.into_compact_proof::<H>(root);

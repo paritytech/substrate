@@ -212,6 +212,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type AssetDeposit: Get<DepositBalanceOf<Self, I>>;
 
+		/// The amount of funds that must be reserved for a non-provider asset account to be
+		/// maintained.
+		#[pallet::constant]
+		type AssetAccountDeposit: Get<DepositBalanceOf<Self, I>>;
+
 		/// The basic amount of funds that must be reserved when adding metadata to your asset.
 		#[pallet::constant]
 		type MetadataDepositBase: Get<DepositBalanceOf<Self, I>>;
@@ -250,15 +255,15 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// The number of units of assets held by any given account.
+	/// The holdings of a specific account for a specific asset.
 	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::AssetId,
 		Blake2_128Concat,
 		T::AccountId,
-		AssetBalance<T::Balance, T::Extra>,
-		ValueQuery,
+		AssetAccountOf<T, I>,
+		OptionQuery,
 		GetDefault,
 		ConstU32<300_000>,
 	>;
@@ -448,8 +453,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// Account balance must be greater than or equal to the transfer amount.
 		BalanceLow,
-		/// Balance should be non-zero.
-		BalanceZero,
+		/// The account to alter does not exist.
+		NoAccount,
 		/// The signing account has no permission to do the operation.
 		NoPermission,
 		/// The given asset ID is unknown.
@@ -471,6 +476,12 @@ pub mod pallet {
 		Unapproved,
 		/// The source account would not survive the transfer and it needs to stay alive.
 		WouldDie,
+		/// The asset-account already exists.
+		AlreadyExists,
+		/// The asset-account doesn't have an associated deposit.
+		NoDeposit,
+		/// The operation would result in funds being burned.
+		WouldBurn,
 	}
 
 	#[pallet::call]
@@ -633,7 +644,7 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Manager of the asset `id`.
 		///
-		/// Bails with `BalanceZero` if the `who` is already dead.
+		/// Bails with `NoAccount` if the `who` is already dead.
 		///
 		/// - `id`: The identifier of the asset to have some amount burned.
 		/// - `who`: The account to be debited from.
@@ -779,9 +790,11 @@ pub mod pallet {
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(&origin == &d.freezer, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
-			ensure!(Account::<T, I>::contains_key(id, &who), Error::<T, I>::BalanceZero);
 
-			Account::<T, I>::mutate(id, &who, |a| a.is_frozen = true);
+			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = true;
+				Ok(())
+			})?;
 
 			Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
 			Ok(())
@@ -808,9 +821,11 @@ pub mod pallet {
 			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(&origin == &details.admin, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
-			ensure!(Account::<T, I>::contains_key(id, &who), Error::<T, I>::BalanceZero);
 
-			Account::<T, I>::mutate(id, &who, |a| a.is_frozen = false);
+			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
+				maybe_account.as_mut().ok_or(Error::<T, I>::NoAccount)?.is_frozen = false;
+				Ok(())
+			})?;
 
 			Self::deposit_event(Event::<T, I>::Thawed { asset_id: id, who });
 			Ok(())
@@ -1273,6 +1288,37 @@ pub mod pallet {
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
 			Self::do_transfer_approved(id, &owner, &delegate, &destination, amount)
+		}
+
+		/// Create an asset account for non-provider assets.
+		///
+		/// A deposit will be taken from the signer account.
+		///
+		/// - `origin`: Must be Signed; the signer account must have sufficient funds for a deposit
+		///   to be taken.
+		/// - `id`: The identifier of the asset for the account to be created.
+		///
+		/// Emits `Touched` event when successful.
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn touch(origin: OriginFor<T>, #[pallet::compact] id: T::AssetId) -> DispatchResult {
+			Self::do_touch(id, ensure_signed(origin)?)
+		}
+
+		/// Return the deposit (if any) of an asset account.
+		///
+		/// The origin must be Signed.
+		///
+		/// - `id`: The identifier of the asset for the account to be created.
+		/// - `allow_burn`: If `true` then assets may be destroyed in order to complete the refund.
+		///
+		/// Emits `Refunded` event when successful.
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn refund(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			allow_burn: bool,
+		) -> DispatchResult {
+			Self::do_refund(id, ensure_signed(origin)?, allow_burn)
 		}
 	}
 }

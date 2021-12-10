@@ -18,9 +18,9 @@ derive_more = "0.99.16"
 pwasm-utils = "0.18.2"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 wasmi = "0.9.1"
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../../primitives/core" }
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
-sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
+sp-wasm-interface = { version = "4.0.0", path = "../../../primitives/wasm-interface" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
 sp-serializer = { version = "4.0.0-dev", path = "../../../primitives/serializer" }
 thiserror = "1.0.30"

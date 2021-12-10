@@ -4300,8 +4300,8 @@ fn chill_other_works() {
 		.min_nominator_bond(1_000)
 		.min_validator_bond(1_500)
 		.build_and_execute(|| {
-			let initial_validators = CounterForValidators::<Test>::get();
-			let initial_nominators = CounterForNominators::<Test>::get();
+			let initial_validators = Validators::<Test>::count();
+			let initial_nominators = Nominators::<Test>::count();
 			for i in 0..15 {
 				let a = 4 * i;
 				let b = 4 * i + 1;
@@ -4350,7 +4350,15 @@ fn chill_other_works() {
 			);
 
 			// Change the minimum bond... but no limits.
-			assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
+			assert_ok!(Staking::set_staking_configs(
+				Origin::root(),
+				1_500,
+				2_000,
+				None,
+				None,
+				None,
+				Zero::zero()
+			));
 
 			// Still can't chill these users
 			assert_noop!(
@@ -4363,13 +4371,14 @@ fn chill_other_works() {
 			);
 
 			// Add limits, but no threshold
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
 				Some(10),
 				Some(10),
-				None
+				None,
+				Zero::zero()
 			));
 
 			// Still can't chill these users
@@ -4383,13 +4392,14 @@ fn chill_other_works() {
 			);
 
 			// Add threshold, but no limits
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
 				None,
 				None,
-				Some(Percent::from_percent(0))
+				Some(Percent::from_percent(0)),
+				Zero::zero()
 			));
 
 			// Still can't chill these users
@@ -4403,18 +4413,19 @@ fn chill_other_works() {
 			);
 
 			// Add threshold and limits
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
 				Some(10),
 				Some(10),
-				Some(Percent::from_percent(75))
+				Some(Percent::from_percent(75)),
+				Zero::zero()
 			));
 
 			// 16 people total because tests start with 2 active one
-			assert_eq!(CounterForNominators::<Test>::get(), 15 + initial_nominators);
-			assert_eq!(CounterForValidators::<Test>::get(), 15 + initial_validators);
+			assert_eq!(Nominators::<Test>::count(), 15 + initial_nominators);
+			assert_eq!(Validators::<Test>::count(), 15 + initial_validators);
 
 			// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting
 			// with 16)
@@ -4426,13 +4437,13 @@ fn chill_other_works() {
 			}
 
 			// chill a nominator. Limit is not reached, not chill-able
-			assert_eq!(CounterForNominators::<Test>::get(), 7);
+			assert_eq!(Nominators::<Test>::count(), 7);
 			assert_noop!(
 				Staking::chill_other(Origin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
 			// chill a validator. Limit is reached, chill-able.
-			assert_eq!(CounterForValidators::<Test>::get(), 9);
+			assert_eq!(Validators::<Test>::count(), 9);
 			assert_ok!(Staking::chill_other(Origin::signed(1337), 3));
 		})
 }
@@ -4440,20 +4451,21 @@ fn chill_other_works() {
 #[test]
 fn capped_stakers_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		let validator_count = CounterForValidators::<Test>::get();
+		let validator_count = Validators::<Test>::count();
 		assert_eq!(validator_count, 3);
-		let nominator_count = CounterForNominators::<Test>::get();
+		let nominator_count = Nominators::<Test>::count();
 		assert_eq!(nominator_count, 1);
 
 		// Change the maximums
 		let max = 10;
-		assert_ok!(Staking::set_staking_limits(
+		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
 			10,
 			10,
 			Some(max),
 			Some(max),
-			Some(Percent::from_percent(0))
+			Some(Percent::from_percent(0)),
+			Zero::zero(),
 		));
 
 		// can create `max - validator_count` validators
@@ -4516,9 +4528,57 @@ fn capped_stakers_works() {
 		));
 
 		// No problem when we set to `None` again
-		assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			10,
+			10,
+			None,
+			None,
+			None,
+			Zero::zero(),
+		));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
+	})
+}
+
+#[test]
+fn min_commission_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+		));
+
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			0,
+			0,
+			None,
+			None,
+			None,
+			Perbill::from_percent(10),
+		));
+
+		// can't make it less than 10 now
+		assert_noop!(
+			Staking::validate(
+				Origin::signed(10),
+				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			),
+			Error::<Test>::CommissionTooLow
+		);
+
+		// can only change to higher.
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(10), blocked: false }
+		));
+
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
+		));
 	})
 }
 

@@ -150,6 +150,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
@@ -272,9 +273,10 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type WeightInfo = ();
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
+	type BenchmarkingConfig = TestBenchmarkingConfig;
+	type WeightInfo = ();
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -535,8 +537,8 @@ fn post_conditions() {
 fn check_count() {
 	let nominator_count = Nominators::<Test>::iter().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
-	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
-	assert_eq!(validator_count, CounterForValidators::<Test>::get());
+	assert_eq!(nominator_count, Nominators::<Test>::count());
+	assert_eq!(validator_count, Validators::<Test>::count());
 
 	// the voters that the `SortedListProvider` list is storing for us.
 	let external_voters = <Test as Config>::SortedListProvider::count();

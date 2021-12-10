@@ -29,7 +29,7 @@ sc-service = { version = "0.10.0-dev", default-features = false, features = [
 ], path = "../../client/service" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
