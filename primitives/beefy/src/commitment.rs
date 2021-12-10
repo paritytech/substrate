@@ -278,11 +278,15 @@ where
 	}
 }
 
-/// A [SignedCommitment] with a version number. This variant will be appended
-/// to the block justifications for the block for which the signed commitment
-/// has been generated.
+/// A [SignedCommitment] with a version number.
+///
+/// This variant will be appended to the block justifications for the block
+/// for which the signed commitment has been generated.
+///
+/// Note that this enum is subject to change in the future with introduction
+/// of additional cryptographic primitives to BEEFY.
 #[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-pub enum VersionedCommitment<N, S> {
+pub enum VersionedFinalityProof<N, S> {
 	#[codec(index = 1)]
 	/// Current active version
 	V1(SignedCommitment<N, S>),
@@ -302,7 +306,7 @@ mod tests {
 
 	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
-	type TestVersionedCommitment = VersionedCommitment<u128, crypto::Signature>;
+	type TestVersionedFinalityProof = VersionedFinalityProof<u128, crypto::Signature>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
@@ -438,14 +442,14 @@ mod tests {
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
 		};
 
-		let versioned = TestVersionedCommitment::V1(signed.clone());
+		let versioned = TestVersionedFinalityProof::V1(signed.clone());
 
 		let encoded = codec::Encode::encode(&versioned);
 
 		assert_eq!(1, encoded[0]);
 		assert_eq!(encoded[1..], codec::Encode::encode(&signed));
 
-		let decoded = TestVersionedCommitment::decode(&mut &*encoded);
+		let decoded = TestVersionedFinalityProof::decode(&mut &*encoded);
 
 		assert_eq!(decoded, Ok(versioned));
 	}
