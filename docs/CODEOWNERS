@@ -40,10 +40,6 @@
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
-#/client/beefy/
-#/frame/beefy/ 
-#/frame/beefy-mmr/ 
-#/primitives/beefy/
 
 # Contracts
 /frame/contracts/ @athei
