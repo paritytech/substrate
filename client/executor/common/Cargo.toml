@@ -31,7 +31,7 @@ wasmer-compiler-singlepass = { version = "2.1", optional = true }
 wasmer-engine-universal = { version = "2.1", optional = true }
 
 [features]
-default = []
+default = ["wasmer-sandbox"]
 wasmer-sandbox = [
 	"wasmer",
 	"wasmer-compiler-singlepass",
