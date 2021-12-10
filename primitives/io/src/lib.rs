@@ -486,7 +486,7 @@ pub trait Misc {
 					err,
 				);
 				None
-			}
+			},
 		}
 	}
 }
@@ -709,8 +709,8 @@ pub trait Crypto {
 			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 	}
 
-	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public key and
-	/// key type in the keystore.
+	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
+	/// key and key type in the keystore.
 	///
 	/// Returns the signature.
 	fn ecdsa_sign_prehashed(
