@@ -678,8 +678,14 @@ pub(crate) fn build_executor<D: NativeExecutionDispatch + 'static>(
 	let wasm_method = shared.wasm_method;
 	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 	let max_runtime_instances = config.max_runtime_instances;
+	let runtime_cache_size = config.runtime_cache_size;
 
-	NativeElseWasmExecutor::<D>::new(wasm_method.into(), heap_pages, max_runtime_instances)
+	NativeElseWasmExecutor::<D>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+		runtime_cache_size,
+	)
 }
 
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the

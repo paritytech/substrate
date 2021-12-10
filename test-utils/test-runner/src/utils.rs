@@ -113,5 +113,6 @@ pub fn default_config(tokio_handle: Handle, mut chain_spec: Box<dyn ChainSpec>) 
 		keep_blocks: KeepBlocks::All,
 		state_pruning: Default::default(),
 		transaction_storage: TransactionStorageMode::BlockBody,
+		runtime_cache_size: 2,
 	}
 }
