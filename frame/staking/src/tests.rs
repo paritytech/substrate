@@ -1822,7 +1822,11 @@ fn bond_with_little_staked_value_bounded() {
 			// Stingy validator.
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
-			assert_ok!(Session::set_keys(Origin::signed(2), SessionKeys { other: 2.into() }, vec![]));
+			assert_ok!(Session::set_keys(
+				Origin::signed(2),
+				SessionKeys { other: 2.into() },
+				vec![]
+			));
 
 			// 1 era worth of reward. BUT, we set the timestamp after on_initialize, so outdated by
 			// one block.

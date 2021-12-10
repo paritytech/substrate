@@ -480,9 +480,12 @@ pub mod pallet {
 			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
-				.filter_map(|v| Some((v.clone(), Pallet::<T>::load_keys(&v)
-					.expect("Validator in session 1 missing keys!")
-				)))
+				.filter_map(|v| {
+					Some((
+						v.clone(),
+						Pallet::<T>::load_keys(&v).expect("Validator in session 1 missing keys!"),
+					))
+				})
 				.collect();
 
 			// Tell everyone about the genesis session keys
