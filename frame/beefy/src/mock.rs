@@ -18,7 +18,7 @@
 use std::vec;
 
 use frame_support::{
-	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
+	construct_runtime, parameter_types, sp_io::TestExternalities, traits::{GenesisBuild, ConstU8, ConstU32, ConstU64},
 	BasicExternalities,
 };
 use sp_core::H256;
@@ -84,7 +84,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_beefy::Config for Test {
