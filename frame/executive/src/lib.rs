@@ -457,24 +457,22 @@ where
             sp_runtime::print("THIS BLOCK EXTRINSICS COUNT");
             sp_runtime::print(count);
 
-            assert!(extrinsics.len() > count);
+            assert!(extrinsics.len() >= count);
 
             let curr_block_txs = extrinsics.iter().take(count);
             let prev_block_txs = extrinsics.iter().skip(count);
            
-            // let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e: Block::Extrinsic| 
-            //         (     
-            //             e.get_address().map(
-            //                 |addr| AccountId32::unchecked_from(BlakeTwo256::hash(&addr.encode()))
-            //             ),
-            //             e
-            //         )
-            // ).collect();
-            // let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
             
             let curr_block_inherents = curr_block_txs.filter(|e| !e.is_signed().unwrap());
             let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
             let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect();
+
+            let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e| 
+                    (     
+                        (e.get_address(), e)
+                    )
+            ).collect();
+            let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
 
             Self::execute_extrinsics_with_book_keeping(tx_to_be_executed, *header.number());
 

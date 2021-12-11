@@ -76,25 +76,26 @@ fn fisher_yates<T>(data: &mut Vec<T>, seed: [u8; 32]) {
 	}
 }
 
-pub fn shuffle_using_seed<E: Encode>(
-	extrinsics: Vec<(Option<AccountId32>, E)>,
+pub fn shuffle_using_seed<A: Encode + Clone, E: Encode>(
+	extrinsics: Vec<(Option<A>, E)>,
 	seed: &H256,
 ) -> Vec<E> {
 	log::debug!(target: "block_shuffler", "shuffling extrinsics with seed: {:2X?}", seed.as_bytes());
 	log::debug!(target: "block_shuffler", "origin order: [");
 	for (_, tx) in extrinsics.iter() {
-		log::debug!(target: "block_shuffler", "{:?}", BlakeTwo256::hash(&tx.encode()));
+		log::debug!(target: "block_shuffler", "{:?}", BlakeTwo256::hash_of(tx));
 	}
 	log::debug!(target: "block_shuffler", "]");
 
 	// generate exact number of slots for each account
 	// [ Alice, Alice, Alice, ... , Bob, Bob, Bob, ... ]
-	let mut slots: Vec<Option<AccountId32>> =
+	let mut slots: Vec<Option<_>> =
 		extrinsics.iter().map(|(who, _)| who).cloned().collect();
 
-	let mut grouped_extrinsics: BTreeMap<Option<AccountId32>, VecDeque<_>> =
+	let mut grouped_extrinsics: BTreeMap<Option<_>, VecDeque<_>> =
 		extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
-			groups.entry(who).or_insert_with(VecDeque::new).push_back(tx);
+			groups.entry(who.as_ref().map(BlakeTwo256::hash_of))
+                  .or_insert_with(VecDeque::new).push_back(tx);
 			groups
 		});
 
@@ -107,7 +108,7 @@ pub fn shuffle_using_seed<E: Encode>(
 	// [ AliceExtrinsic1, BobExtrinsic1, ... , AliceExtrinsicN, BobExtrinsicN ]
 	let shuffled_extrinsics: Vec<_> = slots
 		.into_iter()
-		.map(|who| grouped_extrinsics.get_mut(&who).unwrap().pop_front().unwrap())
+		.map(|who| grouped_extrinsics.get_mut(&who.as_ref().map(BlakeTwo256::hash_of)).unwrap().pop_front().unwrap())
 		.collect();
 
 	log::debug!(target: "block_shuffler", "shuffled order:[");
@@ -150,7 +151,7 @@ where
 			(who, tx)
 		}).collect();
 
-	shuffle_using_seed::<Block::Extrinsic>(extrinsics, seed)
+	shuffle_using_seed(extrinsics, seed)
 }
 
 #[derive(derive_more::Display, Debug)]

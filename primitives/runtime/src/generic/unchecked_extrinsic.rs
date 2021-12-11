@@ -20,7 +20,7 @@
 use crate::{
 	generic::CheckedExtrinsic,
 	traits::{
-		self, HasAddress, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
+		self, BlakeTwo256, HasAddress, Checkable, Extrinsic, Hash, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
 		SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
@@ -162,6 +162,7 @@ where
 
 impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress 
     for UncheckedExtrinsic<MultiAddress<AccountId,AccountIndex>, Call, Signature, Extra> where
+    AccountId: Clone,
 	Signature: Member + traits::Verify,
 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
 	Extra: SignedExtension<AccountId = AccountId>,
@@ -169,7 +170,11 @@ impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress
     type AccountId = AccountId;
 
 	fn get_address(&self) -> Option<Self::AccountId>{
-        None
+        match &self.signature {
+            Some((MultiAddress::<AccountId, AccountIndex>::Id(addr),_,_)) => Some(addr.clone()),
+            Some(_) => panic!("unsupported address"),
+            _ => None
+        }
 	}
 }
 

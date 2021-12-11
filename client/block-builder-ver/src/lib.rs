@@ -34,10 +34,12 @@ use sp_api::{
 use sp_blockchain::{ApplyExtrinsicFailed, Backend, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
+    SaturatedConversion,
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Extrinsic, DigestFor, DigestItemFor, Hash, HashFor, Header as HeaderT, NumberFor, One},
 };
 
+use sp_blockchain::HeaderBackend;
 use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
@@ -265,13 +267,22 @@ where
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
 
+        let previous_block_header = self.backend.blockchain()
+            .header(BlockId::Hash(parent_hash))
+            .unwrap()
+            .unwrap();
+
         let previous_block_extrinsics = self.backend.blockchain()
             .body(BlockId::Hash(parent_hash))
             .unwrap()
             .unwrap_or_default();
 
-        log::debug!(target: "block_builder", "previous block has {} transactions", previous_block_extrinsics.len());
-        self.previous_block_extrinsics = Some(previous_block_extrinsics.clone());
+        let prev_block_extrinsics_count = previous_block_header.count().clone().saturated_into::<usize>();
+        log::debug!(target: "block_builder", "previous block has {} transactions in total", previous_block_extrinsics.len());
+        log::debug!(target: "block_builder", "previous block included {} transactions in total", prev_block_extrinsics_count);
+
+        let previous_block_extrinsics = previous_block_extrinsics.iter().take(prev_block_extrinsics_count).cloned().collect::<Vec<_>>();
+
 
 
         log::warn!(target: "block_builder", "shuffling is temporarly disabled!!!");
@@ -288,20 +299,23 @@ where
                 .map(|info| Some(info.who)).unwrap_or(None).is_some()
             ).collect::<Vec<_>>();
 
-        let shuffled_extrinsics = extrinsics;
+        log::debug!(target: "block_builder", "previous block included {} extrincsics", extrinsics.len());
+
+        self.previous_block_extrinsics = Some(extrinsics.clone());
+        // let shuffled_extrinsics = extrinsics;
         // filter out inherentes
         // let shuffled_extrinsics = previous_block_extrinsics.into_iter().filter(|e| e.is_signed().unwrap()).collect::<Vec<_>>();
         // log::debug!(target: "block_builder", "previous block has {} extrinsics", shuffled_extrinsics.len());
-        // let shuffled_extrinsics = if previous_block_extrinsics.len() <= 1 {
-        //     previous_block_extrinsics
-        // } else {
-        //     extrinsic_shuffler::shuffle::<Block, A>(
-        //         &self.api,
-        //         &self.block_id,
-        //         previous_block_extrinsics,
-        //         &seed.seed,
-        //     )
-        // };
+        let shuffled_extrinsics = if extrinsics.len() <= 1 {
+            extrinsics
+        } else {
+            extrinsic_shuffler::shuffle::<Block, A>(
+                &self.api,
+                &self.block_id,
+                extrinsics,
+                &seed.seed,
+            )
+        };
 
         for xt in shuffled_extrinsics.iter() {
             log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
@@ -358,7 +372,7 @@ where
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
-		header.set_count(curr_block_extrinsics_count.into());
+		header.set_count((curr_block_extrinsics_count as u32).into());
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, all_extrinsics),
