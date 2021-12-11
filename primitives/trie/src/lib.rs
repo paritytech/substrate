@@ -113,10 +113,14 @@ pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue, M
 
 /// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, 'cache, L> = trie_db::TrieDB<'a, 'cache, L>;
+/// Builder for creating a [`TrieDB`].
+pub type TrieDBBuilder<'a, 'cache, L> = trie_db::TrieDBBuilder<'a, 'cache, L>;
 /// Persistent trie database write-access interface for the a given hasher.
 pub type TrieDBMut<'a, L> = trie_db::TrieDBMut<'a, L>;
+/// Builder for creating a [`TrieDBMut`].
+pub type TrieDBMutBuilder<'a, L> = trie_db::TrieDBMutBuilder<'a, L>;
 /// Querying interface, as in `trie_db` but less generic.
-pub type Lookup<'a, L, Q> = trie_db::Lookup<'a, L, Q>;
+pub type Lookup<'a, 'cache, L, Q> = trie_db::Lookup<'a, 'cache, L, Q>;
 /// Hash type for a trie layout.
 pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
 
@@ -126,10 +130,14 @@ pub mod trie_types {
 	pub type Layout<H> = super::Layout<H>;
 	/// Persistent trie database read-access interface for the a given hasher.
 	pub type TrieDB<'a, 'cache, H> = super::TrieDB<'a, 'cache, Layout<H>>;
+	/// Builder for creating a [`TrieDB`].
+	pub type TrieDBBuilder<'a, 'cache, H> = super::TrieDBBuilder<'a, 'cache, Layout<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, Layout<H>>;
+	/// Builder for creating a [`TrieDBMut`].
+	pub type TrieDBMutBuilder<'a, H> = super::TrieDBMutBuilder<'a, Layout<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
-	pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, Layout<H>, Q>;
+	pub type Lookup<'a, 'cache, H, Q> = trie_db::Lookup<'a, 'cache, Layout<H>, Q>;
 	/// As in `trie_db`, but less generic, error type for the crate.
 	pub type TrieError<H> = trie_db::TrieError<H, super::Error>;
 }
@@ -152,8 +160,7 @@ where
 	K: 'a + AsRef<[u8]>,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let mut trie = TrieDB::<L>::new(db, &root)?;
-	generate_proof(&mut trie, keys)
+	generate_proof::<_, L, _, _>(db, &root, keys)
 }
 
 /// Verify a set of key-value pairs against a trie root and a proof.
@@ -191,7 +198,7 @@ where
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
+		let mut trie = TrieDBMutBuilder::<L>::from_existing(db, &mut root)?.build();
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -213,7 +220,7 @@ pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, tri
 	root: &TrieHash<L>,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDB::<L>::new(&*db, root)?.get(key)
+	TrieDBBuilder::<L>::new(&*db, root)?.build().get(key)
 }
 
 /// Read a value from the trie with given Query.
@@ -227,7 +234,7 @@ pub fn read_trie_value_with<
 	key: &[u8],
 	query: Q,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDB::<L>::new(&*db, root)?.get_with(key, query)
+	TrieDBBuilder::<L>::new(&*db, root)?.build().get_with(key, query)
 }
 
 /// Determine the empty trie root.
@@ -279,12 +286,12 @@ where
 pub fn record_all_keys<L: TrieConfiguration, DB>(
 	db: &DB,
 	root: &TrieHash<L>,
-	recorder: &mut Recorder<TrieHash<L>>,
+	recorder: &mut Recorder<L>,
 ) -> Result<(), Box<TrieError<L>>>
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let mut trie = TrieDB::<L>::new(&*db, root)?;
+	let mut trie = TrieDBBuilder::<L>::new(&*db, root)?.build();
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -314,7 +321,10 @@ where
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDB::<L>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	TrieDBBuilder::<L>::new(&db, &root)?
+		.build()
+		.get(key)
+		.map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the child trie with given query.
@@ -333,7 +343,8 @@ where
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDB::<L>::new(&db, &root)?
+	TrieDBBuilder::<L>::new(&db, &root)?
+		.build()
 		.get_with(key, query)
 		.map(|x| x.map(|val| val.to_vec()))
 }
@@ -448,10 +459,10 @@ use std::{
 
 #[derive(Clone)]
 pub struct SharedTrieNodeCache<H: Hasher> {
-	cache:
-		std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>,
-	cache_data:
-		std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<bytes::Bytes>>>>>,
+	cache: std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>,
+	cache_data: std::sync::Arc<
+		parking_lot::RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<trie_db::Bytes>>>>,
+	>,
 }
 
 impl<H: Hasher> Default for SharedTrieNodeCache<H> {
@@ -467,12 +478,10 @@ pub struct LocalTrieNodeCache<H: Hasher> {
 }
 
 pub struct TrieNodeCache<'a, H: Hasher> {
-	shared:
-		parking_lot::RwLockReadGuard<'a, HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
+	shared: parking_lot::RwLockReadGuard<'a, HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
 	local: parking_lot::MutexGuard<'a, HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
 	enable_fast_cache: bool,
-	fast_cache:
-		parking_lot::MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, Option<bytes::Bytes>>>,
+	fast_cache: parking_lot::MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, Option<trie_db::Bytes>>>,
 }
 
 impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
@@ -502,7 +511,15 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 		self.local.insert(hash, node);
 	}
 
-	fn lookup_data_for_key(&self, key: &[u8]) -> Option<&Option<bytes::Bytes>> {
+	fn get_node(&mut self, hash: &H::Out) -> Option<&trie_db::node::NodeOwned<H::Out>> {
+		if let Some(node) = self.shared.get(hash) {
+			return Some(node)
+		}
+
+		self.local.get(hash)
+	}
+
+	fn lookup_data_for_key(&self, key: &[u8]) -> Option<&Option<trie_db::Bytes>> {
 		if self.enable_fast_cache {
 			self.fast_cache.get(key)
 		} else {
@@ -510,7 +527,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 		}
 	}
 
-	fn cache_data_for_key(&mut self, key: &[u8], data: Option<bytes::Bytes>) {
+	fn cache_data_for_key(&mut self, key: &[u8], data: Option<trie_db::Bytes>) {
 		if self.enable_fast_cache {
 			self.fast_cache.insert(key.into(), data);
 		}
@@ -519,18 +536,17 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 
 impl<H: Hasher> LocalTrieNodeCache<H> {
 	pub fn new(shared: SharedTrieNodeCache<H>, enable_fast_cache: bool) -> Self {
-		Self {
-			enable_fast_cache,
-			local: Default::default(),
-			shared,
-		}
+		Self { enable_fast_cache, local: Default::default(), shared }
 	}
 
 	pub fn as_cache<'a>(&'a self, hash: H::Out) -> TrieNodeCache<'a, H> {
 		TrieNodeCache {
 			shared: self.shared.cache.read(),
 			local: self.local.lock(),
-			fast_cache: parking_lot::RwLockWriteGuard::map(self.shared.cache_data.write(), |cache| cache.entry(hash).or_default()),
+			fast_cache: parking_lot::RwLockWriteGuard::map(
+				self.shared.cache_data.write(),
+				|cache| cache.entry(hash).or_default(),
+			),
 			enable_fast_cache: self.enable_fast_cache,
 		}
 	}

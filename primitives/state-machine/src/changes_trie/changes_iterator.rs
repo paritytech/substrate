@@ -32,7 +32,7 @@ use codec::{Codec, Decode, Encode};
 use hash_db::Hasher;
 use num_traits::Zero;
 use sp_core::storage::PrefixedStorageKey;
-use sp_trie::Recorder;
+use sp_trie::{trie_types::Layout, Recorder};
 use std::{cell::RefCell, collections::VecDeque};
 
 /// Return changes of given key at given blocks range.
@@ -355,7 +355,7 @@ where
 	H::Out: 'a,
 {
 	essence: DrilldownIteratorEssence<'a, H, Number>,
-	proof_recorder: RefCell<Recorder<H::Out>>,
+	proof_recorder: RefCell<Recorder<Layout<H>>>,
 }
 
 impl<'a, H, Number> ProvingDrilldownIterator<'a, H, Number>

@@ -43,7 +43,7 @@ use std::{
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
-	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
+	pub(crate) proof_recorder: &'a mut Recorder<Layout<H>>,
 }
 
 impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
