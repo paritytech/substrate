@@ -33,7 +33,7 @@ use frame_support::{
 	dispatch::DispatchErrorWithPostInfo,
 	parameter_types,
 	storage::child,
-	traits::{BalanceStatus, Contains, Currency, OnInitialize, ReservableCurrency},
+	traits::{BalanceStatus, Contains, Currency, OnInitialize, ReservableCurrency, ConstU32, ConstU64},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
@@ -177,7 +177,6 @@ impl ChainExtension<Test> for TestExtension {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 	pub static ExistentialDeposit: u64 = 1;
@@ -197,7 +196,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -220,13 +219,11 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-parameter_types! {
-	pub const MinimumPeriod: u64 = 1;
-}
+
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<1>;
 	type WeightInfo = ();
 }
 impl pallet_utility::Config for Test {
@@ -237,7 +234,6 @@ impl pallet_utility::Config for Test {
 }
 parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
-	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
@@ -282,7 +278,7 @@ impl Config for Test {
 	type WeightPrice = Self;
 	type WeightInfo = ();
 	type ChainExtension = TestExtension;
-	type DeletionQueueDepth = DeletionQueueDepth;
+	type DeletionQueueDepth = ConstU32<1024>;
 	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
