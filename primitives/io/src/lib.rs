@@ -709,6 +709,22 @@ pub trait Crypto {
 			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 	}
 
+	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
+	/// key and key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign_prehashed(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Option<ecdsa::Signature> {
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_sign_prehashed(keystore, id, pub_key, msg).ok().flatten()
+	}
+
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
@@ -722,6 +738,17 @@ pub trait Crypto {
 	#[version(2)]
 	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
 		ecdsa::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Verify `ecdsa` signature with pre-hashed `msg`.
+	///
+	/// Returns `true` when the verification was successful.
+	fn ecdsa_verify_prehashed(
+		sig: &ecdsa::Signature,
+		msg: &[u8; 32],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		ecdsa::Pair::verify_prehashed(sig, msg, pub_key)
 	}
 
 	/// Register a `ecdsa` signature for batch verification.
