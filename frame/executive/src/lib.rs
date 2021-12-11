@@ -465,16 +465,17 @@ where
             
             let curr_block_inherents = curr_block_txs.filter(|e| !e.is_signed().unwrap());
             let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
-            let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect();
+            let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
 
-            let extrinsics_with_author: Vec<(_,_)> = extrinsics.into_iter().map(|e| 
+            let extrinsics_with_author: Vec<(_,_)> = tx_to_be_executed.into_iter().map(|e| 
                     (     
                         (e.get_address(), e)
                     )
             ).collect();
             let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
-
-            Self::execute_extrinsics_with_book_keeping(tx_to_be_executed, *header.number());
+            // let shuffled_extrinsics = tx_to_be_executed;
+            
+            Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");

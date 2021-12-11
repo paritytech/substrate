@@ -135,6 +135,9 @@ where
 	Api: ProvideRuntimeApi<Block> + 'a,
 	Api::Api: ExtrinsicInfoRuntimeApi<Block>,
 {
+    if extrinsics.len() <= 1 {
+        return extrinsics;
+    }
 	let extrinsics: Vec<(Option<AccountId32>, Block::Extrinsic)> = extrinsics
 		.into_iter()
 		.map(|tx| {
