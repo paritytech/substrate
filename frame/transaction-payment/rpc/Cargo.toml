@@ -20,7 +20,7 @@ jsonrpc-derive = "18.0.0"
 
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "4.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sp-rpc = { version = "4.0.0-dev", path = "../../../primitives/rpc" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", path = "./runtime-api" }

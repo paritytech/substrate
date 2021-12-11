@@ -368,7 +368,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
-	fn prometheus_config(&self, _default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(
+		&self,
+		_default_listen_port: u16,
+		_chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<PrometheusConfig>> {
 		Ok(None)
 	}
 
@@ -527,7 +531,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
-			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
+			prometheus_config: self
+				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,

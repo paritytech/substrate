@@ -17,7 +17,7 @@ scale-info = { version = "1.0", features = ["derive"] }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sp-core = { version = "4.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
 sp-tracing = { version = "4.0.0", path = "../../../primitives/tracing" }

@@ -158,7 +158,7 @@ where
 	if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
 		// The instruction weights have changed.
 		// We need to re-instrument the code with the new instruction weights.
-		gas_meter.charge(CodeToken::Instrument(estimate_code_size::<T, PristineCode<T>, _>(
+		gas_meter.charge(CodeToken::Reinstrument(estimate_code_size::<T, PristineCode<T>, _>(
 			&code_hash,
 		)?))?;
 		reinstrument(&mut prefab_module, schedule)?;
@@ -201,9 +201,9 @@ where
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Clone, Copy)]
 enum CodeToken {
-	/// Weight for instrumenting a contract contract of the supplied size in bytes.
-	Instrument(u32),
-	/// Weight for loading a contract per kilobyte.
+	/// Weight for reinstrumenting a contract contract of the supplied size in bytes.
+	Reinstrument(u32),
+	/// Weight for loading a contract per byte.
 	Load(u32),
 }
 
@@ -211,14 +211,14 @@ impl<T: Config> Token<T> for CodeToken {
 	fn weight(&self) -> Weight {
 		use self::CodeToken::*;
 		// In case of `Load` we already covered the general costs of
-		// accessing the storage but still need to account for the actual size of the
+		// calling the storage but still need to account for the actual size of the
 		// contract code. This is why we substract `T::*::(0)`. We need to do this at this
-		// point because when charging the general weight we do not know the size of
-		// the contract.
+		// point because when charging the general weight for calling the contract we not know the
+		// size of the contract.
 		match *self {
-			Instrument(len) => T::WeightInfo::instrument(len / 1024),
-			Load(len) =>
-				T::WeightInfo::code_load(len / 1024).saturating_sub(T::WeightInfo::code_load(0)),
+			Reinstrument(len) => T::WeightInfo::reinstrument(len / 1024),
+			Load(len) => T::WeightInfo::call_with_code_kb(len / 1024)
+				.saturating_sub(T::WeightInfo::call_with_code_kb(0)),
 		}
 	}
 }
