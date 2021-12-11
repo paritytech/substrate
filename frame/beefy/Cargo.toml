@@ -23,7 +23,7 @@ pallet-session = { version = "4.0.0-dev", path = "../session", default-features 
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy", default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 

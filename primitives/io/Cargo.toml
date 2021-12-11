@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 hash-db = { version = "0.15.2", default-features = false }
-sp-core = { version = "4.0.0", default-features = false, path = "../core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, optional = true, path = "../keystore" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 libsecp256k1 = { version = "0.7", optional = true }

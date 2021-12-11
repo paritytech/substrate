@@ -25,7 +25,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "4.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
@@ -43,7 +43,7 @@ strum_macros = { optional = true, version = "0.22.0" }
 [dev-dependencies]
 parking_lot = "0.11.0"
 rand = { version = "0.7.3" }
-sp-core = { version = "4.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }

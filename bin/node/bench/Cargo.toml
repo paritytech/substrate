@@ -23,7 +23,7 @@ derive_more = "0.99.16"
 kvdb = "0.10.0"
 kvdb-rocksdb = "0.14.0"
 sp-trie = { version = "4.0.0-dev", path = "../../../primitives/trie" }
-sp-core = { version = "4.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }

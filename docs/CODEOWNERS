@@ -40,12 +40,6 @@
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
-# BEEFY
-/client/beefy/ @adoerr
-/frame/beefy/ @adoerr
-/frame/beefy-mmr/ @adoerr
-/primitives/beefy/ @adoerr
-
 # Contracts
 /frame/contracts/ @athei
 
