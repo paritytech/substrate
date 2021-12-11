@@ -21,7 +21,7 @@ use frame_election_provider_support::{
 	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{parameter_types, traits::Hooks, weights::Weight};
+use frame_support::{parameter_types, traits::{Hooks, ConstU64}, weights::Weight};
 use multi_phase::unsigned::{IndexAssignmentOf, Voter};
 use parking_lot::RwLock;
 use sp_core::{
@@ -222,8 +222,8 @@ impl frame_system::Config for Runtime {
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+pub type ExistentialDeposit = ConstU64<1>;
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
 		::with_sensible_defaults(2 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
 }

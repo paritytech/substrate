@@ -22,7 +22,7 @@
 use crate as elections;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{ChangeMembers, Currency, LockIdentifier},
+	traits::{ChangeMembers, Currency, LockIdentifier, ConstU32, ConstU64},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -32,7 +32,6 @@ use sp_runtime::{
 };
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -51,7 +50,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -60,12 +59,10 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -73,7 +70,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -118,12 +115,12 @@ impl elections::Config for Test {
 	type BadVoterIndex = ();
 	type LoserCandidate = ();
 	type ChangeMembers = TestChangeMembers;
-	type CandidacyBond = CandidacyBond;
+	type CandidacyBond = ConstU64<3>;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
-	type MinimumVotingLock = MinimumVotingLock;
+	type MinimumVotingLock = ConstU64<5>;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
-	type CarryCount = CarryCount;
+	type CarryCount = ConstU32<2>;
 	type InactiveGracePeriod = InactiveGracePeriod;
 	type VotingPeriod = VotingPeriod;
 	type DecayRatio = DecayRatio;
@@ -216,9 +213,9 @@ impl ExtBuilder {
 				term_duration: 5,
 			},
 		}
-		.build_storage()
-		.unwrap()
-		.into();
+			.build_storage()
+			.unwrap()
+			.into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}

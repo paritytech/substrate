@@ -1111,6 +1111,7 @@ mod tests {
 		assert_noop, assert_ok, dispatch::DispatchResultWithPostInfo, parameter_types,
 		traits::OnInitialize,
 	};
+	use frame_support::traits::{ConstU32, ConstU64};
 	use frame_system::ensure_signed;
 	use sp_core::H256;
 	use sp_runtime::{
@@ -1121,7 +1122,6 @@ mod tests {
 	use substrate_test_utils::assert_eq_uvec;
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -1141,7 +1141,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -1150,18 +1150,14 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
-	}
-
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = frame_system::Pallet<Test>;
 		type MaxLocks = ();
 		type MaxReserves = ();
