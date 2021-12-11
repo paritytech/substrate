@@ -210,6 +210,14 @@ pub mod well_known_keys {
 	/// Prefix of the default child storage keys in the top trie.
 	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:default:";
 
+	/// Whether a key is a default child storage key.
+	///
+	/// This is convenience function which basically checks if the given `key` starts
+	/// with `DEFAULT_CHILD_STORAGE_KEY_PREFIX` and doesn't do anything apart from that.
+	pub fn is_default_child_storage_key(key: &[u8]) -> bool {
+		key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+	}
+
 	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
@@ -231,7 +239,7 @@ pub mod well_known_keys {
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub enum ChildInfo {
 	/// This is the one used by default.
 	ParentKeyId(ChildTrieParentKeyId),
@@ -370,16 +378,14 @@ impl ChildType {
 }
 
 /// A child trie of default type.
-/// It uses the same default implementation as the top trie,
-/// top trie being a child trie with no keyspace and no storage key.
-/// Its keyspace is the variable (unprefixed) part of its storage key.
-/// It shares its trie nodes backend storage with every other
-/// child trie, so its storage key needs to be a unique id
-/// that will be use only once.
-/// Those unique id also required to be long enough to avoid any
-/// unique id to be prefixed by an other unique id.
+///
+/// It uses the same default implementation as the top trie, top trie being a child trie with no
+/// keyspace and no storage key. Its keyspace is the variable (unprefixed) part of its storage key.
+/// It shares its trie nodes backend storage with every other child trie, so its storage key needs
+/// to be a unique id that will be use only once. Those unique id also required to be long enough to
+/// avoid any unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub struct ChildTrieParentKeyId {
 	/// Data is the storage key without prefix.
 	data: Vec<u8>,

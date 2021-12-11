@@ -130,12 +130,17 @@ impl WasmExecutor {
 		host_functions: Vec<&'static dyn Function>,
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,
+		runtime_cache_size: u8,
 	) -> Self {
 		WasmExecutor {
 			method,
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
-			cache: Arc::new(RuntimeCache::new(max_runtime_instances, cache_path.clone())),
+			cache: Arc::new(RuntimeCache::new(
+				max_runtime_instances,
+				cache_path.clone(),
+				runtime_cache_size,
+			)),
 			cache_path,
 		}
 	}
@@ -330,6 +335,7 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
+		runtime_cache_size: u8,
 	) -> Self {
 		let extended = D::ExtendHostFunctions::host_functions();
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
@@ -351,6 +357,7 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 			host_functions,
 			max_runtime_instances,
 			None,
+			runtime_cache_size,
 		);
 
 		NativeElseWasmExecutor {
@@ -636,6 +643,7 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			None,
 			8,
+			2,
 		);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2);

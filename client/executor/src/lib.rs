@@ -80,6 +80,7 @@ mod tests {
 			sp_io::SubstrateHostFunctions::host_functions(),
 			8,
 			None,
+			2,
 		);
 		let res = executor
 			.uncached_call(

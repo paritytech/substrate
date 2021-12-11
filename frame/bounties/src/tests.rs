@@ -83,6 +83,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
@@ -135,6 +136,7 @@ impl Config for Test {
 	type DataDepositPerByte = ConstU64<1>;
 	type MaximumReasonLength = ConstU32<16384>;
 	type WeightInfo = ();
+	type ChildBountyManager = ();
 }
 
 type TreasuryError = pallet_treasury::Error<Test>;
@@ -989,5 +991,44 @@ fn genesis_funding_works() {
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
 		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
+	});
+}
+
+#[test]
+fn unassign_curator_self() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 1, 10));
+		assert_ok!(Bounties::accept_curator(Origin::signed(1), 0));
+
+		assert_eq!(Balances::free_balance(1), 93);
+		assert_eq!(Balances::reserved_balance(1), 5);
+
+		System::set_block_number(8);
+		<Treasury as OnInitialize<u64>>::on_initialize(8);
+
+		assert_ok!(Bounties::unassign_curator(Origin::signed(1), 0));
+
+		assert_eq!(
+			Bounties::bounties(0).unwrap(),
+			Bounty {
+				proposer: 0,
+				fee: 10,
+				curator_deposit: 0,
+				value: 50,
+				bond: 85,
+				status: BountyStatus::Funded,
+			}
+		);
+
+		assert_eq!(Balances::free_balance(1), 98);
+		assert_eq!(Balances::reserved_balance(1), 0); // not slashed
 	});
 }

@@ -48,7 +48,7 @@ impl RpcMetrics {
 				requests_started: register(
 					CounterVec::new(
 						Opts::new(
-							"rpc_requests_started",
+							"substrate_rpc_requests_started",
 							"Number of RPC requests (not calls) received by the server.",
 						),
 						&["protocol"],
@@ -58,7 +58,7 @@ impl RpcMetrics {
 				requests_finished: register(
 					CounterVec::new(
 						Opts::new(
-							"rpc_requests_finished",
+							"substrate_rpc_requests_finished",
 							"Number of RPC requests (not calls) processed by the server.",
 						),
 						&["protocol"],
@@ -68,7 +68,7 @@ impl RpcMetrics {
 				calls_time: register(
 					HistogramVec::new(
 						HistogramOpts::new(
-							"rpc_calls_time",
+							"substrate_rpc_calls_time",
 							"Total time [μs] of processed RPC calls",
 						),
 						&["protocol", "method"],
@@ -78,7 +78,7 @@ impl RpcMetrics {
 				calls_started: register(
 					CounterVec::new(
 						Opts::new(
-							"rpc_calls_started",
+							"substrate_rpc_calls_started",
 							"Number of received RPC calls (unique un-batched requests)",
 						),
 						&["protocol", "method"],
@@ -88,7 +88,7 @@ impl RpcMetrics {
 				calls_finished: register(
 					CounterVec::new(
 						Opts::new(
-							"rpc_calls_finished",
+							"substrate_rpc_calls_finished",
 							"Number of processed RPC calls (unique un-batched requests)",
 						),
 						&["protocol", "method", "is_error"],

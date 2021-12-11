@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_assets;
 
-use frame_support::{construct_runtime, parameter_types, traits::{GenesisBuild, ConstU32, ConstU64}};
+use frame_support::{
+	construct_runtime,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -66,7 +69,9 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<2>;
 }
+
 
 impl pallet_balances::Config for Test {
 	type Balance = u64;
@@ -80,10 +85,6 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-parameter_types! {
-	pub const StringLimit: u32 = 50;
-}
-
 impl Config for Test {
 	type Event = Event;
 	type Balance = u64;
@@ -91,6 +92,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<1>;
+	type AssetAccountDeposit = ConstU64<10>;
 	type MetadataDepositBase = ConstU64<1>;
 	type MetadataDepositPerByte = ConstU64<1>;
 	type ApprovalDeposit = ConstU64<1>;

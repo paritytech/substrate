@@ -210,6 +210,7 @@ fn record_proof_works() {
 		WasmExecutionMethod::Interpreted,
 		None,
 		8,
+		2,
 	);
 	execution_proof_check_on_trie_backend(
 		&backend,

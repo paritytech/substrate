@@ -41,6 +41,7 @@ impl InspectCmd {
 			config.wasm_method,
 			config.default_heap_pages,
 			config.max_runtime_instances,
+			config.runtime_cache_size,
 		);
 
 		let client = new_full_client::<B, RA, _>(&config, None, executor)?;

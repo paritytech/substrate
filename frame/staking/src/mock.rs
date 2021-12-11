@@ -149,6 +149,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = frame_support::traits::ConstU32<1024>;
@@ -531,8 +532,8 @@ fn post_conditions() {
 fn check_count() {
 	let nominator_count = Nominators::<Test>::iter().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
-	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
-	assert_eq!(validator_count, CounterForValidators::<Test>::get());
+	assert_eq!(nominator_count, Nominators::<Test>::count());
+	assert_eq!(validator_count, Validators::<Test>::count());
 
 	// the voters that the `SortedListProvider` list is storing for us.
 	let external_voters = <Test as Config>::SortedListProvider::count();

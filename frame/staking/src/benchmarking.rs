@@ -112,8 +112,8 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
-	assert_ne!(CounterForValidators::<T>::get(), 0);
-	assert_ne!(CounterForNominators::<T>::get(), 0);
+	assert_ne!(Validators::<T>::count(), 0);
+	assert_ne!(Nominators::<T>::count(), 0);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -922,8 +922,8 @@ mod tests {
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
 
-			assert_eq!(count_validators, CounterForValidators::<Test>::get() as usize);
-			assert_eq!(count_nominators, CounterForNominators::<Test>::get() as usize);
+			assert_eq!(count_validators, Validators::<Test>::count() as usize);
+			assert_eq!(count_nominators, Nominators::<Test>::count() as usize);
 
 			assert_eq!(count_validators, v as usize);
 			assert_eq!(count_nominators, n as usize);

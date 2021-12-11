@@ -1958,7 +1958,9 @@ dependencies = [
  "paste 1.0.6",
  "scale-info",
  "sp-api",
+ "sp-application-crypto",
  "sp-io",
+ "sp-keystore",
  "sp-runtime",
  "sp-runtime-interface",
  "sp-std",
@@ -4614,6 +4616,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
+ "sp-tracing",
  "sp-trie",
  "wat",
 ]
@@ -4699,6 +4702,7 @@ dependencies = [
  "pallet-bags-list",
  "pallet-balances",
  "pallet-bounties",
+ "pallet-child-bounties",
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
@@ -4717,6 +4721,7 @@ dependencies = [
  "pallet-multisig",
  "pallet-offences",
  "pallet-offences-benchmarking",
+ "pallet-preimage",
  "pallet-proxy",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
@@ -5381,6 +5386,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-child-bounties"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-balances",
+ "pallet-bounties",
+ "pallet-treasury",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-collective"
 version = "4.0.0-dev"
 dependencies = [
@@ -5402,6 +5426,7 @@ version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
  "bitflags",
+ "env_logger 0.9.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5440,6 +5465,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-core",
+ "sp-rpc",
  "sp-runtime",
  "sp-std",
 ]
@@ -5888,6 +5914,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-preimage"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-proxy"
 version = "4.0.0-dev"
 dependencies = [
@@ -5942,6 +5984,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.14",
+ "pallet-preimage",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -6274,9 +6317,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cb5195cb862b13055cf7f7a76c55073dc73885c2a61511e322b8c1666be7332"
+checksum = "78a95abf24f1097c6e3181abbbbfc3630b3b5e681470940f719b69acb4911c7f"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
@@ -8010,6 +8053,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log 0.4.14",
+ "lru 0.6.6",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "paste 1.0.6",
@@ -9366,7 +9410,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "base58",
  "bitflags",
@@ -9418,7 +9462,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core-hashing"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "blake2-rfc",
  "byteorder",
@@ -9448,7 +9492,7 @@ dependencies = [
 
 [[package]]
 name = "sp-debug-derive"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9457,7 +9501,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.10.0-dev"
+version = "0.10.0"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -9650,11 +9694,12 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-runtime-client",
+ "zstd",
 ]
 
 [[package]]
 name = "sp-runtime-interface"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -9676,7 +9721,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface-proc-macro"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "Inflector",
  "proc-macro-crate 1.1.0",
@@ -9796,11 +9841,11 @@ dependencies = [
 
 [[package]]
 name = "sp-std"
-version = "4.0.0-dev"
+version = "4.0.0"
 
 [[package]]
 name = "sp-storage"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -9852,7 +9897,7 @@ dependencies = [
 
 [[package]]
 name = "sp-tracing"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "parity-scale-codec",
  "sp-std",
@@ -9931,7 +9976,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -10925,6 +10970,7 @@ dependencies = [
  "sp-state-machine",
  "sp-version",
  "structopt",
+ "zstd",
 ]
 
 [[package]]
