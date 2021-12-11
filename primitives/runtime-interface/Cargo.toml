@@ -28,7 +28,7 @@ impl-trait-for-tuples = "0.2.1"
 [dev-dependencies]
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
 sp-state-machine = { version = "0.10.0-dev", path = "../state-machine" }
-sp-core = { version = "4.0.0", path = "../core" }
+sp-core = { version = "4.1.0-dev", path = "../core" }
 sp-io = { version = "4.0.0-dev", path = "../io" }
 rustversion = "1.0.5"
 trybuild = "1.0.52"

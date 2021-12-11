@@ -13,7 +13,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core = { version = "4.0.0", default-features = false, path = "../../core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../keystore", default-features = false }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }

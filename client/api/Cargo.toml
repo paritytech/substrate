@@ -27,7 +27,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 log = "0.4.8"
 parking_lot = "0.11.1"
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-sp-core = { version = "4.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }

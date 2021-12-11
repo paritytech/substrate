@@ -25,7 +25,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]
