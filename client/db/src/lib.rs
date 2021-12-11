@@ -936,7 +936,7 @@ impl<Block: BlockT> EmptyStorage<Block> {
 	pub fn new() -> Self {
 		let mut root = Block::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<Block>>::default();
-		sp_state_machine::TrieDBMut::<HashFor<Block>>::new(&mut mdb, &mut root);
+		sp_trie::trie_types::TrieDBMutBuilder::<HashFor<Block>>::new(&mut mdb, &mut root).build();
 		EmptyStorage(root)
 	}
 }

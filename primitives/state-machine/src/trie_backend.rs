@@ -27,11 +27,7 @@ use hash_db::Hasher;
 use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, ChildType};
 use sp_std::{boxed::Box, vec::Vec};
-use sp_trie::{
-	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
-	trie_types::{Layout, TrieDB, TrieError},
-	Trie,
-};
+use sp_trie::{Trie, child_delta_trie_root, delta_trie_root, empty_child_trie_root, trie_types::{Layout, TrieDB, TrieDBBuilder, TrieError}};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -151,7 +147,7 @@ where
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(self.essence(), self.essence.root())?;
+			let trie = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?.build();
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, value) = x?;
@@ -172,7 +168,7 @@ where
 
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(self.essence(), self.essence.root())?;
+			let trie = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?.build();
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, _) = x?;

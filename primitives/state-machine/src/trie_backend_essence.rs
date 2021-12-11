@@ -27,7 +27,7 @@ use sp_core::storage::ChildInfo;
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value, read_trie_value,
-	trie_types::{Layout, TrieDB, TrieError},
+	trie_types::{Layout, TrieDB, TrieDBBuilder, TrieError},
 	DBValue, KeySpacedDB, MemoryDB, PrefixedMemoryDB, Trie, TrieDBIterator,
 };
 #[cfg(feature = "std")]
@@ -206,8 +206,9 @@ where
 			dyn_eph = self;
 		}
 
-		let trie =
-			TrieDB::<H>::new(dyn_eph, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
+		let trie = TrieDBBuilder::<H>::new(dyn_eph, root)
+			.map_err(|e| format!("TrieDB creation error: {}", e))?
+			.build();
 		let mut iter = trie.iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
 		// The key just after the one given in input, basically `key++0`.
@@ -238,12 +239,15 @@ where
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
+		let builder = TrieDBBuilder::<H>::new_unchecked(self, &self.root);
+
 		match self.trie_node_cache {
-			Some(ref cache) =>
-				TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache(self.root))
-					.get(key)
-					.map_err(map_e),
-			None => TrieDB::<H>::new(self, &self.root).map_err(map_e)?.get(key).map_err(map_e),
+			Some(ref cache) => builder
+				.with_cache(&mut cache.as_cache(self.root))
+				.build()
+				.get(key)
+				.map_err(map_e),
+			None => builder.build().get(key).map_err(map_e),
 		}
 
 		// match &self.trie_node_cache {
@@ -391,7 +395,7 @@ where
 		allow_missing_nodes: bool,
 	) -> Result<bool> {
 		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(db, root)?;
+			let trie = TrieDBBuilder::<H>::new(db, root)?.build();
 
 			let prefix = prefix.unwrap_or(&[]);
 			let iterator = if let Some(start_at) = start_at {

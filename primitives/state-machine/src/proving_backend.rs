@@ -57,15 +57,16 @@ where
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
-		let map_e = |e| format!("Trie lookup error: {}", e);
+		// let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H>>(
-			&eph,
-			self.backend.root(),
-			key,
-			&mut *self.proof_recorder,
-		)
-		.map_err(map_e)
+		// read_trie_value_with::<Layout<H>, _, Ephemeral<S, H>>(
+		// 	&eph,
+		// 	self.backend.root(),
+		// 	key,
+		// 	&mut *self.proof_recorder,
+		// )
+		// .map_err(map_e)
+		unimplemented!()
 	}
 
 	/// Produce proof for a child key query.
@@ -83,16 +84,17 @@ where
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
-		let map_e = |e| format!("Trie lookup error: {}", e);
+		// let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value_with::<Layout<H>, _, _>(
-			child_info.keyspace(),
-			&eph,
-			&root.as_ref(),
-			key,
-			&mut *self.proof_recorder,
-		)
-		.map_err(map_e)
+		// read_child_trie_value_with::<Layout<H>, _, _>(
+		// 	child_info.keyspace(),
+		// 	&eph,
+		// 	&root.as_ref(),
+		// 	key,
+		// 	&mut *self.proof_recorder,
+		// )
+		// .map_err(map_e)
+		unimplemented!()
 	}
 
 	/// Produce proof for the whole backend.

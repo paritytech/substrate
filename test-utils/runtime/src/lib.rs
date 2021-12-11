@@ -30,7 +30,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
-	trie_types::{TrieDB, TrieDBMut},
+	trie_types::{TrieDB, TrieDBBuilder, TrieDBMut, TrieDBMutBuilder},
 	PrefixedMemoryDB, StorageProof,
 };
 use trie_db::{Trie, TrieMut};
@@ -655,7 +655,7 @@ fn code_using_trie() -> u64 {
 	let mut root = sp_std::default::Default::default();
 	let _ = {
 		let v = &pairs;
-		let mut t = TrieDBMut::<Hashing>::new(&mut mdb, &mut root);
+		let mut t = TrieDBMutBuilder::<Hashing>::new(&mut mdb, &mut root).build();
 		for i in 0..v.len() {
 			let key: &[u8] = &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -666,7 +666,7 @@ fn code_using_trie() -> u64 {
 		t
 	};
 
-	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
+	if let Ok(trie) = TrieDBBuilder::<Hashing>::new(&mdb, &root).map(|t| t.build()) {
 		if let Ok(iter) = trie.iter() {
 			let mut iter_pairs = Vec::new();
 			for pair in iter {
