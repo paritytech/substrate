@@ -48,7 +48,7 @@ use frame_support::{
 	BoundedVec,
 };
 use scale_info::TypeInfo;
-use weights::WeightInfo;
+pub use weights::WeightInfo;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
