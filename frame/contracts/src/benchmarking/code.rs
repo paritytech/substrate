@@ -35,8 +35,19 @@ use pwasm_utils::parity_wasm::{
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
-use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
-use sp_std::{borrow::ToOwned, convert::TryFrom, prelude::*};
+use sp_sandbox::{
+	default_executor::{EnvironmentDefinitionBuilder, Memory},
+	SandboxEnvironmentBuilder, SandboxMemory,
+};
+use sp_std::{borrow::ToOwned, prelude::*};
+
+/// The location where to put the genrated code.
+pub enum Location {
+	/// Generate all code into the `call` exported function.
+	Call,
+	/// Generate all code into the `deploy` exported function.
+	Deploy,
+}
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -305,7 +316,8 @@ where
 	/// Creates a wasm module of `target_bytes` size. Used to benchmark the performance of
 	/// `instantiate_with_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
-	pub fn sized(target_bytes: u32) -> Self {
+	/// `code_location`: Whether to place the code into `deploy` or `call`.
+	pub fn sized(target_bytes: u32, code_location: Location) -> Self {
 		use self::elements::Instruction::{End, I32Const, If, Return};
 		// Base size of a contract is 63 bytes and each expansion adds 6 bytes.
 		// We do one expansion less to account for the code section and function body
@@ -314,12 +326,14 @@ where
 		// because of the maximum code size that is enforced by `instantiate_with_code`.
 		let expansions = (target_bytes.saturating_sub(63) / 6).saturating_sub(1);
 		const EXPANSION: [Instruction; 4] = [I32Const(0), If(BlockType::NoResult), Return, End];
-		ModuleDefinition {
-			call_body: Some(body::repeated(expansions, &EXPANSION)),
-			memory: Some(ImportedMemory::max::<T>()),
-			..Default::default()
+		let mut module =
+			ModuleDefinition { memory: Some(ImportedMemory::max::<T>()), ..Default::default() };
+		let body = Some(body::repeated(expansions, &EXPANSION));
+		match code_location {
+			Location::Call => module.call_body = body,
+			Location::Deploy => module.deploy_body = body,
 		}
-		.into()
+		module.into()
 	}
 
 	/// Creates a wasm module that calls the imported function named `getter_name` `repeat`
@@ -492,11 +506,11 @@ pub mod body {
 					vec![Instruction::I32Const(current as i32)]
 				},
 				DynInstr::RandomUnaligned(low, high) => {
-					let unaligned = rng.gen_range(*low, *high) | 1;
+					let unaligned = rng.gen_range(*low..*high) | 1;
 					vec![Instruction::I32Const(unaligned as i32)]
 				},
 				DynInstr::RandomI32(low, high) => {
-					vec![Instruction::I32Const(rng.gen_range(*low, *high))]
+					vec![Instruction::I32Const(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomI32Repeated(num) => (&mut rng)
 					.sample_iter(Standard)
@@ -509,19 +523,19 @@ pub mod body {
 					.map(|val| Instruction::I64Const(val))
 					.collect(),
 				DynInstr::RandomGetLocal(low, high) => {
-					vec![Instruction::GetLocal(rng.gen_range(*low, *high))]
+					vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomSetLocal(low, high) => {
-					vec![Instruction::SetLocal(rng.gen_range(*low, *high))]
+					vec![Instruction::SetLocal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomTeeLocal(low, high) => {
-					vec![Instruction::TeeLocal(rng.gen_range(*low, *high))]
+					vec![Instruction::TeeLocal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomGetGlobal(low, high) => {
-					vec![Instruction::GetGlobal(rng.gen_range(*low, *high))]
+					vec![Instruction::GetGlobal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomSetGlobal(low, high) => {
-					vec![Instruction::SetGlobal(rng.gen_range(*low, *high))]
+					vec![Instruction::SetGlobal(rng.gen_range(*low..*high))]
 				},
 			})
 			.chain(sp_std::iter::once(Instruction::End))

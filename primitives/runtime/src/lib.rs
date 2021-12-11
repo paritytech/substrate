@@ -494,6 +494,8 @@ pub enum DispatchError {
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
 	NoProviders,
+	/// There are too many consumers so the account cannot be created.
+	TooManyConsumers,
 	/// An error to do with tokens.
 	Token(TokenError),
 	/// An arithmetic error.
@@ -629,6 +631,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
+			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
 		}
@@ -660,6 +663,7 @@ impl traits::Printable for DispatchError {
 			},
 			Self::ConsumerRemaining => "Consumer remaining".print(),
 			Self::NoProviders => "No providers".print(),
+			Self::TooManyConsumers => "Too many consumers".print(),
 			Self::Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
@@ -916,9 +920,13 @@ impl<R> TransactionOutcome<R> {
 
 #[cfg(test)]
 mod tests {
+	use crate::traits::BlakeTwo256;
+
 	use super::*;
 	use codec::{Decode, Encode};
 	use sp_core::crypto::Pair;
+	use sp_io::TestExternalities;
+	use sp_state_machine::create_proof_check_backend;
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
@@ -1017,6 +1025,49 @@ mod tests {
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
 			panic!("Hey, I'm an error");
+		});
+	}
+
+	#[test]
+	fn execute_and_generate_proof_works() {
+		use codec::Encode;
+		use sp_state_machine::Backend;
+		let mut ext = TestExternalities::default();
+
+		ext.insert(b"a".to_vec(), vec![1u8; 33]);
+		ext.insert(b"b".to_vec(), vec![2u8; 33]);
+		ext.insert(b"c".to_vec(), vec![3u8; 33]);
+		ext.insert(b"d".to_vec(), vec![4u8; 33]);
+
+		let pre_root = ext.backend.root().clone();
+		let (_, proof) = ext.execute_and_prove(|| {
+			sp_io::storage::get(b"a");
+			sp_io::storage::get(b"b");
+			sp_io::storage::get(b"v");
+			sp_io::storage::get(b"d");
+		});
+
+		let compact_proof = proof.clone().into_compact_proof::<BlakeTwo256>(pre_root).unwrap();
+		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+
+		// just an example of how you'd inspect the size of the proof.
+		println!("proof size: {:?}", proof.encoded_size());
+		println!("compact proof size: {:?}", compact_proof.encoded_size());
+		println!("zstd-compressed compact proof size: {:?}", &compressed_proof.len());
+
+		// create a new trie-backed from the proof and make sure it contains everything
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(pre_root, proof).unwrap();
+		assert_eq!(proof_check.storage(b"a",).unwrap().unwrap(), vec![1u8; 33]);
+
+		let _ = ext.execute_and_prove(|| {
+			sp_io::storage::set(b"a", &vec![1u8; 44]);
+		});
+
+		// ensure that these changes are propagated to the backend.
+
+		ext.execute_with(|| {
+			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
+			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
 		});
 	}
 }

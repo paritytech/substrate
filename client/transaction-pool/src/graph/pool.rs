@@ -539,6 +539,13 @@ mod tests {
 					longevity: 9001,
 					propagate: false,
 				}),
+				Extrinsic::Store(_) => Ok(ValidTransaction {
+					priority: 9001,
+					requires: vec![],
+					provides: vec![vec![43]],
+					longevity: 9001,
+					propagate: false,
+				}),
 				_ => unimplemented!(),
 			};
 
@@ -1044,7 +1051,7 @@ mod tests {
 		}
 
 		#[test]
-		fn should_trigger_dropped() {
+		fn should_trigger_dropped_older() {
 			// given
 			let limit = Limit { count: 1, total_bytes: 1000 };
 			let options =
@@ -1075,6 +1082,67 @@ mod tests {
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(stream.next(), Some(TransactionStatus::Dropped));
+		}
+
+		#[test]
+		fn should_trigger_dropped_lower_priority() {
+			{
+				// given
+				let limit = Limit { count: 1, total_bytes: 1000 };
+				let options =
+					Options { ready: limit.clone(), future: limit.clone(), ..Default::default() };
+
+				let pool = Pool::new(options, true.into(), TestApi::default().into());
+
+				let xt = Extrinsic::IncludeData(Vec::new());
+				block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
+				assert_eq!(pool.validated_pool().status().ready, 1);
+
+				// then
+				let xt = uxt(Transfer {
+					from: AccountId::from_h256(H256::from_low_u64_be(2)),
+					to: AccountId::from_h256(H256::from_low_u64_be(1)),
+					amount: 4,
+					nonce: 1,
+				});
+				let result = block_on(pool.submit_one(&BlockId::Number(1), SOURCE, xt));
+				assert!(matches!(
+					result,
+					Err(sc_transaction_pool_api::error::Error::ImmediatelyDropped)
+				));
+			}
+			{
+				// given
+				let limit = Limit { count: 2, total_bytes: 1000 };
+				let options =
+					Options { ready: limit.clone(), future: limit.clone(), ..Default::default() };
+
+				let pool = Pool::new(options, true.into(), TestApi::default().into());
+
+				let xt = Extrinsic::IncludeData(Vec::new());
+				block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, xt)).unwrap();
+				assert_eq!(pool.validated_pool().status().ready, 1);
+
+				let xt = uxt(Transfer {
+					from: AccountId::from_h256(H256::from_low_u64_be(1)),
+					to: AccountId::from_h256(H256::from_low_u64_be(2)),
+					amount: 5,
+					nonce: 0,
+				});
+				let watcher =
+					block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, xt)).unwrap();
+				assert_eq!(pool.validated_pool().status().ready, 2);
+
+				// when
+				let xt = Extrinsic::Store(Vec::new());
+				block_on(pool.submit_one(&BlockId::Number(1), SOURCE, xt)).unwrap();
+				assert_eq!(pool.validated_pool().status().ready, 2);
+
+				// then
+				let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+				assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+				assert_eq!(stream.next(), Some(TransactionStatus::Dropped));
+			}
 		}
 
 		#[test]

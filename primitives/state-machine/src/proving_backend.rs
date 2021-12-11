@@ -221,6 +221,11 @@ where
 	pub fn estimate_encoded_size(&self) -> usize {
 		self.0.essence().backend_storage().proof_recorder.estimate_encoded_size()
 	}
+
+	/// Clear the proof recorded data.
+	pub fn clear_recorder(&self) {
+		self.0.essence().backend_storage().proof_recorder.reset()
+	}
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
@@ -358,7 +363,9 @@ where
 	}
 }
 
-/// Create proof check backend.
+/// Create a backend used for checking the proof., using `H` as hasher.
+///
+/// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,

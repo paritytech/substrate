@@ -75,12 +75,12 @@ fn decl_genesis_config_and_impl_default(
 		#[serde(deny_unknown_fields)]
 		#[serde(crate = #serde_crate)]
 		#serde_bug_bound
-		pub struct GenesisConfig#genesis_struct_decl #genesis_where_clause {
+		pub struct GenesisConfig #genesis_struct_decl #genesis_where_clause {
 			#( #config_fields )*
 		}
 
 		#[cfg(feature = "std")]
-		impl#genesis_impl Default for GenesisConfig#genesis_struct #genesis_where_clause {
+		impl #genesis_impl Default for GenesisConfig #genesis_struct #genesis_where_clause {
 			fn default() -> Self {
 				GenesisConfig {
 					#( #config_field_defaults )*
@@ -137,7 +137,7 @@ fn impl_build_storage(
 
 	quote! {
 		#[cfg(feature = "std")]
-		impl#genesis_impl GenesisConfig#genesis_struct #genesis_where_clause {
+		impl #genesis_impl GenesisConfig #genesis_struct #genesis_where_clause {
 			/// Build the storage for this module.
 			pub fn build_storage #fn_generic (&self) -> std::result::Result<
 				#scrate::sp_runtime::Storage,
@@ -161,7 +161,7 @@ fn impl_build_storage(
 		}
 
 		#[cfg(feature = "std")]
-		impl#build_storage_impl #build_storage_impl_trait for GenesisConfig#genesis_struct
+		impl #build_storage_impl #build_storage_impl_trait for GenesisConfig #genesis_struct
 			#where_clause
 		{
 			fn build_module_genesis_storage(

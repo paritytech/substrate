@@ -247,7 +247,6 @@
 mod behaviour;
 mod chain;
 mod discovery;
-mod on_demand_layer;
 mod peer_info;
 mod protocol;
 mod request_responses;
@@ -274,8 +273,9 @@ pub use protocol::{
 	PeerInfo,
 };
 pub use service::{
-	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
-	OutboundFailure, RequestFailure,
+	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
+	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
+	Signature, SigningError,
 };
 
 pub use sc_peerset::ReputationChange;

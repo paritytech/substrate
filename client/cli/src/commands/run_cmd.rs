@@ -58,7 +58,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
@@ -89,7 +89,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
@@ -238,6 +238,10 @@ pub struct RunCmd {
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
 
+	/// Maximum number of different runtimes that can be cached.
+	#[structopt(long, default_value = "2")]
+	pub runtime_cache_size: u8,
+
 	/// Run a temporary node.
 	///
 	/// A temporary directory will be created to store the configuration and will be deleted
@@ -361,17 +365,24 @@ impl CliConfiguration for RunCmd {
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn prometheus_config(&self, default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(
+		&self,
+		default_listen_port: u16,
+		chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<PrometheusConfig>> {
 		Ok(if self.no_prometheus {
 			None
 		} else {
 			let interface =
 				if self.prometheus_external { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
 
-			Some(PrometheusConfig::new_with_default_registry(SocketAddr::new(
-				interface.into(),
-				self.prometheus_port.unwrap_or(default_listen_port),
-			)))
+			Some(PrometheusConfig::new_with_default_registry(
+				SocketAddr::new(
+					interface.into(),
+					self.prometheus_port.unwrap_or(default_listen_port),
+				),
+				chain_spec.id().into(),
+			))
 		})
 	}
 
@@ -448,6 +459,10 @@ impl CliConfiguration for RunCmd {
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+	}
+
+	fn runtime_cache_size(&self) -> Result<u8> {
+		Ok(self.runtime_cache_size)
 	}
 
 	fn base_path(&self) -> Result<Option<BasePath>> {
