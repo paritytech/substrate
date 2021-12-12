@@ -166,25 +166,25 @@ pub mod pallet {
 		T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
 			10
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(20));
 		}
 		fn on_runtime_upgrade() -> Weight {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
 			30
 		}
 		fn integrity_test() {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType2); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType2); // Test for where clause
 		}
 	}
 
@@ -200,8 +200,8 @@ pub mod pallet {
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
 		) -> DispatchResultWithPostInfo {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType3); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType3); // Test for where clause
 			let _ = origin;
 			Self::deposit_event(Event::Something(3));
 			Ok(().into())
@@ -262,12 +262,13 @@ pub mod pallet {
 	#[pallet::storage_prefix = "Value2"]
 	pub type RenamedValue<T> = StorageValue<Value = u64>;
 
+	/// Test some doc
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
 	where
 		T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1,
 	{
-		T::AccountId::from(SomeType7); // Test where clause works
+		let _ = T::AccountId::from(SomeType7); // Test where clause works
 		4u16
 	}
 
@@ -351,8 +352,8 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>,
 	{
 		fn build(&self) {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType4); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType4); // Test for where clause
 		}
 	}
 
@@ -369,8 +370,8 @@ pub mod pallet {
 	{
 		type Call = Call<T>;
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType5); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_transactional { .. }) {
 				return Ok(ValidTransaction::default())
 			}
@@ -389,8 +390,8 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
-			T::AccountId::from(SomeType1); // Test for where clause
-			T::AccountId::from(SomeType6); // Test for where clause
+			let _ = T::AccountId::from(SomeType1); // Test for where clause
+			let _ = T::AccountId::from(SomeType6); // Test for where clause
 			Some(Call::foo_no_post_info {})
 		}
 
@@ -452,9 +453,21 @@ pub mod pallet2 {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> where
-		T::AccountId: From<SomeType1> + SomeAssociation1
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+			Self::deposit_event(Event::Something(11));
+			0
+		}
+		fn on_finalize(_: BlockNumberFor<T>) {
+			Self::deposit_event(Event::Something(21));
+		}
+		fn on_runtime_upgrade() -> Weight {
+			Self::deposit_event(Event::Something(31));
+			0
+		}
 	}
 
 	#[pallet::call]
@@ -468,6 +481,7 @@ pub mod pallet2 {
 		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::event]
+	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
 		/// Something
 		Something(u32),
@@ -552,6 +566,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
@@ -962,10 +977,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 10);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -973,10 +988,62 @@ fn pallet_hooks_expand() {
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example(pallet::Event::Something(20)),
+			Event::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example(pallet::Event::Something(30)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+	})
+}
+
+#[test]
+fn all_pallets_type_reversed_order_is_correct() {
+	TestExternalities::default().execute_with(|| {
+		frame_system::Pallet::<Runtime>::set_block_number(1);
+
+		#[allow(deprecated)]
+		{
+			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
+			AllPalletsWithoutSystemReversed::on_finalize(1);
+
+			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
+		}
+
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[0].event,
+			Event::Example2(pallet2::Event::Something(11)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Example(pallet::Event::Something(10)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
 	})
@@ -1497,4 +1564,49 @@ fn test_storage_info() {
 			},
 		],
 	);
+}
+
+#[test]
+fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
+	fn _b(t: (System, (Example4, (Example2, (Example,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystem) {}
+	fn _b(t: (System, (Example, (Example2, (Example4,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystem) {}
+	fn _b(t: (Example, (Example2, (Example4,)))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example, (System,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example,)))) {
+		_a(t)
+	}
 }

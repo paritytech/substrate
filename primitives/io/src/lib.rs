@@ -88,12 +88,12 @@ pub enum EcdsaVerifyError {
 }
 
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
-/// removed from the trie from making the `storage_kill` call.
+/// removed from the backend from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
 pub enum KillStorageResult {
-	/// No key remains in the child trie.
+	/// All key to remove were removed, return number of key removed from backend.
 	AllRemoved(u32),
-	/// At least one key still resides in the child trie due to the supplied limit.
+	/// Not all key to remove were removed, return number of key removed from backend.
 	SomeRemaining(u32),
 }
 
@@ -195,16 +195,9 @@ pub trait Storage {
 		self.storage_root()
 	}
 
-	/// "Commit" all existing operations and get the resulting storage change root.
-	/// `parent_hash` is a SCALE encoded hash.
-	///
-	/// The hashing algorithm is defined by the `Block`.
-	///
-	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
-	/// changes trie is disabled.
-	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
-		self.storage_changes_root(parent_hash)
-			.expect("Invalid `parent_hash` given to `changes_root`.")
+	/// Always returns `None`. This function exists for compatibility reasons.
+	fn changes_root(&mut self, _parent_hash: &[u8]) -> Option<Vec<u8>> {
+		None
 	}
 
 	/// Get the next key in storage after the given one in lexicographic order.
@@ -716,6 +709,22 @@ pub trait Crypto {
 			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 	}
 
+	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
+	/// key and key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign_prehashed(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Option<ecdsa::Signature> {
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_sign_prehashed(keystore, id, pub_key, msg).ok().flatten()
+	}
+
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
@@ -729,6 +738,17 @@ pub trait Crypto {
 	#[version(2)]
 	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
 		ecdsa::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Verify `ecdsa` signature with pre-hashed `msg`.
+	///
+	/// Returns `true` when the verification was successful.
+	fn ecdsa_verify_prehashed(
+		sig: &ecdsa::Signature,
+		msg: &[u8; 32],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		ecdsa::Pair::verify_prehashed(sig, msg, pub_key)
 	}
 
 	/// Register a `ecdsa` signature for batch verification.
@@ -1497,7 +1517,7 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
+pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///

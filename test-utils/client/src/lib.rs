@@ -45,20 +45,12 @@ use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::{
-	codec::Encode,
-	traits::{BlakeTwo256, Block as BlockT},
-	OpaqueExtrinsic,
-};
+use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
 	sync::Arc,
 };
-
-/// Test client light database backend.
-pub type LightBackend<Block> =
-	sc_light::Backend<sc_client_db::light::LightStorage<Block>, BlakeTwo256>;
 
 /// A genesis storage initialization trait.
 pub trait GenesisInit: Default {
@@ -291,7 +283,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(|| {
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),

@@ -31,7 +31,7 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
-type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
+type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256>;
 
 fn call_wasm_method_with_result<HF: HostFunctionsT>(
 	binary: &[u8],
@@ -48,6 +48,7 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 		host_functions,
 		8,
 		None,
+		2,
 	);
 	executor
 		.uncached_call(

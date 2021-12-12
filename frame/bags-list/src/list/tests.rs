@@ -18,7 +18,7 @@
 use super::*;
 use crate::{
 	mock::{test_utils::*, *},
-	CounterForListNodes, ListBags, ListNodes,
+	ListBags, ListNodes,
 };
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, assert_storage_noop};
@@ -29,7 +29,7 @@ fn basic_setup_works() {
 		// syntactic sugar to create a raw node
 		let node = |id, prev, next, bag_upper| Node::<Runtime> { id, prev, next, bag_upper };
 
-		assert_eq!(CounterForListNodes::<Runtime>::get(), 4);
+		assert_eq!(ListNodes::<Runtime>::count(), 4);
 		assert_eq!(ListNodes::<Runtime>::iter().count(), 4);
 		assert_eq!(ListBags::<Runtime>::iter().count(), 2);
 
@@ -249,10 +249,10 @@ mod list {
 
 	#[test]
 	fn remove_works() {
-		use crate::{CounterForListNodes, ListBags, ListNodes};
+		use crate::{ListBags, ListNodes};
 		let ensure_left = |id, counter| {
 			assert!(!ListNodes::<Runtime>::contains_key(id));
-			assert_eq!(CounterForListNodes::<Runtime>::get(), counter);
+			assert_eq!(ListNodes::<Runtime>::count(), counter);
 			assert_eq!(ListNodes::<Runtime>::iter().count() as u32, counter);
 		};
 
@@ -357,10 +357,19 @@ mod list {
 			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified"));
 		});
 
-		// ensure count is in sync with `CounterForListNodes`.
+		// ensure count is in sync with `ListNodes::count()`.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			crate::CounterForListNodes::<Runtime>::mutate(|counter| *counter += 1);
-			assert_eq!(crate::CounterForListNodes::<Runtime>::get(), 5);
+			assert_eq!(crate::ListNodes::<Runtime>::count(), 4);
+			// we do some wacky stuff here to get access to the counter, since it is (reasonably)
+			// not exposed as mutable in any sense.
+			frame_support::generate_storage_alias!(
+				BagsList,
+				CounterForListNodes
+				=> Value<u32, frame_support::pallet_prelude::ValueQuery>
+			);
+			CounterForListNodes::mutate(|counter| *counter += 1);
+			assert_eq!(crate::ListNodes::<Runtime>::count(), 5);
+
 			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != stored_count"));
 		});
 	}
@@ -372,6 +381,123 @@ mod list {
 
 			let non_existent_ids = vec![&42, &666, &13];
 			assert!(non_existent_ids.iter().all(|id| !List::<Runtime>::contains(id)));
+		})
+	}
+
+	#[test]
+	#[should_panic = "given nodes must always have a valid bag. qed."]
+	fn put_in_front_of_panics_if_bag_not_found() {
+		ExtBuilder::default().skip_genesis_ids().build_and_execute_no_post_check(|| {
+			let node_10_no_bag = Node::<Runtime> { id: 10, prev: None, next: None, bag_upper: 15 };
+			let node_11_no_bag = Node::<Runtime> { id: 11, prev: None, next: None, bag_upper: 15 };
+
+			// given
+			ListNodes::<Runtime>::insert(10, node_10_no_bag);
+			ListNodes::<Runtime>::insert(11, node_11_no_bag);
+			StakingMock::set_vote_weight_of(&10, 14);
+			StakingMock::set_vote_weight_of(&11, 15);
+			assert!(!ListBags::<Runtime>::contains_key(15));
+			assert_eq!(List::<Runtime>::get_bags(), vec![]);
+
+			// then .. this panics
+			let _ = List::<Runtime>::put_in_front_of(&10, &11);
+		});
+	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_only_node() {
+		// Note that this `insert_at_unchecked` test should fail post checks because node 42 does
+		// not get re-assigned the correct bagu pper. This is because `insert_at_unchecked` assumes
+		// both nodes are already in the same bag with the correct bag upper.
+		ExtBuilder::default().build_and_execute_no_post_check(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 =
+				Node::<Runtime> { id: 42, prev: Some(1), next: Some(2), bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_1 = crate::ListNodes::<Runtime>::get(&1).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_1, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![42, 1]), (1_000, vec![2, 3, 4])]
+			);
+		})
+	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_head() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 = Node::<Runtime> { id: 42, prev: Some(4), next: None, bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_2 = crate::ListNodes::<Runtime>::get(&2).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_2, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![42, 2, 3, 4])]
+			);
+		})
+	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_non_terminal() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 = Node::<Runtime> { id: 42, prev: None, next: Some(2), bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_3 = crate::ListNodes::<Runtime>::get(&3).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_3, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 42, 3, 4])]
+			);
+		})
+	}
+
+	#[test]
+	fn insert_at_unchecked_at_is_tail() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
+
+			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
+			let node_42 =
+				Node::<Runtime> { id: 42, prev: Some(42), next: Some(42), bag_upper: 1_000 };
+			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
+
+			let node_4 = crate::ListNodes::<Runtime>::get(&4).unwrap();
+
+			// when
+			List::<Runtime>::insert_at_unchecked(node_4, node_42);
+
+			// then
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1]), (1_000, vec![2, 3, 42, 4])]
+			);
 		})
 	}
 }

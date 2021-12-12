@@ -153,10 +153,6 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("child_storage_root is not supported in ReadOnlyExternalities")
 	}
 
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		unimplemented!("storage_changes_root is not supported in ReadOnlyExternalities")
-	}
-
 	fn storage_start_transaction(&mut self) {
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}

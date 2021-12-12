@@ -31,7 +31,8 @@ use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pwasm_utils::parity_wasm::elements::ValueType;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, Zero};
+use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
@@ -54,15 +55,12 @@ pub enum ReturnCode {
 	CalleeReverted = 2,
 	/// The passed key does not exist in storage.
 	KeyNotFound = 3,
-	/// Transfer failed because it would have brought the sender's total balance below the
-	/// subsistence threshold.
-	BelowSubsistenceThreshold = 4,
-	/// Transfer failed for other reasons. Most probably reserved or locked balance of the
-	/// sender prevents the transfer.
+	/// Deprecated and no longer returned: There is only the minimum balance.
+	_BelowSubsistenceThreshold = 4,
+	/// See [`Error::TransferFailed`].
 	TransferFailed = 5,
-	/// The newly created contract is below the subsistence threshold after executing
-	/// its constructor.
-	NewContractNotFunded = 6,
+	/// Deprecated and no longer returned: Endowment is no longer required.
+	_EndowmentTooLow = 6,
 	/// No code could be found at the supplied code hash.
 	CodeNotFound = 7,
 	/// The contract that was called is no contract (a plain account).
@@ -150,8 +148,6 @@ pub enum RuntimeCosts {
 	ValueTransferred,
 	/// Weight of calling `seal_minimum_balance`.
 	MinimumBalance,
-	/// Weight of calling `seal_contract_deposit`.
-	ContractDeposit,
 	/// Weight of calling `seal_block_number`.
 	BlockNumber,
 	/// Weight of calling `seal_now`.
@@ -230,7 +226,6 @@ impl RuntimeCosts {
 			Balance => s.balance,
 			ValueTransferred => s.value_transferred,
 			MinimumBalance => s.minimum_balance,
-			ContractDeposit => s.contract_deposit,
 			BlockNumber => s.block_number,
 			Now => s.now,
 			WeightToFee => s.weight_to_fee,
@@ -357,7 +352,7 @@ fn already_charged(_: u32) -> Option<RuntimeCosts> {
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
-	memory: sp_sandbox::Memory,
+	memory: sp_sandbox::default_executor::Memory,
 	trap_reason: Option<TrapReason>,
 }
 
@@ -367,7 +362,11 @@ where
 	<E::T as frame_system::Config>::AccountId:
 		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
-	pub fn new(ext: &'a mut E, input_data: Vec<u8>, memory: sp_sandbox::Memory) -> Self {
+	pub fn new(
+		ext: &'a mut E,
+		input_data: Vec<u8>,
+		memory: sp_sandbox::default_executor::Memory,
+	) -> Self {
 		Runtime { ext, input_data: Some(input_data), memory, trap_reason: None }
 	}
 
@@ -606,16 +605,12 @@ where
 	fn err_into_return_code(from: DispatchError) -> Result<ReturnCode, DispatchError> {
 		use ReturnCode::*;
 
-		let below_sub = Error::<E::T>::BelowSubsistenceThreshold.into();
 		let transfer_failed = Error::<E::T>::TransferFailed.into();
-		let not_funded = Error::<E::T>::NewContractNotFunded.into();
 		let no_code = Error::<E::T>::CodeNotFound.into();
 		let not_found = Error::<E::T>::ContractNotFound.into();
 
 		match from {
-			x if x == below_sub => Ok(BelowSubsistenceThreshold),
 			x if x == transfer_failed => Ok(TransferFailed),
-			x if x == not_funded => Ok(NewContractNotFunded),
 			x if x == no_code => Ok(CodeNotFound),
 			x if x == not_found => Ok(NotCallable),
 			err => Err(err),
@@ -731,12 +726,7 @@ where
 	}
 }
 
-// ***********************************************************
-// * AFTER MAKING A CHANGE MAKE SURE TO UPDATE COMPLEXITY.MD *
-// ***********************************************************
-
-// Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
-// a function set which can be imported by an executed contract.
+// This is the API exposed to contracts.
 //
 // # Note
 //
@@ -832,7 +822,6 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	[seal0] seal_transfer(
 		ctx,
@@ -920,10 +909,9 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
-	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NotCallable`
-	[__unstable__] seal_call(
+	[seal1] seal_call(
 		ctx,
 		flags: u32,
 		callee_ptr: u32,
@@ -935,7 +923,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| "used rerved bit in CallFlags")?,
+			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
 			callee_ptr,
 			gas,
 			value_ptr,
@@ -997,9 +985,8 @@ define_env!(Env, <E: Ext>,
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
 	// supplying the sentinel value of `u32::MAX` to `output_ptr` or `address_ptr`.
 	//
-	// After running the constructor it is verified that the contract account holds at
-	// least the subsistence threshold. If that is not the case the instantiation fails and
-	// the contract is not created.
+	// `value` must be at least the minimum balance. Otherwise the instantiation fails and the
+	// contract is not created.
 	//
 	// # Parameters
 	//
@@ -1028,9 +1015,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
-	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
-	// `ReturnCode::NewContractNotFunded`
 	// `ReturnCode::CodeNotFound`
 	[seal1] seal_instantiate(
 		ctx,
@@ -1077,7 +1062,7 @@ define_env!(Env, <E: Ext>,
 		ctx.terminate(beneficiary_ptr)
 	},
 
-	// Remove the calling account and transfer remaining balance.
+	// Remove the calling account and transfer remaining **free** balance.
 	//
 	// This function never returns. Either the termination was successful and the
 	// execution of the destroyed contract is halted. Or it failed during the termination
@@ -1210,7 +1195,7 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the balance of the current account into the supplied buffer.
+	// Stores the **free* balance of the current account into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at
@@ -1225,7 +1210,7 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the value transferred along with this call or as endowment into the supplied buffer.
+	// Stores the value transferred along with this call/instantiate into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at
@@ -1318,38 +1303,20 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the contract deposit into the supplied buffer.
-	//
-	// # Deprecation
-	//
-	// This is equivalent to calling `seal_contract_deposit` and only exists for backwards
-	// compatibility. See that function for documentation.
-	[seal0] seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::ContractDeposit)?;
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.contract_deposit().encode(), false, already_charged
-		)?)
-	},
-
-	// Stores the contract deposit into the supplied buffer.
+	// Stores the tombstone deposit into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
-	// The data is encoded as T::Balance.
+	// # Deprecation
 	//
-	// # Note
-	//
-	// The contract deposit is on top of the existential deposit. The sum
-	// is commonly referred as subsistence threshold in code. No contract initiated
-	// balance transfer can go below this threshold.
-	[seal0] seal_contract_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::ContractDeposit)?;
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.contract_deposit().encode(), false, already_charged
-		)?)
+	// There is no longer a tombstone deposit. This function always returns 0.
+	[seal0] seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::Balance)?;
+		let deposit = <BalanceOf<E::T>>::zero().encode();
+		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, &deposit, false, already_charged)?)
 	},
 
 	// Was used to restore the given destination contract sacrificing the caller.

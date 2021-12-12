@@ -26,7 +26,7 @@ use sp_version::RuntimeVersion;
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
+	traits::{ConstU32, KeyOwnerProofSystem, Randomness, StorageInfo},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 		IdentityFee, Weight,
@@ -191,6 +191,7 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = SS58Prefix;
 	/// The set code logic, just the default since we're not a parachain.
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
@@ -286,16 +287,16 @@ construct_runtime!(
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Aura: pallet_aura::{Pallet, Config<T>},
-		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
-		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
+		System: frame_system,
+		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
+		Timestamp: pallet_timestamp,
+		Aura: pallet_aura,
+		Grandpa: pallet_grandpa,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
-		TemplateModule: pallet_template::{Pallet, Call, Storage, Event<T>},
+		TemplateModule: pallet_template,
 	}
 );
 
@@ -323,7 +324,7 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllPallets,
+	AllPalletsWithSystem,
 >;
 
 impl_runtime_apis! {

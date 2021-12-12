@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 /// Simple u32 power of 2 function - simply uses a bit shift
 macro_rules! pow2 {
 	($n:expr) => {

@@ -23,30 +23,25 @@ use std::{
 };
 
 use crate::{
-	backend::Backend,
-	changes_trie::{
-		BlockNumber as ChangesTrieBlockNumber, Configuration as ChangesTrieConfiguration,
-		InMemoryStorage as ChangesTrieInMemoryStorage, State as ChangesTrieState,
-	},
-	ext::Ext,
-	InMemoryBackend, OverlayedChanges, StorageKey, StorageTransactionCache, StorageValue,
+	backend::Backend, ext::Ext, InMemoryBackend, InMemoryProvingBackend, OverlayedChanges,
+	StorageKey, StorageTransactionCache, StorageValue,
 };
 
-use codec::Decode;
 use hash_db::Hasher;
 use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
-		well_known_keys::{is_child_storage_key, CHANGES_TRIE_CONFIG, CODE},
+		well_known_keys::{is_child_storage_key, CODE},
 		Storage,
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
+use sp_trie::StorageProof;
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
+pub struct TestExternalities<H: Hasher>
 where
 	H::Out: codec::Codec + Ord,
 {
@@ -54,33 +49,23 @@ where
 	overlay: OverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache:
-		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H, N>,
+		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,
 	/// Storage backend.
 	pub backend: InMemoryBackend<H>,
-	changes_trie_config: Option<ChangesTrieConfiguration>,
-	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	/// Extensions.
 	pub extensions: Extensions,
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
+impl<H: Hasher> TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// Get externalities implementation.
-	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>> {
+	pub fn ext(&mut self) -> Ext<H, InMemoryBackend<H>> {
 		Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
 			&self.backend,
-			match self.changes_trie_config.clone() {
-				Some(config) => Some(ChangesTrieState {
-					config,
-					zero: 0.into(),
-					storage: &self.changes_trie_storage,
-				}),
-				None => None,
-			},
 			Some(&mut self.extensions),
 		)
 	}
@@ -97,12 +82,7 @@ where
 
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
-		let mut overlay = OverlayedChanges::default();
-		let changes_trie_config = storage
-			.top
-			.get(CHANGES_TRIE_CONFIG)
-			.and_then(|v| Decode::decode(&mut &v[..]).ok());
-		overlay.set_collect_extrinsics(changes_trie_config.is_some());
+		let overlay = OverlayedChanges::default();
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
@@ -117,9 +97,7 @@ where
 		TestExternalities {
 			overlay,
 			offchain_db,
-			changes_trie_config,
 			extensions,
-			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
 			storage_transaction_cache: Default::default(),
 		}
@@ -145,14 +123,16 @@ where
 		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
 	}
 
+	/// Insert key/value into backend.
+	///
+	/// This only supports inserting keys in child tries.
+	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
+		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])]);
+	}
+
 	/// Registers the given extension for this instance.
 	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.register(ext);
-	}
-
-	/// Get mutable reference to changes trie storage.
-	pub fn changes_trie_storage(&mut self) -> &mut ChangesTrieInMemoryStorage<H, N> {
-		&mut self.changes_trie_storage
 	}
 
 	/// Return a new backend with all pending changes.
@@ -180,9 +160,8 @@ where
 	///
 	/// This will panic if there are still open transactions.
 	pub fn commit_all(&mut self) -> Result<(), String> {
-		let changes = self.overlay.drain_storage_changes::<_, _, N>(
+		let changes = self.overlay.drain_storage_changes::<_, _>(
 			&self.backend,
-			None,
 			Default::default(),
 			&mut Default::default(),
 		)?;
@@ -200,9 +179,29 @@ where
 		sp_externalities::set_and_run_with_externalities(&mut ext, execute)
 	}
 
+	/// Execute the given closure while `self`, with `proving_backend` as backend, is set as
+	/// externalities.
+	///
+	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
+	/// get their own proof from scratch.
+	pub fn execute_and_prove<'a, R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
+		let proving_backend = InMemoryProvingBackend::new(&self.backend);
+		let mut proving_ext = Ext::new(
+			&mut self.overlay,
+			&mut self.storage_transaction_cache,
+			&proving_backend,
+			Some(&mut self.extensions),
+		);
+
+		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
+		let proof = proving_backend.extract_proof();
+
+		(outcome, proof)
+	}
+
 	/// Execute the given closure while `self` is set as externalities.
 	///
-	/// Returns the result of the given closure, if no panics occured.
+	/// Returns the result of the given closure, if no panics occurred.
 	/// Otherwise, returns `Err`.
 	pub fn execute_with_safe<R>(
 		&mut self,
@@ -216,7 +215,7 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N>
+impl<H: Hasher> std::fmt::Debug for TestExternalities<H>
 where
 	H::Out: Ord + codec::Codec,
 {
@@ -225,18 +224,18 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
+impl<H: Hasher> PartialEq for TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
-	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
+	fn eq(&self, other: &TestExternalities<H>) -> bool {
 		self.as_backend().eq(&other.as_backend())
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
+impl<H: Hasher> Default for TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -245,7 +244,7 @@ where
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N>
+impl<H: Hasher> From<Storage> for TestExternalities<H>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -254,11 +253,10 @@ where
 	}
 }
 
-impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N>
+impl<H> sp_externalities::ExtensionStore for TestExternalities<H>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
-	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(type_id)
@@ -284,11 +282,10 @@ where
 	}
 }
 
-impl<H, N> sp_externalities::ExternalitiesExt for TestExternalities<H, N>
+impl<H> sp_externalities::ExternalitiesExt for TestExternalities<H>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
-	N: ChangesTrieBlockNumber,
 {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
 		self.extension_by_type_id(TypeId::of::<T>()).and_then(<dyn Any>::downcast_mut)
@@ -312,7 +309,7 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
@@ -324,7 +321,7 @@ mod tests {
 
 	#[test]
 	fn set_and_retrieve_code() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		let mut ext = ext.ext();
 
 		let code = vec![1, 2, 3];
@@ -336,12 +333,12 @@ mod tests {
 	#[test]
 	fn check_send() {
 		fn assert_send<T: Send>() {}
-		assert_send::<TestExternalities<BlakeTwo256, u64>>();
+		assert_send::<TestExternalities<BlakeTwo256>>();
 	}
 
 	#[test]
 	fn commit_all_and_kill_child_storage() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		let child_info = ChildInfo::new_default(&b"test_child"[..]);
 
 		{
@@ -366,7 +363,7 @@ mod tests {
 
 	#[test]
 	fn as_backend_generates_same_backend_as_commit_all() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		{
 			let mut ext = ext.ext();
 			ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());

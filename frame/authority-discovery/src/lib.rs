@@ -30,8 +30,6 @@ use frame_support::{
 use sp_authority_discovery::AuthorityId;
 use sp_std::prelude::*;
 
-use core::convert::TryFrom;
-
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -262,6 +260,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
 	pub struct TestSessionHandler;

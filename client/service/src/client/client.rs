@@ -23,7 +23,6 @@ use super::{
 	genesis,
 };
 use codec::{Decode, Encode};
-use hash_db::Prefix;
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
@@ -31,18 +30,15 @@ use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
-		self, apply_aux, changes_tries_state_at_block, BlockImportOperation, ClientImportOperation,
-		Finalizer, ImportSummary, LockImportRun, NewBlockState, PrunableStateChangesTrieStorage,
-		StorageProvider,
+		self, apply_aux, BlockImportOperation, ClientImportOperation, Finalizer, ImportSummary,
+		LockImportRun, NewBlockState, StorageProvider,
 	},
-	cht,
 	client::{
 		BadBlocks, BlockBackend, BlockImportNotification, BlockOf, BlockchainEvents, ClientInfo,
 		FinalityNotification, FinalityNotifications, ForkBlocks, ImportNotifications,
 		ProvideUncles,
 	},
 	execution_extensions::ExecutionExtensions,
-	light::ChangesProof,
 	notifications::{StorageEventStream, StorageNotifications},
 	CallExecutor, ExecutorProvider, KeyIterator, ProofProvider, UsageProvider,
 };
@@ -56,35 +52,36 @@ use sp_api::{
 	ProvideRuntimeApi,
 };
 use sp_blockchain::{
-	self as blockchain, well_known_cache_keys::Id as CacheKeyId, Backend as ChainBackend, Cache,
-	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata, ProvideCache,
+	self as blockchain, well_known_cache_keys::Id as CacheKeyId, Backend as ChainBackend,
+	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata,
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
-	convert_hash,
-	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
-	ChangesTrieConfiguration, NativeOrEncoded,
+	storage::{
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
+		StorageKey,
+	},
+	NativeOrEncoded,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::{
-	generic::{BlockId, DigestItem, SignedBlock},
+	generic::{BlockId, SignedBlock},
 	traits::{
-		Block as BlockT, DigestFor, HashFor, Header as HeaderT, NumberFor, One,
-		SaturatedConversion, Zero,
+		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion, Zero,
 	},
-	BuildStorage, Justification, Justifications,
+	BuildStorage, Digest, Justification, Justifications,
 };
 use sp_state_machine::{
-	key_changes, key_changes_proof, prove_child_read, prove_range_read_with_size, prove_read,
-	read_range_proof_check, Backend as StateBackend, ChangesTrieAnchorBlockId,
-	ChangesTrieConfigurationRange, ChangesTrieRootsStorage, ChangesTrieStorage, DBValue,
+	prove_child_read, prove_range_read_with_child_with_size, prove_read,
+	read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend, KeyValueStates,
+	KeyValueStorageLevel, MAX_NESTED_TRIE_DEPTH,
 };
-use sp_trie::StorageProof;
+use sp_trie::{CompactProof, StorageProof};
 use std::{
-	collections::{BTreeMap, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	marker::PhantomData,
 	panic::UnwindSafe,
 	path::PathBuf,
@@ -409,250 +406,6 @@ where
 		self.executor.runtime_version(id)
 	}
 
-	/// Reads given header and generates CHT-based header proof for CHT of given size.
-	pub fn header_proof_with_cht_size(
-		&self,
-		id: &BlockId<Block>,
-		cht_size: NumberFor<Block>,
-	) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
-		let proof_error = || {
-			sp_blockchain::Error::Backend(format!("Failed to generate header proof for {:?}", id))
-		};
-		let header = self.backend.blockchain().expect_header(*id)?;
-		let block_num = *header.number();
-		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
-		let cht_start = cht::start_number(cht_size, cht_num);
-		let mut current_num = cht_start;
-		let cht_range = ::std::iter::from_fn(|| {
-			let old_current_num = current_num;
-			current_num = current_num + One::one();
-			Some(old_current_num)
-		});
-		let headers = cht_range.map(|num| self.block_hash(num));
-		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
-			cht_size,
-			cht_num,
-			std::iter::once(block_num),
-			headers,
-		)?;
-		Ok((header, proof))
-	}
-
-	/// Does the same work as `key_changes_proof`, but assumes that CHTs are of passed size.
-	pub fn key_changes_proof_with_cht_size(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		min: Block::Hash,
-		max: Block::Hash,
-		storage_key: Option<&PrefixedStorageKey>,
-		key: &StorageKey,
-		cht_size: NumberFor<Block>,
-	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
-		struct AccessedRootsRecorder<'a, Block: BlockT> {
-			storage: &'a dyn ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>,
-			min: NumberFor<Block>,
-			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, Block::Hash>>,
-		}
-
-		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>>
-			for AccessedRootsRecorder<'a, Block>
-		{
-			fn build_anchor(
-				&self,
-				hash: Block::Hash,
-			) -> Result<ChangesTrieAnchorBlockId<Block::Hash, NumberFor<Block>>, String> {
-				self.storage.build_anchor(hash)
-			}
-
-			fn root(
-				&self,
-				anchor: &ChangesTrieAnchorBlockId<Block::Hash, NumberFor<Block>>,
-				block: NumberFor<Block>,
-			) -> Result<Option<Block::Hash>, String> {
-				let root = self.storage.root(anchor, block)?;
-				if block < self.min {
-					if let Some(ref root) = root {
-						self.required_roots_proofs.lock().insert(block, root.clone());
-					}
-				}
-				Ok(root)
-			}
-		}
-
-		impl<'a, Block: BlockT> ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>
-			for AccessedRootsRecorder<'a, Block>
-		{
-			fn as_roots_storage(
-				&self,
-			) -> &dyn sp_state_machine::ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> {
-				self
-			}
-
-			fn with_cached_changed_keys(
-				&self,
-				root: &Block::Hash,
-				functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<Vec<u8>>>),
-			) -> bool {
-				self.storage.with_cached_changed_keys(root, functor)
-			}
-
-			fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-				self.storage.get(key, prefix)
-			}
-		}
-
-		let first_number =
-			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?;
-		let (storage, configs) = self.require_changes_trie(first_number, last, true)?;
-		let min_number =
-			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
-
-		let recording_storage = AccessedRootsRecorder::<Block> {
-			storage: storage.storage(),
-			min: min_number,
-			required_roots_proofs: Mutex::new(BTreeMap::new()),
-		};
-
-		let max_number = std::cmp::min(
-			self.backend.blockchain().info().best_number,
-			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(max))?,
-		);
-
-		// fetch key changes proof
-		let mut proof = Vec::new();
-		for (config_zero, config_end, config) in configs {
-			let last_number =
-				self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?;
-			let config_range = ChangesTrieConfigurationRange {
-				config: &config,
-				zero: config_zero,
-				end: config_end.map(|(config_end_number, _)| config_end_number),
-			};
-			let proof_range = key_changes_proof::<HashFor<Block>, _>(
-				config_range,
-				&recording_storage,
-				first_number,
-				&ChangesTrieAnchorBlockId { hash: convert_hash(&last), number: last_number },
-				max_number,
-				storage_key,
-				&key.0,
-			)
-			.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
-			proof.extend(proof_range);
-		}
-
-		// now gather proofs for all changes tries roots that were touched during key_changes_proof
-		// execution AND are unknown (i.e. replaced with CHT) to the requester
-		let roots = recording_storage.required_roots_proofs.into_inner();
-		let roots_proof = self.changes_trie_roots_proof(cht_size, roots.keys().cloned())?;
-
-		Ok(ChangesProof {
-			max_block: max_number,
-			proof,
-			roots: roots.into_iter().map(|(n, h)| (n, convert_hash(&h))).collect(),
-			roots_proof,
-		})
-	}
-
-	/// Generate CHT-based proof for roots of changes tries at given blocks.
-	fn changes_trie_roots_proof<I: IntoIterator<Item = NumberFor<Block>>>(
-		&self,
-		cht_size: NumberFor<Block>,
-		blocks: I,
-	) -> sp_blockchain::Result<StorageProof> {
-		// most probably we have touched several changes tries that are parts of the single CHT
-		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
-		let mut proofs = Vec::new();
-
-		cht::for_each_cht_group::<Block::Header, _, _, _>(
-			cht_size,
-			blocks,
-			|_, cht_num, cht_blocks| {
-				let cht_proof =
-					self.changes_trie_roots_proof_at_cht(cht_size, cht_num, cht_blocks)?;
-				proofs.push(cht_proof);
-				Ok(())
-			},
-			(),
-		)?;
-
-		Ok(StorageProof::merge(proofs))
-	}
-
-	/// Generates CHT-based proof for roots of changes tries at given blocks
-	/// (that are part of single CHT).
-	fn changes_trie_roots_proof_at_cht(
-		&self,
-		cht_size: NumberFor<Block>,
-		cht_num: NumberFor<Block>,
-		blocks: Vec<NumberFor<Block>>,
-	) -> sp_blockchain::Result<StorageProof> {
-		let cht_start = cht::start_number(cht_size, cht_num);
-		let mut current_num = cht_start;
-		let cht_range = ::std::iter::from_fn(|| {
-			let old_current_num = current_num;
-			current_num = current_num + One::one();
-			Some(old_current_num)
-		});
-		let roots = cht_range.map(|num| {
-			self.header(&BlockId::Number(num)).map(|block| {
-				block
-					.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())
-			})
-		});
-		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
-			cht_size, cht_num, blocks, roots,
-		)?;
-		Ok(proof)
-	}
-
-	/// Returns changes trie storage and all configurations that have been active
-	/// in the range [first; last].
-	///
-	/// Configurations are returned in descending order (and obviously never overlap).
-	/// If fail_if_disabled is false, returns maximal consequent configurations ranges,
-	/// starting from last and stopping on either first, or when CT have been disabled.
-	/// If fail_if_disabled is true, fails when there's a subrange where CT have been disabled
-	/// inside first..last blocks range.
-	fn require_changes_trie(
-		&self,
-		first: NumberFor<Block>,
-		last: Block::Hash,
-		fail_if_disabled: bool,
-	) -> sp_blockchain::Result<(
-		&dyn PrunableStateChangesTrieStorage<Block>,
-		Vec<(NumberFor<Block>, Option<(NumberFor<Block>, Block::Hash)>, ChangesTrieConfiguration)>,
-	)> {
-		let storage = self
-			.backend
-			.changes_trie_storage()
-			.ok_or_else(|| sp_blockchain::Error::ChangesTriesNotSupported)?;
-
-		let mut configs = Vec::with_capacity(1);
-		let mut current = last;
-		loop {
-			let config_range = storage.configuration_at(&BlockId::Hash(current))?;
-			match config_range.config {
-				Some(config) => configs.push((config_range.zero.0, config_range.end, config)),
-				None if !fail_if_disabled => return Ok((storage, configs)),
-				None => return Err(sp_blockchain::Error::ChangesTriesNotSupported),
-			}
-
-			if config_range.zero.0 < first {
-				break
-			}
-
-			current = *self
-				.backend
-				.blockchain()
-				.expect_header(BlockId::Hash(config_range.zero.1))?
-				.parent_hash();
-		}
-
-		Ok((storage, configs))
-	}
-
 	/// Apply a checked and validated block to an operation. If a justification is provided
 	/// then `finalized` *must* be true.
 	fn apply_block(
@@ -807,7 +560,7 @@ where
 					sc_consensus::StorageChanges::Changes(storage_changes) => {
 						self.backend
 							.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
-						let (main_sc, child_sc, offchain_sc, tx, _, changes_trie_tx, tx_index) =
+						let (main_sc, child_sc, offchain_sc, tx, _, tx_index) =
 							storage_changes.into_inner();
 
 						if self.config.offchain_indexing_api {
@@ -818,16 +571,40 @@ where
 						operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
 						operation.op.update_transaction_index(tx_index)?;
 
-						if let Some(changes_trie_transaction) = changes_trie_tx {
-							operation.op.update_changes_trie(changes_trie_transaction)?;
-						}
 						Some((main_sc, child_sc))
 					},
 					sc_consensus::StorageChanges::Import(changes) => {
-						let storage = sp_storage::Storage {
-							top: changes.state.into_iter().collect(),
-							children_default: Default::default(),
-						};
+						let mut storage = sp_storage::Storage::default();
+						for state in changes.state.0.into_iter() {
+							if state.parent_storage_keys.len() == 0 && state.state_root.len() == 0 {
+								for (key, value) in state.key_values.into_iter() {
+									storage.top.insert(key, value);
+								}
+							} else {
+								for parent_storage in state.parent_storage_keys {
+									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
+									let storage_key =
+										match ChildType::from_prefixed_key(&storage_key) {
+											Some((ChildType::ParentKeyId, storage_key)) =>
+												storage_key,
+											None =>
+												return Err(Error::Backend(
+													"Invalid child storage key.".to_string(),
+												)),
+										};
+									let entry = storage
+										.children_default
+										.entry(storage_key.to_vec())
+										.or_insert_with(|| StorageChild {
+											data: Default::default(),
+											child_info: ChildInfo::new_default(storage_key),
+										});
+									for (key, value) in state.key_values.iter() {
+										entry.data.insert(key.clone(), value.clone());
+									}
+								}
+							}
+						}
 
 						let state_root = operation.op.reset_storage(storage)?;
 						if state_root != *import_headers.post().state_root() {
@@ -972,11 +749,8 @@ where
 				)?;
 
 				let state = self.backend.state_at(at)?;
-				let changes_trie_state =
-					changes_tries_state_at_block(&at, self.backend.changes_trie_storage())?;
-
 				let gen_storage_changes = runtime_api
-					.into_storage_changes(&state, changes_trie_state.as_ref(), *parent_hash)
+					.into_storage_changes(&state, *parent_hash)
 					.map_err(sp_blockchain::Error::Storage)?;
 
 				if import_block.header.state_root() != &gen_storage_changes.transaction_storage_root
@@ -1311,98 +1085,159 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
-		// backwards compatible.
-		//
-		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
-		let code_proof = self.read_proof(
-			id,
-			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
-		)?;
-
-		self.executor
-			.prove_execution(id, method, call_data)
-			.map(|(r, p)| (r, StorageProof::merge(vec![p, code_proof])))
-	}
-
-	fn header_proof(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
-		self.header_proof_with_cht_size(id, cht::size())
-	}
-
-	fn key_changes_proof(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		min: Block::Hash,
-		max: Block::Hash,
-		storage_key: Option<&PrefixedStorageKey>,
-		key: &StorageKey,
-	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
-		self.key_changes_proof_with_cht_size(first, last, min, max, storage_key, key, cht::size())
+		self.executor.prove_execution(id, method, call_data)
 	}
 
 	fn read_proof_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &[u8],
+		start_key: &[Vec<u8>],
 		size_limit: usize,
-	) -> sp_blockchain::Result<(StorageProof, u32)> {
+	) -> sp_blockchain::Result<(CompactProof, u32)> {
 		let state = self.state_at(id)?;
-		Ok(prove_range_read_with_size::<_, HashFor<Block>>(
-			state,
-			None,
-			None,
-			size_limit,
-			Some(start_key),
-		)?)
+		let root = state.storage_root(std::iter::empty()).0;
+
+		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
+			state, size_limit, start_key,
+		)?;
+		let proof = sp_trie::encode_compact::<sp_trie::Layout<HashFor<Block>>>(proof, root)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
+		Ok((proof, count))
 	}
 
 	fn storage_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &[u8],
+		start_key: &[Vec<u8>],
 		size_limit: usize,
-	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>> {
+		if start_key.len() > MAX_NESTED_TRIE_DEPTH {
+			return Err(Error::Backend("Invalid start key.".to_string()))
+		}
 		let state = self.state_at(id)?;
-		let mut current_key = start_key.to_vec();
-		let mut total_size = 0;
-		let mut entries = Vec::new();
-		while let Some(next_key) = state
-			.next_storage_key(&current_key)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-		{
-			let value = state
-				.storage(next_key.as_ref())
+		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
+			let storage_key = PrefixedStorageKey::new_ref(&storage_key);
+			match ChildType::from_prefixed_key(&storage_key) {
+				Some((ChildType::ParentKeyId, storage_key)) =>
+					Ok(ChildInfo::new_default(storage_key)),
+				None => Err(Error::Backend("Invalid child storage key.".to_string())),
+			}
+		};
+		let mut current_child = if start_key.len() == 2 {
+			let start_key = start_key.get(0).expect("checked len");
+			if let Some(child_root) = state
+				.storage(&start_key)
 				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-				.unwrap_or_default();
-			let size = value.len() + next_key.len();
-			if total_size + size > size_limit && !entries.is_empty() {
+			{
+				Some((child_info(start_key)?, child_root))
+			} else {
+				return Err(Error::Backend("Invalid root start key.".to_string()))
+			}
+		} else {
+			None
+		};
+		let mut current_key = start_key.last().map(Clone::clone).unwrap_or(Vec::new());
+		let mut total_size = 0;
+		let mut result = vec![(
+			KeyValueStorageLevel {
+				state_root: Vec::new(),
+				key_values: Vec::new(),
+				parent_storage_keys: Vec::new(),
+			},
+			false,
+		)];
+
+		let mut child_roots = HashSet::new();
+		loop {
+			let mut entries = Vec::new();
+			let mut complete = true;
+			let mut switch_child_key = None;
+			while let Some(next_key) = if let Some(child) = current_child.as_ref() {
+				state
+					.next_child_storage_key(&child.0, &current_key)
+					.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			} else {
+				state
+					.next_storage_key(&current_key)
+					.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			} {
+				let value = if let Some(child) = current_child.as_ref() {
+					state
+						.child_storage(&child.0, next_key.as_ref())
+						.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+						.unwrap_or_default()
+				} else {
+					state
+						.storage(next_key.as_ref())
+						.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+						.unwrap_or_default()
+				};
+				let size = value.len() + next_key.len();
+				if total_size + size > size_limit && !entries.is_empty() {
+					complete = false;
+					break
+				}
+				total_size += size;
+
+				if current_child.is_none() &&
+					sp_core::storage::well_known_keys::is_child_storage_key(next_key.as_slice())
+				{
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value.clone());
+						switch_child_key = Some((next_key.clone(), value.clone()));
+						entries.push((next_key.clone(), value));
+						break
+					}
+				}
+				entries.push((next_key.clone(), value));
+				current_key = next_key;
+			}
+			if let Some((child, child_root)) = switch_child_key.take() {
+				result[0].0.key_values.extend(entries.into_iter());
+				current_child = Some((child_info(&child)?, child_root));
+				current_key = Vec::new();
+			} else if let Some((child, child_root)) = current_child.take() {
+				current_key = child.into_prefixed_storage_key().into_inner();
+				result.push((
+					KeyValueStorageLevel {
+						state_root: child_root,
+						key_values: entries,
+						parent_storage_keys: Vec::new(),
+					},
+					complete,
+				));
+				if !complete {
+					break
+				}
+			} else {
+				result[0].0.key_values.extend(entries.into_iter());
+				result[0].1 = complete;
 				break
 			}
-			total_size += size;
-			entries.push((next_key.clone(), value));
-			current_key = next_key;
 		}
-		Ok(entries)
+		Ok(result)
 	}
 
 	fn verify_range_proof(
 		&self,
 		root: Block::Hash,
-		proof: StorageProof,
-		start_key: &[u8],
-	) -> sp_blockchain::Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)> {
-		Ok(read_range_proof_check::<HashFor<Block>>(
-			root,
-			proof,
-			None,
-			None,
-			None,
-			Some(start_key),
-		)?)
+		proof: CompactProof,
+		start_key: &[Vec<u8>],
+	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
+		let mut db = sp_state_machine::MemoryDB::<HashFor<Block>>::new(&[]);
+		let _ = sp_trie::decode_compact::<sp_state_machine::Layout<HashFor<Block>>, _, _>(
+			&mut db,
+			proof.iter_compact_encoded_nodes(),
+			Some(&root),
+		)
+		.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
+		let proving_backend = sp_state_machine::TrieBackend::new(db, root);
+		let state = read_range_proof_check_with_child_on_proving_backend::<HashFor<Block>>(
+			&proving_backend,
+			start_key,
+		)?;
+
+		Ok(state)
 	}
 }
 
@@ -1418,7 +1253,7 @@ where
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
 		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
 		sc_block_builder::BlockBuilder::new(
@@ -1433,7 +1268,7 @@ where
 
 	fn new_block(
 		&self,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
 		let info = self.chain_info();
 		sc_block_builder::BlockBuilder::new(
@@ -1581,89 +1416,6 @@ where
 			.child_storage_hash(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
 	}
-
-	fn max_key_changes_range(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-	) -> sp_blockchain::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
-		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		if first > last_number {
-			return Err(sp_blockchain::Error::ChangesTrieAccessFailed(
-				"Invalid changes trie range".into(),
-			))
-		}
-
-		let (storage, configs) = match self.require_changes_trie(first, last_hash, false).ok() {
-			Some((storage, configs)) => (storage, configs),
-			None => return Ok(None),
-		};
-
-		let first_available_changes_trie = configs.last().map(|config| config.0);
-		match first_available_changes_trie {
-			Some(first_available_changes_trie) => {
-				let oldest_unpruned = storage.oldest_pruned_digest_range_end();
-				let first = std::cmp::max(first_available_changes_trie, oldest_unpruned);
-				Ok(Some((first, last)))
-			},
-			None => Ok(None),
-		}
-	}
-
-	fn key_changes(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-		storage_key: Option<&PrefixedStorageKey>,
-		key: &StorageKey,
-	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
-		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		let (storage, configs) = self.require_changes_trie(first, last_hash, true)?;
-
-		let mut result = Vec::new();
-		let best_number = self.backend.blockchain().info().best_number;
-		for (config_zero, config_end, config) in configs {
-			let range_first = ::std::cmp::max(first, config_zero + One::one());
-			let range_anchor = match config_end {
-				Some((config_end_number, config_end_hash)) =>
-					if last_number > config_end_number {
-						ChangesTrieAnchorBlockId {
-							hash: config_end_hash,
-							number: config_end_number,
-						}
-					} else {
-						ChangesTrieAnchorBlockId {
-							hash: convert_hash(&last_hash),
-							number: last_number,
-						}
-					},
-				None =>
-					ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number },
-			};
-
-			let config_range = ChangesTrieConfigurationRange {
-				config: &config,
-				zero: config_zero.clone(),
-				end: config_end.map(|(config_end_number, _)| config_end_number),
-			};
-			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HashFor<Block>, _>(
-				config_range,
-				storage.storage(),
-				range_first,
-				&range_anchor,
-				best_number,
-				storage_key,
-				&key.0,
-			)
-			.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
-			.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
-			result.extend(result_range);
-		}
-
-		Ok(result)
-	}
 }
 
 impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA>
@@ -1788,16 +1540,6 @@ where
 
 	fn hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		(**self).hash(number)
-	}
-}
-
-impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA>
-where
-	B: backend::Backend<Block>,
-	Block: BlockT,
-{
-	fn cache(&self) -> Option<Arc<dyn Cache<Block>>> {
-		self.backend.blockchain().cache()
 	}
 }
 

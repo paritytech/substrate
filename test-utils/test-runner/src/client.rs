@@ -111,6 +111,7 @@ where
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
+		config.runtime_cache_size,
 	);
 
 	let (client, backend, keystore, mut task_manager) =
@@ -159,7 +160,6 @@ where
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
-			on_demand: None,
 			block_announce_validator_builder: None,
 			warp_sync: None,
 		};
@@ -195,14 +195,12 @@ where
 			backend: backend.clone(),
 			task_manager: &mut task_manager,
 			keystore: keystore.sync_keystore(),
-			on_demand: None,
 			transaction_pool: transaction_pool.clone(),
 			rpc_extensions_builder: Box::new(move |_, _| {
 				let mut io = jsonrpc_core::IoHandler::default();
 				io.extend_with(ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone())));
 				Ok(io)
 			}),
-			remote_blockchain: None,
 			network,
 			system_rpc_tx,
 			telemetry: None,
@@ -235,7 +233,9 @@ where
 	});
 
 	// spawn the authorship task as an essential task.
-	task_manager.spawn_essential_handle().spawn("manual-seal", authorship_future);
+	task_manager
+		.spawn_essential_handle()
+		.spawn("manual-seal", None, authorship_future);
 
 	network_starter.start_network();
 	let rpc_handler = rpc_handlers.io_handler();

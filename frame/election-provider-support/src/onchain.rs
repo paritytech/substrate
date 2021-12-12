@@ -57,7 +57,7 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 ///
 /// WARNING: the user of this pallet must ensure that the `Accuracy` type will work nicely with the
 /// normalization operation done inside `seq_phragmen`. See
-/// [`sp_npos_elections::assignment::try_normalize`] for more info.
+/// [`sp_npos_elections::Assignment::try_normalize`] for more info.
 pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
@@ -145,6 +145,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
 	impl Config for Runtime {

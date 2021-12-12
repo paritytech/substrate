@@ -1330,6 +1330,7 @@ pub mod pallet_prelude {
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
+	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{
@@ -1748,7 +1749,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
-/// When implementating the storage info (when #[pallet::generate_storage_info]` is specified
+/// When implementating the storage info (when `#[pallet::generate_storage_info]` is specified
 /// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
 /// This can be useful for storage which can never go into PoV (Proof of Validity).
 ///

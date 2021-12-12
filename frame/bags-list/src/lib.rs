@@ -19,14 +19,14 @@
 //!
 //! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
 //! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
-//! signifies the chance of each id being included in the final [`VoteWeightProvider::iter`].
+//! signifies the chance of each id being included in the final [`SortedListProvider::iter`].
 //!
-//! It implements [`sp_election_provider_support::SortedListProvider`] to provide a semi-sorted list
-//! of accounts to another pallet. It needs some other pallet to give it some information about the
-//! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
+//! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
+//! list of accounts to another pallet. It needs some other pallet to give it some information about
+//! the weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
-//! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
+//! the `SortedListProvider` (e.g. `on_insert`, or `unsafe_regenerate`) at their genesis.
 //!
 //! # Goals
 //!
@@ -38,7 +38,8 @@
 //!
 //! # Details
 //!
-//! - items are kept in bags, which are delineated by their range of weight (See [`BagThresholds`]).
+//! - items are kept in bags, which are delineated by their range of weight (See
+//!   [`Config::BagThresholds`]).
 //! - for iteration, bags are chained together from highest to lowest and elements within the bag
 //!   are iterated from head to tail.
 //! - items within a bag are iterated in order of insertion. Thus removing an item and re-inserting
@@ -59,6 +60,7 @@ use sp_std::prelude::*;
 mod benchmarks;
 
 mod list;
+pub mod migrations;
 #[cfg(any(test, feature = "fuzz"))]
 pub mod mock;
 #[cfg(test)]
@@ -151,17 +153,12 @@ pub mod pallet {
 		type BagThresholds: Get<&'static [VoteWeight]>;
 	}
 
-	/// How many ids are registered.
-	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the
-	// `CountedMap` storage.
-	#[pallet::storage]
-	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
-
 	/// A single node, within some bag.
 	///
 	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
-	pub(crate) type ListNodes<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
+	pub(crate) type ListNodes<T: Config> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
 	/// A bag stored in storage.
 	///
@@ -172,8 +169,19 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Moved an account from one bag to another. \[who, from, to\].
-		Rebagged(T::AccountId, VoteWeight, VoteWeight),
+		/// Moved an account from one bag to another.
+		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
+	}
+
+	#[pallet::error]
+	#[cfg_attr(test, derive(PartialEq))]
+	pub enum Error<T> {
+		/// Attempted to place node in front of a node in another bag.
+		NotInSameBag,
+		/// Id not found in list.
+		IdNotFound,
+		/// An Id does not have a greater vote weight than another Id.
+		NotHeavier,
 	}
 
 	#[pallet::call]
@@ -192,6 +200,20 @@ pub mod pallet {
 			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
 			let _ = Pallet::<T>::do_rebag(&dislocated, current_weight);
 			Ok(())
+		}
+
+		/// Move the caller's Id directly in front of `lighter`.
+		///
+		/// The dispatch origin for this call must be _Signed_ and can only be called by the Id of
+		/// the account going in front of `lighter`.
+		///
+		/// Only works if
+		/// - both nodes are within the same bag,
+		/// - and `origin` has a greater `VoteWeight` than `lighter`.
+		#[pallet::weight(T::WeightInfo::put_in_front_of())]
+		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
+			let heavier = ensure_signed(origin)?;
+			List::<T>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
 		}
 	}
 
@@ -220,7 +242,7 @@ impl<T: Config> Pallet<T> {
 		let maybe_movement = list::Node::<T>::get(&account)
 			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
+			Self::deposit_event(Event::<T>::Rebagged { who: account.clone(), from, to });
 		};
 		maybe_movement
 	}
@@ -240,7 +262,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	fn count() -> u32 {
-		CounterForListNodes::<T>::get()
+		ListNodes::<T>::count()
 	}
 
 	fn contains(id: &T::AccountId) -> bool {
@@ -259,11 +281,14 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::remove(id)
 	}
 
-	fn regenerate(
+	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
-		List::<T>::regenerate(all, weight_of)
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		List::<T>::unsafe_regenerate(all, weight_of)
 	}
 
 	#[cfg(feature = "std")]
@@ -276,8 +301,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		Ok(())
 	}
 
-	fn clear(maybe_count: Option<u32>) -> u32 {
-		List::<T>::clear(maybe_count)
+	fn unsafe_clear() {
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		List::<T>::unsafe_clear()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

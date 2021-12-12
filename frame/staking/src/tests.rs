@@ -34,7 +34,7 @@ use sp_runtime::{
 	Perbill, Percent,
 };
 use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	SessionIndex,
 };
 use sp_std::prelude::*;
@@ -1633,115 +1633,49 @@ fn reward_to_stake_works() {
 }
 
 #[test]
-fn on_free_balance_zero_stash_removes_validator() {
-	// Tests that validator storage items are cleaned up when stash is empty
-	// Tests that storage items are untouched when controller is empty
+fn reap_stash_works() {
 	ExtBuilder::default()
 		.existential_deposit(10)
 		.balance_factor(10)
 		.build_and_execute(|| {
-			// Check the balance of the validator account
+			// given
 			assert_eq!(Balances::free_balance(10), 10);
-			// Check the balance of the stash account
 			assert_eq!(Balances::free_balance(11), 10 * 1000);
-			// Check these two accounts are bonded
 			assert_eq!(Staking::bonded(&11), Some(10));
 
-			// Set payee information
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
-
-			// Check storage items that should be cleaned up
 			assert!(<Ledger<Test>>::contains_key(&10));
 			assert!(<Bonded<Test>>::contains_key(&11));
 			assert!(<Validators<Test>>::contains_key(&11));
 			assert!(<Payee<Test>>::contains_key(&11));
 
-			// Reduce free_balance of controller to 0
-			let _ = Balances::slash(&10, Balance::max_value());
+			// stash is not reapable
+			assert_noop!(
+				Staking::reap_stash(Origin::signed(20), 11, 0),
+				Error::<Test>::FundedTarget
+			);
+			// controller or any other account is not reapable
+			assert_noop!(Staking::reap_stash(Origin::signed(20), 10, 0), Error::<Test>::NotStash);
 
-			// Check the balance of the stash account has not been touched
-			assert_eq!(Balances::free_balance(11), 10 * 1000);
-			// Check these two accounts are still bonded
-			assert_eq!(Staking::bonded(&11), Some(10));
+			// no easy way to cause an account to go below ED, we tweak their staking ledger
+			// instead.
+			Ledger::<Test>::insert(
+				10,
+				StakingLedger {
+					stash: 11,
+					total: 5,
+					active: 5,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 
-			// Check storage items have not changed
-			assert!(<Ledger<Test>>::contains_key(&10));
-			assert!(<Bonded<Test>>::contains_key(&11));
-			assert!(<Validators<Test>>::contains_key(&11));
-			assert!(<Payee<Test>>::contains_key(&11));
+			// reap-able
+			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 0));
 
-			// Reduce free_balance of stash to 0
-			let _ = Balances::slash(&11, Balance::max_value());
-			// Check total balance of stash
-			assert_eq!(Balances::total_balance(&11), 10);
-
-			// Reap the stash
-			assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
-
-			// Check storage items do not exist
+			// then
 			assert!(!<Ledger<Test>>::contains_key(&10));
 			assert!(!<Bonded<Test>>::contains_key(&11));
 			assert!(!<Validators<Test>>::contains_key(&11));
-			assert!(!<Nominators<Test>>::contains_key(&11));
-			assert!(!<Payee<Test>>::contains_key(&11));
-		});
-}
-
-#[test]
-fn on_free_balance_zero_stash_removes_nominator() {
-	// Tests that nominator storage items are cleaned up when stash is empty
-	// Tests that storage items are untouched when controller is empty
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.balance_factor(10)
-		.build_and_execute(|| {
-			// Make 10 a nominator
-			assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
-			// Check that account 10 is a nominator
-			assert!(<Nominators<Test>>::contains_key(11));
-			// Check the balance of the nominator account
-			assert_eq!(Balances::free_balance(10), 10);
-			// Check the balance of the stash account
-			assert_eq!(Balances::free_balance(11), 10_000);
-
-			// Set payee information
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
-
-			// Check storage items that should be cleaned up
-			assert!(<Ledger<Test>>::contains_key(&10));
-			assert!(<Bonded<Test>>::contains_key(&11));
-			assert!(<Nominators<Test>>::contains_key(&11));
-			assert!(<Payee<Test>>::contains_key(&11));
-
-			// Reduce free_balance of controller to 0
-			let _ = Balances::slash(&10, Balance::max_value());
-			// Check total balance of account 10
-			assert_eq!(Balances::total_balance(&10), 0);
-
-			// Check the balance of the stash account has not been touched
-			assert_eq!(Balances::free_balance(11), 10_000);
-			// Check these two accounts are still bonded
-			assert_eq!(Staking::bonded(&11), Some(10));
-
-			// Check storage items have not changed
-			assert!(<Ledger<Test>>::contains_key(&10));
-			assert!(<Bonded<Test>>::contains_key(&11));
-			assert!(<Nominators<Test>>::contains_key(&11));
-			assert!(<Payee<Test>>::contains_key(&11));
-
-			// Reduce free_balance of stash to 0
-			let _ = Balances::slash(&11, Balance::max_value());
-			// Check total balance of stash
-			assert_eq!(Balances::total_balance(&11), 10);
-
-			// Reap the stash
-			assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
-
-			// Check storage items do not exist
-			assert!(!<Ledger<Test>>::contains_key(&10));
-			assert!(!<Bonded<Test>>::contains_key(&11));
-			assert!(!<Validators<Test>>::contains_key(&11));
-			assert!(!<Nominators<Test>>::contains_key(&11));
 			assert!(!<Payee<Test>>::contains_key(&11));
 		});
 }
@@ -2316,6 +2250,7 @@ fn slash_in_old_span_does_not_deselect() {
 			}],
 			&[Perbill::from_percent(0)],
 			1,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// the validator doesn't get chilled again
@@ -2332,6 +2267,7 @@ fn slash_in_old_span_does_not_deselect() {
 			// NOTE: A 100% slash here would clean up the account, causing de-registration.
 			&[Perbill::from_percent(95)],
 			1,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// the validator doesn't get chilled again
@@ -2535,7 +2471,7 @@ fn garbage_collection_after_slashing() {
 
 			assert_eq!(Balances::free_balance(11), 2000 - 200);
 			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_some());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &200);
+			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &200);
 
 			on_offence_now(
 				&[OffenceDetails {
@@ -2556,13 +2492,13 @@ fn garbage_collection_after_slashing() {
 
 			// reap_stash respects num_slashing_spans so that weight is accurate
 			assert_noop!(
-				Staking::reap_stash(Origin::none(), 11, 0),
+				Staking::reap_stash(Origin::signed(20), 11, 0),
 				Error::<Test>::IncorrectSlashingSpans
 			);
-			assert_ok!(Staking::reap_stash(Origin::none(), 11, 2));
+			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 2));
 
 			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
-			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);
+			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &0);
 		})
 }
 
@@ -2628,6 +2564,7 @@ fn slashing_nominators_by_span_max() {
 			}],
 			&[Perbill::from_percent(10)],
 			2,
+			DisableStrategy::WhenSlashed,
 		);
 
 		assert_eq!(Balances::free_balance(11), 900);
@@ -2654,6 +2591,7 @@ fn slashing_nominators_by_span_max() {
 			}],
 			&[Perbill::from_percent(30)],
 			3,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// 11 was not further slashed, but 21 and 101 were.
@@ -2675,6 +2613,7 @@ fn slashing_nominators_by_span_max() {
 			}],
 			&[Perbill::from_percent(20)],
 			2,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// 11 was further slashed, but 21 and 101 were not.
@@ -2810,6 +2749,7 @@ fn remove_deferred() {
 			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(15)],
 			1,
+			DisableStrategy::WhenSlashed,
 		);
 
 		// fails if empty
@@ -2996,6 +2936,40 @@ fn non_slashable_offence_doesnt_disable_validator() {
 		assert!(!is_disabled(10));
 		// whereas validator 20 gets disabled
 		assert!(is_disabled(20));
+	});
+}
+
+#[test]
+fn slashing_independent_of_disabling_validator() {
+	ExtBuilder::default().build_and_execute(|| {
+		mock::start_active_era(1);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
+
+		let now = Staking::active_era().unwrap().index;
+
+		// offence with no slash associated, BUT disabling
+		on_offence_in_era(
+			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+			&[Perbill::zero()],
+			now,
+			DisableStrategy::Always,
+		);
+
+		// offence that slashes 25% of the bond, BUT not disabling
+		on_offence_in_era(
+			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+			&[Perbill::from_percent(25)],
+			now,
+			DisableStrategy::Never,
+		);
+
+		// the offence for validator 10 was explicitly disabled
+		assert!(is_disabled(10));
+		// whereas validator 20 is explicitly not disabled
+		assert!(!is_disabled(20));
 	});
 }
 
@@ -3661,7 +3635,7 @@ fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
 		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), zero_offence_weight);
+		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
 		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
@@ -3674,7 +3648,7 @@ fn offences_weight_calculated_correctly() {
 					reporters: vec![],
 				}
 			).collect();
-		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), n_offence_unapplied_weight);
+		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), n_offence_unapplied_weight);
 
 		// On Offence with one offenders, Applied
 		let one_offender = [
@@ -3695,7 +3669,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), one_offence_unapplied_weight);
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), one_offence_unapplied_weight);
 	});
 }
 
@@ -4326,8 +4300,8 @@ fn chill_other_works() {
 		.min_nominator_bond(1_000)
 		.min_validator_bond(1_500)
 		.build_and_execute(|| {
-			let initial_validators = CounterForValidators::<Test>::get();
-			let initial_nominators = CounterForNominators::<Test>::get();
+			let initial_validators = Validators::<Test>::count();
+			let initial_nominators = Nominators::<Test>::count();
 			for i in 0..15 {
 				let a = 4 * i;
 				let b = 4 * i + 1;
@@ -4376,7 +4350,15 @@ fn chill_other_works() {
 			);
 
 			// Change the minimum bond... but no limits.
-			assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
+			assert_ok!(Staking::set_staking_configs(
+				Origin::root(),
+				1_500,
+				2_000,
+				None,
+				None,
+				None,
+				Zero::zero()
+			));
 
 			// Still can't chill these users
 			assert_noop!(
@@ -4389,13 +4371,14 @@ fn chill_other_works() {
 			);
 
 			// Add limits, but no threshold
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
 				Some(10),
 				Some(10),
-				None
+				None,
+				Zero::zero()
 			));
 
 			// Still can't chill these users
@@ -4409,13 +4392,14 @@ fn chill_other_works() {
 			);
 
 			// Add threshold, but no limits
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
 				None,
 				None,
-				Some(Percent::from_percent(0))
+				Some(Percent::from_percent(0)),
+				Zero::zero()
 			));
 
 			// Still can't chill these users
@@ -4429,18 +4413,19 @@ fn chill_other_works() {
 			);
 
 			// Add threshold and limits
-			assert_ok!(Staking::set_staking_limits(
+			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
 				1_500,
 				2_000,
 				Some(10),
 				Some(10),
-				Some(Percent::from_percent(75))
+				Some(Percent::from_percent(75)),
+				Zero::zero()
 			));
 
 			// 16 people total because tests start with 2 active one
-			assert_eq!(CounterForNominators::<Test>::get(), 15 + initial_nominators);
-			assert_eq!(CounterForValidators::<Test>::get(), 15 + initial_validators);
+			assert_eq!(Nominators::<Test>::count(), 15 + initial_nominators);
+			assert_eq!(Validators::<Test>::count(), 15 + initial_validators);
 
 			// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting
 			// with 16)
@@ -4452,13 +4437,13 @@ fn chill_other_works() {
 			}
 
 			// chill a nominator. Limit is not reached, not chill-able
-			assert_eq!(CounterForNominators::<Test>::get(), 7);
+			assert_eq!(Nominators::<Test>::count(), 7);
 			assert_noop!(
 				Staking::chill_other(Origin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
 			// chill a validator. Limit is reached, chill-able.
-			assert_eq!(CounterForValidators::<Test>::get(), 9);
+			assert_eq!(Validators::<Test>::count(), 9);
 			assert_ok!(Staking::chill_other(Origin::signed(1337), 3));
 		})
 }
@@ -4466,20 +4451,21 @@ fn chill_other_works() {
 #[test]
 fn capped_stakers_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		let validator_count = CounterForValidators::<Test>::get();
+		let validator_count = Validators::<Test>::count();
 		assert_eq!(validator_count, 3);
-		let nominator_count = CounterForNominators::<Test>::get();
+		let nominator_count = Nominators::<Test>::count();
 		assert_eq!(nominator_count, 1);
 
 		// Change the maximums
 		let max = 10;
-		assert_ok!(Staking::set_staking_limits(
+		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
 			10,
 			10,
 			Some(max),
 			Some(max),
-			Some(Percent::from_percent(0))
+			Some(Percent::from_percent(0)),
+			Zero::zero(),
 		));
 
 		// can create `max - validator_count` validators
@@ -4542,9 +4528,57 @@ fn capped_stakers_works() {
 		));
 
 		// No problem when we set to `None` again
-		assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			10,
+			10,
+			None,
+			None,
+			None,
+			Zero::zero(),
+		));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
+	})
+}
+
+#[test]
+fn min_commission_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+		));
+
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			0,
+			0,
+			None,
+			None,
+			None,
+			Perbill::from_percent(10),
+		));
+
+		// can't make it less than 10 now
+		assert_noop!(
+			Staking::validate(
+				Origin::signed(10),
+				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			),
+			Error::<Test>::CommissionTooLow
+		);
+
+		// can only change to higher.
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(10), blocked: false }
+		));
+
+		assert_ok!(Staking::validate(
+			Origin::signed(10),
+			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
+		));
 	})
 }
 

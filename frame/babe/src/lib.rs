@@ -31,7 +31,7 @@ use frame_support::{
 	weights::{Pays, Weight},
 	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::{Public, TryFrom};
+use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
@@ -248,7 +248,7 @@ pub mod pallet {
 
 	/// Randomness under construction.
 	///
-	/// We make a tradeoff between storage accesses and list length.
+	/// We make a trade-off between storage accesses and list length.
 	/// We store the under-construction randomness in segments of up to
 	/// `UNDER_CONSTRUCTION_SEGMENT_LENGTH`.
 	///
@@ -633,7 +633,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
+		let log = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
 		<frame_system::Pallet<T>>::deposit_log(log.into())
 	}
 
