@@ -178,6 +178,19 @@ impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress
 	}
 }
 
+// impl<T, Call, Signature, Extra> HasAddress 
+//     for UncheckedExtrinsic<T, Call, Signature, Extra> where
+// 	Signature: Member + traits::Verify,
+// 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = T>,
+// 	Extra: SignedExtension<AccountId = T>,
+// {
+//     type AccountId = AccountId;
+//
+// 	fn get_address(&self) -> Option<Self::AccountId>{
+//         None
+// 	}
+// }
+//
 impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where

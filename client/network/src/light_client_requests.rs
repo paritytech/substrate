@@ -172,7 +172,6 @@ mod tests {
 			state_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
-			seed: Default::default(),
 		}
 	}
 

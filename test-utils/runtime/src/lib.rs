@@ -41,7 +41,6 @@ use frame_support::{
 	traits::{CrateVersion, KeyOwnerProofSystem},
 	weights::RuntimeDbWeight,
 };
-use sp_runtime::{Zero, One};
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
@@ -272,7 +271,7 @@ pub type Digest = sp_runtime::generic::Digest<H256>;
 /// A test block.
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = sp_runtime::generic::HeaderVer<BlockNumber, Hashing>;
+pub type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {

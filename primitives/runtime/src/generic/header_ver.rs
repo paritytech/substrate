@@ -263,6 +263,7 @@ mod tests {
 				],
 			},
 			seed: Default::default(),
+            count: 0
 		};
 
 		let header_encoded = header.encode();
@@ -296,6 +297,7 @@ mod tests {
 				],
 			},
 			seed: Default::default(),
+			count: 0,
 		};
 
 		let header_encoded = header.encode();

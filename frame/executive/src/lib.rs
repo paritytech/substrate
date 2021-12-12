@@ -1013,26 +1013,22 @@ mod tests {
 	#[test]
 	fn block_import_works() {
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(
-				Block {
-					header: Header {
-						parent_hash: [69u8; 32].into(),
-						number: 1,
-						state_root: hex!(
-							"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
-						)
-						.into(),
-						extrinsics_root: hex!(
-							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
-						)
-						.into(),
-						digest: Digest { logs: vec![] },
-						seed: Default::default(),
-					},
-					extrinsics: vec![],
+			Executive::execute_block(Block {
+				header: Header {
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: hex!(
+						"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
+					)
+					.into(),
+					extrinsics_root: hex!(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+					)
+					.into(),
+					digest: Digest { logs: vec![] },
 				},
-				vec![],
-			);
+				extrinsics: vec![],
+			});
 		});
 	}
 
@@ -1040,23 +1036,19 @@ mod tests {
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(
-				Block {
-					header: Header {
-						parent_hash: [69u8; 32].into(),
-						number: 1,
-						state_root: [0u8; 32].into(),
-						extrinsics_root: hex!(
-							"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
-						)
-						.into(),
-						digest: Digest { logs: vec![] },
-						seed: Default::default(),
-					},
-					extrinsics: vec![],
+			Executive::execute_block(Block {
+				header: Header {
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: [0u8; 32].into(),
+					extrinsics_root: hex!(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+					)
+					.into(),
+					digest: Digest { logs: vec![] },
 				},
-				vec![],
-			);
+				extrinsics: vec![],
+			});
 		});
 	}
 
@@ -1064,23 +1056,19 @@ mod tests {
 	#[should_panic]
 	fn block_import_of_bad_extrinsic_root_fails() {
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(
-				Block {
-					header: Header {
-						parent_hash: [69u8; 32].into(),
-						number: 1,
-						state_root: hex!(
-							"49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
-						)
-						.into(),
-						extrinsics_root: [0u8; 32].into(),
-						digest: Digest { logs: vec![] },
-						seed: Default::default(),
-					},
-					extrinsics: vec![],
+			Executive::execute_block(Block {
+				header: Header {
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: hex!(
+						"49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
+					)
+					.into(),
+					extrinsics_root: [0u8; 32].into(),
+					digest: Digest { logs: vec![] },
 				},
-				vec![],
-			)
+				extrinsics: vec![],
+			});
 		});
 	}
 
@@ -1448,10 +1436,7 @@ mod tests {
 					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
-			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(
-				Block::new(header, vec![xt]),
-				vec![None],
-			);
+			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
@@ -1539,7 +1524,7 @@ mod tests {
 		});
 
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block::new(header, vec![xt]), vec![None]);
+			Executive::execute_block(Block::new(header, vec![xt]));
 		});
 	}
 
@@ -1569,7 +1554,7 @@ mod tests {
 		});
 
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block::new(header, vec![xt1, xt2]), vec![None, None]);
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 		});
 	}
 
@@ -1595,7 +1580,7 @@ mod tests {
 		});
 
 		new_test_ext(1).execute_with(|| {
-			Executive::execute_block(Block::new(header, vec![xt1, xt2]), vec![None, None]);
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 		});
 	}
 }

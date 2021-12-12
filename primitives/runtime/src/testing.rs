@@ -22,7 +22,7 @@ use crate::{
 	generic,
 	scale_info::TypeInfo,
 	traits::{
-		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, OpaqueKeys,
+		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, HasAddress, OpaqueKeys,
 		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
@@ -303,6 +303,15 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	/// Create a new `TextXt`.
 	pub fn new(call: Call, signature: Option<(u64, Extra)>) -> Self {
 		Self { call, signature }
+	}
+}
+
+impl<Call,Extra> HasAddress for TestXt<Call, Extra> where
+{
+    type AccountId = u64;
+
+	fn get_address(&self) -> Option<Self::AccountId>{
+        self.signature.as_ref().map(|(id,_)| *id)
 	}
 }
 

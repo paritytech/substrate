@@ -452,7 +452,7 @@ mod tests {
 			&*backend,
 		)
 		.unwrap()
-		.build()
+		.build_with_seed(Default::default())
 		.unwrap();
 
 		let proof = block.proof.expect("Proof is build on request");

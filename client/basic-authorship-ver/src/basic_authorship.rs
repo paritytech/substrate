@@ -839,7 +839,7 @@ mod tests {
 		let block = client
 			.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
 			.unwrap()
-			.build()
+			.build_with_seed(Default::default())
 			.unwrap();
 		block_on(client.import(BlockOrigin::Own, block.block)).unwrap();
 
