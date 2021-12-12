@@ -643,6 +643,7 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 }
 
 impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
+	/// Initializes the default object using the given `validator`.
 	pub fn default_from(validator: AccountId) -> Self {
 		Self {
 			validator,
