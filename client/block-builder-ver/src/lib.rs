@@ -280,14 +280,9 @@ where
             .unwrap_or_default();
 
         let prev_block_extrinsics_count = previous_block_header.count().clone().saturated_into::<usize>();
-        log::debug!(target: "block_builder", "previous block has {} transactions in total", previous_block_extrinsics.len());
-        log::debug!(target: "block_builder", "previous block included {} transactions in total", prev_block_extrinsics_count);
+        log::debug!(target: "block_builder", "previous block has {} transactions, {} comming from that block", previous_block_extrinsics.len(), prev_block_extrinsics_count);
 
         let previous_block_extrinsics = previous_block_extrinsics.iter().take(prev_block_extrinsics_count).cloned().collect::<Vec<_>>();
-
-
-
-        log::warn!(target: "block_builder", "shuffling is temporarly disabled!!!");
 
         // filter out extrinsics only
         let extrinsics = previous_block_extrinsics.into_iter()
@@ -301,7 +296,6 @@ where
                 .map(|info| Some(info.who)).unwrap_or(None).is_some()
             ).collect::<Vec<_>>();
 
-        log::debug!(target: "block_builder", "previous block included {} extrincsics", extrinsics.len());
         self.previous_block_extrinsics = Some(extrinsics.clone());
         let to_be_executed = self.inherents.clone().into_iter().chain(extrinsics.into_iter()).collect::<Vec<_>>();
 

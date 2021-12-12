@@ -451,11 +451,7 @@ where
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
 			let (header, extrinsics) = block.deconstruct();
-            sp_runtime::print("ALL TX COUNT");
-            sp_runtime::print(extrinsics.len());
             let count: usize = header.count().clone().saturated_into::<usize>();
-            sp_runtime::print("THIS BLOCK EXTRINSICS COUNT");
-            sp_runtime::print(count);
 
             assert!(extrinsics.len() >= count);
 
@@ -492,9 +488,7 @@ where
 		extrinsics: Vec<Block::Extrinsic>,
 		block_number: NumberFor<Block>,
 	) {
-        sp_runtime::print("EXECUTE_EXTRINSICS_WITH_BOOK_KEEPING");
 		extrinsics.into_iter().for_each(|e| {
-            sp_runtime::print("EXECUTE EXTRINSICS");
 			if let Err(e) = Self::apply_extrinsic(e) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
