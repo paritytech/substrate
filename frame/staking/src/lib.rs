@@ -465,6 +465,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Zero>
 	StakingLedger<AccountId, Balance>
 {
+	/// Initializes the default object using the given `validator`.
 	pub fn default_from(stash: AccountId) -> Self {
 		Self {
 			stash,
