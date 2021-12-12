@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_conviction_voting;
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, OnInitialize, SortedMembers},
+	traits::{Contains, EqualPrivilegeOnly, OnInitialize, SortedMembers, ConstU32},
 	weights::Weight,
 };
 use frame_system::EnsureRoot;
@@ -92,6 +92,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
@@ -106,6 +107,8 @@ impl pallet_scheduler::Config for Test {
 	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
+	type PreimageProvider = ();
+	type NoPreimagePostponement = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -160,7 +163,7 @@ impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
 }
 
 pub struct TestReferenda;
-impl Referenda<TallyOf<Test>> for TestReferenda {
+impl Polls<TallyOf<Test>> for TestReferenda {
 	type Index = u8;
 	type Votes = u64;
 	type Moment = u64;

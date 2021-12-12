@@ -27,9 +27,10 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 
 [dev-dependencies]
 assert_matches = "1.5"
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
+pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 
 [features]
 default = ["std"]

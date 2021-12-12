@@ -2605,21 +2605,7 @@ mod tests {
 			type DbWeight: Get<RuntimeDbWeight>;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
-		pub enum RawOrigin<AccountId> {
-			Root,
-			Signed(AccountId),
-			None,
-		}
-
-		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-				match s {
-					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::None,
-				}
-			}
-		}
+		pub use super::super::RawOrigin;
 
 		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 	}
@@ -2704,6 +2690,12 @@ mod tests {
 
 	#[derive(TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode)]
 	pub struct OuterOrigin;
+
+	impl From<RawOrigin<<TraitImpl as system::Config>::AccountId>> for OuterOrigin {
+		fn from(_: RawOrigin<<TraitImpl as system::Config>::AccountId>) -> Self {
+			unimplemented!("Not required in tests!")
+		}
+	}
 
 	impl crate::traits::OriginTrait for OuterOrigin {
 		type Call = <TraitImpl as system::Config>::Call;

@@ -27,7 +27,7 @@
 
 use frame_support::{ensure, traits::{
 	Currency, Get, LockIdentifier, LockableCurrency, ReservableCurrency, WithdrawReasons,
-	PollStatus, Referenda,
+	PollStatus, Polls,
 }};
 use sp_runtime::{ArithmeticError, DispatchError, DispatchResult, Perbill, traits::{
 	Saturating, Zero, AtLeast32BitUnsigned
@@ -61,7 +61,7 @@ type VotingOf<T> = Voting<
 	ReferendumIndexOf<T>,
 >;
 type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
-type ReferendumIndexOf<T> = <<T as Config>::Referenda as Referenda<TallyOf<T>>>::Index;
+type ReferendumIndexOf<T> = <<T as Config>::Referenda as Polls<TallyOf<T>>>::Index;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -85,7 +85,7 @@ pub mod pallet {
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
 		/// The implementation of the logic which conducts referenda.
-		type Referenda: Referenda<
+		type Referenda: Polls<
 			TallyOf<Self>,
 			Votes = BalanceOf<Self>,
 			Moment = Self::BlockNumber,

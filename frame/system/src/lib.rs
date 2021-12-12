@@ -889,21 +889,6 @@ where
 	}
 }
 
-/// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
-/// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
-pub fn ensure_signed_or_root<OuterOrigin, AccountId>(o: OuterOrigin)
-	-> Result<Option<AccountId>, BadOrigin>
-where
-	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
-{
-	match o.into() {
-		Ok(RawOrigin::Signed(t)) => Ok(Some(t)),
-		Ok(RawOrigin::Root) => Ok(None),
-		_ => Err(BadOrigin),
-	}
-}
-
-
 /// A type of block initialization to perform.
 pub enum InitKind {
 	/// Leave inspectable storage entries in state.

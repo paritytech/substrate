@@ -18,7 +18,7 @@
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
 use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
-use sp_runtime::traits::{BadOrigin, Member, Either};
+use sp_runtime::{traits::{BadOrigin, Member}, Either};
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {

@@ -22,7 +22,10 @@ use crate as pallet_referenda;
 use codec::{Encode, Decode};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers, OriginTrait},
+	traits::{
+		Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers, OriginTrait,
+		ConstU32, ConstU64,
+	},
 	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -46,6 +49,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Preimage: pallet_preimage,
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Config, Event<T>},
 		Referenda: pallet_referenda::{Pallet, Call, Storage, Event<T>},
 	}
@@ -88,6 +92,16 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
+}
+impl pallet_preimage::Config for Test {
+	type Event = Event;
+	type WeightInfo = ();
+	type Currency = Balances;
+	type ManagerOrigin = EnsureRoot<u64>;
+	type MaxSize = ConstU32<4096>;
+	type BaseDeposit = ();
+	type ByteDeposit = ();
 }
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
@@ -102,6 +116,8 @@ impl pallet_scheduler::Config for Test {
 	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
+	type PreimageProvider = Preimage;
+	type NoPreimagePostponement = ConstU64<10>;
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -195,7 +211,6 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 		&DATA[..]
 	}
 	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()> {
-		use sp_std::convert::TryFrom;
 		if let Ok(system_origin) = frame_system::RawOrigin::try_from(id.clone()) {
 			match system_origin {
 				frame_system::RawOrigin::Root => Ok(0),
