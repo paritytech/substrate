@@ -926,7 +926,7 @@ pub trait SignedExtension:
 
 	/// Do any post-flight stuff for an extrinsic.
 	///
-	/// If the transaction is signed, then `_pre` will contain the output of `validate_unsigned`,
+	/// If the transaction is signed, then `_pre` will contain the output of `pre_dispatch`,
 	/// and `None` otherwise.
 	///
 	/// This gets given the `DispatchResult` `_result` from the extrinsic and can, if desired,
