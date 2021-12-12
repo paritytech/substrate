@@ -942,7 +942,7 @@ where
 
 		let maybe_authority_id =
 			local_authority_id(&self.env.voters, self.env.config.keystore.as_ref());
-		let authority_id = maybe_authority_id.map_or("".into(), |s| s.to_string());
+		let authority_id = maybe_authority_id.map_or("<unknown>".into(), |s| s.to_string());
 
 		telemetry!(
 			self.telemetry;
