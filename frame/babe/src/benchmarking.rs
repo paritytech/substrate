@@ -57,14 +57,14 @@ benchmarks! {
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0];
 
-		let equivocation_proof1: sp_consensus_babe::EquivocationProof<Header> =
-			Decode::decode(&mut &EQUIVOCATION_PROOF_BLOB[..]).unwrap();
-
-		let equivocation_proof2 = equivocation_proof1.clone();
+		// let equivocation_proof1: sp_consensus_babe::EquivocationProof<Header> =
+		// 	Decode::decode(&mut &EQUIVOCATION_PROOF_BLOB[..]).unwrap();
+        //
+		// let equivocation_proof2 = equivocation_proof1.clone();
 	}: {
-		sp_consensus_babe::check_equivocation_proof::<Header>(equivocation_proof1);
+		// sp_consensus_babe::check_equivocation_proof::<Header>(equivocation_proof1);
 	} verify {
-		assert!(sp_consensus_babe::check_equivocation_proof::<Header>(equivocation_proof2));
+		// assert!(sp_consensus_babe::check_equivocation_proof::<Header>(equivocation_proof2));
 	}
 
 	impl_benchmark_test_suite!(

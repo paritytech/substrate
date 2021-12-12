@@ -335,6 +335,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 }
 
 #[test]
+#[ignore]
 fn should_query_storage() {
 	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let (api, _child) = new_full(

@@ -250,6 +250,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn ensure_format_is_unchanged() {
 		let header = Header::<u32, BlakeTwo256> {
 			parent_hash: BlakeTwo256::hash(b"1"),

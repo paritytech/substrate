@@ -718,6 +718,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn authoring_blocks() {
 		sp_tracing::try_init_simple();
 		let net = AuraTestNet::new(3);
@@ -867,6 +868,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn on_slot_returns_correct_block() {
 		let net = AuraTestNet::new(4);
 
