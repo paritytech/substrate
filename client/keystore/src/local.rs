@@ -192,7 +192,7 @@ impl SyncCryptoStore for LocalKeystore {
 		match key.0 {
 			ed25519::CRYPTO_ID => {
 				let pub_key = ed25519::Public::from_slice(key.1.as_slice())
-					.map_err(|()| TraitError::Other("Corrupted key - Invalid size".into()))?;
+					.map_err(|()| TraitError::Other("Corrupted public key - Invalid size".into()))?;
 				let key_pair = self
 					.0
 					.read()
