@@ -52,4 +52,10 @@ impl CliConfiguration for MetadataSubcommand {
 			Self::Dump(cmd) => cmd.shared_params(),
 		}
 	}
+
+	fn base_path(&self) -> crate::Result<Option<sc_service::BasePath>> {
+		match self {
+			Self::Dump(cmd) => cmd.base_path(),
+		}
+	}
 }

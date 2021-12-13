@@ -31,6 +31,7 @@ use std::{
 	sync::Arc,
 };
 use structopt::StructOpt;
+use sc_service::BasePath;
 
 /// The `metadata-dump` command used to dump the metadata of the runtime.
 #[derive(Debug, StructOpt, Clone)]
@@ -46,6 +47,18 @@ pub struct MetadataDump {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	/// Run a temporary node.
+	///
+	/// A temporary directory will be created to store the configuration and will be deleted
+	/// at the end of the process.
+	///
+	/// Note: the directory is random per process execution. This directory is used as base path
+	/// which includes: database, node key and keystore.
+	///
+	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
+	#[structopt(long, conflicts_with = "base-path")]
+	pub tmp: bool,
 }
 
 impl MetadataDump {
@@ -81,5 +94,18 @@ impl MetadataDump {
 impl CliConfiguration for MetadataDump {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
+	}
+
+	fn base_path(&self) -> crate::Result<Option<BasePath>> {
+		Ok(if self.tmp {
+			Some(BasePath::new_temp_dir()?)
+		} else {
+			match self.shared_params().base_path() {
+				Some(r) => Some(r),
+				// If `dev` is enabled, we use the temp base path.
+				None if self.shared_params().is_dev() => Some(BasePath::new_temp_dir()?),
+				None => None,
+			}
+		})
 	}
 }
