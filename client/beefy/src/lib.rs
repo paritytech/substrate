@@ -40,14 +40,28 @@ mod worker;
 
 pub mod notification;
 
-pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
+pub(crate) mod beefy_protocol_name {
+	const NAME: &'static str = "/beefy/1";
+	/// Old names for the notifications protocol, used for backward compatibility.
+	pub const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/beefy/1"];
+
+	/// Name of the notifications protocol used by Beefy.
+	/// Must be registered towards the networking in order for Beefy to properly function.
+	pub fn with_prefix(prefix: &str) -> String {
+		format!("{}{}", prefix, NAME)
+	}
+}
 
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
-pub fn beefy_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg =
-		sc_network::config::NonDefaultSetConfig::new(BEEFY_PROTOCOL_NAME.into(), 1024 * 1024);
+pub fn beefy_peers_set_config(chain_prefix: &str) -> sc_network::config::NonDefaultSetConfig {
+	let mut cfg = sc_network::config::NonDefaultSetConfig::new(
+		beefy_protocol_name::with_prefix(chain_prefix).into(),
+		1024 * 1024,
+	);
+
 	cfg.allow_non_reserved(25, 25);
+	cfg.add_fallback_names(beefy_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect());
 	cfg
 }
 
@@ -101,6 +115,8 @@ where
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
+	/// Protocol name prefix - usually genesis hash and optional fork id.
+	pub protocol_name_prefix: String,
 }
 
 /// Start the BEEFY gadget.
@@ -122,11 +138,12 @@ where
 		signed_commitment_sender,
 		min_block_delta,
 		prometheus_registry,
+		protocol_name_prefix,
 	} = beefy_params;
 
+	let protocol_name = beefy_protocol_name::with_prefix(&protocol_name_prefix);
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
-	let gossip_engine =
-		GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
 
 	let metrics =
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(

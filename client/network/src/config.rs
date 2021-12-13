@@ -603,6 +603,11 @@ impl NonDefaultSetConfig {
 	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
 		self.set_config.reserved_nodes.push(peer);
 	}
+
+	/// Add a list of protocol names used for backward compatibility.
+	pub fn add_fallback_names(&mut self, fallback_names: Vec<Cow<'static, str>>) {
+		self.fallback_names.extend(fallback_names);
+	}
 }
 
 /// Configuration for the transport layer.
