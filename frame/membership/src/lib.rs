@@ -25,6 +25,7 @@
 
 use frame_support::traits::{
 	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion,
+	ConstU32, ConstU64
 };
 use sp_std::prelude::*;
 
@@ -528,8 +529,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub const MaxMembers: u32 = 10;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 		pub static Members: Vec<u64> = vec![];
@@ -551,7 +550,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -560,7 +559,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
@@ -607,7 +606,7 @@ mod tests {
 		type PrimeOrigin = EnsureSignedBy<Five, u64>;
 		type MembershipInitialized = TestChangeMembers;
 		type MembershipChanged = TestChangeMembers;
-		type MaxMembers = MaxMembers;
+		type MaxMembers = ConstU32<10>;
 		type WeightInfo = ();
 	}
 

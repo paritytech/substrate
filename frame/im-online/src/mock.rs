@@ -21,7 +21,7 @@
 
 use std::cell::RefCell;
 
-use frame_support::{parameter_types, weights::Weight};
+use frame_support::{parameter_types, traits::{ConstU32, ConstU64},weights::Weight};
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
 use sp_runtime::{
@@ -110,7 +110,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -130,7 +129,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -139,7 +138,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 parameter_types! {
@@ -148,7 +147,7 @@ parameter_types! {
 }
 
 impl pallet_session::Config for Runtime {
-	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type SessionManager =
 		pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline,);
@@ -156,7 +155,7 @@ impl pallet_session::Config for Runtime {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = Event;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type WeightInfo = ();
 }
 
@@ -165,13 +164,9 @@ impl pallet_session::historical::Config for Runtime {
 	type FullIdentificationOf = ConvertInto;
 }
 
-parameter_types! {
-	pub const UncleGenerations: u32 = 5;
-}
-
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = ();
-	type UncleGenerations = UncleGenerations;
+	type UncleGenerations = ConstU64<5>;
 	type FilterUncle = ();
 	type EventHandler = ImOnline;
 }
@@ -213,9 +208,6 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 
 parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
-	pub const MaxKeys: u32 = 10_000;
-	pub const MaxPeerInHeartbeats: u32 = 10_000;
-	pub const MaxPeerDataEncodingSize: u32 = 1_000;
 }
 
 impl Config for Runtime {
@@ -226,9 +218,9 @@ impl Config for Runtime {
 	type ReportUnresponsiveness = OffenceHandler;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
-	type MaxKeys = MaxKeys;
-	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
-	type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
+	type MaxKeys = ConstU32<10_000>;
+	type MaxPeerInHeartbeats = ConstU32<10_000>;
+	type MaxPeerDataEncodingSize = ConstU32<1_000>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

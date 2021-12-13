@@ -19,9 +19,10 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, ConstU64},
+	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
+use frame_support::traits::{ConstU32,ConstU64};
 
 #[frame_support::pallet]
 mod module {
@@ -91,7 +92,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl module::Config for Runtime {

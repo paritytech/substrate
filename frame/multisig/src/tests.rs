@@ -22,7 +22,7 @@
 use super::*;
 
 use crate as pallet_multisig;
-use frame_support::{assert_noop, assert_ok, parameter_types, traits::{Contains, ConstU16, ConstU64}};
+use frame_support::{assert_noop, assert_ok, parameter_types, traits::{Contains, ConstU16, ConstU32, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -73,7 +73,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
