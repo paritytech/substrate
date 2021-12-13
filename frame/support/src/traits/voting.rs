@@ -118,13 +118,14 @@ impl<Tally, Moment> PollStatus<Tally, Moment> {
 pub trait Polls<Tally> {
 	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
 	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
+	type Class: Parameter + Member;
 	type Moment;
 
-	/// `true` if the referendum `index` can be voted on. Once this is `false`, existing votes may
-	/// be cancelled permissionlessly.
-	fn is_active(index: Self::Index) -> bool;
+	/// `Some` if the referendum `index` can be voted on, along with the class of referendum. Once
+	/// this is `None`, existing votes may be cancelled permissionlessly.
+	fn is_active(index: Self::Index) -> Option<Self::Class>;
 
-	/// Don't use this if you might mutate - use `try_mutate_tally` instead.
+	/// Don't use this if you might mutate - use `try_access_poll` instead.
 	fn tally<R>(index: Self::Index) -> Option<Tally>;
 
 	fn access_poll<R>(

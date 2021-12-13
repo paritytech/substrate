@@ -71,6 +71,31 @@ fn basic_happy_path_works() {
 }
 
 #[test]
+fn auto_timeout_should_happen_with_nothing_but_submit() {
+	new_test_ext().execute_with(|| {
+		// #1: submit
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		run_to(10);
+		assert_matches!(
+			ReferendumInfoFor::<Test>::get(0),
+			Some(ReferendumInfo::Ongoing(..))
+		);
+		run_to(11);
+		// #11: Timed out - ended.
+		assert_matches!(
+			ReferendumInfoFor::<Test>::get(0),
+			Some(ReferendumInfo::TimedOut(11, _, None))
+		);
+
+	});
+}
+
+#[test]
 fn tracks_are_distinguished() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Referenda::submit(

@@ -136,8 +136,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ReferendumCount<T> = StorageValue<_, ReferendumIndex, ValueQuery>;
 
-	/// The sorted list of referenda
-	/// ready to be decided but not yet being decided, ordered by conviction-weighted approvals.
+	/// Information concerning any given referendum.
+	///
+	/// TWOX-NOTE: SAFE as indexes are not under an attacker’s control.
+	#[pallet::storage]
+	pub type ReferendumInfoFor<T: Config> =
+		StorageMap<_, Blake2_128Concat, ReferendumIndex, ReferendumInfoOf<T>>;
+
+	/// The sorted list of referenda ready to be decided but not yet being decided, ordered by
+	/// conviction-weighted approvals.
 	///
 	/// This should be empty if `DecidingCount` is less than `TrackInfo::max_deciding`.
 	#[pallet::storage]
@@ -152,21 +159,6 @@ pub mod pallet {
 	/// The number of referenda being decided currently.
 	#[pallet::storage]
 	pub type DecidingCount<T: Config> = StorageMap<_, Twox64Concat, TrackIdOf<T>, u32, ValueQuery>;
-
-	/// Information concerning any given referendum.
-	///
-	/// TWOX-NOTE: SAFE as indexes are not under an attacker’s control.
-	#[pallet::storage]
-	pub type ReferendumInfoFor<T: Config> =
-		StorageMap<_, Twox64Concat, ReferendumIndex, ReferendumInfoOf<T>>;
-
-	/// Accounts for which there are locks in action which may be removed at some point in the
-	/// future. The value is the block number at which the lock expires and may be removed.
-	///
-	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
-	#[pallet::storage]
-	#[pallet::getter(fn locks)]
-	pub type Locks<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::BlockNumber>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -306,18 +298,20 @@ pub mod pallet {
 				*x += 1;
 				r
 			});
+			let now = frame_system::Pallet::<T>::block_number();
+			let nudge_call = Call::nudge_referendum { index };
 			let status = ReferendumStatus {
 				track,
 				origin: proposal_origin,
 				proposal_hash: proposal_hash.clone(),
 				enactment: enactment_moment,
-				submitted: frame_system::Pallet::<T>::block_number(),
+				submitted: now,
 				submission_deposit,
 				decision_deposit: None,
 				deciding: None,
 				tally: Default::default(),
 				ayes_in_queue: None,
-				alarm: None,
+				alarm: Self::set_alarm(nudge_call, now + T::UndecidingTimeout::get()),
 			};
 			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 
@@ -393,8 +387,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Advance a referendum onto its next logical state. This will happen eventually anyway,
-		/// but you can nudge it
+		/// Advance a referendum onto its next logical state. This should happen automaically,
+		/// but this exists in order to allow it to happen manaully in case it is needed.
 		#[pallet::weight(0)]
 		pub fn nudge_referendum(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			ensure_signed_or_root(origin)?;
@@ -402,6 +396,8 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Advance a track onto its next logical state. This should happen automaically,
+		/// but this exists in order to allow it to happen manaully in case it is needed.
 		#[pallet::weight(0)]
 		pub fn nudge_track(
 			origin: OriginFor<T>,
@@ -411,12 +407,6 @@ pub mod pallet {
 			Self::advance_track(track)?;
 			Ok(Pays::No.into())
 		}
-
-		/// Just a stub - not meant to do anything.
-		#[pallet::weight(0)]
-		pub fn stub(_origin: OriginFor<T>, _call_hash: T::Hash) -> DispatchResult {
-			Ok(())
-		}
 	}
 }
 
@@ -424,6 +414,8 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 	type Index = ReferendumIndex;
 	type Votes = VotesOf<T>;
 	type Moment = T::BlockNumber;
+	type Class = TrackIdOf<T>;
+
 	fn access_poll<R>(
 		index: Self::Index,
 		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber>) -> R,
@@ -441,6 +433,7 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 			_ => f(PollStatus::None),
 		}
 	}
+
 	fn try_access_poll<R>(
 		index: Self::Index,
 		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber>) -> Result<R, DispatchError>,
@@ -458,11 +451,13 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 			_ => f(PollStatus::None),
 		}
 	}
+
 	fn tally<R>(index: Self::Index) -> Option<T::Tally> {
 		Some(Self::ensure_ongoing(index).ok()?.tally)
 	}
-	fn is_active(index: Self::Index) -> bool {
-		Self::ensure_ongoing(index).is_ok()
+
+	fn is_active(index: Self::Index) -> Option<TrackIdOf<T>> {
+		Self::ensure_ongoing(index).ok().map(|e| e.track)
 	}
 }
 
