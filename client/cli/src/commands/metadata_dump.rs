@@ -21,6 +21,7 @@
 use crate::{error, params::SharedParams, CliConfiguration};
 use log::info;
 use sc_client_api::UsageProvider;
+use sc_service::BasePath;
 use sp_api::{Metadata, ProvideRuntimeApi};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::{
@@ -31,7 +32,6 @@ use std::{
 	sync::Arc,
 };
 use structopt::StructOpt;
-use sc_service::BasePath;
 
 /// The `metadata-dump` command used to dump the metadata of the runtime.
 #[derive(Debug, StructOpt, Clone)]
