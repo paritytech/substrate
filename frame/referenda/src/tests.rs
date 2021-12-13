@@ -71,6 +71,40 @@ fn basic_happy_path_works() {
 }
 
 #[test]
+fn confirming_then_fail_works() {
+	new_test_ext().execute_with(|| {
+	});
+}
+
+#[test]
+fn confirming_then_reconfirming_works() {
+	new_test_ext().execute_with(|| {
+	});
+}
+
+#[test]
+fn queueing_works() {
+	new_test_ext().execute_with(|| {
+		// Submit 4 proposals with a queue len of 1.
+		// One should be being decided.
+		// Vote on the others to set order.
+		// Cancel the first.
+		// The other with the most approvals should be being decided.
+		// Vote on the remaining two to change order.
+		// Vote enough for it to insta-win.
+		// There should be a third being decided, the one with the most approvals.
+		// Let it end unsuccessfully.
+		// The final should be being decided.
+	});
+}
+
+#[test]
+fn kill_when_confirming_works() {
+	new_test_ext().execute_with(|| {
+	});
+}
+
+#[test]
 fn auto_timeout_should_happen_with_nothing_but_submit() {
 	new_test_ext().execute_with(|| {
 		// #1: submit
