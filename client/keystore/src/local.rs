@@ -191,8 +191,9 @@ impl SyncCryptoStore for LocalKeystore {
 	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
 		match key.0 {
 			ed25519::CRYPTO_ID => {
-				let pub_key = ed25519::Public::from_slice(key.1.as_slice())
-					.map_err(|()| TraitError::Other("Corrupted public key - Invalid size".into()))?;
+				let pub_key = ed25519::Public::from_slice(key.1.as_slice()).map_err(|()| {
+					TraitError::Other("Corrupted public key - Invalid size".into())
+				})?;
 				let key_pair = self
 					.0
 					.read()
@@ -201,8 +202,9 @@ impl SyncCryptoStore for LocalKeystore {
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			sr25519::CRYPTO_ID => {
-				let pub_key = sr25519::Public::from_slice(key.1.as_slice())
-					.map_err(|()| TraitError::Other("Corrupted public key - Invalid size".into()))?;
+				let pub_key = sr25519::Public::from_slice(key.1.as_slice()).map_err(|()| {
+					TraitError::Other("Corrupted public key - Invalid size".into())
+				})?;
 				let key_pair = self
 					.0
 					.read()
@@ -211,8 +213,9 @@ impl SyncCryptoStore for LocalKeystore {
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			ecdsa::CRYPTO_ID => {
-				let pub_key = ecdsa::Public::from_slice(key.1.as_slice())
-					.map_err(|()| TraitError::Other("Corrupted public key - Invalid size".into()))?;
+				let pub_key = ecdsa::Public::from_slice(key.1.as_slice()).map_err(|()| {
+					TraitError::Other("Corrupted public key - Invalid size".into())
+				})?;
 				let key_pair = self
 					.0
 					.read()
