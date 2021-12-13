@@ -24,7 +24,7 @@ use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
 		Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers, OriginTrait,
-		ConstU32, ConstU64,
+		ConstU32, ConstU64, PreimageRecipient,
 	},
 	weights::Weight,
 };
@@ -32,7 +32,7 @@ use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, Hash,},
 	Perbill,
 };
 
@@ -289,8 +289,13 @@ pub fn set_balance_proposal(value: u64) -> Vec<u8> {
 }
 
 pub fn set_balance_proposal_hash(value: u64) -> H256 {
-	use sp_core::Hasher;
-	BlakeTwo256::hash(&set_balance_proposal(value)[..])
+	let c = Call::Balances(pallet_balances::Call::set_balance {
+		who: 42,
+		new_free: value,
+		new_reserved: 0,
+	});
+	<Preimage as PreimageRecipient<_>>::note_preimage(c.encode().try_into().unwrap());
+	BlakeTwo256::hash_of(&c)
 }
 
 #[allow(dead_code)]

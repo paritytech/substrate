@@ -37,6 +37,7 @@ fn params_should_work() {
 #[test]
 fn basic_happy_path_works() {
 	new_test_ext().execute_with(|| {
+		// #1: submit
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Root.into(),
@@ -46,14 +47,23 @@ fn basic_happy_path_works() {
 		assert_eq!(Balances::reserved_balance(&1), 2);
 		assert_eq!(ReferendumCount::<Test>::get(), 1);
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
-		run_to(6);
-		//  Vote should now be deciding.
+		run_to(4);
+		assert_eq!(DecidingCount::<Test>::get(0), 0);
+		run_to(5);
+		// #5: 4 blocks after submit - vote should now be deciding.
 		assert_eq!(DecidingCount::<Test>::get(0), 1);
+		run_to(6);
+		// #6: Lots of ayes. Should now be confirming.
 		set_tally(0, 100, 0);
-		// Vote should now be confirming.
 		run_to(8);
-		// Vote should now have ended.
+		// #8: Should be confirmed & ended.
 		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(2), 0));
+		run_to(11);
+		// #9: Should not yet be enacted.
+		assert_eq!(Balances::free_balance(&42), 0);
+		run_to(12);
+		// #10: Proposal should be executed.
+		assert_eq!(Balances::free_balance(&42), 1);
 	});
 }
 
@@ -112,11 +122,12 @@ fn tracks_are_distinguished() {
 #[test]
 fn submit_errors_work() {
 	new_test_ext().execute_with(|| {
+		let h = set_balance_proposal_hash(1);
 		// No track for Signed origins.
 		assert_noop!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Signed(2).into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		), Error::<Test>::NoTrack);
 
@@ -124,7 +135,7 @@ fn submit_errors_work() {
 		assert_noop!(Referenda::submit(
 			Origin::signed(10),
 			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		), BalancesError::<Test>::InsufficientBalance);
 	});
@@ -136,10 +147,11 @@ fn decision_deposit_errors_work() {
 		let e = Error::<Test>::NotOngoing;
 		assert_noop!(Referenda::place_decision_deposit(Origin::signed(2), 0), e);
 
+		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		));
 		let e = BalancesError::<Test>::InsufficientBalance;
@@ -157,10 +169,11 @@ fn refund_deposit_works() {
 		let e = Error::<Test>::BadReferendum;
 		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(1), 0), e);
 
+		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		));
 		let e = Error::<Test>::NoDeposit;
@@ -178,20 +191,21 @@ fn refund_deposit_works() {
 #[test]
 fn cancel_works() {
 	new_test_ext().execute_with(|| {
+		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 
-		run_to(10);
+		run_to(8);
 		assert_ok!(Referenda::cancel(Origin::signed(4), 0));
 		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(3), 0));
 		assert_matches!(
 			ReferendumInfoFor::<Test>::get(0).unwrap(),
-			ReferendumInfo::Cancelled(10, Deposit { who: 1, amount: 2 }, None)
+			ReferendumInfo::Cancelled(8, Deposit { who: 1, amount: 2 }, None)
 		);
 	});
 }
@@ -199,10 +213,11 @@ fn cancel_works() {
 #[test]
 fn cancel_errors_works() {
 	new_test_ext().execute_with(|| {
+		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
@@ -216,21 +231,22 @@ fn cancel_errors_works() {
 #[test]
 fn kill_works() {
 	new_test_ext().execute_with(|| {
+		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 
-		run_to(10);
+		run_to(8);
 		assert_ok!(Referenda::kill(Origin::root(), 0));
 		let e = Error::<Test>::NoDeposit;
 		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(3), 0), e);
 		assert_matches!(
 			ReferendumInfoFor::<Test>::get(0).unwrap(),
-			ReferendumInfo::Killed(10)
+			ReferendumInfo::Killed(8)
 		);
 	});
 }
@@ -238,10 +254,11 @@ fn kill_works() {
 #[test]
 fn kill_errors_works() {
 	new_test_ext().execute_with(|| {
+		let h = set_balance_proposal_hash(1);
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
 			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
+			h,
 			AtOrAfter::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));

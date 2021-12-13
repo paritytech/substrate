@@ -28,7 +28,7 @@
 use codec::{Encode, Codec};
 use frame_support::{
 	ensure, BoundedVec, traits::{
-		schedule::{DispatchTime, Anon as ScheduleAnon, Named as ScheduleNamed},
+		schedule::{DispatchTime, v2::Anon as ScheduleAnon, v2::Named as ScheduleNamed, MaybeHashed},
 		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
 		Polls, VoteTally, PollStatus, OriginTrait,
 	},
@@ -80,8 +80,8 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>>
-			+ ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>>;
+		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash=Self::Hash>
+			+ ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash=Self::Hash>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
@@ -497,7 +497,7 @@ impl<T: Config> Pallet<T> {
 			None,
 			63,
 			origin,
-			Call::stub { call_hash }.into(),
+			MaybeHashed::Hash(call_hash),
 		).is_ok();
 		debug_assert!(ok, "LOGIC ERROR: bake_referendum/schedule_named failed");
 	}
@@ -511,7 +511,7 @@ impl<T: Config> Pallet<T> {
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
-			call.into(),
+			MaybeHashed::Value(call.into()),
 		).ok();
 		debug_assert!(maybe_address.is_some(), "Unable to schedule a new referendum at #{} (now: #{})?!", when, frame_system::Pallet::<T>::block_number());
 		maybe_address
@@ -694,7 +694,7 @@ impl<T: Config> Pallet<T> {
 					Self::deposit_event(Event::<T>::Confirmed { index, tally: status.tally });
 					return (ReferendumInfo::Approved(now, status.submission_deposit, status.decision_deposit), true)
 				}
-				dirty = deciding.confirming.is_none();
+				dirty = dirty || deciding.confirming.is_none();
 				let confirmation = deciding.confirming
 					.unwrap_or_else(|| now.saturating_add(track.confirm_period));
 				deciding.confirming = Some(confirmation);
@@ -707,7 +707,7 @@ impl<T: Config> Pallet<T> {
 					return (ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit), true)
 				}
 				// Cannot be confirming
-				dirty = deciding.confirming.is_some();
+				dirty = dirty || deciding.confirming.is_some();
 				deciding.confirming = None;
 				let decision_time = Self::decision_time(&deciding, &status.tally, track);
 				alarm = decision_time;
