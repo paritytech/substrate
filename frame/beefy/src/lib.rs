@@ -106,7 +106,7 @@ impl<T: Config> Pallet<T> {
 	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
 		// As in GRANDPA, we trigger a validator set change only if the the validator
 		// set has actually changed.
-		if new != Self::authorities() && !new.is_empty() {
+		if new != Self::authorities() {
 			<Authorities<T>>::put(&new);
 
 			let next_id = Self::validator_set_id() + 1u64;
