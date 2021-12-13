@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Key related CLI utilities
+//! Metadata related CLI utilities
 
 use super::MetadataDump;
 use crate::{CliConfiguration, Error, SharedParams};
