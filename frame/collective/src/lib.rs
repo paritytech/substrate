@@ -541,7 +541,7 @@ pub mod pallet {
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
 				let votes = {
 					let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
-					Votes { index, threshold, ayes: vec![], nays: vec![], end }
+					Votes { index, threshold, ayes: Vec::new(), nays: Vec::new(), end }
 				};
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
