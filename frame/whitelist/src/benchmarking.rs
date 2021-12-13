@@ -39,7 +39,7 @@ benchmarks! {
 			"call not whitelisted"
 		);
 		ensure!(
-			T::PreimageProvider::preimage_requested(&call_hash) == true,
+			T::PreimageProvider::preimage_requested(&call_hash),
 			"preimage not requested"
 		);
 	}
@@ -56,7 +56,7 @@ benchmarks! {
 			"whitelist not removed"
 		);
 		ensure!(
-			T::PreimageProvider::preimage_requested(&call_hash) == false,
+			!T::PreimageProvider::preimage_requested(&call_hash),
 			"preimage still requested"
 		);
 	}
@@ -89,7 +89,7 @@ benchmarks! {
 			"whitelist not removed"
 		);
 		ensure!(
-			T::PreimageProvider::preimage_requested(&call_hash) == false,
+			!T::PreimageProvider::preimage_requested(&call_hash),
 			"preimage still requested"
 		);
 	}
