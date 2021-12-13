@@ -26,7 +26,7 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../..
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "4.0.0", path = "../../../primitives/core", default-features = false }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]

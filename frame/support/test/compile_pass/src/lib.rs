@@ -22,13 +22,13 @@
 //! This crate tests that `construct_runtime!` expands the pallet parts
 //! correctly even when frame-support is renamed in Cargo.toml
 
+use frame_support::{construct_runtime, parameter_types};
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	create_runtime_str, generic,
 	traits::{BlakeTwo256, IdentityLookup, Verify},
 };
 use sp_version::RuntimeVersion;
-use support::{construct_runtime, parameter_types};
 
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("frame-support-test-compile-pass"),
@@ -51,8 +51,8 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 0;
 }
 
-impl system::Config for Runtime {
-	type BaseCallFilter = support::traits::Everything;
+impl frame_system::Config for Runtime {
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Index = u128;
@@ -73,6 +73,7 @@ impl system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 }
@@ -87,6 +88,6 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system,
+		System: frame_system,
 	}
 );

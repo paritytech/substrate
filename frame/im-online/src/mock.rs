@@ -106,7 +106,15 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	t.into()
+	let mut result: sp_io::TestExternalities = t.into();
+	// Set the default keys, otherwise session will discard the validator.
+	result.execute_with(|| {
+		for i in 1..=6 {
+			System::inc_providers(&i);
+			assert_eq!(Session::set_keys(Origin::signed(i), (i - 1).into(), vec![]), Ok(()));
+		}
+	});
+	result
 }
 
 parameter_types! {
@@ -139,6 +147,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {

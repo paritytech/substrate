@@ -29,7 +29,7 @@ frame-executive = { version = "4.0.0-dev", default-features = false, path = "../
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev"}
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura" }
-sp-core = { version = "4.0.0", default-features = false, path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
 sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "4.0.0-dev"}
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }

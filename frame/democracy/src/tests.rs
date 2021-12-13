@@ -105,6 +105,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
@@ -119,6 +120,8 @@ impl pallet_scheduler::Config for Test {
 	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
+	type PreimageProvider = ();
+	type NoPreimagePostponement = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;

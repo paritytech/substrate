@@ -123,7 +123,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	status: BountyStatus<AccountId, BlockNumber>,
 }
 
-impl<AccountId: PartialEq + Clone + Ord + Default, Balance, BlockNumber: Clone>
+impl<AccountId: PartialEq + Clone + Ord, Balance, BlockNumber: Clone>
 	Bounty<AccountId, Balance, BlockNumber>
 {
 	/// Getter for bounty status, to be used for child bounties.
@@ -453,6 +453,7 @@ pub mod pallet {
 									let err_amount =
 										T::Currency::unreserve(&curator, bounty.curator_deposit);
 									debug_assert!(err_amount.is_zero());
+									bounty.curator_deposit = Zero::zero();
 									// Continue to change bounty status below...
 								}
 							},

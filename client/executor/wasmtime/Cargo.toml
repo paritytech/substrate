@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-executor-common = { version = "0.10.0-dev", path = "../common" }
 sp-wasm-interface = { version = "4.0.0", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "4.0.0", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "4.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 wasmtime = { version = "0.31.0", default-features = false, features = [
     "cache",

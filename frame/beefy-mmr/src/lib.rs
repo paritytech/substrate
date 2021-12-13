@@ -72,7 +72,7 @@ where
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
 	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		use sp_core::crypto::Public;
+		use sp_core::crypto::ByteArray;
 		let compressed_key = a.as_slice();
 
 		libsecp256k1::PublicKey::parse_slice(

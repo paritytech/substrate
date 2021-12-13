@@ -57,7 +57,7 @@ use sp_consensus::{
 	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
 };
 use sp_consensus_slots::Slot;
-use sp_core::crypto::{Pair, Public};
+use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{

@@ -36,7 +36,7 @@ sp-consensus = { path = "../../../primitives/consensus/common", version = "0.10.
 sp-consensus-slots = { path = "../../../primitives/consensus/slots", version = "0.10.0-dev" }
 sp-inherents = { path = "../../../primitives/inherents", version = "4.0.0-dev" }
 sp-runtime = { path = "../../../primitives/runtime", version = "4.0.0-dev" }
-sp-core = { path = "../../../primitives/core", version = "4.0.0" }
+sp-core = { path = "../../../primitives/core", version = "4.1.0-dev" }
 sp-keystore = { path = "../../../primitives/keystore", version = "0.10.0-dev" }
 sp-api = { path = "../../../primitives/api", version = "4.0.0-dev" }
 sc-transaction-pool-api = { path = "../../../client/transaction-pool/api", version = "4.0.0-dev" }

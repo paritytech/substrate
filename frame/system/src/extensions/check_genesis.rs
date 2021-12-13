@@ -19,7 +19,7 @@ use crate::{Config, Pallet};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{SignedExtension, Zero},
+	traits::{DispatchInfoOf, SignedExtension, Zero},
 	transaction_validity::TransactionValidityError,
 };
 
@@ -61,5 +61,15 @@ impl<T: Config + Send + Sync> SignedExtension for CheckGenesis<T> {
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Pallet<T>>::block_hash(T::BlockNumber::zero()))
+	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		Ok(self.validate(who, call, info, len).map(|_| ())?)
 	}
 }

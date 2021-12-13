@@ -99,7 +99,7 @@ fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<SecretString>) -> Result<Vec
 mod tests {
 	use super::*;
 	use sc_service::{ChainSpec, ChainType, GenericChainSpec, NoExtension};
-	use sp_core::{sr25519::Pair, Pair as _, Public};
+	use sp_core::{sr25519::Pair, ByteArray, Pair as _};
 	use structopt::StructOpt;
 	use tempfile::TempDir;
 
