@@ -9392,7 +9392,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "4.0.1"
+version = "4.1.0-dev"
 dependencies = [
  "base58",
  "bitflags",
@@ -9681,7 +9681,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "4.0.1"
+version = "4.1.0-dev"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -9958,7 +9958,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "4.0.1"
+version = "4.1.0-dev"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",

@@ -27,7 +27,7 @@ futures = "0.3.16"
 derive_more = "0.99.16"
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../../primitives/consensus/common" }
-sp-core = { version = "4.0.0", path = "../../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../../primitives/core" }
 sp-application-crypto = { version = "4.0.0-dev", path = "../../../../primitives/application-crypto" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../../primitives/keystore" }
 
