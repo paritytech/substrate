@@ -170,7 +170,10 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
 	let genesis_hash = client.block_hash(0).ok().flatten().unwrap_or_default();
-	let chain_prefix = format!("/{}/{}", config.protocol_id().as_ref(), genesis_hash);
+	let chain_prefix = match config.chain_spec.fork_id() {
+		Some(fork_id) => format!("/{}/{}", genesis_hash, fork_id),
+		None => format!("/{}", genesis_hash),
+	};
 
 	if let Some(url) = &config.keystore_remote {
 		match remote_keystore(url) {
