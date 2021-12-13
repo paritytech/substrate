@@ -309,6 +309,10 @@ pub mod pallet {
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
 		type OnSetCode: SetCode<Self>;
+
+		/// The maximum number of consumers allowed on a single account.
+		#[pallet::constant]
+		type MaxConsumers: Get<RefCount>;
 	}
 
 	#[pallet::pallet]
@@ -340,7 +344,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
-			ensure_signed(origin)?;
+			ensure_signed_or_root(origin)?;
 			Ok(().into())
 		}
 
@@ -868,6 +872,22 @@ where
 	}
 }
 
+/// Ensure that the origin `o` represents either a signed extrinsic (i.e. transaction) or the root.
+/// Returns `Ok` with the account that signed the extrinsic, `None` if it was root,  or an `Err`
+/// otherwise.
+pub fn ensure_signed_or_root<OuterOrigin, AccountId>(
+	o: OuterOrigin,
+) -> Result<Option<AccountId>, BadOrigin>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
+{
+	match o.into() {
+		Ok(RawOrigin::Root) => Ok(None),
+		Ok(RawOrigin::Signed(t)) => Ok(Some(t)),
+		_ => Err(BadOrigin),
+	}
+}
+
 /// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrigin>
 where
@@ -1107,8 +1127,12 @@ impl<T: Config> Pallet<T> {
 	pub fn inc_consumers(who: &T::AccountId) -> Result<(), DispatchError> {
 		Account::<T>::try_mutate(who, |a| {
 			if a.providers > 0 {
-				a.consumers = a.consumers.saturating_add(1);
-				Ok(())
+				if a.consumers < T::MaxConsumers::get() {
+					a.consumers = a.consumers.saturating_add(1);
+					Ok(())
+				} else {
+					Err(DispatchError::TooManyConsumers)
+				}
 			} else {
 				Err(DispatchError::NoProviders)
 			}
@@ -1148,7 +1172,8 @@ impl<T: Config> Pallet<T> {
 
 	/// True if the account has at least one provider reference.
 	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
-		Account::<T>::get(who).providers > 0
+		let a = Account::<T>::get(who);
+		a.providers > 0 && a.consumers < T::MaxConsumers::get()
 	}
 
 	/// Deposits an event into this block's event record.

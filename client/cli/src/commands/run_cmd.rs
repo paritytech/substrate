@@ -238,6 +238,10 @@ pub struct RunCmd {
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
 
+	/// Maximum number of different runtimes that can be cached.
+	#[structopt(long, default_value = "2")]
+	pub runtime_cache_size: u8,
+
 	/// Run a temporary node.
 	///
 	/// A temporary directory will be created to store the configuration and will be deleted
@@ -361,7 +365,11 @@ impl CliConfiguration for RunCmd {
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn prometheus_config(&self, default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(
+		&self,
+		default_listen_port: u16,
+		chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<PrometheusConfig>> {
 		Ok(if self.no_prometheus {
 			None
 		} else {
@@ -373,7 +381,7 @@ impl CliConfiguration for RunCmd {
 					interface.into(),
 					self.prometheus_port.unwrap_or(default_listen_port),
 				),
-				self.shared_params.chain_id(self.shared_params.dev),
+				chain_spec.id().into(),
 			))
 		})
 	}
@@ -451,6 +459,10 @@ impl CliConfiguration for RunCmd {
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+	}
+
+	fn runtime_cache_size(&self) -> Result<u8> {
+		Ok(self.runtime_cache_size)
 	}
 
 	fn base_path(&self) -> Result<Option<BasePath>> {

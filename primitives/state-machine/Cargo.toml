@@ -21,7 +21,7 @@ hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.22.6", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
 sp-trie = { version = "4.0.0-dev", path = "../trie", default-features = false }
-sp-core = { version = "4.0.0", path = "../core", default-features = false }
+sp-core = { version = "4.1.0-dev", path = "../core", default-features = false }
 sp-panic-handler = { version = "4.0.0-dev", path = "../panic-handler", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 num-traits = { version = "0.2.8", default-features = false }

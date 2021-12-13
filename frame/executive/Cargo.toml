@@ -23,11 +23,11 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-tracing = { version = "4.0.0", default-features = false, path = "../../primitives/tracing" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-core = { version = "4.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 hex-literal = "0.3.4"
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
