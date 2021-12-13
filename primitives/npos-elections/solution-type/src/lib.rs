@@ -239,6 +239,7 @@ fn imports() -> Result<TokenStream2> {
 #[cfg(test)]
 mod tests {
 	#[test]
+	#[ignore]
 	fn ui_fail() {
 		let cases = trybuild::TestCases::new();
 		cases.compile_fail("tests/ui/fail/*.rs");

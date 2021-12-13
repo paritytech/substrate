@@ -1,0 +1,83 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Generic implementation of a block and associated items.
+
+#[cfg(feature = "std")]
+use std::fmt;
+
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
+use crate::{
+	codec::{Codec, Decode, Encode},
+	traits::{
+		self, Block as BlockT, Header as HeaderT, MaybeMallocSizeOf, MaybeSerialize, Member,
+		NumberFor,
+	},
+	Justifications,
+};
+use sp_core::RuntimeDebug;
+use sp_std::prelude::*;
+
+/// Abstraction over a substrate block.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct Block<Header, Extrinsic: MaybeSerialize> {
+	/// The block header.
+	pub header: Header,
+	/// The accompanying extrinsics.
+	pub extrinsics: Vec<Extrinsic>,
+	/// The accompanying extrinsics.
+	pub prev_extrinsics: Vec<Extrinsic>,
+}
+
+impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
+where
+	Header: HeaderT,
+	Extrinsic: Member + Codec + traits::Extrinsic + MaybeMallocSizeOf,
+{
+	type Extrinsic = Extrinsic;
+	type Header = Header;
+	type Hash = <Self::Header as traits::Header>::Hash;
+
+	fn header(&self) -> &Self::Header {
+		&self.header
+	}
+	fn extrinsics(&self) -> &[Self::Extrinsic] {
+		&self.extrinsics[..]
+	}
+	fn prev_extrinsics(&self) -> &[Self::Extrinsic] {
+		&self.prev_extrinsics[..]
+	}
+	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
+		(self.header, self.extrinsics)
+	}
+	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
+        // TODO should not be used as it doesnt take prev extrinsics into account
+		Block { header, extrinsics, prev_extrinsics: Vec::new() }
+	}
+	fn new_ver(header: Self::Header, extrinsics: Vec<Self::Extrinsic>, prev_extrinsics: Vec<Self::Extrinsic>) -> Self {
+		Block { header, extrinsics, prev_extrinsics }
+	}
+	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
+        // TODO should not be used as it doesnt take prev extrinsics into account
+		unimplemented!()
+	}
+}

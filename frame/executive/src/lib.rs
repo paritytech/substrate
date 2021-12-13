@@ -125,17 +125,25 @@ use frame_support::{
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
-use frame_system::DigestOf;
+use frame_system::{extrinsics_root, DigestOf};
+use schnorrkel::{
+	vrf::{VRFOutput, VRFProof},
+	SignatureError,
+};
+use sp_core::{ShufflingSeed, crypto::UncheckedFrom, Hasher, U256};
+// use sp_keystore::vrf;
 use sp_runtime::{
+    SaturatedConversion,
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One, Saturating,
+		self, Applyable, BlakeTwo256, CheckEqual, Checkable, Dispatchable, Extrinsic, HasAddress, Header, NumberFor, One, Saturating,
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	AccountId32, ApplyExtrinsicResult,
 };
 use sp_std::{marker::PhantomData, prelude::*};
+use crate::traits::AtLeast32BitUnsigned;
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
@@ -169,13 +177,14 @@ impl<
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: Checkable<Context> + Codec,
+	Block::Extrinsic: HasAddress<AccountId = System::AccountId> + Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
+    // for backward compatibility
 	fn execute_block(block: Block) {
 		Executive::<
 			System,
@@ -186,7 +195,28 @@ where
 			COnRuntimeUpgrade,
 		>::execute_block(block);
 	}
+
+	fn execute_block_ver(block: Block) {
+		Executive::<
+			System,
+			Block,
+			Context,
+			UnsignedValidator,
+			AllPallets,
+			COnRuntimeUpgrade,
+		>::execute_block_ver(block);
+	}
 }
+
+// fn create_shuffling_seed_input_data(prev_seed: &ShufflingSeed) -> vrf::VRFTranscriptData {
+// 	vrf::VRFTranscriptData {
+// 		label: b"shuffling_seed",
+// 		items: vec![(
+// 			"prev_seed",
+// 			vrf::VRFTranscriptValue::Bytes(prev_seed.seed.as_bytes().to_vec()),
+// 		)],
+// 	}
+// }
 
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
@@ -201,7 +231,8 @@ impl<
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: Checkable<Context> + Codec,
+    <System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
+    Block::Extrinsic: HasAddress<AccountId = System::AccountId> + Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -339,8 +370,27 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
+
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
+
+        // TODO uncomment when block & header will be extended
+		// let prev_seed: ShufflingSeed = Default::default();
+		// let seed = header.seed();
+        //
+		// let new_seed = VRFOutput::from_bytes(&seed.seed.as_bytes())
+		// 	.expect("cannot parse shuffling seed");
+        //
+		// let proof = VRFProof::from_bytes(&seed.proof.as_bytes())
+		// 	.expect("cannot parse shuffling seed proof");
+        //
+		// let input = vrf::make_transcript(create_shuffling_seed_input_data(&prev_seed));
+        //
+		// schnorrkel::PublicKey::from_bytes(&[])
+		// 	.and_then(|p| p.vrf_verify(input, &new_seed, &proof))
+        //     .expect("shuffling seed validation failed")
+		// 	.unwrap();
+
 
 		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
@@ -354,6 +404,11 @@ where
 		if let Err(i) = System::ensure_inherents_are_first(block) {
 			panic!("Invalid inherent position for extrinsic at index {}", i);
 		}
+
+		// Check that transaction trie root represents the transactions.
+		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		header.extrinsics_root().check_equal(&xts_root);
+		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -371,7 +426,7 @@ where
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
-			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+            Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -381,6 +436,52 @@ where
 			Self::final_checks(&header);
 		}
 	}
+
+	/// Actually execute all transitions for `block`.
+	pub fn execute_block_ver(block: Block) {
+		sp_io::init_tracing();
+		sp_tracing::within_span! {
+			sp_tracing::info_span!("execute_block", ?block);
+
+			Self::initialize_block(block.header());
+
+			// any initial checks
+			Self::initial_checks(&block);
+
+			let signature_batching = sp_runtime::SignatureBatching::start();
+
+			let (header, extrinsics) = block.deconstruct();
+            let count: usize = header.count().clone().saturated_into::<usize>();
+
+            assert!(extrinsics.len() >= count);
+
+            let curr_block_txs = extrinsics.iter().take(count);
+            let prev_block_txs = extrinsics.iter().skip(count);
+           
+            
+            let curr_block_inherents = curr_block_txs.filter(|e| !e.is_signed().unwrap());
+            let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
+            let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
+
+            let extrinsics_with_author: Vec<(_,_)> = tx_to_be_executed.into_iter().map(|e| 
+                    (     
+                        (e.get_address(), e)
+                    )
+            ).collect();
+            let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
+            // let shuffled_extrinsics = tx_to_be_executed;
+            
+            Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
+
+			if !signature_batching.verify() {
+				panic!("Signature verification failed.");
+			}
+
+			// any final checks
+			Self::final_checks(&header);
+		}
+	}
+
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(
@@ -501,11 +602,6 @@ where
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
-
-		assert!(
-			header.extrinsics_root() == new_header.extrinsics_root(),
-			"Transaction trie root must be valid.",
-		);
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any

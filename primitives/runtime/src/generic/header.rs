@@ -28,7 +28,7 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_core::U256;
+use sp_core::{ShufflingSeed, U256};
 use sp_std::{convert::TryFrom, fmt::Debug};
 
 /// Abstraction over a block header for a substrate chain.

@@ -24,6 +24,12 @@ sp-tracing = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+extrinsic-shuffler = { version='4.0.0-dev', default-features = false, path = '../../primitives/shuffler'}
+sp-ver = { version = "4.0.0-dev", default-features = false, path = "../../primitives/ver" }
+sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
+sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore", optional=true}
+schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false}
+    
 
 [dev-dependencies]
 hex-literal = "0.3.3"
@@ -46,5 +52,11 @@ std = [
 	"sp-runtime/std",
 	"sp-tracing/std",
 	"sp-std/std",
+	"sp-io/std",
+	"sp-ver/std",
+	"extrinsic-shuffler/std",
+	"sp-keystore/std",
+    "schnorrkel/std",
+    "sp-arithmetic/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

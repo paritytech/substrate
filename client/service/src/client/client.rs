@@ -27,8 +27,10 @@ use hash_db::Prefix;
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
+use extrinsic_info_runtime_api::ExtrinsicInfoRuntimeApi;
 use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
+use sc_block_builder_ver::{BlockBuilderApi as BlockBuilderApiVer, BlockBuilderProvider as BlockBuilderProviderVer, RecordProof as RecordProofVer};
 use sc_client_api::{
 	backend::{
 		self, apply_aux, changes_tries_state_at_block, BlockImportOperation, ClientImportOperation,
@@ -1441,6 +1443,47 @@ where
 			info.best_hash,
 			info.best_number,
 			RecordProof::No,
+			inherent_digests,
+			&self.backend,
+		)
+	}
+}
+
+impl<B, E, Block, RA> BlockBuilderProviderVer<B, Block, Self> for Client<B, E, Block, RA>
+where
+	B: backend::Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+	Block: BlockT,
+	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
+	<Self as ProvideRuntimeApi<Block>>::Api:
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApiVer<Block> + ExtrinsicInfoRuntimeApi<Block>,
+{
+	fn new_block_at<R: Into<RecordProofVer>>(
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
+		record_proof: R,
+	) -> sp_blockchain::Result<sc_block_builder_ver::BlockBuilder<Block, Self, B>> {
+		sc_block_builder_ver::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			record_proof.into(),
+			inherent_digests,
+			&self.backend,
+		)
+	}
+
+	fn new_block(
+		&self,
+		inherent_digests: DigestFor<Block>,
+	) -> sp_blockchain::Result<sc_block_builder_ver::BlockBuilder<Block, Self, B>> {
+		let info = self.chain_info();
+		sc_block_builder_ver::BlockBuilder::new(
+			self,
+			info.best_hash,
+			info.best_number,
+			RecordProofVer::No,
 			inherent_digests,
 			&self.backend,
 		)

@@ -58,7 +58,7 @@ mod tests {
 		};
 	}
 
-	test!(U256, test_u256);
+	// test!(U256, test_u256);
 
 	#[test]
 	fn test_u256_codec() {

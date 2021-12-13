@@ -36,7 +36,7 @@ pub use sp_arithmetic::traits::{
 	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
-use sp_core::{self, Hasher, RuntimeDebug, TypeId};
+use sp_core::{self, Hasher, RuntimeDebug, ShufflingSeed, TypeId};
 use sp_std::{
 	self,
 	convert::{TryFrom, TryInto},
@@ -674,6 +674,26 @@ pub trait Header:
 	fn hash(&self) -> Self::Hash {
 		<Self::Hashing as Hash>::hash_of(self)
 	}
+
+	/// Returns seed used for shuffling
+	fn seed(&self) -> &ShufflingSeed{
+        unimplemented!()
+    }
+
+	/// Returns seed used for shuffling
+	fn set_seed(&mut self, seed: ShufflingSeed){
+        unimplemented!()
+    }
+
+	/// Returns seed used for shuffling
+	fn count(&self) -> &Self::Number{
+        unimplemented!()
+    }
+
+	/// Returns seed used for shuffling
+	fn set_count(&mut self, count: Self::Number){
+        unimplemented!()
+    }
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
@@ -777,6 +797,15 @@ pub trait Checkable<Context>: Sized {
 
 	/// Check self, given an instance of Context.
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+}
+
+/// Provides information about author
+pub trait HasAddress{
+	/// Returned if `check` succeeds.
+	type AccountId;
+
+	/// Check self, given an instance of Context.
+	fn get_address(&self) -> Option<Self::AccountId>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to

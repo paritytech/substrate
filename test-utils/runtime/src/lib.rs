@@ -710,6 +710,14 @@ cfg_if! {
 				}
 			}
 
+			impl extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi<Block> for Runtime {
+				fn get_info(
+					_tx: <Block as BlockT>::Extrinsic,
+				) -> Option<extrinsic_info_runtime_api::ExtrinsicInfo> {
+					None
+				}
+			}
+
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
@@ -1319,6 +1327,14 @@ mod tests {
 			(BlockId::Hash(hash), block)
 		};
 
+		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+
+		let (new_block_id, block) = {
+			let builder = client.new_block_at(&new_block_id, Default::default(), false).unwrap();
+			let block = builder.build().unwrap().block;
+			let hash = block.header.hash();
+			(BlockId::Hash(hash), block)
+		};
 		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		// Allocation of 1024k while having ~2048k should succeed.

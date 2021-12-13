@@ -28,6 +28,9 @@ sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
+sp-ver = { version = "4.0.0-dev", path = "../../../primitives/ver" }
+sp-application-crypto = { version = "4.0.0-dev", path = "../../../primitives/application-crypto" }
 futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.11"

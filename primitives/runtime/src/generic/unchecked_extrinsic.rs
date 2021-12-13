@@ -20,10 +20,11 @@
 use crate::{
 	generic::CheckedExtrinsic,
 	traits::{
-		self, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
+		self, BlakeTwo256, HasAddress, Checkable, Extrinsic, Hash, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
 		SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
+    MultiAddress,
 	OpaqueExtrinsic,
 };
 use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
@@ -159,6 +160,37 @@ where
 	}
 }
 
+impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress 
+    for UncheckedExtrinsic<MultiAddress<AccountId,AccountIndex>, Call, Signature, Extra> where
+    AccountId: Clone,
+	Signature: Member + traits::Verify,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
+	Extra: SignedExtension<AccountId = AccountId>,
+{
+    type AccountId = AccountId;
+
+	fn get_address(&self) -> Option<Self::AccountId>{
+        match &self.signature {
+            Some((MultiAddress::<AccountId, AccountIndex>::Id(addr),_,_)) => Some(addr.clone()),
+            Some(_) => panic!("unsupported address"),
+            _ => None
+        }
+	}
+}
+
+// impl<T, Call, Signature, Extra> HasAddress 
+//     for UncheckedExtrinsic<T, Call, Signature, Extra> where
+// 	Signature: Member + traits::Verify,
+// 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = T>,
+// 	Extra: SignedExtension<AccountId = T>,
+// {
+//     type AccountId = AccountId;
+//
+// 	fn get_address(&self) -> Option<Self::AccountId>{
+//         None
+// 	}
+// }
+//
 impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
