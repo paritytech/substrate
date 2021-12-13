@@ -344,7 +344,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
-			ensure_signed(origin)?;
+			ensure_signed_or_root(origin)?;
 			Ok(().into())
 		}
 
@@ -868,6 +868,22 @@ where
 {
 	match o.into() {
 		Ok(RawOrigin::Signed(t)) => Ok(t),
+		_ => Err(BadOrigin),
+	}
+}
+
+/// Ensure that the origin `o` represents either a signed extrinsic (i.e. transaction) or the root.
+/// Returns `Ok` with the account that signed the extrinsic, `None` if it was root,  or an `Err`
+/// otherwise.
+pub fn ensure_signed_or_root<OuterOrigin, AccountId>(
+	o: OuterOrigin,
+) -> Result<Option<AccountId>, BadOrigin>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
+{
+	match o.into() {
+		Ok(RawOrigin::Root) => Ok(None),
+		Ok(RawOrigin::Signed(t)) => Ok(Some(t)),
 		_ => Err(BadOrigin),
 	}
 }

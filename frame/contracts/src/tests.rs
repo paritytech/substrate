@@ -1903,7 +1903,7 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::instrument(code_len / 1024),
+			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len / 1024),
 		);
 	});
 }
