@@ -135,6 +135,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/whitelist",
 	"frame/bags-list",
 	"frame/bags-list/remote-tests",
 	"frame/bags-list/fuzzer",
