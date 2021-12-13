@@ -24,7 +24,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch,
-	traits::{FindAuthor, Get, VerifySeal, ConstU64},
+	traits::{FindAuthor, Get, VerifySeal},
 };
 use sp_authorship::{InherentError, UnclesInherentData, INHERENT_IDENTIFIER};
 use sp_runtime::traits::{Header as HeaderT, One, Saturating};
@@ -406,7 +406,7 @@ impl<T: Config> Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authorship;
-	use frame_support::{parameter_types, ConsensusEngineId};
+	use frame_support::{parameter_types, ConsensusEngineId, traits::{ConstU32, ConstU64}};
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::DigestItem,
@@ -457,7 +457,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet::Config for Test {
