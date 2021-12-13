@@ -4613,6 +4613,7 @@ dependencies = [
  "sp-consensus-babe",
  "sp-core",
  "sp-externalities",
+ "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
@@ -5552,21 +5553,6 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
-]
-
-[[package]]
-name = "pallet-elections"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

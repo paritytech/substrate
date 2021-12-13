@@ -125,15 +125,19 @@ impl Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 }
 
+fn test_pub() -> sp_core::sr25519::Public {
+	sp_core::sr25519::Public::from_raw([1u8; 32])
+}
+
 #[test]
 fn it_aggregates_the_price() {
 	sp_io::TestExternalities::default().execute_with(|| {
 		assert_eq!(Example::average_price(), None);
 
-		assert_ok!(Example::submit_price(Origin::signed(Default::default()), 27));
+		assert_ok!(Example::submit_price(Origin::signed(test_pub()), 27));
 		assert_eq!(Example::average_price(), Some(27));
 
-		assert_ok!(Example::submit_price(Origin::signed(Default::default()), 43));
+		assert_ok!(Example::submit_price(Origin::signed(test_pub()), 43));
 		assert_eq!(Example::average_price(), Some(35));
 	});
 }

@@ -364,7 +364,7 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
 	total: RewardPoint,
@@ -372,9 +372,15 @@ pub struct EraRewardPoints<AccountId: Ord> {
 	individual: BTreeMap<AccountId, RewardPoint>,
 }
 
+impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
+	fn default() -> Self {
+		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
+	}
+}
+
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
@@ -436,7 +442,6 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-#[cfg_attr(feature = "runtime-benchmarks", derive(Default))]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -457,9 +462,20 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub claimed_rewards: Vec<EraIndex>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned>
+impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Zero>
 	StakingLedger<AccountId, Balance>
 {
+	/// Initializes the default object using the given `validator`.
+	pub fn default_from(stash: AccountId) -> Self {
+		Self {
+			stash,
+			total: Zero::zero(),
+			active: Zero::zero(),
+			unlocking: vec![],
+			claimed_rewards: vec![],
+		}
+	}
+
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
@@ -593,9 +609,7 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-#[derive(
-	PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, RuntimeDebug, TypeInfo,
-)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
@@ -607,9 +621,15 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
+impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, Balance> {
+	fn default() -> Self {
+		Self { total: Default::default(), own: Default::default(), others: vec![] }
+	}
+}
+
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
-#[derive(Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 	/// The stash ID of the offending validator.
 	validator: AccountId,
@@ -621,6 +641,19 @@ pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 	reporters: Vec<AccountId>,
 	/// The amount of payout.
 	payout: Balance,
+}
+
+impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
+	/// Initializes the default object using the given `validator`.
+	pub fn default_from(validator: AccountId) -> Self {
+		Self {
+			validator,
+			own: Zero::zero(),
+			others: vec![],
+			reporters: vec![],
+			payout: Zero::zero(),
+		}
+	}
 }
 
 /// Means for interacting with a specialized version of the `session` trait.

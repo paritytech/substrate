@@ -51,13 +51,11 @@ pub enum Error {
 	#[error("Invalid URI; expecting either a secret URI or a public URI.")]
 	InvalidUri(crypto::PublicError),
 
-	#[error("Signature has an invalid length. Read {read} bytes, expected {expected} bytes")]
-	SignatureInvalidLength {
-		/// Amount of signature bytes read.
-		read: usize,
-		/// Expected number of signature bytes.
-		expected: usize,
-	},
+	#[error("Signature is an invalid format.")]
+	SignatureFormatInvalid,
+
+	#[error("Key is an invalid format.")]
+	KeyFormatInvalid,
 
 	#[error("Unknown key type, must be a known 4-character sequence")]
 	KeyTypeInvalid,

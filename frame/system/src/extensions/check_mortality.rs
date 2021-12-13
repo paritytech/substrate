@@ -85,6 +85,16 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 			Ok(<Pallet<T>>::block_hash(n))
 		}
 	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		Ok(self.validate(who, call, info, len).map(|_| ())?)
+	}
 }
 
 #[cfg(test)]

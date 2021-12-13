@@ -498,15 +498,19 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode + Clone + Ord>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_core::H256;
+	use sp_core::{crypto::UncheckedFrom, H256};
 	use sp_finality_grandpa::AuthorityId;
 	use substrate_test_runtime_client;
+
+	fn dummy_id() -> AuthorityId {
+		AuthorityId::unchecked_from([1; 32])
+	}
 
 	#[test]
 	fn load_decode_from_v0_migrates_data_format() {
 		let client = substrate_test_runtime_client::new();
 
-		let authorities = vec![(AuthorityId::default(), 100)];
+		let authorities = vec![(dummy_id(), 100)];
 		let set_id = 3;
 		let round_number: RoundNumber = 42;
 		let round_state = RoundState::<H256, u64> {
@@ -595,7 +599,7 @@ mod test {
 	fn load_decode_from_v1_migrates_data_format() {
 		let client = substrate_test_runtime_client::new();
 
-		let authorities = vec![(AuthorityId::default(), 100)];
+		let authorities = vec![(dummy_id(), 100)];
 		let set_id = 3;
 		let round_number: RoundNumber = 42;
 		let round_state = RoundState::<H256, u64> {
@@ -688,7 +692,7 @@ mod test {
 	fn load_decode_from_v2_migrates_data_format() {
 		let client = substrate_test_runtime_client::new();
 
-		let authorities = vec![(AuthorityId::default(), 100)];
+		let authorities = vec![(dummy_id(), 100)];
 		let set_id = 3;
 
 		{
