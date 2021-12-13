@@ -18,6 +18,7 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 use crate::{
+    AccountId32,
 	generic::CheckedExtrinsic,
 	traits::{
 		self, BlakeTwo256, HasAddress, Checkable, Extrinsic, Hash, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
@@ -175,6 +176,19 @@ impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress
             Some(_) => panic!("unsupported address"),
             _ => None
         }
+	}
+}
+
+impl<Call, Signature, Extra> HasAddress 
+    for UncheckedExtrinsic<AccountId32, Call, Signature, Extra> where
+	Signature: Member + traits::Verify,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId32>,
+	Extra: SignedExtension<AccountId = AccountId32>,
+{
+    type AccountId = AccountId32;
+
+	fn get_address(&self) -> Option<Self::AccountId>{
+        self.signature.as_ref().map(|(sig,_,_)| sig).cloned()
 	}
 }
 
