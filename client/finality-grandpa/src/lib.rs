@@ -263,7 +263,7 @@ pub struct Config {
 	pub keystore: Option<SyncCryptoStorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
-	/// Protocol name prefix - usually chain ID and genesis truncated hash.
+	/// Protocol name prefix - usually genesis hash and optional fork id.
 	pub protocol_name_prefix: String,
 }
 
@@ -717,10 +717,10 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
 pub fn grandpa_peers_set_config(chain_prefix: &str) -> sc_network::config::NonDefaultSetConfig {
-	use communication::GrandpaProtocolName;
+	use communication::grandpa_protocol_name;
 	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: GrandpaProtocolName::with_prefix(chain_prefix).into(),
-		fallback_names: GrandpaProtocolName::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
+		notifications_protocol: grandpa_protocol_name::with_prefix(chain_prefix).into(),
+		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
