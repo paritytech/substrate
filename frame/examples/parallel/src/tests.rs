@@ -17,7 +17,7 @@
 
 use crate::{self as pallet_example_parallel, *};
 
-use frame_support::{parameter_types, traits::{ConstU32,ConstU64}};
+use frame_support::{parameter_types};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -56,7 +56,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = ConstU64<250>;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -67,7 +67,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {

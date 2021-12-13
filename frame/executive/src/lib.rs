@@ -121,7 +121,7 @@ use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
-		OnRuntimeUpgrade, ConstU8, ConstU32, ConstU64
+		OnRuntimeUpgrade
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
@@ -578,7 +578,7 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons},
+		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, ConstU8, ConstU32, ConstU64},
 		weights::{IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
