@@ -57,6 +57,6 @@ impl RuntimePublic for Public {
 	}
 
 	fn to_raw_vec(&self) -> Vec<u8> {
-		sp_core::crypto::Public::to_raw_vec(self)
+		sp_core::crypto::ByteArray::to_raw_vec(self)
 	}
 }

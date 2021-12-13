@@ -312,8 +312,10 @@ impl<AId> SessionHandler<AId> for Tuple {
 		for_tuples!(
 			#(
 				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
-						.unwrap_or_default())));
+					.filter_map(|k|
+						k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID).map(|k1| (&k.0, k1))
+					)
+				);
 
 				Tuple::on_genesis_session(our_keys);
 			)*
@@ -328,11 +330,13 @@ impl<AId> SessionHandler<AId> for Tuple {
 		for_tuples!(
 			#(
 				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
-						.unwrap_or_default())));
+					.filter_map(|k|
+						k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID).map(|k1| (&k.0, k1))
+					));
 				let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
-					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
-						.unwrap_or_default())));
+					.filter_map(|k|
+						k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID).map(|k1| (&k.0, k1))
+					));
 				Tuple::on_new_session(changed, our_keys, queued_keys);
 			)*
 		)
@@ -403,7 +407,7 @@ pub mod pallet {
 		type SessionHandler: SessionHandler<Self::ValidatorId>;
 
 		/// The keys.
-		type Keys: OpaqueKeys + Member + Parameter + Default + MaybeSerializeDeserialize;
+		type Keys: OpaqueKeys + Member + Parameter + MaybeSerializeDeserialize;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -476,13 +480,18 @@ pub mod pallet {
 			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
-				.map(|v| (v.clone(), <Pallet<T>>::load_keys(&v).unwrap_or_default()))
+				.filter_map(|v| {
+					Some((
+						v.clone(),
+						Pallet::<T>::load_keys(&v).expect("Validator in session 1 missing keys!"),
+					))
+				})
 				.collect();
 
 			// Tell everyone about the genesis session keys
 			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-			<Validators<T>>::put(initial_validators_0);
+			Validators::<T>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
 
 			T::SessionManager::start_session(0);
@@ -641,7 +650,7 @@ impl<T: Config> Pallet<T> {
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators =
 			session_keys.iter().map(|(validator, _)| validator.clone()).collect::<Vec<_>>();
-		<Validators<T>>::put(&validators);
+		Validators::<T>::put(&validators);
 
 		if changed {
 			// reset disabled validators
@@ -663,7 +672,7 @@ impl<T: Config> Pallet<T> {
 				// same as before, as underlying economic conditions may have changed.
 				(validators, true)
 			} else {
-				(<Validators<T>>::get(), false)
+				(Validators::<T>::get(), false)
 			};
 
 		// Queue next session keys.
@@ -689,10 +698,10 @@ impl<T: Config> Pallet<T> {
 			};
 			let queued_amalgamated = next_validators
 				.into_iter()
-				.map(|a| {
-					let k = Self::load_keys(&a).unwrap_or_default();
+				.filter_map(|a| {
+					let k = Self::load_keys(&a)?;
 					check_next_changed(&k);
-					(a, k)
+					Some((a, k))
 				})
 				.collect::<Vec<_>>();
 

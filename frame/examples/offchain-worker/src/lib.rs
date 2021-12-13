@@ -233,7 +233,7 @@ pub mod pallet {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
 			// Add the price to the on-chain list.
-			Self::add_price(who, price);
+			Self::add_price(Some(who), price);
 			Ok(().into())
 		}
 
@@ -262,7 +262,7 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
-			Self::add_price(Default::default(), price);
+			Self::add_price(None, price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -278,7 +278,7 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
-			Self::add_price(Default::default(), price_payload.price);
+			Self::add_price(None, price_payload.price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -291,7 +291,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		NewPrice { price: u32, who: T::AccountId },
+		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
 	}
 
 	#[pallet::validate_unsigned]
@@ -641,7 +641,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Add new price to the list.
-	fn add_price(who: T::AccountId, price: u32) {
+	fn add_price(maybe_who: Option<T::AccountId>, price: u32) {
 		log::info!("Adding to the average: {}", price);
 		<Prices<T>>::mutate(|prices| {
 			const MAX_LEN: usize = 64;
@@ -657,7 +657,7 @@ impl<T: Config> Pallet<T> {
 			.expect("The average is not empty, because it was just mutated; qed");
 		log::info!("Current average price is: {}", average);
 		// here we are raising the NewPrice event
-		Self::deposit_event(Event::NewPrice { price, who });
+		Self::deposit_event(Event::NewPrice { price, maybe_who });
 	}
 
 	/// Calculate current average price.

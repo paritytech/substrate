@@ -480,7 +480,7 @@ impl ExtBuilder {
 		}
 
 		let _ = pallet_staking::GenesisConfig::<Test> {
-			stakers,
+			stakers: stakers.clone(),
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
@@ -493,12 +493,15 @@ impl ExtBuilder {
 
 		let _ = pallet_session::GenesisConfig::<Test> {
 			keys: if self.has_stakers {
-				// genesis election will overwrite this, no worries.
-				Default::default()
+				// set the keys for the first session.
+				stakers
+					.into_iter()
+					.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
+					.collect()
 			} else {
 				// set some dummy validators in genesis.
 				(0..self.validator_count as u64)
-					.map(|x| (x, x, SessionKeys { other: UintAuthorityId(x as u64) }))
+					.map(|id| (id, id, SessionKeys { other: id.into() }))
 					.collect()
 			},
 		}
@@ -644,6 +647,7 @@ pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	bond(stash, ctrl, val);
 	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
+	assert_ok!(Session::set_keys(Origin::signed(ctrl), SessionKeys { other: ctrl.into() }, vec![]));
 }
 
 pub(crate) fn bond_nominator(

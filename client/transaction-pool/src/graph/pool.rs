@@ -594,11 +594,8 @@ mod tests {
 	}
 
 	fn uxt(transfer: Transfer) -> Extrinsic {
-		Extrinsic::Transfer {
-			transfer,
-			signature: Default::default(),
-			exhaust_resources_when_not_first: false,
-		}
+		let signature = TryFrom::try_from(&[0; 64][..]).unwrap();
+		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
 	}
 
 	fn pool() -> Pool<TestApi> {
