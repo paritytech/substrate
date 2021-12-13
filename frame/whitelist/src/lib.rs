@@ -149,7 +149,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(T::WeightInfo::dispatch_whitelisted_call().saturating_add(*call_weight_witness))]
+		#[pallet::weight(
+			T::WeightInfo::dispatch_whitelisted_call().saturating_add(*call_weight_witness)
+		)]
 		pub fn dispatch_whitelisted_call(
 			origin: OriginFor<T>,
 			call_hash: T::Hash,
