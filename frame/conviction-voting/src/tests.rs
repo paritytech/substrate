@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_conviction_voting;
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, OnInitialize, SortedMembers, ConstU32},
+	traits::{ConstU32, Contains, EqualPrivilegeOnly, OnInitialize, SortedMembers},
 	weights::Weight,
 };
 use frame_system::EnsureRoot;
@@ -167,7 +167,9 @@ impl Polls<TallyOf<Test>> for TestReferenda {
 	type Index = u8;
 	type Votes = u64;
 	type Moment = u64;
-	fn is_active(_index: u8) -> bool { false }
+	fn is_active(_index: u8) -> bool {
+		false
+	}
 	fn access_poll<R>(
 		_index: Self::Index,
 		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64>) -> R,

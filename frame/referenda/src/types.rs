@@ -19,7 +19,7 @@
 
 use super::*;
 use codec::{Decode, Encode, EncodeLike};
-use frame_support::{Parameter, traits::schedule::Anon};
+use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 
@@ -54,26 +54,17 @@ pub type ReferendumStatusOf<T> = ReferendumStatus<
 	<T as frame_system::Config>::AccountId,
 	ScheduleAddressOf<T>,
 >;
-pub type DecidingStatusOf<T> = DecidingStatus<
-	<T as frame_system::Config>::BlockNumber,
->;
-pub type TrackInfoOf<T> = TrackInfo<
+pub type DecidingStatusOf<T> = DecidingStatus<<T as frame_system::Config>::BlockNumber>;
+pub type TrackInfoOf<T> = TrackInfo<BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
+pub type TrackIdOf<T> = <<T as Config>::Tracks as TracksInfo<
 	BalanceOf<T>,
 	<T as frame_system::Config>::BlockNumber,
->;
-pub type TrackIdOf<T> = <
-	<T as Config>::Tracks as TracksInfo<
-		BalanceOf<T>,
-		<T as frame_system::Config>::BlockNumber,
-	>
->::Id;
-pub type ScheduleAddressOf<T> = <
-	<T as Config>::Scheduler as Anon<
-		<T as frame_system::Config>::BlockNumber,
-		CallOf<T>,
-		PalletsOriginOf<T>,
-	>
->::Address;
+>>::Id;
+pub type ScheduleAddressOf<T> = <<T as Config>::Scheduler as Anon<
+	<T as frame_system::Config>::BlockNumber,
+	CallOf<T>,
+	PalletsOriginOf<T>,
+>>::Address;
 
 /// A referendum index.
 pub type ReferendumIndex = u32;
@@ -83,16 +74,18 @@ pub trait InsertSorted<T> {
 	///
 	/// Returns `true` if it was inserted, `false` if it would belong beyond the bound of the
 	/// series.
-	fn insert_sorted_by_key<
-		F: FnMut(&T) -> K,
-		K: PartialOrd<K> + Ord,
-	>(&mut self, t: T, f: F,) -> bool;
+	fn insert_sorted_by_key<F: FnMut(&T) -> K, K: PartialOrd<K> + Ord>(
+		&mut self,
+		t: T,
+		f: F,
+	) -> bool;
 }
 impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
-	fn insert_sorted_by_key<
-		F: FnMut(&T) -> K,
-		K: PartialOrd<K> + Ord,
-	>(&mut self, t: T, mut f: F,) -> bool {
+	fn insert_sorted_by_key<F: FnMut(&T) -> K, K: PartialOrd<K> + Ord>(
+		&mut self,
+		t: T,
+		mut f: F,
+	) -> bool {
 		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
 		if index >= S::get() as usize {
 			return false
@@ -158,8 +151,8 @@ pub enum AtOrAfter<Moment: Parameter> {
 	/// Indiciates that the event should occur at the moment given.
 	At(Moment),
 	/// Indiciates that the event should occur some period of time (defined by the parameter) after
-	/// a prior event. The prior event is defined by the context, but for the purposes of referendum
-	/// proposals, the "prior event" is the passing of the referendum.
+	/// a prior event. The prior event is defined by the context, but for the purposes of
+	/// referendum proposals, the "prior event" is the passing of the referendum.
 	After(Moment),
 }
 
@@ -177,7 +170,15 @@ impl<Moment: AtLeast32BitUnsigned + Copy + Parameter> AtOrAfter<Moment> {
 pub struct ReferendumStatus<
 	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
 	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Moment: Parameter + Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+	Moment: Parameter
+		+ Eq
+		+ PartialEq
+		+ sp_std::fmt::Debug
+		+ Encode
+		+ Decode
+		+ TypeInfo
+		+ Clone
+		+ EncodeLike,
 	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
 	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
 	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
@@ -214,16 +215,26 @@ pub struct ReferendumStatus<
 }
 
 impl<
-	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Moment: Parameter + Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + AtLeast32BitUnsigned + Copy + EncodeLike,
-	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
->
+		TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Moment: Parameter
+			+ Eq
+			+ PartialEq
+			+ sp_std::fmt::Debug
+			+ Encode
+			+ Decode
+			+ TypeInfo
+			+ Clone
+			+ AtLeast32BitUnsigned
+			+ Copy
+			+ EncodeLike,
+		Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	>
 	ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId, ScheduleAddress>
 {
 	pub fn begin_deciding(&mut self, now: Moment, decision_period: Moment) {
@@ -250,7 +261,19 @@ pub enum ReferendumInfo<
 	ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
 > {
 	/// Referendum has been submitted and is being voted on.
-	Ongoing(ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId, ScheduleAddress>),
+	Ongoing(
+		ReferendumStatus<
+			TrackId,
+			Origin,
+			Moment,
+			Hash,
+			Balance,
+			Votes,
+			Tally,
+			AccountId,
+			ScheduleAddress,
+		>,
+	),
 	/// Referendum finished with approval. Submission deposit is held.
 	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with rejection. Submission deposit is held.
@@ -264,17 +287,24 @@ pub enum ReferendumInfo<
 }
 
 impl<
-	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Moment: Parameter + Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
-	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
->
-	ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId, ScheduleAddress>
+		TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Moment: Parameter
+			+ Eq
+			+ PartialEq
+			+ sp_std::fmt::Debug
+			+ Encode
+			+ Decode
+			+ TypeInfo
+			+ Clone
+			+ EncodeLike,
+		Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+		ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	> ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId, ScheduleAddress>
 {
 	pub fn take_decision_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
 		use ReferendumInfo::*;
@@ -282,7 +312,8 @@ impl<
 			Ongoing(x) if x.decision_deposit.is_none() => Ok(None),
 			// Cannot refund deposit if Ongoing as this breaks assumptions.
 			Ongoing(_) => Err(()),
-			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) | Cancelled(_, _, d) => Ok(d.take()),
+			Approved(_, _, d) | Rejected(_, _, d) | TimedOut(_, _, d) | Cancelled(_, _, d) =>
+				Ok(d.take()),
 			Killed(_) => Ok(None),
 		}
 	}
@@ -302,9 +333,8 @@ impl Curve {
 	}
 	pub fn delay(&self, y: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { begin, delta } => {
-				(*begin - y.min(*begin)).min(*delta) / *delta
-			},
+			Self::LinearDecreasing { begin, delta } =>
+				(*begin - y.min(*begin)).min(*delta) / *delta,
 		}
 	}
 	pub fn passing(&self, x: Perbill, y: Perbill) -> bool {

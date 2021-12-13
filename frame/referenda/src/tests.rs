@@ -17,13 +17,16 @@
 
 //! The crate's tests.
 
-use codec::Decode;
-use assert_matches::assert_matches;
-use frame_support::{assert_ok, assert_noop, traits::Contains};
-use frame_support::dispatch::{RawOrigin, DispatchError::BadOrigin};
-use pallet_balances::Error as BalancesError;
 use super::*;
 use crate::mock::*;
+use assert_matches::assert_matches;
+use codec::Decode;
+use frame_support::{
+	assert_noop, assert_ok,
+	dispatch::{DispatchError::BadOrigin, RawOrigin},
+	traits::Contains,
+};
+use pallet_balances::Error as BalancesError;
 
 #[test]
 fn params_should_work() {
@@ -88,34 +91,43 @@ fn tracks_are_distinguished() {
 
 		let mut i = ReferendumInfoFor::<Test>::iter().collect::<Vec<_>>();
 		i.sort_by_key(|x| x.0);
-		assert_eq!(i, vec![
-			(0, ReferendumInfo::Ongoing(ReferendumStatus {
-				track: 0,
-				origin: OriginCaller::system(RawOrigin::Root),
-				proposal_hash: set_balance_proposal_hash(1),
-				enactment: AtOrAfter::At(10),
-				submitted: 1,
-				submission_deposit: Deposit { who: 1, amount: 2 },
-				decision_deposit: Some(Deposit { who: 3, amount: 10 }),
-				deciding: None,
-				tally: Tally { ayes: 0, nays: 0 },
-				ayes_in_queue: None,
-				alarm: Some((5, 0)),
-			})),
-			(1, ReferendumInfo::Ongoing(ReferendumStatus {
-				track: 1,
-				origin: OriginCaller::system(RawOrigin::None),
-				proposal_hash: set_balance_proposal_hash(2),
-				enactment: AtOrAfter::At(20),
-				submitted: 1,
-				submission_deposit: Deposit { who: 2, amount: 2 },
-				decision_deposit: Some(Deposit { who: 4, amount: 1 }),
-				deciding: None,
-				tally: Tally { ayes: 0, nays: 0 },
-				ayes_in_queue: None,
-				alarm: Some((3, 0)),
-			})),
-		]);
+		assert_eq!(
+			i,
+			vec![
+				(
+					0,
+					ReferendumInfo::Ongoing(ReferendumStatus {
+						track: 0,
+						origin: OriginCaller::system(RawOrigin::Root),
+						proposal_hash: set_balance_proposal_hash(1),
+						enactment: AtOrAfter::At(10),
+						submitted: 1,
+						submission_deposit: Deposit { who: 1, amount: 2 },
+						decision_deposit: Some(Deposit { who: 3, amount: 10 }),
+						deciding: None,
+						tally: Tally { ayes: 0, nays: 0 },
+						ayes_in_queue: None,
+						alarm: Some((5, 0)),
+					})
+				),
+				(
+					1,
+					ReferendumInfo::Ongoing(ReferendumStatus {
+						track: 1,
+						origin: OriginCaller::system(RawOrigin::None),
+						proposal_hash: set_balance_proposal_hash(2),
+						enactment: AtOrAfter::At(20),
+						submitted: 1,
+						submission_deposit: Deposit { who: 2, amount: 2 },
+						decision_deposit: Some(Deposit { who: 4, amount: 1 }),
+						deciding: None,
+						tally: Tally { ayes: 0, nays: 0 },
+						ayes_in_queue: None,
+						alarm: Some((3, 0)),
+					})
+				),
+			]
+		);
 	});
 }
 
@@ -124,20 +136,16 @@ fn submit_errors_work() {
 	new_test_ext().execute_with(|| {
 		let h = set_balance_proposal_hash(1);
 		// No track for Signed origins.
-		assert_noop!(Referenda::submit(
-			Origin::signed(1),
-			RawOrigin::Signed(2).into(),
-			h,
-			AtOrAfter::At(10),
-		), Error::<Test>::NoTrack);
+		assert_noop!(
+			Referenda::submit(Origin::signed(1), RawOrigin::Signed(2).into(), h, AtOrAfter::At(10),),
+			Error::<Test>::NoTrack
+		);
 
 		// No funds for deposit
-		assert_noop!(Referenda::submit(
-			Origin::signed(10),
-			RawOrigin::Root.into(),
-			h,
-			AtOrAfter::At(10),
-		), BalancesError::<Test>::InsufficientBalance);
+		assert_noop!(
+			Referenda::submit(Origin::signed(10), RawOrigin::Root.into(), h, AtOrAfter::At(10),),
+			BalancesError::<Test>::InsufficientBalance
+		);
 	});
 }
 
@@ -244,10 +252,7 @@ fn kill_works() {
 		assert_ok!(Referenda::kill(Origin::root(), 0));
 		let e = Error::<Test>::NoDeposit;
 		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(3), 0), e);
-		assert_matches!(
-			ReferendumInfoFor::<Test>::get(0).unwrap(),
-			ReferendumInfo::Killed(8)
-		);
+		assert_matches!(ReferendumInfoFor::<Test>::get(0).unwrap(), ReferendumInfo::Killed(8));
 	});
 }
 

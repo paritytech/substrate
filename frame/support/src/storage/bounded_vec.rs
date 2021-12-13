@@ -147,7 +147,6 @@ impl<T, S> BoundedVec<T, S> {
 	pub fn pop(&mut self) -> Option<T> {
 		self.0.pop()
 	}
-
 }
 
 impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {

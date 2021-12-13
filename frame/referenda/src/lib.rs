@@ -25,29 +25,34 @@
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Codec};
+use codec::{Codec, Encode};
 use frame_support::{
-	ensure, BoundedVec, traits::{
-		schedule::{DispatchTime, v2::Anon as ScheduleAnon, v2::Named as ScheduleNamed, MaybeHashed},
-		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		Polls, VoteTally, PollStatus, OriginTrait,
+	ensure,
+	traits::{
+		schedule::{
+			v2::{Anon as ScheduleAnon, Named as ScheduleNamed},
+			DispatchTime, MaybeHashed,
+		},
+		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, OriginTrait, PollStatus,
+		Polls, ReservableCurrency, VoteTally,
 	},
+	BoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Dispatchable, Saturating, One, AtLeast32BitUnsigned}, DispatchError, DispatchResult,
-	Perbill,
+	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating},
+	DispatchError, DispatchResult, Perbill,
 };
-use sp_std::{prelude::*, fmt::Debug};
+use sp_std::{fmt::Debug, prelude::*};
 
 mod types;
 pub mod weights;
 pub use pallet::*;
 pub use types::{
-	ReferendumInfo, ReferendumStatus, TrackInfo, TracksInfo, Curve, DecidingStatus, Deposit,
-	AtOrAfter, BalanceOf, NegativeImbalanceOf, CallOf, VotesOf, TallyOf, ReferendumInfoOf,
-	ReferendumStatusOf, DecidingStatusOf, TrackInfoOf, TrackIdOf, InsertSorted, ReferendumIndex,
-	PalletsOriginOf, ScheduleAddressOf,
+	AtOrAfter, BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
+	NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo, ReferendumInfoOf,
+	ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf, TrackIdOf, TrackInfo,
+	TrackInfoOf, TracksInfo, VotesOf,
 };
 pub use weights::WeightInfo;
 
@@ -64,7 +69,7 @@ const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{Parameter, pallet_prelude::*, traits::EnsureOrigin, weights::Pays};
+	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Pays, Parameter};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::DispatchResult;
 
@@ -80,8 +85,8 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash=Self::Hash>
-			+ ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash=Self::Hash>;
+		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash = Self::Hash>
+			+ ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash = Self::Hash>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
@@ -146,24 +151,14 @@ pub mod pallet {
 
 	/// The number of referenda being decided currently.
 	#[pallet::storage]
-	pub type DecidingCount<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		TrackIdOf<T>,
-		u32,
-		ValueQuery,
-	>;
+	pub type DecidingCount<T: Config> = StorageMap<_, Twox64Concat, TrackIdOf<T>, u32, ValueQuery>;
 
 	/// Information concerning any given referendum.
 	///
 	/// TWOX-NOTE: SAFE as indexes are not under an attacker’s control.
 	#[pallet::storage]
-	pub type ReferendumInfoFor<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		ReferendumIndex,
-		ReferendumInfoOf<T>,
-	>;
+	pub type ReferendumInfoFor<T: Config> =
+		StorageMap<_, Twox64Concat, ReferendumIndex, ReferendumInfoOf<T>>;
 
 	/// Accounts for which there are locks in action which may be removed at some point in the
 	/// future. The value is the block number at which the lock expires and may be removed.
@@ -306,7 +301,11 @@ pub mod pallet {
 
 			let track = T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T>::NoTrack)?;
 			let submission_deposit = Self::take_deposit(who, T::SubmissionDeposit::get())?;
-			let index = ReferendumCount::<T>::mutate(|x| { let r = *x; *x += 1; r });
+			let index = ReferendumCount::<T>::mutate(|x| {
+				let r = *x;
+				*x += 1;
+				r
+			});
 			let status = ReferendumStatus {
 				track,
 				origin: proposal_origin,
@@ -349,7 +348,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_signed_or_root(origin)?;
 			let mut info = ReferendumInfoFor::<T>::get(index).ok_or(Error::<T>::BadReferendum)?;
-			let deposit = info.take_decision_deposit()
+			let deposit = info
+				.take_decision_deposit()
 				.map_err(|_| Error::<T>::Unfinished)?
 				.ok_or(Error::<T>::NoDeposit)?;
 			Self::refund_deposit(Some(deposit));
@@ -358,10 +358,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn cancel(
-			origin: OriginFor<T>,
-			index: ReferendumIndex,
-		) -> DispatchResult {
+		pub fn cancel(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::CancelOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
@@ -380,10 +377,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn kill(
-			origin: OriginFor<T>,
-			index: ReferendumIndex,
-		) -> DispatchResult {
+		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
@@ -420,7 +414,9 @@ pub mod pallet {
 
 		/// Just a stub - not meant to do anything.
 		#[pallet::weight(0)]
-		pub fn stub(_origin: OriginFor<T>, _call_hash: T::Hash) -> DispatchResult { Ok(()) }
+		pub fn stub(_origin: OriginFor<T>, _call_hash: T::Hash) -> DispatchResult {
+			Ok(())
+		}
 	}
 }
 
@@ -436,7 +432,7 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
 				let result = f(PollStatus::Ongoing(&mut status.tally));
 				let now = frame_system::Pallet::<T>::block_number();
-				let (info, _)  = Self::service_referendum(now, index, status);
+				let (info, _) = Self::service_referendum(now, index, status);
 				ReferendumInfoFor::<T>::insert(index, info);
 				result
 			},
@@ -453,7 +449,7 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
 				let result = f(PollStatus::Ongoing(&mut status.tally))?;
 				let now = frame_system::Pallet::<T>::block_number();
-				let (info, _)  = Self::service_referendum(now, index, status);
+				let (info, _) = Self::service_referendum(now, index, status);
 				ReferendumInfoFor::<T>::insert(index, info);
 				Ok(result)
 			},
@@ -471,9 +467,7 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn ensure_ongoing(index: ReferendumIndex)
-		-> Result<ReferendumStatusOf<T>, DispatchError>
-	{
+	pub fn ensure_ongoing(index: ReferendumIndex) -> Result<ReferendumStatusOf<T>, DispatchError> {
 		match ReferendumInfoFor::<T>::get(index) {
 			Some(ReferendumInfo::Ongoing(status)) => Ok(status),
 			_ => Err(Error::<T>::NotOngoing.into()),
@@ -498,7 +492,8 @@ impl<T: Config> Pallet<T> {
 			63,
 			origin,
 			MaybeHashed::Hash(call_hash),
-		).is_ok();
+		)
+		.is_ok();
 		debug_assert!(ok, "LOGIC ERROR: bake_referendum/schedule_named failed");
 	}
 
@@ -512,8 +507,14 @@ impl<T: Config> Pallet<T> {
 			128u8,
 			frame_system::RawOrigin::Root.into(),
 			MaybeHashed::Value(call.into()),
-		).ok();
-		debug_assert!(maybe_address.is_some(), "Unable to schedule a new referendum at #{} (now: #{})?!", when, frame_system::Pallet::<T>::block_number());
+		)
+		.ok();
+		debug_assert!(
+			maybe_address.is_some(),
+			"Unable to schedule a new referendum at #{} (now: #{})?!",
+			when,
+			frame_system::Pallet::<T>::block_number()
+		);
 		maybe_address
 	}
 
@@ -692,11 +693,18 @@ impl<T: Config> Pallet<T> {
 					let (desired, call_hash) = (status.enactment, status.proposal_hash);
 					Self::schedule_enactment(index, track, desired, status.origin, call_hash);
 					Self::deposit_event(Event::<T>::Confirmed { index, tally: status.tally });
-					return (ReferendumInfo::Approved(now, status.submission_deposit, status.decision_deposit), true)
+					return (
+						ReferendumInfo::Approved(
+							now,
+							status.submission_deposit,
+							status.decision_deposit,
+						),
+						true,
+					)
 				}
 				dirty = dirty || deciding.confirming.is_none();
-				let confirmation = deciding.confirming
-					.unwrap_or_else(|| now.saturating_add(track.confirm_period));
+				let confirmation =
+					deciding.confirming.unwrap_or_else(|| now.saturating_add(track.confirm_period));
 				deciding.confirming = Some(confirmation);
 				alarm = confirmation;
 			} else {
@@ -704,7 +712,14 @@ impl<T: Config> Pallet<T> {
 					// Failed!
 					Self::note_one_fewer_deciding(status.track, track);
 					Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
-					return (ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit), true)
+					return (
+						ReferendumInfo::Rejected(
+							now,
+							status.submission_deposit,
+							status.decision_deposit,
+						),
+						true,
+					)
 				}
 				// Cannot be confirming
 				dirty = dirty || deciding.confirming.is_some();
@@ -715,7 +730,10 @@ impl<T: Config> Pallet<T> {
 		} else if now >= timeout {
 			// Too long without being decided - end it.
 			Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
-			return (ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit), true)
+			return (
+				ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit),
+				true,
+			)
 		}
 		status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
 		(ReferendumInfo::Ongoing(status), dirty)
@@ -732,13 +750,17 @@ impl<T: Config> Pallet<T> {
 		let until_approval = track.min_approval.delay(approval);
 		let until_turnout = track.min_turnout.delay(turnout);
 		let offset = until_turnout.max(until_approval);
-		deciding.ending.saturating_sub(deciding.period).saturating_add(offset * deciding.period)
+		deciding
+			.ending
+			.saturating_sub(deciding.period)
+			.saturating_add(offset * deciding.period)
 	}
 
 	/// Reserve a deposit and return the `Deposit` instance.
-	fn take_deposit(who: T::AccountId, amount: BalanceOf<T>)
-		-> Result<Deposit<T::AccountId, BalanceOf<T>>, DispatchError>
-	{
+	fn take_deposit(
+		who: T::AccountId,
+		amount: BalanceOf<T>,
+	) -> Result<Deposit<T::AccountId, BalanceOf<T>>, DispatchError> {
 		T::Currency::reserve(&who, amount)?;
 		Ok(Deposit { who, amount })
 	}
@@ -759,8 +781,7 @@ impl<T: Config> Pallet<T> {
 
 	fn track(id: TrackIdOf<T>) -> Option<&'static TrackInfoOf<T>> {
 		let tracks = T::Tracks::tracks();
-		let index = tracks.binary_search_by_key(&id, |x| x.0)
-    		.unwrap_or_else(|x| x);
+		let index = tracks.binary_search_by_key(&id, |x| x.0).unwrap_or_else(|x| x);
 		Some(&tracks[index].1)
 	}
 
@@ -772,7 +793,6 @@ impl<T: Config> Pallet<T> {
 		approval_needed: &Curve,
 	) -> bool {
 		let x = Perbill::from_rational(now.min(period), period);
-		turnout_needed.passing(x, tally.turnout())
-			&& approval_needed.passing(x, tally.approval())
+		turnout_needed.passing(x, tally.turnout()) && approval_needed.passing(x, tally.approval())
 	}
 }

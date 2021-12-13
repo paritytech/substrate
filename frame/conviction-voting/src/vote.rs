@@ -167,8 +167,12 @@ impl<Balance: Default, AccountId, BlockNumber: Zero, ReferendumIndex> Default
 	}
 }
 
-impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, AccountId, ReferendumIndex>
-	Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
+impl<
+		Balance: Saturating + Ord + Zero + Copy,
+		BlockNumber: Ord + Copy + Zero,
+		AccountId,
+		ReferendumIndex,
+	> Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
 		match self {

@@ -25,13 +25,17 @@
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{ensure, traits::{
-	Currency, Get, LockIdentifier, LockableCurrency, ReservableCurrency, WithdrawReasons,
-	PollStatus, Polls,
-}};
-use sp_runtime::{ArithmeticError, DispatchError, DispatchResult, Perbill, traits::{
-	Saturating, Zero, AtLeast32BitUnsigned
-}};
+use frame_support::{
+	ensure,
+	traits::{
+		Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polls, ReservableCurrency,
+		WithdrawReasons,
+	},
+};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Saturating, Zero},
+	ArithmeticError, DispatchError, DispatchResult, Perbill,
+};
 use sp_std::prelude::*;
 
 mod conviction;
@@ -85,11 +89,7 @@ pub mod pallet {
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
 		/// The implementation of the logic which conducts referenda.
-		type Referenda: Polls<
-			TallyOf<Self>,
-			Votes = BalanceOf<Self>,
-			Moment = Self::BlockNumber,
-		>;
+		type Referenda: Polls<TallyOf<Self>, Votes = BalanceOf<Self>, Moment = Self::BlockNumber>;
 
 		/// The maximum amount of tokens which may be used for voting. May just be
 		/// `Currency::total_issuance`, but you might want to reduce this in order to account for
@@ -116,13 +116,8 @@ pub mod pallet {
 	///
 	/// TWOX-NOTE: SAFE as `AccountId`s are crypto hashes anyway.
 	#[pallet::storage]
-	pub type VotingFor<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		T::AccountId,
-		VotingOf<T>,
-		ValueQuery,
-	>;
+	pub type VotingFor<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, VotingOf<T>, ValueQuery>;
 
 	/// Accounts for which there are locks in action which may be removed at some point in the
 	/// future. The value is the block number at which the lock expires and may be removed.
@@ -374,9 +369,14 @@ impl<T: Config> Pallet<T> {
 				} else {
 					return Err(Error::<T>::AlreadyDelegating.into())
 				}
-				// Extend the lock to `balance` (rather than setting it) since we don't know what other
-				// votes are in place.
-				T::Currency::extend_lock(CONVICTION_VOTING_ID, who, vote.balance(), WithdrawReasons::TRANSFER);
+				// Extend the lock to `balance` (rather than setting it) since we don't know what
+				// other votes are in place.
+				T::Currency::extend_lock(
+					CONVICTION_VOTING_ID,
+					who,
+					vote.balance(),
+					WithdrawReasons::TRANSFER,
+				);
 				Ok(())
 			})
 		})
@@ -515,7 +515,12 @@ impl<T: Config> Pallet<T> {
 			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
-			T::Currency::extend_lock(CONVICTION_VOTING_ID, &who, balance, WithdrawReasons::TRANSFER);
+			T::Currency::extend_lock(
+				CONVICTION_VOTING_ID,
+				&who,
+				balance,
+				WithdrawReasons::TRANSFER,
+			);
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated(who, target));
@@ -558,7 +563,12 @@ impl<T: Config> Pallet<T> {
 		if lock_needed.is_zero() {
 			T::Currency::remove_lock(CONVICTION_VOTING_ID, who);
 		} else {
-			T::Currency::set_lock(CONVICTION_VOTING_ID, who, lock_needed, WithdrawReasons::TRANSFER);
+			T::Currency::set_lock(
+				CONVICTION_VOTING_ID,
+				who,
+				lock_needed,
+				WithdrawReasons::TRANSFER,
+			);
 		}
 	}
 }

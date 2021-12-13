@@ -19,12 +19,12 @@
 
 use super::*;
 use crate as pallet_referenda;
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers, OriginTrait,
-		ConstU32, ConstU64, PreimageRecipient,
+		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, OriginTrait,
+		PreimageRecipient, SortedMembers,
 	},
 	weights::Weight,
 };
@@ -32,7 +32,7 @@ use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Hash,},
+	traits::{BlakeTwo256, Hash, IdentityLookup},
 	Perbill,
 };
 
@@ -173,40 +173,46 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 	type Origin = <Origin as OriginTrait>::PalletsOrigin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<u64, u64>)] {
 		static DATA: [(u8, TrackInfo<u64, u64>); 2] = [
-			(0u8, TrackInfo {
-				name: "root",
-				max_deciding: 1,
-				decision_deposit: 10,
-				prepare_period: 4,
-				decision_period: 4,
-				confirm_period: 2,
-				min_enactment_period: 4,
-				min_approval: Curve::LinearDecreasing {
-					begin: Perbill::from_percent(100),
-					delta: Perbill::from_percent(50),
+			(
+				0u8,
+				TrackInfo {
+					name: "root",
+					max_deciding: 1,
+					decision_deposit: 10,
+					prepare_period: 4,
+					decision_period: 4,
+					confirm_period: 2,
+					min_enactment_period: 4,
+					min_approval: Curve::LinearDecreasing {
+						begin: Perbill::from_percent(100),
+						delta: Perbill::from_percent(50),
+					},
+					min_turnout: Curve::LinearDecreasing {
+						begin: Perbill::from_percent(100),
+						delta: Perbill::from_percent(100),
+					},
 				},
-				min_turnout: Curve::LinearDecreasing {
-					begin: Perbill::from_percent(100),
-					delta: Perbill::from_percent(100),
+			),
+			(
+				1u8,
+				TrackInfo {
+					name: "none",
+					max_deciding: 3,
+					decision_deposit: 1,
+					prepare_period: 2,
+					decision_period: 2,
+					confirm_period: 1,
+					min_enactment_period: 2,
+					min_approval: Curve::LinearDecreasing {
+						begin: Perbill::from_percent(55),
+						delta: Perbill::from_percent(5),
+					},
+					min_turnout: Curve::LinearDecreasing {
+						begin: Perbill::from_percent(10),
+						delta: Perbill::from_percent(10),
+					},
 				},
-			}),
-			(1u8, TrackInfo {
-				name: "none",
-				max_deciding: 3,
-				decision_deposit: 1,
-				prepare_period: 2,
-				decision_period: 2,
-				confirm_period: 1,
-				min_enactment_period: 2,
-				min_approval: Curve::LinearDecreasing {
-					begin: Perbill::from_percent(55),
-					delta: Perbill::from_percent(5),
-				},
-				min_turnout: Curve::LinearDecreasing {
-					begin: Perbill::from_percent(10),
-					delta: Perbill::from_percent(10),
-				},
-			}),
+			),
 		];
 		&DATA[..]
 	}
@@ -270,17 +276,17 @@ pub struct Tally {
 }
 
 impl VoteTally<u32> for Tally {
-    fn ayes(&self) -> u32 {
-        self.ayes
-    }
+	fn ayes(&self) -> u32 {
+		self.ayes
+	}
 
-    fn turnout(&self) -> Perbill {
-        Perbill::from_percent(self.ayes + self.nays)
-    }
+	fn turnout(&self) -> Perbill {
+		Perbill::from_percent(self.ayes + self.nays)
+	}
 
-    fn approval(&self) -> Perbill {
-        Perbill::from_rational(self.ayes, self.ayes + self.nays)
-    }
+	fn approval(&self) -> Perbill {
+		Perbill::from_rational(self.ayes, self.ayes + self.nays)
+	}
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {

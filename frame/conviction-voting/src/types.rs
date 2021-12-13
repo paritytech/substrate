@@ -24,7 +24,10 @@ use crate::{AccountVote, Conviction, Vote};
 use codec::{Decode, Encode};
 use frame_support::traits::VoteTally;
 use scale_info::TypeInfo;
-use sp_runtime::{traits::{Saturating, Zero}, RuntimeDebug};
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	RuntimeDebug,
+};
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -42,7 +45,9 @@ pub struct Tally<Votes, Total> {
 impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> VoteTally<Votes>
 	for Tally<Votes, Total>
 {
-	fn ayes(&self) -> Votes { self.ayes }
+	fn ayes(&self) -> Votes {
+		self.ayes
+	}
 
 	fn turnout(&self) -> Perbill {
 		Perbill::from_rational(self.turnout, Total::get())

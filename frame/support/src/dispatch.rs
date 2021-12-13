@@ -20,6 +20,7 @@
 
 pub use crate::{
 	codec::{Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, Output},
+	scale_info::TypeInfo,
 	sp_std::{
 		fmt, marker,
 		prelude::{Clone, Eq, PartialEq, Vec},
@@ -32,7 +33,6 @@ pub use crate::{
 		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
 		TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
 	},
-	scale_info::TypeInfo,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError, RuntimeDebug};
 
