@@ -92,10 +92,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 /// An abstraction over Wasm code executor. Supports selecting execution backend and
 /// manages runtime cache.
-pub struct WasmExecutor<H>
-where
-	H: HostFunctions,
-{
+pub struct WasmExecutor<H> {
 	/// Method used to execute fallback Wasm code.
 	method: WasmExecutionMethod,
 	/// The number of 64KB pages to allocate for Wasm execution.
@@ -109,10 +106,7 @@ where
 	phantom: PhantomData<H>,
 }
 
-impl<H> Clone for WasmExecutor<H>
-where
-	H: HostFunctions,
-{
+impl<H> Clone for WasmExecutor<H> {
 	fn clone(&self) -> Self {
 		Self {
 			method: self.method,

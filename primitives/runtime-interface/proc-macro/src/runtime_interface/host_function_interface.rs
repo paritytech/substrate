@@ -218,28 +218,46 @@ fn generate_host_function_implementation(
 	let fn_name = create_function_ident_with_version(&method.sig.ident, version);
 	let ref_and_mut = get_function_argument_types_ref_and_mut(&method.sig);
 
-	let mut ffi_args_prototype = Vec::new();
+	// List of variable names containing WASM FFI-compatible arguments.
 	let mut ffi_names = Vec::new();
+
+	// List of `$name: $ty` tokens containing WASM FFI-compatible arguments.
+	let mut ffi_args_prototype = Vec::new();
+
+	// List of variable names containing arguments already converted into native Rust types.
+	// Also includes the preceding `&` or `&mut`. To be used to call the actual implementation of
+	// the host function.
 	let mut host_names_with_ref = Vec::new();
+
+	// List of code snippets to copy over the results returned from a host function through
+	// any `&mut` arguments back into WASM's linear memory.
 	let mut copy_data_into_ref_mut_args = Vec::new();
+
+	// List of code snippets to convert dynamic FFI args (`Value` enum) into concrete static FFI
+	// types (`u32`, etc.).
 	let mut convert_args_dynamic_ffi_to_static_ffi = Vec::new();
+
+	// List of code snippets to convert static FFI args (`u32`, etc.) into native Rust types.
 	let mut convert_args_static_ffi_to_host = Vec::new();
+
 	for ((host_name, host_ty), ref_and_mut) in
 		get_function_argument_names_and_types_without_ref(&method.sig).zip(ref_and_mut)
 	{
+		let ffi_name = generate_ffi_value_var_name(&host_name)?;
 		let host_name_ident = match *host_name {
 			Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
-			_ => unreachable!(),
+			_ => unreachable!("`generate_ffi_value_var_name` above would return an error on `Pat` != `Ident`; qed"),
 		};
 
-		let ffi_name = generate_ffi_value_var_name(&host_name)?;
 		let ffi_ty = quote! { <#host_ty as #crate_::RIType>::FFIType };
 		ffi_args_prototype.push(quote! { #ffi_name: #ffi_ty });
 		ffi_names.push(quote! { #ffi_name });
 
 		let convert_arg_error = format!(
 			"could not marshal the '{}' argument through the WASM FFI boundary while executing '{}' from interface '{}'",
-			host_name_ident, method.sig.ident, trait_name
+			host_name_ident,
+			method.sig.ident,
+			trait_name
 		);
 		convert_args_static_ffi_to_host.push(quote! {
 			let mut #host_name = <#host_ty as #crate_::host::FromFFIValue>::from_ffi_value(__function_context__, #ffi_name)
@@ -262,8 +280,10 @@ fn generate_host_function_implementation(
 		}
 
 		let arg_count_mismatch_error = format!(
-			"number of arguments given to '{}' from interface '{}' does not match the expected number of arguments!",
-			method.sig.ident, trait_name
+			"missing argument '{}': number of arguments given to '{}' from interface '{}' does not match the expected number of arguments",
+			host_name_ident,
+			method.sig.ident,
+			trait_name
 		);
 		convert_args_dynamic_ffi_to_static_ffi.push(quote! {
 			let #ffi_name = args.next().ok_or_else(|| #arg_count_mismatch_error.to_owned())?;

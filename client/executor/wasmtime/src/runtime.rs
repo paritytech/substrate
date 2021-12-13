@@ -80,10 +80,7 @@ impl StoreData {
 
 pub(crate) type Store = wasmtime::Store<StoreData>;
 
-enum Strategy<H>
-where
-	H: HostFunctions,
-{
+enum Strategy<H> {
 	FastInstanceReuse {
 		instance_wrapper: InstanceWrapper,
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
@@ -93,10 +90,7 @@ where
 	RecreateInstance(InstanceCreator<H>),
 }
 
-struct InstanceCreator<H>
-where
-	H: HostFunctions,
-{
+struct InstanceCreator<H> {
 	module: Arc<wasmtime::Module>,
 	heap_pages: u64,
 	allow_missing_func_imports: bool,
@@ -150,10 +144,7 @@ struct InstanceSnapshotData {
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
-pub struct WasmtimeRuntime<H>
-where
-	H: HostFunctions,
-{
+pub struct WasmtimeRuntime<H> {
 	module: Arc<wasmtime::Module>,
 	snapshot_data: Option<InstanceSnapshotData>,
 	config: Config,
@@ -205,10 +196,7 @@ where
 
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
-pub struct WasmtimeInstance<H>
-where
-	H: HostFunctions,
-{
+pub struct WasmtimeInstance<H> {
 	strategy: Strategy<H>,
 }
 

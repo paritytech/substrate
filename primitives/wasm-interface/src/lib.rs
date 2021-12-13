@@ -40,7 +40,7 @@ macro_rules! if_wasmtime_is_enabled {
 
 if_wasmtime_is_enabled! {
 	// Reexport wasmtime so that its types are accessible from the procedural macro.
-	pub extern crate wasmtime;
+	pub use wasmtime;
 }
 
 /// Result type used by traits in this crate.
@@ -124,7 +124,8 @@ impl Value {
 	}
 }
 
-/// Provides `Sealed` trait to prevent implementing trait `PointerType` outside of this crate.
+/// Provides `Sealed` trait to prevent implementing trait `PointerType` and `WasmTy` outside of this
+/// crate.
 mod private {
 	pub trait Sealed {}
 
@@ -132,6 +133,9 @@ mod private {
 	impl Sealed for u16 {}
 	impl Sealed for u32 {}
 	impl Sealed for u64 {}
+
+	impl Sealed for i32 {}
+	impl Sealed for i64 {}
 }
 
 /// Something that can be wrapped in a wasm `Pointer`.
@@ -358,14 +362,28 @@ pub trait Sandbox {
 }
 
 if_wasmtime_is_enabled! {
+	/// A trait used to statically register host callbacks with the WASM executor,
+	/// so that they call be called from within the runtime with minimal overhead.
+	///
+	/// This is used internally to interface the wasmtime-based executor with the
+	/// host functions' definitions generated through the runtime interface macro,
+	/// and is not meant to be used directly.
 	pub trait HostFunctionRegistry {
 		type State;
 		type Error;
 		type FunctionContext: FunctionContext;
+
+		/// Wraps the given `caller` in a type which implements `FunctionContext`
+		/// and calls the given `callback`.
 		fn with_function_context<R>(
 			caller: wasmtime::Caller<Self::State>,
 			callback: impl FnOnce(&mut dyn FunctionContext) -> R,
 		) -> R;
+
+		/// Registers a given host function with the WASM executor.
+		///
+		/// The function has to be statically callable, and all of its arguments
+		/// and its return value have to be compatible with WASM FFI.
 		fn register_static<Params, Results>(
 			&mut self,
 			fn_name: &str,
@@ -436,13 +454,13 @@ where
 		where
 			T: HostFunctionRegistry,
 		{
-			struct Proxy<'a, T>
-			where
-				T: HostFunctionRegistry,
-			{
+			struct Proxy<'a, T> {
 				registry: &'a mut T,
-				seen: std::collections::HashSet<String>,
+				seen_overlay: std::collections::HashSet<String>,
+				seen_base: std::collections::HashSet<String>,
+				overlay_registered: bool,
 			}
+
 			impl<'a, T> HostFunctionRegistry for Proxy<'a, T>
 			where
 				T: HostFunctionRegistry,
@@ -450,6 +468,7 @@ where
 				type State = T::State;
 				type Error = T::Error;
 				type FunctionContext = T::FunctionContext;
+
 				fn with_function_context<R>(
 					caller: wasmtime::Caller<Self::State>,
 					callback: impl FnOnce(&mut dyn FunctionContext) -> R,
@@ -462,18 +481,55 @@ where
 					fn_name: &str,
 					func: impl wasmtime::IntoFunc<Self::State, Params, Results> + 'static,
 				) -> core::result::Result<(), Self::Error> {
-					if self.seen.contains(fn_name) {
+					if self.overlay_registered {
+						if !self.seen_base.insert(fn_name.to_owned()) {
+							log::warn!(
+								target: "extended_host_functions",
+								"Duplicate base host function: '{}'",
+								fn_name,
+							);
+
+							// TODO: Return an error here?
+							return Ok(())
+						}
+
+						if self.seen_overlay.contains(fn_name) {
+							// Was already registered when we went through the overlay, so just ignore it.
+							log::debug!(
+								target: "extended_host_functions",
+								"Overriding base host function: '{}'",
+								fn_name,
+							);
+
+							return Ok(())
+						}
+					} else if !self.seen_overlay.insert(fn_name.to_owned()) {
+						log::warn!(
+							target: "extended_host_functions",
+							"Duplicate overlay host function: '{}'",
+							fn_name,
+						);
+
+						// TODO: Return an error here?
 						return Ok(())
 					}
 
-					self.seen.insert(fn_name.to_owned());
 					self.registry.register_static(fn_name, func)
 				}
 			}
 
-			let mut proxy = Proxy { registry, seen: Default::default() };
+			let mut proxy = Proxy {
+				registry,
+				seen_overlay: Default::default(),
+				seen_base: Default::default(),
+				overlay_registered: false,
+			};
 
+			// The functions from the `Overlay` can override those from the `Base`,
+			// so `Overlay` is registered first, and then we skip those functions
+			// in `Base` if they were already registered from the `Overlay`.
 			Overlay::register_static(&mut proxy)?;
+			proxy.overlay_registered = true;
 			Base::register_static(&mut proxy)?;
 
 			Ok(())
@@ -482,12 +538,16 @@ where
 }
 
 /// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
+///
+/// This trait is sealed and should not be implemented downstream.
 #[cfg(all(feature = "std", feature = "wasmtime"))]
-pub trait WasmTy: wasmtime::WasmTy {}
+pub trait WasmTy: wasmtime::WasmTy + private::Sealed {}
 
 /// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
+///
+/// This trait is sealed and should not be implemented downstream.
 #[cfg(not(all(feature = "std", feature = "wasmtime")))]
-pub trait WasmTy {}
+pub trait WasmTy: private::Sealed {}
 
 impl WasmTy for i32 {}
 impl WasmTy for u32 {}

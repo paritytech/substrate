@@ -9979,6 +9979,7 @@ name = "sp-wasm-interface"
 version = "4.1.0-dev"
 dependencies = [
  "impl-trait-for-tuples",
+ "log 0.4.14",
  "parity-scale-codec",
  "sp-std",
  "wasmi",

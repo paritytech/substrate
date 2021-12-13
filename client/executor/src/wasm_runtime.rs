@@ -205,6 +205,8 @@ impl RuntimeCache {
 	///
 	/// `f` - Function to execute.
 	///
+	/// `H` - A compile-time list of host functions to expose to the runtime.
+	///
 	/// # Returns result of `f` wrapped in an additional result.
 	/// In case of failure one of two errors can be returned:
 	///
