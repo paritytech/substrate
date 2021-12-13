@@ -24,7 +24,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
 

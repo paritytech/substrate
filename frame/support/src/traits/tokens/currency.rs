@@ -199,3 +199,91 @@ pub trait Currency<AccountId> {
 		balance: Self::Balance,
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
 }
+
+#[cfg(feature = "std")]
+impl<AccountId> Currency<AccountId> for () {
+	type Balance = u32;
+	type PositiveImbalance = ();
+	type NegativeImbalance = ();
+	fn total_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
+	fn can_slash(_: &AccountId, _: Self::Balance) -> bool {
+		true
+	}
+	fn total_issuance() -> Self::Balance {
+		0
+	}
+	fn minimum_balance() -> Self::Balance {
+		0
+	}
+	fn burn(_: Self::Balance) -> Self::PositiveImbalance {
+		()
+	}
+	fn issue(_: Self::Balance) -> Self::NegativeImbalance {
+		()
+	}
+	fn pair(_: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+		((), ())
+	}
+	fn free_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
+	fn ensure_can_withdraw(
+		_: &AccountId,
+		_: Self::Balance,
+		_: WithdrawReasons,
+		_: Self::Balance,
+	) -> DispatchResult {
+		Ok(())
+	}
+	fn transfer(
+		_: &AccountId,
+		_: &AccountId,
+		_: Self::Balance,
+		_: ExistenceRequirement,
+	) -> DispatchResult {
+		Ok(())
+	}
+	fn slash(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+		((), 0)
+	}
+	fn deposit_into_existing(
+		_: &AccountId,
+		_: Self::Balance,
+	) -> Result<Self::PositiveImbalance, DispatchError> {
+		Ok(())
+	}
+	fn resolve_into_existing(
+		_: &AccountId,
+		_: Self::NegativeImbalance,
+	) -> Result<(), Self::NegativeImbalance> {
+		Ok(())
+	}
+	fn deposit_creating(_: &AccountId, _: Self::Balance) -> Self::PositiveImbalance {
+		()
+	}
+	fn resolve_creating(_: &AccountId, _: Self::NegativeImbalance) {}
+	fn withdraw(
+		_: &AccountId,
+		_: Self::Balance,
+		_: WithdrawReasons,
+		_: ExistenceRequirement,
+	) -> Result<Self::NegativeImbalance, DispatchError> {
+		Ok(())
+	}
+	fn settle(
+		_: &AccountId,
+		_: Self::PositiveImbalance,
+		_: WithdrawReasons,
+		_: ExistenceRequirement,
+	) -> Result<(), Self::PositiveImbalance> {
+		Ok(())
+	}
+	fn make_free_balance_be(
+		_: &AccountId,
+		_: Self::Balance,
+	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+		SignedImbalance::Positive(())
+	}
+}

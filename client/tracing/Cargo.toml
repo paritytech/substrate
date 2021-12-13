@@ -33,7 +33,7 @@ sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-tracing-proc-macro = { version = "4.0.0-dev", path = "./proc-macro" }
 sc-rpc-server = { version = "4.0.0-dev", path = "../rpc-servers" }

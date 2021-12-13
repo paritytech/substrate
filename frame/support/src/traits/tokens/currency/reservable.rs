@@ -81,6 +81,33 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	) -> Result<Self::Balance, DispatchError>;
 }
 
+#[cfg(feature = "std")]
+impl<AccountId> ReservableCurrency<AccountId> for () {
+	fn can_reserve(_: &AccountId, _: Self::Balance) -> bool {
+		true
+	}
+	fn slash_reserved(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+		((), 0)
+	}
+	fn reserved_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
+	fn reserve(_: &AccountId, _: Self::Balance) -> DispatchResult {
+		Ok(())
+	}
+	fn unreserve(_: &AccountId, _: Self::Balance) -> Self::Balance {
+		0
+	}
+	fn repatriate_reserved(
+		_: &AccountId,
+		_: &AccountId,
+		_: Self::Balance,
+		_: BalanceStatus,
+	) -> Result<Self::Balance, DispatchError> {
+		Ok(0)
+	}
+}
+
 pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 	/// An identifier for a reserve. Used for disambiguating different reserves so that
 	/// they can be individually replaced or removed.

@@ -20,7 +20,7 @@ sp-io = { version = "4.0.0-dev", path = "../../../primitives/io", default-featur
 sp-state-machine = { version = "0.10.0-dev", optional = true, path = "../../../primitives/state-machine" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
-sp-core = { version = "4.0.0", default-features = false, path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 trybuild = "1.0.52"
