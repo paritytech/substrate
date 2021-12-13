@@ -25,7 +25,7 @@ hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.22.6", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
 memory-db = { version = "0.27.0", default-features = false }
-sp-core = { version = "4.0.0", default-features = false, path = "../core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }
 
 [dev-dependencies]
 trie-bench = "0.28.0"

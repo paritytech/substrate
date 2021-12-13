@@ -137,6 +137,7 @@ impl BenchmarkCmd {
 			wasm_method,
 			self.heap_pages,
 			2, // The runtime instances cache size.
+			2, // The runtime cache size
 		);
 
 		let extensions = || -> Extensions {
