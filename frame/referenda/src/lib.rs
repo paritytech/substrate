@@ -40,7 +40,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Dispatchable, Zero, One, Saturating},
+	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
 	DispatchError, DispatchResult, Perbill,
 };
 use sp_std::{fmt::Debug, prelude::*};
@@ -493,7 +493,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Set an alarm.
-	fn set_alarm(call: impl Into<CallOf<T>>, when: T::BlockNumber) -> Option<(T::BlockNumber, ScheduleAddressOf<T>)> {
+	fn set_alarm(
+		call: impl Into<CallOf<T>>,
+		when: T::BlockNumber,
+	) -> Option<(T::BlockNumber, ScheduleAddressOf<T>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
 		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
 		let maybe_result = T::Scheduler::schedule(
@@ -503,8 +506,8 @@ impl<T: Config> Pallet<T> {
 			frame_system::RawOrigin::Root.into(),
 			MaybeHashed::Value(call.into()),
 		)
-			.ok()
-			.map(|x| (when, x));
+		.ok()
+		.map(|x| (when, x));
 		debug_assert!(
 			maybe_result.is_some(),
 			"Unable to schedule a new alarm at #{} (now: #{})?!",
@@ -543,11 +546,8 @@ impl<T: Config> Pallet<T> {
 			&track.min_approval,
 		);
 		status.ayes_in_queue = None;
-		let confirming = if is_passing {
-			Some(now.saturating_add(track.confirm_period))
-		} else {
-			None
-		};
+		let confirming =
+			if is_passing { Some(now.saturating_add(track.confirm_period)) } else { None };
 		let deciding_status = DecidingStatus { since: now, confirming };
 		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
 		dbg!(alarm);

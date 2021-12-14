@@ -343,7 +343,8 @@ impl sp_std::fmt::Debug for Curve {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		match self {
 			Self::LinearDecreasing { begin, delta } => {
-				write!(f,
+				write!(
+					f,
 					"Linear[(0%, {}%) -> (100%, {}%)]",
 					*begin * 100u32,
 					(*begin - *delta) * 100u32,
@@ -352,4 +353,3 @@ impl sp_std::fmt::Debug for Curve {
 		}
 	}
 }
-

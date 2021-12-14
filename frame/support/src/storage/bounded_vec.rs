@@ -434,9 +434,8 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::Twox128;
+	use crate::{traits::ConstU32, Twox128};
 	use sp_io::TestExternalities;
-	use crate::traits::ConstU32;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

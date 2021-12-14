@@ -18,7 +18,7 @@
 //! The crate's tests.
 
 use super::*;
-use crate::mock::*;
+use crate::mock::{RefState::*, *};
 use assert_matches::assert_matches;
 use codec::Decode;
 use frame_support::{
@@ -72,85 +72,22 @@ fn basic_happy_path_works() {
 	});
 }
 
-// TODO: Confirm -> Kill -> Fail
-// TODO: Confirm -> Unconfirm -> Reconfirm -> Pass
-// TODO: (End) Confirm -> Unconfirm (overtime) -> Pass
-// TODO: (End) Confirm -> Unconfirm (overtime) -> Fail
-
 #[test]
 fn insta_confirm_then_kill_works() {
 	new_test_ext().execute_with(|| {
-		// #1: submit
-		assert_ok!(Referenda::submit(
-			Origin::signed(1),
-			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
-			AtOrAfter::At(10),
-		));
-		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
-		// Insta-confirm
-		set_tally(0, 100, 0);
+		let r = Confirming { immediate: true }.create();
 		run_to(6);
 		assert!(pallet_scheduler::Agenda::<Test>::get(7).iter().any(|x| x.is_some()));
-		assert_ok!(Referenda::kill(Origin::root(), 0));
+		assert_ok!(Referenda::kill(Origin::root(), r));
 		assert!(!pallet_scheduler::Agenda::<Test>::get(7).iter().any(|x| x.is_some()));
-		assert_eq!(killed_since(0), 6);
+		assert_eq!(killed_since(r), 6);
 	});
-}
-
-fn make_instaconfirm_and_run_until_deciding() -> ReferendumIndex {
-	assert_ok!(Referenda::submit(
-		Origin::signed(1),
-		RawOrigin::Root.into(),
-		set_balance_proposal_hash(1),
-		AtOrAfter::At(10),
-	));
-	assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
-	set_tally(0, 100, 0);
-	let index = ReferendumCount::<Test>::get() - 1;
-	while !is_deciding(index) {
-		run_to(System::block_number() + 1);
-	}
-	assert_eq!(confirming_until(index), System::block_number() + 2);
-	index
-}
-
-fn make_confirming_and_run_until_deciding() -> ReferendumIndex {
-	assert_ok!(Referenda::submit(
-		Origin::signed(1),
-		RawOrigin::Root.into(),
-		set_balance_proposal_hash(1),
-		AtOrAfter::At(10),
-	));
-	assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
-	let index = ReferendumCount::<Test>::get() - 1;
-	while !is_deciding(index) {
-		run_to(System::block_number() + 1);
-	}
-	set_tally(0, 100, 0);
-	index
-}
-
-fn make_passing_and_run_until_deciding() -> ReferendumIndex {
-	assert_ok!(Referenda::submit(
-		Origin::signed(1),
-		RawOrigin::Root.into(),
-		set_balance_proposal_hash(1),
-		AtOrAfter::At(10),
-	));
-	assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
-	let index = ReferendumCount::<Test>::get() - 1;
-	while !is_deciding(index) {
-		run_to(System::block_number() + 1);
-	}
-	set_tally(0, 100, 99);
-	index
 }
 
 #[test]
 fn confirm_then_reconfirm_with_elapsed_trigger_works() {
 	new_test_ext().execute_with(|| {
-		let r = make_confirming_and_run_until_deciding();
+		let r = Confirming { immediate: false }.create();
 		assert_eq!(confirming_until(r), 7);
 		run_to(6);
 		set_tally(r, 100, 99);
@@ -163,7 +100,7 @@ fn confirm_then_reconfirm_with_elapsed_trigger_works() {
 #[test]
 fn instaconfirm_then_reconfirm_with_elapsed_trigger_works() {
 	new_test_ext().execute_with(|| {
-		let r = make_instaconfirm_and_run_until_deciding();
+		let r = Confirming { immediate: true }.create();
 		run_to(6);
 		assert_eq!(confirming_until(r), 7);
 		set_tally(r, 100, 99);
@@ -176,7 +113,7 @@ fn instaconfirm_then_reconfirm_with_elapsed_trigger_works() {
 #[test]
 fn instaconfirm_then_reconfirm_with_voting_trigger_works() {
 	new_test_ext().execute_with(|| {
-		let r = make_instaconfirm_and_run_until_deciding();
+		let r = Confirming { immediate: true }.create();
 		run_to(6);
 		assert_eq!(confirming_until(r), 7);
 		set_tally(r, 100, 99);
@@ -192,7 +129,7 @@ fn instaconfirm_then_reconfirm_with_voting_trigger_works() {
 #[test]
 fn voting_should_extend_for_late_confirmation() {
 	new_test_ext().execute_with(|| {
-		let r = make_confirming_and_run_until_deciding();
+		let r = Confirming { immediate: false }.create();
 		run_to(6);
 		assert_eq!(confirming_until(r), 7);
 		set_tally(r, 100, 99);
@@ -208,7 +145,7 @@ fn voting_should_extend_for_late_confirmation() {
 #[test]
 fn should_instafail_during_extension_confirmation() {
 	new_test_ext().execute_with(|| {
-		let r = make_passing_and_run_until_deciding();
+		let r = Passing.create();
 		run_to(10);
 		assert_eq!(confirming_until(r), 11);
 		// Should insta-fail since it's now past the normal voting time.
@@ -220,23 +157,16 @@ fn should_instafail_during_extension_confirmation() {
 #[test]
 fn confirming_then_fail_works() {
 	new_test_ext().execute_with(|| {
-		// #1: submit
-		assert_ok!(Referenda::submit(
-			Origin::signed(1),
-			RawOrigin::Root.into(),
-			set_balance_proposal_hash(1),
-			AtOrAfter::At(10),
-		));
-		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		let r = Failing.create();
 		// Normally ends at 5 + 4 (voting period) = 9.
 		run_to(6);
-		assert_eq!(deciding_and_failing_since(0), 5);
-		set_tally(0, 100, 0);
-		assert_eq!(confirming_until(0), 8);
+		assert_eq!(deciding_and_failing_since(r), 5);
+		set_tally(r, 100, 0);
+		assert_eq!(confirming_until(r), 8);
 		run_to(7);
-		set_tally(0, 100, 101);
+		set_tally(r, 100, 101);
 		run_to(9);
-		assert_eq!(rejected_since(0), 9);
+		assert_eq!(rejected_since(r), 9);
 	});
 }
 
@@ -263,16 +193,17 @@ fn queueing_works() {
 				AtOrAfter::After(0),
 			));
 			assert_ok!(Referenda::place_decision_deposit(Origin::signed(i), i as u32));
-			// TODO: decision deposit after some initial votes with a non-highest voted coming first.
+			// TODO: decision deposit after some initial votes with a non-highest voted coming
+			// first.
 		}
 		assert_eq!(ReferendumCount::<Test>::get(), 5);
 
 		run_to(5);
 		// One should be being decided.
 		assert_eq!(DecidingCount::<Test>::get(0), 1);
-		assert!(is_deciding_and_failing(0));
+		assert_eq!(deciding_and_failing_since(0), 5);
 		for i in 1..=4 {
-			assert!(is_waiting(i));
+			assert_eq!(waiting_since(i), 2);
 		}
 
 		// Vote to set order.
@@ -286,12 +217,12 @@ fn queueing_works() {
 
 		// Cancel the first.
 		assert_ok!(Referenda::cancel(Origin::signed(4), 0));
-		assert!(is_cancelled(0));
+		assert_eq!(cancelled_since(0), 6);
 
 		// The other with the most approvals (#4) should be being decided.
 		assert_eq!(DecidingCount::<Test>::get(0), 1);
-		assert!(is_deciding(4));
-		assert!(is_confirming(4));
+		assert_eq!(deciding_since(4), 6);
+		assert_eq!(confirming_until(4), 8);
 
 		// Vote on the remaining two to change order.
 		println!("Set tally #1");
@@ -305,25 +236,25 @@ fn queueing_works() {
 		run_to(8);
 
 		// #4 should have been confirmed.
-		assert!(is_approved(4));
+		assert_eq!(approved_since(4), 8);
 		// #1 (the one with the most approvals) should now be being decided.
-		assert!(is_deciding(1));
+		assert_eq!(deciding_since(1), 8);
 
 		// Let it end unsuccessfully.
 		run_to(12);
-		assert!(is_rejected(1));
+		assert_eq!(rejected_since(1), 12);
 
 		// #2 should now be being decided. It will (barely) pass.
-		assert!(is_deciding_and_failing(2));
+		assert_eq!(deciding_and_failing_since(2), 12);
 
 		// #2 moves into confirming at the last moment with a 50% approval.
 		run_to(16);
-		assert!(is_confirming(2));
+		assert_eq!(confirming_until(2), 18);
 
 		// #2 gets approved.
 		run_to(18);
-		assert!(is_approved(2));
-		assert!(is_deciding(3));
+		assert_eq!(approved_since(2), 18);
+		assert_eq!(deciding_since(3), 18);
 	});
 }
 
@@ -338,17 +269,13 @@ fn auto_timeout_should_happen_with_nothing_but_submit() {
 			AtOrAfter::At(20),
 		));
 		run_to(20);
-		assert_matches!(
-			ReferendumInfoFor::<Test>::get(0),
-			Some(ReferendumInfo::Ongoing(..))
-		);
+		assert_matches!(ReferendumInfoFor::<Test>::get(0), Some(ReferendumInfo::Ongoing(..)));
 		run_to(21);
 		// #11: Timed out - ended.
 		assert_matches!(
 			ReferendumInfoFor::<Test>::get(0),
 			Some(ReferendumInfo::TimedOut(21, _, None))
 		);
-
 	});
 }
 
@@ -493,7 +420,7 @@ fn cancel_works() {
 		run_to(8);
 		assert_ok!(Referenda::cancel(Origin::signed(4), 0));
 		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(3), 0));
-		assert!(is_cancelled(0));
+		assert_eq!(cancelled_since(0), 8);
 	});
 }
 
@@ -531,7 +458,7 @@ fn kill_works() {
 		assert_ok!(Referenda::kill(Origin::root(), 0));
 		let e = Error::<Test>::NoDeposit;
 		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(3), 0), e);
-		assert!(is_killed(0));
+		assert_eq!(killed_since(0), 8);
 	});
 }
 

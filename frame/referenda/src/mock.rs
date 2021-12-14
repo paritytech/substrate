@@ -346,68 +346,6 @@ pub fn set_tally(index: ReferendumIndex, ayes: u32, nays: u32) {
 	});
 }
 
-pub fn is_waiting(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: None, .. }))
-	)
-}
-
-pub fn is_deciding(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
-	)
-}
-
-pub fn is_deciding_and_failing(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus {
-			deciding: Some(DecidingStatus { confirming: None, .. }),
-			..
-		}))
-	)
-}
-
-pub fn is_confirming(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus {
-			deciding: Some(DecidingStatus { confirming: Some(_), .. }),
-			..
-		}))
-	)
-}
-
-pub fn is_approved(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Approved(..))
-	)
-}
-
-pub fn is_rejected(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Rejected(..))
-	)
-}
-
-pub fn is_cancelled(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Cancelled(..))
-	)
-}
-
-pub fn is_killed(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Killed(..))
-	)
-}
-
 pub fn waiting_since(i: ReferendumIndex) -> u64 {
 	match ReferendumInfoFor::<Test>::get(i).unwrap() {
 		ReferendumInfo::Ongoing(ReferendumStatus { submitted, deciding: None, .. }) => submitted,
@@ -417,8 +355,10 @@ pub fn waiting_since(i: ReferendumIndex) -> u64 {
 
 pub fn deciding_since(i: ReferendumIndex) -> u64 {
 	match ReferendumInfoFor::<Test>::get(i).unwrap() {
-		ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(DecidingStatus { since, .. }), .. })
-		=> since,
+		ReferendumInfo::Ongoing(ReferendumStatus {
+			deciding: Some(DecidingStatus { since, .. }),
+			..
+		}) => since,
 		_ => panic!("Not deciding"),
 	}
 }
@@ -426,14 +366,9 @@ pub fn deciding_since(i: ReferendumIndex) -> u64 {
 pub fn deciding_and_failing_since(i: ReferendumIndex) -> u64 {
 	match ReferendumInfoFor::<Test>::get(i).unwrap() {
 		ReferendumInfo::Ongoing(ReferendumStatus {
-			deciding: Some(DecidingStatus {
-				since,
-				confirming: None,
-				..
-			}),
+			deciding: Some(DecidingStatus { since, confirming: None, .. }),
 			..
-		})
-		=> since,
+		}) => since,
 		_ => panic!("Not deciding"),
 	}
 }
@@ -441,13 +376,9 @@ pub fn deciding_and_failing_since(i: ReferendumIndex) -> u64 {
 pub fn confirming_until(i: ReferendumIndex) -> u64 {
 	match ReferendumInfoFor::<Test>::get(i).unwrap() {
 		ReferendumInfo::Ongoing(ReferendumStatus {
-			deciding: Some(DecidingStatus {
-				confirming: Some(until),
-				..
-			}),
+			deciding: Some(DecidingStatus { confirming: Some(until), .. }),
 			..
-		})
-		=> until,
+		}) => until,
 		_ => panic!("Not confirming"),
 	}
 }
@@ -477,5 +408,48 @@ pub fn killed_since(i: ReferendumIndex) -> u64 {
 	match ReferendumInfoFor::<Test>::get(i).unwrap() {
 		ReferendumInfo::Killed(since, ..) => since,
 		_ => panic!("Not killed"),
+	}
+}
+
+fn is_deciding(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
+	)
+}
+
+#[derive(Clone, Copy)]
+pub enum RefState {
+	Failing,
+	Passing,
+	Confirming { immediate: bool },
+}
+
+impl RefState {
+	pub fn create(self) -> ReferendumIndex {
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			frame_support::dispatch::RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		if matches!(self, RefState::Confirming { immediate: true }) {
+			set_tally(0, 100, 0);
+		}
+		let index = ReferendumCount::<Test>::get() - 1;
+		while !is_deciding(index) {
+			run_to(System::block_number() + 1);
+		}
+		if matches!(self, RefState::Confirming { immediate: false }) {
+			set_tally(0, 100, 0);
+		}
+		if matches!(self, RefState::Confirming { .. }) {
+			assert_eq!(confirming_until(index), System::block_number() + 2);
+		}
+		if matches!(self, RefState::Passing) {
+			set_tally(0, 100, 99);
+		}
+		index
 	}
 }
