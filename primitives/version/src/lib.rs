@@ -22,9 +22,9 @@
 //! distinguish different runtimes. The most important field is the
 //! [`spec_version`](RuntimeVersion::spec_version). The `spec_version` should be increased in a
 //! runtime when a new runtime build includes breaking changes that would make other runtimes unable
-//! to import blocks built by this runtime or vice-versa, where the new runtime could not import blocks
-//! built by the old runtime. The runtime version also carries other version information about the
-//! runtime, see [`RuntimeVersion`] for more information on this.
+//! to import blocks built by this runtime or vice-versa, where the new runtime could not import
+//! blocks built by the old runtime. The runtime version also carries other version information
+//! about the runtime, see [`RuntimeVersion`] for more information on this.
 //!
 //! Substrate will fetch the runtime version from a `wasm` blob by first checking the
 //! `runtime_version` link section or calling the `Core::version` runtime api. The link section can
