@@ -196,6 +196,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		),
 		None,
 		None,
+		None,
 		Default::default(),
 	)
 }
@@ -386,6 +387,7 @@ pub fn development_config() -> ChainSpec {
 		None,
 		None,
 		None,
+		None,
 		Default::default(),
 	)
 }
@@ -407,6 +409,7 @@ pub fn local_testnet_config() -> ChainSpec {
 		ChainType::Local,
 		local_testnet_genesis,
 		vec![],
+		None,
 		None,
 		None,
 		None,
@@ -441,6 +444,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			None,
+			None,
 			Default::default(),
 		)
 	}
@@ -453,6 +457,7 @@ pub(crate) mod tests {
 			ChainType::Development,
 			local_testnet_genesis,
 			vec![],
+			None,
 			None,
 			None,
 			None,

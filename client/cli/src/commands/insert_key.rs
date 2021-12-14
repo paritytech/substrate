@@ -144,6 +144,7 @@ mod tests {
 				None,
 				None,
 				None,
+				None,
 				NoExtension::None,
 			)))
 		}

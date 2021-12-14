@@ -155,6 +155,7 @@ fn generate_chain_spec(
 		None,
 		None,
 		None,
+		None,
 		Default::default(),
 	);
 
