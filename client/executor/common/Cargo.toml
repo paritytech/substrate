@@ -30,7 +30,7 @@ wasmer = { version = "1.0", optional = true }
 wasmer-compiler-singlepass = { version = "1.0", optional = true }
 
 [features]
-default = []
+default = ["wasmer-sandbox"]
 wasmer-sandbox = [
 	"wasmer",
 	"wasmer-compiler-singlepass",
