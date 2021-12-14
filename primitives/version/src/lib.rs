@@ -19,17 +19,17 @@
 //!
 //! Each runtime that should be executed by a Substrate based node needs to have a runtime version.
 //! The runtime version is defined by [`RuntimeVersion`]. The runtime version is used to
-//! distinguish different runtimes, while the most important field is the
+//! distinguish different runtimes. The most important field is the
 //! [`spec_version`](RuntimeVersion::spec_version). The `spec_version` should be increased in a
 //! runtime when a new runtime build includes breaking changes that would make other runtimes unable
-//! to import blocks build by this runtime or vice-versa the new runtime could not import blocks
-//! build by the old runtime. The runtime version also carries other version information about the
+//! to import blocks built by this runtime or vice-versa, where the new runtime could not import blocks
+//! built by the old runtime. The runtime version also carries other version information about the
 //! runtime, see [`RuntimeVersion`] for more information on this.
 //!
 //! Substrate will fetch the runtime version from a `wasm` blob by first checking the
 //! `runtime_version` link section or calling the `Core::version` runtime api. The link section can
 //! be generated in the runtime using the [`runtime_version`] attribute. The `Core` runtime api also
-//! has to be implemented for the runtime using `impl_runtime_apis!`.
+//! needs to be implemented for the runtime using `impl_runtime_apis!`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
