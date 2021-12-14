@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{self as frame_system, *};
-use frame_support::{parameter_types, traits::{ConstU64}};
+use frame_support::{parameter_types, traits::{ConstU32, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -110,7 +110,7 @@ impl Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 pub type SysEvent = frame_system::Event<Test>;

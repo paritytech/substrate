@@ -20,7 +20,7 @@
 use super::*;
 use crate as pallet_society;
 
-use frame_support::{ord_parameter_types, parameter_types};
+use frame_support::{ord_parameter_types, parameter_types, traits::{ConstU64, ConstU32}};
 use frame_support_test::TestRandomness;
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -80,7 +80,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type OnNewAccount = ();
@@ -89,7 +89,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
@@ -99,7 +99,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -108,17 +108,17 @@ impl Config for Test {
 	type Event = Event;
 	type Currency = pallet_balances::Pallet<Self>;
 	type Randomness = TestRandomness<Self>;
-	type CandidateDeposit = CandidateDeposit;
-	type WrongSideDeduction = WrongSideDeduction;
-	type MaxStrikes = MaxStrikes;
-	type PeriodSpend = PeriodSpend;
+	type CandidateDeposit = ConstU64<25>;
+	type WrongSideDeduction = ConstU64<2>;
+	type MaxStrikes = ConstU32<2>;
+	type PeriodSpend = ConstU64<1000>;
 	type MembershipChanged = ();
-	type RotationPeriod = RotationPeriod;
-	type MaxLockDuration = MaxLockDuration;
+	type RotationPeriod = ConstU64<4>;
+	type MaxLockDuration = ConstU64<100>;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
-	type ChallengePeriod = ChallengePeriod;
-	type MaxCandidateIntake = MaxCandidateIntake;
+	type ChallengePeriod = ConstU64<8>;
+	type MaxCandidateIntake = ConstU32<10>;
 	type PalletId = SocietyPalletId;
 }
 

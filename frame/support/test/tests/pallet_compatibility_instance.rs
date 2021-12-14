@@ -14,7 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+use frame_support::{traits::{ConstU32, ConstU64}};
 mod pallet_old {
 	use frame_support::{
 		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
@@ -197,11 +197,6 @@ pub mod pallet {
 	}
 }
 
-frame_support::parameter_types!(
-	pub const SomeConst: u64 = 10;
-	pub const BlockHashCount: u32 = 250;
-);
-
 impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -217,7 +212,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -226,36 +221,36 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance2> for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance3> for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config<pallet_old::Instance2> for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config<pallet_old::Instance3> for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 

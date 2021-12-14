@@ -24,7 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-	traits::{Get, OneSessionHandler, ConstU32, ConstU64},
+	traits::{Get, OneSessionHandler},
 	WeakBoundedVec,
 };
 use sp_authority_discovery::AuthorityId;
@@ -173,7 +173,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authority_discovery;
-	use frame_support::{parameter_types, traits::GenesisBuild};
+	use frame_support::{parameter_types, traits::{GenesisBuild, ConstU32, ConstU64}};
 	use sp_application_crypto::Pair;
 	use sp_authority_discovery::AuthorityPair;
 	use sp_core::{crypto::key_types, H256};
@@ -257,7 +257,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	pub struct TestSessionHandler;
