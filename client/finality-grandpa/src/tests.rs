@@ -97,7 +97,7 @@ impl GrandpaTestNet {
 impl GrandpaTestNet {
 	fn add_authority_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GrandpaProtocolName::test_name().into()],
+			notifications_protocols: vec![communication::grandpa_protocol_name::NAME.into()],
 			is_authority: true,
 			..Default::default()
 		})
@@ -121,7 +121,7 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GrandpaProtocolName::test_name().into()],
+			notifications_protocols: vec![communication::grandpa_protocol_name::NAME.into()],
 			is_authority: false,
 			..Default::default()
 		})

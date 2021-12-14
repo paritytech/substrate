@@ -68,7 +68,7 @@ mod periodic;
 pub(crate) mod tests;
 
 pub(crate) mod grandpa_protocol_name {
-	const NAME: &'static str = "/grandpa/1";
+	pub(crate) const NAME: &'static str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
 	pub const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/grandpa/1"];
 
@@ -76,12 +76,6 @@ pub(crate) mod grandpa_protocol_name {
 	/// Must be registered towards the networking in order for Grandpa to properly function.
 	pub fn with_prefix(prefix: &str) -> String {
 		format!("{}{}", prefix, NAME)
-	}
-
-	#[cfg(test)]
-	/// Protocol name used in tests.
-	pub fn test_name() -> String {
-		format!("/test{}", NAME)
 	}
 }
 

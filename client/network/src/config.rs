@@ -605,6 +605,8 @@ impl NonDefaultSetConfig {
 	}
 
 	/// Add a list of protocol names used for backward compatibility.
+	///
+	/// See the explanations in [`NonDefaultSetConfig::fallback_names`].
 	pub fn add_fallback_names(&mut self, fallback_names: Vec<Cow<'static, str>>) {
 		self.fallback_names.extend(fallback_names);
 	}
