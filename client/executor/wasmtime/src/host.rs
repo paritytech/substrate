@@ -62,11 +62,11 @@ impl HostState {
 /// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
-pub(crate) struct HostContext<'a, 'b> {
-	pub(crate) caller: &'a mut Caller<'b, StoreData>,
+pub(crate) struct HostContext<'a> {
+	pub(crate) caller: Caller<'a, StoreData>,
 }
 
-impl<'a, 'b> HostContext<'a, 'b> {
+impl<'a> HostContext<'a> {
 	fn host_state(&self) -> &HostState {
 		self.caller
 			.data()
@@ -98,7 +98,7 @@ impl<'a, 'b> HostContext<'a, 'b> {
 	}
 }
 
-impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
+impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	fn read_memory_into(
 		&self,
 		address: Pointer<u8>,
@@ -136,7 +136,7 @@ impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
 	}
 }
 
-impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
+impl<'a> Sandbox for HostContext<'a> {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -320,12 +320,12 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 	}
 }
 
-struct SandboxContext<'a, 'b, 'c> {
-	host_context: &'a mut HostContext<'b, 'c>,
+struct SandboxContext<'a, 'b> {
+	host_context: &'a mut HostContext<'b>,
 	dispatch_thunk: Func,
 }
 
-impl<'a, 'b, 'c> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c> {
+impl<'a, 'b> sandbox::SandboxContext for SandboxContext<'a, 'b> {
 	fn invoke(
 		&mut self,
 		invoke_args_ptr: Pointer<u8>,
