@@ -8035,6 +8035,8 @@ dependencies = [
 name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
+ "criterion",
+ "env_logger 0.9.0",
  "hex-literal",
  "lazy_static",
  "libsecp256k1",
@@ -11147,6 +11149,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "userfaultfd"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b738009e099b4ded1ecf19dfb7631f69c24f16e0af6d29fd9b3f54a092aca46"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "libc",
+ "nix",
+ "thiserror",
+ "userfaultfd-sys",
+]
+
+[[package]]
+name = "userfaultfd-sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f03138f85fb1a85b1324bd34f29491c6592fff9bcc8fb7d4176d2166185d2de"
+dependencies = [
+ "bindgen",
+ "cc",
+ "cfg-if 0.1.10",
+]
+
+[[package]]
 name = "value-bag"
 version = "1.0.0-alpha.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11703,6 +11730,7 @@ dependencies = [
  "region",
  "rsix",
  "thiserror",
+ "userfaultfd",
  "wasmtime-environ",
  "winapi 0.3.9",
 ]

@@ -21,12 +21,12 @@
 
 use crate::runtime::{Store, StoreData};
 use sc_executor_common::{
-	error::{Error, Result},
+	error::{Error, Result, WasmError},
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
+use sp_wasm_interface::{Pointer, Value, WordSize};
 use wasmtime::{
-	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
+	AsContext, AsContextMut, Extern, Func, Global, Instance, Linker, Memory, Module, Table, Val,
 };
 
 /// Invoked entrypoint format.
@@ -137,16 +137,12 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 }
 
 impl InstanceWrapper {
-	/// Create a new instance wrapper from the given wasm module.
-	pub fn new<H>(
+	pub(crate) fn new(
 		module: &Module,
+		linker: &Linker<StoreData>,
 		heap_pages: u64,
-		allow_missing_func_imports: bool,
 		max_memory_size: Option<usize>,
-	) -> Result<Self>
-	where
-		H: HostFunctions,
-	{
+	) -> Result<Self> {
 		let limits = if let Some(max_memory_size) = max_memory_size {
 			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
 		} else {
@@ -161,37 +157,21 @@ impl InstanceWrapper {
 			store.limiter(|s| &mut s.limits);
 		}
 
-		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
-		// and results.
-		let imports = crate::imports::resolve_imports::<H>(
-			&mut store,
-			module,
-			heap_pages,
-			allow_missing_func_imports,
-		)?;
+		let instance = linker.instantiate(&mut store, module).map_err(|error| {
+			WasmError::Other(
+				format!("failed to instantiate a new WASM module instance: {}", error,),
+			)
+		})?;
 
-		let instance = Instance::new(&mut store, module, &imports.externs)
-			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
-
-		let memory = match imports.memory_import_index {
-			Some(memory_idx) => extern_memory(&imports.externs[memory_idx])
-				.expect("only memory can be at the `memory_idx`; qed")
-				.clone(),
-			None => {
-				let memory = get_linear_memory(&instance, &mut store)?;
-				if !memory.grow(&mut store, heap_pages).is_ok() {
-					return Err("failed top increase the linear memory size".into())
-				}
-				memory
-			},
-		};
+		let memory = get_linear_memory(&instance, &mut store)?;
+		memory.grow(&mut store, heap_pages).unwrap();
 
 		let table = get_table(&instance, &mut store);
 
 		store.data_mut().memory = Some(memory);
 		store.data_mut().table = table;
 
-		Ok(Self { instance, memory, store })
+		Ok(InstanceWrapper { instance, memory, store })
 	}
 
 	/// Resolves a substrate entrypoint by the given name.

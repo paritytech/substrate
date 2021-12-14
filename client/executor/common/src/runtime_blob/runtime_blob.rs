@@ -19,7 +19,10 @@
 use crate::error::WasmError;
 use pwasm_utils::{
 	export_mutable_globals,
-	parity_wasm::elements::{deserialize_buffer, serialize, DataSegment, Internal, Module},
+	parity_wasm::elements::{
+		deserialize_buffer, serialize, DataSegment, ExportEntry, External, Internal, MemorySection,
+		MemoryType, Module, Section,
+	},
 };
 
 /// A bunch of information collected from a WebAssembly module.
@@ -102,6 +105,55 @@ impl RuntimeBlob {
 				})
 			})
 			.unwrap_or_default()
+	}
+
+	/// Converts a WASM memory import into a memory section and exports it.
+	///
+	/// Does nothing if there's no memory import.
+	pub fn convert_memory_import_into_export(&mut self, min_heap_pages: u32) {
+		let import_section = match self.raw_module.import_section_mut() {
+			Some(import_section) => import_section,
+			None => return,
+		};
+
+		let import_entries = import_section.entries_mut();
+		for index in 0..import_entries.len() {
+			let entry = &import_entries[index];
+			let old_memory_ty = match entry.external() {
+				External::Memory(memory_ty) => memory_ty,
+				_ => continue,
+			};
+
+			// Theoretically these can be anything, although I haven't seen any WASM blob where they
+			// are different than these.
+			debug_assert_eq!(entry.module(), "env");
+			debug_assert_eq!(entry.field(), "memory");
+
+			let memory_name = entry.field().to_owned();
+			let min = std::cmp::max(old_memory_ty.limits().initial(), min_heap_pages);
+			let max = old_memory_ty.limits().maximum();
+			import_entries.remove(index);
+
+			let new_memory_ty = MemoryType::new(min, max);
+			self.raw_module
+				.insert_section(Section::Memory(MemorySection::with_entries(vec![new_memory_ty])))
+				.expect("there can be only one memory so adding a new memory will always succeed after removing the existing one");
+
+			if self.raw_module.export_section_mut().is_none() {
+				// A module without an export section is somewhat unrealistic, but let's do this
+				// just in case to cover all of our bases.
+				self.raw_module
+					.insert_section(Section::Export(Default::default()))
+					.expect("an export section can be always inserted if it doesn't exist");
+			}
+			self.raw_module
+				.export_section_mut()
+				.expect("export section always exists")
+				.entries_mut()
+				.push(ExportEntry::new(memory_name, Internal::Memory(0)));
+
+			return
+		}
 	}
 
 	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].
