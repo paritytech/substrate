@@ -1089,8 +1089,13 @@ where
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
 	}
-	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
+	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
+		// defensive-only: block author must exist.
+		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
+			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
+		} else {
+			crate::log!(warn, "block author not set, this should never happen");
+		}
 	}
 }
 
@@ -1238,8 +1243,13 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
-		let mut ledger = Self::ledger(who).unwrap_or_default();
-		ledger.active = active;
+		let ledger = match Self::ledger(who) {
+			None => StakingLedger::default_from(who.clone()),
+			Some(mut l) => {
+				l.active = active;
+				l
+			},
+		};
 		<Ledger<T>>::insert(who, ledger);
 		<Bonded<T>>::insert(who, who);
 

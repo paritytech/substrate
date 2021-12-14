@@ -69,7 +69,6 @@ pub mod pallet {
 		type AuthorityId: Member
 			+ Parameter
 			+ RuntimeAppPublic
-			+ Default
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen;
 		/// The maximum number of authorities that the pallet can hold.

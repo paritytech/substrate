@@ -27,7 +27,8 @@ use sp_std::cmp::Ordering;
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
-	CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic, UncheckedFrom,
+	ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
+	UncheckedFrom,
 };
 #[cfg(feature = "full_crypto")]
 use crate::{
@@ -113,17 +114,11 @@ impl Public {
 	}
 }
 
-impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 33 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 33];
-		r.copy_from_slice(data);
-		Self(r)
-	}
+impl ByteArray for Public {
+	const LEN: usize = 33;
+}
 
+impl TraitPublic for Public {
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
 	}
@@ -143,12 +138,6 @@ impl From<&Public> for CryptoTypePublicPair {
 
 impl Derive for Public {}
 
-impl Default for Public {
-	fn default() -> Self {
-		Public([0u8; 33])
-	}
-}
-
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
@@ -165,11 +154,12 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 33 {
-			Ok(Self::from_slice(data))
-		} else {
-			Err(())
+		if data.len() != Self::LEN {
+			return Err(())
 		}
+		let mut r = [0u8; Self::LEN];
+		r.copy_from_slice(data);
+		Ok(Self::unchecked_from(r))
 	}
 }
 
@@ -337,6 +327,12 @@ impl sp_std::fmt::Debug for Signature {
 impl sp_std::hash::Hash for Signature {
 	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
 		sp_std::hash::Hash::hash(&self.0[..], state);
+	}
+}
+
+impl UncheckedFrom<[u8; 65]> for Signature {
+	fn unchecked_from(data: [u8; 65]) -> Signature {
+		Signature(data)
 	}
 }
 
