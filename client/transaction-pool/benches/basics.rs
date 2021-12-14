@@ -18,7 +18,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use codec::Encode;
+use codec::{Decode, Encode};
 use futures::{
 	executor::block_on,
 	future::{ready, Ready},
@@ -126,7 +126,8 @@ impl ChainApi for TestApi {
 fn uxt(transfer: Transfer) -> Extrinsic {
 	Extrinsic::Transfer {
 		transfer,
-		signature: Default::default(),
+		signature: Decode::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+			.expect("infinite input; no dead input space; qed"),
 		exhaust_resources_when_not_first: false,
 	}
 }
