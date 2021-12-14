@@ -22,7 +22,7 @@ use crate as pallet_democracy;
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers, ConstBool, ConstU16, ConstU32, ConstU64},
+	traits::{Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers, ConstU32, ConstU64},
 	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
