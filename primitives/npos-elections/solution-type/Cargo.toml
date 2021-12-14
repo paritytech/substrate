@@ -26,4 +26,4 @@ scale-info = "1.0"
 sp-arithmetic = { path = "../../arithmetic", version = "4.0.0-dev" }
 # used by generate_solution_type:
 sp-npos-elections = { path = "..", version = "4.0.0-dev" }
-trybuild = "1.0.52"
+trybuild = "1.0.53"
