@@ -20,7 +20,6 @@
 #![recursion_limit = "512"]
 
 mod clone_no_bound;
-mod pallet_error;
 mod construct_runtime;
 mod crate_version;
 mod debug_no_bound;
@@ -29,9 +28,11 @@ mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
 mod pallet;
+mod pallet_error;
 mod partial_eq_no_bound;
 mod storage;
 mod transactional;
+mod tt_macro;
 
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
@@ -567,4 +568,10 @@ pub fn match_and_insert(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(PalletError)]
 pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
 	pallet_error::derive_pallet_error(input)
+}
+
+/// Internal macro used by `frame_support` to create tt-call-compliant macros
+#[proc_macro]
+pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
+	tt_macro::create_tt_return_macro(input)
 }

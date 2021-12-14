@@ -584,7 +584,7 @@ pub use frame_support_procedural::{
 };
 
 #[doc(hidden)]
-pub use frame_support_procedural::__generate_dummy_part_checker;
+pub use frame_support_procedural::{__create_tt_macro, __generate_dummy_part_checker};
 
 /// Derive [`Clone`] but do not bound any generic.
 ///

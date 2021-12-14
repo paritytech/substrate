@@ -119,17 +119,6 @@ macro_rules! decl_error {
 		impl<$generic: $trait $(, $inst_generic: $instance)?> $error<$generic $(, $inst_generic)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
-			fn as_u8(&self) -> u8 {
-				$crate::decl_error! {
-					@GENERATE_AS_U8
-					self
-					$error
-					{}
-					0,
-					$( $name ),*
-				}
-			}
-
 			fn as_str(&self) -> &'static str {
 				match self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
@@ -154,47 +143,19 @@ macro_rules! decl_error {
 		$( where $( $where_ty: $where_bound ),* )?
 		{
 			fn from(err: $error<$generic $(, $inst_generic)?>) -> Self {
+				use $crate::codec::Encode;
 				let index = <$generic::PalletInfo as $crate::traits::PalletInfo>
 					::index::<$module<$generic $(, $inst_generic)?>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
+				let mut error = err.encode();
+				error.resize($crate::MAX_PALLET_ERROR_ENCODED_SIZE, 0);
 
 				$crate::sp_runtime::DispatchError::Module {
 					index,
-					error: err.as_u8(),
+					error: error.try_into().expect("error has been resized to be 4 bytes; qed"),
 					message: Some(err.as_str()),
 				}
 			}
 		}
 	};
-	(@GENERATE_AS_U8
-		$self:ident
-		$error:ident
-		{ $( $generated:tt )* }
-		$index:expr,
-		$name:ident
-		$( , $rest:ident )*
-	) => {
-		$crate::decl_error! {
-			@GENERATE_AS_U8
-			$self
-			$error
-			{
-				$( $generated )*
-				$error::$name => $index,
-			}
-			$index + 1,
-			$( $rest ),*
-		}
-	};
-	(@GENERATE_AS_U8
-		$self:ident
-		$error:ident
-		{ $( $generated:tt )* }
-		$index:expr,
-	) => {
-		match $self {
-			$error::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
-			$( $generated )*
-		}
-	}
 }
