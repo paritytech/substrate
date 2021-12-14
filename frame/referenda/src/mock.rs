@@ -104,7 +104,7 @@ impl pallet_preimage::Config for Test {
 	type ByteDeposit = ();
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
+	pub MaximumSchedulerWeight: Weight = 2_000_000_000_000;
 }
 impl pallet_scheduler::Config for Test {
 	type Event = Event;
@@ -113,7 +113,7 @@ impl pallet_scheduler::Config for Test {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
-	type MaxScheduledPerBlock = ();
+	type MaxScheduledPerBlock = ConstU32<100>;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type PreimageProvider = Preimage;

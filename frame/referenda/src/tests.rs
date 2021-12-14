@@ -28,6 +28,8 @@ use frame_support::{
 };
 use pallet_balances::Error as BalancesError;
 
+// TODO: Scheduler should re-use `None` items in its `Agenda`.
+
 #[test]
 fn params_should_work() {
 	new_test_ext().execute_with(|| {
@@ -85,11 +87,56 @@ fn confirming_then_reconfirming_works() {
 #[test]
 fn queueing_works() {
 	new_test_ext().execute_with(|| {
-		// Submit 4 proposals with a queue len of 1.
+		// Submit a proposal into a track with a queue len of 1.
+		assert_ok!(Referenda::submit(
+			Origin::signed(5),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(0),
+			AtOrAfter::After(0),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(5), 0));
+
+		run_to(2);
+
+		// Submit 3 more proposals into the same queue.
+		for i in 1..=3 {
+			assert_ok!(Referenda::submit(
+				Origin::signed(i),
+				RawOrigin::Root.into(),
+				set_balance_proposal_hash(i),
+				AtOrAfter::After(0),
+			));
+			assert_ok!(Referenda::place_decision_deposit(Origin::signed(6), i as u32));
+			// TODO: decision deposit after some initial votes with a non-highest voted coming first.
+		}
+		assert_eq!(ReferendumCount::<Test>::get(), 4);
+
+		run_to(5);
 		// One should be being decided.
-		// Vote on the others to set order.
+		assert_eq!(DecidingCount::<Test>::get(0), 1);
+		assert_matches!(
+			ReferendumInfoFor::<Test>::get(0),
+			Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
+		);
+
+		// Vote to set order.
+		set_tally(1, 1, 10);
+		set_tally(2, 2, 20);
+		set_tally(3, 3, 30);
+		println!("Agenda #6: {:?}", pallet_scheduler::Agenda::<Test>::get(6));
+		run_to(6);
+		println!("{:?}", Vec::<_>::from(TrackQueue::<Test>::get(0)));
+
 		// Cancel the first.
+		assert_ok!(Referenda::cancel(Origin::signed(4), 0));
+
 		// The other with the most approvals should be being decided.
+		assert_eq!(DecidingCount::<Test>::get(0), 1);
+		assert_matches!(
+			ReferendumInfoFor::<Test>::get(3),
+			Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
+		);
+
 		// Vote on the remaining two to change order.
 		// Vote enough for it to insta-win.
 		// There should be a third being decided, the one with the most approvals.
@@ -166,7 +213,7 @@ fn tracks_are_distinguished() {
 						deciding: None,
 						tally: Tally { ayes: 0, nays: 0 },
 						ayes_in_queue: None,
-						alarm: Some((5, 0)),
+						alarm: Some((5, (5, 0))),
 					})
 				),
 				(
@@ -182,7 +229,7 @@ fn tracks_are_distinguished() {
 						deciding: None,
 						tally: Tally { ayes: 0, nays: 0 },
 						ayes_in_queue: None,
-						alarm: Some((3, 0)),
+						alarm: Some((3, (3, 0))),
 					})
 				),
 			]

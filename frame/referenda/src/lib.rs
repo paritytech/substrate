@@ -356,7 +356,7 @@ pub mod pallet {
 			T::CancelOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
-			if let Some(last_alarm) = status.alarm {
+			if let Some((_, last_alarm)) = status.alarm {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
 			Self::note_one_fewer_deciding(status.track, track);
@@ -375,7 +375,7 @@ pub mod pallet {
 			T::KillOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
-			if let Some(last_alarm) = status.alarm {
+			if let Some((_, last_alarm)) = status.alarm {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
 			Self::note_one_fewer_deciding(status.track, track);
@@ -493,24 +493,25 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Set an alarm.
-	fn set_alarm(call: impl Into<CallOf<T>>, when: T::BlockNumber) -> Option<ScheduleAddressOf<T>> {
+	fn set_alarm(call: impl Into<CallOf<T>>, when: T::BlockNumber) -> Option<(T::BlockNumber, ScheduleAddressOf<T>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
 		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
-		let maybe_address = T::Scheduler::schedule(
+		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
 			MaybeHashed::Value(call.into()),
 		)
-		.ok();
+			.ok()
+			.map(|x| (when, x));
 		debug_assert!(
-			maybe_address.is_some(),
+			maybe_result.is_some(),
 			"Unable to schedule a new referendum at #{} (now: #{})?!",
 			when,
 			frame_system::Pallet::<T>::block_number()
 		);
-		maybe_address
+		maybe_result
 	}
 
 	fn ready_for_deciding(
@@ -519,13 +520,16 @@ impl<T: Config> Pallet<T> {
 		index: ReferendumIndex,
 		status: &mut ReferendumStatusOf<T>,
 	) {
+		println!("ready_for_deciding ref #{:?}", index);
 		let deciding_count = DecidingCount::<T>::get(status.track);
 		if deciding_count < track.max_deciding {
 			// Begin deciding.
+			println!("Beginning deciding...");
 			status.begin_deciding(now, track.decision_period);
 			DecidingCount::<T>::insert(status.track, deciding_count.saturating_add(1));
 		} else {
 			// Add to queue.
+			println!("Queuing for decision.");
 			let item = (index, status.tally.ayes());
 			status.ayes_in_queue = Some(status.tally.ayes());
 			TrackQueue::<T>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
@@ -627,10 +631,8 @@ impl<T: Config> Pallet<T> {
 		index: ReferendumIndex,
 		mut status: ReferendumStatusOf<T>,
 	) -> (ReferendumInfoOf<T>, bool) {
+		println!("#{:?}: Servicing #{:?}", now, index);
 		let mut dirty = false;
-		if let Some(last_alarm) = status.alarm.take() {
-			let _ = T::Scheduler::cancel(last_alarm);
-		}
 		// Should it begin being decided?
 		let track = match Self::track(status.track) {
 			Some(x) => x,
@@ -642,6 +644,7 @@ impl<T: Config> Pallet<T> {
 		if status.deciding.is_none() {
 			// Are we already queued for deciding?
 			if let Some(_) = status.ayes_in_queue.as_ref() {
+				println!("Already queued...");
 				// Does our position in the queue need updating?
 				let ayes = status.tally.ayes();
 				let mut queue = TrackQueue::<T>::get(status.track);
@@ -668,6 +671,7 @@ impl<T: Config> Pallet<T> {
 						Self::ready_for_deciding(now, &track, index, &mut status);
 						dirty = true;
 					} else {
+						println!("Not deciding, have DD, within PP: Setting alarm to end of PP");
 						alarm = alarm.min(prepare_end);
 					}
 				}
@@ -684,6 +688,7 @@ impl<T: Config> Pallet<T> {
 			if is_passing {
 				if deciding.confirming.map_or(false, |c| now >= c) {
 					// Passed!
+					Self::kill_alarm(&mut status);
 					Self::note_one_fewer_deciding(status.track, track);
 					let (desired, call_hash) = (status.enactment, status.proposal_hash);
 					Self::schedule_enactment(index, track, desired, status.origin, call_hash);
@@ -705,6 +710,7 @@ impl<T: Config> Pallet<T> {
 			} else {
 				if now >= deciding.ending {
 					// Failed!
+					Self::kill_alarm(&mut status);
 					Self::note_one_fewer_deciding(status.track, track);
 					Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
 					return (
@@ -724,13 +730,23 @@ impl<T: Config> Pallet<T> {
 			}
 		} else if now >= timeout {
 			// Too long without being decided - end it.
+			Self::kill_alarm(&mut status);
 			Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
 			return (
 				ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit),
 				true,
 			)
 		}
-		status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
+
+		if !status.alarm.as_ref().map_or(false, |&(when, _)| when == alarm) {
+			println!("Setting alarm at block #{:?} for ref {:?}", alarm, index);
+			// Either no alarm or one that was different
+			Self::kill_alarm(&mut status);
+			status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
+			dirty = true;
+		} else {
+			println!("Keeping alarm at block #{:?} for ref {:?}", alarm, index);
+		}
 		(ReferendumInfo::Ongoing(status), dirty)
 	}
 
@@ -749,6 +765,13 @@ impl<T: Config> Pallet<T> {
 			.ending
 			.saturating_sub(deciding.period)
 			.saturating_add(offset * deciding.period)
+	}
+
+	fn kill_alarm(status: &mut ReferendumStatusOf<T>) {
+		if let Some((_, last_alarm)) = status.alarm.take() {
+			// Incorrect alarm - cancel it.
+			let _ = T::Scheduler::cancel(last_alarm);
+		}
 	}
 
 	/// Reserve a deposit and return the `Deposit` instance.

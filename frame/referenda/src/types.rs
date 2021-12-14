@@ -87,11 +87,50 @@ impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 		mut f: F,
 	) -> bool {
 		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
-		if index >= S::get() as usize {
-			return false
+		if self.len() == S::get() as usize {
+			if index == 0 {
+				return false
+			}
+			self[0..index].rotate_left(1);
+			self[index - 1] = t;
+		} else {
+			self.force_insert(index, t);
 		}
-		self.force_insert(index, t);
 		true
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use frame_support::traits::ConstU32;
+
+	#[test]
+	fn insert_sorted_works() {
+		let mut b: BoundedVec<u32, ConstU32<6>> = vec![20, 30, 40].try_into().unwrap();
+		assert!(b.insert_sorted_by_key(10, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40][..]);
+
+		assert!(b.insert_sorted_by_key(60, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40, 60][..]);
+
+		assert!(b.insert_sorted_by_key(50, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40, 50, 60][..]);
+
+		assert!(!b.insert_sorted_by_key(9, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40, 50, 60][..]);
+
+		assert!(b.insert_sorted_by_key(11, |&x| x));
+		assert_eq!(&b[..], &[11, 20, 30, 40, 50, 60][..]);
+
+		assert!(b.insert_sorted_by_key(21, |&x| x));
+		assert_eq!(&b[..], &[20, 21, 30, 40, 50, 60][..]);
+
+		assert!(b.insert_sorted_by_key(61, |&x| x));
+		assert_eq!(&b[..], &[21, 30, 40, 50, 60, 61][..]);
+
+		assert!(b.insert_sorted_by_key(51, |&x| x));
+		assert_eq!(&b[..], &[30, 40, 50, 51, 60, 61][..]);
 	}
 }
 
@@ -211,7 +250,7 @@ pub struct ReferendumStatus<
 	/// Automatic advancement is scheduled when ayes_in_queue is Some value greater than the
 	/// ayes in `tally`.
 	pub(crate) ayes_in_queue: Option<Votes>,
-	pub(crate) alarm: Option<ScheduleAddress>,
+	pub(crate) alarm: Option<(Moment, ScheduleAddress)>,
 }
 
 impl<
