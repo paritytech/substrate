@@ -87,16 +87,7 @@ impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 		mut f: F,
 	) -> bool {
 		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
-		if self.len() == S::get() as usize {
-			if index == 0 {
-				return false
-			}
-			self[0..index].rotate_left(1);
-			self[index - 1] = t;
-		} else {
-			self.force_insert(index, t);
-		}
-		true
+		self.force_insert_keep_right(index, t)
 	}
 }
 
@@ -136,11 +127,9 @@ mod tests {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct DecidingStatus<BlockNumber> {
-	/// When this referendum will end. If confirming, then the
+	/// When this referendum began being "decided". If confirming, then the
 	/// end will actually be delayed until the end of the confirmation period.
-	pub(crate) ending: BlockNumber,
-	/// How long we will be deciding on this referendum for.
-	pub(crate) period: BlockNumber,
+	pub(crate) since: BlockNumber,
 	/// If `Some`, then the referendum has entered confirmation stage and will end at
 	/// the block number as long as it doesn't lose its approval in the meantime.
 	pub(crate) confirming: Option<BlockNumber>,
@@ -253,39 +242,6 @@ pub struct ReferendumStatus<
 	pub(crate) alarm: Option<(Moment, ScheduleAddress)>,
 }
 
-impl<
-		TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Moment: Parameter
-			+ Eq
-			+ PartialEq
-			+ sp_std::fmt::Debug
-			+ Encode
-			+ Decode
-			+ TypeInfo
-			+ Clone
-			+ AtLeast32BitUnsigned
-			+ Copy
-			+ EncodeLike,
-		Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	>
-	ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId, ScheduleAddress>
-{
-	pub fn begin_deciding(&mut self, now: Moment, decision_period: Moment) {
-		self.ayes_in_queue = None;
-		self.deciding = Some(DecidingStatus {
-			ending: now.saturating_add(decision_period),
-			period: decision_period,
-			confirming: None,
-		});
-	}
-}
-
 /// Info regarding a referendum, present or past.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum ReferendumInfo<
@@ -359,6 +315,7 @@ impl<
 }
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
+#[cfg_attr(not(feature = "std"), derive(RuntimeDebug))]
 pub enum Curve {
 	/// Linear curve starting at `(0, begin)`, ending at `(period, begin - delta)`.
 	LinearDecreasing { begin: Perbill, delta: Perbill },
@@ -380,3 +337,19 @@ impl Curve {
 		y >= self.threshold(x)
 	}
 }
+
+#[cfg(feature = "std")]
+impl sp_std::fmt::Debug for Curve {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		match self {
+			Self::LinearDecreasing { begin, delta } => {
+				write!(f,
+					"Linear[(0%, {}%) -> (100%, {}%)]",
+					*begin * 100u32,
+					(*begin - *delta) * 100u32,
+				)
+			},
+		}
+	}
+}
+

@@ -147,8 +147,8 @@ parameter_types! {
 	pub static InstantAllowed: bool = false;
 	pub static AlarmInterval: u64 = 1;
 	pub const SubmissionDeposit: u64 = 2;
-	pub const MaxQueued: u32 = 2;
-	pub const UndecidingTimeout: u64 = 10;
+	pub const MaxQueued: u32 = 3;
+	pub const UndecidingTimeout: u64 = 20;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -250,7 +250,7 @@ impl Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
+		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();

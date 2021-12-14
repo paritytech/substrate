@@ -40,7 +40,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating},
+	traits::{AtLeast32BitUnsigned, Dispatchable, Zero, One, Saturating},
 	DispatchError, DispatchResult, Perbill,
 };
 use sp_std::{fmt::Debug, prelude::*};
@@ -507,11 +507,52 @@ impl<T: Config> Pallet<T> {
 			.map(|x| (when, x));
 		debug_assert!(
 			maybe_result.is_some(),
-			"Unable to schedule a new referendum at #{} (now: #{})?!",
+			"Unable to schedule a new alarm at #{} (now: #{})?!",
 			when,
 			frame_system::Pallet::<T>::block_number()
 		);
 		maybe_result
+	}
+
+	/// Mutate a referendum's `status` into the correct deciding state.
+	///
+	/// - `now` is the current block number.
+	/// - `track` is the track info for the referendum.
+	///
+	/// This will properly set up the `confirming` item.
+	fn begin_deciding(
+		status: &mut ReferendumStatusOf<T>,
+		index: ReferendumIndex,
+		now: T::BlockNumber,
+		track: &TrackInfoOf<T>,
+	) {
+		println!("Begining deciding for ref #{:?} at block #{:?}", index, now);
+		let is_passing = Self::is_passing(
+			&status.tally,
+			Zero::zero(),
+			track.decision_period,
+			&track.min_turnout,
+			&track.min_approval,
+		);
+		dbg!(
+			is_passing,
+			&status.tally,
+			now,
+			track.decision_period,
+			&track.min_turnout,
+			&track.min_approval,
+		);
+		status.ayes_in_queue = None;
+		let confirming = if is_passing {
+			Some(now.saturating_add(track.confirm_period))
+		} else {
+			None
+		};
+		let deciding_status = DecidingStatus { since: now, confirming };
+		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
+		dbg!(alarm);
+		Self::ensure_alarm_at(status, index, alarm);
+		status.deciding = Some(deciding_status);
 	}
 
 	fn ready_for_deciding(
@@ -525,7 +566,7 @@ impl<T: Config> Pallet<T> {
 		if deciding_count < track.max_deciding {
 			// Begin deciding.
 			println!("Beginning deciding...");
-			status.begin_deciding(now, track.decision_period);
+			Self::begin_deciding(status, index, now, track);
 			DecidingCount::<T>::insert(status.track, deciding_count.saturating_add(1));
 		} else {
 			// Add to queue.
@@ -563,7 +604,7 @@ impl<T: Config> Pallet<T> {
 		while deciding_count < track_info.max_deciding {
 			if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
 				let now = frame_system::Pallet::<T>::block_number();
-				status.begin_deciding(now, track_info.decision_period);
+				Self::begin_deciding(&mut status, index, now, &track_info);
 				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				deciding_count.saturating_inc();
 				count.saturating_inc();
@@ -594,14 +635,38 @@ impl<T: Config> Pallet<T> {
 	/// - begin deciding another referendum (and leave `DecidingCount` alone); or
 	/// - decrement `DecidingCount`.
 	fn note_one_fewer_deciding(track: TrackIdOf<T>, track_info: &TrackInfoOf<T>) {
+		println!("One fewer deciding on {:?}", track);
 		let mut track_queue = TrackQueue::<T>::get(track);
 		if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
+			println!("Ref #{:?} ready for deciding", index);
 			let now = frame_system::Pallet::<T>::block_number();
-			status.begin_deciding(now, track_info.decision_period);
+			Self::begin_deciding(&mut status, index, now, track_info);
 			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 			TrackQueue::<T>::insert(track, track_queue);
 		} else {
 			DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
+		}
+	}
+
+	/// Ensure that an `service_referendum` alarm happens for the referendum `index` at `alarm`.
+	///
+	/// This will do nothing if the alarm is already set.
+	///
+	/// Returns `false` if nothing changed.
+	fn ensure_alarm_at(
+		status: &mut ReferendumStatusOf<T>,
+		index: ReferendumIndex,
+		alarm: T::BlockNumber,
+	) -> bool {
+		if !status.alarm.as_ref().map_or(false, |&(when, _)| when == alarm) {
+			println!("Setting alarm at block #{:?} for ref {:?}", alarm, index);
+			// Either no alarm or one that was different
+			Self::kill_alarm(status);
+			status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
+			true
+		} else {
+			println!("Keeping alarm at block #{:?} for ref {:?}", alarm, index);
+			false
 		}
 	}
 
@@ -650,17 +715,13 @@ impl<T: Config> Pallet<T> {
 				let mut queue = TrackQueue::<T>::get(status.track);
 				let maybe_old_pos = queue.iter().position(|(x, _)| *x == index);
 				let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
-				if maybe_old_pos.is_none() && new_pos < queue.len() {
+				if maybe_old_pos.is_none() && new_pos > 0 {
 					// Just insert.
-					queue.force_insert(new_pos, (index, ayes));
+					queue.force_insert_keep_right(new_pos, (index, ayes));
 				} else if let Some(old_pos) = maybe_old_pos {
 					// We were in the queue - just update and sort.
 					queue[old_pos].1 = ayes;
-					if new_pos < old_pos {
-						queue[new_pos..=old_pos].rotate_right(1);
-					} else if old_pos < new_pos {
-						queue[old_pos..=new_pos].rotate_left(1);
-					}
+					queue.slide(old_pos, new_pos);
 				}
 				TrackQueue::<T>::insert(status.track, queue);
 			} else {
@@ -680,8 +741,8 @@ impl<T: Config> Pallet<T> {
 		if let Some(deciding) = &mut status.deciding {
 			let is_passing = Self::is_passing(
 				&status.tally,
-				now,
-				deciding.period,
+				now.saturating_sub(deciding.since),
+				track.decision_period,
 				&track.min_turnout,
 				&track.min_approval,
 			);
@@ -702,13 +763,13 @@ impl<T: Config> Pallet<T> {
 						true,
 					)
 				}
-				dirty = dirty || deciding.confirming.is_none();
-				let confirmation =
-					deciding.confirming.unwrap_or_else(|| now.saturating_add(track.confirm_period));
-				deciding.confirming = Some(confirmation);
-				alarm = confirmation;
+				if deciding.confirming.is_none() {
+					// Start confirming
+					dirty = true;
+					deciding.confirming = Some(now.saturating_add(track.confirm_period));
+				}
 			} else {
-				if now >= deciding.ending {
+				if now >= deciding.since.saturating_add(track.decision_period) {
 					// Failed!
 					Self::kill_alarm(&mut status);
 					Self::note_one_fewer_deciding(status.track, track);
@@ -722,12 +783,13 @@ impl<T: Config> Pallet<T> {
 						true,
 					)
 				}
-				// Cannot be confirming
-				dirty = dirty || deciding.confirming.is_some();
-				deciding.confirming = None;
-				let decision_time = Self::decision_time(&deciding, &status.tally, track);
-				alarm = decision_time;
+				if deciding.confirming.is_some() {
+					// Stop confirming
+					dirty = true;
+					deciding.confirming = None;
+				}
 			}
+			alarm = Self::decision_time(&deciding, &status.tally, track);
 		} else if now >= timeout {
 			// Too long without being decided - end it.
 			Self::kill_alarm(&mut status);
@@ -738,16 +800,8 @@ impl<T: Config> Pallet<T> {
 			)
 		}
 
-		if !status.alarm.as_ref().map_or(false, |&(when, _)| when == alarm) {
-			println!("Setting alarm at block #{:?} for ref {:?}", alarm, index);
-			// Either no alarm or one that was different
-			Self::kill_alarm(&mut status);
-			status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
-			dirty = true;
-		} else {
-			println!("Keeping alarm at block #{:?} for ref {:?}", alarm, index);
-		}
-		(ReferendumInfo::Ongoing(status), dirty)
+		let dirty_alarm = Self::ensure_alarm_at(&mut status, index, alarm);
+		(ReferendumInfo::Ongoing(status), dirty_alarm || dirty)
 	}
 
 	fn decision_time(
@@ -755,16 +809,15 @@ impl<T: Config> Pallet<T> {
 		tally: &T::Tally,
 		track: &TrackInfoOf<T>,
 	) -> T::BlockNumber {
-		// Set alarm to the point where the current voting would make it pass.
-		let approval = tally.approval();
-		let turnout = tally.turnout();
-		let until_approval = track.min_approval.delay(approval);
-		let until_turnout = track.min_turnout.delay(turnout);
-		let offset = until_turnout.max(until_approval);
-		deciding
-			.ending
-			.saturating_sub(deciding.period)
-			.saturating_add(offset * deciding.period)
+		deciding.confirming.unwrap_or_else(|| {
+			// Set alarm to the point where the current voting would make it pass.
+			let approval = tally.approval();
+			let turnout = tally.turnout();
+			let until_approval = track.min_approval.delay(approval);
+			let until_turnout = track.min_turnout.delay(turnout);
+			let offset = until_turnout.max(until_approval);
+			deciding.since.saturating_add(offset * track.decision_period)
+		})
 	}
 
 	fn kill_alarm(status: &mut ReferendumStatusOf<T>) {
@@ -805,12 +858,12 @@ impl<T: Config> Pallet<T> {
 
 	fn is_passing(
 		tally: &T::Tally,
-		now: T::BlockNumber,
+		elapsed: T::BlockNumber,
 		period: T::BlockNumber,
 		turnout_needed: &Curve,
 		approval_needed: &Curve,
 	) -> bool {
-		let x = Perbill::from_rational(now.min(period), period);
+		let x = Perbill::from_rational(elapsed.min(period), period);
 		turnout_needed.passing(x, tally.turnout()) && approval_needed.passing(x, tally.approval())
 	}
 }

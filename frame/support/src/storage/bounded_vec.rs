@@ -161,13 +161,70 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		S::get() as usize
 	}
 
-	/// Forces the insertion of `s` into `self` truncating first if necessary.
+	/// Forces the insertion of `s` into `self` retaining all items with index at least `index`.
 	///
-	/// Infallible, but if the limit is zero, then it's a no-op.
-	pub fn force_insert(&mut self, index: usize, element: T) {
-		if Self::bound() > 0 {
-			self.0.truncate(Self::bound() as usize - 1);
+	/// If `index == 0` and `self.len() == Self::bound()` then this is a no-op.
+	///
+	/// Returns `true` if the item was inserted.
+	pub fn force_insert_keep_right(&mut self, index: usize, element: T) -> bool {
+		if self.len() < Self::bound() {
 			self.0.insert(index, element);
+		} else {
+			if index == 0 {
+				return false
+			}
+			self[0] = element;
+			self[0..index].rotate_left(1);
+		}
+		true
+	}
+
+	/// Forces the insertion of `s` into `self` retaining all items with index at most `index`.
+	///
+	/// If `index == Self::bound()` and `self.len() == Self::bound()` then this is a no-op.
+	///
+	/// Returns `true` if the item was inserted.
+	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> bool {
+		if self.len() >= Self::bound() && index >= Self::bound() {
+			return false
+		}
+		self.0.insert(index, element);
+		self.0.truncate(Self::bound());
+		true
+	}
+
+	/// Move the position of an item from one location to another in the slice.
+	///
+	/// Except for the item being moved, the order of the slice remains the same.
+	///
+	/// - `index` is the location of the item to be moved.
+	/// - `insert_position` is the index of the item in the slice which should *immediately follow*
+	///   the item which is being moved.
+	pub fn slide(&mut self, index: usize, insert_position: usize) {
+		if insert_position < index {
+			// --- --- --- === === === === @@@ --- --- ---
+			//            ^-- N            ^O^
+			// ...
+			//               /-----<<<-----\
+			// --- --- --- === === === === @@@ --- --- ---
+			//               >>> >>> >>> >>>
+			// ...
+			// --- --- --- @@@ === === === === --- --- ---
+			//             ^N^
+			self[insert_position..=index].rotate_right(1);
+		} else if index + 1 < insert_position {
+			// Note that the apparent asymmetry of these two branches is due to the
+			// fact that the "new" position is the position to be inserted *before*.
+			// --- --- --- @@@ === === === === --- --- ---
+			//             ^O^                ^-- N
+			// ...
+			//               /----->>>-----\
+			// --- --- --- @@@ === === === === --- --- ---
+			//               <<< <<< <<< <<<
+			// ...
+			// --- --- --- === === === === @@@ --- --- ---
+			//                             ^N^
+			self[index..=(insert_position - 1)].rotate_left(1);
 		}
 	}
 
@@ -379,6 +436,7 @@ pub mod test {
 	use super::*;
 	use crate::Twox128;
 	use sp_io::TestExternalities;
+	use crate::traits::ConstU32;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;
@@ -390,6 +448,68 @@ pub mod test {
 	crate::generate_storage_alias! {
 		Prefix,
 		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, Seven>>
+	}
+
+	#[test]
+	fn slide_works() {
+		let mut b: BoundedVec<u32, ConstU32<6>> = vec![0, 1, 2, 3, 4, 5].try_into().unwrap();
+		b.slide(1, 5);
+		assert_eq!(*b, vec![0, 2, 3, 4, 1, 5]);
+		b.slide(4, 0);
+		assert_eq!(*b, vec![1, 0, 2, 3, 4, 5]);
+		b.slide(0, 2);
+		assert_eq!(*b, vec![0, 1, 2, 3, 4, 5]);
+		b.slide(1, 6);
+		assert_eq!(*b, vec![0, 2, 3, 4, 5, 1]);
+		b.slide(0, 6);
+		assert_eq!(*b, vec![2, 3, 4, 5, 1, 0]);
+	}
+
+	#[test]
+	fn slide_noops_work() {
+		let mut b: BoundedVec<u32, ConstU32<6>> = vec![0, 1, 2, 3, 4, 5].try_into().unwrap();
+		b.slide(3, 3);
+		assert_eq!(*b, vec![0, 1, 2, 3, 4, 5]);
+		b.slide(3, 4);
+		assert_eq!(*b, vec![0, 1, 2, 3, 4, 5]);
+	}
+
+	#[test]
+	fn force_insert_keep_left_works() {
+		let mut b: BoundedVec<u32, ConstU32<4>> = vec![].try_into().unwrap();
+		assert!(b.force_insert_keep_left(0, 30));
+		assert!(b.force_insert_keep_left(0, 10));
+		assert!(b.force_insert_keep_left(1, 20));
+		assert!(b.force_insert_keep_left(3, 40));
+		assert_eq!(*b, vec![10, 20, 30, 40]);
+		// at capacity.
+		assert!(!b.force_insert_keep_left(4, 41));
+		assert_eq!(*b, vec![10, 20, 30, 40]);
+		assert!(b.force_insert_keep_left(3, 31));
+		assert_eq!(*b, vec![10, 20, 30, 31]);
+		assert!(b.force_insert_keep_left(1, 11));
+		assert_eq!(*b, vec![10, 11, 20, 30]);
+		assert!(b.force_insert_keep_left(0, 1));
+		assert_eq!(*b, vec![1, 10, 11, 20]);
+	}
+
+	#[test]
+	fn force_insert_keep_right_works() {
+		let mut b: BoundedVec<u32, ConstU32<4>> = vec![].try_into().unwrap();
+		assert!(b.force_insert_keep_right(0, 30));
+		assert!(b.force_insert_keep_right(0, 10));
+		assert!(b.force_insert_keep_right(1, 20));
+		assert!(b.force_insert_keep_right(3, 40));
+		assert_eq!(*b, vec![10, 20, 30, 40]);
+		// at capacity.
+		assert!(!b.force_insert_keep_right(0, 0));
+		assert_eq!(*b, vec![10, 20, 30, 40]);
+		assert!(b.force_insert_keep_right(1, 11));
+		assert_eq!(*b, vec![11, 20, 30, 40]);
+		assert!(b.force_insert_keep_right(3, 31));
+		assert_eq!(*b, vec![20, 30, 31, 40]);
+		assert!(b.force_insert_keep_right(4, 41));
+		assert_eq!(*b, vec![30, 31, 40, 41]);
 	}
 
 	#[test]

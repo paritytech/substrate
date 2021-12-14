@@ -35,7 +35,7 @@ fn params_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(ReferendumCount::<Test>::get(), 0);
 		assert_eq!(Balances::free_balance(42), 0);
-		assert_eq!(Balances::total_issuance(), 210);
+		assert_eq!(Balances::total_issuance(), 600);
 	});
 }
 
@@ -84,6 +84,68 @@ fn confirming_then_reconfirming_works() {
 	});
 }
 
+fn is_waiting(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: None, .. }))
+	)
+}
+
+fn is_deciding(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
+	)
+}
+
+fn is_deciding_and_failing(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Ongoing(ReferendumStatus {
+			deciding: Some(DecidingStatus { confirming: None, .. }),
+			..
+		}))
+	)
+}
+
+fn is_confirming(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Ongoing(ReferendumStatus {
+			deciding: Some(DecidingStatus { confirming: Some(_), .. }),
+			..
+		}))
+	)
+}
+
+fn is_approved(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Approved(..))
+	)
+}
+
+fn is_rejected(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Rejected(..))
+	)
+}
+
+fn is_cancelled(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Cancelled(..))
+	)
+}
+
+fn is_killed(i: ReferendumIndex) -> bool {
+	matches!(
+		ReferendumInfoFor::<Test>::get(i),
+		Some(ReferendumInfo::Killed(..))
+	)
+}
+
 #[test]
 fn queueing_works() {
 	new_test_ext().execute_with(|| {
@@ -99,51 +161,93 @@ fn queueing_works() {
 		run_to(2);
 
 		// Submit 3 more proposals into the same queue.
-		for i in 1..=3 {
+		for i in 1..=4 {
 			assert_ok!(Referenda::submit(
 				Origin::signed(i),
 				RawOrigin::Root.into(),
 				set_balance_proposal_hash(i),
 				AtOrAfter::After(0),
 			));
-			assert_ok!(Referenda::place_decision_deposit(Origin::signed(6), i as u32));
+			assert_ok!(Referenda::place_decision_deposit(Origin::signed(i), i as u32));
 			// TODO: decision deposit after some initial votes with a non-highest voted coming first.
 		}
-		assert_eq!(ReferendumCount::<Test>::get(), 4);
+		assert_eq!(ReferendumCount::<Test>::get(), 5);
 
 		run_to(5);
 		// One should be being decided.
 		assert_eq!(DecidingCount::<Test>::get(0), 1);
-		assert_matches!(
-			ReferendumInfoFor::<Test>::get(0),
-			Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
-		);
+		assert!(is_deciding_and_failing(0));
 
 		// Vote to set order.
 		set_tally(1, 1, 10);
 		set_tally(2, 2, 20);
 		set_tally(3, 3, 30);
+		set_tally(4, 100, 0);
 		println!("Agenda #6: {:?}", pallet_scheduler::Agenda::<Test>::get(6));
 		run_to(6);
 		println!("{:?}", Vec::<_>::from(TrackQueue::<Test>::get(0)));
 
 		// Cancel the first.
 		assert_ok!(Referenda::cancel(Origin::signed(4), 0));
+		assert!(is_cancelled(0));
 
-		// The other with the most approvals should be being decided.
+		// The other with the most approvals (#4) should be being decided.
 		assert_eq!(DecidingCount::<Test>::get(0), 1);
-		assert_matches!(
-			ReferendumInfoFor::<Test>::get(3),
-			Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
-		);
+		assert!(is_deciding(4));
+		assert!(is_confirming(4));
 
 		// Vote on the remaining two to change order.
-		// Vote enough for it to insta-win.
-		// There should be a third being decided, the one with the most approvals.
+		println!("Set tally #1");
+		set_tally(1, 30, 31);
+		println!("{:?}", Vec::<_>::from(TrackQueue::<Test>::get(0)));
+		println!("Set tally #2");
+		set_tally(2, 20, 20);
+		println!("{:?}", Vec::<_>::from(TrackQueue::<Test>::get(0)));
+
+		// Let confirmation period end.
+		run_to(8);
+
+		// #4 should have been confirmed.
+		assert!(is_approved(4));
+		// #1 (the one with the most approvals) should now be being decided.
+		assert!(is_deciding(1));
+
 		// Let it end unsuccessfully.
-		// The final should be being decided.
+		run_to(12);
+		assert!(is_rejected(1));
+
+		// #2 should now be being decided. It will (barely) pass.
+		assert!(is_deciding_and_failing(2));
+
+		// #2 moves into confirming at the last moment with a 50% approval.
+		run_to(16);
+		assert!(is_confirming(2));
+
+		// #2 gets approved.
+		run_to(18);
+		assert!(is_approved(2));
+		assert!(is_deciding(3));
+/*
+		// Vote enough on #2 for it to go into confirming.
+		set_tally(2, 100, 0);
+		assert!(is_confirming(2));
+
+		run_to(14);
+		set_tally(2, 100, 100);
+		assert!(is_deciding_and_failing(2));
+
+		run_to(15);
+		set_tally(2, 1000, 100);
+		assert!(is_confirming(2));
+
+		run_to(17);
+*/
 	});
 }
+
+// TODO: Confirm -> Unconfirm -> Reconfirm -> Pass
+// TODO: (End) Confirm -> Unconfirm (overtime) -> Pass
+// TODO: (End) Confirm -> Unconfirm (overtime) -> Fail
 
 #[test]
 fn kill_when_confirming_works() {
@@ -159,18 +263,18 @@ fn auto_timeout_should_happen_with_nothing_but_submit() {
 			Origin::signed(1),
 			RawOrigin::Root.into(),
 			set_balance_proposal_hash(1),
-			AtOrAfter::At(10),
+			AtOrAfter::At(20),
 		));
-		run_to(10);
+		run_to(20);
 		assert_matches!(
 			ReferendumInfoFor::<Test>::get(0),
 			Some(ReferendumInfo::Ongoing(..))
 		);
-		run_to(11);
+		run_to(21);
 		// #11: Timed out - ended.
 		assert_matches!(
 			ReferendumInfoFor::<Test>::get(0),
-			Some(ReferendumInfo::TimedOut(11, _, None))
+			Some(ReferendumInfo::TimedOut(21, _, None))
 		);
 
 	});
