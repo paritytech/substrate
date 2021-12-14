@@ -167,8 +167,12 @@ pub trait ConsumerLimits {
 }
 
 impl<const Z: u32> ConsumerLimits for ConstU32<Z> {
-	fn max_consumers() -> RefCount { Z }
-	fn max_overflow() -> RefCount { Z }
+	fn max_consumers() -> RefCount {
+		Z
+	}
+	fn max_overflow() -> RefCount {
+		Z
+	}
 }
 
 impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, MaxOverflow) {
