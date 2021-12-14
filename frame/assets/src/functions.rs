@@ -456,7 +456,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		let actual = Self::prep_debit(id, target, amount, f)?;
-		let mut target_died: DeadConsequence = Keep;
+		let mut target_died: Option<DeadConsequence> = None;
 
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -471,9 +471,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				account.balance = account.balance.saturating_sub(actual);
 				if account.balance < details.min_balance {
 					debug_assert!(account.balance.is_zero(), "checked in prep; qed");
-					target_died = Remove;
-					if let Remove = Self::dead_account(target, &mut details, &account.reason, false)
-					{
+					target_died =
+						Some(Self::dead_account(target, &mut details, &account.reason, false));
+					if let Some(Remove) = target_died {
 						return Ok(())
 					}
 				};
@@ -485,7 +485,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		// Execute hook outside of `mutate`.
-		if let Remove = target_died {
+		if let Some(Remove) = target_died {
 			T::Freezer::died(id, target);
 		}
 		Ok(actual)
@@ -509,14 +509,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<T::Balance, DispatchError> {
 		let (balance, died) =
 			Self::transfer_and_die(id, source, dest, amount, maybe_need_admin, f)?;
-		if let Remove = died {
+		if let Some(Remove) = died {
 			T::Freezer::died(id, source);
 		}
 		Ok(balance)
 	}
 
 	/// Same as `do_transfer` but it does not execute the `FrozenBalance::died` hook and
-	/// instead returns whether the `source` account died in this operation.
+	/// instead returns whether and how the `source` account died in this operation.
 	fn transfer_and_die(
 		id: T::AssetId,
 		source: &T::AccountId,
@@ -524,7 +524,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 		maybe_need_admin: Option<T::AccountId>,
 		f: TransferFlags,
-	) -> Result<(T::Balance, DeadConsequence), DispatchError> {
+	) -> Result<(T::Balance, Option<DeadConsequence>), DispatchError> {
 		// Early exist if no-op.
 		if amount.is_zero() {
 			Self::deposit_event(Event::Transferred {
@@ -533,7 +533,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				to: dest.clone(),
 				amount,
 			});
-			return Ok((amount, Keep))
+			return Ok((amount, None))
 		}
 
 		// Figure out the debit and credit, together with side-effects.
@@ -542,7 +542,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut source_account =
 			Account::<T, I>::get(id, &source).ok_or(Error::<T, I>::NoAccount)?;
-		let mut source_died: DeadConsequence = Keep;
+		let mut source_died: Option<DeadConsequence> = None;
 
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -595,9 +595,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Remove source account if it's now dead.
 			if source_account.balance < details.min_balance {
 				debug_assert!(source_account.balance.is_zero(), "checked in prep; qed");
-				source_died = Remove;
-				if let Remove = Self::dead_account(&source, details, &source_account.reason, false)
-				{
+				source_died =
+					Some(Self::dead_account(&source, details, &source_account.reason, false));
+				if let Some(Remove) = source_died {
 					Account::<T, I>::remove(id, &source);
 					return Ok(())
 				}
@@ -773,7 +773,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		destination: &T::AccountId,
 		amount: T::Balance,
 	) -> DispatchResult {
-		let mut owner_died: DeadConsequence = Keep;
+		let mut owner_died: Option<DeadConsequence> = None;
 
 		Approvals::<T, I>::try_mutate_exists(
 			(id, &owner, delegate),
@@ -801,7 +801,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)?;
 
 		// Execute hook outside of `mutate`.
-		if let Remove = owner_died {
+		if let Some(Remove) = owner_died {
 			T::Freezer::died(id, owner);
 		}
 		Ok(())
