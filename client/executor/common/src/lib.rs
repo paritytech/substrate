@@ -28,4 +28,6 @@ pub mod util;
 pub mod wasm_runtime;
 
 mod wasmi_backend;
+
+#[cfg(feature = "wasmer-sandbox")]
 mod wasmer_backend;
