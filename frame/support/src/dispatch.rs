@@ -1980,7 +1980,6 @@ macro_rules! decl_module {
 		pub type Pallet<$trait_instance $(, $instance $( = $module_default_instance)?)?>
 			= $mod_type<$trait_instance $(, $instance)?>;
 
-		/// Declarative macros do not support const assertions for error sizes
 		$crate::__create_tt_macro! {
 			tt_error_token,
 		}
