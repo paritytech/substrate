@@ -221,7 +221,9 @@ where
 			subscriptions.add(subscriber, move |sink| {
 				tx_stream
 					.map(|v| Ok(Ok(v)))
-					.forward(sink.sink_map_err(|e| log::debug!("Error sending notifications: {:?}", e)))
+					.forward(
+						sink.sink_map_err(|e| log::debug!("Error sending notifications: {:?}", e)),
+					)
 					.map(drop)
 			});
 		};
