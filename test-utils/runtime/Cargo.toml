@@ -25,7 +25,7 @@ memory-db = { version = "0.27.0", default-features = false }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime-interface = { version = "4.0.0", default-features = false, path = "../../primitives/runtime-interface" }
+sp-runtime-interface = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime-interface" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }

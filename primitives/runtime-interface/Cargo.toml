@@ -1,6 +1,6 @@
 [package]
 name = "sp-runtime-interface"
-version = "4.0.0"
+version = "4.1.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-wasm-interface = { version = "4.0.0", path = "../wasm-interface", default-features = false }
+sp-wasm-interface = { version = "4.1.0-dev", path = "../wasm-interface", default-features = false }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-tracing = { version = "4.0.0", default-features = false, path = "../tracing" }
 sp-runtime-interface-proc-macro = { version = "4.0.0", path = "proc-macro" }

@@ -67,17 +67,15 @@ mod tests {
 	use sc_executor_common::runtime_blob::RuntimeBlob;
 	use sc_runtime_test::wasm_binary_unwrap;
 	use sp_io::TestExternalities;
-	use sp_wasm_interface::HostFunctions;
 
 	#[test]
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::new(
+		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::new(
 			WasmExecutionMethod::Interpreted,
 			Some(8),
-			sp_io::SubstrateHostFunctions::host_functions(),
 			8,
 			None,
 			2,

@@ -52,3 +52,8 @@ tokio = { version = "1.13", features = ["signal"] }
 # Calling RPC
 jsonrpc-core = "18.0"
 num-traits = "0.2.14"
+
+[features]
+default = ["std"]
+# This is here so that we can use the `runtime_interface` procedural macro
+std = []

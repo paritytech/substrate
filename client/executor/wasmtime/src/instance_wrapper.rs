@@ -24,7 +24,7 @@ use sc_executor_common::{
 	error::{Error, Result},
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{Function, Pointer, Value, WordSize};
+use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
 use wasmtime::{
 	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
 };
@@ -138,13 +138,15 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(
+	pub fn new<H>(
 		module: &Module,
-		host_functions: &[&'static dyn Function],
 		heap_pages: u64,
 		allow_missing_func_imports: bool,
 		max_memory_size: Option<usize>,
-	) -> Result<Self> {
+	) -> Result<Self>
+	where
+		H: HostFunctions,
+	{
 		let limits = if let Some(max_memory_size) = max_memory_size {
 			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
 		} else {
@@ -161,10 +163,9 @@ impl InstanceWrapper {
 
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
-		let imports = crate::imports::resolve_imports(
+		let imports = crate::imports::resolve_imports::<H>(
 			&mut store,
 			module,
-			host_functions,
 			heap_pages,
 			allow_missing_func_imports,
 		)?;
