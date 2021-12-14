@@ -48,7 +48,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, HashFor, Header as HeaderT},
 };
 use sp_timestamp::Timestamp;
-use std::{fmt::Debug, ops::Deref, time::Duration};
+use std::{fmt::Debug, ops::Deref, pin::Pin, time::Duration};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -149,17 +149,23 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	) -> Box<
 		dyn Fn(
 				B::Header,
-				&B::Hash,
+				B::Hash,
 				Vec<B::Extrinsic>,
 				StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 				Self::Claim,
 				Self::EpochData,
-			) -> Result<
-				sc_consensus::BlockImportParams<
-					B,
-					<Self::BlockImport as BlockImport<B>>::Transaction,
+			) -> Pin<
+				Box<
+					dyn Future<
+							Output = Result<
+								sc_consensus::BlockImportParams<
+									B,
+									<Self::BlockImport as BlockImport<B>>::Transaction,
+								>,
+								sp_consensus::Error,
+							>,
+						> + Send,
 				>,
-				sp_consensus::Error,
 			> + Send
 			+ 'static,
 	>;
@@ -351,14 +357,16 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let header_hash = header.hash();
 		let parent_hash = *header.parent_hash();
 
-		let block_import_params = match block_import_params_maker(
+		let block_import_params_fut = block_import_params_maker(
 			header,
-			&header_hash,
+			header_hash,
 			body.clone(),
 			proposal.storage_changes,
 			claim,
 			epoch_data,
-		) {
+		);
+
+		let block_import_params = match block_import_params_fut.await {
 			Ok(bi) => bi,
 			Err(err) => {
 				warn!(target: logging_target, "Failed to create block import params: {:?}", err);
