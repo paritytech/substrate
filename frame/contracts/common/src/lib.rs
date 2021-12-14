@@ -170,6 +170,12 @@ pub enum Code<Hash> {
 	Existing(Hash),
 }
 
+impl<T: Into<Vec<u8>>, Hash> From<T> for Code<Hash> {
+	fn from(from: T) -> Self {
+		Code::Upload(Bytes(from.into()))
+	}
+}
+
 /// The amount of balance that was either charged or refunded in order to pay for storage.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

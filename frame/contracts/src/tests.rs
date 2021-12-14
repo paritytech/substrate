@@ -24,7 +24,7 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, CodeStorage, Config, ContractInfoOf, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -2806,5 +2806,96 @@ fn call_after_killed_account_needs_funding() {
 				},
 			]
 		);
+	});
+}
+
+#[test]
+fn contract_reverted() {
+	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let flags = ReturnFlags::REVERT;
+		let buffer = [4u8, 8, 15, 16, 23, 42];
+		let input = (flags.bits(), buffer).encode();
+
+		// We just upload the code for later use
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None));
+
+		// Calling extrinsic: revert leads to an error
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				input.clone(),
+				vec![],
+			),
+			<Error<Test>>::ContractReverted,
+		);
+
+		// Calling extrinsic: revert leads to an error
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				wasm,
+				input.clone(),
+				vec![],
+			),
+			<Error<Test>>::ContractReverted,
+		);
+
+		// Calling directly: revert leads to success but the flags indicate the error
+		// This is just a different way of transporting the error that allows the read out
+		// the `data` which is only there on success. Obviously, the contract isn't
+		// instantiated.
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Existing(code_hash),
+			input.clone(),
+			vec![],
+			false,
+		)
+		.result
+		.unwrap();
+		assert_eq!(result.result.flags, flags);
+		assert_eq!(result.result.data.0, buffer);
+		assert!(!<ContractInfoOf<Test>>::contains_key(result.account_id));
+
+		// Pass empty flags and therefore successfully instantiate the contract for later use.
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Existing(code_hash),
+			ReturnFlags::empty().bits().encode(),
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Calling extrinsic: revert leads to an error
+		assert_err_ignore_postinfo!(
+			Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, input.clone()),
+			<Error<Test>>::ContractReverted,
+		);
+
+		// Calling directly: revert leads to success but the flags indicate the error
+		let result = Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input, false)
+			.result
+			.unwrap();
+		assert_eq!(result.flags, flags);
+		assert_eq!(result.data.0, buffer);
 	});
 }
