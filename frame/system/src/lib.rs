@@ -1122,7 +1122,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Increment the reference counter on an account.
 	///
-	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	/// The account `who`'s `providers` must be non-zero and the current number of consumers must
+	/// be less than `MaxConsumers` or this will return an error.
 	pub fn inc_consumers(who: &T::AccountId) -> Result<(), DispatchError> {
 		Account::<T>::try_mutate(who, |a| {
 			if a.providers > 0 {
@@ -1132,6 +1133,20 @@ impl<T: Config> Pallet<T> {
 				} else {
 					Err(DispatchError::TooManyConsumers)
 				}
+			} else {
+				Err(DispatchError::NoProviders)
+			}
+		})
+	}
+
+	/// Increment the reference counter on an account, ignoring the `MaxConsumers` limit.
+	///
+	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	pub fn inc_consumers_without_limit(who: &T::AccountId) -> Result<(), DispatchError> {
+		Account::<T>::try_mutate(who, |a| {
+			if a.providers > 0 {
+				a.consumers = a.consumers.saturating_add(1);
+				Ok(())
 			} else {
 				Err(DispatchError::NoProviders)
 			}
