@@ -72,78 +72,172 @@ fn basic_happy_path_works() {
 	});
 }
 
+// TODO: Confirm -> Kill -> Fail
+// TODO: Confirm -> Unconfirm -> Reconfirm -> Pass
+// TODO: (End) Confirm -> Unconfirm (overtime) -> Pass
+// TODO: (End) Confirm -> Unconfirm (overtime) -> Fail
+
+#[test]
+fn insta_confirm_then_kill_works() {
+	new_test_ext().execute_with(|| {
+		// #1: submit
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		// Insta-confirm
+		set_tally(0, 100, 0);
+		run_to(6);
+		assert!(pallet_scheduler::Agenda::<Test>::get(7).iter().any(|x| x.is_some()));
+		assert_ok!(Referenda::kill(Origin::root(), 0));
+		assert!(!pallet_scheduler::Agenda::<Test>::get(7).iter().any(|x| x.is_some()));
+		assert_eq!(killed_since(0), 6);
+	});
+}
+
+fn make_instaconfirm_and_run_until_deciding() -> ReferendumIndex {
+	assert_ok!(Referenda::submit(
+		Origin::signed(1),
+		RawOrigin::Root.into(),
+		set_balance_proposal_hash(1),
+		AtOrAfter::At(10),
+	));
+	assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+	set_tally(0, 100, 0);
+	let index = ReferendumCount::<Test>::get() - 1;
+	while !is_deciding(index) {
+		run_to(System::block_number() + 1);
+	}
+	assert_eq!(confirming_until(index), System::block_number() + 2);
+	index
+}
+
+fn make_confirming_and_run_until_deciding() -> ReferendumIndex {
+	assert_ok!(Referenda::submit(
+		Origin::signed(1),
+		RawOrigin::Root.into(),
+		set_balance_proposal_hash(1),
+		AtOrAfter::At(10),
+	));
+	assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+	let index = ReferendumCount::<Test>::get() - 1;
+	while !is_deciding(index) {
+		run_to(System::block_number() + 1);
+	}
+	set_tally(0, 100, 0);
+	index
+}
+
+fn make_passing_and_run_until_deciding() -> ReferendumIndex {
+	assert_ok!(Referenda::submit(
+		Origin::signed(1),
+		RawOrigin::Root.into(),
+		set_balance_proposal_hash(1),
+		AtOrAfter::At(10),
+	));
+	assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+	let index = ReferendumCount::<Test>::get() - 1;
+	while !is_deciding(index) {
+		run_to(System::block_number() + 1);
+	}
+	set_tally(0, 100, 99);
+	index
+}
+
+#[test]
+fn confirm_then_reconfirm_with_elapsed_trigger_works() {
+	new_test_ext().execute_with(|| {
+		let r = make_confirming_and_run_until_deciding();
+		assert_eq!(confirming_until(r), 7);
+		run_to(6);
+		set_tally(r, 100, 99);
+		assert_eq!(deciding_and_failing_since(r), 5);
+		run_to(11);
+		assert_eq!(approved_since(r), 11);
+	});
+}
+
+#[test]
+fn instaconfirm_then_reconfirm_with_elapsed_trigger_works() {
+	new_test_ext().execute_with(|| {
+		let r = make_instaconfirm_and_run_until_deciding();
+		run_to(6);
+		assert_eq!(confirming_until(r), 7);
+		set_tally(r, 100, 99);
+		assert_eq!(deciding_and_failing_since(r), 5);
+		run_to(11);
+		assert_eq!(approved_since(r), 11);
+	});
+}
+
+#[test]
+fn instaconfirm_then_reconfirm_with_voting_trigger_works() {
+	new_test_ext().execute_with(|| {
+		let r = make_instaconfirm_and_run_until_deciding();
+		run_to(6);
+		assert_eq!(confirming_until(r), 7);
+		set_tally(r, 100, 99);
+		assert_eq!(deciding_and_failing_since(r), 5);
+		run_to(8);
+		set_tally(r, 100, 0);
+		assert_eq!(confirming_until(r), 10);
+		run_to(10);
+		assert_eq!(approved_since(r), 10);
+	});
+}
+
+#[test]
+fn voting_should_extend_for_late_confirmation() {
+	new_test_ext().execute_with(|| {
+		let r = make_confirming_and_run_until_deciding();
+		run_to(6);
+		assert_eq!(confirming_until(r), 7);
+		set_tally(r, 100, 99);
+		assert_eq!(deciding_and_failing_since(r), 5);
+		run_to(8);
+		set_tally(r, 100, 0);
+		assert_eq!(confirming_until(r), 10);
+		run_to(10);
+		assert_eq!(approved_since(r), 10);
+	});
+}
+
+#[test]
+fn should_instafail_during_extension_confirmation() {
+	new_test_ext().execute_with(|| {
+		let r = make_passing_and_run_until_deciding();
+		run_to(10);
+		assert_eq!(confirming_until(r), 11);
+		// Should insta-fail since it's now past the normal voting time.
+		set_tally(r, 100, 101);
+		assert_eq!(rejected_since(r), 10);
+	});
+}
+
 #[test]
 fn confirming_then_fail_works() {
 	new_test_ext().execute_with(|| {
+		// #1: submit
+		assert_ok!(Referenda::submit(
+			Origin::signed(1),
+			RawOrigin::Root.into(),
+			set_balance_proposal_hash(1),
+			AtOrAfter::At(10),
+		));
+		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		// Normally ends at 5 + 4 (voting period) = 9.
+		run_to(6);
+		assert_eq!(deciding_and_failing_since(0), 5);
+		set_tally(0, 100, 0);
+		assert_eq!(confirming_until(0), 8);
+		run_to(7);
+		set_tally(0, 100, 101);
+		run_to(9);
+		assert_eq!(rejected_since(0), 9);
 	});
-}
-
-#[test]
-fn confirming_then_reconfirming_works() {
-	new_test_ext().execute_with(|| {
-	});
-}
-
-fn is_waiting(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: None, .. }))
-	)
-}
-
-fn is_deciding(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus { deciding: Some(_), .. }))
-	)
-}
-
-fn is_deciding_and_failing(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus {
-			deciding: Some(DecidingStatus { confirming: None, .. }),
-			..
-		}))
-	)
-}
-
-fn is_confirming(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Ongoing(ReferendumStatus {
-			deciding: Some(DecidingStatus { confirming: Some(_), .. }),
-			..
-		}))
-	)
-}
-
-fn is_approved(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Approved(..))
-	)
-}
-
-fn is_rejected(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Rejected(..))
-	)
-}
-
-fn is_cancelled(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Cancelled(..))
-	)
-}
-
-fn is_killed(i: ReferendumIndex) -> bool {
-	matches!(
-		ReferendumInfoFor::<Test>::get(i),
-		Some(ReferendumInfo::Killed(..))
-	)
 }
 
 #[test]
@@ -177,6 +271,9 @@ fn queueing_works() {
 		// One should be being decided.
 		assert_eq!(DecidingCount::<Test>::get(0), 1);
 		assert!(is_deciding_and_failing(0));
+		for i in 1..=4 {
+			assert!(is_waiting(i));
+		}
 
 		// Vote to set order.
 		set_tally(1, 1, 10);
@@ -227,31 +324,6 @@ fn queueing_works() {
 		run_to(18);
 		assert!(is_approved(2));
 		assert!(is_deciding(3));
-/*
-		// Vote enough on #2 for it to go into confirming.
-		set_tally(2, 100, 0);
-		assert!(is_confirming(2));
-
-		run_to(14);
-		set_tally(2, 100, 100);
-		assert!(is_deciding_and_failing(2));
-
-		run_to(15);
-		set_tally(2, 1000, 100);
-		assert!(is_confirming(2));
-
-		run_to(17);
-*/
-	});
-}
-
-// TODO: Confirm -> Unconfirm -> Reconfirm -> Pass
-// TODO: (End) Confirm -> Unconfirm (overtime) -> Pass
-// TODO: (End) Confirm -> Unconfirm (overtime) -> Fail
-
-#[test]
-fn kill_when_confirming_works() {
-	new_test_ext().execute_with(|| {
 	});
 }
 
@@ -421,10 +493,7 @@ fn cancel_works() {
 		run_to(8);
 		assert_ok!(Referenda::cancel(Origin::signed(4), 0));
 		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(3), 0));
-		assert_matches!(
-			ReferendumInfoFor::<Test>::get(0).unwrap(),
-			ReferendumInfo::Cancelled(8, Deposit { who: 1, amount: 2 }, None)
-		);
+		assert!(is_cancelled(0));
 	});
 }
 
@@ -462,7 +531,7 @@ fn kill_works() {
 		assert_ok!(Referenda::kill(Origin::root(), 0));
 		let e = Error::<Test>::NoDeposit;
 		assert_noop!(Referenda::refund_decision_deposit(Origin::signed(3), 0), e);
-		assert_matches!(ReferendumInfoFor::<Test>::get(0).unwrap(), ReferendumInfo::Killed(8));
+		assert!(is_killed(0));
 	});
 }
 
