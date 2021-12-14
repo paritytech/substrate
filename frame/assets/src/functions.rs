@@ -84,7 +84,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		reason: &ExistenceReason<DepositBalanceOf<T, I>>,
 		force: bool,
 	) -> DeadConsequence {
-		let mut result = Remove;
 		match *reason {
 			ExistenceReason::Consumer => frame_system::Pallet::<T>::dec_consumers(who),
 			ExistenceReason::Sufficient => {
@@ -93,10 +92,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 			ExistenceReason::DepositRefunded => {},
 			ExistenceReason::DepositHeld(_) if !force => return Keep,
-			ExistenceReason::DepositHeld(_) => result = Keep,
+			ExistenceReason::DepositHeld(_) => {},
 		}
 		d.accounts = d.accounts.saturating_sub(1);
-		result
+		Remove
 	}
 
 	pub(super) fn can_increase(
