@@ -131,9 +131,9 @@ pub struct ExecReturnValue {
 }
 
 impl ExecReturnValue {
-	/// We understand the absense of a revert flag as success.
-	pub fn is_success(&self) -> bool {
-		!self.flags.contains(ReturnFlags::REVERT)
+	/// The contract did revert all storage changes.
+	pub fn did_revert(&self) -> bool {
+		self.flags.contains(ReturnFlags::REVERT)
 	}
 }
 

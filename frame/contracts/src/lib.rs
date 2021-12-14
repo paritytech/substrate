@@ -299,7 +299,7 @@ pub mod pallet {
 				None,
 			);
 			if let Ok(retval) = &output.result {
-				if !retval.is_success() {
+				if retval.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
@@ -362,7 +362,7 @@ pub mod pallet {
 				None,
 			);
 			if let Ok(retval) = &output.result {
-				if !retval.1.is_success() {
+				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
@@ -402,7 +402,7 @@ pub mod pallet {
 				None,
 			);
 			if let Ok(retval) = &output.result {
-				if !retval.1.is_success() {
+				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}

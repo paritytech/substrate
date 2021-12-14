@@ -1096,7 +1096,7 @@ fn crypto_hashes() {
 				<Pallet<Test>>::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, params, false)
 					.result
 					.unwrap();
-			assert!(result.is_success());
+			assert!(!result.did_revert());
 			let expected = hash_fn(input.as_ref());
 			assert_eq!(&result.data[..*expected_size], &*expected);
 		}
@@ -1881,11 +1881,11 @@ fn reinstrument_does_charge() {
 
 		let result0 =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, zero.clone(), false);
-		assert!(result0.result.unwrap().is_success());
+		assert!(!result0.result.unwrap().did_revert());
 
 		let result1 =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, zero.clone(), false);
-		assert!(result1.result.unwrap().is_success());
+		assert!(!result1.result.unwrap().did_revert());
 
 		// They should match because both where called with the same schedule.
 		assert_eq!(result0.gas_consumed, result1.gas_consumed);
@@ -1899,7 +1899,7 @@ fn reinstrument_does_charge() {
 		// This call should trigger reinstrumentation
 		let result2 =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, zero.clone(), false);
-		assert!(result2.result.unwrap().is_success());
+		assert!(!result2.result.unwrap().did_revert());
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
@@ -2162,7 +2162,7 @@ fn ecdsa_recover() {
 			<Pallet<Test>>::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, params, false)
 				.result
 				.unwrap();
-		assert!(result.is_success());
+		assert!(!result.did_revert());
 		assert_eq!(result.data.as_ref(), &EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
 }
