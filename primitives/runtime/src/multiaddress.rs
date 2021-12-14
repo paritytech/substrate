@@ -62,9 +62,3 @@ impl<AccountId, AccountIndex> From<AccountId> for MultiAddress<AccountId, Accoun
 		Self::Id(a)
 	}
 }
-
-impl<AccountId: Default, AccountIndex> Default for MultiAddress<AccountId, AccountIndex> {
-	fn default() -> Self {
-		Self::Id(Default::default())
-	}
-}

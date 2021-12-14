@@ -364,7 +364,7 @@ mod tests {
 	use crate::{
 		codec::{Decode, Encode},
 		testing::TestSignature as TestSig,
-		traits::{IdentityLookup, SignedExtension},
+		traits::{DispatchInfoOf, IdentityLookup, SignedExtension},
 	};
 	use sp_io::hashing::blake2_256;
 
@@ -386,6 +386,16 @@ mod tests {
 
 		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
 			Ok(())
+		}
+
+		fn pre_dispatch(
+			self,
+			who: &Self::AccountId,
+			call: &Self::Call,
+			info: &DispatchInfoOf<Self::Call>,
+			len: usize,
+		) -> Result<Self::Pre, TransactionValidityError> {
+			Ok(self.validate(who, call, info, len).map(|_| ())?)
 		}
 	}
 

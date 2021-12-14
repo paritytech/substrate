@@ -563,6 +563,7 @@ mod tests {
 	use sc_client_api::BlockImportNotification;
 	use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 	use sp_consensus::BlockOrigin;
+	use sp_core::crypto::UncheckedFrom;
 	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
 
 	#[derive(Clone)]
@@ -796,8 +797,8 @@ mod tests {
 		let h3 = make_header(7);
 
 		let signed_prevote = |header: &Header| finality_grandpa::SignedPrevote {
-			id: Default::default(),
-			signature: Default::default(),
+			id: UncheckedFrom::unchecked_from([1; 32]),
+			signature: UncheckedFrom::unchecked_from([1; 64]),
 			prevote: finality_grandpa::Prevote {
 				target_hash: header.hash(),
 				target_number: *header.number(),
@@ -805,8 +806,8 @@ mod tests {
 		};
 
 		let signed_precommit = |header: &Header| finality_grandpa::SignedPrecommit {
-			id: Default::default(),
-			signature: Default::default(),
+			id: UncheckedFrom::unchecked_from([1; 32]),
+			signature: UncheckedFrom::unchecked_from([1; 64]),
 			precommit: finality_grandpa::Precommit {
 				target_hash: header.hash(),
 				target_number: *header.number(),
@@ -844,8 +845,8 @@ mod tests {
 		let h3 = make_header(7);
 
 		let signed_prevote = |header: &Header| finality_grandpa::SignedPrevote {
-			id: Default::default(),
-			signature: Default::default(),
+			id: UncheckedFrom::unchecked_from([1; 32]),
+			signature: UncheckedFrom::unchecked_from([1; 64]),
 			prevote: finality_grandpa::Prevote {
 				target_hash: header.hash(),
 				target_number: *header.number(),
@@ -853,8 +854,8 @@ mod tests {
 		};
 
 		let signed_precommit = |header: &Header| finality_grandpa::SignedPrecommit {
-			id: Default::default(),
-			signature: Default::default(),
+			id: UncheckedFrom::unchecked_from([1; 32]),
+			signature: UncheckedFrom::unchecked_from([1; 64]),
 			precommit: finality_grandpa::Precommit {
 				target_hash: header.hash(),
 				target_number: *header.number(),

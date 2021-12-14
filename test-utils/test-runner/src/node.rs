@@ -195,7 +195,11 @@ where
 	{
 		let signed_data = if let Some(signer) = signer {
 			let extra = self.with_state(|| T::signed_extras(signer.clone()));
-			Some((signer.into(), MultiSignature::Sr25519(Default::default()), extra))
+			Some((
+				signer.into(),
+				MultiSignature::Sr25519(sp_core::sr25519::Signature::from_raw([0u8; 64])),
+				extra,
+			))
 		} else {
 			None
 		};
