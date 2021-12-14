@@ -28,7 +28,7 @@ sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 node-executor = { version = "3.0.0-dev", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
-sp-core = { version = "4.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = [

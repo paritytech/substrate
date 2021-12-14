@@ -23,7 +23,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../treasury" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
-sp-core = { version = "4.0.0", path = "../../primitives/core", default-features = false }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core", default-features = false }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 log = { version = "0.4.14", default-features = false }
 

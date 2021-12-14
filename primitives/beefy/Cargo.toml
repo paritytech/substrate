@@ -13,7 +13,7 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 
 sp-api = { version = "4.0.0-dev", path = "../api", default-features = false }
 sp-application-crypto = { version = "4.0.0-dev", path = "../application-crypto", default-features = false }
-sp-core = { version = "4.0.0", path = "../core", default-features = false }
+sp-core = { version = "4.1.0-dev", path = "../core", default-features = false }
 sp-runtime = { version = "4.0.0-dev", path = "../runtime", default-features = false }
 sp-std = { version = "4.0.0", path = "../std", default-features = false }
 

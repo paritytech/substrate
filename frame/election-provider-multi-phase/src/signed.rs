@@ -42,7 +42,7 @@ use sp_std::{
 /// A raw, unchecked signed submission.
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	/// Who submitted this solution.
 	pub who: AccountId,
@@ -167,17 +167,17 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Get the submission at a particular index.
-	fn get_submission(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
-		if self.deletion_overlay.contains(&idx) {
+	fn get_submission(&self, index: u32) -> Option<SignedSubmissionOf<T>> {
+		if self.deletion_overlay.contains(&index) {
 			// Note: can't actually remove the item from the insertion overlay (if present)
 			// because we don't want to use `&mut self` here. There may be some kind of
 			// `RefCell` optimization possible here in the future.
 			None
 		} else {
 			self.insertion_overlay
-				.get(&idx)
+				.get(&index)
 				.cloned()
-				.or_else(|| SignedSubmissionsMap::<T>::try_get(idx).ok())
+				.or_else(|| SignedSubmissionsMap::<T>::get(index))
 		}
 	}
 
@@ -200,18 +200,18 @@ impl<T: Config> SignedSubmissions<T> {
 		remove_score: ElectionScore,
 		insert: Option<(ElectionScore, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
-		let remove_idx = self.indices.remove(&remove_score)?;
+		let remove_index = self.indices.remove(&remove_score)?;
 		if let Some((insert_score, insert_idx)) = insert {
 			self.indices
 				.try_insert(insert_score, insert_idx)
 				.expect("just removed an item, we must be under capacity; qed");
 		}
 
-		self.insertion_overlay.remove(&remove_idx).or_else(|| {
-			(!self.deletion_overlay.contains(&remove_idx))
+		self.insertion_overlay.remove(&remove_index).or_else(|| {
+			(!self.deletion_overlay.contains(&remove_index))
 				.then(|| {
-					self.deletion_overlay.insert(remove_idx);
-					SignedSubmissionsMap::<T>::try_get(remove_idx).ok()
+					self.deletion_overlay.insert(remove_index);
+					SignedSubmissionsMap::<T>::get(remove_index)
 				})
 				.flatten()
 		})

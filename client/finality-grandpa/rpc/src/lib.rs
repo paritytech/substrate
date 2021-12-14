@@ -155,7 +155,7 @@ mod tests {
 	};
 	use sc_rpc::testing::deser_call;
 	use sp_blockchain::HeaderBackend;
-	use sp_core::crypto::Public;
+	use sp_core::crypto::ByteArray;
 	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 	use substrate_test_runtime_client::{
@@ -172,8 +172,8 @@ mod tests {
 	}
 
 	fn voters() -> HashSet<AuthorityId> {
-		let voter_id_1 = AuthorityId::from_slice(&[1; 32]);
-		let voter_id_2 = AuthorityId::from_slice(&[2; 32]);
+		let voter_id_1 = AuthorityId::from_slice(&[1; 32]).unwrap();
+		let voter_id_2 = AuthorityId::from_slice(&[2; 32]).unwrap();
 
 		vec![voter_id_1, voter_id_2].into_iter().collect()
 	}
@@ -221,7 +221,7 @@ mod tests {
 
 	impl ReportVoterState for TestVoterState {
 		fn get(&self) -> Option<report::VoterState<AuthorityId>> {
-			let voter_id_1 = AuthorityId::from_slice(&[1; 32]);
+			let voter_id_1 = AuthorityId::from_slice(&[1; 32]).unwrap();
 			let voters_best: HashSet<_> = vec![voter_id_1].into_iter().collect();
 
 			let best_round_state = sc_finality_grandpa::report::RoundState {

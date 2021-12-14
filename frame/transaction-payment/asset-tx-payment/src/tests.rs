@@ -201,10 +201,11 @@ impl pallet_authorship::Config for Runtime {
 pub struct CreditToBlockAuthor;
 impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 	fn handle_credit(credit: CreditOf<AccountId, Assets>) {
-		let author = pallet_authorship::Pallet::<Runtime>::author();
-		// What to do in case paying the author fails (e.g. because `fee < min_balance`)
-		// default: drop the result which will trigger the `OnDrop` of the imbalance.
-		let _ = <Assets as Balanced<AccountId>>::resolve(&author, credit);
+		if let Some(author) = pallet_authorship::Pallet::<Runtime>::author() {
+			// What to do in case paying the author fails (e.g. because `fee < min_balance`)
+			// default: drop the result which will trigger the `OnDrop` of the imbalance.
+			let _ = <Assets as Balanced<AccountId>>::resolve(&author, credit);
+		}
 	}
 }
 
@@ -304,7 +305,7 @@ fn transaction_payment_in_native_possible() {
 			assert_eq!(Balances::free_balance(1), initial_balance - 5 - 5 - 10);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_weight(5),
 				&default_post_info(),
 				len,
@@ -319,7 +320,7 @@ fn transaction_payment_in_native_possible() {
 			assert_eq!(Balances::free_balance(2), initial_balance_for_2 - 5 - 10 - 100 - 5);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_weight(100),
 				&post_info_from_weight(50),
 				len,
@@ -370,7 +371,7 @@ fn transaction_payment_in_asset_possible() {
 			assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_weight(weight),
 				&default_post_info(),
 				len,
@@ -423,7 +424,7 @@ fn transaction_payment_without_fee() {
 			assert_eq!(Assets::balance(asset_id, BLOCK_AUTHOR), 0);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_weight(weight),
 				&post_info_from_pays(Pays::No),
 				len,
@@ -475,7 +476,7 @@ fn asset_transaction_payment_with_tip_and_refund() {
 
 			let final_weight = 50;
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_weight(weight),
 				&post_info_from_weight(final_weight),
 				len,
@@ -528,7 +529,7 @@ fn payment_from_account_with_only_assets() {
 			assert_eq!(Assets::balance(asset_id, caller), balance - fee);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_weight(weight),
 				&default_post_info(),
 				len,
@@ -612,7 +613,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 				assert_eq!(Assets::balance(asset_id, caller), balance);
 
 				assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_pays(Pays::No),
 					&post_info_from_pays(Pays::No),
 					len,
@@ -627,7 +628,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 			assert_eq!(Assets::balance(asset_id, caller), balance - 1);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_weight(weight),
 				&default_post_info(),
 				len,
@@ -684,7 +685,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 			// `Pays::Yes` on post-dispatch does not mean we pay (we never charge more than the
 			// initial fee)
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				Some(pre),
 				&info_from_pays(Pays::No),
 				&post_info_from_pays(Pays::Yes),
 				len,
@@ -721,7 +722,7 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			assert_eq!(Assets::balance(asset_id, caller), balance);
 			let weight = 1;
 			let len = 1;
-			let pre = ChargeAssetTxPayment::<Runtime>::pre_dispatch_unsigned(
+			ChargeAssetTxPayment::<Runtime>::pre_dispatch_unsigned(
 				CALL,
 				&info_from_weight(weight),
 				len,
@@ -729,17 +730,11 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			.unwrap();
 
 			assert_eq!(Assets::balance(asset_id, caller), balance);
-			let (_tip, _who, initial_payment) = &pre;
-			let not_paying = match initial_payment {
-				&InitialPayment::Nothing => true,
-				_ => false,
-			};
-			assert!(not_paying, "initial payment is Nothing for unsigned extrinsics");
 
 			// `Pays::Yes` on post-dispatch does not mean we pay (we never charge more than the
 			// initial fee)
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
-				pre,
+				None,
 				&info_from_weight(weight),
 				&post_info_from_pays(Pays::Yes),
 				len,

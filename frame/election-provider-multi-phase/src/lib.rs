@@ -1189,7 +1189,7 @@ pub mod pallet {
 	/// affect; we shouldn't need a cryptographically secure hasher.
 	#[pallet::storage]
 	pub(crate) type SignedSubmissionsMap<T: Config> =
-		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, ValueQuery>;
+		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
 
 	// `SignedSubmissions` items end here.
 

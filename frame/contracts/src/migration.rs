@@ -224,13 +224,16 @@ mod v6 {
 			})
 		});
 
+		let nobody = T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+			.expect("Infinite input; no dead input space; qed");
+
 		<CodeStorage<T>>::translate(|key, old: OldPrefabWasmModule| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 2));
 			<OwnerInfoOf<T>>::insert(
 				key,
 				OwnerInfo {
 					refcount: old.refcount,
-					owner: Default::default(),
+					owner: nobody.clone(),
 					deposit: Default::default(),
 				},
 			);

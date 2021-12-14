@@ -187,7 +187,7 @@ fn record_proof_works() {
 		amount: 1000,
 		nonce: 0,
 		from: AccountKeyring::Alice.into(),
-		to: Default::default(),
+		to: AccountKeyring::Bob.into(),
 	}
 	.into_signed_tx();
 

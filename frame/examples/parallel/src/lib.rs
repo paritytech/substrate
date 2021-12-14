@@ -105,13 +105,13 @@ pub struct EnlistedParticipant {
 
 impl EnlistedParticipant {
 	fn verify(&self, event_id: &[u8]) -> bool {
-		use sp_core::Public;
+		use sp_core::ByteArray;
 		use sp_runtime::traits::Verify;
 
 		match sp_core::sr25519::Signature::try_from(&self.signature[..]) {
-			Ok(signature) => {
-				let public = sp_core::sr25519::Public::from_slice(self.account.as_ref());
-				signature.verify(event_id, &public)
+			Ok(signature) => match sp_core::sr25519::Public::from_slice(self.account.as_ref()) {
+				Err(()) => false,
+				Ok(signer) => signature.verify(event_id, &signer),
 			},
 			_ => false,
 		}

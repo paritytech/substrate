@@ -123,7 +123,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	status: BountyStatus<AccountId, BlockNumber>,
 }
 
-impl<AccountId: PartialEq + Clone + Ord + Default, Balance, BlockNumber: Clone>
+impl<AccountId: PartialEq + Clone + Ord, Balance, BlockNumber: Clone>
 	Bounty<AccountId, Balance, BlockNumber>
 {
 	/// Getter for bounty status, to be used for child bounties.
