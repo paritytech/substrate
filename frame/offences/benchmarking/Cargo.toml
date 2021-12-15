@@ -29,7 +29,7 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-staking = { version = "4.0.0-dev", default-features = false, features = [
 	"runtime-benchmarks",
 ], path = "../../staking" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../election-provider-support" }

@@ -30,7 +30,7 @@ tracing-log = "0.1.2"
 tracing-subscriber = { version = "0.2.25", features = ["parking_lot"] }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }

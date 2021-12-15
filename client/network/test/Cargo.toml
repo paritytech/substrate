@@ -25,7 +25,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }

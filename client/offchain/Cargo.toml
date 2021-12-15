@@ -27,7 +27,7 @@ sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 threadpool = "1.7"
 hyper = { version = "0.14.14", features = ["stream", "http2"] }

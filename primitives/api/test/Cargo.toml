@@ -16,11 +16,11 @@ sp-api = { version = "4.0.0-dev", path = "../" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sp-version = { version = "4.0.0-dev", path = "../../version" }
 sp-tracing = { version = "4.0.0", path = "../../tracing" }
-sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
+sp-runtime = { version = "4.0.0", path = "../../runtime" }
 sp-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
+sp-state-machine = { version = "0.10.0", path = "../../state-machine" }
 trybuild = "1.0.53"
 rustversion = "1.0.5"
 

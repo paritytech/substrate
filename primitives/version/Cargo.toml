@@ -19,7 +19,7 @@ serde = { version = "1.0.126", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../runtime" }
 sp-version-proc-macro = { version = "4.0.0-dev", default-features = false, path = "proc-macro" }
 parity-wasm = { version = "0.42.2", optional = true }
 thiserror = { version = "1.0.30", optional = true }

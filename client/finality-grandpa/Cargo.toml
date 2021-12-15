@@ -24,14 +24,14 @@ log = "0.4.8"
 parking_lot = "0.11.1"
 rand = "0.8.4"
 parity-scale-codec = { version = "2.3.1", features = ["derive"] }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
-sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-application-crypto = { version = "4.0.0", path = "../../primitives/application-crypto" }
+sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }

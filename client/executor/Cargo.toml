@@ -18,9 +18,9 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-tasks = { version = "4.0.0-dev", path = "../../primitives/tasks" }
-sp-trie = { version = "4.0.0-dev", path = "../../primitives/trie" }
+sp-trie = { version = "4.0.0", path = "../../primitives/trie" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
-sp-panic-handler = { version = "4.0.0-dev", path = "../../primitives/panic-handler" }
+sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
 wasmi = "0.9.1"
 lazy_static = "1.4.0"
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
@@ -41,8 +41,8 @@ wat = "1.0"
 hex-literal = "0.3.4"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.10.0", path = "../../primitives/state-machine" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing = "0.1.29"

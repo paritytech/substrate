@@ -30,7 +30,7 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = [
     "wasmtime",
 ] }

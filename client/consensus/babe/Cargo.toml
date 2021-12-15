@@ -20,14 +20,14 @@ codec = { package = "parity-scale-codec", version = "2.0.0", features = [
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../../primitives/application-crypto" }
-sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
+sp-application-crypto = { version = "4.0.0", path = "../../../primitives/application-crypto" }
+sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
 serde = { version = "1.0.126", features = ["derive"] }
 sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+sp-io = { version = "4.0.0", path = "../../../primitives/io" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
@@ -40,7 +40,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 sp-consensus-vrf = { version = "0.10.0-dev", path = "../../../primitives/consensus/vrf" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 futures = "0.3.9"

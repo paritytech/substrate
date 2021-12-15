@@ -1,6 +1,6 @@
 [package]
 name = "sp-state-machine"
-version = "0.10.0-dev"
+version = "0.10.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 edition = "2021"
@@ -20,9 +20,9 @@ parking_lot = { version = "0.11.1", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.22.6", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
-sp-trie = { version = "4.0.0-dev", path = "../trie", default-features = false }
+sp-trie = { version = "4.0.0", path = "../trie", default-features = false }
 sp-core = { version = "4.1.0-dev", path = "../core", default-features = false }
-sp-panic-handler = { version = "4.0.0-dev", path = "../panic-handler", optional = true }
+sp-panic-handler = { version = "4.0.0", path = "../panic-handler", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 num-traits = { version = "0.2.8", default-features = false }
 rand = { version = "0.7.2", optional = true }
@@ -33,7 +33,7 @@ tracing = { version = "0.1.29", optional = true }
 
 [dev-dependencies]
 hex-literal = "0.3.4"
-sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
+sp-runtime = { version = "4.0.0", path = "../runtime" }
 pretty_assertions = "1.0.0"
 rand = "0.7.2"
 
