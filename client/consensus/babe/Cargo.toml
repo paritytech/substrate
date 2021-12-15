@@ -44,7 +44,7 @@ sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 futures = "0.3.9"
-parking_lot = "0.11.1"
+parking_lot = "0.11.2"
 log = "0.4.8"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 rand = "0.7.2"
