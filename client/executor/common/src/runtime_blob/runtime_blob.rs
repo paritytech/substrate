@@ -110,7 +110,7 @@ impl RuntimeBlob {
 	/// Converts a WASM memory import into a memory section and exports it.
 	///
 	/// Does nothing if there's no memory import.
-	pub fn convert_memory_import_into_export(&mut self, min_heap_pages: u32) {
+	pub fn convert_memory_import_into_export(&mut self, extra_heap_pages: u32) {
 		let import_section = match self.raw_module.import_section_mut() {
 			Some(import_section) => import_section,
 			None => return,
@@ -130,8 +130,8 @@ impl RuntimeBlob {
 			debug_assert_eq!(entry.field(), "memory");
 
 			let memory_name = entry.field().to_owned();
-			let min = std::cmp::max(old_memory_ty.limits().initial(), min_heap_pages);
-			let max = old_memory_ty.limits().maximum();
+			let min = old_memory_ty.limits().initial().saturating_add(extra_heap_pages);
+			let max = old_memory_ty.limits().maximum().map(|max| std::cmp::max(min, max));
 			import_entries.remove(index);
 
 			let new_memory_ty = MemoryType::new(min, max);

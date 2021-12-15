@@ -140,7 +140,6 @@ impl InstanceWrapper {
 	pub(crate) fn new(
 		module: &Module,
 		linker: &Linker<StoreData>,
-		heap_pages: u64,
 		max_memory_size: Option<usize>,
 	) -> Result<Self> {
 		let limits = if let Some(max_memory_size) = max_memory_size {
@@ -164,8 +163,6 @@ impl InstanceWrapper {
 		})?;
 
 		let memory = get_linear_memory(&instance, &mut store)?;
-		memory.grow(&mut store, heap_pages).unwrap();
-
 		let table = get_table(&instance, &mut store);
 
 		store.data_mut().memory = Some(memory);

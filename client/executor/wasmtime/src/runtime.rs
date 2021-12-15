@@ -92,13 +92,12 @@ enum Strategy {
 struct InstanceCreator {
 	module: Arc<wasmtime::Module>,
 	linker: Arc<wasmtime::Linker<StoreData>>,
-	heap_pages: u64,
 	max_memory_size: Option<usize>,
 }
 
 impl InstanceCreator {
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&*self.module, &self.linker, self.heap_pages, self.max_memory_size)
+		InstanceWrapper::new(&*self.module, &self.linker, self.max_memory_size)
 	}
 }
 
@@ -147,7 +146,6 @@ impl WasmModule for WasmtimeRuntime {
 			let mut instance_wrapper = InstanceWrapper::new(
 				&self.module,
 				&self.linker,
-				self.config.heap_pages,
 				self.config.max_memory_size,
 			)?;
 			let heap_base = instance_wrapper.extract_heap_base()?;
@@ -171,7 +169,6 @@ impl WasmModule for WasmtimeRuntime {
 			Strategy::RecreateInstance(InstanceCreator {
 				module: self.module.clone(),
 				linker: self.linker.clone(),
-				heap_pages: self.config.heap_pages,
 				max_memory_size: self.config.max_memory_size,
 			})
 		};
