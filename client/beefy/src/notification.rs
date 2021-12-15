@@ -23,7 +23,7 @@ use sp_runtime::traits::{Block, NumberFor};
 
 use parking_lot::Mutex;
 
-/// Stream of signed commitments returned when subscribing.
+/// A commitment with matching GRANDPA validators' signatures.
 pub type SignedCommitment<Block> =
 	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature>;
 

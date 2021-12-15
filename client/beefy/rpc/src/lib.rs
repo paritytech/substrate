@@ -22,9 +22,9 @@
 
 use std::sync::Arc;
 
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use futures::{FutureExt, SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
@@ -33,9 +33,11 @@ use beefy_gadget::notification::BeefySignedCommitmentStream;
 
 mod notification;
 
+type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, jsonrpc_core::Error>>;
+
 /// Provides RPC methods for interacting with BEEFY.
 #[rpc]
-pub trait BeefyApi<Notification, Hash> {
+pub trait BeefyApi<Notification, Number> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -62,6 +64,10 @@ pub trait BeefyApi<Notification, Hash> {
 		metadata: Option<Self::Metadata>,
 		id: SubscriptionId,
 	) -> jsonrpc_core::Result<bool>;
+
+	/// Returns the latest beefy finalized block as see by this client.
+	#[rpc(name = "beefy_latestFinalized")]
+	fn latest_finalized(&self) -> FutureResult<Option<Number>>;
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
@@ -81,7 +87,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	}
 }
 
-impl<Block> BeefyApi<notification::SignedCommitment, Block> for BeefyRpcHandler<Block>
+impl<Block> BeefyApi<notification::SignedCommitment, NumberFor<Block>> for BeefyRpcHandler<Block>
 where
 	Block: BlockT,
 {
@@ -110,6 +116,12 @@ where
 		id: SubscriptionId,
 	) -> jsonrpc_core::Result<bool> {
 		Ok(self.manager.cancel(id))
+	}
+
+	fn latest_finalized(&self) -> FutureResult<Option<NumberFor<Block>>> {
+		let result: Result<Option<NumberFor<Block>>, jsonrpc_core::Error> = Ok(None);
+		let future = async move { result }.boxed();
+		future.map_err(jsonrpc_core::Error::from).boxed()
 	}
 }
 
