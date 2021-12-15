@@ -12,7 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-runtime-interface = { version = "4.0.0", path = "../" }
+sp-runtime-interface = { version = "4.1.0-dev", path = "../" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-executor-common = { version = "0.10.0-dev", path = "../../../client/executor/common" }
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
