@@ -22,7 +22,7 @@ serde = { version = "1.0.126", features = ["derive"], optional = true }
 impl-trait-for-tuples = "0.2.1"
 
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }

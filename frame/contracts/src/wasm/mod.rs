@@ -1765,7 +1765,7 @@ mod tests {
 				data: Bytes(hex!("445566778899").to_vec()),
 			}
 		);
-		assert!(output.is_success());
+		assert!(!output.did_revert());
 	}
 
 	#[test]
@@ -1781,7 +1781,7 @@ mod tests {
 				data: Bytes(hex!("5566778899").to_vec()),
 			}
 		);
-		assert!(!output.is_success());
+		assert!(output.did_revert());
 	}
 
 	const CODE_OUT_OF_BOUNDS_ACCESS: &str = r#"

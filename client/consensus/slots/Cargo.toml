@@ -17,12 +17,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-arithmetic = { version = "4.0.0-dev", path = "../../../primitives/arithmetic" }
+sp-arithmetic = { version = "4.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machine" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }

@@ -1,6 +1,6 @@
 [package]
 name = "sp-trie"
-version = "4.0.0-dev"
+version = "4.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-scale-codec node format"
 repository = "https://github.com/paritytech/substrate/"
@@ -32,7 +32,7 @@ trie-bench = "0.28.0"
 trie-standardmap = "0.15.2"
 criterion = "0.3.3"
 hex-literal = "0.3.4"
-sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
+sp-runtime = { version = "4.0.0", path = "../runtime" }
 
 [features]
 default = ["std"]
