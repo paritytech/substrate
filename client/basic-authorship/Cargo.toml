@@ -33,4 +33,4 @@ sc-proposer-metrics = { version = "0.10.0-dev", path = "../proposer-metrics" }
 [dev-dependencies]
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-parking_lot = "0.11.1"
+parking_lot = "0.11.2"
