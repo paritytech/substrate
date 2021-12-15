@@ -167,7 +167,7 @@ pub struct TrackInfo<Balance, Moment> {
 }
 
 pub trait TracksInfo<Balance, Moment> {
-	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync;
+	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync + 'static;
 	type Origin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
 	fn track_for(origin: &Self::Origin) -> Result<Self::Id, ()>;

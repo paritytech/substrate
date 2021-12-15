@@ -411,6 +411,13 @@ pub fn killed_since(i: ReferendumIndex) -> u64 {
 	}
 }
 
+pub fn timed_out_since(i: ReferendumIndex) -> u64 {
+	match ReferendumInfoFor::<Test>::get(i).unwrap() {
+		ReferendumInfo::TimedOut(since, ..) => since,
+		_ => panic!("Not timed out"),
+	}
+}
+
 fn is_deciding(i: ReferendumIndex) -> bool {
 	matches!(
 		ReferendumInfoFor::<Test>::get(i),
@@ -443,12 +450,14 @@ impl RefState {
 		}
 		if matches!(self, RefState::Confirming { immediate: false }) {
 			set_tally(0, 100, 0);
+			run_to(System::block_number() + 1);
 		}
 		if matches!(self, RefState::Confirming { .. }) {
 			assert_eq!(confirming_until(index), System::block_number() + 2);
 		}
 		if matches!(self, RefState::Passing) {
 			set_tally(0, 100, 99);
+			run_to(System::block_number() + 1);
 		}
 		index
 	}

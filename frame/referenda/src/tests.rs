@@ -60,13 +60,16 @@ fn basic_happy_path_works() {
 		run_to(6);
 		// #6: Lots of ayes. Should now be confirming.
 		set_tally(0, 100, 0);
-		run_to(8);
+		run_to(7);
+		assert_eq!(confirming_until(0), 9);
+		run_to(9);
 		// #8: Should be confirmed & ended.
+		assert_eq!(approved_since(0), 9);
 		assert_ok!(Referenda::refund_decision_deposit(Origin::signed(2), 0));
-		run_to(11);
+		run_to(12);
 		// #9: Should not yet be enacted.
 		assert_eq!(Balances::free_balance(&42), 0);
-		run_to(12);
+		run_to(13);
 		// #10: Proposal should be executed.
 		assert_eq!(Balances::free_balance(&42), 1);
 	});
@@ -77,9 +80,7 @@ fn insta_confirm_then_kill_works() {
 	new_test_ext().execute_with(|| {
 		let r = Confirming { immediate: true }.create();
 		run_to(6);
-		assert!(pallet_scheduler::Agenda::<Test>::get(7).iter().any(|x| x.is_some()));
 		assert_ok!(Referenda::kill(Origin::root(), r));
-		assert!(!pallet_scheduler::Agenda::<Test>::get(7).iter().any(|x| x.is_some()));
 		assert_eq!(killed_since(r), 6);
 	});
 }
@@ -88,9 +89,10 @@ fn insta_confirm_then_kill_works() {
 fn confirm_then_reconfirm_with_elapsed_trigger_works() {
 	new_test_ext().execute_with(|| {
 		let r = Confirming { immediate: false }.create();
-		assert_eq!(confirming_until(r), 7);
-		run_to(6);
+		assert_eq!(confirming_until(r), 8);
+		run_to(7);
 		set_tally(r, 100, 99);
+		run_to(8);
 		assert_eq!(deciding_and_failing_since(r), 5);
 		run_to(11);
 		assert_eq!(approved_since(r), 11);
@@ -104,6 +106,7 @@ fn instaconfirm_then_reconfirm_with_elapsed_trigger_works() {
 		run_to(6);
 		assert_eq!(confirming_until(r), 7);
 		set_tally(r, 100, 99);
+		run_to(7);
 		assert_eq!(deciding_and_failing_since(r), 5);
 		run_to(11);
 		assert_eq!(approved_since(r), 11);
@@ -117,28 +120,25 @@ fn instaconfirm_then_reconfirm_with_voting_trigger_works() {
 		run_to(6);
 		assert_eq!(confirming_until(r), 7);
 		set_tally(r, 100, 99);
+		run_to(7);
 		assert_eq!(deciding_and_failing_since(r), 5);
 		run_to(8);
 		set_tally(r, 100, 0);
-		assert_eq!(confirming_until(r), 10);
-		run_to(10);
-		assert_eq!(approved_since(r), 10);
+		run_to(9);
+		assert_eq!(confirming_until(r), 11);
+		run_to(11);
+		assert_eq!(approved_since(r), 11);
 	});
 }
 
 #[test]
 fn voting_should_extend_for_late_confirmation() {
 	new_test_ext().execute_with(|| {
-		let r = Confirming { immediate: false }.create();
-		run_to(6);
-		assert_eq!(confirming_until(r), 7);
-		set_tally(r, 100, 99);
-		assert_eq!(deciding_and_failing_since(r), 5);
-		run_to(8);
-		set_tally(r, 100, 0);
-		assert_eq!(confirming_until(r), 10);
+		let r = Passing.create();
 		run_to(10);
-		assert_eq!(approved_since(r), 10);
+		assert_eq!(confirming_until(r), 11);
+		run_to(11);
+		assert_eq!(approved_since(r), 11);
 	});
 }
 
@@ -150,7 +150,8 @@ fn should_instafail_during_extension_confirmation() {
 		assert_eq!(confirming_until(r), 11);
 		// Should insta-fail since it's now past the normal voting time.
 		set_tally(r, 100, 101);
-		assert_eq!(rejected_since(r), 10);
+		run_to(11);
+		assert_eq!(rejected_since(r), 11);
 	});
 }
 
@@ -159,11 +160,10 @@ fn confirming_then_fail_works() {
 	new_test_ext().execute_with(|| {
 		let r = Failing.create();
 		// Normally ends at 5 + 4 (voting period) = 9.
-		run_to(6);
 		assert_eq!(deciding_and_failing_since(r), 5);
 		set_tally(r, 100, 0);
+		run_to(6);
 		assert_eq!(confirming_until(r), 8);
-		run_to(7);
 		set_tally(r, 100, 101);
 		run_to(9);
 		assert_eq!(rejected_since(r), 9);
@@ -220,9 +220,10 @@ fn queueing_works() {
 		assert_eq!(cancelled_since(0), 6);
 
 		// The other with the most approvals (#4) should be being decided.
+		run_to(7);
 		assert_eq!(DecidingCount::<Test>::get(0), 1);
-		assert_eq!(deciding_since(4), 6);
-		assert_eq!(confirming_until(4), 8);
+		assert_eq!(deciding_since(4), 7);
+		assert_eq!(confirming_until(4), 9);
 
 		// Vote on the remaining two to change order.
 		println!("Set tally #1");
@@ -233,28 +234,36 @@ fn queueing_works() {
 		println!("{:?}", Vec::<_>::from(TrackQueue::<Test>::get(0)));
 
 		// Let confirmation period end.
-		run_to(8);
+		run_to(9);
 
 		// #4 should have been confirmed.
-		assert_eq!(approved_since(4), 8);
+		assert_eq!(approved_since(4), 9);
+
+		// On to the next block to select the new referendum
+		run_to(10);
 		// #1 (the one with the most approvals) should now be being decided.
-		assert_eq!(deciding_since(1), 8);
+		assert_eq!(deciding_since(1), 10);
 
 		// Let it end unsuccessfully.
-		run_to(12);
-		assert_eq!(rejected_since(1), 12);
+		run_to(14);
+		assert_eq!(rejected_since(1), 14);
 
+		// Service queue.
+		run_to(15);
 		// #2 should now be being decided. It will (barely) pass.
-		assert_eq!(deciding_and_failing_since(2), 12);
+		assert_eq!(deciding_and_failing_since(2), 15);
 
 		// #2 moves into confirming at the last moment with a 50% approval.
-		run_to(16);
-		assert_eq!(confirming_until(2), 18);
+		run_to(19);
+		assert_eq!(confirming_until(2), 21);
 
 		// #2 gets approved.
-		run_to(18);
-		assert_eq!(approved_since(2), 18);
-		assert_eq!(deciding_since(3), 18);
+		run_to(21);
+		assert_eq!(approved_since(2), 21);
+
+		// The final one has since timed out.
+		run_to(22);
+		assert_eq!(timed_out_since(3), 22);
 	});
 }
 

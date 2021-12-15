@@ -387,11 +387,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Advance a referendum onto its next logical state. This should happen automaically,
-		/// but this exists in order to allow it to happen manaully in case it is needed.
+		/// Advance a referendum onto its next logical state. Only used internally.
 		#[pallet::weight(0)]
 		pub fn nudge_referendum(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
-			ensure_signed_or_root(origin)?;
+			ensure_root(origin)?;
 			let now = frame_system::Pallet::<T>::block_number();
 			let status = Self::ensure_ongoing(index)?;
 			let (info, dirty) = Self::service_referendum(now, index, status);
@@ -400,19 +399,17 @@ pub mod pallet {
 			}
 			Ok(())
 		}
-/*
-		/// Advance a track onto its next logical state. This should happen automaically,
-		/// but this exists in order to allow it to happen manaully in case it is needed.
+
+		/// Advance a track onto its next logical state. Only used internally.
 		#[pallet::weight(0)]
-		pub fn nudge_track(
+		pub fn defer_one_fewer_deciding(
 			origin: OriginFor<T>,
 			track: TrackIdOf<T>,
-		) -> DispatchResultWithPostInfo {
-			ensure_signed_or_root(origin)?;
-			Self::advance_track(track)?;
-			Ok(Pays::No.into())
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			Self::act_one_fewer_deciding(track);
+			Ok(())
 		}
-*/
 	}
 }
 
@@ -592,65 +589,63 @@ impl<T: Config> Pallet<T> {
 			let (index, _) = track_queue.pop()?;
 			match Self::ensure_ongoing(index) {
 				Ok(s) => return Some((index, s)),
-				Err(_) => debug_assert!(false, "Queued referendum not ongoing?!"),
+				Err(_) => {}, // referendum already timedout or was cancelled.
 			}
 		}
 	}
 
-	/// Advance a track - this dequeues one or more referenda from the from the `TrackQueue` of
-	/// referenda which are ready to be decided until the `DecidingCount` is equal to the track's
-	/// `max_deciding`.
-	///
-	/// This should never be needed, since referenda should automatically begin when others end.
-	#[allow(dead_code)]
-	fn advance_track(track: TrackIdOf<T>) -> Result<u32, DispatchError> {
-		let track_info = Self::track(track).ok_or(Error::<T>::BadTrack)?;
-		let mut deciding_count = DecidingCount::<T>::get(track);
-		let mut track_queue = TrackQueue::<T>::get(track);
-		let mut count = 0;
-		while deciding_count < track_info.max_deciding {
-			if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
-				let now = frame_system::Pallet::<T>::block_number();
-				let maybe_set_alarm = Self::begin_deciding(&mut status, index, now, &track_info);
-				if let Some(set_alarm) = maybe_set_alarm {
-					Self::ensure_alarm_at(&mut status, index, set_alarm);
-				}
-				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
-				deciding_count.saturating_inc();
-				count.saturating_inc();
-			} else {
-				break
-			}
-		}
-		ensure!(count > 0, Error::<T>::NothingToDo);
+	/// Schedule a call to `act_one_fewer_deciding` function via the dispatchable
+	/// `defer_one_fewer_deciding`. We could theoretically call it immediately (and it would be
+	/// overall more efficient), however the weights become rather less easy to measure.
+	fn note_one_fewer_deciding(track: TrackIdOf<T>, _track_info: &TrackInfoOf<T>) {
+		// Set an alarm call for the next block to nudge the track along.
+		let now = frame_system::Pallet::<T>::block_number();
+		let next_block = now + One::one();
+		let alarm_interval = T::AlarmInterval::get().max(One::one());
+		let when = (next_block + alarm_interval - One::one()) / alarm_interval * alarm_interval;
 
-		DecidingCount::<T>::insert(track, deciding_count);
-		TrackQueue::<T>::insert(track, track_queue);
-		Ok(count)
+		let maybe_result = T::Scheduler::schedule(
+			DispatchTime::At(when),
+			None,
+			128u8,
+			frame_system::RawOrigin::Root.into(),
+			MaybeHashed::Value(Call::defer_one_fewer_deciding { track }.into()),
+		);
+		debug_assert!(
+			maybe_result.is_ok(),
+			"Unable to schedule a new alarm at #{} (now: #{})?!",
+			when,
+			now
+		);
 	}
 
 	/// Action item for when there is now one fewer referendum in the deciding phase and the
 	/// `DecidingCount` is not yet updated. This means that we should either:
 	/// - begin deciding another referendum (and leave `DecidingCount` alone); or
 	/// - decrement `DecidingCount`.
-	fn note_one_fewer_deciding(track: TrackIdOf<T>, track_info: &TrackInfoOf<T>) {
-		println!("One fewer deciding on {:?}", track);
-		let mut track_queue = TrackQueue::<T>::get(track);
-		if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
-			println!("Ref #{:?} ready for deciding", index);
-			let now = frame_system::Pallet::<T>::block_number();
-			let maybe_set_alarm = Self::begin_deciding(&mut status, index, now, track_info);
-			if let Some(set_alarm) = maybe_set_alarm {
-				Self::ensure_alarm_at(&mut status, index, set_alarm);
+	///
+	/// We defer the actual action to `act_one_fewer_deciding` function via a call in order to
+	/// simplify weight considerations.
+	fn act_one_fewer_deciding(track: TrackIdOf<T>) {
+		if let Some(track_info) = T::Tracks::info(track) {
+			println!("One fewer deciding on {:?}", track);
+			let mut track_queue = TrackQueue::<T>::get(track);
+			if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
+				println!("Ref #{:?} ready for deciding", index);
+				let now = frame_system::Pallet::<T>::block_number();
+				let maybe_set_alarm = Self::begin_deciding(&mut status, index, now, track_info);
+				if let Some(set_alarm) = maybe_set_alarm {
+					Self::ensure_alarm_at(&mut status, index, set_alarm);
+				}
+				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+				TrackQueue::<T>::insert(track, track_queue);
+			} else {
+				DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
 			}
-			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
-			TrackQueue::<T>::insert(track, track_queue);
-		} else {
-			DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
 		}
 	}
 
-	/// Ensure that an `service_referendum` alarm happens for the referendum `index` at `alarm`.
+	/// Ensure that a `service_referendum` alarm happens for the referendum `index` at `alarm`.
 	///
 	/// This will do nothing if the alarm is already set.
 	///
@@ -660,7 +655,7 @@ impl<T: Config> Pallet<T> {
 		index: ReferendumIndex,
 		alarm: T::BlockNumber,
 	) -> bool {
-		if !status.alarm.as_ref().map_or(false, |&(when, _)| when == alarm) {
+		if status.alarm.as_ref().map_or(true, |&(when, _)| when != alarm) {
 			println!("Setting alarm at block #{:?} for ref {:?}", alarm, index);
 			// Either no alarm or one that was different
 			Self::kill_alarm(status);
@@ -741,6 +736,16 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 			}
+			// If we didn't move into being decided, then check the timeout.
+			if status.deciding.is_none() && now >= timeout {
+				// Too long without being decided - end it.
+				Self::kill_alarm(&mut status);
+				Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
+				return (
+					ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit),
+					true,
+				)
+			}
 		} else if let Some(deciding) = &mut status.deciding {
 			let is_passing = Self::is_passing(
 				&status.tally,
@@ -793,14 +798,6 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 			alarm = Self::decision_time(&deciding, &status.tally, track);
-		} else if now >= timeout {
-			// Too long without being decided - end it.
-			Self::kill_alarm(&mut status);
-			Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
-			return (
-				ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit),
-				true,
-			)
 		}
 
 		let dirty_alarm = Self::ensure_alarm_at(&mut status, index, alarm);

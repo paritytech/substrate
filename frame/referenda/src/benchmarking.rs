@@ -38,8 +38,8 @@ fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	caller
 }
 
-fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
-	funded_account::<T>("caller", 0);
+fn create_referendum<T: Config>(deposit: bool) -> (T::AccountId, ReferendumIndex) {
+	let caller = funded_account::<T>("caller", 0);
 	whitelist_account!(caller);
 	assert_ok!(Referenda::<T>::submit(
 		RawOrigin::Signed(caller.clone()).into(),
@@ -47,13 +47,20 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 		T::Hashing::hash_of(&0),
 		AtOrAfter::After(0u32.into())
 	));
-	(caller, ReferendumCount::<T>::get() - 1)
+	let index = ReferendumCount::<T>::get() - 1;
+	if deposit {
+		assert_ok!(Referenda::<T>::place_decision_deposit(
+			RawOrigin::Signed(caller.clone()).into(),
+			index,
+		));
+	}
+	(caller, index)
 }
 
-fn decision_period<T::Config>() -> T::BlockNumber {
+fn decision_period<T: Config>() -> T::BlockNumber {
 	let id = T::Tracks::track_for(&RawOrigin::Root.into())
 		.expect("Root should always be a gpvernance origin");
-	let info = T::Tracks::info_for(id).expect("Id value returned from T::Tracks");
+	let info = T::Tracks::info(id).expect("Id value returned from T::Tracks");
 	info.decision_period
 }
 
@@ -155,12 +162,8 @@ benchmarks! {
 	}
 
 	// Not deciding -> not deciding
-	// TODO: not deciding, not queued, no DD paid, PP done
-	// TODO: not deciding, not queued, DD paid, PP not done
-
-	// Not deciding -> deciding
-	// TODO: not deciding, not queued, DD paid, PP (just) done, track empty, passing
-	// TODO: not deciding, not queued, DD paid, PP (just) done, track empty, failing
+	// DONE: not deciding, not queued, no DD paid, PP done
+	// DONE: not deciding, not queued, DD paid, PP not done
 
 	// Not deciding -> not deciding (queued)
 	// TODO: not deciding, not queued, DD paid, PP (just) done, track full
@@ -168,6 +171,10 @@ benchmarks! {
 	// Not deciding (queued) -> not deciding (queued)
 	// TODO: not deciding, queued, since removed
 	// TODO: not deciding, queued, still in but slide needed
+
+	// Not deciding -> deciding
+	// TODO: not deciding, not queued, DD paid, PP (just) done, track empty, passing
+	// TODO: not deciding, not queued, DD paid, PP (just) done, track empty, failing
 
 	// Deciding -> deciding
 	// TODO: deciding, passing, not confirming
@@ -183,10 +190,22 @@ benchmarks! {
 	// TODO: not deciding, timeout
 
 	nudge_referendum_no_dd_pp_over {
-		let (_caller, index) = create_referendum();
-		System::set_block_number(System::block_number() + decision_period::<T>());
-	}: _(RawOrigin::Root, index)
+		let (_caller, index) = create_referendum::<T>(false);
+		let decision_period_over = frame_system::Pallet::<T>::block_number() + decision_period::<T>();
+		frame_system::Pallet::<T>::set_block_number(decision_period_over);
+	}: nudge_referendum(RawOrigin::Root, index)
 	verify {
+		let status = Referenda::<T>::ensure_ongoing(index).unwrap();
+		assert_matches!(status, ReferendumStatus { deciding: None, .. });
+	}
+
+	nudge_referendum_dd_pp_still {
+		let (_caller, index) = create_referendum::<T>(true);
+		let decision_period_over = frame_system::Pallet::<T>::block_number() + decision_period::<T>();
+	}: nudge_referendum(RawOrigin::Root, index)
+	verify {
+		let status = Referenda::<T>::ensure_ongoing(index).unwrap();
+		assert_matches!(status, ReferendumStatus { deciding: None, .. });
 	}
 
 	impl_benchmark_test_suite!(
