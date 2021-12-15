@@ -97,6 +97,15 @@ pub enum KillStorageResult {
 	SomeRemaining(u32),
 }
 
+#[cfg(feature = "dd")]
+#[derive(PassByCodec, Encode, Decode)]
+pub enum KillStorageResult {
+	/// All key to remove were removed, return number of key removed from backend.
+	AllRemoved(u32),
+	/// Not all key to remove were removed, return number of key removed from backend.
+	SomeRemaining(u32),
+}
+
 /// Interface for accessing the storage from within the runtime.
 #[runtime_interface(feature_force_version=old_state,root,1)]
 pub trait Storage {

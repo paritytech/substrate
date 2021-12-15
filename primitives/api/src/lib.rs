@@ -718,6 +718,8 @@ decl_runtime_apis! {
 	}
 }
 
+// With feature 'old_state' we keep core version to 3, so trie layout
+// V0 keeps being used for the runtime.
 #[cfg(feature = "old_state")]
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.

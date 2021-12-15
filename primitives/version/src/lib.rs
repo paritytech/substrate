@@ -29,7 +29,7 @@ use std::fmt;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeString;
-pub use sp_runtime::{create_runtime_str, StateVersion, DEFAULT_STATE_HASHING};
+pub use sp_runtime::{create_runtime_str, StateVersion};
 #[doc(hidden)]
 pub use sp_std;
 
@@ -216,6 +216,10 @@ impl RuntimeVersion {
 	}
 
 	/// Returns state version to use for update.
+	///
+	/// For runtime with core api version less than 4,
+	/// V0 trie version will be applied to state.
+	/// Otherwhise, V1 trie version will be use.
 	pub fn state_version(&self) -> StateVersion {
 		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
 		if self.has_api_with(&core_api_id, |v| v >= 4) {

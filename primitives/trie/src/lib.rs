@@ -107,7 +107,7 @@ where
 {
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
-	const MAX_INLINE_VALUE: Option<u32> = sp_core::storage::DEFAULT_STATE_HASHING;
+	const MAX_INLINE_VALUE: Option<u32> = Some(sp_core::storage::TRIE_VALUE_NODE_THRESHOLD);
 
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;

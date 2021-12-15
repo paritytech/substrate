@@ -237,8 +237,8 @@ pub mod well_known_keys {
 	}
 }
 
-/// Default value to use as a threshold for inner hashing.
-pub const DEFAULT_MAX_INLINE_VALUE: u32 = 33;
+/// Threshold size to start using trie value nodes in state.
+pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
 
 /// Information related to a child state.
 #[derive(Debug, Clone)]
@@ -406,7 +406,8 @@ impl ChildTrieParentKeyId {
 
 /// Different possible state version.
 ///
-/// Currently only enable trie value nodes.
+/// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
+/// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum StateVersion {
 	/// Old state version, no value nodes.
@@ -422,17 +423,17 @@ impl Default for StateVersion {
 }
 
 impl StateVersion {
-	/// Threshold to apply for inline value of trie state.
+	/// If defined, values in state of size bigger or equal
+	/// to this threshold will use a separate trie node.
+	/// Otherwhise, value will be inlined in branch or leaf
+	/// node.
 	pub fn state_value_threshold(&self) -> Option<u32> {
 		match self {
 			StateVersion::V0 => None,
-			StateVersion::V1 => DEFAULT_STATE_HASHING,
+			StateVersion::V1 => Some(TRIE_VALUE_NODE_THRESHOLD),
 		}
 	}
 }
-
-/// Default threshold value for activated inner hashing of trie state.
-pub const DEFAULT_STATE_HASHING: Option<u32> = Some(DEFAULT_MAX_INLINE_VALUE);
 
 #[cfg(test)]
 mod tests {

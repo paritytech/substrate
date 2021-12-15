@@ -54,6 +54,7 @@ std = [
 	"futures",
 	"parking_lot",
 ]
+# Keep using a host function for `LayoutV0` trie.
 old_state = []
 
 with-tracing = [
