@@ -137,11 +137,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 	let macro_ident = syn::Ident::new(&format!("__is_call_part_defined_{}", count), span);
 
-	let capture_docs = if cfg!(feature = "no-metadata-docs") {
-		"never"
-	} else {
-		"always"
-	};
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
 	quote::quote_spanned!(span =>
 		#[doc(hidden)]

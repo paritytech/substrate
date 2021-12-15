@@ -59,11 +59,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 	error_item.variants.insert(0, phantom_variant);
 
-	let capture_docs = if cfg!(feature = "no-metadata-docs") {
-		"never"
-	} else {
-		"always"
-	};
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
 	// derive TypeInfo for error metadata
 	error_item
