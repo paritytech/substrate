@@ -782,7 +782,7 @@ macro_rules! benchmark_backend {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
+			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkErrorFoo>>, $crate::BenchmarkErrorFoo> {
 				$(
 					// Prepare instance
 					let $param = components.iter()
@@ -796,7 +796,7 @@ macro_rules! benchmark_backend {
 				$( $param_instancer ; )*
 				$( $post )*
 
-				Ok($crate::Box::new(move || -> Result<(), $crate::BenchmarkError> {
+				Ok($crate::Box::new(move || -> Result<(), $crate::BenchmarkErrorFoo> {
 					$eval;
 					if verify {
 						$postcode;
@@ -862,17 +862,17 @@ macro_rules! impl_bench_name_tests {
 						},
 						Ok(Err(err)) => {
 							match err {
-								$crate::BenchmarkError::Stop(err) => {
+								$crate::BenchmarkErrorFoo::Stop(err) => {
 									panic!("{}: {:?}", stringify!($name), err);
 								},
-								$crate::BenchmarkError::Override(_) => {
+								$crate::BenchmarkErrorFoo::Override(_) => {
 									// This is still considered a success condition.
 									$crate::log::error!(
 										"WARNING: benchmark error overrided - {}",
 										stringify!($name),
 									);
 								},
-								$crate::BenchmarkError::Skip => {
+								$crate::BenchmarkErrorFoo::Skip => {
 									// This is considered a success condition.
 									$crate::log::error!(
 										"WARNING: benchmark error skipped - {}",
@@ -907,7 +907,7 @@ macro_rules! impl_bench_name_tests {
 // Every variant must implement [`BenchmarkingSetup`].
 //
 // ```nocompile
-// 
+//
 // struct Transfer;
 // impl BenchmarkingSetup for Transfer { ... }
 //
@@ -949,7 +949,7 @@ macro_rules! selected_benchmark {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkError>>, $crate::BenchmarkError> {
+			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), $crate::BenchmarkErrorFoo>>, $crate::BenchmarkErrorFoo> {
 				match self {
 					$(
 						Self::$bench => <
@@ -1004,7 +1004,7 @@ macro_rules! impl_benchmark {
 				whitelist: &[$crate::TrackedStorageKey],
 				verify: bool,
 				internal_repeats: u32,
-			) -> Result<$crate::Vec<$crate::BenchmarkResult>, $crate::BenchmarkError> {
+			) -> Result<$crate::Vec<$crate::BenchmarkResult>, $crate::BenchmarkErrorFoo> {
 				// Map the input to the selected benchmark.
 				let extrinsic = $crate::str::from_utf8(extrinsic)
 					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
@@ -1125,9 +1125,9 @@ macro_rules! impl_benchmark {
 			/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
 			/// author chooses not to implement benchmarks.
 			#[allow(unused)]
-			fn test_bench_by_name(name: &[u8]) -> Result<(), $crate::BenchmarkError> {
+			fn test_bench_by_name(name: &[u8]) -> Result<(), $crate::BenchmarkErrorFoo> {
 				let name = $crate::str::from_utf8(name)
-					.map_err(|_| -> $crate::BenchmarkError { "`name` is not a valid utf8 string!".into() })?;
+					.map_err(|_| -> $crate::BenchmarkErrorFoo { "`name` is not a valid utf8 string!".into() })?;
 				match name {
 					$( stringify!($name) => {
 						$crate::paste::paste! { Self::[< test_benchmark_ $name >]() }
@@ -1157,7 +1157,7 @@ macro_rules! impl_benchmark_test {
 			where T: frame_system::Config, $( $where_clause )*
 			{
 				#[allow(unused)]
-				fn [<test_benchmark_ $name>] () -> Result<(), $crate::BenchmarkError> {
+				fn [<test_benchmark_ $name>] () -> Result<(), $crate::BenchmarkErrorFoo> {
 					let selected_benchmark = SelectedBenchmark::$name;
 					let components = <
 						SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
@@ -1165,7 +1165,7 @@ macro_rules! impl_benchmark_test {
 
 					let execute_benchmark = |
 						c: $crate::Vec<($crate::BenchmarkParameter, u32)>
-					| -> Result<(), $crate::BenchmarkError> {
+					| -> Result<(), $crate::BenchmarkErrorFoo> {
 						// Set up the benchmark, return execution + verification function.
 						let closure_to_verify = <
 							SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
@@ -1576,7 +1576,7 @@ macro_rules! impl_test_function {
 							},
 							Ok(Err(err)) => {
 								match err {
-									$crate::BenchmarkError::Stop(err) => {
+									$crate::BenchmarkErrorFoo::Stop(err) => {
 										println!(
 											"{}: {:?}",
 											$crate::str::from_utf8(benchmark_name)
@@ -1585,7 +1585,7 @@ macro_rules! impl_test_function {
 										);
 										anything_failed = true;
 									},
-									$crate::BenchmarkError::Override(_) => {
+									$crate::BenchmarkErrorFoo::Override(_) => {
 										// This is still considered a success condition.
 										$crate::log::error!(
 											"WARNING: benchmark error overrided - {}",
@@ -1593,7 +1593,7 @@ macro_rules! impl_test_function {
 													.expect("benchmark name is always a valid string!"),
 											);
 									},
-									$crate::BenchmarkError::Skip => {
+									$crate::BenchmarkErrorFoo::Skip => {
 										// This is considered a success condition.
 										$crate::log::error!(
 											"WARNING: benchmark error skipped - {}",
@@ -1725,7 +1725,7 @@ macro_rules! add_benchmark {
 
 			let final_results = match benchmark_result {
 				Ok(results) => Some(results),
-				Err($crate::BenchmarkError::Override(mut result)) => {
+				Err($crate::BenchmarkErrorFoo::Override(mut result)) => {
 					// Insert override warning as the first storage key.
 					$crate::log::error!(
 						"WARNING: benchmark error overrided - {}",
@@ -1737,7 +1737,7 @@ macro_rules! add_benchmark {
 					);
 					Some($crate::vec![result])
 				},
-				Err($crate::BenchmarkError::Stop(e)) => {
+				Err($crate::BenchmarkErrorFoo::Stop(e)) => {
 					$crate::show_benchmark_debug_info(
 						instance_string,
 						benchmark,
@@ -1747,7 +1747,7 @@ macro_rules! add_benchmark {
 					);
 					return Err(e.into());
 				},
-				Err($crate::BenchmarkError::Skip) => {
+				Err($crate::BenchmarkErrorFoo::Skip) => {
 					$crate::log::error!(
 						"WARNING: benchmark error skipped - {}",
 						$crate::str::from_utf8(benchmark)

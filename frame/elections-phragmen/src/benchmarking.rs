@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, whitelist, BenchmarkError, BenchmarkResult};
+use frame_benchmarking::{account, benchmarks, whitelist, BenchmarkErrorFoo, BenchmarkResult};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	traits::OnInitialize,
@@ -337,7 +337,7 @@ benchmarks! {
 
 	// We use the max block weight for this extrinsic for now. See below.
 	remove_member_without_replacement {}: {
-		Err(BenchmarkError::Override(
+		Err(BenchmarkErrorFoo::Override(
 			BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
 		))?;
 	}

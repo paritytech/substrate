@@ -120,7 +120,7 @@ impl BenchmarkResult {
 
 /// Possible errors returned from the benchmarking pipeline.
 #[derive(Clone, PartialEq, Debug)]
-pub enum BenchmarkError {
+pub enum BenchmarkErrorFoo {
 	/// The benchmarking pipeline should stop and return the inner string.
 	Stop(&'static str),
 	/// The benchmarking pipeline is allowed to fail here, and we should use the
@@ -131,29 +131,29 @@ pub enum BenchmarkError {
 	Skip,
 }
 
-impl From<BenchmarkError> for &'static str {
-	fn from(e: BenchmarkError) -> Self {
+impl From<BenchmarkErrorFoo> for &'static str {
+	fn from(e: BenchmarkErrorFoo) -> Self {
 		match e {
-			BenchmarkError::Stop(s) => s,
-			BenchmarkError::Override(_) => "benchmark override",
-			BenchmarkError::Skip => "benchmark skip",
+			BenchmarkErrorFoo::Stop(s) => s,
+			BenchmarkErrorFoo::Override(_) => "benchmark override",
+			BenchmarkErrorFoo::Skip => "benchmark skip",
 		}
 	}
 }
 
-impl From<&'static str> for BenchmarkError {
+impl From<&'static str> for BenchmarkErrorFoo {
 	fn from(s: &'static str) -> Self {
 		Self::Stop(s)
 	}
 }
 
-impl From<DispatchErrorWithPostInfo> for BenchmarkError {
+impl From<DispatchErrorWithPostInfo> for BenchmarkErrorFoo {
 	fn from(e: DispatchErrorWithPostInfo) -> Self {
 		Self::Stop(e.into())
 	}
 }
 
-impl From<DispatchError> for BenchmarkError {
+impl From<DispatchError> for BenchmarkErrorFoo {
 	fn from(e: DispatchError) -> Self {
 		Self::Stop(e.into())
 	}
@@ -302,7 +302,7 @@ pub trait Benchmarking {
 		whitelist: &[TrackedStorageKey],
 		verify: bool,
 		internal_repeats: u32,
-	) -> Result<Vec<BenchmarkResult>, BenchmarkError>;
+	) -> Result<Vec<BenchmarkResult>, BenchmarkErrorFoo>;
 }
 
 /// The required setup for creating a benchmark.
@@ -318,7 +318,7 @@ pub trait BenchmarkingSetup<T, I = ()> {
 		&self,
 		components: &[(BenchmarkParameter, u32)],
 		verify: bool,
-	) -> Result<Box<dyn FnOnce() -> Result<(), BenchmarkError>>, BenchmarkError>;
+	) -> Result<Box<dyn FnOnce() -> Result<(), BenchmarkErrorFoo>>, BenchmarkErrorFoo>;
 }
 
 /// Grab an account, seeded by a name and index.
