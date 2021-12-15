@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `Bar: MaxEncodedLen` is not satisfied
-  --> tests/pallet_ui/storage_info_unsatisfied_nmap.rs:10:12
+  --> tests/pallet_ui/storage_info_unsatisfied_nmap.rs:13:12
    |
-10 |     #[pallet::generate_storage_info]
+13 |     #[pallet::generate_storage_info]
    |               ^^^^^^^^^^^^^^^^^^^^^ the trait `MaxEncodedLen` is not implemented for `Bar`
    |
    = note: required because of the requirements on the impl of `KeyGeneratorMaxEncodedLen` for `Key<frame_support::Twox64Concat, Bar>`
