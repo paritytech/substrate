@@ -21,7 +21,11 @@
 
 use std::cell::RefCell;
 
-use frame_support::{parameter_types, traits::{ConstU32, ConstU64},weights::Weight};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+	weights::Weight,
+};
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
 use sp_runtime::{

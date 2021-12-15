@@ -26,7 +26,7 @@ use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	parameter_types, storage,
-	traits::{Contains, ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, Contains},
 	weights::{Pays, Weight},
 };
 use sp_core::H256;

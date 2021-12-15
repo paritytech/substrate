@@ -348,8 +348,8 @@ where
 pub mod test {
 	use super::*;
 	use crate::Twox128;
-	use sp_io::TestExternalities;
 	use frame_support::traits::ConstU32;
+	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, ConstU32<7>>> }

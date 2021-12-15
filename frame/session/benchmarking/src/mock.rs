@@ -20,7 +20,10 @@
 #![cfg(test)]
 
 use frame_election_provider_support::onchain;
-use frame_support::{parameter_types, traits::{ConstU32, ConstU64}};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_runtime::traits::IdentityLookup;
 
 type AccountId = u64;

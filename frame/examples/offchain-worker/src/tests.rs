@@ -18,7 +18,10 @@
 use crate as example_offchain_worker;
 use crate::*;
 use codec::Decode;
-use frame_support::{assert_ok, parameter_types,traits::{ConstU32, ConstU64}};
+use frame_support::{
+	assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::{
 	offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
 	sr25519::Signature,

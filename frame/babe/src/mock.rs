@@ -22,7 +22,7 @@ use codec::Encode;
 use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
-	traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize, ConstU32, ConstU64, ConstU128},
+	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::InitKind;
 use pallet_session::historical as pallet_session_historical;

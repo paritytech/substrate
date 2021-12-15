@@ -1121,10 +1121,11 @@ mod tests {
 	use super::*;
 	use crate as elections_phragmen;
 	use frame_support::{
-		assert_noop, assert_ok, dispatch::DispatchResultWithPostInfo, parameter_types,
-		traits::OnInitialize,
+		assert_noop, assert_ok,
+		dispatch::DispatchResultWithPostInfo,
+		parameter_types,
+		traits::{ConstU32, ConstU64, OnInitialize},
 	};
-	use frame_support::traits::{ConstU32, ConstU64};
 	use frame_system::ensure_signed;
 	use sp_core::H256;
 	use sp_runtime::{

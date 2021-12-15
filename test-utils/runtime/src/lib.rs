@@ -38,7 +38,7 @@ use trie_db::{Trie, TrieMut};
 use cfg_if::cfg_if;
 use frame_support::{
 	parameter_types,
-	traits::{CrateVersion, KeyOwnerProofSystem, ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
 	weights::RuntimeDbWeight,
 };
 use frame_system::limits::{BlockLength, BlockWeights};

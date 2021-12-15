@@ -20,7 +20,7 @@
 use crate::*;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{OnInitialize, ConstU64},
+	traits::{ConstU64, OnInitialize},
 	weights::{DispatchInfo, GetDispatchInfo},
 };
 use sp_core::H256;

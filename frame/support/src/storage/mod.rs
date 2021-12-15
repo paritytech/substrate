@@ -1404,11 +1404,11 @@ mod test {
 	use super::*;
 	use crate::{assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
+	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
 	use weak_bounded_vec::WeakBoundedVec;
-	use frame_support::traits::ConstU32;
 
 	#[test]
 	fn prefixed_map_works() {

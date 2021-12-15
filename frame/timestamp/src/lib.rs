@@ -316,7 +316,10 @@ mod tests {
 	use super::*;
 	use crate as pallet_timestamp;
 
-	use frame_support::{assert_ok, parameter_types, traits::{ConstU32, ConstU64}};
+	use frame_support::{
+		assert_ok, parameter_types,
+		traits::{ConstU32, ConstU64},
+	};
 	use sp_core::H256;
 	use sp_io::TestExternalities;
 	use sp_runtime::{

@@ -19,8 +19,8 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion, ConstU32, ConstU64
+		ConstU32, ConstU64, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
+		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };

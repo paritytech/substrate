@@ -25,7 +25,9 @@ use codec::Encode;
 use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
-	traits::{GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize, ConstU32, ConstU64, ConstU128},
+	traits::{
+		ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
+	},
 };
 use pallet_session::historical as pallet_session_historical;
 use pallet_staking::EraIndex;
@@ -130,7 +132,6 @@ impl pallet_session::historical::Config for Test {
 	type FullIdentification = pallet_staking::Exposure<u64, u128>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
-
 
 impl pallet_authorship::Config for Test {
 	type FindAuthor = ();

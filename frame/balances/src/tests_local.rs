@@ -22,7 +22,7 @@
 use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
 	parameter_types,
-	traits::{StorageMapShim, ConstU8, ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim},
 	weights::{DispatchInfo, IdentityFee, Weight},
 };
 use pallet_transaction_payment::CurrencyAdapter;

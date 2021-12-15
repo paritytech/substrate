@@ -24,7 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{
-	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion
+	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion,
 };
 use sp_std::prelude::*;
 
@@ -509,7 +509,8 @@ mod tests {
 	};
 
 	use frame_support::{
-		assert_noop, assert_ok, ord_parameter_types, parameter_types, traits::{GenesisBuild, ConstU32, ConstU64},
+		assert_noop, assert_ok, ord_parameter_types, parameter_types,
+		traits::{ConstU32, ConstU64, GenesisBuild},
 	};
 	use frame_system::EnsureSignedBy;
 

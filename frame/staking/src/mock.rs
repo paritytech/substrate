@@ -22,8 +22,8 @@ use frame_election_provider_support::{onchain, SortedListProvider};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
-		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
-		ConstU32, ConstU64
+		ConstU32, ConstU64, Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance,
+		OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };

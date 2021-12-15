@@ -22,7 +22,9 @@ use crate as pallet_identity;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	assert_noop, assert_ok, ord_parameter_types, parameter_types, traits::{EnsureOneOf, ConstU32,ConstU64}, BoundedVec,
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64, EnsureOneOf},
+	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;

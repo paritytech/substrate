@@ -22,7 +22,7 @@ use crate as pallet_lottery;
 
 use frame_support::{
 	parameter_types,
-	traits::{OnFinalize, OnInitialize, ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, OnFinalize, OnInitialize},
 };
 use frame_support_test::TestRandomness;
 use frame_system::EnsureRoot;

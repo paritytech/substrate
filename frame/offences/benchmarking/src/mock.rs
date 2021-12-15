@@ -21,7 +21,11 @@
 
 use super::*;
 use frame_election_provider_support::onchain;
-use frame_support::{parameter_types, traits::{ConstU32, ConstU64}, weights::constants::WEIGHT_PER_SECOND};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+	weights::constants::WEIGHT_PER_SECOND,
+};
 use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
 use sp_runtime::{
@@ -79,7 +83,6 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-
 
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;

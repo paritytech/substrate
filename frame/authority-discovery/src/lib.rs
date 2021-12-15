@@ -173,7 +173,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authority_discovery;
-	use frame_support::{parameter_types, traits::{GenesisBuild, ConstU32, ConstU64}};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64, GenesisBuild},
+	};
 	use sp_application_crypto::Pair;
 	use sp_authority_discovery::AuthorityPair;
 	use sp_core::{crypto::key_types, H256};

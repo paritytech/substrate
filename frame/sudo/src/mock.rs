@@ -21,7 +21,7 @@ use super::*;
 use crate as sudo;
 use frame_support::{
 	parameter_types,
-	traits::{Contains, GenesisBuild, ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
 };
 use frame_system::limits;
 use sp_core::H256;

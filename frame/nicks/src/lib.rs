@@ -245,7 +245,10 @@ mod tests {
 	use super::*;
 	use crate as pallet_nicks;
 
-	use frame_support::{assert_noop, assert_ok, ord_parameter_types, parameter_types, traits::{ConstU64, ConstU32}};
+	use frame_support::{
+		assert_noop, assert_ok, ord_parameter_types, parameter_types,
+		traits::{ConstU32, ConstU64},
+	};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
 	use sp_runtime::{

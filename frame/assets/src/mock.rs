@@ -72,7 +72,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<2>;
 }
 
-
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();

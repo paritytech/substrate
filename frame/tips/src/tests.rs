@@ -30,9 +30,13 @@ use sp_runtime::{
 use sp_storage::Storage;
 
 use frame_support::{
-	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types,
-	storage::StoragePrefixedMap, traits::SortedMembers, weights::Weight, PalletId,
-	traits::{ConstU32, ConstU64}
+	assert_noop, assert_ok,
+	pallet_prelude::GenesisBuild,
+	parameter_types,
+	storage::StoragePrefixedMap,
+	traits::{ConstU32, ConstU64, SortedMembers},
+	weights::Weight,
+	PalletId,
 };
 
 use super::*;

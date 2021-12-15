@@ -29,8 +29,10 @@ use codec::Decode;
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
 
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
-use frame_support::traits::ConstU64;
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{ConstU64, OnInitialize},
+};
 
 fn initialize_block(block: u64) {
 	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);

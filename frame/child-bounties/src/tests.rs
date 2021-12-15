@@ -24,8 +24,12 @@ use crate as pallet_child_bounties;
 use std::cell::RefCell;
 
 use frame_support::{
-	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::{OnInitialize, ConstU32, ConstU64},
-	weights::Weight, PalletId,
+	assert_noop, assert_ok,
+	pallet_prelude::GenesisBuild,
+	parameter_types,
+	traits::{ConstU32, ConstU64, OnInitialize},
+	weights::Weight,
+	PalletId,
 };
 
 use sp_core::H256;

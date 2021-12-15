@@ -25,7 +25,7 @@ use frame_support::{
 		StorageHasher,
 	},
 	parameter_types,
-	traits::{Get, ConstU32},
+	traits::{ConstU32, Get},
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
 use scale_info::TypeInfo;

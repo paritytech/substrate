@@ -306,8 +306,8 @@ impl<K, V, S> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> whe
 pub mod test {
 	use super::*;
 	use crate::Twox128;
-	use sp_io::TestExternalities;
 	use frame_support::traits::ConstU32;
+	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeMap<u32, (), ConstU32<7>>> }
 	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeMap<u32, (),  ConstU32<7>>> }
@@ -334,13 +334,13 @@ pub mod test {
 	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32,  ConstU32<7>>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32,  ConstU32<7>>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -348,7 +348,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32,  ConstU32<7>>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -369,7 +369,7 @@ pub mod test {
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded = boundedmap_from_keys::<u32,  ConstU32<7>>(&[1, 2, 3]);
+		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -394,7 +394,7 @@ pub mod test {
 
 	#[test]
 	fn btree_map_eq_works() {
-		let bounded = boundedmap_from_keys::<u32,  ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
 		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
 	}
 

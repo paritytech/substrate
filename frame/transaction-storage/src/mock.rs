@@ -19,9 +19,7 @@
 
 use crate as pallet_transaction_storage;
 use crate::TransactionStorageProof;
-use frame_support::{
-	traits::{OnFinalize, OnInitialize, ConstU16, ConstU32, ConstU64},
-};
+use frame_support::traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,

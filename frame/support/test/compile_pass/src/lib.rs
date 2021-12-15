@@ -22,7 +22,10 @@
 //! This crate tests that `construct_runtime!` expands the pallet parts
 //! correctly even when frame-support is renamed in Cargo.toml
 
-use frame_support::{construct_runtime, parameter_types, traits::{ConstU16, ConstU32}};
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{ConstU16, ConstU32},
+};
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	create_runtime_str, generic,

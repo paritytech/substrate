@@ -19,9 +19,10 @@ use std::vec;
 
 use beefy_primitives::mmr::MmrLeafVersion;
 use frame_support::{
-	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
+	construct_runtime, parameter_types,
+	sp_io::TestExternalities,
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
 	BasicExternalities,
-	traits::{ConstU16, ConstU32, ConstU64},
 };
 use sp_core::{Hasher, H256};
 use sp_runtime::{

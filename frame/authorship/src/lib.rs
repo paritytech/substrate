@@ -405,7 +405,11 @@ impl<T: Config> Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authorship;
-	use frame_support::{parameter_types, ConsensusEngineId, traits::{ConstU32, ConstU64}};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64},
+		ConsensusEngineId,
+	};
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::DigestItem,

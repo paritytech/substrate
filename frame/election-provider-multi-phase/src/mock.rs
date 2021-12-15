@@ -21,7 +21,11 @@ use frame_election_provider_support::{
 	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{parameter_types, traits::{Hooks, ConstU32}, weights::Weight};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, Hooks},
+	weights::Weight,
+};
 use multi_phase::unsigned::{IndexAssignmentOf, Voter};
 use parking_lot::RwLock;
 use sp_core::{

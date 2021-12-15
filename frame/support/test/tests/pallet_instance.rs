@@ -18,7 +18,7 @@
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
-	traits::{GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade, ConstU32},
+	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{

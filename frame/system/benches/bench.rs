@@ -16,13 +16,13 @@
 // limitations under the License.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
-use frame_support::traits::{ConstU32,ConstU64};
 
 #[frame_support::pallet]
 mod module {
@@ -83,7 +83,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-		type BlockHashCount = ConstU64<250>;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();

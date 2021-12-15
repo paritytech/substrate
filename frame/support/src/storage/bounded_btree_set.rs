@@ -287,9 +287,9 @@ impl<T, S> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where BTreeS
 pub mod test {
 	use super::*;
 	use crate::Twox128;
+	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use frame_support::traits::ConstU32;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeSet<u32, ConstU32<7>>> }
@@ -414,7 +414,7 @@ pub mod test {
 			}
 		}
 
-		let mut set = BoundedBTreeSet::<Unequal,  ConstU32<4>>::new();
+		let mut set = BoundedBTreeSet::<Unequal, ConstU32<4>>::new();
 
 		// when the set is full
 

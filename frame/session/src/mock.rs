@@ -32,7 +32,11 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 
-use frame_support::{parameter_types, traits::{GenesisBuild, ConstU32, ConstU64}, BasicExternalities};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+	BasicExternalities,
+};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {

@@ -21,7 +21,7 @@ use crate as pallet_gilt;
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{Currency, GenesisBuild, OnFinalize, OnInitialize, ConstU16, ConstU32, ConstU64},
+	traits::{ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -101,7 +101,7 @@ impl pallet_gilt::Config for Test {
 	type IgnoredIssuance = IgnoredIssuance;
 	type QueueCount = ConstU32<3>;
 	type MaxQueueLen = ConstU32<3>;
-	type FifoQueueLen =ConstU32<1>;
+	type FifoQueueLen = ConstU32<1>;
 	type Period = ConstU64<3>;
 	type MinFreeze = ConstU64<2>;
 	type IntakePeriod = ConstU64<2>;

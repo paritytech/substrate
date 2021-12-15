@@ -16,7 +16,10 @@
 // limitations under the License.
 
 use crate::{self as frame_system, *};
-use frame_support::{parameter_types, traits::{ConstU32, ConstU64}};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,

@@ -20,7 +20,7 @@ use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{fungibles::Mutate, FindAuthor, ConstU8, ConstU32, ConstU64},
+	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
 	weights::{
 		DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFeeCoefficient,
 		WeightToFeeCoefficients, WeightToFeePolynomial,
@@ -142,7 +142,6 @@ impl WeightToFeePolynomial for WeightToFee {
 		}]
 	}
 }
-
 
 impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;

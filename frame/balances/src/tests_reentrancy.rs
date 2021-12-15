@@ -20,7 +20,11 @@
 #![cfg(test)]
 
 use crate::{self as pallet_balances, Config, Pallet};
-use frame_support::{parameter_types, traits::{StorageMapShim, ConstU8, ConstU32, ConstU64}, weights::IdentityFee};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim},
+	weights::IdentityFee,
+};
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_io;

@@ -21,7 +21,9 @@ use super::*;
 
 use crate as pallet_preimage;
 use frame_support::{
-	ord_parameter_types, parameter_types, traits::{Everything, ConstU32, ConstU64}, weights::constants::RocksDbWeight,
+	ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64, Everything},
+	weights::constants::RocksDbWeight,
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;

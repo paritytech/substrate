@@ -24,7 +24,10 @@ use super::*;
 use crate as proxy;
 use codec::{Decode, Encode};
 use frame_support::{
-	assert_noop, assert_ok, dispatch::DispatchError, parameter_types, traits::{Contains, ConstU32, ConstU64},
+	assert_noop, assert_ok,
+	dispatch::DispatchError,
+	parameter_types,
+	traits::{ConstU32, ConstU64, Contains},
 	RuntimeDebug,
 };
 use sp_core::H256;

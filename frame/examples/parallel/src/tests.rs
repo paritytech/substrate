@@ -17,7 +17,7 @@
 
 use crate::{self as pallet_example_parallel, *};
 
-use frame_support::{parameter_types};
+use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,

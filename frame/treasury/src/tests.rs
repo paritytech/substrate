@@ -28,7 +28,10 @@ use sp_runtime::{
 };
 
 use frame_support::{
-	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::{OnInitialize, ConstU32, ConstU64},
+	assert_noop, assert_ok,
+	pallet_prelude::GenesisBuild,
+	parameter_types,
+	traits::{ConstU32, ConstU64, OnInitialize},
 	PalletId,
 };
 

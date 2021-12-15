@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_scored_pool;
 
-use frame_support::{ord_parameter_types, parameter_types, traits::{GenesisBuild, ConstU32, ConstU64}};
+use frame_support::{
+	ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+};
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
