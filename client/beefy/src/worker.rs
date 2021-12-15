@@ -61,6 +61,7 @@ where
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
+	pub rpc_best_beefy: Arc<Mutex<Option<NumberFor<B>>>>,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
@@ -87,6 +88,7 @@ where
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
+	rpc_best_beefy: Arc<Mutex<Option<NumberFor<B>>>>,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
 }
@@ -114,6 +116,7 @@ where
 			gossip_validator,
 			min_block_delta,
 			metrics,
+			rpc_best_beefy,
 		} = worker_params;
 
 		BeefyWorker {
@@ -130,6 +133,7 @@ where
 			best_grandpa_block: client.info().finalized_number,
 			best_beefy_block: None,
 			last_signed_id: 0,
+			rpc_best_beefy,
 			_backend: PhantomData,
 		}
 	}

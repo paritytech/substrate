@@ -20,6 +20,7 @@
 
 #![warn(missing_docs)]
 
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -73,17 +74,22 @@ pub trait BeefyApi<Notification, Number> {
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+	beefy_best_block: Arc<Mutex<Option<NumberFor<Block>>>>,
 	manager: SubscriptionManager,
 }
 
 impl<Block: BlockT> BeefyRpcHandler<Block> {
 	/// Creates a new BeefyRpcHandler instance.
-	pub fn new<E>(signed_commitment_stream: BeefySignedCommitmentStream<Block>, executor: E) -> Self
+	pub fn new<E>(
+		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+		beefy_best_block: Arc<Mutex<Option<NumberFor<Block>>>>,
+		executor: E,
+	) -> Self
 	where
 		E: futures::task::Spawn + Send + Sync + 'static,
 	{
 		let manager = SubscriptionManager::new(Arc::new(executor));
-		Self { signed_commitment_stream, manager }
+		Self { signed_commitment_stream, beefy_best_block, manager }
 	}
 }
 

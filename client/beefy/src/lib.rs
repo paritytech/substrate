@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use log::debug;
@@ -27,7 +28,7 @@ use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
-use sp_runtime::traits::Block;
+use sp_runtime::traits::{Block, NumberFor};
 
 use beefy_primitives::BeefyApi;
 
@@ -101,6 +102,8 @@ where
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
+	/// TODO
+	pub rpc_best_beefy: Arc<Mutex<Option<NumberFor<B>>>>,
 }
 
 /// Start the BEEFY gadget.
@@ -122,6 +125,7 @@ where
 		signed_commitment_sender,
 		min_block_delta,
 		prometheus_registry,
+		rpc_best_beefy,
 	} = beefy_params;
 
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
@@ -151,6 +155,7 @@ where
 		gossip_validator,
 		min_block_delta,
 		metrics,
+		rpc_best_beefy,
 	};
 
 	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);
