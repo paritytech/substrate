@@ -28,7 +28,6 @@ wasmtime = { version = "0.31.0", default-features = false, features = [
     "cranelift",
     "jitdump",
     "parallel-compilation",
-    "uffd"
 ] }
 
 [dev-dependencies]
