@@ -86,17 +86,12 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-parameter_types! {
-	pub const Period: u64 = 1;
-	pub const Offset: u64 = 0;
-}
-
 impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
-	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type SessionManager = MockSessionManager;
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
