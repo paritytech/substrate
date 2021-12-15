@@ -50,7 +50,7 @@ where
 			},
 			_ =>
 				return Err(WasmError::Other(format!(
-					"host doesn't provide any non function imports besides 'memory': {}:{}",
+					"host doesn't provide any non function imports: {}:{}",
 					import_ty.module(),
 					name,
 				))),
