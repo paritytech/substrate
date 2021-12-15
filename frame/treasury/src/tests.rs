@@ -28,7 +28,7 @@ use sp_runtime::{
 };
 
 use frame_support::{
-	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::OnInitialize,
+	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::{OnInitialize, ConstU32, ConstU64},
 	PalletId,
 };
 
@@ -69,7 +69,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = frame_support::traits::ConstU64<250>;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -78,10 +78,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
@@ -90,7 +87,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -99,8 +96,6 @@ thread_local! {
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
-	pub const ProposalBondMinimum: u64 = 1;
-	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const BountyUpdatePeriod: u32 = 20;
@@ -116,13 +111,13 @@ impl Config for Test {
 	type Event = Event;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
-	type ProposalBondMinimum = ProposalBondMinimum;
-	type SpendPeriod = SpendPeriod;
+	type ProposalBondMinimum = ConstU64<1>;
+	type SpendPeriod = ConstU64<2>;
 	type Burn = Burn;
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
-	type MaxApprovals = MaxApprovals;
+	type MaxApprovals = ConstU32<100>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

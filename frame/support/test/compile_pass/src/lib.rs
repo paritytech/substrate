@@ -22,7 +22,7 @@
 //! This crate tests that `construct_runtime!` expands the pallet parts
 //! correctly even when frame-support is renamed in Cargo.toml
 
-use frame_support::{construct_runtime, parameter_types, traits::{ConstU8, ConstU32}};
+use frame_support::{construct_runtime, parameter_types, traits::{ConstU16, ConstU32}};
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	create_runtime_str, generic,
@@ -74,7 +74,7 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 	type SystemWeightInfo = ();
-	type SS58Prefix = ConstU8<0>;
+	type SS58Prefix = ConstU16<0>;
 }
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
