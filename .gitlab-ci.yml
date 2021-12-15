@@ -42,7 +42,6 @@ variables:                         &default-vars
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
-  PIPELINE_SCRIPTS_TAG:            "v0.4"
 
 default:
   cache:                           {}
@@ -580,8 +579,8 @@ cargo-check-macos:
   script:
     - git clone
         --depth=1
-        "--branch=$PIPELINE_SCRIPTS_TAG"
-        https://github.com/paritytech/pipeline-scripts
+        --branch=dependents-dependents
+        https://github.com/joao-paulo-parity/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
         paritytech
         substrate
