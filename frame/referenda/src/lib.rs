@@ -392,7 +392,12 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn nudge_referendum(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			ensure_signed_or_root(origin)?;
-			Self::advance_referendum(index)?;
+			let now = frame_system::Pallet::<T>::block_number();
+			let status = Self::ensure_ongoing(index)?;
+			let (info, dirty) = Self::service_referendum(now, index, status);
+			if dirty {
+				ReferendumInfoFor::<T>::insert(index, info);
+			}
 			Ok(())
 		}
 /*
@@ -425,8 +430,8 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
 				let result = f(PollStatus::Ongoing(&mut status.tally));
 				let now = frame_system::Pallet::<T>::block_number();
-				let (info, _) = Self::service_referendum(now, index, status);
-				ReferendumInfoFor::<T>::insert(index, info);
+				Self::ensure_alarm_at(&mut status, index, now + One::one());
+				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				result
 			},
 			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
@@ -443,8 +448,8 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
 				let result = f(PollStatus::Ongoing(&mut status.tally))?;
 				let now = frame_system::Pallet::<T>::block_number();
-				let (info, _) = Self::service_referendum(now, index, status);
-				ReferendumInfoFor::<T>::insert(index, info);
+				Self::ensure_alarm_at(&mut status, index, now + One::one());
+				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				Ok(result)
 			},
 			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
@@ -529,7 +534,7 @@ impl<T: Config> Pallet<T> {
 		index: ReferendumIndex,
 		now: T::BlockNumber,
 		track: &TrackInfoOf<T>,
-	) {
+	) -> Option<T::BlockNumber> {
 		println!("Begining deciding for ref #{:?} at block #{:?}", index, now);
 		let is_passing = Self::is_passing(
 			&status.tally,
@@ -551,9 +556,8 @@ impl<T: Config> Pallet<T> {
 			if is_passing { Some(now.saturating_add(track.confirm_period)) } else { None };
 		let deciding_status = DecidingStatus { since: now, confirming };
 		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
-		dbg!(alarm);
-		Self::ensure_alarm_at(status, index, alarm);
 		status.deciding = Some(deciding_status);
+		Some(alarm)
 	}
 
 	fn ready_for_deciding(
@@ -561,20 +565,21 @@ impl<T: Config> Pallet<T> {
 		track: &TrackInfoOf<T>,
 		index: ReferendumIndex,
 		status: &mut ReferendumStatusOf<T>,
-	) {
+	) -> Option<T::BlockNumber> {
 		println!("ready_for_deciding ref #{:?}", index);
 		let deciding_count = DecidingCount::<T>::get(status.track);
 		if deciding_count < track.max_deciding {
 			// Begin deciding.
 			println!("Beginning deciding...");
-			Self::begin_deciding(status, index, now, track);
 			DecidingCount::<T>::insert(status.track, deciding_count.saturating_add(1));
+			Self::begin_deciding(status, index, now, track)
 		} else {
 			// Add to queue.
 			println!("Queuing for decision.");
 			let item = (index, status.tally.ayes());
 			status.ayes_in_queue = Some(status.tally.ayes());
 			TrackQueue::<T>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
+			None
 		}
 	}
 
@@ -606,7 +611,10 @@ impl<T: Config> Pallet<T> {
 		while deciding_count < track_info.max_deciding {
 			if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
 				let now = frame_system::Pallet::<T>::block_number();
-				Self::begin_deciding(&mut status, index, now, &track_info);
+				let maybe_set_alarm = Self::begin_deciding(&mut status, index, now, &track_info);
+				if let Some(set_alarm) = maybe_set_alarm {
+					Self::ensure_alarm_at(&mut status, index, set_alarm);
+				}
 				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				deciding_count.saturating_inc();
 				count.saturating_inc();
@@ -621,17 +629,6 @@ impl<T: Config> Pallet<T> {
 		Ok(count)
 	}
 
-	/// Attempts to advance the referendum. Returns `Ok` if something useful happened.
-	fn advance_referendum(index: ReferendumIndex) -> DispatchResult {
-		let now = frame_system::Pallet::<T>::block_number();
-		let status = Self::ensure_ongoing(index)?;
-		let (info, dirty) = Self::service_referendum(now, index, status);
-		if dirty {
-			ReferendumInfoFor::<T>::insert(index, info);
-		}
-		Ok(())
-	}
-
 	/// Action item for when there is now one fewer referendum in the deciding phase and the
 	/// `DecidingCount` is not yet updated. This means that we should either:
 	/// - begin deciding another referendum (and leave `DecidingCount` alone); or
@@ -642,7 +639,10 @@ impl<T: Config> Pallet<T> {
 		if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
 			println!("Ref #{:?} ready for deciding", index);
 			let now = frame_system::Pallet::<T>::block_number();
-			Self::begin_deciding(&mut status, index, now, track_info);
+			let maybe_set_alarm = Self::begin_deciding(&mut status, index, now, track_info);
+			if let Some(set_alarm) = maybe_set_alarm {
+				Self::ensure_alarm_at(&mut status, index, set_alarm);
+			}
 			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 			TrackQueue::<T>::insert(track, track_queue);
 		} else {
@@ -721,7 +721,7 @@ impl<T: Config> Pallet<T> {
 					// Just insert.
 					queue.force_insert_keep_right(new_pos, (index, ayes));
 				} else if let Some(old_pos) = maybe_old_pos {
-					// We were in the queue - just update and sort.
+					// We were in the queue - slide into the correct position.
 					queue[old_pos].1 = ayes;
 					queue.slide(old_pos, new_pos);
 				}
@@ -731,7 +731,9 @@ impl<T: Config> Pallet<T> {
 				if status.decision_deposit.is_some() {
 					let prepare_end = status.submitted.saturating_add(track.prepare_period);
 					if now >= prepare_end {
-						Self::ready_for_deciding(now, &track, index, &mut status);
+						if let Some(set_alarm) = Self::ready_for_deciding(now, &track, index, &mut status) {
+							alarm = alarm.min(set_alarm);
+						}
 						dirty = true;
 					} else {
 						println!("Not deciding, have DD, within PP: Setting alarm to end of PP");
@@ -739,8 +741,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 			}
-		}
-		if let Some(deciding) = &mut status.deciding {
+		} else if let Some(deciding) = &mut status.deciding {
 			let is_passing = Self::is_passing(
 				&status.tally,
 				now.saturating_sub(deciding.since),

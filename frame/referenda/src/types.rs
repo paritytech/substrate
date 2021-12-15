@@ -170,7 +170,13 @@ pub trait TracksInfo<Balance, Moment> {
 	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync;
 	type Origin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
-	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()>;
+	fn track_for(origin: &Self::Origin) -> Result<Self::Id, ()>;
+	fn info(id: Self::Id) -> Option<&'static TrackInfo<Balance, Moment>> {
+		Self::tracks()
+			.iter()
+			.find(|x| &x.0 == &id)
+			.map(|x| &x.1)
+	}
 }
 
 /// Indication of either a specific moment or a delay from a implicitly defined moment.
