@@ -8,21 +8,3 @@ error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
    = note: add `#[derive(Debug)]` to `Bar` or manually `impl std::fmt::Debug for Bar`
    = note: required because of the requirements on the impl of `std::fmt::Debug` for `&Bar`
    = note: required for the cast to the object type `dyn std::fmt::Debug`
-
-error[E0277]: the trait bound `Bar: Clone` is not satisfied
-   --> tests/pallet_ui/call_argument_invalid_bound_3.rs:22:36
-    |
-22  |         pub fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-    |                                          ^^^ the trait `Clone` is not implemented for `Bar`
-    |
-note: required by `clone`
-   --> $RUST/core/src/clone.rs
-    |
-    |     fn clone(&self) -> Self;
-    |     ^^^^^^^^^^^^^^^^^^^^^^^^
-
-error[E0369]: binary operation `==` cannot be applied to type `&Bar`
-  --> tests/pallet_ui/call_argument_invalid_bound_3.rs:22:36
-   |
-22 |         pub fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                          ^^^
