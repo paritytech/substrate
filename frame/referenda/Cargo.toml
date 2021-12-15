@@ -24,13 +24,14 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+assert_matches = { version = "1.5", optional = true }
 
 [dev-dependencies]
-assert_matches = "1.5"
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
+assert_matches = { version = "1.5" }
 
 [features]
 default = ["std"]
@@ -50,5 +51,6 @@ runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"assert_matches",
 ]
 try-runtime = ["frame-support/try-runtime"]

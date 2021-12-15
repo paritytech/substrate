@@ -18,22 +18,16 @@
 //! Democracy pallet benchmarking.
 
 use super::*;
-
 use frame_benchmarking::{account, benchmarks, whitelist_account};
-use frame_support::{
-	assert_noop, assert_ok,
-	codec::Decode,
-	traits::{
-		schedule::DispatchTime, Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable,
-	},
-};
-use frame_system::{Pallet as System, RawOrigin};
-use sp_runtime::traits::{BadOrigin, Bounded, One};
-
-use crate::Pallet as Democracy;
+use frame_support::{assert_ok, traits::{Currency, EnsureOrigin}};
+use frame_system::RawOrigin;
+use sp_runtime::traits::{Bounded, Hash};
+use assert_matches::assert_matches;
+use crate::Pallet as Referenda;
 
 const SEED: u32 = 0;
 
+#[allow(dead_code)]
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
@@ -43,66 +37,107 @@ fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	caller
 }
-/*
-fn add_proposal<T: Config>(track: TrackIfOf<T>, n: u32) -> Result<T::Hash, &'static str> {
-	let other = funded_account::<T>("proposer", n);
-	let value = T::SubmissionDeposit::get();
-	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 
-	Referenda::<T>::submit(RawOrigin::Signed(other).into(), proposal_hash, AtOrAfter::After(0))?;
-
-	Ok(proposal_hash)
-}
-
-fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
-	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
-	let vote_threshold = VoteThreshold::SimpleMajority;
-
-	Democracy::<T>::inject_referendum(
-		T::LaunchPeriod::get(),
-		proposal_hash,
-		vote_threshold,
-		0u32.into(),
-	);
-	let referendum_index: ReferendumIndex = ReferendumCount::<T>::get() - 1;
-	T::Scheduler::schedule_named(
-		(DEMOCRACY_ID, referendum_index).encode(),
-		DispatchTime::At(2u32.into()),
-		None,
-		63,
-		frame_system::RawOrigin::Root.into(),
-		Call::enact_proposal { proposal_hash, index: referendum_index }.into(),
-	)
-	.map_err(|_| "failed to schedule named")?;
-	Ok(referendum_index)
-}
-
-fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
-	let v = Vote { aye: true, conviction: Conviction::Locked1x };
-
-	AccountVote::Standard { vote: v, balance: b }
-}
-*/
 benchmarks! {
 	submit {
-		let p = T::MaxProposals::get();
-
-		for i in 0 .. (p - 1) {
-			add_proposal::<T>(i)?;
-		}
-
 		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash: T::Hash = T::Hashing::hash_of(&0);
-		let value = T::MinimumDeposit::get();
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
-	verify {
-		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
+	}: _(
+		RawOrigin::Signed(caller),
+		RawOrigin::Root.into(),
+		T::Hashing::hash_of(&0),
+		AtOrAfter::After(0u32.into())
+	) verify {
+		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
+		let status = ReferendumInfoFor::<T>::get(index).unwrap();
+		assert_matches!(status, ReferendumInfo::Ongoing(_));
 	}
 
+	place_decision_deposit {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let origin = move || RawOrigin::Signed(caller.clone());
+		assert_ok!(Referenda::<T>::submit(
+			origin().into(),
+			RawOrigin::Root.into(),
+			T::Hashing::hash_of(&0),
+			AtOrAfter::After(0u32.into())
+		));
+		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
+	}: _(origin(), index)
+	verify {
+		let status = ReferendumInfoFor::<T>::get(index).unwrap();
+		assert_matches!(status, ReferendumInfo::Ongoing(ReferendumStatus {
+			decision_deposit: Some(..),
+			..
+		}));
+	}
+
+	refund_decision_deposit {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let origin = move || RawOrigin::Signed(caller.clone());
+		assert_ok!(Referenda::<T>::submit(
+			origin().into(),
+			RawOrigin::Root.into(),
+			T::Hashing::hash_of(&0),
+			AtOrAfter::After(0u32.into())
+		));
+		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
+		assert_ok!(Referenda::<T>::place_decision_deposit(origin().into(), index));
+		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), index));
+	}: _(origin(), index)
+	verify {
+		let status = ReferendumInfoFor::<T>::get(index).unwrap();
+		assert_matches!(status, ReferendumInfo::Cancelled(_, _, None));
+	}
+
+	cancel {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let origin = move || RawOrigin::Signed(caller.clone());
+		assert_ok!(Referenda::<T>::submit(
+			origin().into(),
+			RawOrigin::Root.into(),
+			T::Hashing::hash_of(&0),
+			AtOrAfter::After(0u32.into())
+		));
+		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
+		assert_ok!(Referenda::<T>::place_decision_deposit(origin().into(), index));
+	}: _<T::Origin>(T::CancelOrigin::successful_origin(), index)
+	verify {
+		let status = ReferendumInfoFor::<T>::get(index).unwrap();
+		assert_matches!(status, ReferendumInfo::Cancelled(..));
+	}
+
+	kill {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let origin = move || RawOrigin::Signed(caller.clone());
+		assert_ok!(Referenda::<T>::submit(
+			origin().into(),
+			RawOrigin::Root.into(),
+			T::Hashing::hash_of(&0),
+			AtOrAfter::After(0u32.into())
+		));
+		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
+		assert_ok!(Referenda::<T>::place_decision_deposit(origin().into(), index));
+	}: _<T::Origin>(T::KillOrigin::successful_origin(), index)
+	verify {
+		let status = ReferendumInfoFor::<T>::get(index).unwrap();
+		assert_matches!(status, ReferendumInfo::Killed(..));
+	}
+/*
+	nudge_referendum {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+	}: _(RawOrigin::Signed(caller), 0)
+	verify {
+	}
+*/
 	impl_benchmark_test_suite!(
-		Democracy,
-		crate::tests::new_test_ext(),
-		crate::tests::Test
+		Referenda,
+		crate::mock::new_test_ext(),
+		crate::mock::Test
 	);
 }

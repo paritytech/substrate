@@ -61,15 +61,15 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-//#[cfg(feature = "runtime-benchmarks")]
-//pub mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 
 const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Pays, Parameter};
+	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, Parameter};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::DispatchResult;
 
@@ -395,7 +395,7 @@ pub mod pallet {
 			Self::advance_referendum(index)?;
 			Ok(())
 		}
-
+/*
 		/// Advance a track onto its next logical state. This should happen automaically,
 		/// but this exists in order to allow it to happen manaully in case it is needed.
 		#[pallet::weight(0)]
@@ -407,6 +407,7 @@ pub mod pallet {
 			Self::advance_track(track)?;
 			Ok(Pays::No.into())
 		}
+*/
 	}
 }
 
@@ -596,6 +597,7 @@ impl<T: Config> Pallet<T> {
 	/// `max_deciding`.
 	///
 	/// This should never be needed, since referenda should automatically begin when others end.
+	#[allow(dead_code)]
 	fn advance_track(track: TrackIdOf<T>) -> Result<u32, DispatchError> {
 		let track_info = Self::track(track).ok_or(Error::<T>::BadTrack)?;
 		let mut deciding_count = DecidingCount::<T>::get(track);
