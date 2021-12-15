@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 log = { version = "0.4.8", optional = true }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }
 sp-externalities = { version = "0.10.0", optional = true, path = "../externalities" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../io" }
+sp-io = { version = "4.0.0", default-features = false, path = "../io" }
 sp-runtime-interface = { version = "4.1.0-dev", default-features = false, path = "../runtime-interface" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 

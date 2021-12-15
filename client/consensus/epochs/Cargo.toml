@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
-sp-runtime = {  path = "../../../primitives/runtime" , version = "4.0.0-dev"}
+sp-runtime = {  path = "../../../primitives/runtime" , version = "4.0.0"}
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sc-client-api = { path = "../../api" , version = "4.0.0-dev"}
 sc-consensus = { path = "../common" , version = "0.10.0-dev"}

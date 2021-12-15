@@ -24,7 +24,7 @@ serde = "1.0.126"
 
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
 
 [dev-dependencies]

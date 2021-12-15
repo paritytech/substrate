@@ -131,9 +131,9 @@ pub struct ExecReturnValue {
 }
 
 impl ExecReturnValue {
-	/// We understand the absense of a revert flag as success.
-	pub fn is_success(&self) -> bool {
-		!self.flags.contains(ReturnFlags::REVERT)
+	/// The contract did revert all storage changes.
+	pub fn did_revert(&self) -> bool {
+		self.flags.contains(ReturnFlags::REVERT)
 	}
 }
 
@@ -168,6 +168,12 @@ pub enum Code<Hash> {
 	Upload(Bytes),
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
+}
+
+impl<T: Into<Vec<u8>>, Hash> From<T> for Code<Hash> {
+	fn from(from: T) -> Self {
+		Code::Upload(Bytes(from.into()))
+	}
 }
 
 /// The amount of balance that was either charged or refunded in order to pay for storage.

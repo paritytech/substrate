@@ -22,11 +22,11 @@ futures = { version = "0.3.1", features = ["thread-pool"] }
 log = "0.4.8"
 sp-core = { path = "../../core", version = "4.1.0-dev" }
 sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
+sp-state-machine = { version = "0.10.0", path = "../../state-machine" }
 futures-timer = "3.0.1"
 sp-std = { version = "4.0.0", path = "../../std" }
 sp-version = { version = "4.0.0-dev", path = "../../version" }
-sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
+sp-runtime = { version = "4.0.0", path = "../../runtime" }
 thiserror = "1.0.30"
 
 [dev-dependencies]
