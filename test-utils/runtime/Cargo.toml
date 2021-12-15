@@ -28,7 +28,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 sp-runtime-interface = { version = "4.0.0", default-features = false, path = "../../primitives/runtime-interface" }
 sp-io = { version = "4.0.0", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
-sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
+sp-version = { version = "4.0.0", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }

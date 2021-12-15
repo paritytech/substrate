@@ -28,7 +28,7 @@ sp-core = { version = "4.0.0", path = "../../../../primitives/core" }
 sp-io = { version = "4.0.0", path = "../../../../primitives/io" }
 sp-keystore = { version = "0.10.0", path = "../../../../primitives/keystore" }
 sp-externalities = { version = "0.10.0", path = "../../../../primitives/externalities" }
-sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
+sp-version = { version = "4.0.0", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
 jsonrpsee = { version = "0.4.1", default-features = false, features = ["ws-client"]}
