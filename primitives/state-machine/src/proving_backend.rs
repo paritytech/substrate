@@ -28,8 +28,7 @@ use log::debug;
 use parking_lot::RwLock;
 use sp_core::storage::ChildInfo;
 use sp_trie::{
-	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
-	MemoryDB, StorageProof,
+	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, MemoryDB, StorageProof,
 };
 pub use sp_trie::{
 	trie_types::{Layout, TrieError},
@@ -95,21 +94,6 @@ where
 		// )
 		// .map_err(map_e)
 		unimplemented!()
-	}
-
-	/// Produce proof for the whole backend.
-	pub fn record_all_keys(&mut self) {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
-
-		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
-			let root = self.backend.root();
-			record_all_keys::<Layout<H>, _>(&eph, root, &mut *self.proof_recorder)
-		};
-
-		if let Err(e) = iter() {
-			debug!(target: "trie", "Error while recording all keys: {}", e);
-		}
 	}
 }
 
@@ -475,13 +459,16 @@ mod tests {
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let proving = ProvingBackend::new(trie);
-		(0..63).for_each(|i| assert_eq!(proving.next_storage_key(&[i]).unwrap(), Some(vec![i + 1])));
+		(0..63)
+			.for_each(|i| assert_eq!(proving.next_storage_key(&[i]).unwrap(), Some(vec![i + 1])));
 
 		let proof = proving.extract_proof();
 
 		let proof_check =
 			create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
-		(0..63).for_each(|i| assert_eq!(proof_check.next_storage_key(&[i]).unwrap(), Some(vec![i + 1])));
+		(0..63).for_each(|i| {
+			assert_eq!(proof_check.next_storage_key(&[i]).unwrap(), Some(vec![i + 1]))
+		});
 	}
 
 	#[test]

@@ -25,8 +25,9 @@ mod node_header;
 mod storage_proof;
 mod trie_codec;
 mod trie_stream;
+#[cfg(feature = "std")]
+pub mod cache;
 
-use codec::Output;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
 /// Various re-exports from the `hash-db` crate.
@@ -282,30 +283,6 @@ where
 	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta)
 }
 
-/// Record all keys for a given root.
-pub fn record_all_keys<L: TrieConfiguration, DB>(
-	db: &DB,
-	root: &TrieHash<L>,
-	recorder: &mut Recorder<L>,
-) -> Result<(), Box<TrieError<L>>>
-where
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
-{
-	let mut trie = TrieDBBuilder::<L>::new(&*db, root)?.build();
-	let iter = trie.iter()?;
-
-	for x in iter {
-		let (key, _) = x?;
-
-		// there's currently no API like iter_with()
-		// => use iter to enumerate all keys AND lookup each
-		// key using get_with
-		// trie.get_with(&key, &mut *recorder)?;
-	}
-
-	Ok(())
-}
-
 /// Read a value from the child trie.
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	keyspace: &[u8],
@@ -449,113 +426,6 @@ where
 
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T> + 'b) {
 		&mut *self
-	}
-}
-
-use std::{
-	collections::{hash_map::Entry, HashMap},
-	sync::Arc,
-};
-
-#[derive(Clone)]
-pub struct SharedTrieNodeCache<H: Hasher> {
-	cache: std::sync::Arc<parking_lot::RwLock<HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>>,
-	cache_data: std::sync::Arc<
-		parking_lot::RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<trie_db::Bytes>>>>,
-	>,
-}
-
-impl<H: Hasher> Default for SharedTrieNodeCache<H> {
-	fn default() -> Self {
-		Self { cache: Default::default(), cache_data: Default::default() }
-	}
-}
-
-pub struct LocalTrieNodeCache<H: Hasher> {
-	shared: SharedTrieNodeCache<H>,
-	local: parking_lot::Mutex<HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
-	enable_fast_cache: bool,
-}
-
-pub struct TrieNodeCache<'a, H: Hasher> {
-	shared: parking_lot::RwLockReadGuard<'a, HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
-	local: parking_lot::MutexGuard<'a, HashMap<H::Out, trie_db::node::NodeOwned<H::Out>>>,
-	enable_fast_cache: bool,
-	fast_cache: parking_lot::MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, Option<trie_db::Bytes>>>,
-}
-
-impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
-	fn get_or_insert_node(
-		&mut self,
-		hash: H::Out,
-		fetch_node: &mut dyn FnMut() -> trie_db::Result<
-			trie_db::node::NodeOwned<H::Out>,
-			H::Out,
-			CError<Layout<H>>,
-		>,
-	) -> trie_db::Result<&trie_db::node::NodeOwned<H::Out>, H::Out, CError<Layout<H>>> {
-		if let Some(res) = self.shared.get(&hash) {
-			return Ok(res)
-		}
-
-		match self.local.entry(hash) {
-			Entry::Occupied(res) => Ok(res.into_mut()),
-			Entry::Vacant(vacant) => {
-				let node = (*fetch_node)()?;
-				Ok(vacant.insert(node))
-			},
-		}
-	}
-
-	fn insert_node(&mut self, hash: H::Out, node: trie_db::node::NodeOwned<H::Out>) {
-		self.local.insert(hash, node);
-	}
-
-	fn get_node(&mut self, hash: &H::Out) -> Option<&trie_db::node::NodeOwned<H::Out>> {
-		if let Some(node) = self.shared.get(hash) {
-			return Some(node)
-		}
-
-		self.local.get(hash)
-	}
-
-	fn lookup_data_for_key(&self, key: &[u8]) -> Option<&Option<trie_db::Bytes>> {
-		if self.enable_fast_cache {
-			self.fast_cache.get(key)
-		} else {
-			None
-		}
-	}
-
-	fn cache_data_for_key(&mut self, key: &[u8], data: Option<trie_db::Bytes>) {
-		if self.enable_fast_cache {
-			self.fast_cache.insert(key.into(), data);
-		}
-	}
-}
-
-impl<H: Hasher> LocalTrieNodeCache<H> {
-	pub fn new(shared: SharedTrieNodeCache<H>, enable_fast_cache: bool) -> Self {
-		Self { enable_fast_cache, local: Default::default(), shared }
-	}
-
-	pub fn as_cache<'a>(&'a self, hash: H::Out) -> TrieNodeCache<'a, H> {
-		TrieNodeCache {
-			shared: self.shared.cache.read(),
-			local: self.local.lock(),
-			fast_cache: parking_lot::RwLockWriteGuard::map(
-				self.shared.cache_data.write(),
-				|cache| cache.entry(hash).or_default(),
-			),
-			enable_fast_cache: self.enable_fast_cache,
-		}
-	}
-}
-
-impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
-	fn drop(&mut self) {
-		let mut shared = self.shared.cache.write();
-		shared.extend(self.local.lock().drain());
 	}
 }
 
