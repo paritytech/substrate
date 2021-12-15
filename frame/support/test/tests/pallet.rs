@@ -535,6 +535,10 @@ pub mod pallet4 {
 	impl<T: Config> Pallet<T> {}
 }
 
+frame_support::parameter_types!(
+	pub const MyGetParam3: u32 = 12;
+);
+
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
