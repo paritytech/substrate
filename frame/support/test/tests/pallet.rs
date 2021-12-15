@@ -19,7 +19,7 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		ConstU32, ConstU64, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
+		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
@@ -569,7 +569,7 @@ impl pallet::Config for Runtime {
 	type Event = Event;
 	type MyGetParam = ConstU32<10>;
 	type MyGetParam2 = ConstU32<11>;
-	type MyGetParam3 = ConstU32<12>;
+	type MyGetParam3 = MyGetParam3;
 	type Balance = u64;
 }
 

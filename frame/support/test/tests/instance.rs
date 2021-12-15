@@ -24,7 +24,6 @@ use frame_support::{
 		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
 		StorageHasher,
 	},
-	parameter_types,
 	traits::{ConstU32, Get},
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
