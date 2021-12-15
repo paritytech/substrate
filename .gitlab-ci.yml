@@ -650,6 +650,18 @@ build-macos-subkey:
   tags:
     - osx
 
+check-rustdoc:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  variables:
+    <<:                            *default-vars
+    SKIP_WASM_BUILD:               1
+    RUSTDOCFLAGS:                  "-Dwarnings"
+  script:
+    - time cargo +nightly doc --workspace --all-features --verbose --no-deps
+    - sccache -s
+
 build-rustdoc:
   stage:                           build
   <<:                              *docker-env
@@ -665,7 +677,6 @@ build-rustdoc:
     paths:
     - ./crate-docs/
   script:
-    # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
     - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
