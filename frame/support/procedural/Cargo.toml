@@ -24,3 +24,4 @@ syn = { version = "1.0.81", features = ["full"] }
 [features]
 default = ["std"]
 std = []
+no-metadata-docs = []

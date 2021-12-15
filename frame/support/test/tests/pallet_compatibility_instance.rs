@@ -15,6 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Old macros don't support the flag `no-metadata-docs` so the result differs when the feature is
+// activated.
+#![cfg(not(feature = "no-metadata-docs"))]
+
 mod pallet_old {
 	use frame_support::{
 		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,

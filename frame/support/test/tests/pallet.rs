@@ -1103,6 +1103,14 @@ fn migrate_from_pallet_version_to_storage_version() {
 fn metadata() {
 	use frame_support::metadata::*;
 
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
+
 	let pallets = vec![
 		PalletMetadata {
 			index: 1,
@@ -1272,7 +1280,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "Unbounded",
@@ -1290,13 +1298,13 @@ fn metadata() {
 					name: "MyGetParam",
 					ty: meta_type::<u32>(),
 					value: vec![10, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam2",
 					ty: meta_type::<u32>(),
 					value: vec![11, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam3",
@@ -1308,19 +1316,19 @@ fn metadata() {
 					name: "some_extra",
 					ty: meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc", " Some doc"],
+					docs: maybe_docs(vec![" Some doc", " Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "SomeExtraRename",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
@@ -1354,7 +1362,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 				],
 			}),
