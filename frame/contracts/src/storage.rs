@@ -72,6 +72,21 @@ pub struct DeletedContract {
 	pub(crate) trie_id: TrieId,
 }
 
+/// Information about what happended to the pre-existing value when calling [`Storage::write`].
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub enum WriteOutcome {
+	/// No value existed at the specified key.
+	New,
+	/// A value of the returned length was overwritten.
+	Overwritten(u32),
+	/// The returned value was taken out of storage before being overwritten.
+	///
+	/// This is only returned when specifically requested because it causes additional work
+	/// depending on the size of the pre-existing value. When not requested [`Self::Overwritten`]
+	/// is returned instead.
+	Taken(Vec<u8>),
+}
+
 pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
@@ -87,9 +102,15 @@ where
 		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
+	/// Returns `true` iff the `key` exists in storage.
+	pub fn contains(trie_id: &TrieId, key: &StorageKey) -> bool {
+		child::exists(&child_trie_info(trie_id), &blake2_256(key))
+	}
+
 	/// Update a storage entry into a contract's kv storage.
 	///
-	/// If the `new_value` is `None` then the kv pair is removed.
+	/// If the `new_value` is `None` then the kv pair is removed. If `take` is true
+	/// a [`WriteOutcome::Taken`] is returned instead of a [`WriteOutcome::Overwritten`].
 	///
 	/// This function also records how much storage was created or removed if a `storage_meter`
 	/// is supplied. It should only be absent for testing or benchmarking code.
@@ -98,13 +119,19 @@ where
 		key: &StorageKey,
 		new_value: Option<Vec<u8>>,
 		storage_meter: Option<&mut meter::NestedMeter<T>>,
-	) -> DispatchResult {
+		take: bool,
+	) -> Result<WriteOutcome, DispatchError> {
 		let hashed_key = blake2_256(key);
 		let child_trie_info = &child_trie_info(trie_id);
+		let (old_len, old_value) = if take {
+			let val = child::get_raw(&child_trie_info, &hashed_key);
+			(val.as_ref().map(|v| v.len() as u32), val)
+		} else {
+			(child::len(&child_trie_info, &hashed_key), None)
+		};
 
 		if let Some(storage_meter) = storage_meter {
 			let mut diff = meter::Diff::default();
-			let old_len = child::len(&child_trie_info, &hashed_key);
 			match (old_len, new_value.as_ref().map(|v| v.len() as u32)) {
 				(Some(old_len), Some(new_len)) =>
 					if new_len > old_len {
@@ -130,7 +157,11 @@ where
 			None => child::kill(&child_trie_info, &hashed_key),
 		}
 
-		Ok(())
+		Ok(match (old_len, old_value) {
+			(None, _) => WriteOutcome::New,
+			(Some(old_len), None) => WriteOutcome::Overwritten(old_len),
+			(Some(_), Some(old_value)) => WriteOutcome::Taken(old_value),
+		})
 	}
 
 	/// Creates a new contract descriptor in the storage with the given code hash at the given

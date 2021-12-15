@@ -17,7 +17,7 @@
 
 use crate::{
 	gas::GasMeter,
-	storage::{self, Storage},
+	storage::{self, Storage, WriteOutcome},
 	AccountCounter, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
 	Pallet as Contracts, Schedule,
 };
@@ -140,9 +140,20 @@ pub trait Ext: sealing::Sealed {
 	/// was deleted.
 	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>>;
 
+	/// Returns true iff some storage entry exists under the supplied `key`
+	///
+	/// Returns `false` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
+	fn contains_storage(&mut self, key: &StorageKey) -> bool;
+
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult;
+	fn set_storage(
+		&mut self,
+		key: StorageKey,
+		value: Option<Vec<u8>>,
+		take_old: bool,
+	) -> Result<WriteOutcome, DispatchError>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -985,13 +996,23 @@ where
 		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
+	fn contains_storage(&mut self, key: &StorageKey) -> bool {
+		Storage::<T>::contains(&self.top_frame_mut().contract_info().trie_id, key)
+	}
+
+	fn set_storage(
+		&mut self,
+		key: StorageKey,
+		value: Option<Vec<u8>>,
+		take_old: bool,
+	) -> Result<WriteOutcome, DispatchError> {
 		let frame = self.top_frame_mut();
 		Storage::<T>::write(
 			&frame.contract_info.get(&frame.account_id).trie_id,
 			&key,
 			value,
 			Some(&mut frame.nested_storage),
+			take_old,
 		)
 	}
 
@@ -2347,6 +2368,101 @@ mod tests {
 				None,
 			));
 			assert_eq!(<AccountCounter<Test>>::get(), 4);
+		});
+	}
+
+	#[test]
+	fn set_storage_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			// Write
+			assert_eq!(
+				ctx.ext.set_storage([1; 32], Some(vec![1, 2, 3]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(
+				ctx.ext.set_storage([2; 32], Some(vec![4, 5, 6]), true),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(ctx.ext.set_storage([3; 32], None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage([4; 32], None, true), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage([5; 32], Some(vec![]), false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage([6; 32], Some(vec![]), true), Ok(WriteOutcome::New));
+
+			// Overwrite
+			assert_eq!(
+				ctx.ext.set_storage([1; 32], Some(vec![42]), false),
+				Ok(WriteOutcome::Overwritten(3))
+			);
+			assert_eq!(
+				ctx.ext.set_storage([2; 32], Some(vec![48]), true),
+				Ok(WriteOutcome::Taken(vec![4, 5, 6]))
+			);
+			assert_eq!(ctx.ext.set_storage([3; 32], None, false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.set_storage([4; 32], None, true), Ok(WriteOutcome::New));
+			assert_eq!(
+				ctx.ext.set_storage([5; 32], Some(vec![]), false),
+				Ok(WriteOutcome::Overwritten(0))
+			);
+			assert_eq!(
+				ctx.ext.set_storage([6; 32], Some(vec![]), true),
+				Ok(WriteOutcome::Taken(vec![]))
+			);
+
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, min_balance * 1000);
+			place_contract(&BOB, code_hash);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			assert_ok!(MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			));
+		});
+	}
+
+	#[test]
+	fn contains_storage_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			assert_eq!(
+				ctx.ext.set_storage([1; 32], Some(vec![1, 2, 3]), false),
+				Ok(WriteOutcome::New)
+			);
+			assert_eq!(ctx.ext.set_storage([2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
+			assert_eq!(ctx.ext.contains_storage(&[1; 32]), true);
+			assert_eq!(ctx.ext.contains_storage(&[1; 32]), true);
+			assert_eq!(ctx.ext.contains_storage(&[3; 32]), false);
+
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let min_balance = <Test as Config>::Currency::minimum_balance();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, min_balance * 1000);
+			place_contract(&BOB, code_hash);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, None, 0).unwrap();
+			assert_ok!(MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			));
 		});
 	}
 }

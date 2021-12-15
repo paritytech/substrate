@@ -322,11 +322,20 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_clear_storage`.
 	pub clear_storage: Weight,
 
+	/// Weight of calling `seal_contains_storage`.
+	pub contains_storage: Weight,
+
 	/// Weight of calling `seal_get_storage`.
 	pub get_storage: Weight,
 
 	/// Weight per byte of an item received via `seal_get_storage`.
 	pub get_storage_per_byte: Weight,
+
+	/// Weight of calling `seal_take_storage`.
+	pub take_storage: Weight,
+
+	/// Weight per byte of an item received via `seal_take_storage`.
+	pub take_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_transfer`.
 	pub transfer: Weight,
@@ -579,8 +588,11 @@ impl<T: Config> Default for HostFnWeights<T> {
 			set_storage: cost_batched!(seal_set_storage),
 			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
 			clear_storage: cost_batched!(seal_clear_storage),
+			contains_storage: cost_batched!(seal_contains_storage),
 			get_storage: cost_batched!(seal_get_storage),
 			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
+			take_storage: cost_batched!(seal_take_storage),
+			take_storage_per_byte: cost_byte_batched!(seal_take_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
 			call_transfer_surcharge: cost_batched_args!(
