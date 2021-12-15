@@ -81,6 +81,14 @@ impl Config for Test {
 	type Call = Call;
 }
 
+fn test_pub(n: u8) -> sp_core::sr25519::Public {
+	sp_core::sr25519::Public::from_raw([n; 32])
+}
+
+fn test_origin(n: u8) -> Origin {
+	Origin::signed(test_pub(n))
+}
+
 #[test]
 fn it_can_enlist() {
 	use sp_core::Pair;
@@ -91,8 +99,7 @@ fn it_can_enlist() {
 
 		let event_name = b"test";
 
-		Example::run_event(Origin::signed(Default::default()), event_name.to_vec())
-			.expect("Failed to enlist");
+		Example::run_event(test_origin(1), event_name.to_vec()).expect("Failed to enlist");
 
 		let participants = vec![
 			EnlistedParticipant {
@@ -105,7 +112,7 @@ fn it_can_enlist() {
 			},
 		];
 
-		Example::enlist_participants(Origin::signed(Default::default()), participants)
+		Example::enlist_participants(Origin::signed(test_pub(1)), participants)
 			.expect("Failed to enlist");
 
 		assert_eq!(Example::participants().len(), 2);
@@ -123,8 +130,7 @@ fn one_wrong_will_not_enlist_anyone() {
 
 		let event_name = b"test";
 
-		Example::run_event(Origin::signed(Default::default()), event_name.to_vec())
-			.expect("Failed to enlist");
+		Example::run_event(test_origin(1), event_name.to_vec()).expect("Failed to enlist");
 
 		let participants = vec![
 			EnlistedParticipant {
@@ -142,8 +148,7 @@ fn one_wrong_will_not_enlist_anyone() {
 			},
 		];
 
-		Example::enlist_participants(Origin::signed(Default::default()), participants)
-			.expect("Failed to enlist");
+		Example::enlist_participants(test_origin(1), participants).expect("Failed to enlist");
 
 		assert_eq!(Example::participants().len(), 0);
 	});

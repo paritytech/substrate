@@ -156,7 +156,7 @@ fn expect_public_from_phrase<Pair: sp_core::Pair>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::crypto::{Pair, Public};
+	use sp_core::crypto::{ByteArray, Pair};
 	use sp_runtime::traits::IdentifyAccount;
 	use structopt::StructOpt;
 

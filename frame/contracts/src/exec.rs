@@ -686,7 +686,7 @@ where
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			// Additional work needs to be performed in case of an instantiation.
-			if output.is_success() && entry_point == ExportedFunction::Constructor {
+			if !output.did_revert() && entry_point == ExportedFunction::Constructor {
 				let frame = self.top_frame();
 
 				// It is not allowed to terminate a contract inside its constructor.
@@ -713,7 +713,7 @@ where
 		let (success, output) = with_transaction(|| {
 			let output = do_transaction();
 			match &output {
-				Ok(result) if result.is_success() => TransactionOutcome::Commit((true, output)),
+				Ok(result) if !result.did_revert() => TransactionOutcome::Commit((true, output)),
 				_ => TransactionOutcome::Rollback((false, output)),
 			}
 		});
@@ -1352,7 +1352,7 @@ mod tests {
 			)
 			.unwrap();
 
-			assert!(!output.is_success());
+			assert!(output.did_revert());
 			assert_eq!(get_balance(&origin), 100);
 			assert_eq!(get_balance(&dest), balance);
 		});
@@ -1403,7 +1403,7 @@ mod tests {
 			);
 
 			let output = result.unwrap();
-			assert!(output.is_success());
+			assert!(!output.did_revert());
 			assert_eq!(output.data, Bytes(vec![1, 2, 3, 4]));
 		});
 	}
@@ -1435,7 +1435,7 @@ mod tests {
 			);
 
 			let output = result.unwrap();
-			assert!(!output.is_success());
+			assert!(output.did_revert());
 			assert_eq!(output.data, Bytes(vec![1, 2, 3, 4]));
 		});
 	}

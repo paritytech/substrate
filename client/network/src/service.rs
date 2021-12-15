@@ -190,7 +190,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_peer_id = local_public.clone().to_peer_id();
 		info!(
 			target: "sub-libp2p",
-			"🏷 Local node identity is: {}",
+			"🏷  Local node identity is: {}",
 			local_peer_id.to_base58(),
 		);
 

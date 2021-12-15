@@ -1,6 +1,6 @@
 [package]
 name = "sp-arithmetic"
-version = "4.0.0-dev"
+version = "4.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"

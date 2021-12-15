@@ -146,7 +146,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
@@ -172,7 +172,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
@@ -197,11 +197,11 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
-			Self::deposit_event(Event::KeyChanged { new_sudoer: Self::key() });
-			<Key<T>>::put(new);
+			Self::deposit_event(Event::KeyChanged { old_sudoer: Key::<T>::get() });
+			Key::<T>::put(&new);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -234,7 +234,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
-			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let who = T::Lookup::lookup(who)?;
 
@@ -253,8 +253,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A sudo just took place. \[result\]
 		Sudid { sudo_result: DispatchResult },
-		/// The \[sudoer\] just switched identity; the old key is supplied.
-		KeyChanged { new_sudoer: T::AccountId },
+		/// The \[sudoer\] just switched identity; the old key is supplied if one existed.
+		KeyChanged { old_sudoer: Option<T::AccountId> },
 		/// A sudo just took place. \[result\]
 		SudoAsDone { sudo_result: DispatchResult },
 	}
@@ -269,25 +269,27 @@ pub mod pallet {
 	/// The `AccountId` of the sudo key.
 	#[pallet::storage]
 	#[pallet::getter(fn key)]
-	pub(super) type Key<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
+	pub(super) type Key<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		/// The `AccountId` of the sudo key.
-		pub key: T::AccountId,
+		pub key: Option<T::AccountId>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { key: Default::default() }
+			Self { key: None }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			<Key<T>>::put(&self.key);
+			if let Some(ref key) = self.key {
+				Key::<T>::put(key);
+			}
 		}
 	}
 }

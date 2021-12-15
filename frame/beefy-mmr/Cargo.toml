@@ -23,7 +23,7 @@ pallet-session = { version = "4.0.0-dev", path = "../session", default-features 
 
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core", default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime", default-features = false }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime", default-features = false }
 sp-std = { version = "4.0.0", path = "../../primitives/std", default-features = false }
 
 beefy-merkle-tree = { version = "4.0.0-dev", path = "./primitives", default-features = false }
