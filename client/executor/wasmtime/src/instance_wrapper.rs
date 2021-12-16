@@ -26,7 +26,8 @@ use sc_executor_common::{
 };
 use sp_wasm_interface::{Pointer, Value, WordSize};
 use wasmtime::{
-	AsContext, AsContextMut, Extern, Func, Global, Instance, Linker, Memory, Module, Table, Val,
+	AsContext, AsContextMut, Engine, Extern, Func, Global, Instance, InstancePre, Memory, Table,
+	Val,
 };
 
 /// Invoked entrypoint format.
@@ -136,27 +137,29 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 	}
 }
 
+pub(crate) fn create_store(engine: &wasmtime::Engine, max_memory_size: Option<usize>) -> Store {
+	let limits = if let Some(max_memory_size) = max_memory_size {
+		wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
+	} else {
+		Default::default()
+	};
+
+	let mut store =
+		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None });
+	if max_memory_size.is_some() {
+		store.limiter(|s| &mut s.limits);
+	}
+	store
+}
+
 impl InstanceWrapper {
 	pub(crate) fn new(
-		module: &Module,
-		linker: &Linker<StoreData>,
+		engine: &Engine,
+		instance_pre: &InstancePre<StoreData>,
 		max_memory_size: Option<usize>,
 	) -> Result<Self> {
-		let limits = if let Some(max_memory_size) = max_memory_size {
-			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
-		} else {
-			Default::default()
-		};
-
-		let mut store = Store::new(
-			module.engine(),
-			StoreData { limits, host_state: None, memory: None, table: None },
-		);
-		if max_memory_size.is_some() {
-			store.limiter(|s| &mut s.limits);
-		}
-
-		let instance = linker.instantiate(&mut store, module).map_err(|error| {
+		let mut store = create_store(engine, max_memory_size);
+		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
 			WasmError::Other(
 				format!("failed to instantiate a new WASM module instance: {}", error,),
 			)

@@ -90,14 +90,14 @@ enum Strategy {
 }
 
 struct InstanceCreator {
-	module: Arc<wasmtime::Module>,
-	linker: Arc<wasmtime::Linker<StoreData>>,
+	engine: wasmtime::Engine,
+	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
 	max_memory_size: Option<usize>,
 }
 
 impl InstanceCreator {
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&*self.module, &self.linker, self.max_memory_size)
+		InstanceWrapper::new(&self.engine, &self.instance_pre, self.max_memory_size)
 	}
 }
 
@@ -134,8 +134,8 @@ struct InstanceSnapshotData {
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
-	module: Arc<wasmtime::Module>,
-	linker: Arc<wasmtime::Linker<StoreData>>,
+	engine: wasmtime::Engine,
+	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
 	snapshot_data: Option<InstanceSnapshotData>,
 	config: Config,
 }
@@ -144,8 +144,8 @@ impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
 			let mut instance_wrapper = InstanceWrapper::new(
-				&self.module,
-				&self.linker,
+				&self.engine,
+				&self.instance_pre,
 				self.config.max_memory_size,
 			)?;
 			let heap_base = instance_wrapper.extract_heap_base()?;
@@ -167,8 +167,8 @@ impl WasmModule for WasmtimeRuntime {
 			}
 		} else {
 			Strategy::RecreateInstance(InstanceCreator {
-				module: self.module.clone(),
-				linker: self.linker.clone(),
+				engine: self.engine.clone(),
+				instance_pre: self.instance_pre.clone(),
 				max_memory_size: self.config.max_memory_size,
 			})
 		};
@@ -624,12 +624,12 @@ where
 	let mut linker = wasmtime::Linker::new(&engine);
 	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
 
-	Ok(WasmtimeRuntime {
-		module: Arc::new(module),
-		linker: Arc::new(linker),
-		snapshot_data,
-		config,
-	})
+	let mut store = crate::instance_wrapper::create_store(module.engine(), config.max_memory_size);
+	let instance_pre = linker
+		.instantiate_pre(&mut store, &module)
+		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {}", e)))?;
+
+	Ok(WasmtimeRuntime { engine, instance_pre: Arc::new(instance_pre), snapshot_data, config })
 }
 
 fn instrument(
