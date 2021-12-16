@@ -17,7 +17,9 @@
 
 use crate::Layout;
 use hash_db::Hasher;
-use parking_lot::{MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{
+	MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 use std::{
 	collections::{hash_map::Entry, HashMap},
 	sync::Arc,
@@ -43,18 +45,23 @@ pub struct LocalTrieNodeCache<H: Hasher> {
 }
 
 impl<H: Hasher> LocalTrieNodeCache<H> {
-	pub fn new(shared: SharedTrieNodeCache<H>, enable_fast_cache: bool) -> Self {
-		Self { enable_data_cache: enable_fast_cache, local: Default::default(), shared }
+	pub fn new(shared: SharedTrieNodeCache<H>, enable_data_cache: bool) -> Self {
+		Self { enable_data_cache, local: Default::default(), shared }
 	}
 
-	pub fn as_cache<'a>(&'a self, hash: H::Out) -> TrieNodeCache<'a, H> {
+	pub fn as_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
+		let data_cache = if self.enable_data_cache {
+			DataCache::ForStorageRoot(RwLockWriteGuard::map(self.shared.data_cache.write(), |cache| {
+				cache.entry(storage_root).or_default()
+			}))
+		} else {
+			DataCache::Disabled
+		};
+
 		TrieNodeCache {
 			shared_cache: self.shared.node_cache.read(),
 			local_cache: self.local.lock(),
-			data_cache: RwLockWriteGuard::map(self.shared.data_cache.write(), |cache| {
-				cache.entry(hash).or_default()
-			}),
-			enable_data_cache: self.enable_data_cache,
+			data_cache,
 		}
 	}
 }
@@ -66,22 +73,55 @@ impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
 	}
 }
 
+/// The abstraction of the data cache for the [`TrieNodeCache`].
+enum DataCache<'a> {
+	/// The data cache is disabled.
+	Disabled,
+	/// The data cache is fresh, aka not yet associated to any storage root.
+	/// This is used for example when a new trie is being build, to cache new data.
+	Fresh(HashMap<Vec<u8>, Option<Bytes>>),
+	/// The data cache is already bound to a specific storage root.
+	///
+	/// The actual storage root is not stored here.
+	ForStorageRoot(MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, Option<Bytes>>>),
+}
+
+impl DataCache<'_> {
+	/// Get the data for the given `key`.
+	fn get(&self, key: &[u8]) -> Option<&Option<Bytes>> {
+		match self {
+			Self::Disabled => None,
+			Self::Fresh(map) => map.get(key),
+			Self::ForStorageRoot(map) => map.get(key),
+		}
+	}
+
+	/// Insert some new `data` under the given `key`.
+	fn insert(&mut self, key: &[u8], data: Option<Bytes>) {
+		match self {
+			Self::Disabled => {},
+			Self::Fresh(map) => {
+				map.insert(key.into(), data);
+			},
+			Self::ForStorageRoot(map) => {
+				map.insert(key.into(), data);
+			},
+		}
+	}
+}
+
 pub struct TrieNodeCache<'a, H: Hasher> {
 	shared_cache: RwLockReadGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
 	local_cache: MutexGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
-	enable_data_cache: bool,
-	data_cache: MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, Option<Bytes>>>,
+	data_cache: DataCache<'a>,
 }
 
 impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 	fn get_or_insert_node(
 		&mut self,
 		hash: H::Out,
-		fetch_node: &mut dyn FnMut() -> trie_db::Result<
-			NodeOwned<H::Out>,
-			H::Out,
-			CError<Layout<H>>,
-		>,
+		fetch_node: &mut dyn FnMut()
+			-> trie_db::Result<NodeOwned<H::Out>, H::Out, CError<Layout<H>>>,
 	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, CError<Layout<H>>> {
 		if let Some(res) = self.shared_cache.get(&hash) {
 			return Ok(res)
@@ -109,12 +149,10 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 	}
 
 	fn lookup_data_for_key(&self, key: &[u8]) -> Option<&Option<Bytes>> {
-		self.enable_data_cache.then(|| self.data_cache.get(key)).flatten()
+		self.data_cache.get(key)
 	}
 
 	fn cache_data_for_key(&mut self, key: &[u8], data: Option<Bytes>) {
-		if self.enable_data_cache {
-			self.data_cache.insert(key.into(), data);
-		}
+		self.data_cache.insert(key.into(), data);
 	}
 }
