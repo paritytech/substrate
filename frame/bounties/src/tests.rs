@@ -28,7 +28,6 @@ use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	traits::{ConstU32, ConstU64, OnInitialize},
-	weights::Weight,
 	PalletId,
 };
 

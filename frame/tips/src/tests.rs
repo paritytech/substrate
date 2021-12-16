@@ -35,7 +35,6 @@ use frame_support::{
 	parameter_types,
 	storage::StoragePrefixedMap,
 	traits::{ConstU32, ConstU64, SortedMembers},
-	weights::Weight,
 	PalletId,
 };
 
