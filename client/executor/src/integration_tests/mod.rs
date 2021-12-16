@@ -215,15 +215,15 @@ fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 test_wasm_execution!(storage_should_work);
 fn storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
+	// Test value must be bigger than 32 bytes
+	// to test the trie versioning.
+	let value = vec![7u8; 60];
 
 	{
 		let mut ext = ext.ext();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 
-		// Test value must be bigger than 32 bytes
-		// to test the trie versioning.
-		let value = vec![7u8; 60];
-		let output = call_in_wasm("test_data_in", value.encode(), wasm_method, &mut ext).unwrap();
+		let output = call_in_wasm("test_data_in", &value.encode(), wasm_method, &mut ext).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}

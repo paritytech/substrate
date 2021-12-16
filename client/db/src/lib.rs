@@ -2279,7 +2279,7 @@ pub(crate) mod tests {
 	use sp_runtime::{
 		testing::{Block as RawBlock, ExtrinsicWrapper, Header},
 		traits::{BlakeTwo256, Hash},
-		ConsensusEngineId,
+		ConsensusEngineId, StateVersion,
 	};
 
 	const CONS0_ENGINE_ID: ConsensusEngineId = *b"CON0";
@@ -2312,7 +2312,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest,
 			extrinsics_root,
 		};
@@ -3244,7 +3244,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number: 1,
 			parent_hash: block0,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
 		};
@@ -3256,7 +3256,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number: 2,
 			parent_hash: block1,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
 		};
@@ -3279,7 +3279,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number: 1,
 			parent_hash: block0,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
 		};
