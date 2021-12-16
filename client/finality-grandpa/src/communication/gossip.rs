@@ -1667,6 +1667,7 @@ pub(super) struct PeerReport {
 #[cfg(test)]
 mod tests {
 	use super::{environment::SharedVoterSetState, *};
+	use crate::communication;
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sc_network_test::Block;
@@ -1682,7 +1683,7 @@ mod tests {
 			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
-			protocol_name_prefix: "/test".into(),
+			protocol_name: communication::grandpa_protocol_name::NAME.into(),
 		}
 	}
 
@@ -1844,13 +1845,13 @@ mod tests {
 
 			// messages from old rounds are expired.
 			for round_num in 1u64..last_kept_round {
-				let topic = crate::communication::round_topic::<Block>(round_num, 1);
+				let topic = communication::round_topic::<Block>(round_num, 1);
 				assert!(is_expired(topic, &[1, 2, 3]));
 			}
 
 			// messages from not-too-old rounds are not expired.
 			for round_num in last_kept_round..10 {
-				let topic = crate::communication::round_topic::<Block>(round_num, 1);
+				let topic = communication::round_topic::<Block>(round_num, 1);
 				assert!(!is_expired(topic, &[1, 2, 3]));
 			}
 		}
@@ -2266,7 +2267,7 @@ mod tests {
 		// we accept messages from rounds 9, 10 and 11
 		// therefore neither of those should be considered expired
 		for round in &[9, 10, 11] {
-			assert!(!is_expired(crate::communication::round_topic::<Block>(*round, 1), &[]))
+			assert!(!is_expired(communication::round_topic::<Block>(*round, 1), &[]))
 		}
 	}
 
@@ -2314,7 +2315,7 @@ mod tests {
 					if message_allowed(
 						peer,
 						MessageIntent::Broadcast,
-						&crate::communication::round_topic::<Block>(1, 0),
+						&communication::round_topic::<Block>(1, 0),
 						&[],
 					) {
 						allowed += 1;
@@ -2378,7 +2379,7 @@ mod tests {
 		assert!(!val.message_allowed()(
 			&light_peer,
 			MessageIntent::Broadcast,
-			&crate::communication::round_topic::<Block>(1, 0),
+			&communication::round_topic::<Block>(1, 0),
 			&[],
 		));
 
@@ -2392,7 +2393,7 @@ mod tests {
 		assert!(!val.message_allowed()(
 			&light_peer,
 			MessageIntent::Broadcast,
-			&crate::communication::round_topic::<Block>(1, 0),
+			&communication::round_topic::<Block>(1, 0),
 			&[],
 		));
 
@@ -2416,8 +2417,8 @@ mod tests {
 				auth_data: Vec::new(),
 			};
 
-			crate::communication::gossip::GossipMessage::<Block>::Commit(
-				crate::communication::gossip::FullCommitMessage {
+			communication::gossip::GossipMessage::<Block>::Commit(
+				communication::gossip::FullCommitMessage {
 					round: Round(2),
 					set_id: SetId(0),
 					message: commit,
@@ -2430,7 +2431,7 @@ mod tests {
 		assert!(val.message_allowed()(
 			&light_peer,
 			MessageIntent::Broadcast,
-			&crate::communication::global_topic::<Block>(0),
+			&communication::global_topic::<Block>(0),
 			&commit,
 		));
 	}
@@ -2470,8 +2471,8 @@ mod tests {
 				auth_data: Vec::new(),
 			};
 
-			crate::communication::gossip::GossipMessage::<Block>::Commit(
-				crate::communication::gossip::FullCommitMessage {
+			communication::gossip::GossipMessage::<Block>::Commit(
+				communication::gossip::FullCommitMessage {
 					round: Round(1),
 					set_id: SetId(1),
 					message: commit,
@@ -2489,7 +2490,7 @@ mod tests {
 		assert!(message_allowed(
 			&peer1,
 			MessageIntent::Broadcast,
-			&crate::communication::global_topic::<Block>(1),
+			&communication::global_topic::<Block>(1),
 			&commit,
 		));
 
@@ -2498,7 +2499,7 @@ mod tests {
 		assert!(!message_allowed(
 			&peer2,
 			MessageIntent::Broadcast,
-			&crate::communication::global_topic::<Block>(1),
+			&communication::global_topic::<Block>(1),
 			&commit,
 		));
 	}
@@ -2515,8 +2516,8 @@ mod tests {
 				auth_data: Vec::new(),
 			};
 
-			crate::communication::gossip::GossipMessage::<Block>::Commit(
-				crate::communication::gossip::FullCommitMessage {
+			communication::gossip::GossipMessage::<Block>::Commit(
+				communication::gossip::FullCommitMessage {
 					round: Round(round),
 					set_id: SetId(set_id),
 					message: commit,
@@ -2536,15 +2537,13 @@ mod tests {
 
 		// a commit message for round 1 that finalizes the same height as we
 		// have observed previously should not be expired
-		assert!(
-			!message_expired(crate::communication::global_topic::<Block>(1), &commit(1, 1, 2),)
-		);
+		assert!(!message_expired(communication::global_topic::<Block>(1), &commit(1, 1, 2),));
 
 		// it should be expired if it is for a lower block
-		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(1, 1, 1)));
+		assert!(message_expired(communication::global_topic::<Block>(1), &commit(1, 1, 1)));
 
 		// or the same block height but from the previous round
-		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(0, 1, 2)));
+		assert!(message_expired(communication::global_topic::<Block>(1), &commit(0, 1, 2)));
 	}
 
 	#[test]

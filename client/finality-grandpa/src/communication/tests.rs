@@ -148,7 +148,7 @@ fn config() -> crate::Config {
 		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
-		protocol_name_prefix: "/test".into(),
+		protocol_name: grandpa_protocol_name::NAME.into(),
 	}
 }
 
