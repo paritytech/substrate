@@ -159,7 +159,7 @@ parameter_types! {
 }
 
 impl pallet_session::Config for Runtime {
-	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager =
 		pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline,);
