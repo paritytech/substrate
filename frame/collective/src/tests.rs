@@ -125,8 +125,8 @@ impl Config<Instance1> for Test {
 	type Proposal = Call;
 	type Event = Event;
 	type MotionDuration = ConstU64<3>;
-	type MaxProposals = ConstU32<100>;
-	type MaxMembers = ConstU32<100>;
+	type MaxProposals = MaxProposals;
+	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 }
@@ -135,8 +135,8 @@ impl Config<Instance2> for Test {
 	type Proposal = Call;
 	type Event = Event;
 	type MotionDuration = ConstU64<3>;
-	type MaxProposals = ConstU32<100>;
-	type MaxMembers = ConstU32<100>;
+	type MaxProposals = MaxProposals;
+	type MaxMembers = MaxMembers;
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
 }
@@ -149,8 +149,8 @@ impl Config for Test {
 	type Proposal = Call;
 	type Event = Event;
 	type MotionDuration = ConstU64<3>;
-	type MaxProposals = ConstU32<100>;
-	type MaxMembers = ConstU32<100>;
+	type MaxProposals = MaxProposals;
+	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 }

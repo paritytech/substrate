@@ -96,7 +96,6 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub const ConfigDepositBase: u64 = 10;
 	pub const FriendDepositFactor: u64 = 1;
-	pub const MaxFriends: u16 = 3;
 	pub const RecoveryDeposit: u64 = 10;
 }
 

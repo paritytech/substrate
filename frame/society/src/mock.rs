@@ -48,16 +48,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const CandidateDeposit: u64 = 25;
-	pub const WrongSideDeduction: u64 = 2;
-	pub const MaxStrikes: u32 = 2;
-	pub const RotationPeriod: u64 = 4;
-	pub const PeriodSpend: u64 = 1000;
-	pub const MaxLockDuration: u64 = 100;
-	pub const ChallengePeriod: u64 = 8;
-	pub const BlockHashCount: u64 = 250;
-	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
