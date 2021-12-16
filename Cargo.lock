@@ -8141,6 +8141,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "rand 0.8.4",
  "sc-block-builder",
+ "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
  "sc-keystore",

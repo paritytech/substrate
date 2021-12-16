@@ -169,11 +169,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		transaction_pool,
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
-	let genesis_hash = client.block_hash(0).ok().flatten().unwrap_or_default();
-	let chain_prefix = match config.chain_spec.fork_id() {
-		Some(fork_id) => format!("/{}/{}", genesis_hash, fork_id),
-		None => format!("/{}", genesis_hash),
-	};
 
 	if let Some(url) = &config.keystore_remote {
 		match remote_keystore(url) {
@@ -185,11 +180,15 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				))),
 		};
 	}
+	let grandpa_protocol_name = sc_finality_grandpa::protocol_standard_name(
+		&client.block_hash(0).ok().flatten().unwrap_or_default(),
+		&config.chain_spec,
+	);
 
 	config
 		.network
 		.extra_sets
-		.push(sc_finality_grandpa::grandpa_peers_set_config(&chain_prefix));
+		.push(sc_finality_grandpa::grandpa_peers_set_config(grandpa_protocol_name.clone()));
 	let warp_sync = Arc::new(sc_finality_grandpa::warp_proof::NetworkProvider::new(
 		backend.clone(),
 		grandpa_link.shared_authority_set().clone(),
@@ -314,7 +313,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		keystore,
 		local_role: role,
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
-		protocol_name_prefix: chain_prefix,
+		protocol_name: grandpa_protocol_name,
 	};
 
 	if enable_grandpa {
