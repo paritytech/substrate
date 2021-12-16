@@ -285,7 +285,9 @@ impl onchain::Config for Runtime {
 }
 
 pub struct MockFallback;
-impl ElectionProvider<AccountId, u64> for MockFallback {
+impl ElectionProvider for MockFallback {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 
@@ -438,7 +440,9 @@ pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 pub struct ExtBuilder {}
 
 pub struct StakingMock;
-impl ElectionDataProvider<AccountId, u64> for StakingMock {
+impl ElectionDataProvider for StakingMock {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
 	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
