@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::Encode;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use sc_executor_common::{runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
