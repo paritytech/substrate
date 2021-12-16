@@ -304,7 +304,18 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let keystore_container = KeystoreContainer::new(&config.keystore)?;
+	let mut keystore_container = KeystoreContainer::new(&config.keystore)?;
+
+	if let Some(uri) = &config.keystore_remote {
+		 use tee_keystore::TEEKeystore;
+		 let keystore = TEEKeystore::deferred(&uri)
+		 	.map_err(|e| format!("Failed to connect to remote keystore: {:?}", e))
+		 	.map_err(Error::Other)?;
+
+		let keystore = sc_keystore::TracingKeystore::new(keystore);
+
+		keystore_container.set_remote_keystore(Arc::new(keystore));
+	}
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
