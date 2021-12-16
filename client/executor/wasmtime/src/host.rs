@@ -206,7 +206,6 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
-			.map(Into::into)
 			.collect::<Vec<_>>();
 
 		let instance = self.sandbox_store().instance(instance_id).map_err(|e| e.to_string())?;

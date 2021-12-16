@@ -20,6 +20,7 @@
 
 use sp_wasm_interface::{Pointer, WordSize, FunctionContext};
 use codec::{Decode, Encode};
+use std::rc::Rc;
 
 use wasmi::{
 	ImportResolver, memory_units::Pages, Externals, MemoryInstance, Module, ModuleInstance,
@@ -29,7 +30,7 @@ use wasmi::{
 use crate::{
 	util::{MemoryTransfer, checked_range},
 	error,
-	sandbox::{Imports, GuestExternals, trap, GuestFuncIndex, deserialize_result, SandboxContext, SandboxInstance},
+	sandbox::{Imports, GuestExternals, trap, GuestFuncIndex, deserialize_result, SandboxContext, SandboxInstance, GuestEnvironment, InstantiationError, BackendInstance},
 };
 
 impl ImportResolver for Imports {
@@ -250,4 +251,37 @@ where
 	F: FnOnce() -> R,
 {
 	SandboxContextStore::using(sandbox_context, f)
+}
+
+pub fn instantiate_wasmi(
+	wasm: &[u8],
+	guest_env: GuestEnvironment,
+	state: u32,
+	sandbox_context: &mut dyn SandboxContext,
+) -> std::result::Result<Rc<SandboxInstance>, InstantiationError> {
+	let wasmi_module =
+		Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+	let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
+		.map_err(|_| InstantiationError::Instantiation)?;
+
+	let sandbox_instance = Rc::new(SandboxInstance {
+		// In general, it's not a very good idea to use `.not_started_instance()` for
+		// anything but for extracting memory and tables. But in this particular case, we
+		// are extracting for the purpose of running `start` function which should be ok.
+		backend_instance: BackendInstance::Wasmi(wasmi_instance.not_started_instance().clone()),
+		guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+	});
+
+	with_guest_externals(&sandbox_instance, state, |guest_externals| {
+		with_context_store(sandbox_context, || {
+			wasmi_instance
+				.run_start(guest_externals)
+				.map_err(|_| InstantiationError::StartTrapped)
+		})
+
+		// Note: no need to run start on wasmtime instance, since it's done
+		// automatically
+	})?;
+
+	Ok(sandbox_instance)
 }

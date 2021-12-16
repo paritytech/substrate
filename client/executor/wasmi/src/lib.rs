@@ -213,7 +213,6 @@ impl Sandbox for FunctionExecutor {
 		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
-			.map(Into::into)
 			.collect::<Vec<_>>();
 
 		let instance =
