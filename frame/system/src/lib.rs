@@ -133,7 +133,7 @@ pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
-	H::ordered_trie_root(xts)
+	H::ordered_trie_root(xts, sp_core::StateVersion::V0)
 }
 
 /// An object to track the currently used extrinsic weight in a block.
@@ -1355,7 +1355,11 @@ impl<T: Config> Pallet<T> {
 			<BlockHash<T>>::remove(to_remove);
 		}
 
-		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
+		#[cfg(feature = "use-state-v0")]
+		let version = sp_core::StateVersion::V0 as u8;
+		#[cfg(not(feature = "use-state-v0"))]
+		let version = sp_core::StateVersion::V1 as u8;
+		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
 		<T::Header as traits::Header>::new(

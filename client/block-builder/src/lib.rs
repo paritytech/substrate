@@ -232,6 +232,7 @@ where
 			header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
+				sp_runtime::StateVersion::V0,
 			),
 		);
 

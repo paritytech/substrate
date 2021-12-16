@@ -223,13 +223,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 		// Test value must be bigger than 32 bytes
 		// to test the trie versioning.
 		let value = vec![7u8; 60];
-		let output = call_in_wasm(
-			"test_data_in",
-			value.encode(),
-			wasm_method,
-			&mut ext,
-		)
-		.unwrap();
+		let output = call_in_wasm("test_data_in", value.encode(), wasm_method, &mut ext).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}

@@ -44,7 +44,7 @@ pub use sp_runtime::traits::Zero;
 #[doc(hidden)]
 pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
 #[doc(hidden)]
-pub use sp_storage::TrackedStorageKey;
+pub use sp_storage::{StateVersion, TrackedStorageKey};
 pub use utils::*;
 
 /// Whitelist the given account.
@@ -1079,7 +1079,7 @@ macro_rules! impl_benchmark {
 
 					// Time the storage root recalculation.
 					let start_storage_root = $crate::benchmarking::current_time();
-					$crate::storage_root();
+					$crate::storage_root($crate::StateVersion::V1 as u8);
 					let finish_storage_root = $crate::benchmarking::current_time();
 					let elapsed_storage_root = finish_storage_root - start_storage_root;
 

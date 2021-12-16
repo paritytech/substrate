@@ -54,8 +54,6 @@ std = [
 	"futures",
 	"parking_lot",
 ]
-# Keep using a host function for `LayoutV0` trie.
-use-state-v0 = []
 
 with-tracing = [
 	"sp-tracing/with-tracing"

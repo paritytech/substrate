@@ -55,7 +55,7 @@ use sp_core::{
 };
 
 #[cfg(feature = "std")]
-use sp_trie::{LayoutV0, TrieConfiguration};
+use sp_trie::{LayoutV0, LayoutV1, TrieConfiguration};
 
 use sp_runtime_interface::{
 	pass_by::{PassBy, PassByCodec},
@@ -97,7 +97,13 @@ pub enum KillStorageResult {
 	SomeRemaining(u32),
 }
 
-#[cfg(not(feature = "use-state-v0"))]
+fn state_version(version: u8) -> sp_core::StateVersion {
+	match version {
+		0 => sp_core::StateVersion::V0,
+		_ => sp_core::StateVersion::V1,
+	}
+}
+
 /// Interface for accessing the storage from within the runtime.
 #[runtime_interface]
 pub trait Storage {
@@ -202,8 +208,8 @@ pub trait Storage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
-	fn root(&mut self) -> Vec<u8> {
-		self.storage_root(sp_core::StateVersion::V1)
+	fn root(&mut self, version: u8) -> Vec<u8> {
+		self.storage_root(state_version(version))
 	}
 
 	/// Always returns `None`. This function exists for compatibility reasons.
@@ -257,157 +263,6 @@ pub trait Storage {
 	}
 }
 
-#[cfg(feature = "use-state-v0")]
-/// Interface for accessing the storage from within the runtime.
-#[runtime_interface]
-pub trait Storage {
-	/// Returns the data for `key` in the storage or `None` if the key can not be found.
-	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key).map(|s| s.to_vec())
-	}
-
-	/// Get `key` from storage, placing the value into `value_out` and return the number of
-	/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
-	/// doesn't exist at all.
-	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
-	/// are copied into `value_out`.
-	fn read(&self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
-		self.storage(key).map(|value| {
-			let value_offset = value_offset as usize;
-			let data = &value[value_offset.min(value.len())..];
-			let written = std::cmp::min(data.len(), value_out.len());
-			value_out[..written].copy_from_slice(&data[..written]);
-			data.len() as u32
-		})
-	}
-
-	/// Set `key` to `value` in the storage.
-	fn set(&mut self, key: &[u8], value: &[u8]) {
-		self.set_storage(key.to_vec(), value.to_vec());
-	}
-
-	/// Clear the storage of the given `key` and its value.
-	fn clear(&mut self, key: &[u8]) {
-		self.clear_storage(key)
-	}
-
-	/// Check whether the given `key` exists in storage.
-	fn exists(&self, key: &[u8]) -> bool {
-		self.exists_storage(key)
-	}
-
-	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		let _ = Externalities::clear_prefix(*self, prefix, None);
-	}
-
-	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
-	///
-	/// # Limit
-	///
-	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
-	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
-	///
-	/// The limit can be used to partially delete a prefix storage in case it is too large
-	/// to delete in one go (block).
-	///
-	/// It returns a boolean false iff some keys are remaining in
-	/// the prefix after the functions returns. Also returns a `u32` with
-	/// the number of keys removed from the process.
-	///
-	/// # Note
-	///
-	/// Please note that keys that are residing in the overlay for that prefix when
-	/// issuing this call are all deleted without counting towards the `limit`. Only keys
-	/// written during the current block are part of the overlay. Deleting with a `limit`
-	/// mostly makes sense with an empty overlay for that prefix.
-	///
-	/// Calling this function multiple times per block for the same `prefix` does
-	/// not make much sense because it is not cumulative when called inside the same block.
-	/// Use this function to distribute the deletion of a single child trie across multiple
-	/// blocks.
-	#[version(2)]
-	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
-		}
-	}
-
-	/// Append the encoded `value` to the storage item at `key`.
-	///
-	/// The storage item needs to implement [`EncodeAppend`](codec::EncodeAppend).
-	///
-	/// # Warning
-	///
-	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
-	/// something else fails at appending, the storage item will be set to `[value]`.
-	fn append(&mut self, key: &[u8], value: Vec<u8>) {
-		self.storage_append(key.to_vec(), value);
-	}
-
-	/// "Commit" all existing operations and compute the resulting storage root.
-	///
-	/// The hashing algorithm is defined by the `Block`.
-	///
-	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
-	fn root(&mut self) -> Vec<u8> {
-		self.storage_root(sp_core::StateVersion::V0)
-	}
-
-	/// Always returns `None`. This function exists for compatibility reasons.
-	fn changes_root(&mut self, _parent_hash: &[u8]) -> Option<Vec<u8>> {
-		None
-	}
-
-	/// Get the next key in storage after the given one in lexicographic order.
-	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		self.next_storage_key(&key)
-	}
-
-	/// Start a new nested transaction.
-	///
-	/// This allows to either commit or roll back all changes that are made after this call.
-	/// For every transaction there must be a matching call to either `rollback_transaction`
-	/// or `commit_transaction`. This is also effective for all values manipulated using the
-	/// `DefaultChildStorage` API.
-	///
-	/// # Warning
-	///
-	/// This is a low level API that is potentially dangerous as it can easily result
-	/// in unbalanced transactions. For example, FRAME users should use high level storage
-	/// abstractions.
-	fn start_transaction(&mut self) {
-		self.storage_start_transaction();
-	}
-
-	/// Rollback the last transaction started by `start_transaction`.
-	///
-	/// Any changes made during that transaction are discarded.
-	///
-	/// # Panics
-	///
-	/// Will panic if there is no open transaction.
-	fn rollback_transaction(&mut self) {
-		self.storage_rollback_transaction()
-			.expect("No open transaction that can be rolled back.");
-	}
-
-	/// Commit the last transaction started by `start_transaction`.
-	///
-	/// Any changes made during that transaction are committed.
-	///
-	/// # Panics
-	///
-	/// Will panic if there is no open transaction.
-	fn commit_transaction(&mut self) {
-		self.storage_commit_transaction()
-			.expect("No open transaction that can be committed.");
-	}
-}
-	
-#[cfg(not(feature = "use-state-v0"))]
 /// Interface for accessing the child storage for default child trie,
 /// from within the runtime.
 #[runtime_interface]
@@ -545,9 +400,9 @@ pub trait DefaultChildStorage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	#[version(2)]
-	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
+	fn root(&mut self, storage_key: &[u8], version: u8) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info, sp_core::StateVersion::V1)
+		self.child_storage_root(&child_info, state_version(version))
 	}
 
 	/// Child storage key iteration.
@@ -559,146 +414,6 @@ pub trait DefaultChildStorage {
 	}
 }
 
-#[cfg(feature = "use-state-v0")]
-/// Interface for accessing the child storage for default child trie,
-/// from within the runtime.
-#[runtime_interface]
-pub trait DefaultChildStorage {
-	/// Get a default child storage value for a given key.
-	///
-	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the
-	/// parent trie. Result is `None` if the value for `key` in the child storage can not be found.
-	fn get(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage(&child_info, key).map(|s| s.to_vec())
-	}
-
-	/// Allocation efficient variant of `get`.
-	///
-	/// Get `key` from child storage, placing the value into `value_out` and return the number
-	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
-	/// doesn't exist at all.
-	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
-	/// are copied into `value_out`.
-	fn read(
-		&self,
-		storage_key: &[u8],
-		key: &[u8],
-		value_out: &mut [u8],
-		value_offset: u32,
-	) -> Option<u32> {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage(&child_info, key).map(|value| {
-			let value_offset = value_offset as usize;
-			let data = &value[value_offset.min(value.len())..];
-			let written = std::cmp::min(data.len(), value_out.len());
-			value_out[..written].copy_from_slice(&data[..written]);
-			data.len() as u32
-		})
-	}
-
-	/// Set a child storage value.
-	///
-	/// Set `key` to `value` in the child storage denoted by `storage_key`.
-	fn set(&mut self, storage_key: &[u8], key: &[u8], value: &[u8]) {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
-	}
-
-	/// Clear a child storage key.
-	///
-	/// For the default child storage at `storage_key`, clear value at `key`.
-	fn clear(&mut self, storage_key: &[u8], key: &[u8]) {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.clear_child_storage(&child_info, key);
-	}
-
-	/// Clear an entire child storage.
-	///
-	/// If it exists, the child storage for `storage_key`
-	/// is removed.
-	fn storage_kill(&mut self, storage_key: &[u8]) {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info, None);
-	}
-
-	/// Clear a child storage key.
-	///
-	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
-	#[version(2)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
-		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, _num_removed) = self.kill_child_storage(&child_info, limit);
-		all_removed
-	}
-
-	/// Clear a child storage key.
-	///
-	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
-	#[version(3)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
-		}
-	}
-
-	/// Check a child storage key.
-	///
-	/// Check whether the given `key` exists in default child defined at `storage_key`.
-	fn exists(&self, storage_key: &[u8], key: &[u8]) -> bool {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.exists_child_storage(&child_info, key)
-	}
-
-	/// Clear child default key by prefix.
-	///
-	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
-	fn clear_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
-		let child_info = ChildInfo::new_default(storage_key);
-		let _ = self.clear_child_prefix(&child_info, prefix, None);
-	}
-
-	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
-	///
-	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
-	#[version(2)]
-	fn clear_prefix(
-		&mut self,
-		storage_key: &[u8],
-		prefix: &[u8],
-		limit: Option<u32>,
-	) -> KillStorageResult {
-		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, num_removed) = self.clear_child_prefix(&child_info, prefix, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
-		}
-	}
-
-	/// Default child root calculation.
-	///
-	/// "Commit" all existing operations and compute the resulting child storage root.
-	/// The hashing algorithm is defined by the `Block`.
-	///
-	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
-	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info, sp_core::StateVersion::V0)
-	}
-
-	/// Child storage key iteration.
-	///
-	/// Get the next key in storage after the given one in lexicographic order in child storage.
-	fn next_key(&mut self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		let child_info = ChildInfo::new_default(storage_key);
-		self.next_child_storage_key(&child_info, key)
-	}
-}
-	
 /// Interface that provides trie related functionality.
 #[runtime_interface]
 pub trait Trie {
@@ -707,9 +422,27 @@ pub trait Trie {
 		LayoutV0::<sp_core::Blake2Hasher>::trie_root(input)
 	}
 
+	/// A trie root formed from the iterated items.
+	#[version(2)]
+	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: u8) -> H256 {
+		match state_version {
+			0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
+			_ => LayoutV1::<sp_core::Blake2Hasher>::trie_root(input),
+		}
+	}
+
 	/// A trie root formed from the enumerated items.
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2)]
+	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, state_version: u8) -> H256 {
+		match state_version {
+			0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+			_ => LayoutV1::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the iterated items.
@@ -717,9 +450,27 @@ pub trait Trie {
 		LayoutV0::<sp_core::KeccakHasher>::trie_root(input)
 	}
 
+	/// A trie root formed from the iterated items.
+	#[version(2)]
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: u8) -> H256 {
+		match state_version {
+			0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
+			_ => LayoutV1::<sp_core::KeccakHasher>::trie_root(input),
+		}
+	}
+
 	/// A trie root formed from the enumerated items.
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2)]
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, state_version: u8) -> H256 {
+		match state_version {
+			0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
+			_ => LayoutV1::<sp_core::KeccakHasher>::ordered_trie_root(input),
+		}
 	}
 
 	/// Verify trie proof
@@ -733,6 +484,31 @@ pub trait Trie {
 	}
 
 	/// Verify trie proof
+	#[version(2)]
+	fn blake2_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		state_version: u8,
+	) -> bool {
+		match state_version {
+			0 => sp_trie::verify_trie_proof::<LayoutV0<sp_core::Blake2Hasher>, _, _, _>(
+				&root,
+				proof,
+				&[(key, Some(value))],
+			)
+			.is_ok(),
+			_ => sp_trie::verify_trie_proof::<LayoutV1<sp_core::Blake2Hasher>, _, _, _>(
+				&root,
+				proof,
+				&[(key, Some(value))],
+			)
+			.is_ok(),
+		}
+	}
+
+	/// Verify trie proof
 	fn keccak_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
 		sp_trie::verify_trie_proof::<LayoutV0<sp_core::KeccakHasher>, _, _, _>(
 			&root,
@@ -740,6 +516,31 @@ pub trait Trie {
 			&[(key, Some(value))],
 		)
 		.is_ok()
+	}
+
+	/// Verify trie proof
+	#[version(2)]
+	fn keccak_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		state_version: u8,
+	) -> bool {
+		match state_version {
+			0 => sp_trie::verify_trie_proof::<LayoutV0<sp_core::KeccakHasher>, _, _, _>(
+				&root,
+				proof,
+				&[(key, Some(value))],
+			)
+			.is_ok(),
+			_ => sp_trie::verify_trie_proof::<LayoutV1<sp_core::KeccakHasher>, _, _, _>(
+				&root,
+				proof,
+				&[(key, Some(value))],
+			)
+			.is_ok(),
+		}
 	}
 }
 

@@ -188,7 +188,9 @@ pub mod pallet {
 			// Chunk data and compute storage root
 			let chunk_count = num_chunks(data.len() as u32);
 			let chunks = data.chunks(CHUNK_SIZE).map(|c| c.to_vec()).collect();
-			let root = sp_io::trie::blake2_256_ordered_root(chunks);
+			// TODO @arkpar using V1 could be fine here
+			let root =
+				sp_io::trie::blake2_256_ordered_root(chunks, sp_runtime::StateVersion::V0 as u8);
 
 			let content_hash = sp_io::hashing::blake2_256(&data);
 			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index()
@@ -294,12 +296,14 @@ pub mod pallet {
 				},
 				None => Err(Error::<T>::MissingStateData)?,
 			};
+			// TODO @arkpar using V1 could be fine here
 			ensure!(
 				sp_io::trie::blake2_256_verify_proof(
 					info.chunk_root,
 					&proof.proof,
 					&encode_index(chunk_index),
 					&proof.chunk,
+					sp_runtime::StateVersion::V0 as u8,
 				),
 				Error::<T>::InvalidProof
 			);

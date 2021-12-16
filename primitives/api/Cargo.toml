@@ -50,4 +50,4 @@ std = [
 # This sets the max logging level to `off` for `log`.
 disable-logging = ["log/max_level_off"]
 # Keep using a `LayoutV0` trie in the runtime.
-use-state-v0 = ["sp-runtime/use-state-v0"]
+use-state-v0 = []
