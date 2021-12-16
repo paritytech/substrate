@@ -21,11 +21,11 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
-sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
+sp-application-crypto = { version = "4.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
 sp-consensus-vrf = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/vrf" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-io = { version = "4.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }

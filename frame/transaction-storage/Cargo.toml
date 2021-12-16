@@ -20,9 +20,9 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "4.0.0", default-features = false, path = "../../primitives/io" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-storage-proof" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }

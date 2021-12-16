@@ -1543,7 +1543,10 @@ pub type SubstrateHostFunctions = (
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{map, storage::Storage, testing::TaskExecutor, traits::TaskExecutorExt};
+	use sp_core::{
+		crypto::UncheckedInto, map, storage::Storage, testing::TaskExecutor,
+		traits::TaskExecutorExt,
+	};
 	use sp_state_machine::BasicExternalities;
 	use std::any::TypeId;
 
@@ -1644,7 +1647,7 @@ mod tests {
 			}
 
 			// push invlaid
-			crypto::sr25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 			assert!(!crypto::finish_batch_verify());
 
 			crypto::start_batch_verify();
@@ -1657,14 +1660,31 @@ mod tests {
 		});
 	}
 
+	fn zero_ed_pub() -> ed25519::Public {
+		[0u8; 32].unchecked_into()
+	}
+
+	fn zero_ed_sig() -> ed25519::Signature {
+		ed25519::Signature::from_raw([0u8; 64])
+	}
+
+	fn zero_sr_pub() -> sr25519::Public {
+		[0u8; 32].unchecked_into()
+	}
+
+	fn zero_sr_sig() -> sr25519::Signature {
+		sr25519::Signature::from_raw([0u8; 64])
+	}
+
 	#[test]
 	fn batching_works() {
 		let mut ext = BasicExternalities::default();
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+
 		ext.execute_with(|| {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();
-			crypto::ed25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
 			assert!(!crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
@@ -1690,7 +1710,7 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::ed25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
 
 			assert!(!crypto::finish_batch_verify());
 
@@ -1722,7 +1742,7 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::sr25519_batch_verify(&Default::default(), &Vec::new(), &Default::default());
+			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 
 			assert!(!crypto::finish_batch_verify());
 		});

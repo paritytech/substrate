@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../application-crypto" }
+sp-application-crypto = { version = "4.0.0", default-features = false, path = "../../application-crypto" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 merlin = { version = "2.0", default-features = false }
@@ -24,8 +24,8 @@ sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = 
 sp-consensus-vrf = { version = "0.10.0-dev", path = "../vrf", default-features = false }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../../core" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
-sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../keystore", optional = true }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
+sp-keystore = { version = "0.10.0", default-features = false, path = "../../keystore", optional = true }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../timestamp", optional = true }
 serde = { version = "1.0.126", features = ["derive"], optional = true }
 async-trait = { version = "0.1.50", optional = true }

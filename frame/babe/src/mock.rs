@@ -22,7 +22,7 @@ use codec::Encode;
 use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
-	traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::InitKind;
 use pallet_session::historical as pallet_session_historical;
@@ -67,7 +67,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -88,7 +87,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
@@ -130,30 +129,18 @@ impl pallet_session::historical::Config for Test {
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
 
-parameter_types! {
-	pub const UncleGenerations: u64 = 0;
-}
-
 impl pallet_authorship::Config for Test {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
-	type UncleGenerations = UncleGenerations;
+	type UncleGenerations = ConstU64<0>;
 	type FilterUncle = ();
 	type EventHandler = ();
-}
-
-parameter_types! {
-	pub const MinimumPeriod: u64 = 1;
 }
 
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = Babe;
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<1>;
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 1;
 }
 
 impl pallet_balances::Config for Test {
@@ -163,7 +150,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -183,11 +170,7 @@ parameter_types! {
 	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
 	pub const SlashDeferDuration: EraIndex = 0;
-	pub const AttestationPeriod: u64 = 100;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
-	pub const ElectionLookahead: u64 = 0;
-	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
@@ -211,7 +194,7 @@ impl pallet_staking::Config for Test {
 	type SessionInterface = Self;
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
@@ -229,15 +212,13 @@ impl pallet_offences::Config for Test {
 
 parameter_types! {
 	pub const EpochDuration: u64 = 3;
-	pub const ExpectedBlockTime: u64 = 1;
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
-	pub const MaxAuthorities: u32 = 10;
 }
 
 impl Config for Test {
 	type EpochDuration = EpochDuration;
-	type ExpectedBlockTime = ExpectedBlockTime;
+	type ExpectedBlockTime = ConstU64<1>;
 	type EpochChangeTrigger = crate::ExternalTrigger;
 	type DisabledValidators = Session;
 
@@ -255,7 +236,7 @@ impl Config for Test {
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
-	type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = ConstU32<10>;
 }
 
 pub fn go_to_block(n: u64, s: u64) {

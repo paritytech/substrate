@@ -78,7 +78,7 @@ impl RuntimeBuilder {
 				.expect("failed to create a runtime blob out of test runtime")
 		};
 
-		let rt = crate::create_runtime(
+		let rt = crate::create_runtime::<HostFunctions>(
 			blob,
 			crate::Config {
 				heap_pages: self.heap_pages,
@@ -97,10 +97,6 @@ impl RuntimeBuilder {
 					canonicalize_nans: self.canonicalize_nans,
 					parallel_compilation: true,
 				},
-			},
-			{
-				use sp_wasm_interface::HostFunctions as _;
-				HostFunctions::host_functions()
 			},
 		)
 		.expect("cannot create runtime");
@@ -316,9 +312,7 @@ fn test_max_memory_pages() {
 #[cfg_attr(build_type = "debug", ignore)]
 #[test]
 fn test_instances_without_reuse_are_not_leaked() {
-	use sp_wasm_interface::HostFunctions;
-
-	let runtime = crate::create_runtime(
+	let runtime = crate::create_runtime::<HostFunctions>(
 		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
 		crate::Config {
 			heap_pages: 2048,
@@ -332,7 +326,6 @@ fn test_instances_without_reuse_are_not_leaked() {
 				parallel_compilation: true,
 			},
 		},
-		sp_io::SubstrateHostFunctions::host_functions(),
 	)
 	.unwrap();
 

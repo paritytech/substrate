@@ -19,7 +19,9 @@ use std::vec;
 
 use beefy_primitives::mmr::MmrLeafVersion;
 use frame_support::{
-	construct_runtime, parameter_types, sp_io::TestExternalities, traits::GenesisBuild,
+	construct_runtime, parameter_types,
+	sp_io::TestExternalities,
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
 	BasicExternalities,
 };
 use sp_core::{Hasher, H256};
@@ -57,11 +59,6 @@ construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const SS58Prefix: u8 = 42;
-}
-
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -77,29 +74,24 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
-	type SS58Prefix = SS58Prefix;
+	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-
-parameter_types! {
-	pub const Period: u64 = 1;
-	pub const Offset: u64 = 0;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
-	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type SessionManager = MockSessionManager;
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;

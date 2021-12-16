@@ -243,8 +243,8 @@ pub(crate) mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::{apply_aux, LockImportRun};
 	use sp_consensus::BlockOrigin;
-	use sp_core::crypto::Public;
-	use sp_finality_grandpa::{AuthorityId, GRANDPA_ENGINE_ID as ID};
+	use sp_core::crypto::UncheckedFrom;
+	use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
 	use sp_keyring::Ed25519Keyring;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Header, H256},
@@ -350,7 +350,7 @@ pub(crate) mod tests {
 		// When we can't decode proof from Vec<u8>
 		check_finality_proof::<Block>(
 			1,
-			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
+			vec![(UncheckedFrom::unchecked_from([3u8; 32]), 1u64)],
 			vec![42],
 		)
 		.unwrap_err();
@@ -361,7 +361,7 @@ pub(crate) mod tests {
 		// When decoded proof has zero length
 		check_finality_proof::<Block>(
 			1,
-			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
+			vec![(UncheckedFrom::unchecked_from([3u8; 32]), 1u64)],
 			Vec::<GrandpaJustification<Block>>::new().encode(),
 		)
 		.unwrap_err();
@@ -387,7 +387,7 @@ pub(crate) mod tests {
 
 		check_finality_proof::<Block>(
 			1,
-			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
+			vec![(UncheckedFrom::unchecked_from([3u8; 32]), 1u64)],
 			finality_proof.encode(),
 		)
 		.unwrap_err();

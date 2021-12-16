@@ -48,7 +48,6 @@ pub trait WeightInfo {
 	fn remark(b: u32, ) -> Weight;
 	fn remark_with_event(b: u32, ) -> Weight;
 	fn set_heap_pages() -> Weight;
-	fn set_changes_trie_config() -> Weight;
 	fn set_storage(i: u32, ) -> Weight;
 	fn kill_storage(i: u32, ) -> Weight;
 	fn kill_prefix(p: u32, ) -> Weight;
@@ -71,13 +70,6 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	fn set_heap_pages() -> Weight {
 		(1_891_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	// Storage: System Digest (r:1 w:1)
-	// Storage: unknown [0x3a6368616e6765735f74726965] (r:0 w:1)
-	fn set_changes_trie_config() -> Weight {
-		(7_370_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn set_storage(i: u32, ) -> Weight {
@@ -118,13 +110,6 @@ impl WeightInfo for () {
 	fn set_heap_pages() -> Weight {
 		(1_891_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	// Storage: System Digest (r:1 w:1)
-	// Storage: unknown [0x3a6368616e6765735f74726965] (r:0 w:1)
-	fn set_changes_trie_config() -> Weight {
-		(7_370_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn set_storage(i: u32, ) -> Weight {

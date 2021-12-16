@@ -132,7 +132,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc3-f4940588c-x86_64-linux-gnu
 	/// 2020-06-03 16:14:21 ❤️  by Parity Technologies <admin@parity.io>, 2017-2020
 	/// 2020-06-03 16:14:21 📋 Chain specification: Flaming Fir
-	/// 2020-06-03 16:14:21 🏷 Node name: jolly-rod-7462
+	/// 2020-06-03 16:14:21 🏷  Node name: jolly-rod-7462
 	/// 2020-06-03 16:14:21 👤 Role: FULL
 	/// 2020-06-03 16:14:21 💾 Database: RocksDb at /tmp/c/chains/flamingfir7/db
 	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
@@ -199,7 +199,7 @@ pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 	info!("✌️  version {}", C::impl_version());
 	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::today().year());
 	info!("📋 Chain specification: {}", config.chain_spec.name());
-	info!("🏷 Node name: {}", config.network.node_name);
+	info!("🏷  Node name: {}", config.network.node_name);
 	info!("👤 Role: {}", config.display_role());
 	info!(
 		"💾 Database: {} at {}",
