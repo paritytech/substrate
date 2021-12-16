@@ -46,7 +46,7 @@ rand = "0.7.2"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
-serde = { version = "1.0.126", features = ["derive"] }
+serde = { version = "1.0.131", features = ["derive"] }
 serde_json = "1.0.71"
 smallvec = "1.7.0"
 sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }

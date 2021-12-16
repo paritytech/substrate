@@ -10,7 +10,7 @@ description = "RPC for the BEEFY Client gadget for substrate"
 [dependencies]
 futures = "0.3.16"
 log = "0.4"
-serde = { version = "1.0.130", features = ["derive"] }
+serde = { version = "1.0.131", features = ["derive"] }
 
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
