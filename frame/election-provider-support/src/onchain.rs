@@ -17,8 +17,12 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{ElectionDataProvider, ElectionProvider, PageIndex};
-use frame_support::{traits::Get, weights::DispatchClass};
+use crate::{BoundedSupport, ElectionDataProvider, ElectionProvider, PageIndex};
+use frame_support::{
+	traits::{ConstU32, Get},
+	weights::DispatchClass,
+	BoundedVec,
+};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -75,16 +79,31 @@ pub trait Config: frame_system::Config {
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
 	type Error = Error;
 	type DataProvider = T::DataProvider;
-	type Pages = frame_support::traits::ConstU8<1>;
+	type Pages = frame_support::traits::ConstU32<1>;
+	type MaxBackingCountPerTarget = ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
 
-	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect(
+		remaining: PageIndex,
+	) -> Result<
+		BoundedVec<
+			(T::AccountId, BoundedSupport<T::AccountId, Self::MaxBackingCountPerTarget>),
+			Self::MaxSupportsPerPage,
+		>,
+		Self::Error,
+	> {
 		if remaining != 0 {
 			return Err(Error::NoMoreThenSinglePageExpected)
 		}
-		let voters = Self::DataProvider::voters(T::TargetsPageSize::get(), 0)
+
+		let voters = Self::DataProvider::voters(T::VoterPageSize::get(), 0)
+			.map_err(Error::DataProvider)?
+			.into_iter()
+			.map(|(x, y, z)| (x, y, z.into_inner()))
+			.collect::<Vec<_>>(); // TODO: shitty allocation.
+
+		let targets = Self::DataProvider::targets(T::TargetsPageSize::get(), 0)
 			.map_err(Error::DataProvider)?;
-		let targets =
-			Self::DataProvider::targets(T::VoterPageSize::get(), 0).map_err(Error::DataProvider)?;
 		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
@@ -107,7 +126,11 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 			DispatchClass::Mandatory,
 		);
 
-		Ok(to_supports(&staked))
+		let supports = to_supports(&staked);
+		// TODO: shitty allocation.
+		use crate::TryIntoBoundedSupports;
+		let bounded_supports = supports.try_into_bounded_supports().unwrap();
+		Ok(bounded_supports)
 	}
 }
 
@@ -170,12 +193,14 @@ mod tests {
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
+		use frame_support::traits::ConstU32;
+
 		use super::*;
 		use crate::{data_provider, PageIndex};
 
 		pub struct DataProvider;
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
-			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
+			type MaxVotesPerVoter = ConstU32<2>;
 			fn voters(
 				_: Option<usize>,
 				_: PageIndex,

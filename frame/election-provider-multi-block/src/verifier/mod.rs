@@ -19,14 +19,15 @@
 //!
 //! TODO
 
+use frame_support::BoundedVec;
 // Only these items are public from this pallet.
 pub use pallet::*;
 
 mod pallet;
 
 // internal imports
-use crate::{helpers, SolutionOf};
-use frame_election_provider_support::{PageIndex, Supports};
+use crate::SolutionOf;
+use frame_election_provider_support::{BoundedSupport, PageIndex};
 use pallet::{QueuedSolution, VerifyingSolution};
 use sp_npos_elections::ElectionScore;
 use std::fmt::Debug;
@@ -71,6 +72,11 @@ pub trait Verifier {
 	type Solution;
 	type AccountId;
 	type MaxBackingCountPerTarget: frame_support::traits::Get<u32>;
+	// NOTE: This one is a tricky, we can't know this in advance. This is determined by the
+	// validator count of staking. We should not set this to be too high, since it would mean that
+	// all of our worse cases are actually worse, but ideally it should follow
+	// staking::validator_count closely.
+	type MaxSupportsPerPage: frame_support::traits::Get<u32>;
 
 	/// This is a page of the solution that we want to verify next, store it.
 	///
@@ -107,7 +113,7 @@ pub trait Verifier {
 	///
 	/// It is the responsibility of the call site to call this function with all appropriate
 	/// `page` arguments.
-	fn get_queued_solution_page(page: PageIndex) -> Option<Supports<Self::AccountId>>;
+	fn get_queued_solution_page(page: PageIndex) -> Option<SupportsOf<Self>>;
 
 	/// Perform the feasibility check of the given solution page.
 	///
@@ -122,7 +128,7 @@ pub trait Verifier {
 	fn feasibility_check_page(
 		partial_solution: Self::Solution,
 		page: PageIndex,
-	) -> Result<Supports<Self::AccountId>, FeasibilityError>;
+	) -> Result<SupportsOf<Self>, FeasibilityError>;
 
 	/// Forcibly write this solution into the current valid variant.
 	///
@@ -132,15 +138,16 @@ pub trait Verifier {
 	/// For now this is only needed for single page solution, thus the api will only support
 	/// that.
 	fn force_set_single_page_verified_solution(
-		partial_solution: Supports<Self::AccountId>,
+		single_page_solution: SupportsOf<Self>,
 		verified_score: ElectionScore,
 	);
 }
 
 impl<T: Config> Verifier for Pallet<T> {
-	type Solution = SolutionOf<T>;
 	type AccountId = T::AccountId;
+	type Solution = SolutionOf<T>;
 	type MaxBackingCountPerTarget = T::MaxBackingCountPerTarget;
+	type MaxSupportsPerPage = T::MaxSupportsPerPage;
 
 	fn set_unverified_solution_page(
 		page_index: PageIndex,
@@ -172,19 +179,19 @@ impl<T: Config> Verifier for Pallet<T> {
 		QueuedSolution::<T>::kill();
 	}
 
-	fn get_queued_solution_page(page: PageIndex) -> Option<Supports<Self::AccountId>> {
+	fn get_queued_solution_page(page: PageIndex) -> Option<SupportsOf<Self>> {
 		QueuedSolution::<T>::get_queued_solution_page(page)
 	}
 
 	fn feasibility_check_page(
 		partial_solution: Self::Solution,
 		page: PageIndex,
-	) -> Result<Supports<Self::AccountId>, FeasibilityError> {
+	) -> Result<SupportsOf<Self>, FeasibilityError> {
 		Self::feasibility_check_page_inner(partial_solution, page)
 	}
 
 	fn force_set_single_page_verified_solution(
-		partial_supports: Supports<Self::AccountId>,
+		partial_supports: SupportsOf<Self>,
 		verified_score: ElectionScore,
 	) {
 		QueuedSolution::<T>::force_set_single_page_valid(0, partial_supports, verified_score);

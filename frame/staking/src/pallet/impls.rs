@@ -269,7 +269,8 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// New era.
-			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis, current_era);
+			let maybe_new_era_validators =
+				Self::try_trigger_new_era(session_index, is_genesis, current_era);
 			if maybe_new_era_validators.is_some() &&
 				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
@@ -464,8 +465,8 @@ impl<T: Config> Pallet<T> {
 			}
 
 			/// Clear all storage items that may have bene written to during
-			// `store_intermediary_staker_info`, and `finalize_staker_info_collection`. This will be
-			//  expensive, but extremely rare to happen.
+			// `store_intermediary_staker_info`, and `finalize_staker_info_collection`. This will
+			// be  expensive, but extremely rare to happen.
 			<ErasStakers<T>>::remove_prefix(maybe_starting_era, None);
 			<ErasStakersClipped<T>>::remove_prefix(maybe_starting_era, None);
 			<ErasValidatorPrefs<T>>::remove_prefix(maybe_starting_era, None);
@@ -1021,8 +1022,12 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+frame_support::parameter_types! {
+	pub const MaxVotesPerVoter: u32 = T::MAX_NOMINATIONS;
+}
+
 impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
+	type MaxVotesPerVoter = MaxVotesPerVoter;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));

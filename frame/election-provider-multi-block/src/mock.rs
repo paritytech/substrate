@@ -307,8 +307,18 @@ impl ElectionProvider<AccountId, u64> for MockFallback {
 	type Error = &'static str;
 	type DataProvider = MockStaking;
 	type Pages = frame_support::traits::ConstU8<1>;
+	type MaxBackingCountPerTarget = frame_support::traits::ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = frame_support::traits::ConstU32<{ u32::MAX }>;
 
-	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
+	fn elect(
+		remaining: PageIndex,
+	) -> Result<
+		BoundedVec<
+			(T::AccountId, BoundedSupport<T::AccountId, Self::MaxBackingCountPerTarget>),
+			Self::MaxSupportsPerPage,
+		>,
+		Self::Error,
+	> {
 		if OnChianFallback::get() {
 			onchain::OnChainSequentialPhragmen::<Runtime>::elect(remaining)
 				.map_err(|_| "OnChainSequentialPhragmen failed")
@@ -320,7 +330,8 @@ impl ElectionProvider<AccountId, u64> for MockFallback {
 
 pub struct MockStaking;
 impl ElectionDataProvider<AccountId, u64> for MockStaking {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
+	type MaxVotesPerVoter = ConstU32<{ <TestNposSolution as NposSolution>::LIMIT as u32 }>;
+
 	fn targets(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,

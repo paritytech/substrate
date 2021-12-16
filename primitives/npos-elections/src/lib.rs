@@ -378,8 +378,7 @@ pub fn to_support_map<AccountId: IdentifierT>(
 	supports
 }
 
-/// Same as [`to_support_map`] except it returns a
-/// flat vector.
+/// Same as [`to_support_map`] except it returns a flat vector.
 pub fn to_supports<AccountId: IdentifierT>(
 	assignments: &[StakedAssignment<AccountId>],
 ) -> Supports<AccountId> {

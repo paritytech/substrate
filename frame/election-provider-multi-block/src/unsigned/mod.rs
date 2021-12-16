@@ -30,14 +30,12 @@ pub mod miner;
 mod pallet {
 	use crate::{
 		types::*,
-		unsigned::miner::{self, BaseMiner},
+		unsigned::miner::{self},
 		verifier::Verifier,
 	};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-
-	use sp_npos_elections::EvaluateSupport;
-	use sp_runtime::traits::{One, SaturatedConversion};
+	use sp_runtime::traits::SaturatedConversion;
 
 	/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
 	/// number.
@@ -95,6 +93,7 @@ mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]
@@ -102,7 +101,7 @@ mod pallet {
 		#[pallet::weight((0, DispatchClass::Operational))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			mut paged_solution: Box<PagedRawSolution<T>>,
+			paged_solution: Box<PagedRawSolution<T>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -117,6 +116,7 @@ mod pallet {
 
 			let only_page = paged_solution
 				.solution_pages
+				.into_inner()
 				.pop()
 				.expect("length of `solution_pages` is always `T::Pages`, `T::Pages` is always greater than 1, can be popped; qed.");
 			let supports = <T::Verifier as Verifier>::feasibility_check_page(
@@ -128,7 +128,9 @@ mod pallet {
 			// we know that the claimed score is better then what we currently have because of the
 			// pre-dispatch checks, now we only check if the claimed score was *valid*.
 
-			let valid_score = supports.clone().evaluate();
+			// TODO: this is just a placeholder..
+			use frame_election_provider_support::EvaluateBoundedSupports;
+			let valid_score = supports.evaluate_bounded();
 			assert_eq!(valid_score, paged_solution.score, "{}", error_message);
 
 			log!(info, "queued an unsigned solution with score {:?}", valid_score);

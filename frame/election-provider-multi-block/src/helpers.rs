@@ -18,7 +18,11 @@
 //! Some helper functions/macros for this crate.
 
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
-use crate::types::{PageIndex, VoterOf};
+use crate::{
+	types::{PageIndex, VoterOf},
+	UnboundedVoterOf,
+};
+use frame_support::BoundedVec;
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
@@ -34,7 +38,7 @@ macro_rules! log {
 
 /// Generate an `efficient closure of voters and the page in which they live in.
 pub fn generate_voter_page_fn<T: Config>(
-	paged_snapshot: &Vec<Vec<VoterOf<T>>>,
+	paged_snapshot: &BoundedVec<BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>, T::Pages>,
 ) -> impl Fn(&T::AccountId) -> Option<PageIndex> {
 	let mut cache: BTreeMap<T::AccountId, PageIndex> = BTreeMap::new();
 	paged_snapshot
@@ -52,11 +56,29 @@ pub fn generate_voter_page_fn<T: Config>(
 	move |who| cache.get(who).copied()
 }
 
-/// Generate a btree-map cache of the voters and their indices.
+/// Generate a btree-map cache of the voters and their indices within the provided `snapshot`.
+///
+/// This does not care about pagination. `snapshot` might be a single page or the entire blob of
+/// voters.
 ///
 /// This can be used to efficiently build index getter closures.
-pub fn generate_voter_cache<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+pub fn generate_voter_cache_unbounded<T: Config>(
+	snapshot: &Vec<UnboundedVoterOf<T>>,
+) -> BTreeMap<T::AccountId, usize> {
+	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
+	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
+		let _existed = cache.insert(x.clone(), i);
+		// if a duplicate exists, we only consider the last one. Defensive only, should never
+		// happen.
+		debug_assert!(_existed.is_none());
+	});
+
+	cache
+}
+
+// TODO: can we avoid duplicate?
+pub fn generate_voter_cache_bounded<T: Config>(
+	snapshot: &BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>,
 ) -> BTreeMap<T::AccountId, usize> {
 	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
@@ -119,7 +141,7 @@ pub fn voter_index_fn_usize<T: Config>(
 /// Not meant to be used in production.
 #[cfg(test)]
 pub fn voter_index_fn_linear<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> + '_ {
 	move |who| {
 		snapshot
@@ -170,7 +192,7 @@ pub fn target_index_fn_linear<T: Config>(
 /// Create a function that can map a voter index ([`SolutionVoterIndexOf`]) to the actual voter
 /// account using a linearly indexible snapshot.
 pub fn voter_at_fn<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> impl Fn(SolutionVoterIndexOf<T>) -> Option<T::AccountId> + '_ {
 	move |i| {
 		<SolutionVoterIndexOf<T> as TryInto<usize>>::try_into(i)
@@ -196,7 +218,7 @@ pub fn target_at_fn<T: Config>(
 /// This is not optimized and uses a linear search.
 #[cfg(test)]
 pub fn stake_of_fn_linear<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + '_ {
 	move |who| {
 		snapshot
@@ -214,7 +236,19 @@ pub fn stake_of_fn_linear<T: Config>(
 /// The cache need must be derived from the same snapshot. Zero is returned if a voter is
 /// non-existent.
 pub fn stake_of_fn<'a, T: Config>(
-	snapshot: &'a Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &'a BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>,
+	cache: &'a BTreeMap<T::AccountId, usize>,
+) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
+	move |who| {
+		if let Some(index) = cache.get(who) {
+			snapshot.get(*index).map(|(_, x, _)| x).cloned().unwrap_or_default()
+		} else {
+			0
+		}
+	}
+}
+pub fn stake_of_fn_unbounded<'a, T: Config>(
+	snapshot: &'a Vec<UnboundedVoterOf<T>>,
 	cache: &'a BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
 	move |who| {

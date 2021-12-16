@@ -15,14 +15,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use frame_support::{BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound};
 use sp_std::{collections::btree_set::BTreeSet, fmt::Debug};
 
-use frame_election_provider_support::ElectionProvider;
-pub use frame_election_provider_support::{PageIndex, Supports};
+use crate::Verifier;
+use codec::{Decode, Encode, MaxEncodedLen};
+pub use frame_election_provider_support::PageIndex;
+use frame_election_provider_support::{BoundedSupport, ElectionDataProvider, ElectionProvider};
+use scale_info::TypeInfo;
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
 use sp_runtime::SaturatedConversion;
 
-use crate::Config;
+/// The supports that's returned from a given [`Verifier`].
+pub type SupportsOf<V> = BoundedVec<
+	(
+		<V as Verifier>::AccountId,
+		BoundedSupport<<V as Verifier>::AccountId, <V as Verifier>::MaxBackingCountPerTarget>,
+	),
+	<V as Verifier>::MaxSupportsPerPage,
+>;
 
 /// The solution type used by this crate.
 pub type SolutionOf<T> = <T as crate::Config>::Solution;
@@ -44,18 +55,19 @@ pub type AssignmentOf<T> =
 	sp_npos_elections::Assignment<<T as frame_system::Config>::AccountId, SolutionAccuracyOf<T>>;
 
 #[derive(
-	scale_info::TypeInfo,
-	codec::Encode,
-	codec::Decode,
-	frame_support::RuntimeDebugNoBound,
-	frame_support::CloneNoBound,
-	frame_support::EqNoBound,
-	frame_support::PartialEqNoBound,
+	TypeInfo,
+	Encode,
+	Decode,
+	RuntimeDebugNoBound,
+	CloneNoBound,
+	EqNoBound,
+	PartialEqNoBound,
+	MaxEncodedLen,
 )]
-#[codec(mel_bound(T: Config))]
+#[codec(mel_bound(T: crate::Config))]
 #[scale_info(skip_type_params(T))]
-pub struct PagedRawSolution<T: Config> {
-	pub solution_pages: Vec<SolutionOf<T>>, // TODO: at least use the bounded vec.
+pub struct PagedRawSolution<T: crate::Config> {
+	pub solution_pages: BoundedVec<SolutionOf<T>, T::Pages>,
 	pub score: ElectionScore,
 	pub round: u32,
 }
@@ -79,7 +91,7 @@ impl<T> Pagify<T> for Vec<T> {
 				.enumerate()
 				.map(|(p, s)| (p.saturated_into::<PageIndex>(), s))
 				.map(move |(p, s)| {
-					let bound_usize = bound.into();
+					let bound_usize = bound as usize;
 					debug_assert!(self.len() <= bound_usize);
 					let padding = bound_usize.saturating_sub(self.len());
 					let new_page = p.saturating_add(padding.saturated_into::<PageIndex>());
@@ -89,13 +101,13 @@ impl<T> Pagify<T> for Vec<T> {
 	}
 }
 
-impl<T: Config> Default for PagedRawSolution<T> {
+impl<T: crate::Config> Default for PagedRawSolution<T> {
 	fn default() -> Self {
 		Self { round: 1, score: Default::default(), solution_pages: Default::default() }
 	}
 }
 
-impl<T: Config> PagedRawSolution<T> {
+impl<T: crate::Config> PagedRawSolution<T> {
 	/// Get the total number of voters, assuming that voters in each page are unique.
 	pub fn voter_count(&self) -> usize {
 		self.solution_pages
@@ -124,25 +136,36 @@ impl<T: Config> PagedRawSolution<T> {
 	}
 }
 
-/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
-/// voted.
+/// Alias for a voter in the npos system.
+///
+/// This type is bounded.
 pub type VoterOf<T> = (
+	<T as frame_system::Config>::AccountId,
+	sp_npos_elections::VoteWeight,
+	BoundedVec<
+		<T as frame_system::Config>::AccountId,
+		<<T as crate::Config>::DataProvider as ElectionDataProvider<
+			<T as frame_system::Config>::AccountId,
+			<T as frame_system::Config>::BlockNumber,
+		>>::MaxVotesPerVoter,
+	>,
+);
+
+/// Alias for a voter in the npos system.
+///
+/// This type is unbounded.
+pub type UnboundedVoterOf<T> = (
 	<T as frame_system::Config>::AccountId,
 	sp_npos_elections::VoteWeight,
 	Vec<<T as frame_system::Config>::AccountId>,
 );
-
-pub type RoundVoterSnapshotPage<T> = Vec<VoterOf<T>>;
-pub type RoundTargetSnapshotPage<T> = Vec<<T as frame_system::Config>::AccountId>;
 
 /// Encodes the length of a solution or a snapshot.
 ///
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(
-	PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug, Default, scale_info::TypeInfo,
-)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo, MaxEncodedLen)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -153,7 +176,7 @@ pub struct SolutionOrSnapshotSize {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -172,7 +195,7 @@ impl Default for ElectionCompute {
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, codec::Encode, codec::Decode, Debug, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, MaxEncodedLen, Debug, TypeInfo)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,

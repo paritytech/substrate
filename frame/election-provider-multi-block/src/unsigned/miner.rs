@@ -15,18 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ptr::eq;
-
 use super::WeightInfo;
-use crate::{helpers, log, types::*, verifier, Snapshot};
+use crate::{
+	helpers, log,
+	types::*,
+	verifier::{self},
+};
 use codec::{Decode, Encode};
 use frame_election_provider_support::{ExtendedBalance, NposSolver, Support, VoteWeight};
-use frame_support::{dispatch::Weight, traits::Get};
-use sp_npos_elections::StakedAssignment;
+use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
 	traits::{SaturatedConversion, Saturating, Zero},
 };
+use sp_std::prelude::*;
 
 // TODO: the miner will def. need a fuzzer.
 
@@ -155,9 +157,9 @@ impl<
 
 		// This is the range of voters that we are interested in. Mind the second `.rev`, it is
 		// super critical.
-		let voter_pages_range = (crate::Pallet::<T>::lsp()..=crate::Pallet::<T>::msp())
+		let voter_pages_range = (crate::Pallet::<T>::lsp()..crate::Pallet::<T>::msp() + 1)
 			.rev()
-			.take(pages.into())
+			.take(pages as usize)
 			.rev();
 
 		log!(
@@ -170,23 +172,35 @@ impl<
 		// NOTE: if `pages (2) < T::Pages (3)`, at this point this vector will have length 2, with a
 		// layout of `[snapshot(1), snapshot(2)]`, namely the two most significant pages of the
 		// snapshot.
-		let voter_pages = voter_pages_range
-			.map(|p| {
-				crate::Snapshot::<T>::voters(p)
-					.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Voters(p)))
-			})
-			.collect::<Result<Vec<_>, _>>()?;
+		let voter_pages: BoundedVec<_, T::Pages> =
+			voter_pages_range
+				.map(|p| {
+					crate::Snapshot::<T>::voters(p)
+						.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Voters(p)))
+				})
+				.collect::<Result<Vec<_>, _>>()?
+				.try_into()
+				.expect("`voter_pages_range` has `.take(pages)`; it must have length less than pages; it must convert to `BoundedVec`; qed");
 
 		// we also build this closure early, so we can let `targets` be consumed.
 		let voter_page_fn = helpers::generate_voter_page_fn::<T>(&voter_pages);
 		let target_index_fn = helpers::target_index_fn::<T>(&all_targets);
 
 		// now flatten the voters, ready to be used as if pagination did not existed.
-		let all_voters = voter_pages.iter().flatten().cloned().collect::<Vec<_>>();
+		let all_voters = voter_pages
+			.clone() // TODO: iter().cloned()??
+			.into_iter()
+			.map(|x| x.into_inner())
+			.flatten()
+			.map(|(x, y, z)| (x, y, z.into_inner()))
+			.collect::<Vec<_>>();
 
-		let ElectionResult { winners: _, assignments } =
-			Solver::solve(desired_targets as usize, all_targets.clone(), all_voters.clone())
-				.map_err(|e| MinerError::Solver(e))?;
+		let ElectionResult { winners: _, assignments } = Solver::solve(
+			desired_targets as usize,
+			all_targets.clone().to_vec(),
+			all_voters.clone(),
+		)
+		.map_err(|e| MinerError::Solver(e))?;
 
 		// reduce and trim supports. We don't trim length and weight here, since those are dependent
 		// on the final form of the solution ([`PagedRawSolution`]), thus we do it later.
@@ -202,8 +216,8 @@ impl<
 
 			// These closures are of no use in the rest of these code, since they only deal with the
 			// overall list of voters.
-			let cache = helpers::generate_voter_cache::<T>(&all_voters);
-			let stake_of = helpers::stake_of_fn::<T>(&all_voters, &cache);
+			let cache = helpers::generate_voter_cache_unbounded::<T>(&all_voters);
+			let stake_of = helpers::stake_of_fn_unbounded::<T>(&all_voters, &cache);
 
 			// 1. convert to staked and reduce
 			let (reduced_count, staked) = {
@@ -224,13 +238,13 @@ impl<
 				let mut supports_invalid_score = to_supports(&staked);
 
 				let pre_score = (&supports_invalid_score).evaluate();
-				let trimmed = Self::trim_supports(&mut supports_invalid_score);
+				let num_trimmed = Self::trim_supports(&mut supports_invalid_score);
 
 				// now recreated the staked assignments
 				let staked = supports_to_staked_assignment(supports_invalid_score);
 				let assignments = assignment_staked_to_ratio_normalized(staked)
 					.map_err::<MinerError<T>, _>(Into::into)?;
-				(pre_score, trimmed, assignments)
+				(pre_score, num_trimmed, assignments)
 			};
 
 			log!(
@@ -245,8 +259,9 @@ impl<
 		};
 
 		// split the assignments into different pages.
-		let mut paged_assignments: Vec<Vec<AssignmentOf<T>>> = Vec::with_capacity(pages as usize);
-		paged_assignments.resize(pages as usize, Default::default());
+		let mut paged_assignments: BoundedVec<Vec<AssignmentOf<T>>, T::Pages> =
+			BoundedVec::bounded_capacity(pages as usize);
+		paged_assignments.bounded_resize(pages as usize, Default::default());
 		for assignment in trimmed_assignments {
 			// NOTE: this `page` index is LOCAL. It does not correspond to the actual page index of
 			// the snapshot map, but rather the index in the `voter_pages`.
@@ -257,7 +272,7 @@ impl<
 		}
 
 		// convert each page to a compact struct
-		let mut solution_pages: Vec<SolutionOf<T>> = paged_assignments
+		let solution_pages: BoundedVec<SolutionOf<T>, T::Pages> = paged_assignments
 			.into_iter()
 			.enumerate()
 			.map(|(page_index, assignment_page)| {
@@ -268,7 +283,7 @@ impl<
 					.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Voters(page)))?;
 
 				let voter_index_fn = {
-					let cache = helpers::generate_voter_cache::<T>(&voter_snapshot_page);
+					let cache = helpers::generate_voter_cache_bounded::<T>(&voter_snapshot_page);
 					helpers::voter_index_fn_owned::<T>(cache)
 				};
 				<SolutionOf<T>>::from_assignment(
@@ -278,11 +293,17 @@ impl<
 				)
 				.map_err::<MinerError<T>, _>(Into::into)
 			})
-			.collect::<Result<Vec<_>, _>>()?;
+			.collect::<Result<Vec<_>, _>>()?
+			.try_into()
+			.expect("TODO");
 
 		// now do the weight and length trim.
+		let mut solution_pages_unbounded = solution_pages.into_inner();
 		let _trim_length_weight =
-			Self::maybe_trim_weight_and_len(&mut solution_pages, &voter_pages)?;
+			Self::maybe_trim_weight_and_len(&mut solution_pages_unbounded, &voter_pages)?;
+		let solution_pages = solution_pages_unbounded
+			.try_into()
+			.expect("maybe_trim_weight_and_len cannot increase the length of its input; qed.");
 		log!(debug, "trimmed {} voters due to length/weight restriction.", _trim_length_weight);
 
 		// finally, wrap everything up. Assign a fake score here, since we might need to re-compute
@@ -336,7 +357,7 @@ impl<
 	pub fn check_feasibility(
 		paged_solution: &PagedRawSolution<T>,
 		solution_type: &str,
-	) -> Result<Vec<Supports<T::AccountId>>, MinerError<T>> {
+	) -> Result<Vec<SupportsOf<T::Verifier>>, MinerError<T>> {
 		// check every solution page for feasibility.
 		paged_solution
 			.solution_pages
@@ -358,14 +379,13 @@ impl<
 	/// would do as closely as possible, and expects all the corresponding snapshot data to be
 	/// available.
 	fn compute_score(paged_solution: &PagedRawSolution<T>) -> Result<ElectionScore, MinerError<T>> {
-		use crate::Verifier;
 		use sp_npos_elections::EvaluateSupport;
 		use sp_std::collections::btree_map::BTreeMap;
 
-		let mut all_supports = Self::check_feasibility(paged_solution, "mined")?;
+		let all_supports = Self::check_feasibility(paged_solution, "mined")?;
 		let mut total_backings: BTreeMap<T::AccountId, ExtendedBalance> = BTreeMap::new();
 		all_supports.into_iter().flatten().for_each(|(who, support)| {
-			let mut backing = total_backings.entry(who).or_default();
+			let backing = total_backings.entry(who).or_default();
 			*backing = backing.saturating_add(support.total);
 		});
 
@@ -385,7 +405,7 @@ impl<
 	/// particular.
 	///
 	/// Returns the count of supports trimmed.
-	pub fn trim_supports(supports: &mut Supports<T::AccountId>) -> u32 {
+	pub fn trim_supports(supports: &mut sp_npos_elections::Supports<T::AccountId>) -> u32 {
 		let limit =
 			<T::Verifier as crate::verifier::Verifier>::MaxBackingCountPerTarget::get() as usize;
 		let mut count = 0;
@@ -424,7 +444,7 @@ impl<
 	/// of the transaction and its weight (e.g. signed or unsigned).
 	pub fn maybe_trim_weight_and_len(
 		solution_pages: &mut Vec<SolutionOf<T>>,
-		voter_pages: &Vec<Vec<VoterOf<T>>>,
+		voter_pages: &BoundedVec<BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>, T::Pages>,
 	) -> Result<u32, MinerError<T>> {
 		debug_assert_eq!(solution_pages.len(), voter_pages.len());
 		let size_limit = T::MinerMaxLength::get();
@@ -494,7 +514,7 @@ impl<
 			})
 		};
 
-		let mut sort_current_trimming_page =
+		let sort_current_trimming_page =
 			|current_trimming_page: usize, solution_pages: &mut Vec<SolutionOf<T>>| {
 				solution_pages.get_mut(current_trimming_page).map(|solution_page| {
 					let stake_of_fn = current_trimming_page_stake_of(current_trimming_page);

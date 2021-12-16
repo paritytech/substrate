@@ -24,7 +24,7 @@ use crate::{
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolver, PerThing128};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
@@ -39,6 +39,7 @@ use sp_std::{cmp::Ordering, prelude::*};
 
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
+
 /// Storage key used to store the offchain worker running status.
 pub(crate) const OFFCHAIN_LOCK: &[u8] = b"parity/multi-phase-unsigned-election/lock";
 

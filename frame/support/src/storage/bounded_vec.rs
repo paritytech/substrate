@@ -146,9 +146,25 @@ impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {
 }
 
 impl<T, S: Get<u32>> BoundedVec<T, S> {
+	/// Pre-allocate `capacity` items in self.
+	///
+	/// If `capacity` is greater than [`Self::bound`], then the minimum of the two is used.
+	pub fn bounded_capacity(capacity: usize) -> Self {
+		let capacity = capacity.min(Self::bound());
+		Self(Vec::with_capacity(capacity), Default::default())
+	}
+
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
 		S::get() as usize
+	}
+
+	pub fn bounded_resize(&mut self, size: usize, value: T)
+	where
+		T: Clone,
+	{
+		let size = size.min(Self::bound());
+		self.0.resize(size, value);
 	}
 
 	/// Consumes self and mutates self via the given `mutate` function.
@@ -456,4 +472,10 @@ pub mod test {
 			Err("BoundedVec exceeds its limit".into()),
 		);
 	}
+
+	// #[test]
+	// fn can_be_collected() {
+	// 	let b1: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+	// 	let b2 = b1.into_iter().map(|x| x + 1).collect::<BoundedVec<u32, Seven>>();
+	// }
 }

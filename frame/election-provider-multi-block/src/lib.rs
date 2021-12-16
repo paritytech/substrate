@@ -211,17 +211,22 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider, PageIndex};
+use frame_election_provider_support::{
+	onchain, BoundedSupport, ElectionDataProvider, ElectionProvider, PageIndex,
+};
 use frame_support::{
 	ensure,
-	traits::{ConstU8, Get},
+	traits::{ConstU32, Get},
+	BoundedVec,
 };
 use sp_arithmetic::traits::Zero;
-use sp_npos_elections::{NposSolution, VoteWeight};
-use sp_runtime::{traits::Bounded, PerThing, SaturatedConversion};
+use sp_npos_elections::VoteWeight;
+use sp_runtime::SaturatedConversion;
+use sp_std::prelude::*;
 use verifier::Verifier;
 
 // TODO: integrate type-info and #[pallet::generate_storage_info]
+// TODO: decouple task: Use BoundedVec in internal voter target vec of ElectionDataProvider
 
 #[cfg(test)]
 mod mock;
@@ -273,9 +278,19 @@ pub struct InitiateEmergencyPhase<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for InitiateEmergencyPhase<T> {
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
-	type Pages = ConstU8<1>;
+	type Pages = ConstU32<1>;
+	type MaxBackingCountPerTarget = ();
+	type MaxSupportsPerPage = ();
 
-	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect(
+		remaining: PageIndex,
+	) -> Result<
+		BoundedVec<
+			(T::AccountId, BoundedSupport<T::AccountId, Self::MaxBackingCountPerTarget>),
+			Self::MaxSupportsPerPage,
+		>,
+		Self::Error,
+	> {
 		ensure!(remaining == 0, "fallback should only have 1 page");
 		log!(warn, "Entering emergency phase.");
 		Err("Emergency phase started.")
@@ -320,18 +335,15 @@ impl<T: Config> From<verifier::FeasibilityError> for ElectionError<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use std::fmt::Result;
 
 	use crate::{types::*, verifier, BenchmarkingConfig, WeightInfo};
 	use frame_election_provider_support::{
 		ElectionDataProvider, ElectionProvider, NposSolution, PageIndex,
 	};
-	use frame_support::{
-		pallet_prelude::*, traits::EstimateCallFee, IterableStorageDoubleMap, Twox64Concat,
-	};
+	use frame_support::{pallet_prelude::*, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{traits::CheckedAdd, PerThing, UpperOf};
-	use sp_runtime::traits::{One, SaturatedConversion, Saturating, Zero};
+	use sp_runtime::traits::{Saturating, Zero};
 	use sp_std::convert::TryInto;
 
 	#[pallet::config]
@@ -348,15 +360,15 @@ pub mod pallet {
 		type SignedPhase: Get<Self::BlockNumber>;
 
 		/// The number of snapshot voters to fetch per block.
-		///
-		/// Note the data type: If the voters are represented by a `u32` in `type CompactSolution`,
-		/// the same `u32` is used here to ensure bounds are respected.
+		// TODO: here we use u32, but the type that is used in compact can still be different. Just
+		// needs an integrity test to check that `size_of::<VoterIndex> <= size_of::<u32>`, which
+		// would already be pretty darn crazy.
 		#[pallet::constant]
-		type VoterSnapshotPerBlock: Get<SolutionVoterIndexOf<Self>>;
+		type VoterSnapshotPerBlock: Get<u32>;
 
 		/// The number of snapshot targets to fetch per block.
 		#[pallet::constant]
-		type TargetSnapshotPerBlock: Get<SolutionTargetIndexOf<Self>>;
+		type TargetSnapshotPerBlock: Get<u32>;
 
 		/// The number of pages.
 		///
@@ -379,7 +391,8 @@ pub mod pallet {
 			+ sp_std::fmt::Debug
 			+ Ord
 			+ NposSolution
-			+ scale_info::TypeInfo;
+			+ TypeInfo
+			+ MaxEncodedLen;
 
 		/// The fallback type used for the election.
 		///
@@ -407,7 +420,11 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn manage(origin: OriginFor<T>, maybe_force_phase: Option<Phase<T::BlockNumber>>, kill_verifier: bool) -> DispatchResultWithPostInfo {
+		pub fn manage(
+			origin: OriginFor<T>,
+			maybe_force_phase: Option<Phase<T::BlockNumber>>,
+			kill_verifier: bool,
+		) -> DispatchResultWithPostInfo {
 			// TODO: reset everything, this should only be called in emergencies.
 			todo!();
 		}
@@ -429,7 +446,9 @@ pub mod pallet {
 				signed_deadline.saturating_sub(T::Pages::get().into());
 			let last_unsigned_verification_deadline: T::BlockNumber = T::Pages::get().into();
 
-			let next_election = T::DataProvider::next_election_prediction(now).max(now).saturating_sub(T::Lookahead::get());
+			let next_election = T::DataProvider::next_election_prediction(now)
+				.max(now)
+				.saturating_sub(T::Lookahead::get());
 			let remaining_blocks = next_election - now;
 			let current_phase = Self::current_phase();
 
@@ -478,7 +497,7 @@ pub mod pallet {
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
 					0
-				}
+				},
 
 				// signed or snapshot to unsigned
 				Phase::Signed | Phase::Snapshot(0)
@@ -487,7 +506,7 @@ pub mod pallet {
 					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
 					Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
 					0
-				}
+				},
 				_ => T::WeightInfo::on_initialize_nothing(),
 			}
 		}
@@ -509,7 +528,11 @@ pub mod pallet {
 			assert!(pages_bn + lookahead < T::SignedPhase::get());
 			assert!(pages_bn + lookahead < T::UnsignedPhase::get());
 
-			assert_eq!(<T::Fallback as ElectionProvider<T::AccountId, T::BlockNumber>>::Pages::get(), 1, "fallback may only have 1 page");
+			assert_eq!(
+				<T::Fallback as ElectionProvider<T::AccountId, T::BlockNumber>>::Pages::get(),
+				1,
+				"fallback may only have 1 page"
+			);
 
 			// Based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
 			let max_vote: usize = <SolutionOf<T> as NposSolution>::LIMIT;
@@ -532,7 +555,7 @@ pub mod pallet {
 			// NOTE that this pallet does not really need to enforce this in runtime. The
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
-				<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MAXIMUM_VOTES_PER_VOTER,
+				<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MaxVotesPerVoter::get(),
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
 		}
@@ -605,14 +628,17 @@ pub mod pallet {
 			DesiredTargets::<T>::put(d);
 		}
 
-		pub(crate) fn set_targets(targets: RoundTargetSnapshotPage<T>) {
+		pub(crate) fn set_targets(targets: BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>) {
 			Self::write_storage_with_pre_allocate(
 				&PagedTargetSnapshot::<T>::hashed_key_for(0),
 				targets,
 			);
 		}
 
-		pub(crate) fn set_voters(page: PageIndex, voters: RoundVoterSnapshotPage<T>) {
+		pub(crate) fn set_voters(
+			page: PageIndex,
+			voters: BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>,
+		) {
 			Self::write_storage_with_pre_allocate(
 				&PagedVoterSnapshot::<T>::hashed_key_for(page),
 				voters,
@@ -654,7 +680,9 @@ pub mod pallet {
 			DesiredTargets::<T>::get()
 		}
 
-		pub(crate) fn voters(page: PageIndex) -> Option<RoundVoterSnapshotPage<T>> {
+		pub(crate) fn voters(
+			page: PageIndex,
+		) -> Option<BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>> {
 			PagedVoterSnapshot::<T>::get(page)
 		}
 
@@ -666,7 +694,7 @@ pub mod pallet {
 			PagedVoterSnapshot::<T>::decode_len(Pallet::<T>::msp())
 		}
 
-		pub(crate) fn targets() -> Option<RoundTargetSnapshotPage<T>> {
+		pub(crate) fn targets() -> Option<BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>> {
 			// NOTE: targets always have one index, which is 0, aka lsp.
 			PagedTargetSnapshot::<T>::get(Pallet::<T>::lsp())
 		}
@@ -689,7 +717,7 @@ pub mod pallet {
 			assert!(exists ^ !Self::targets().is_some(), "targets mismatch");
 
 			(crate::Pallet::<T>::msp()..=crate::Pallet::<T>::lsp())
-				.take(up_to_page.into())
+				.take(up_to_page as usize)
 				.for_each(|p| {
 					assert!(
 						exists ^ !Self::voters(p).is_some(),
@@ -723,7 +751,8 @@ pub mod pallet {
 			PagedTargetSnapshot::<T>::iter().count().saturated_into::<PageIndex>()
 		}
 
-		pub fn voters_iter() -> impl Iterator<Item = (PageIndex, RoundVoterSnapshotPage<T>)> {
+		pub fn voters_iter(
+		) -> impl Iterator<Item = (PageIndex, BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>)> {
 			PagedVoterSnapshot::<T>::iter()
 		}
 
@@ -768,14 +797,15 @@ pub mod pallet {
 	/// Paginated voter snapshot. At most [`T::Pages`] keys will exist.
 	#[pallet::storage]
 	type PagedVoterSnapshot<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, RoundVoterSnapshotPage<T>>;
+		StorageMap<_, Twox64Concat, PageIndex, BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>>;
 
 	/// Paginated target snapshot. At most ONE key will exist.
 	#[pallet::storage]
 	type PagedTargetSnapshot<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, RoundTargetSnapshotPage<T>>;
+		StorageMap<_, Twox64Concat, PageIndex, BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>>;
 
 	#[pallet::pallet]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
@@ -785,6 +815,7 @@ impl<T: Config> Pallet<T> {
 	/// Based on the contract of `ElectionDataProvider`, this is the first page that is filled.
 	fn msp() -> PageIndex {
 		T::Pages::get().checked_sub(1).unwrap_or_else(|| {
+			// TODO: Defensive Trait.
 			debug_assert!(false, "Integrity check must ensure that T::Pages is greater than 1");
 			log!(warn, "Integrity check must ensure that T::Pages is greater than 1");
 			Default::default()
@@ -848,37 +879,33 @@ impl<T: Config> Pallet<T> {
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?,
 		);
 
-		let limit = T::TargetSnapshotPerBlock::get().saturated_into::<usize>();
-		let targets = T::DataProvider::targets(Some(limit), 0).map_err(ElectionError::DataProvider)?;
+		let limit = Some(T::TargetSnapshotPerBlock::get().saturated_into::<usize>());
+		let targets: BoundedVec<_, T::TargetSnapshotPerBlock> = T::DataProvider::targets(limit, 0)
+			.and_then(|v| v.try_into().map_err(|_| "try-into failed"))
+			.map_err(ElectionError::DataProvider)?;
 
-		let length = targets.len();
-		if length > limit {
-			return Err(ElectionError::DataProvider("Snapshot too big."))
-		}
-
+		let count = targets.len() as u32;
 		Snapshot::<T>::set_targets(targets);
-		Snapshot::<T>::update_metadata(None, Some(length as u32));
-		log!(debug, "created target snapshot with {} targets.", length);
+		Snapshot::<T>::update_metadata(None, Some(count));
+		log!(debug, "created target snapshot with {} targets.", count);
 
-		Ok(length as u32)
+		Ok(count)
 	}
 
 	/// Creates the voter snapshot. Writes new data to:
 	///
 	/// Returns `Ok(num_created)` if operation is okay.
 	pub fn create_voters_snapshot_paged(remaining: PageIndex) -> Result<u32, ElectionError<T>> {
-		let limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
-		let voters = T::DataProvider::voters(Some(limit), remaining)
-			.map_err(ElectionError::DataProvider)?;
-
-		// Defensive-only.
-		if voters.len() > limit {
-			return Err(ElectionError::DataProvider("Snapshot too big."))
-		}
+		let limit = Some(T::VoterSnapshotPerBlock::get().saturated_into::<usize>());
+		let voters: BoundedVec<_, T::VoterSnapshotPerBlock> =
+			T::DataProvider::voters(limit, remaining)
+				.and_then(|v| v.try_into().map_err(|_| "try-into failed"))
+				.map_err(ElectionError::DataProvider)?;
 
 		let count = voters.len() as u32;
 		Snapshot::<T>::set_voters(remaining, voters);
 		Snapshot::<T>::update_metadata(Some(count), None);
+		log!(debug, "created voter snapshot with {} voters, {} remaining.", count, remaining);
 
 		Ok(count)
 	}
@@ -915,12 +942,32 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T>
+where
+	T::Fallback: ElectionProvider<
+		T::AccountId,
+		T::BlockNumber,
+		MaxBackingCountPerTarget = <T::Verifier as Verifier>::MaxBackingCountPerTarget,
+		MaxSupportsPerPage = <T::Verifier as Verifier>::MaxSupportsPerPage,
+	>,
+{
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 	type Pages = T::Pages;
+	type MaxSupportsPerPage = <T::Verifier as Verifier>::MaxSupportsPerPage;
+	type MaxBackingCountPerTarget = <T::Verifier as Verifier>::MaxBackingCountPerTarget;
 
-	fn elect(remaining: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect(
+		remaining: PageIndex,
+	) -> Result<
+		// TODO: once we make ElectionProvider not be generic, we can make a type alias for this as
+		// well.
+		BoundedVec<
+			(T::AccountId, BoundedSupport<T::AccountId, Self::MaxBackingCountPerTarget>),
+			Self::MaxSupportsPerPage,
+		>,
+		Self::Error,
+	> {
 		T::Verifier::get_queued_solution_page(remaining)
 			.ok_or(ElectionError::SupportPageNotAvailable)
 			.or_else(|err| {

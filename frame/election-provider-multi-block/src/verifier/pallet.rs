@@ -16,10 +16,10 @@
 // limitations under the License.
 
 use crate::{helpers, SolutionOf};
-use frame_election_provider_support::{ExtendedBalance, PageIndex, Support, Supports};
+use frame_election_provider_support::{ExtendedBalance, PageIndex, Support};
 use sp_npos_elections::{ElectionScore, EvaluateSupport, NposSolution};
-use sp_runtime::traits::{CheckedSub, One, SaturatedConversion};
-use std::{collections::BTreeMap, fmt::Debug};
+use sp_runtime::traits::One;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use super::FeasibilityError;
 use frame_support::{ensure, traits::Get};
@@ -35,7 +35,10 @@ pub use pallet::{Config, Error, Event, Pallet, __substrate_event_check};
 
 #[frame_support::pallet]
 mod pallet {
-	use crate::{types::Pagify, verifier::Verifier, Snapshot};
+	use crate::{
+		types::{Pagify, SupportsOf},
+		verifier::Verifier,
+	};
 
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -63,7 +66,11 @@ mod pallet {
 		/// This must be set such that the memory limits in the rest of the system are well
 		/// respected.
 		// TODO: base miner should be tweaked to respect this.
-		type MaxBackingCountPerTarget: Get<u32>;
+		type MaxBackingCountPerTarget: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
+
+		/// Maximum number of supports (aka. winners/validators/targets) that can be represented in
+		/// a page of results.
+		type MaxSupportsPerPage: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
 	}
 
 	#[pallet::error]
@@ -205,7 +212,7 @@ mod pallet {
 	#[pallet::storage]
 	type VerifyingSolutionScore<T: Config> = StorageValue<_, ElectionScore>;
 
-	#[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy)]
+	#[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy, MaxEncodedLen)]
 	enum ValidSolution {
 		X,
 		Y,
@@ -241,9 +248,10 @@ mod pallet {
 		/// should never become `valid`.
 		pub(crate) fn final_score() -> Result<(ElectionScore, u32), FeasibilityError> {
 			// TODO: this could be made into a proper error.
+			// TODO: integrate counted map types
 			debug_assert_eq!(
-				QueuedSolutionBackings::<T>::iter_keys().count() as u8,
-				T::Pages::get()
+				QueuedSolutionBackings::<T>::iter_keys().count(),
+				T::Pages::get() as usize
 			);
 
 			let mut total_supports: BTreeMap<T::AccountId, (ExtendedBalance, u32)> =
@@ -336,17 +344,13 @@ mod pallet {
 		/// This is called after *a page* has been validated, but the entire solution is not yet
 		/// known to be valid. At this stage, we write to the invalid variant. Once all pages are
 		/// verified, a call to [`finalize_correct`] will seal the correct pages.
-		pub(crate) fn set_invalid_page(page: PageIndex, supports: Supports<T::AccountId>) {
-			log!(
-				trace,
-				"setting verified supports in the invalid variant page {}: {:?}",
-				page,
-				supports
-			);
-			let backings = supports
+		pub(crate) fn set_invalid_page(page: PageIndex, supports: SupportsOf<Pallet<T>>) {
+			let backings: BoundedVec<_, T::MaxSupportsPerPage> = supports
 				.iter()
-				.map(|(x, s)| (x, (s.total, s.voters.len() as u32)))
-				.collect::<Vec<_>>();
+				.map(|(x, s)| (x.clone(), (s.total, s.voters.len() as u32)))
+				.collect::<Vec<_>>()
+				.try_into() // TODO: would be good if we could directly collect into a BoundedVec
+				.expect("TODO");
 			QueuedSolutionBackings::<T>::insert(page, backings);
 
 			match Self::invalid() {
@@ -359,7 +363,7 @@ mod pallet {
 		///
 		/// Writes all the given pages, and the provided score blindly.
 		pub(crate) fn force_set_valid(
-			paged_supports: Vec<Supports<T::AccountId>>,
+			paged_supports: BoundedVec<SupportsOf<Pallet<T>>, T::Pages>,
 			score: ElectionScore,
 		) {
 			// TODO: would be nice if we could consume `Vec<_>.pagify` as well, but rustc is not
@@ -381,7 +385,7 @@ mod pallet {
 		/// solution.
 		pub(crate) fn force_set_single_page_valid(
 			page: PageIndex,
-			supports: Supports<T::AccountId>,
+			supports: SupportsOf<Pallet<T>>,
 			score: ElectionScore,
 		) {
 			// clear everything about valid solutions.
@@ -414,7 +418,7 @@ mod pallet {
 		}
 
 		/// Get a page of the current queued (aka valid) solution.
-		pub(crate) fn get_queued_solution_page(page: PageIndex) -> Option<Supports<T::AccountId>> {
+		pub(crate) fn get_queued_solution_page(page: PageIndex) -> Option<SupportsOf<Pallet<T>>> {
 			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::get(page),
 				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
@@ -422,7 +426,7 @@ mod pallet {
 		}
 
 		#[cfg(test)]
-		pub(crate) fn valid_iter() -> impl Iterator<Item = (PageIndex, Supports<T::AccountId>)> {
+		pub(crate) fn valid_iter() -> impl Iterator<Item = (PageIndex, SupportsOf<Pallet<T>>)> {
 			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::iter(),
 				ValidSolution::Y => QueuedSolutionY::<T>::iter(),
@@ -430,7 +434,7 @@ mod pallet {
 		}
 
 		#[cfg(test)]
-		pub(crate) fn invalid_iter() -> impl Iterator<Item = (PageIndex, Supports<T::AccountId>)> {
+		pub(crate) fn invalid_iter() -> impl Iterator<Item = (PageIndex, SupportsOf<Pallet<T>>)> {
 			match Self::invalid() {
 				ValidSolution::X => QueuedSolutionX::<T>::iter(),
 				ValidSolution::Y => QueuedSolutionY::<T>::iter(),
@@ -438,7 +442,7 @@ mod pallet {
 		}
 
 		#[cfg(test)]
-		pub(crate) fn get_invalid_page(page: PageIndex) -> Option<Supports<T::AccountId>> {
+		pub(crate) fn get_invalid_page(page: PageIndex) -> Option<SupportsOf<Pallet<T>>> {
 			match Self::invalid() {
 				ValidSolution::X => QueuedSolutionX::<T>::get(page),
 				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
@@ -446,7 +450,7 @@ mod pallet {
 		}
 
 		#[cfg(test)]
-		pub(crate) fn get_valid_page(page: PageIndex) -> Option<Supports<T::AccountId>> {
+		pub(crate) fn get_valid_page(page: PageIndex) -> Option<SupportsOf<Pallet<T>>> {
 			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::get(page),
 				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
@@ -485,12 +489,10 @@ mod pallet {
 	/// Writing them to a bugger and copying at the ned is slightly better, but expensive. This flag
 	/// system is best of both worlds.
 	#[pallet::storage]
-	type QueuedSolutionX<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, Supports<T::AccountId>>;
+	type QueuedSolutionX<T: Config> = StorageMap<_, Twox64Concat, PageIndex, SupportsOf<Pallet<T>>>;
 	#[pallet::storage]
 	/// The `Y` variant of the current queued solution. Might be the valid one or not.
-	type QueuedSolutionY<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, Supports<T::AccountId>>;
+	type QueuedSolutionY<T: Config> = StorageMap<_, Twox64Concat, PageIndex, SupportsOf<Pallet<T>>>;
 	/// Pointer to the variant of [`QueuedSolutionX`] or [`QueuedSolutionY`] that is currently
 	/// valid.
 	#[pallet::storage]
@@ -503,13 +505,13 @@ mod pallet {
 	/// This can only ever live for the invalid variant of the solution. Once it is valid, we don't
 	/// need this information anymore; the score is already computed once in
 	/// [`QueuedSolutionScore`], and the backing counts are checked.
-	// NOTES: the length of the vector is no more than the total number of targets. this the number
-	// is bounded and relatively small. Storing one balance and one count per each, per page should
-	// not break anything.
-	// TODO: move this already to BoundedVec.
 	#[pallet::storage]
-	type QueuedSolutionBackings<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, Vec<(T::AccountId, (ExtendedBalance, u32))>>;
+	type QueuedSolutionBackings<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		PageIndex,
+		BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxSupportsPerPage>,
+	>;
 
 	/// The score of the valid variant of [`QueuedSolution`].
 	///
@@ -528,6 +530,7 @@ mod pallet {
 	type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
 
 	#[pallet::pallet]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]
@@ -558,18 +561,23 @@ mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_solution(
 			origin: OriginFor<T>,
-			paged_supports: Vec<Supports<T::AccountId>>,
+			paged_supports: Vec<sp_npos_elections::Supports<T::AccountId>>,
 			claimed_score: ElectionScore,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			ensure!(crate::Pallet::<T>::current_phase().is_emergency(), Error::<T>::CallNotAllowed);
-			ensure!(
-				paged_supports.len().saturated_into::<PageIndex>() == T::Pages::get(),
-				<crate::Error<T>>::WrongPageCount,
-			);
 
-			QueuedSolution::<T>::force_set_valid(paged_supports, claimed_score);
+			use frame_election_provider_support::TryIntoBoundedSupports;
+			let bounded_supports = paged_supports
+				.into_iter()
+				.map(|s| s.try_into_bounded_supports())
+				.collect::<Result<Vec<_>, _>>()
+				.map_err::<DispatchError, _>(|_| "wrong support others".into())?
+				.try_into()
+				.map_err(|_| <crate::Error<T>>::WrongPageCount)?;
+
+			QueuedSolution::<T>::force_set_valid(bounded_supports, claimed_score);
 
 			Ok(())
 		}
@@ -693,7 +701,7 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn feasibility_check_page_inner(
 		partial_solution: SolutionOf<T>,
 		page: PageIndex,
-	) -> Result<Supports<T::AccountId>, FeasibilityError> {
+	) -> Result<crate::verifier::SupportsOf<Self>, FeasibilityError> {
 		// Read the corresponding snapshots.
 		let snapshot_targets =
 			crate::Snapshot::<T>::targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
@@ -701,7 +709,7 @@ impl<T: Config> Pallet<T> {
 			crate::Snapshot::<T>::voters(page).ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		// ----- Start building. First, we need some closures.
-		let cache = helpers::generate_voter_cache::<T>(&snapshot_voters);
+		let cache = helpers::generate_voter_cache_bounded::<T>(&snapshot_voters);
 		let voter_at = helpers::voter_at_fn::<T>(&snapshot_voters);
 		let target_at = helpers::target_at_fn::<T>(&snapshot_targets);
 		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
@@ -748,7 +756,8 @@ impl<T: Config> Pallet<T> {
 
 		let supports = sp_npos_elections::to_supports(&staked_assignments);
 
-		// ensure some heuristics
+		// Ensure some heuristics. These conditions must hold in the **entire** support, this is
+		// just a single page. But, they must hold in a single page as well.
 		let desired_targets =
 			crate::Snapshot::<T>::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 		ensure!((supports.len() as u32) <= desired_targets, FeasibilityError::WrongWinnerCount);
@@ -759,7 +768,9 @@ impl<T: Config> Pallet<T> {
 			FeasibilityError::TooManyBackings
 		);
 
-		Ok(supports)
+		use frame_election_provider_support::TryIntoBoundedSupports;
+		let bounded_supports = supports.try_into_bounded_supports().unwrap();
+		Ok(bounded_supports)
 	}
 
 	#[cfg(test)]
