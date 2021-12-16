@@ -42,6 +42,3 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 thiserror = "1.0.30"
-
-[features]
-use-state-v0 = ["sp-api/use-state-v0"]
