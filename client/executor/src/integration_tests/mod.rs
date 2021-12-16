@@ -220,9 +220,12 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 		let mut ext = ext.ext();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 
+		// Test value must be bigger than 32 bytes
+		// to test the trie versioning.
+		let value = vec![7u8; 60];
 		let output = call_in_wasm(
 			"test_data_in",
-			&b"Hello worldHello worldHello worldHello world".to_vec().encode(),
+			value.encode(),
 			wasm_method,
 			&mut ext,
 		)
@@ -233,7 +236,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 
 	let expected = TestExternalities::new(sp_core::storage::Storage {
 		top: map![
-			b"input".to_vec() => b"Hello worldHello worldHello worldHello world".to_vec(),
+			b"input".to_vec() => value,
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		],
