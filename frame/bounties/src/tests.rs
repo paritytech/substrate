@@ -58,7 +58,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const MaximumBlockWeight: Weight = 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
