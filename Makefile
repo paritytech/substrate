@@ -6,7 +6,7 @@
 .PHONY: all bootnode
 
 substrate:
-	cargo build --bin substrate --release
+	SKIP_WASM_BUILD=1 cargo build --bin substrate --release
 
 all:
 	cargo build --release
