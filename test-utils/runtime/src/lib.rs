@@ -606,7 +606,7 @@ parameter_types! {
 }
 
 impl pallet_babe::Config for Runtime {
-	type EpochDuration = ConstU64<6>;
+	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ConstU64<10_000>;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
