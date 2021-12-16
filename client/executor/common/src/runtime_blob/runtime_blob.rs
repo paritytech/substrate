@@ -124,11 +124,6 @@ impl RuntimeBlob {
 				_ => continue,
 			};
 
-			// Theoretically these can be anything, although I haven't seen any WASM blob where they
-			// are different than these.
-			debug_assert_eq!(entry.module(), "env");
-			debug_assert_eq!(entry.field(), "memory");
-
 			let memory_name = entry.field().to_owned();
 			let min = old_memory_ty.limits().initial().saturating_add(extra_heap_pages);
 			let max = old_memory_ty.limits().maximum().map(|max| std::cmp::max(min, max));
