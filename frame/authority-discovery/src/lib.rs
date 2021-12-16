@@ -173,7 +173,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authority_discovery;
-	use frame_support::{parameter_types, traits::GenesisBuild};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64, GenesisBuild},
+	};
 	use sp_application_crypto::Pair;
 	use sp_authority_discovery::AuthorityPair;
 	use sp_core::{crypto::key_types, H256};
@@ -201,11 +204,10 @@ mod tests {
 
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
-		pub const MaxAuthorities: u32 = 100;
 	}
 
 	impl Config for Test {
-		type MaxAuthorities = MaxAuthorities;
+		type MaxAuthorities = ConstU32<100>;
 	}
 
 	impl pallet_session::Config for Test {
@@ -230,8 +232,6 @@ mod tests {
 	parameter_types! {
 		pub const Period: BlockNumber = 1;
 		pub const Offset: BlockNumber = 0;
-		pub const UncleGenerations: u64 = 0;
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -251,7 +251,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -260,7 +260,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	pub struct TestSessionHandler;

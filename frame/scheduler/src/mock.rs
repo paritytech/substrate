@@ -22,7 +22,9 @@ use super::*;
 use crate as scheduler;
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{Contains, EnsureOneOf, EqualPrivilegeOnly, OnFinalize, OnInitialize},
+	traits::{
+		ConstU32, ConstU64, Contains, EnsureOneOf, EqualPrivilegeOnly, OnFinalize, OnInitialize,
+	},
 	weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -116,7 +118,6 @@ impl Contains<Call> for BaseFilter {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
 }
@@ -135,7 +136,7 @@ impl system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -144,15 +145,13 @@ impl system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 impl logger::Config for Test {
 	type Event = Event;
 }
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
-	pub const MaxScheduledPerBlock: u32 = 10;
-	pub const MaxSize: u32 = 1024;
 	pub const NoPreimagePostponement: Option<u64> = Some(2);
 }
 ord_parameter_types! {
@@ -164,7 +163,7 @@ impl pallet_preimage::Config for Test {
 	type WeightInfo = ();
 	type Currency = ();
 	type ManagerOrigin = EnsureRoot<u64>;
-	type MaxSize = MaxSize;
+	type MaxSize = ConstU32<1024>;
 	type BaseDeposit = ();
 	type ByteDeposit = ();
 }
@@ -176,7 +175,7 @@ impl Config for Test {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-	type MaxScheduledPerBlock = MaxScheduledPerBlock;
+	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
 	type PreimageProvider = Preimage;

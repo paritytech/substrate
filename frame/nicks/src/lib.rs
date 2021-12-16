@@ -245,7 +245,10 @@ mod tests {
 	use super::*;
 	use crate as pallet_nicks;
 
-	use frame_support::{assert_noop, assert_ok, ord_parameter_types, parameter_types};
+	use frame_support::{
+		assert_noop, assert_ok, ord_parameter_types, parameter_types,
+		traits::{ConstU32, ConstU64},
+	};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
 	use sp_runtime::{
@@ -269,7 +272,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -288,7 +290,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -297,11 +299,9 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-	}
+
 	impl pallet_balances::Config for Test {
 		type MaxLocks = ();
 		type MaxReserves = ();
@@ -309,26 +309,22 @@ mod tests {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type WeightInfo = ();
 	}
-	parameter_types! {
-		pub const ReservationFee: u64 = 2;
-		pub const MinLength: u32 = 3;
-		pub const MaxLength: u32 = 16;
-	}
+
 	ord_parameter_types! {
 		pub const One: u64 = 1;
 	}
 	impl Config for Test {
 		type Event = Event;
 		type Currency = Balances;
-		type ReservationFee = ReservationFee;
+		type ReservationFee = ConstU64<2>;
 		type Slashed = ();
 		type ForceOrigin = EnsureSignedBy<One, u64>;
-		type MinLength = MinLength;
-		type MaxLength = MaxLength;
+		type MinLength = ConstU32<3>;
+		type MaxLength = ConstU32<16>;
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {

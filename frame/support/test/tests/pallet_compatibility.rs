@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use frame_support::traits::{ConstU32, ConstU64};
+
 pub trait SomeAssociation {
 	type A: frame_support::dispatch::Parameter + Default;
 }
@@ -217,11 +219,6 @@ pub mod pallet {
 	}
 }
 
-frame_support::parameter_types!(
-	pub const SomeConst: u64 = 10;
-	pub const BlockHashCount: u32 = 250;
-);
-
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
@@ -234,7 +231,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -246,16 +243,16 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config for Runtime {
 	type Event = Event;
-	type SomeConst = SomeConst;
+	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 
