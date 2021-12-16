@@ -90,21 +90,24 @@
 //!
 //!     pub trait Config: Sized {
 //!         type ElectionProvider: ElectionProvider<
-//!             AccountId = Self::AccountId,
-//!             BlockNumber = Self::BlockNumber,
-//!             DataProvider = Module<Self>,
+//!             AccountId = AccountId,
+//!             BlockNumber = BlockNumber,
+//!             DataProvider = Pallet<Self>,
 //!         >;
 //!     }
 //!
-//!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
+//!     pub struct Pallet<T: Config>(std::marker::PhantomData<T>);
 //!
-//!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
+//!     impl<T: Config> ElectionDataProvider for Pallet<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
 //!         const MAXIMUM_VOTES_PER_VOTER: u32 = 1;
+//!
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
 //!         fn voters(maybe_max_len: Option<usize>)
-//!         -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
+//!           -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
 //!         {
 //!             Ok(Default::default())
 //!         }
@@ -124,12 +127,12 @@
 //!     pub struct GenericElectionProvider<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     pub trait Config {
-//!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+//!         type DataProvider: ElectionDataProvider<AccountId=AccountId, BlockNumber = BlockNumber>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
-//!         type AccountId = u32;
-//!         type BlockNumber = u32;
+//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!
@@ -148,7 +151,7 @@
 //!
 //!     struct Runtime;
 //!     impl generic_election_provider::Config for Runtime {
-//!         type DataProvider = data_provider_mod::Module<Runtime>;
+//!         type DataProvider = data_provider_mod::Pallet<Runtime>;
 //!     }
 //!
 //!     impl data_provider_mod::Config for Runtime {
