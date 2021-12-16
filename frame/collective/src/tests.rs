@@ -18,7 +18,10 @@
 use super::{Event as CollectiveEvent, *};
 use crate as pallet_collective;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types, traits::GenesisBuild, weights::Pays, Hashable,
+	assert_noop, assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+	weights::Pays,
+	Hashable,
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::{
@@ -83,11 +86,11 @@ mod mock_democracy {
 	}
 }
 
+pub type MaxMembers = ConstU32<100>;
+
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 100;
-	pub const MaxMembers: u32 = 100;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -106,7 +109,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -115,13 +118,13 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 impl Config<Instance1> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = MotionDuration;
+	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
@@ -131,7 +134,7 @@ impl Config<Instance2> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = MotionDuration;
+	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
@@ -145,7 +148,7 @@ impl Config for Test {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
-	type MotionDuration = MotionDuration;
+	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;

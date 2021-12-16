@@ -24,6 +24,7 @@ use crate::Config;
 use codec::Encode;
 use frame_support::{
 	parameter_types,
+	traits::{ConstU32, ConstU64},
 	weights::{
 		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
 		Weight,
@@ -84,7 +85,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
@@ -103,7 +103,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -112,7 +112,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl Config for Runtime {

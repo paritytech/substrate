@@ -90,21 +90,24 @@
 //!
 //!     pub trait Config: Sized {
 //!         type ElectionProvider: ElectionProvider<
-//!             AccountId,
-//!             BlockNumber,
-//!             DataProvider = Module<Self>,
+//!             AccountId = AccountId,
+//!             BlockNumber = BlockNumber,
+//!             DataProvider = Pallet<Self>,
 //!         >;
 //!     }
 //!
-//!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
+//!     pub struct Pallet<T: Config>(std::marker::PhantomData<T>);
 //!
-//!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
+//!     impl<T: Config> ElectionDataProvider for Pallet<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
 //!         const MAXIMUM_VOTES_PER_VOTER: u32 = 1;
+//!
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
 //!         fn voters(maybe_max_len: Option<usize>)
-//!         -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
+//!           -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
 //!         {
 //!             Ok(Default::default())
 //!         }
@@ -124,10 +127,12 @@
 //!     pub struct GenericElectionProvider<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     pub trait Config {
-//!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+//!         type DataProvider: ElectionDataProvider<AccountId=AccountId, BlockNumber = BlockNumber>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
+//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!
@@ -146,7 +151,7 @@
 //!
 //!     struct Runtime;
 //!     impl generic_election_provider::Config for Runtime {
-//!         type DataProvider = data_provider_mod::Module<Runtime>;
+//!         type DataProvider = data_provider_mod::Pallet<Runtime>;
 //!     }
 //!
 //!     impl data_provider_mod::Config for Runtime {
@@ -178,7 +183,13 @@ pub mod data_provider {
 }
 
 /// Something that can provide the data to an [`ElectionProvider`].
-pub trait ElectionDataProvider<AccountId, BlockNumber> {
+pub trait ElectionDataProvider {
+	/// The account identifier type.
+	type AccountId;
+
+	/// The block number type.
+	type BlockNumber;
+
 	/// Maximum number of votes per voter that this data provider is providing.
 	const MAXIMUM_VOTES_PER_VOTER: u32;
 
@@ -189,7 +200,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>>;
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<Self::AccountId>>;
 
 	/// All possible voters for the election.
 	///
@@ -202,7 +213,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>;
+	) -> data_provider::Result<Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>>;
 
 	/// The number of targets to elect.
 	///
@@ -216,14 +227,14 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// [`ElectionProvider::elect`].
 	///
 	/// This is only useful for stateful election providers.
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber;
+	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber;
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
-		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		_targets: Vec<AccountId>,
+		_voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		_targets: Vec<Self::AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
 	}
@@ -233,22 +244,29 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_voter(_voter: AccountId, _weight: VoteWeight, _targets: Vec<AccountId>) {}
+	fn add_voter(_voter: Self::AccountId, _weight: VoteWeight, _targets: Vec<Self::AccountId>) {}
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_target(_target: AccountId) {}
+	fn add_target(_target: Self::AccountId) {}
 
 	/// Clear all voters and targets.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn clear() {}
 }
 
+/// An election data provider that should only be used for testing.
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
+pub struct TestDataProvider<X>(sp_std::marker::PhantomData<X>);
+
+#[cfg(feature = "std")]
+impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountId, BlockNumber)> {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+
 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
 	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
@@ -271,12 +289,21 @@ impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for ()
 /// This trait only provides an interface to _request_ an election, i.e.
 /// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
-pub trait ElectionProvider<AccountId, BlockNumber> {
+pub trait ElectionProvider {
+	/// The account identifier type.
+	type AccountId;
+
+	/// The block number type.
+	type BlockNumber;
+
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
 	/// The data provider of the election.
-	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+	type DataProvider: ElectionDataProvider<
+		AccountId = Self::AccountId,
+		BlockNumber = Self::BlockNumber,
+	>;
 
 	/// Elect a new set of winners.
 	///
@@ -284,16 +311,22 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect() -> Result<Supports<AccountId>, Self::Error>;
+	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
+/// An election provider to be used only for testing.
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
+pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
+
+#[cfg(feature = "std")]
+impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNumber)> {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
 	type Error = &'static str;
-	type DataProvider = ();
+	type DataProvider = TestDataProvider<(AccountId, BlockNumber)>;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Err("<() as ElectionProvider> cannot do anything.")
+		Err("<NoElection as ElectionProvider> cannot do anything.")
 	}
 }
 

@@ -289,7 +289,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<Snapshot<T>>::get().is_some());
 		assert!(<SnapshotMetadata<T>>::get().is_some());
 	}: {
-		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
+		assert_ok!(<MultiPhase<T> as ElectionProvider>::elect());
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		assert!(<DesiredTargets<T>>::get().is_none());
