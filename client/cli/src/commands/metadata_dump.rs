@@ -33,7 +33,7 @@ use std::{
 };
 use structopt::StructOpt;
 
-/// The `metadata-dump` command used to dump the metadata of the runtime.
+/// The `metadata dump` sub-command used to dump the metadata of the runtime.
 #[derive(Debug, StructOpt, Clone)]
 pub struct MetadataDump {
 	/// Output file name or stdout if unspecified.
