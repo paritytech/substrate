@@ -147,7 +147,7 @@ impl RuntimeBlob {
 				.entries_mut()
 				.push(ExportEntry::new(memory_name, Internal::Memory(0)));
 
-			return
+			break
 		}
 	}
 
