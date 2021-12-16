@@ -169,7 +169,7 @@ mod tests {
 
 	use frame_support::{
 		parameter_types,
-		traits::{OnInitialize, Randomness},
+		traits::{ConstU32, ConstU64, OnInitialize, Randomness},
 	};
 	use frame_system::limits;
 
@@ -188,7 +188,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
 			::simple_max(1024);
 		pub BlockLength: limits::BlockLength = limits::BlockLength
@@ -210,7 +209,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -219,7 +218,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet_randomness_collective_flip::Config for Test {}

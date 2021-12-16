@@ -19,7 +19,7 @@ use crate as pallet_mmr;
 use crate::*;
 
 use codec::{Decode, Encode};
-use frame_support::parameter_types;
+use frame_support::traits::{ConstU32, ConstU64};
 use pallet_mmr_primitives::{Compact, LeafDataProvider};
 use sp_core::H256;
 use sp_runtime::{
@@ -42,9 +42,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
@@ -57,7 +54,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -69,7 +66,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl Config for Test {

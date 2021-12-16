@@ -19,12 +19,12 @@ codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive
 prometheus = { version = "0.10.0-dev", package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" }
 
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
-sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
+sp-application-crypto = { version = "4.0.0", path = "../../primitives/application-crypto" }
+sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }

@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 # Needed for various traits. In our case, `OnFinalize`.
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 # Needed for type-safe access to storage DB.
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
@@ -27,7 +27,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 [dev-dependencies]
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-std = { version = "4.0.0", path = "../../primitives/std" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-io = { version = "4.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]

@@ -405,7 +405,11 @@ impl<T: Config> Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authorship;
-	use frame_support::{parameter_types, ConsensusEngineId};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64},
+		ConsensusEngineId,
+	};
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::DigestItem,
@@ -428,7 +432,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -448,7 +451,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -457,16 +460,12 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
-	}
-
-	parameter_types! {
-		pub const UncleGenerations: u64 = 5;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet::Config for Test {
 		type FindAuthor = AuthorGiven;
-		type UncleGenerations = UncleGenerations;
+		type UncleGenerations = ConstU64<5>;
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}

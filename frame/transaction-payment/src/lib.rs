@@ -789,7 +789,7 @@ mod tests {
 
 	use frame_support::{
 		assert_noop, assert_ok, parameter_types,
-		traits::{Currency, Imbalance, OnUnbalanced},
+		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
 		weights::{
 			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
 			WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
@@ -836,7 +836,6 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub static TransactionByteFee: u64 = 1;
 		pub static WeightToFee: u64 = 1;
 		pub static OperationalFeeMultiplier: u8 = 5;
@@ -857,7 +856,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -866,18 +865,14 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
-	}
-
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet_balances::Config for Runtime {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type MaxLocks = ();
 		type MaxReserves = ();

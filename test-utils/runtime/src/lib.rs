@@ -38,7 +38,7 @@ use trie_db::{Trie, TrieMut};
 use cfg_if::cfg_if;
 use frame_support::{
 	parameter_types,
-	traits::{CrateVersion, KeyOwnerProofSystem},
+	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
 	weights::RuntimeDbWeight,
 };
 use frame_system::limits::{BlockLength, BlockWeights};
@@ -556,7 +556,6 @@ impl frame_support::traits::PalletInfo for Runtime {
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
-	pub const MinimumPeriod: u64 = 5;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 100,
 		write: 1000,
@@ -591,26 +590,24 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<5>;
 	type WeightInfo = ();
 }
 
 parameter_types! {
 	pub const EpochDuration: u64 = 6;
-	pub const ExpectedBlockTime: u64 = 10_000;
-	pub const MaxAuthorities: u32 = 10;
 }
 
 impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
-	type ExpectedBlockTime = ExpectedBlockTime;
+	type ExpectedBlockTime = ConstU64<10_000>;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
@@ -630,7 +627,7 @@ impl pallet_babe::Config for Runtime {
 	type HandleEquivocation = ();
 	type WeightInfo = ();
 
-	type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = ConstU32<10>;
 }
 
 /// Adds one to the given input and returns the final result.

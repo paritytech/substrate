@@ -348,35 +348,31 @@ where
 pub mod test {
 	use super::*;
 	use crate::Twox128;
+	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
-
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, Seven>>
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]
 	fn try_append_is_correct() {
-		assert_eq!(BoundedVec::<u32, Seven>::bound(), 7);
+		assert_eq!(BoundedVec::<u32, ConstU32<7>>::bound(), 7);
 	}
 
 	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -384,7 +380,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -395,7 +391,7 @@ pub mod test {
 
 	#[test]
 	fn try_insert_works() {
-		let mut bounded: BoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let mut bounded: BoundedVec<u32, ConstU32<4>> = vec![1, 2, 3].try_into().unwrap();
 		bounded.try_insert(1, 0).unwrap();
 		assert_eq!(*bounded, vec![1, 0, 2, 3]);
 
@@ -406,13 +402,13 @@ pub mod test {
 	#[test]
 	#[should_panic(expected = "insertion index (is 9) should be <= len (is 3)")]
 	fn try_inert_panics_if_oob() {
-		let mut bounded: BoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let mut bounded: BoundedVec<u32, ConstU32<4>> = vec![1, 2, 3].try_into().unwrap();
 		bounded.try_insert(9, 0).unwrap();
 	}
 
 	#[test]
 	fn try_push_works() {
-		let mut bounded: BoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let mut bounded: BoundedVec<u32, ConstU32<4>> = vec![1, 2, 3].try_into().unwrap();
 		bounded.try_push(0).unwrap();
 		assert_eq!(*bounded, vec![1, 2, 3, 0]);
 
@@ -421,7 +417,7 @@ pub mod test {
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+		let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -430,7 +426,7 @@ pub mod test {
 
 	#[test]
 	fn try_mutate_works() {
-		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
 		let bounded = bounded.try_mutate(|v| v.push(7)).unwrap();
 		assert_eq!(bounded.len(), 7);
 		assert!(bounded.try_mutate(|v| v.push(8)).is_none());
@@ -438,13 +434,13 @@ pub mod test {
 
 	#[test]
 	fn slice_indexing_works() {
-		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
 		assert_eq!(&bounded[0..=2], &[1, 2, 3]);
 	}
 
 	#[test]
 	fn vec_eq_works() {
-		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
 		assert_eq!(bounded, vec![1, 2, 3, 4, 5, 6]);
 	}
 
@@ -452,7 +448,7 @@ pub mod test {
 	fn too_big_vec_fail_to_decode() {
 		let v: Vec<u32> = vec![1, 2, 3, 4, 5];
 		assert_eq!(
-			BoundedVec::<u32, Four>::decode(&mut &v.encode()[..]),
+			BoundedVec::<u32, ConstU32<4>>::decode(&mut &v.encode()[..]),
 			Err("BoundedVec exceeds its limit".into()),
 		);
 	}

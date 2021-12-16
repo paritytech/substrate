@@ -22,7 +22,7 @@ smallvec = "1.7.0"
 
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core", default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
