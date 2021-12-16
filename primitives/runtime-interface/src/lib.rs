@@ -294,31 +294,6 @@ pub use sp_std;
 /// for the case when that would create a circular dependency. You usually _do not_ want to add
 /// this flag, as tracing doesn't cost you anything by default anyways (it is added as a no-op)
 /// but is super useful for debugging later.
-///
-/// # Feature patch
-///
-/// Using `feature_force_version`, one can keep using an old host function version by default
-/// in its runtime.
-/// This is usually only for patching runtime that requires additional steps before switching
-/// to a new host function.
-/// Syntax is:
-///
-/// ```
-/// #[sp_runtime_interface::runtime_interface(feature_force_version=use_state_v0,a_function,1)]
-/// trait RuntimeInterface {
-/// 		fn a_function(&mut self) {
-/// 		}
-///
-/// 		#[version(2)]
-/// 		fn a_function(&mut self) {
-/// 		}
-/// }
-/// ```
-///
-/// In this case, when feature `use_state_v0` (warning '-' are not supported in feature name) is
-/// defined, the host function for `RuntimeInterface::root` will be the version 1 even if later
-/// version exists. This functionality is currently only use for migration state and may be
-/// removed in the future.
 pub use sp_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]
