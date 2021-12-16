@@ -14,7 +14,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use frame_support::traits::{ConstU32, ConstU64};
+
 pub trait SomeAssociation {
 	type A: frame_support::dispatch::Parameter + Default;
 }
