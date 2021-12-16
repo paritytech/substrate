@@ -97,7 +97,7 @@ pub enum KillStorageResult {
 	SomeRemaining(u32),
 }
 
-#[cfg(not(feature = "use_state_v0"))]
+#[cfg(not(feature = "use-state-v0"))]
 /// Interface for accessing the storage from within the runtime.
 #[runtime_interface]
 pub trait Storage {
@@ -257,7 +257,7 @@ pub trait Storage {
 	}
 }
 
-#[cfg(feature = "use_state_v0")]
+#[cfg(feature = "use-state-v0")]
 /// Interface for accessing the storage from within the runtime.
 #[runtime_interface]
 pub trait Storage {
@@ -407,7 +407,7 @@ pub trait Storage {
 	}
 }
 	
-#[cfg(not(feature = "use_state_v0"))]
+#[cfg(not(feature = "use-state-v0"))]
 /// Interface for accessing the child storage for default child trie,
 /// from within the runtime.
 #[runtime_interface]
@@ -559,7 +559,7 @@ pub trait DefaultChildStorage {
 	}
 }
 
-#[cfg(feature = "use_state_v0")]
+#[cfg(feature = "use-state-v0")]
 /// Interface for accessing the child storage for default child trie,
 /// from within the runtime.
 #[runtime_interface]

@@ -693,7 +693,7 @@ impl From<RuntimeVersion> for OldRuntimeVersion {
 	}
 }
 
-#[cfg(not(feature = "use_state_v0"))]
+#[cfg(not(feature = "use-state-v0"))]
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
@@ -718,9 +718,9 @@ decl_runtime_apis! {
 	}
 }
 
-// With feature 'use_state_v0' we keep core version to 3, so trie layout
+// With feature 'use-state-v0' we keep core version to 3, so trie layout
 // V0 keeps being used for the runtime.
-#[cfg(feature = "use_state_v0")]
+#[cfg(feature = "use-state-v0")]
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]

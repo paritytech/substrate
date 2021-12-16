@@ -59,4 +59,4 @@ std = [
 	"hash256-std-hasher/std",
 	"either/use_std",
 ]
-use_state_v0 = ["sp-io/use_state_v0"]
+use-state-v0 = ["sp-io/use-state-v0"]
