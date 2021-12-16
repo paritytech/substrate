@@ -328,30 +328,6 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	Ok(config)
 }
 
-fn setup_pooling(config: &wasmtime::Config) -> wasmtime::Config {
-	let mut config = config.clone();
-
-	config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
-		strategy: wasmtime::PoolingAllocationStrategy::NextAvailable,
-		module_limits: wasmtime::ModuleLimits {
-			imported_functions: 1000,
-			imported_tables: 1,
-			imported_memories: 1,
-			imported_globals: 100,
-			types: 1000,
-			functions: 5000,
-			tables: 1,
-			memories: 1,
-			globals: 100,
-			table_elements: 1000,
-			memory_pages: 4096,
-		},
-		instance_limits: wasmtime::InstanceLimits { count: 4 },
-	});
-
-	config
-}
-
 /// Knobs for deterministic stack height limiting.
 ///
 /// The WebAssembly standard defines a call/value stack but it doesn't say anything about its
@@ -543,29 +519,27 @@ where
 {
 	// Create the engine, store and finally the module from the given code.
 	let mut wasmtime_config = common_config(&config.semantics)?;
-	let mut wasmtime_config_with_pooling = setup_pooling(&wasmtime_config);
 	if let Some(ref cache_path) = config.cache_path {
 		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
 			log::warn!(
 				"failed to setup wasmtime cache. Performance may degrade significantly: {}.",
 				reason,
 			);
-		} else {
-			let _ = setup_wasmtime_caching(cache_path, &mut wasmtime_config_with_pooling);
 		}
 	}
 
-	let mut engine = Engine::new(&wasmtime_config_with_pooling).map_err(|e| {
-		WasmError::Other(format!("cannot create the wasmtime engine (with pooling): {}", e))
-	})?;
+	let engine = Engine::new(&wasmtime_config)
+		.map_err(|e| WasmError::Other(format!("cannot create the wasmtime engine: {}", e)))?;
 
 	let (module, snapshot_data) = match code_supply_mode {
 		CodeSupplyMode::Verbatim { blob } => {
 			let mut blob = instrument(blob, &config.semantics)?;
 
-			// This is necessary so that `wasmtime`'s instance pooling works, as imported memories
-			// are ineligible to be pooled. And since we don't actually need the memory to be
-			// imported we can just convert any memory import into an export with impunity.
+			// We don't actually need the memory to be imported so we can just convert any memory
+			// import into an export with imputiny. This simplifies our code since `wasmtime` will
+			// now automatically take care of creating the memory for us, and it also allows us
+			// to potentially enable `wasmtime`'s instance pooling at a later date. (Imported
+			// memories are ineligible for pooling.)
 			blob.convert_memory_import_into_export(
 				config
 					.heap_pages
@@ -575,29 +549,8 @@ where
 
 			let serialized_blob = blob.clone().serialize();
 
-			let mut module = wasmtime::Module::new(&engine, &serialized_blob);
-			if let Err(error) = module {
-				// When configured for pooling we must specify strict resource limits within which
-				// the runtime has to fit. If for some reason the runtime exceeds those limits
-				// creating a new module will fail.
-				//
-				// We don't really want to brick ourselves just because the runtime accidentally
-				// exceeded them, so we'll try again, just without the pooling, at the cost of a
-				// slight slowdown at runtime.
-				engine = Engine::new(&wasmtime_config).map_err(|e| {
-					WasmError::Other(format!(
-						"cannot create the wasmtime engine (without pooling): {}",
-						e
-					))
-				})?;
-
-				module = wasmtime::Module::new(&engine, &serialized_blob);
-				if module.is_ok() {
-					log::warn!("Failed to create a wasmtime module with pooling: {}", error);
-				}
-			}
-			let module =
-				module.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
+			let module = wasmtime::Module::new(&engine, &serialized_blob)
+				.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
 			if config.semantics.fast_instance_reuse {
 				let data_segments_snapshot = DataSegmentsSnapshot::take(&blob).map_err(|e| {
