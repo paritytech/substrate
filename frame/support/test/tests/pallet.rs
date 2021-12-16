@@ -1373,6 +1373,16 @@ fn metadata() {
 		},
 	];
 
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty()
+		&& pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty()
+		&& pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+
+	if cfg!(feature = "no-metadata-docs") {
+		assert!(empty_doc)
+	} else {
+		assert!(!empty_doc)
+	}
+
 	let extrinsic = ExtrinsicMetadata {
 		ty: meta_type::<UncheckedExtrinsic>(),
 		version: 4,
