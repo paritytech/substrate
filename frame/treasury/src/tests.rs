@@ -120,7 +120,7 @@ impl Config for Test {
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
-	type MaxApprovals = ConstU32<100>;
+	type MaxApprovals = MaxApprovals;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
