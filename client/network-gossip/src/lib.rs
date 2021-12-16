@@ -32,8 +32,8 @@
 //!
 //! # Usage
 //!
-//! - Implement the [`Network`] trait, representing the low-level networking primitives. It is already
-//!   implemented on `sc_network::NetworkService`.
+//! - Implement the [`Network`] trait, representing the low-level networking primitives. It is
+//!   already implemented on `sc_network::NetworkService`.
 //! - Implement the [`Validator`] trait. See the section below.
 //! - Decide on a protocol name. Each gossiping protocol should have a different one.
 //! - Build a [`GossipEngine`] using these three elements.
@@ -50,8 +50,8 @@
 //! The primary role of a [`Validator`] is to process incoming messages from peers, and decide
 //! whether to discard them or process them. It also decides whether to re-broadcast the message.
 //!
-//! The secondary role of the [`Validator`] is to check if a message is allowed to be sent to a given
-//! peer. All messages, before being sent, will be checked against this filter.
+//! The secondary role of the [`Validator`] is to check if a message is allowed to be sent to a
+//! given peer. All messages, before being sent, will be checked against this filter.
 //! This enables the validator to use information it's aware of about connected peers to decide
 //! whether to send messages to them at any given moment in time - In particular, to wait until
 //! peers can accept and process the message before sending it.
