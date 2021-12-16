@@ -34,7 +34,6 @@ use sp_core::{
 use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_trie::{trie_types::Layout, TrieConfiguration};
-use sp_wasm_interface::HostFunctions as _;
 use std::sync::Arc;
 use tracing_subscriber::layer::SubscriberExt;
 
@@ -124,14 +123,8 @@ fn call_in_wasm<E: Externalities>(
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
 ) -> Result<Vec<u8>, String> {
-	let executor = crate::WasmExecutor::new(
-		execution_method,
-		Some(1024),
-		HostFunctions::host_functions(),
-		8,
-		None,
-		2,
-	);
+	let executor =
+		crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None, 2);
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
 		ext,
@@ -475,10 +468,9 @@ test_wasm_execution!(should_trap_when_heap_exhausted);
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
-	let executor = crate::WasmExecutor::new(
+	let executor = crate::WasmExecutor::<HostFunctions>::new(
 		wasm_method,
 		Some(17), // `17` is the initial number of pages compiled into the binary.
-		HostFunctions::host_functions(),
 		8,
 		None,
 		2,
@@ -501,11 +493,10 @@ fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn Wasm
 	let blob = RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..])
 		.expect("failed to create a runtime blob out of test runtime");
 
-	crate::wasm_runtime::create_wasm_runtime_with_code(
+	crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
 		wasm_method,
 		pages,
 		blob,
-		HostFunctions::host_functions(),
 		true,
 		None,
 	)
@@ -589,10 +580,9 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(parallel_execution);
 fn parallel_execution(wasm_method: WasmExecutionMethod) {
-	let executor = std::sync::Arc::new(crate::WasmExecutor::new(
+	let executor = std::sync::Arc::new(crate::WasmExecutor::<HostFunctions>::new(
 		wasm_method,
 		Some(1024),
-		HostFunctions::host_functions(),
 		8,
 		None,
 		2,
@@ -763,11 +753,10 @@ fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 	 )
 	)"#).unwrap();
 
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
+	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
 		wasm_method,
 		1024,
 		RuntimeBlob::uncompress_if_needed(&binary[..]).unwrap(),
-		HostFunctions::host_functions(),
 		true,
 		None,
 	)
@@ -779,4 +768,23 @@ fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 
 	let res = instance.call_export("returns_no_bss_mutable_static", &[0]).unwrap();
 	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
+}
+
+test_wasm_execution!(return_i8);
+fn return_i8(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	assert_eq!(
+		call_in_wasm("test_return_i8", &[], wasm_method, &mut ext).unwrap(),
+		(-66_i8).encode()
+	);
+}
+
+test_wasm_execution!(take_i8);
+fn take_i8(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm("test_take_i8", &(-66_i8).encode(), wasm_method, &mut ext).unwrap();
 }
