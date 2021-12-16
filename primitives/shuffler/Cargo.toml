@@ -20,7 +20,7 @@ sp-api = { default-features = false, version = "4.0.0-dev" , path = "../../primi
 sp-core = { default-features = false, version = "4.0.0-dev" , path = "../../primitives/core"}
 sp-std = { default-features = false, version = '4.0.0-dev' , path = "../../primitives/std"}
 sp-block-builder = { default-features=false, version = "4.0.0-dev" , path = "../../primitives/block-builder"}
-extrinsic-info-runtime-api = { default-features=false, version='4.0.0-dev', path='../../primitives/extrinsic-info-runtime-api'}
+ver-api = { default-features=false, version='4.0.0-dev', path='../../primitives/ver-api'}
 sp-ver = { default-features=false, path='../../primitives/ver', version='4.0.0-dev' }
 derive_more = "0.99.2"
 
@@ -34,5 +34,5 @@ std = [
     'sp-runtime/std',
     'sp-block-builder/std',
     'sp-ver/std',
-    'extrinsic-info-runtime-api/std',
+    'ver-api/std',
 ]

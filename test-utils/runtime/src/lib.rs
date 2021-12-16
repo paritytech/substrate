@@ -51,7 +51,7 @@ use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
 	traits::{
 		BlakeTwo256, BlindCheckable, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
-		GetRuntimeBlockType, IdentityLookup, Verify,
+		GetRuntimeBlockType, Header as HeaderT, IdentityLookup, Verify,
 	},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -710,12 +710,16 @@ cfg_if! {
 				}
 			}
 
-			impl extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi<Block> for Runtime {
-				fn get_info(
+			impl ver_api::VerApi<Block> for Runtime {
+				fn get_signer(
 					_tx: <Block as BlockT>::Extrinsic,
-				) -> Option<extrinsic_info_runtime_api::ExtrinsicInfo> {
+				) -> Option<sp_runtime::AccountId32> {
 					None
 				}
+
+                fn is_new_session(number: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
+                    false
+                }
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {

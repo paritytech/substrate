@@ -40,7 +40,7 @@ use sp_runtime::{
 };
 
 use sp_blockchain::HeaderBackend;
-use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
+use ver_api::VerApi;
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use log::info;
@@ -155,7 +155,7 @@ where
 	A: ProvideRuntimeApi<Block> + 'a,
 	A::Api: BlockBuilderApi<Block>
 		+ ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-		+ ExtrinsicInfoRuntimeApi<Block>,
+		+ VerApi<Block>,
 	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
@@ -288,12 +288,11 @@ where
         let extrinsics = previous_block_extrinsics.into_iter()
             .filter(|e| 
 			    self.api.execute_in_transaction(|api| {
-                    match api.get_info(&self.block_id, e.clone()){
+                    match api.get_signer(&self.block_id, e.clone()){
                         Ok(result) => TransactionOutcome::Rollback(result),
                         Err(_) => TransactionOutcome::Rollback(None)
                     }
-                })
-                .map(|info| Some(info.who)).unwrap_or(None).is_some()
+                }).is_some()
             ).collect::<Vec<_>>();
 
         self.previous_block_extrinsics = Some(extrinsics.clone());

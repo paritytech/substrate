@@ -45,7 +45,7 @@ parity-util-mem = { version = "0.10.0", default-features = false, features = ["p
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.10.0-dev", default-features = false, path = "../../primitives/externalities" }
-extrinsic-info-runtime-api = { path = '../../primitives/extrinsic-info-runtime-api', default-features = false, version = '4.0.0-dev' }
+ver-api = { path = '../../primitives/ver-api', default-features = false, version = '4.0.0-dev' }
 sp-ver = {path = '../../primitives/ver', default-features = false, version = '4.0.0-dev' }
 
 # 3rd party
@@ -101,7 +101,7 @@ std = [
 	"sp-trie/std",
 	"sp-transaction-pool/std",
 	"trie-db/std",
-    "extrinsic-info-runtime-api/std",
+    "ver-api/std",
     "sp-ver/std",
 ]
 # Special feature to disable logging
