@@ -14,7 +14,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use frame_support::traits::{ConstU32, ConstU64};
+
 mod pallet_old {
 	use frame_support::{
 		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
