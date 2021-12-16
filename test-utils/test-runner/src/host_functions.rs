@@ -16,75 +16,38 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-/// Use this to override host functions.
-/// eg
-/// ```rust
-/// use test_runner::override_host_functions;
-/// pub struct SignatureVerificationOverride;
-///
-/// impl sp_wasm_interface::HostFunctions for SignatureVerificationOverride {
-///     fn host_functions() -> Vec<&'static dyn sp_wasm_interface::Function> {
-///         override_host_functions!(
-///             "ext_crypto_ecdsa_verify_version_1", EcdsaVerify,
-///         )
-///     }
-/// }
-/// ```
-#[macro_export]
-macro_rules! override_host_functions {
-    ($($fn_name:expr, $name:ident,)*) => {{
-        let mut host_functions = vec![];
-        $(
-            struct $name;
-            impl sp_wasm_interface::Function for $name {
-                fn name(&self) -> &str {
-                    &$fn_name
-                }
+use sp_core::{ecdsa, ed25519, sr25519};
+use sp_runtime_interface::runtime_interface;
 
-                fn signature(&self) -> sp_wasm_interface::Signature {
-                    sp_wasm_interface::Signature {
-                        args: std::borrow::Cow::Owned(vec![
-                            sp_wasm_interface::ValueType::I32,
-                            sp_wasm_interface::ValueType::I64,
-                            sp_wasm_interface::ValueType::I32,
-                        ]),
-                        return_value: Some(sp_wasm_interface::ValueType::I32),
-                    }
-                }
+#[runtime_interface]
+trait Crypto {
+	fn ecdsa_verify(_sig: &ecdsa::Signature, _msg: &[u8], _pub_key: &ecdsa::Public) -> bool {
+		true
+	}
 
-                fn execute(
-                    &self,
-                    context: &mut dyn sp_wasm_interface::FunctionContext,
-                    _args: &mut dyn Iterator<Item = sp_wasm_interface::Value>,
-                ) -> Result<Option<sp_wasm_interface::Value>, String> {
-                    <bool as sp_runtime_interface::host::IntoFFIValue>::into_ffi_value(true, context)
-                        .map(sp_wasm_interface::IntoValue::into_value)
-                        .map(Some)
-                }
-            }
-            host_functions.push(&$name as &'static dyn sp_wasm_interface::Function);
-        )*
-        host_functions
-   }};
+	#[version(2)]
+	fn ecdsa_verify(_sig: &ecdsa::Signature, _msg: &[u8], _pub_key: &ecdsa::Public) -> bool {
+		true
+	}
+
+	fn ed25519_verify(_sig: &ed25519::Signature, _msg: &[u8], _pub_key: &ed25519::Public) -> bool {
+		true
+	}
+
+	fn sr25519_verify(_sig: &sr25519::Signature, _msg: &[u8], _pub_key: &sr25519::Public) -> bool {
+		true
+	}
+
+	#[version(2)]
+	fn sr25519_verify(_sig: &sr25519::Signature, _msg: &[u8], _pub_key: &sr25519::Public) -> bool {
+		true
+	}
 }
 
 /// Provides host functions that overrides runtime signature verification
 /// to always return true.
-pub struct SignatureVerificationOverride;
+pub type SignatureVerificationOverride = crypto::HostFunctions;
 
-impl sp_wasm_interface::HostFunctions for SignatureVerificationOverride {
-	fn host_functions() -> Vec<&'static dyn sp_wasm_interface::Function> {
-		override_host_functions!(
-			"ext_crypto_ecdsa_verify_version_1",
-			EcdsaVerify,
-			"ext_crypto_ecdsa_verify_version_2",
-			EcdsaVerifyV2,
-			"ext_crypto_ed25519_verify_version_1",
-			Ed25519Verify,
-			"ext_crypto_sr25519_verify_version_1",
-			Sr25519Verify,
-			"ext_crypto_sr25519_verify_version_2",
-			Sr25519VerifyV2,
-		)
-	}
-}
+// This is here to get rid of the warnings.
+#[allow(unused_imports, dead_code)]
+use self::crypto::{ecdsa_verify, ed25519_verify, sr25519_verify};

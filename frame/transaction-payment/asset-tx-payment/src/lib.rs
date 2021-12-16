@@ -244,43 +244,44 @@ where
 	}
 
 	fn post_dispatch(
-		pre: Self::Pre,
+		pre: Option<Self::Pre>,
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
 		len: usize,
 		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		let (tip, who, initial_payment) = pre;
-		match initial_payment {
-			InitialPayment::Native(already_withdrawn) => {
-				pallet_transaction_payment::ChargeTransactionPayment::<T>::post_dispatch(
-					(tip, who, already_withdrawn),
-					info,
-					post_info,
-					len,
-					result,
-				)?;
-			},
-			InitialPayment::Asset(already_withdrawn) => {
-				let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
-					len as u32, info, post_info, tip,
-				);
-				T::OnChargeAssetTransaction::correct_and_deposit_fee(
-					&who,
-					info,
-					post_info,
-					actual_fee.into(),
-					tip.into(),
-					already_withdrawn.into(),
-				)?;
-			},
-			InitialPayment::Nothing => {
-				// `actual_fee` should be zero here for any signed extrinsic. It would be non-zero
-				// here in case of unsigned extrinsics as they don't pay fees but
-				// `compute_actual_fee` is not aware of them. In both cases it's fine to just move
-				// ahead without adjusting the fee, though, so we do nothing.
-				debug_assert!(tip.is_zero(), "tip should be zero if initial fee was zero.");
-			},
+		if let Some((tip, who, initial_payment)) = pre {
+			match initial_payment {
+				InitialPayment::Native(already_withdrawn) => {
+					pallet_transaction_payment::ChargeTransactionPayment::<T>::post_dispatch(
+						Some((tip, who, already_withdrawn)),
+						info,
+						post_info,
+						len,
+						result,
+					)?;
+				},
+				InitialPayment::Asset(already_withdrawn) => {
+					let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
+						len as u32, info, post_info, tip,
+					);
+					T::OnChargeAssetTransaction::correct_and_deposit_fee(
+						&who,
+						info,
+						post_info,
+						actual_fee.into(),
+						tip.into(),
+						already_withdrawn.into(),
+					)?;
+				},
+				InitialPayment::Nothing => {
+					// `actual_fee` should be zero here for any signed extrinsic. It would be
+					// non-zero here in case of unsigned extrinsics as they don't pay fees but
+					// `compute_actual_fee` is not aware of them. In both cases it's fine to just
+					// move ahead without adjusting the fee, though, so we do nothing.
+					debug_assert!(tip.is_zero(), "tip should be zero if initial fee was zero.");
+				},
+			}
 		}
 
 		Ok(())

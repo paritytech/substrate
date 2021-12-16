@@ -177,3 +177,55 @@ pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	/// The raw value of self.
 	fn peek(&self) -> Balance;
 }
+
+#[cfg(feature = "std")]
+impl<Balance: Default> Imbalance<Balance> for () {
+	type Opposite = ();
+	fn zero() -> Self {
+		()
+	}
+	fn drop_zero(self) -> Result<(), Self> {
+		Ok(())
+	}
+	fn split(self, _: Balance) -> (Self, Self) {
+		((), ())
+	}
+	fn ration(self, _: u32, _: u32) -> (Self, Self)
+	where
+		Balance: From<u32> + Saturating + Div<Output = Balance>,
+	{
+		((), ())
+	}
+	fn split_merge(self, _: Balance, _: (Self, Self)) -> (Self, Self) {
+		((), ())
+	}
+	fn ration_merge(self, _: u32, _: u32, _: (Self, Self)) -> (Self, Self)
+	where
+		Balance: From<u32> + Saturating + Div<Output = Balance>,
+	{
+		((), ())
+	}
+	fn split_merge_into(self, _: Balance, _: &mut (Self, Self)) {}
+	fn ration_merge_into(self, _: u32, _: u32, _: &mut (Self, Self))
+	where
+		Balance: From<u32> + Saturating + Div<Output = Balance>,
+	{
+	}
+	fn merge(self, _: Self) -> Self {
+		()
+	}
+	fn merge_into(self, _: &mut Self) {}
+	fn maybe_merge(self, _: Option<Self>) -> Self {
+		()
+	}
+	fn subsume(&mut self, _: Self) {}
+	fn maybe_subsume(&mut self, _: Option<Self>) {
+		()
+	}
+	fn offset(self, _: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
+		SameOrOther::None
+	}
+	fn peek(&self) -> Balance {
+		Default::default()
+	}
+}

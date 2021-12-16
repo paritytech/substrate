@@ -54,11 +54,11 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		balances: BalancesConfig { balances: endowed },
 		session: SessionConfig {
 			keys: vec![
-				(dave(), alice(), to_session_keys(&Ed25519Keyring::Alice, &Sr25519Keyring::Alice)),
-				(eve(), bob(), to_session_keys(&Ed25519Keyring::Bob, &Sr25519Keyring::Bob)),
+				(alice(), dave(), to_session_keys(&Ed25519Keyring::Alice, &Sr25519Keyring::Alice)),
+				(bob(), eve(), to_session_keys(&Ed25519Keyring::Bob, &Sr25519Keyring::Bob)),
 				(
-					ferdie(),
 					charlie(),
+					ferdie(),
 					to_session_keys(&Ed25519Keyring::Charlie, &Sr25519Keyring::Charlie),
 				),
 			],

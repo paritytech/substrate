@@ -61,7 +61,7 @@ pub mod migrations;
 pub mod weights;
 
 use sp_runtime::{
-	traits::{AccountIdConversion, BadOrigin, Hash, Zero},
+	traits::{AccountIdConversion, BadOrigin, Hash, TrailingZeroInput, Zero},
 	Percent, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -128,6 +128,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum acceptable reason length.
+		///
+		/// Benchmarks depend on this value, be sure to update weights file when changing this value
 		#[pallet::constant]
 		type MaximumReasonLength: Get<u32>;
 
@@ -150,7 +152,8 @@ pub mod pallet {
 		/// Origin from which tippers must come.
 		///
 		/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy
-		/// operation).
+		/// operation). Benchmarks depend on the value of `ContainsLengthBound::max_len` be sure to
+		/// update weights file when altering this method.
 		type Tippers: SortedMembers<Self::AccountId> + ContainsLengthBound;
 
 		/// Weight information for extrinsics in this pallet.
@@ -577,6 +580,9 @@ impl<T: Config> Pallet<T> {
 
 		use frame_support::{migration::storage_key_iter, Twox64Concat};
 
+		let zero_account = T::AccountId::decode(&mut TrailingZeroInput::new(&[][..]))
+			.expect("infinite input; qed");
+
 		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
@@ -586,7 +592,7 @@ impl<T: Config> Pallet<T> {
 		{
 			let (finder, deposit, finders_fee) = match old_tip.finder {
 				Some((finder, deposit)) => (finder, deposit, true),
-				None => (T::AccountId::default(), Zero::zero(), false),
+				None => (zero_account.clone(), Zero::zero(), false),
 			};
 			let new_tip = OpenTip {
 				reason: old_tip.reason,

@@ -150,6 +150,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
@@ -272,9 +273,10 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type WeightInfo = ();
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
+	type BenchmarkingConfig = TestBenchmarkingConfig;
+	type WeightInfo = ();
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -478,7 +480,7 @@ impl ExtBuilder {
 		}
 
 		let _ = pallet_staking::GenesisConfig::<Test> {
-			stakers,
+			stakers: stakers.clone(),
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
@@ -491,12 +493,15 @@ impl ExtBuilder {
 
 		let _ = pallet_session::GenesisConfig::<Test> {
 			keys: if self.has_stakers {
-				// genesis election will overwrite this, no worries.
-				Default::default()
+				// set the keys for the first session.
+				stakers
+					.into_iter()
+					.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
+					.collect()
 			} else {
 				// set some dummy validators in genesis.
 				(0..self.validator_count as u64)
-					.map(|x| (x, x, SessionKeys { other: UintAuthorityId(x as u64) }))
+					.map(|id| (id, id, SessionKeys { other: id.into() }))
 					.collect()
 			},
 		}
@@ -535,8 +540,8 @@ fn post_conditions() {
 fn check_count() {
 	let nominator_count = Nominators::<Test>::iter().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
-	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
-	assert_eq!(validator_count, CounterForValidators::<Test>::get());
+	assert_eq!(nominator_count, Nominators::<Test>::count());
+	assert_eq!(validator_count, Validators::<Test>::count());
 
 	// the voters that the `SortedListProvider` list is storing for us.
 	let external_voters = <Test as Config>::SortedListProvider::count();
@@ -642,6 +647,7 @@ pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	bond(stash, ctrl, val);
 	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
+	assert_ok!(Session::set_keys(Origin::signed(ctrl), SessionKeys { other: ctrl.into() }, vec![]));
 }
 
 pub(crate) fn bond_nominator(
