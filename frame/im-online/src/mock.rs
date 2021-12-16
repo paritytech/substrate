@@ -167,7 +167,7 @@ impl pallet_session::Config for Runtime {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = Event;
-	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
 
