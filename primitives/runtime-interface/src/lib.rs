@@ -304,7 +304,7 @@ pub use sp_std;
 /// Syntax is:
 ///
 /// ```
-/// #[sp_runtime_interface::runtime_interface(feature_force_version=old_state,a_function,1)]
+/// #[sp_runtime_interface::runtime_interface(feature_force_version=use_state_v0,a_function,1)]
 /// trait RuntimeInterface {
 /// 		fn a_function(&mut self) {
 /// 		}
@@ -315,7 +315,7 @@ pub use sp_std;
 /// }
 /// ```
 ///
-/// In this case, when feature `old_state` (warning '-' are not supported in feature name) is
+/// In this case, when feature `use_state_v0` (warning '-' are not supported in feature name) is
 /// defined, the host function for `RuntimeInterface::root` will be the version 1 even if later
 /// version exists. This functionality is currently only use for migration state and may be
 /// removed in the future.

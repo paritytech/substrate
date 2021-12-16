@@ -44,4 +44,4 @@ substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" 
 thiserror = "1.0.30"
 
 [features]
-old_state = ["sp-api/old_state"]
+use_state_v0 = ["sp-api/use_state_v0"]
