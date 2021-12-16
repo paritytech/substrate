@@ -16,14 +16,19 @@
 
 #![allow(missing_docs)]
 
-use cumulus_test_runtime::{AccountId, BabeConfig, GrandpaConfig, Signature};
+use pallet_staking::StakerStatus;
 use sc_chain_spec::{ChainSpecExtension, ChainSpecGroup};
 use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
 use sp_core::{sr25519, Pair, Public};
-use sp_runtime::traits::{IdentifyAccount, Verify};
-use crate::runtime::SessionConfig;
-use crate::runtime::SessionKeys;
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	Perbill,
+};
+use test_runtime_grandpa::{
+	AccountId, BabeConfig, Balance, GrandpaConfig, SessionConfig, SessionKeys, Signature,
+	StakingConfig, DOLLARS, MAX_NOMINATIONS,
+};
 /// Specialized `ChainSpec` for the normal parachain runtime.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisExt, Extensions>;
 
@@ -31,13 +36,13 @@ pub type ChainSpec = sc_service::GenericChainSpec<GenesisExt, Extensions>;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct GenesisExt {
 	/// The runtime genesis config.
-	runtime_genesis_config: cumulus_test_runtime::GenesisConfig,
+	runtime_genesis_config: test_runtime_grandpa::GenesisConfig,
 }
 
 impl sp_runtime::BuildStorage for GenesisExt {
 	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
 		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
-			sp_io::storage::set(cumulus_test_runtime::TEST_RUNTIME_UPGRADE_KEY, &vec![1, 2, 3, 4]);
+			sp_io::storage::set(test_runtime_grandpa::TEST_RUNTIME_UPGRADE_KEY, &vec![1, 2, 3, 4]);
 		});
 
 		self.runtime_genesis_config.assimilate_storage(storage)
@@ -81,21 +86,6 @@ where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-
-/// Helper function to generate stash, controller and session key from seed
-pub fn authority_keys_from_seed(
-	seed: &str,
-) -> (AccountId, AccountId, sp_finality_grandpa::AuthorityId, sp_consensus_babe::AuthorityId) {
-	(
-		get_account_id_from_seed::<sr25519::Public>(&format!("{}//stash", seed)),
-		get_account_id_from_seed::<sr25519::Public>(seed),
-		get_from_seed::<sp_finality_grandpa::AuthorityId>(seed),
-		get_from_seed::<sp_consensus_babe::AuthorityId>(seed),
-		// get_from_seed::<ImOnlineId>(seed),
-		// get_from_seed::<AuthorityDiscoveryId>(seed),
-	)
-}
-
 /// Get the chain spec for a specific parachain ID.
 pub fn get_chain_spec() -> ChainSpec {
 	ChainSpec::from_genesis(
@@ -112,7 +102,7 @@ pub fn get_chain_spec() -> ChainSpec {
 }
 
 /// Local testnet genesis for testing.
-pub fn local_testnet_genesis() -> cumulus_test_runtime::GenesisConfig {
+pub fn local_testnet_genesis() -> test_runtime_grandpa::GenesisConfig {
 	testnet_genesis(
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		vec![
@@ -131,7 +121,6 @@ pub fn local_testnet_genesis() -> cumulus_test_runtime::GenesisConfig {
 		],
 	)
 }
-
 fn session_keys(
 	grandpa: sp_finality_grandpa::AuthorityId,
 	babe: sp_consensus_babe::AuthorityId,
@@ -144,67 +133,79 @@ fn session_keys(
 fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
-) -> cumulus_test_runtime::GenesisConfig {
-	let mut initial_authorities: Vec<(
+) -> test_runtime_grandpa::GenesisConfig {
+	//test_runtime_grandpa::GenesisConfig::default()
+	let initial_authorities: Vec<(
 		AccountId,
 		AccountId,
 		sp_finality_grandpa::AuthorityId,
 		sp_consensus_babe::AuthorityId,
-		/*		sp_consensus_babe::AuthorityId, */
 		/*ImOnlineId,
 		 *AuthorityDiscoveryId, */
-	)> = vec![ authority_keys_from_seed("Charlie"),  authority_keys_from_seed("Dave")];
-
-
-
-	//const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
-	//const STASH: Balance = ENDOWMENT / 1000;
-	//let rng = rand::thread_rng();
-	//let initial_nominators: Vec<AccountId> = vec![];
-	cumulus_test_runtime::GenesisConfig {
-		system: cumulus_test_runtime::SystemConfig {
-			code: cumulus_test_runtime::WASM_BINARY
+	)> = vec![];
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = ENDOWMENT / 1000;
+	let mut rng = rand::thread_rng();
+	let initial_nominators: Vec<AccountId> = vec![];
+	let stakers = initial_authorities
+		.iter()
+		.map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
+		.chain(initial_nominators.iter().map(|x| {
+			use rand::{seq::SliceRandom, Rng};
+			let limit = (MAX_NOMINATIONS as usize).min(initial_authorities.len());
+			let count = rng.gen::<usize>() % limit;
+			let nominations = initial_authorities
+				.as_slice()
+				.choose_multiple(&mut rng, count)
+				.into_iter()
+				.map(|choice| choice.0.clone())
+				.collect::<Vec<_>>();
+			(x.clone(), x.clone(), STASH, StakerStatus::Nominator(nominations))
+		}))
+		.collect::<Vec<_>>();
+	test_runtime_grandpa::GenesisConfig {
+		system: test_runtime_grandpa::SystemConfig {
+			code: test_runtime_grandpa::WASM_BINARY
 				.expect("WASM binary was not build, please build it!")
 				.to_vec(),
 			..Default::default()
 		},
+		// parachain_system: Default::default(),
+		balances: test_runtime_grandpa::BalancesConfig {
+			balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
+		},
 		babe: BabeConfig {
 			authorities: vec![],
-		//	authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1u64)).collect(),
-			epoch_config: Some(cumulus_test_runtime::BABE_GENESIS_EPOCH_CONFIG),
+			epoch_config: Some(test_runtime_grandpa::BABE_GENESIS_EPOCH_CONFIG),
 		},
-		grandpa: GrandpaConfig {
-			authorities: vec![] //These seem to be set by GenesisBuild
-		//	authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1u64)).collect(),
+		grandpa: GrandpaConfig { authorities: vec![] },
+		staking: StakingConfig {
+			validator_count: initial_authorities.len() as u32,
+			minimum_validator_count: initial_authorities.len() as u32,
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			slash_reward_fraction: Perbill::from_percent(10),
+			stakers,
+			..Default::default()
 		},
-		collective: pallet_collective::pallet::GenesisConfig { ..Default::default() },
-		sudo: cumulus_test_runtime::SudoConfig { key: root_key },
-		//session: Default::default(),
-
+		transaction_payment: Default::default(),
+		treasury: Default::default(),
+		collective: pallet_collective::pallet::GenesisConfig { ..Default::default() }, /* test_runtime_grandpa::CouncilConfig::default(), */
 		session: SessionConfig {
-			//keys: vec![],
-
 			keys: initial_authorities
 				.iter()
 				.map(|x| {
 					(
 						x.0.clone(),
 						x.1.clone(),
-						session_keys(x.2.clone(), x.3.clone()),
+						session_keys(
+							x.2.clone(),
+							x.3.clone(),
+							//  x.4.clone(), x.5.clone()
+						),
 					)
 				})
 				.collect::<Vec<_>>(),
 		},
-		// session: SessionConfig {
-		// 	keys: vec![
-		// 		(dave(), alice(), to_session_keys(&Ed25519Keyring::Alice, &Sr25519Keyring::Alice)),
-		// 		(eve(), bob(), to_session_keys(&Ed25519Keyring::Bob, &Sr25519Keyring::Bob)),
-		// 		(
-		// 			ferdie(),
-		// 			charlie(),
-		// 			to_session_keys(&Ed25519Keyring::Charlie, &Sr25519Keyring::Charlie),
-		// 		),
-		// 	],
-		// }
+		sudo: test_runtime_grandpa::SudoConfig { key: root_key },
 	}
 }

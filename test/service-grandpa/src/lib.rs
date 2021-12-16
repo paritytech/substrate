@@ -21,36 +21,35 @@
 mod chain_spec;
 mod genesis;
 
-use sc_utils::mpsc::TracingUnboundedSender;
-use sc_consensus_babe::SlotProportion;
+pub use chain_spec::*;
 use core::future::Future;
-use cumulus_test_runtime::{NodeBlock as Block, RuntimeApi};
 use frame_system_rpc_runtime_api::AccountNonceApi;
-use manual_seal::import_queue;
+pub use genesis::*;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_network::{config::TransportConfig, multiaddr, NetworkService};
-use sp_runtime::OpaqueExtrinsic;
-use sc_service::{BasePath, ChainSpec, Configuration, Error as ServiceError, NetworkStarter, PartialComponents, Role, RpcHandlers, TFullBackend, TFullClient, TaskManager, config::{
+use sc_service::{
+	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, MultiaddrWithPeerId, NetworkConfiguration,
 		OffchainWorkerConfig, PruningMode, TransactionStorageMode, WasmExecutionMethod,
-	}};
+	},
+	BasePath, ChainSpec, Configuration, Error as ServiceError, PartialComponents, Role,
+	RpcHandlers, TFullBackend, TFullClient, TaskManager,
+};
+use sp_api::{BlockT, ProvideRuntimeApi};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_blockchain::HeaderBackend;
 use sp_core::{Pair, H256};
 use sp_keyring::Sr25519Keyring;
+pub use sp_keyring::Sr25519Keyring as Keyring;
 use sp_runtime::{codec::Encode, generic, traits::BlakeTwo256};
 use sp_state_machine::BasicExternalities;
+use sp_trie::PrefixedMemoryDB;
 use std::sync::Arc;
 use substrate_test_client::{
 	BlockchainEventsExt, RpcHandlersExt, RpcTransactionError, RpcTransactionOutput,
 };
-//use sp_finality_grandpa::GrandpaApi;
-use sp_api::ProvideRuntimeApi;
-//use sp_api::BlockT;
-pub use chain_spec::*;
-pub use cumulus_test_runtime as runtime;
-pub use genesis::*;
-pub use sp_keyring::Sr25519Keyring as Keyring;
+pub use test_runtime_grandpa as runtime;
+use test_runtime_grandpa::{Hash, NodeBlock as Block, RuntimeApi};
 // use sc_consensus::BlockImport;
 // use sc_client_api::BlockBackend;
 // use sc_client_api::UsageProvider;
@@ -59,11 +58,11 @@ pub use sp_keyring::Sr25519Keyring as Keyring;
 // use sc_client_api::{
 // 	backend::{Backend as BackendT},
 // };
-//use sc_client_api::ExecutorProvider;
+use sc_client_api::ExecutorProvider;
 //use sc_executor::NativeElseWasmExecutor;
 /// A consensus that will never produce any block.
-// #[derive(Clone)]
-// struct NullConsensus;
+#[derive(Clone)]
+struct NullConsensus;
 
 // #[async_trait::async_trait]
 // impl ParachainConsensus<Block> for NullConsensus {
@@ -77,8 +76,8 @@ pub use sp_keyring::Sr25519Keyring as Keyring;
 // 	}
 // }
 
-// / The signature of the announce block fn.
-// /pub type AnnounceBlockFn = Arc<dyn Fn(Hash, Option<Vec<u8>>) + Send + Sync>;
+/// The signature of the announce block fn.
+pub type AnnounceBlockFn = Arc<dyn Fn(Hash, Option<Vec<u8>>) + Send + Sync>;
 
 /// Native executor instance.
 pub struct RuntimeExecutor;
@@ -87,11 +86,11 @@ impl sc_executor::NativeExecutionDispatch for RuntimeExecutor {
 	type ExtendHostFunctions = ();
 
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-		cumulus_test_runtime::api::dispatch(method, data)
+		test_runtime_grandpa::api::dispatch(method, data)
 	}
 
 	fn native_version() -> sc_executor::NativeVersion {
-		cumulus_test_runtime::native_version()
+		test_runtime_grandpa::native_version()
 	}
 }
 
@@ -105,13 +104,6 @@ pub type Client = TFullClient<
 /// Transaction pool type used by the test service
 pub type TransactionPool = Arc<sc_transaction_pool::FullPool<Block, Client>>;
 
-macro_rules! pepper { ($($element:stmt;)*) => { $(println!("{}:{} {}", file!(), line!(), stringify!($element)); $element)* } }
-//todo count with recursion - start with line!()
-use sp_api::BlockT;
-use sc_client_api::ExecutorProvider;
-
-type TBl = sp_runtime::generic::Block<sp_runtime::generic::Header<u32, BlakeTwo256>, OpaqueExtrinsic>;
-
 /// Starts a `ServiceBuilder` for a full service.
 ///
 /// Use this macro if you don't actually need the full service, but just the builder in order to
@@ -119,22 +111,16 @@ type TBl = sp_runtime::generic::Block<sp_runtime::generic::Header<u32, BlakeTwo2
 pub fn new_partial(
 	config: &mut Configuration,
 ) -> Result<
-	(PartialComponents<
+	PartialComponents<
 		Client,
 		TFullBackend<Block>,
 		(),
-		(),
+		sc_consensus::import_queue::BasicQueue<Block, PrefixedMemoryDB<BlakeTwo256>>,
 		sc_transaction_pool::FullPool<Block, Client>,
 		(),
-	>, Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>, 
-	TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-	NetworkStarter
-),
+	>,
 	sc_service::Error,
-> 
-//	where TBl: BlockT
-{
-	
+> {
 	let executor = sc_executor::NativeElseWasmExecutor::<RuntimeExecutor>::new(
 		config.wasm_method,
 		config.default_heap_pages,
@@ -145,7 +131,7 @@ pub fn new_partial(
 		sc_service::new_full_parts::<Block, RuntimeApi, _>(&config, None, executor)?;
 	let client = Arc::new(client);
 
-	//let registry = config.prometheus_registry();
+	let registry = config.prometheus_registry();
 
 	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
 		config.transaction_pool.clone(),
@@ -156,119 +142,61 @@ pub fn new_partial(
 	);
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
-	// let (grandpa_block_import, _grandpa_link) = grandpa::block_import(
-	// 	client.clone(),
-	// 	&(client.clone() as Arc<_>),
-	// 	select_chain.clone(),
-	// 	None//telemetry.as_ref().map(|x| x.handle()),
-	// )?;
-
-	let (grandpa_block_import, ..) = grandpa::block_import(
+	let (grandpa_block_import, _grandpa_link) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
-		None,
+		None, //telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
-	let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
-		slot_duration,
+		sc_consensus_babe::Config::get_or_compute(&*client)?,
 		grandpa_block_import,
 		client.clone(),
 	)?;
 
-	let boxi = Box::new(block_import.clone());
-		let import_queue =
-		import_queue(boxi, &task_manager.spawn_essential_handle(), None);
-
-	let (network, system_rpc_tx, start_network) =
-		sc_service::build_network(sc_service::BuildNetworkParams {
-			config: config,
-			client: client.clone(),
-			transaction_pool: transaction_pool.clone(),
-			spawn_handle: task_manager.spawn_handle(),
-			import_queue: import_queue,
-			//on_demand: None,
-			block_announce_validator_builder: None, /* Some(Box::new(block_announce_validator_builder)), */
-			warp_sync: None,
-		})?;
-
-	let proposer = sc_basic_authorship::ProposerFactory::new(
-		task_manager.spawn_handle(),
-		client.clone(),
-		transaction_pool.clone(),
-		None, //prometheus_registry.as_ref(),
-		None//telemetry.as_ref().map(|x| x.handle()),
-	);
-
-	let client_clone = client.clone();
 	let slot_duration = babe_link.config().slot_duration();
-
-	let babe_config //: sc_consensus_babe::BabeParams//<_,_,_,_,_,_,_,_,_,_> 
-	= sc_consensus_babe::BabeParams {
-		keystore: keystore_container.sync_keystore(),
-		client: client.clone(),
-		select_chain,
-		env: proposer,
-		block_import,
-		sync_oracle: network.clone(),
-		justification_sync_link: network.clone(),
-		create_inherent_data_providers: move |parent, ()| {
-			let client_clone = client_clone.clone();
-			async move {
-				let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
-					&*client_clone,
-					parent,
-				)?;
-
-				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
-				let slot =
-					sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-						*timestamp,
-						slot_duration,
-					);
-
-				let storage_proof =
-					sp_transaction_storage_proof::registration::new_data_provider(
-						&*client_clone,
-						&parent,
-					)?;
-
-				Ok((timestamp, slot, uncles, storage_proof))
-			}
-		},
-		force_authoring:true,
-		backoff_authoring_blocks: Option::<()>::None,
+	let import_queue = sc_consensus_babe::import_queue(
 		babe_link,
-		can_author_with: sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
-		block_proposal_slot_portion: SlotProportion::new(0.5),
-		max_block_proposal_slot_portion: None,
-		telemetry: None//telemetry.as_ref().map(|x| x.handle()),
-	};
+		block_import,
+		None,
+		client.clone(),
+		select_chain,
+		move |_, _| async move {
+			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-	let babe = sc_consensus_babe::start_babe(babe_config)?;
-	task_manager.spawn_essential_handle().spawn_blocking(
-		"babe-proposer",
-		Some("block-authoring"),
-		babe,
-	);
+			let slot =
+				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+					*timestamp,
+					slot_duration,
+				);
+
+			let uncles =
+				sp_authorship::InherentDataProvider::<<Block as BlockT>::Header>::check_inherents();
+
+			Ok((timestamp, slot, uncles))
+		},
+		&task_manager.spawn_essential_handle(),
+		registry.clone(),
+		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+		None,
+	)?;
 
 	let params = PartialComponents {
 		backend,
 		client,
-		import_queue: (),
+		import_queue,
 		keystore_container,
 		task_manager,
 		transaction_pool,
 		select_chain: (),
 		other: (),
 	};
-	
-	Ok((params, network, system_rpc_tx, start_network))
+
+	Ok(params)
 }
 
-// /// Prepare the parachain's node configuration
+// /// Prepare the parachain's node condifugration
 // ///
 // /// This function will disable the default announcement of Substrate for the parachain in favor
 // /// of the one of Cumulus.
@@ -280,7 +208,7 @@ pub fn new_partial(
 
 // / Parameters given to [`start_full_node`].
 // pub struct StartFullNodeParams<'a, Block: BlockT, Client> {
-// 	// The client
+// 	// The clinet
 // 	pub client: Arc<Client>,
 // 	//pub relay_chain_full_node: RFullNode<PClient>,
 // 	pub task_manager: &'a mut TaskManager,
@@ -409,10 +337,24 @@ where
 
 	//let mut parachain_config = prepare_node_config(parachain_config);
 
-	let (params, network, system_rpc_tx, start_network) = new_partial(&mut parachain_config)?;
+	let params = new_partial(&mut parachain_config)?;
 
 	let transaction_pool = params.transaction_pool;
 	let mut task_manager = params.task_manager;
+
+	// let relay_chain_full_node = polkadot_test_service::new_full(
+	// 	relay_chain_config,
+	// 	if let Some(ref key) = collator_key {
+	// 		polkadot_service::IsCollator::Yes(key.clone())
+	// 	} else {
+	// 		polkadot_service::IsCollator::No
+	// 	},
+	// 	None,
+	// )
+	// .map_err(|e| match e {
+	// 	polkadot_service::Error::Sub(x) => x,
+	// 	s => format!("{}", s).into(),
+	// })?;
 
 	let client = params.client.clone();
 
@@ -427,7 +369,18 @@ where
 	//let block_announce_validator_builder = move |_| Box::new(block_announce_validator) as Box<_>;
 
 	// let prometheus_registry = parachain_config.prometheus_registry().cloned();
-	
+	let import_queue = params.import_queue;
+	let (network, system_rpc_tx, start_network) =
+		sc_service::build_network(sc_service::BuildNetworkParams {
+			config: &parachain_config,
+			client: client.clone(),
+			transaction_pool: transaction_pool.clone(),
+			spawn_handle: task_manager.spawn_handle(),
+			import_queue,
+			//on_demand: None,
+			block_announce_validator_builder: None, /* Some(Box::new(block_announce_validator_builder)), */
+			warp_sync: None,
+		})?;
 
 	let rpc_extensions_builder = {
 		let client = client.clone();
@@ -540,11 +493,26 @@ impl TestNodeBuilder {
 		self
 	}
 
+	// /// Wrap the announce block function of this node.
+	// pub fn wrap_announce_block(
+	// 	mut self,
+	// 	wrap: impl FnOnce(AnnounceBlockFn) -> AnnounceBlockFn + 'static,
+	// ) -> Self {
+	// 	self.wrap_announce_block = Some(Box::new(wrap));
+	// 	self
+	// }
+
 	/// Allows accessing the parachain storage before the test node is built.
 	pub fn update_storage_parachain(mut self, updater: impl Fn() + 'static) -> Self {
 		self.storage_update_func_parachain = Some(Box::new(updater));
 		self
 	}
+
+	// /// Allows accessing the relay chain storage before the test node is built.
+	// pub fn update_storage_relay_chain(mut self, updater: impl Fn() + 'static) -> Self {
+	// 	self.storage_update_func_relay_chain = Some(Box::new(updater));
+	// 	self
+	// }
 
 	/// Build the [`TestNode`].
 	pub async fn build(self) -> TestNode {
@@ -553,7 +521,7 @@ impl TestNodeBuilder {
 			self.tokio_handle.clone(),
 			self.key.clone(),
 			self.parachain_nodes,
-			false,
+			true,
 		)
 		.expect("could not generate Configuration");
 
@@ -561,7 +529,7 @@ impl TestNodeBuilder {
 		let (task_manager, client, network, rpc_handlers, transaction_pool) =
 			start_node_impl(parachain_config, |_| Ok(Default::default()))
 				.await
-				.expect("could not create test service");
+				.expect("could not create Cumulus test service");
 
 		let peer_id = network.local_peer_id().clone();
 		let addr = MultiaddrWithPeerId { multiaddr, peer_id };
@@ -570,7 +538,7 @@ impl TestNodeBuilder {
 	}
 }
 
-/// Create a `Configuration`.
+/// Create a Cumulus `Configuration`.
 ///
 /// By default an in-memory socket will be used, therefore you need to provide nodes if you want the
 /// node to be connected to other nodes. If `nodes_exclusive` is `true`, the node will only connect
@@ -642,7 +610,7 @@ pub fn node_config(
 			offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 			other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 		},
-		rpc_http: None, //Some(std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 9933))),
+		rpc_http: None,
 		rpc_ws: None,
 		rpc_ipc: None,
 		rpc_ws_max_connections: None,
@@ -655,7 +623,7 @@ pub fn node_config(
 		default_heap_pages: None,
 		offchain_worker: OffchainWorkerConfig { enabled: true, indexing_enabled: false },
 		force_authoring: false,
-		disable_grandpa: true,
+		disable_grandpa: false,
 		dev_key_seed: Some(key_seed),
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
@@ -686,17 +654,17 @@ impl TestNode {
 		self.rpc_handlers.send_transaction(extrinsic.into()).await
 	}
 
-	// /// Register a parachain at this relay chain.
-	// pub async fn schedule_upgrade(&self, validation: Vec<u8>) -> Result<(), RpcTransactionError> {
-	// 	let call = frame_system::Call::set_code { code: validation };
+	/// Register a parachain at this relay chain.
+	pub async fn schedule_upgrade(&self, validation: Vec<u8>) -> Result<(), RpcTransactionError> {
+		let call = frame_system::Call::set_code { code: validation };
 
-	// 	self.send_extrinsic(
-	// 		runtime::SudoCall::sudo_unchecked_weight { call: Box::new(call.into()), weight: 1_000 },
-	// 		Sr25519Keyring::Alice,
-	// 	)
-	// 	.await
-	// 	.map(drop)
-	// }
+		self.send_extrinsic(
+			runtime::SudoCall::sudo_unchecked_weight { call: Box::new(call.into()), weight: 1_000 },
+			Sr25519Keyring::Alice,
+		)
+		.await
+		.map(drop)
+	}
 }
 
 /// Fetch account nonce for key pair

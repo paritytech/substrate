@@ -19,7 +19,7 @@
 mod block_builder;
 use codec::Encode;
 use runtime::{
-	Block, BlockHashCount, Call, Runtime, Signature, SignedExtra, SignedPayload,
+	Balance, Block, BlockHashCount, Call, Runtime, Signature, SignedExtra, SignedPayload,
 	UncheckedExtrinsic, VERSION,
 };
 use sc_service::client;
@@ -28,9 +28,9 @@ use sp_core::storage::Storage;
 use sp_runtime::{generic::Era, BuildStorage, SaturatedConversion};
 
 pub use block_builder::*;
-pub use cumulus_test_runtime as runtime;
 pub use sc_executor::error::Result as ExecutorResult;
 pub use substrate_test_client::*;
+pub use test_runtime_grandpa as runtime;
 
 mod local_executor {
 	/// Native executor instance.
@@ -40,11 +40,11 @@ mod local_executor {
 		type ExtendHostFunctions = ();
 
 		fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-			cumulus_test_runtime::api::dispatch(method, data)
+			test_runtime_grandpa::api::dispatch(method, data)
 		}
 
 		fn native_version() -> sc_executor::NativeVersion {
-			cumulus_test_runtime::native_version()
+			test_runtime_grandpa::native_version()
 		}
 	}
 }
@@ -75,7 +75,7 @@ pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		cumulus_test_service::local_testnet_genesis().build_storage().unwrap()
+		test_service_grandpa::local_testnet_genesis().build_storage().unwrap()
 	}
 }
 
@@ -143,18 +143,18 @@ pub fn generate_extrinsic(
 	)
 }
 
-// /// Transfer some token from one account to another using a provided test [`Client`].
-// pub fn transfer(
-// 	client: &Client,
-// 	origin: sp_keyring::AccountKeyring,
-// 	dest: sp_keyring::AccountKeyring,
-// 	value: Balance,
-// ) -> UncheckedExtrinsic {
-// 	let function =
-// 		Call::Balances(pallet_balances::Call::transfer { dest: dest.public().into(), value });
+/// Transfer some token from one account to another using a provided test [`Client`].
+pub fn transfer(
+	client: &Client,
+	origin: sp_keyring::AccountKeyring,
+	dest: sp_keyring::AccountKeyring,
+	value: Balance,
+) -> UncheckedExtrinsic {
+	let function =
+		Call::Balances(pallet_balances::Call::transfer { dest: dest.public().into(), value });
 
-// 	generate_extrinsic(client, origin, function)
-// }
+	generate_extrinsic(client, origin, function)
+}
 
 // /// Call `validate_block` in the given `wasm_blob`.
 // pub fn validate_block(

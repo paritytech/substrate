@@ -979,6 +979,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "color-backtrace"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd6c04463c99389fff045d2b90ce84f5131332712c7ffbede020f5e9ad1ed685"
+dependencies = [
+ "atty",
+ "backtrace",
+ "termcolor",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1397,6 +1408,7 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "sc-block-builder",
+ "sc-client-db",
  "sc-consensus",
  "sc-consensus-babe",
  "sc-executor",
@@ -1456,6 +1468,7 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
+ "spin 0.9.2",
  "substrate-wasm-builder",
 ]
 
@@ -1464,7 +1477,9 @@ name = "cumulus-test-service"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "color-backtrace",
  "criterion",
+ "ctor",
  "cumulus-test-runtime",
  "frame-system",
  "frame-system-rpc-runtime-api",
@@ -1479,8 +1494,11 @@ dependencies = [
  "sc-chain-spec",
  "sc-cli",
  "sc-client-api",
+ "sc-client-db",
  "sc-consensus",
  "sc-consensus-babe",
+ "sc-consensus-manual-seal",
+ "sc-consensus-uncles",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-network",
@@ -1489,6 +1507,7 @@ dependencies = [
  "sc-tracing",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
+ "sc-utils",
  "serde",
  "sp-api",
  "sp-arithmetic",
@@ -1504,6 +1523,7 @@ dependencies = [
  "sp-state-machine",
  "sp-timestamp",
  "sp-tracing",
+ "sp-transaction-storage-proof",
  "sp-trie",
  "substrate-test-client",
  "substrate-test-utils",
@@ -7535,7 +7555,7 @@ dependencies = [
  "cc",
  "libc",
  "once_cell",
- "spin",
+ "spin 0.5.2",
  "untrusted",
  "web-sys",
  "winapi 0.3.9",
@@ -10100,6 +10120,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
+name = "spin"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "511254be0c5bcf062b019a6c89c01a664aa359ded62f78aa72c6fc137c0590e5"
+dependencies = [
+ "lock_api 0.4.2",
+]
+
+[[package]]
 name = "ss58-registry"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10509,6 +10538,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-client-grandpa"
+version = "0.1.0"
+dependencies = [
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sc-block-builder",
+ "sc-consensus",
+ "sc-consensus-babe",
+ "sc-executor",
+ "sc-executor-common",
+ "sc-service",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-keyring",
+ "sp-runtime",
+ "sp-timestamp",
+ "substrate-test-client",
+ "test-runtime-grandpa",
+ "test-service-grandpa",
+]
+
+[[package]]
 name = "test-runner"
 version = "0.9.0"
 dependencies = [
@@ -10572,6 +10627,103 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "test-runner",
+]
+
+[[package]]
+name = "test-runtime-grandpa"
+version = "0.1.0"
+dependencies = [
+ "frame-election-provider-support",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-rpc-runtime-api",
+ "getrandom 0.2.3",
+ "pallet-authorship",
+ "pallet-babe",
+ "pallet-balances",
+ "pallet-bounties",
+ "pallet-collective",
+ "pallet-election-provider-multi-phase",
+ "pallet-grandpa",
+ "pallet-offences",
+ "pallet-session",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "pallet-treasury",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-babe",
+ "sp-core",
+ "sp-finality-grandpa",
+ "sp-inherents",
+ "sp-io",
+ "sp-npos-elections",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-staking",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder",
+]
+
+[[package]]
+name = "test-service-grandpa"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "criterion",
+ "frame-system",
+ "frame-system-rpc-runtime-api",
+ "futures 0.3.16",
+ "jsonrpc-core",
+ "pallet-collective",
+ "pallet-staking",
+ "pallet-sudo",
+ "parity-scale-codec",
+ "rand 0.7.3",
+ "sc-basic-authorship",
+ "sc-chain-spec",
+ "sc-cli",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-babe",
+ "sc-executor",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sc-rpc",
+ "sc-service",
+ "sc-tracing",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "serde",
+ "sp-api",
+ "sp-arithmetic",
+ "sp-authorship",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-babe",
+ "sp-core",
+ "sp-finality-grandpa",
+ "sp-io",
+ "sp-keyring",
+ "sp-runtime",
+ "sp-state-machine",
+ "sp-timestamp",
+ "sp-tracing",
+ "sp-trie",
+ "substrate-test-client",
+ "substrate-test-utils",
+ "test-runtime-grandpa",
+ "tokio",
 ]
 
 [[package]]

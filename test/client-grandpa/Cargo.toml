@@ -1,5 +1,5 @@
 [package]
-name = "cumulus-test-client"
+name = "test-client-grandpa"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -32,11 +32,8 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 # pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "master" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
 
-# Cumulus deps
-cumulus-test-runtime = { path = "../runtime" }
-cumulus-test-service = { path = "../service" }
+test-runtime-grandpa = { path = "../runtime-grandpa" }
+test-service-grandpa = { path = "../service-grandpa" }
 
 # Other deps
 codec = { package = "parity-scale-codec", version = "2.3.0", default-features = false, features = ["derive"] }
-
-sc-client-db = { version = "0.10.0-dev", default-features = false, features = ["with-parity-db"], path = "../../client/db" }

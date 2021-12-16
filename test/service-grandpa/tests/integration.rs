@@ -14,27 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use cumulus_test_service::Keyring::*;
 use futures::join;
+use test_service_grandpa::Keyring::*;
 
-//#[test]
 #[substrate_test_utils::test]
-//#[ignore]
+#[ignore]
 async fn test_collating_and_non_collator_mode_catching_up() {
-	use ctor::ctor;
-
-	#[ctor]
-	fn init_color_backtraces() {
-		color_backtrace::install();
-	}
-
 	let mut builder = sc_cli::LoggerBuilder::new("");
 	builder.with_colors(false);
 	let _ = builder.init();
 
 	let tokio_handle = tokio::runtime::Handle::current();
-
-macro_rules! pepper { ($($element:stmt;)*) => { $(println!("{}:{} {}", file!(), line!(), stringify!($element)); $element)* } }
 
 	// // start alice
 	// let alice = run_relay_chain_validator_node(tokio_handle.clone(), Alice, || {}, Vec::new());
@@ -47,31 +37,30 @@ macro_rules! pepper { ($($element:stmt;)*) => { $(println!("{}:{} {}", file!(), 
 	// alice
 	// 	.register_parachain(
 	// 		para_id,
-	// 		cumulus_test_runtime::WASM_BINARY
+	// 		test_runtime_grandpa::WASM_BINARY
 	// 			.expect("You need to build the WASM binary to run this test!")
 	// 			.to_vec(),
 	// 		initial_head_data(para_id),
 	// 	)
 	// 	.await
 	// 	.unwrap();
-pepper!{
+
 	// run cumulus charlie (a parachain collator)
-	let charlie = cumulus_test_service::TestNodeBuilder::new(tokio_handle.clone(), Charlie)
+	let charlie = test_service_grandpa::TestNodeBuilder::new(tokio_handle.clone(), Charlie)
 		//.enable_collator()
 		//.connect_to_relay_chain_nodes(vec![&alice, &bob])
 		//.connect_to_parachain_node(vec![&alice, &bob])
 		.build()
 		.await;
+	charlie.wait_for_blocks(5).await;
 
-
-	// // run cumulus dave (a parachain full node) and wait for it to sync some blocks
-	let dave = cumulus_test_service::TestNodeBuilder::new(tokio_handle, Dave)
+	// run cumulus dave (a parachain full node) and wait for it to sync some blocks
+	let dave = test_service_grandpa::TestNodeBuilder::new(tokio_handle, Dave)
 		.connect_to_parachain_node(&charlie)
 		//.connect_to_relay_chain_nodes(vec![&alice, &bob])
 		.build()
 		.await;
-	// dave.wait_for_blocks(7).await;
-	charlie.wait_for_blocks(5).await;
+	dave.wait_for_blocks(7).await;
 
 	join!(
 		// alice.task_manager.clean_shutdown(),
@@ -79,5 +68,4 @@ pepper!{
 		charlie.task_manager.clean_shutdown(),
 		dave.task_manager.clean_shutdown(),
 	);
-}
 }

@@ -126,9 +126,9 @@ where
 		None,
 	)?;
 
-	let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
+	let babe_config = sc_consensus_babe::Config::get_or_compute(&*client)?;
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
-		slot_duration.clone(),
+		babe_config.clone(),
 		grandpa_block_import,
 		client.clone(),
 	)?;
