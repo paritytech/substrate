@@ -70,9 +70,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-parameter_types! {
-	pub const UnsignedPriority: u64 = 1 << 20;
-}
 
 impl Config for Test {
 	type Call = Call;
