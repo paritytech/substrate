@@ -192,24 +192,20 @@ impl<'a, TBlockNumber: Clone, TSignature> CompactSignedCommitment<TBlockNumber, 
 	fn pack(signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature>) -> Self {
 		let SignedCommitment { commitment, signatures } = signed_commitment;
 		let validator_set_len = signatures.len() as u32;
+
+		let signatures_compact: Vec<&'a TSignature> =
+			signatures.iter().filter_map(|x| x.as_ref()).collect();
+		let bits = {
+			let mut bits: Vec<u8> =
+				signatures.iter().map(|x| if x.is_some() { 1 } else { 0 }).collect();
+			// Resize with excess bits for placement purposes
+			let excess_bits_len =
+				CONTAINER_BIT_SIZE - (validator_set_len as usize % CONTAINER_BIT_SIZE);
+			bits.resize(bits.len() + excess_bits_len, 0);
+			bits
+		};
+
 		let mut signatures_from: BitField = vec![];
-		let mut signatures_compact: Vec<&'a TSignature> = vec![];
-
-		let mut bits: Vec<u8> =
-			signatures.iter().map(|x| if x.is_some() { 1 } else { 0 }).collect();
-
-		for signature in signatures {
-			match signature {
-				Some(value) => signatures_compact.push(value),
-				None => (),
-			}
-		}
-
-		// Resize with excess bits for placement purposes
-		let excess_bits_len =
-			CONTAINER_BIT_SIZE - (validator_set_len as usize % CONTAINER_BIT_SIZE);
-		bits.resize(bits.len() + excess_bits_len, 0);
-
 		let chunks = bits.chunks(CONTAINER_BIT_SIZE);
 		for chunk in chunks {
 			let mut iter = chunk.iter().copied();
