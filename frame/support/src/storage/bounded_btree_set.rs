@@ -287,19 +287,15 @@ impl<T, S> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where BTreeS
 pub mod test {
 	use super::*;
 	use crate::Twox128;
+	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
-
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeSet<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeSet<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeSet<u32, Seven>>
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeSet<u32, ConstU32<7>>>
 	}
 
 	fn map_from_keys<T>(keys: &[T]) -> BTreeSet<T>
@@ -320,13 +316,13 @@ pub mod test {
 	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -334,7 +330,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -345,7 +341,7 @@ pub mod test {
 
 	#[test]
 	fn try_insert_works() {
-		let mut bounded = boundedmap_from_keys::<u32, Four>(&[1, 2, 3]);
+		let mut bounded = boundedmap_from_keys::<u32, ConstU32<4>>(&[1, 2, 3]);
 		bounded.try_insert(0).unwrap();
 		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
 
@@ -355,7 +351,7 @@ pub mod test {
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3]);
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -364,7 +360,7 @@ pub mod test {
 
 	#[test]
 	fn try_mutate_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
 		let bounded = bounded
 			.try_mutate(|v| {
 				v.insert(7);
@@ -380,7 +376,7 @@ pub mod test {
 
 	#[test]
 	fn btree_map_eq_works() {
-		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2, 3, 4, 5, 6]);
 		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
 	}
 
@@ -388,7 +384,7 @@ pub mod test {
 	fn too_big_fail_to_decode() {
 		let v: Vec<u32> = vec![1, 2, 3, 4, 5];
 		assert_eq!(
-			BoundedBTreeSet::<u32, Four>::decode(&mut &v.encode()[..]),
+			BoundedBTreeSet::<u32, ConstU32<4>>::decode(&mut &v.encode()[..]),
 			Err("BoundedBTreeSet exceeds its limit".into()),
 		);
 	}
@@ -418,7 +414,7 @@ pub mod test {
 			}
 		}
 
-		let mut set = BoundedBTreeSet::<Unequal, Four>::new();
+		let mut set = BoundedBTreeSet::<Unequal, ConstU32<4>>::new();
 
 		// when the set is full
 

@@ -44,7 +44,7 @@ pub use sp_application_crypto as app_crypto;
 pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_core::{
-	crypto::{self, Public},
+	crypto::{self, ByteArray},
 	ecdsa, ed25519,
 	hash::{H256, H512},
 	sr25519,
@@ -284,12 +284,6 @@ impl TryFrom<MultiSignature> for ecdsa::Signature {
 	}
 }
 
-impl Default for MultiSignature {
-	fn default() -> Self {
-		Self::Ed25519(Default::default())
-	}
-}
-
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -300,12 +294,6 @@ pub enum MultiSigner {
 	Sr25519(sr25519::Public),
 	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
-}
-
-impl Default for MultiSigner {
-	fn default() -> Self {
-		Self::Ed25519(Default::default())
-	}
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminer`,
@@ -403,10 +391,14 @@ impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
 		match (self, signer) {
-			(Self::Ed25519(ref sig), who) =>
-				sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(Self::Sr25519(ref sig), who) =>
-				sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(Self::Ed25519(ref sig), who) => match ed25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
+			(Self::Sr25519(ref sig), who) => match sr25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
 			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
@@ -433,7 +425,10 @@ impl Verify for AnySignature {
 			.map(|s| s.verify(msg, signer))
 			.unwrap_or(false) ||
 			ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-				.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
+				.map(|s| match ed25519::Public::from_slice(signer.as_ref()) {
+					Err(()) => false,
+					Ok(signer) => s.verify(msg, &signer),
+				})
 				.unwrap_or(false)
 	}
 }
@@ -494,6 +489,8 @@ pub enum DispatchError {
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
 	NoProviders,
+	/// There are too many consumers so the account cannot be created.
+	TooManyConsumers,
 	/// An error to do with tokens.
 	Token(TokenError),
 	/// An arithmetic error.
@@ -629,6 +626,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
+			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
 		}
@@ -660,6 +658,7 @@ impl traits::Printable for DispatchError {
 			},
 			Self::ConsumerRemaining => "Consumer remaining".print(),
 			Self::NoProviders => "No providers".print(),
+			Self::TooManyConsumers => "Too many consumers".print(),
 			Self::Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
@@ -920,7 +919,7 @@ mod tests {
 
 	use super::*;
 	use codec::{Decode, Encode};
-	use sp_core::crypto::Pair;
+	use sp_core::crypto::{Pair, UncheckedFrom};
 	use sp_io::TestExternalities;
 	use sp_state_machine::create_proof_check_backend;
 
@@ -1006,7 +1005,9 @@ mod tests {
 
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
-			sp_io::crypto::sr25519_verify(&Default::default(), &Vec::new(), &Default::default());
+			let dummy = UncheckedFrom::unchecked_from([1; 32]);
+			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
+			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
 		});
 	}
 

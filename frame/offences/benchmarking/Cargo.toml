@@ -29,15 +29,15 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-staking = { version = "4.0.0-dev", default-features = false, features = [
 	"runtime-benchmarks",
 ], path = "../../staking" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../election-provider-support" }
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 
 [features]

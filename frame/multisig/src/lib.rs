@@ -64,7 +64,7 @@ use frame_system::{self as system, RawOrigin};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Dispatchable, Zero},
+	traits::{Dispatchable, TrailingZeroInput, Zero},
 	DispatchError,
 };
 use sp_std::prelude::*;
@@ -508,7 +508,8 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: `who` must be sorted. If it is not, then you'll get the wrong answer.
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
 	fn operate(

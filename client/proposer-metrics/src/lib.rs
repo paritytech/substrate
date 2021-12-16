@@ -56,28 +56,28 @@ impl Metrics {
 		Ok(Self {
 			block_constructed: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_block_constructed",
+					"substrate_proposer_block_constructed",
 					"Histogram of time taken to construct new block",
 				))?,
 				registry,
 			)?,
 			number_of_transactions: register(
 				Gauge::new(
-					"proposer_number_of_transactions",
+					"substrate_proposer_number_of_transactions",
 					"Number of transactions included in block",
 				)?,
 				registry,
 			)?,
 			create_inherents_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_create_inherents_time",
+					"substrate_proposer_create_inherents_time",
 					"Histogram of time taken to execute create inherents",
 				))?,
 				registry,
 			)?,
 			create_block_proposal_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_block_proposal_time",
+					"substrate_proposer_block_proposal_time",
 					"Histogram of time taken to construct a block and prepare it for proposal",
 				))?,
 				registry,
