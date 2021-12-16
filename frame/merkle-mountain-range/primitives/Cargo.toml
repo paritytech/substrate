@@ -18,7 +18,7 @@ serde = { version = "1.0.126", optional = true, features = ["derive"] }
 
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }

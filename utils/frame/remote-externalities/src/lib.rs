@@ -738,7 +738,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		self
 	}
 
-	/// Just a utility wrapper of [`inject_hashed_prefix`] that injects
+	/// Just a utility wrapper of [`Self::inject_hashed_prefix`] that injects
 	/// [`DEFAULT_CHILD_STORAGE_KEY_PREFIX`] as a prefix.
 	///
 	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
@@ -747,9 +747,9 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	///
 	/// Otherwise, the only other way to make sure a child-tree is manually included is to inject
 	/// its root (`DEFAULT_CHILD_STORAGE_KEY_PREFIX`, plus some other postfix) into
-	/// [`inject_hashed_key`]. Unfortunately, there's no federated way of managing child tree roots
-	/// as of now and each pallet does its own thing. Therefore, it is not possible for this library
-	/// to automatically include child trees of pallet X, when its top keys are included.
+	/// [`Self::inject_hashed_key`]. Unfortunately, there's no federated way of managing child tree
+	/// roots as of now and each pallet does its own thing. Therefore, it is not possible for this
+	/// library to automatically include child trees of pallet X, when its top keys are included.
 	pub fn inject_default_child_tree_prefix(self) -> Self {
 		self.inject_hashed_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
 	}

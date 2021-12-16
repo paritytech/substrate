@@ -21,7 +21,6 @@
 #[cfg(test)]
 mod tests;
 
-use log::warn;
 use std::{convert::TryInto, sync::Arc};
 
 use sp_blockchain::HeaderBackend;
@@ -188,7 +187,7 @@ where
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(error::Error::from) {
 			Ok(tx) => tx,
 			Err(err) => {
-				warn!("Failed to submit extrinsic: {}", err);
+				log::debug!("Failed to submit extrinsic: {}", err);
 				// reject the subscriber (ignore errors - we don't care if subscriber is no longer
 				// there).
 				let _ = subscriber.reject(err.into());
@@ -211,7 +210,7 @@ where
 			let tx_stream = match submit.await {
 				Ok(s) => s,
 				Err(err) => {
-					warn!("Failed to submit extrinsic: {}", err);
+					log::debug!("Failed to submit extrinsic: {}", err);
 					// reject the subscriber (ignore errors - we don't care if subscriber is no
 					// longer there).
 					let _ = subscriber.reject(err.into());
@@ -222,14 +221,16 @@ where
 			subscriptions.add(subscriber, move |sink| {
 				tx_stream
 					.map(|v| Ok(Ok(v)))
-					.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
+					.forward(
+						sink.sink_map_err(|e| log::debug!("Error sending notifications: {:?}", e)),
+					)
 					.map(drop)
 			});
 		};
 
 		let res = self.subscriptions.executor().spawn_obj(future.boxed().into());
 		if res.is_err() {
-			warn!("Error spawning subscription RPC task.");
+			log::warn!("Error spawning subscription RPC task.");
 		}
 	}
 

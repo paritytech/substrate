@@ -25,15 +25,15 @@ rand = "0.7.3"
 tiny-bip39 = "0.8.2"
 serde_json = "1.0.71"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sp-panic-handler = { version = "4.0.0-dev", path = "../../primitives/panic-handler" }
+sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../service" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }

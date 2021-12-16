@@ -188,8 +188,6 @@ pub struct PrometheusConfig {
 
 impl PrometheusConfig {
 	/// Create a new config using the default registry.
-	///
-	/// The default registry prefixes metrics with `substrate`.
 	pub fn new_with_default_registry(port: SocketAddr, chain_id: String) -> Self {
 		let param = iter::once((String::from("chain"), chain_id)).collect();
 		Self {

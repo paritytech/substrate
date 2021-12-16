@@ -22,7 +22,7 @@
 use crate as pallet_aura;
 use frame_support::{
 	parameter_types,
-	traits::{DisabledValidators, GenesisBuild},
+	traits::{ConstU32, ConstU64, DisabledValidators, GenesisBuild},
 };
 use sp_consensus_aura::{ed25519::AuthorityId, AuthorityIndex};
 use sp_core::H256;
@@ -48,10 +48,8 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
-	pub const MinimumPeriod: u64 = 1;
 }
 
 impl frame_system::Config for Test {
@@ -69,7 +67,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -84,12 +82,8 @@ impl frame_system::Config for Test {
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<1>;
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const MaxAuthorities: u32 = 10;
 }
 
 thread_local! {
@@ -118,7 +112,7 @@ impl DisabledValidators for MockDisabledValidators {
 impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
 	type DisabledValidators = MockDisabledValidators;
-	type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = ConstU32<10>;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {

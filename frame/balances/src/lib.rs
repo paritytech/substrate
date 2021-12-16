@@ -971,7 +971,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			Locks::<T, I>::insert(who, bounded_locks);
 			if !existed {
-				if system::Pallet::<T>::inc_consumers(who).is_err() {
+				if system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
 					// since the funds that are under the lock will themselves be stored in the
 					// account and therefore will need a reference.
