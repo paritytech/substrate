@@ -51,7 +51,7 @@ use sp_core::{
 	offchain::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
-	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, H256,
+	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, StateVersion, H256,
 };
 
 #[cfg(feature = "std")]
@@ -95,13 +95,6 @@ pub enum KillStorageResult {
 	AllRemoved(u32),
 	/// Not all key to remove were removed, return number of key removed from backend.
 	SomeRemaining(u32),
-}
-
-fn state_version(version: u8) -> sp_core::StateVersion {
-	match version {
-		0 => sp_core::StateVersion::V0,
-		_ => sp_core::StateVersion::V1,
-	}
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -199,17 +192,17 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		self.storage_root(sp_core::StateVersion::V0)
+		self.storage_root(StateVersion::V0)
 	}
 
-	#[version(2)]
 	/// "Commit" all existing operations and compute the resulting storage root.
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
-	fn root(&mut self, version: u8) -> Vec<u8> {
-		self.storage_root(state_version(version))
+	#[version(2)]
+	fn root(&mut self, version: StateVersion) -> Vec<u8> {
+		self.storage_root(version)
 	}
 
 	/// Always returns `None`. This function exists for compatibility reasons.
@@ -390,7 +383,7 @@ pub trait DefaultChildStorage {
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info, sp_core::StateVersion::V0)
+		self.child_storage_root(&child_info, StateVersion::V0)
 	}
 
 	/// Default child root calculation.
@@ -400,9 +393,9 @@ pub trait DefaultChildStorage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	#[version(2)]
-	fn root(&mut self, storage_key: &[u8], version: u8) -> Vec<u8> {
+	fn root(&mut self, storage_key: &[u8], version: StateVersion) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info, state_version(version))
+		self.child_storage_root(&child_info, version)
 	}
 
 	/// Child storage key iteration.
@@ -424,10 +417,10 @@ pub trait Trie {
 
 	/// A trie root formed from the iterated items.
 	#[version(2)]
-	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: u8) -> H256 {
-		match state_version {
-			0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
-			_ => LayoutV1::<sp_core::Blake2Hasher>::trie_root(input),
+	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::trie_root(input),
 		}
 	}
 
@@ -438,10 +431,10 @@ pub trait Trie {
 
 	/// A trie root formed from the enumerated items.
 	#[version(2)]
-	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, state_version: u8) -> H256 {
-		match state_version {
-			0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
-			_ => LayoutV1::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::ordered_trie_root(input),
 		}
 	}
 
@@ -452,10 +445,10 @@ pub trait Trie {
 
 	/// A trie root formed from the iterated items.
 	#[version(2)]
-	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: u8) -> H256 {
-		match state_version {
-			0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
-			_ => LayoutV1::<sp_core::KeccakHasher>::trie_root(input),
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::trie_root(input),
 		}
 	}
 
@@ -466,10 +459,10 @@ pub trait Trie {
 
 	/// A trie root formed from the enumerated items.
 	#[version(2)]
-	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, state_version: u8) -> H256 {
-		match state_version {
-			0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
-			_ => LayoutV1::<sp_core::KeccakHasher>::ordered_trie_root(input),
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::ordered_trie_root(input),
 		}
 	}
 
@@ -490,20 +483,22 @@ pub trait Trie {
 		proof: &[Vec<u8>],
 		key: &[u8],
 		value: &[u8],
-		state_version: u8,
+		version: StateVersion,
 	) -> bool {
-		match state_version {
-			0 => sp_trie::verify_trie_proof::<LayoutV0<sp_core::Blake2Hasher>, _, _, _>(
-				&root,
-				proof,
-				&[(key, Some(value))],
-			)
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
 			.is_ok(),
-			_ => sp_trie::verify_trie_proof::<LayoutV1<sp_core::Blake2Hasher>, _, _, _>(
-				&root,
-				proof,
-				&[(key, Some(value))],
-			)
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
 			.is_ok(),
 		}
 	}
@@ -525,20 +520,22 @@ pub trait Trie {
 		proof: &[Vec<u8>],
 		key: &[u8],
 		value: &[u8],
-		state_version: u8,
+		version: StateVersion,
 	) -> bool {
-		match state_version {
-			0 => sp_trie::verify_trie_proof::<LayoutV0<sp_core::KeccakHasher>, _, _, _>(
-				&root,
-				proof,
-				&[(key, Some(value))],
-			)
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
 			.is_ok(),
-			_ => sp_trie::verify_trie_proof::<LayoutV1<sp_core::KeccakHasher>, _, _, _>(
-				&root,
-				proof,
-				&[(key, Some(value))],
-			)
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
 			.is_ok(),
 		}
 	}

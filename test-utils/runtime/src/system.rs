@@ -196,8 +196,7 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
-	let extrinsics_root =
-		trie::blake2_256_ordered_root(txs, sp_core::StateVersion::V0 as u8).into();
+	let extrinsics_root = trie::blake2_256_ordered_root(txs, sp_core::StateVersion::V0).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
@@ -206,7 +205,7 @@ pub fn finalize_block() -> Header {
 
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
-	let storage_root = Hash::decode(&mut &storage_root(sp_core::StateVersion::V1 as u8)[..])
+	let storage_root = Hash::decode(&mut &storage_root(sp_core::StateVersion::V1)[..])
 		.expect("`storage_root` is a valid hash");
 
 	if let Some(new_authorities) = o_new_authorities {

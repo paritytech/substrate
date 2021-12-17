@@ -1356,9 +1356,9 @@ impl<T: Config> Pallet<T> {
 		}
 
 		#[cfg(feature = "use-state-v0")]
-		let version = sp_core::StateVersion::V0 as u8;
+		let version = sp_core::StateVersion::V0;
 		#[cfg(not(feature = "use-state-v0"))]
-		let version = sp_core::StateVersion::V1 as u8;
+		let version = sp_core::StateVersion::V1;
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 

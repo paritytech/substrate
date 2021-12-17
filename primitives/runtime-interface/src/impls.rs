@@ -544,3 +544,7 @@ impl PassBy for sp_wasm_interface::Value {
 impl PassBy for sp_storage::TrackedStorageKey {
 	type PassBy = Codec<Self>;
 }
+
+impl PassBy for sp_storage::StateVersion {
+	type PassBy = Enum<Self>;
+}

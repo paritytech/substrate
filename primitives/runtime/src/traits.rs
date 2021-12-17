@@ -484,11 +484,11 @@ impl Hash for BlakeTwo256 {
 	type Output = sp_core::H256;
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::blake2_256_root(input, version as u8)
+		sp_io::trie::blake2_256_root(input, version)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
-		sp_io::trie::blake2_256_ordered_root(input, version as u8)
+		sp_io::trie::blake2_256_ordered_root(input, version)
 	}
 }
 
@@ -511,11 +511,11 @@ impl Hash for Keccak256 {
 	type Output = sp_core::H256;
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::keccak_256_root(input, version as u8)
+		sp_io::trie::keccak_256_root(input, version)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
-		sp_io::trie::keccak_256_ordered_root(input, version as u8)
+		sp_io::trie::keccak_256_ordered_root(input, version)
 	}
 }
 

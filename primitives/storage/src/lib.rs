@@ -423,6 +423,23 @@ impl Default for StateVersion {
 	}
 }
 
+impl From<StateVersion> for u8 {
+	fn from(version: StateVersion) -> u8 {
+		version as u8
+	}
+}
+
+impl sp_std::convert::TryFrom<u8> for StateVersion {
+	type Error = ();
+	fn try_from(val: u8) -> sp_std::result::Result<StateVersion, ()> {
+		match val {
+			0 => Ok(StateVersion::V0),
+			1 => Ok(StateVersion::V1),
+			_ => Err(()),
+		}
+	}
+}
+
 impl StateVersion {
 	/// If defined, values in state of size bigger or equal
 	/// to this threshold will use a separate trie node.
