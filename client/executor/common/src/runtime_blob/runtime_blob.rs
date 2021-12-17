@@ -110,10 +110,15 @@ impl RuntimeBlob {
 	/// Converts a WASM memory import into a memory section and exports it.
 	///
 	/// Does nothing if there's no memory import.
-	pub fn convert_memory_import_into_export(&mut self, extra_heap_pages: u32) {
+	///
+	/// May return an error in case the WASM module is invalid.
+	pub fn convert_memory_import_into_export(
+		&mut self,
+		extra_heap_pages: u32,
+	) -> Result<(), WasmError> {
 		let import_section = match self.raw_module.import_section_mut() {
 			Some(import_section) => import_section,
-			None => return,
+			None => return Ok(()),
 		};
 
 		let import_entries = import_section.entries_mut();
@@ -132,7 +137,12 @@ impl RuntimeBlob {
 			let new_memory_ty = MemoryType::new(min, max);
 			self.raw_module
 				.insert_section(Section::Memory(MemorySection::with_entries(vec![new_memory_ty])))
-				.expect("there can be only one memory so adding a new memory will always succeed after removing the existing one");
+				.map_err(|error| {
+					WasmError::Other(format!(
+					"can't convert a memory import into an export: failed to insert a new memory section: {}",
+					error
+				))
+				})?;
 
 			if self.raw_module.export_section_mut().is_none() {
 				// A module without an export section is somewhat unrealistic, but let's do this
@@ -149,6 +159,8 @@ impl RuntimeBlob {
 
 			break
 		}
+
+		Ok(())
 	}
 
 	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].

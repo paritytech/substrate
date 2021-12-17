@@ -545,7 +545,7 @@ where
 					.heap_pages
 					.try_into()
 					.expect("a reasonable 'heap_pages' will never exceed 2^32"),
-			);
+			)?;
 
 			let serialized_blob = blob.clone().serialize();
 
