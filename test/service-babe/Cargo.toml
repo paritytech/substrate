@@ -1,5 +1,5 @@
 [package]
-name = "cumulus-test-service"
+name = "test-service-babe"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -64,7 +64,7 @@ sc-utils = { version = "4.0.0-dev", path = "../../client/utils" }
 # cumulus-client-service = { path = "../../client/service" }
 # cumulus-client-consensus-common = { path = "../../client/consensus/common" }
 # cumulus-primitives-core = { path = "../../primitives/core" }
-cumulus-test-runtime = { path = "../runtime" }
+test-runtime-babe = { path = "../runtime-babe" }
 
 criterion = { version = "0.3.5", features = ["async_tokio"] }
 

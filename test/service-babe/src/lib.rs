@@ -24,7 +24,7 @@ mod genesis;
 use sc_utils::mpsc::TracingUnboundedSender;
 use sc_consensus_babe::SlotProportion;
 use core::future::Future;
-use cumulus_test_runtime::{NodeBlock as Block, RuntimeApi};
+use test_runtime_babe::{NodeBlock as Block, RuntimeApi};
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use manual_seal::import_queue;
 use sc_client_api::execution_extensions::ExecutionStrategies;
@@ -48,7 +48,7 @@ use substrate_test_client::{
 use sp_api::ProvideRuntimeApi;
 //use sp_api::BlockT;
 pub use chain_spec::*;
-pub use cumulus_test_runtime as runtime;
+pub use test_runtime_babe as runtime;
 pub use genesis::*;
 pub use sp_keyring::Sr25519Keyring as Keyring;
 // use sc_consensus::BlockImport;
@@ -87,11 +87,11 @@ impl sc_executor::NativeExecutionDispatch for RuntimeExecutor {
 	type ExtendHostFunctions = ();
 
 	fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-		cumulus_test_runtime::api::dispatch(method, data)
+		test_runtime_babe::api::dispatch(method, data)
 	}
 
 	fn native_version() -> sc_executor::NativeVersion {
-		cumulus_test_runtime::native_version()
+		test_runtime_babe::native_version()
 	}
 }
 

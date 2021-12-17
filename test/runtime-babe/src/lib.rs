@@ -279,7 +279,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
-use spin::Lazy;
+//use spin::Lazy;
 use sp_runtime::AccountId32;
 
 // parameter_types! {

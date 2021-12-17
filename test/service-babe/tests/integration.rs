@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use cumulus_test_service::Keyring::*;
+use test_service_babe::Keyring::*;
 use futures::join;
 
 //#[test]
@@ -47,7 +47,7 @@ macro_rules! pepper { ($($element:stmt;)*) => { $(println!("{}:{} {}", file!(), 
 	// alice
 	// 	.register_parachain(
 	// 		para_id,
-	// 		cumulus_test_runtime::WASM_BINARY
+	// 		test_runtime_babe::WASM_BINARY
 	// 			.expect("You need to build the WASM binary to run this test!")
 	// 			.to_vec(),
 	// 		initial_head_data(para_id),
@@ -56,7 +56,7 @@ macro_rules! pepper { ($($element:stmt;)*) => { $(println!("{}:{} {}", file!(), 
 	// 	.unwrap();
 pepper!{
 	// run cumulus charlie (a parachain collator)
-	let charlie = cumulus_test_service::TestNodeBuilder::new(tokio_handle.clone(), Charlie)
+	let charlie = test_service_babe::TestNodeBuilder::new(tokio_handle.clone(), Charlie)
 		//.enable_collator()
 		//.connect_to_relay_chain_nodes(vec![&alice, &bob])
 		//.connect_to_parachain_node(vec![&alice, &bob])
@@ -65,7 +65,7 @@ pepper!{
 
 
 	// // run cumulus dave (a parachain full node) and wait for it to sync some blocks
-	let dave = cumulus_test_service::TestNodeBuilder::new(tokio_handle, Dave)
+	let dave = test_service_babe::TestNodeBuilder::new(tokio_handle, Dave)
 		.connect_to_parachain_node(&charlie)
 		//.connect_to_relay_chain_nodes(vec![&alice, &bob])
 		.build()

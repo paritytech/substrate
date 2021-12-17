@@ -15,7 +15,7 @@
 // // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // use cumulus_primitives_core::ParaId;
-// use cumulus_test_service::{initial_head_data, run_relay_chain_validator_node, Keyring::*};
+// use test_service_babe::{initial_head_data, run_relay_chain_validator_node, Keyring::*};
 // use futures::{join, StreamExt};
 // use sc_client_api::BlockchainEvents;
 // use sp_runtime::generic::BlockId;
@@ -41,7 +41,7 @@
 // 	alice
 // 		.register_parachain(
 // 			para_id,
-// 			cumulus_test_runtime::WASM_BINARY
+// 			test_runtime_babe::WASM_BINARY
 // 				.expect("You need to build the WASM binary to run this test!")
 // 				.to_vec(),
 // 			initial_head_data(para_id),
@@ -51,14 +51,14 @@
 
 // 	// run cumulus charlie (a parachain collator)
 // 	let charlie =
-// 		cumulus_test_service::TestNodeBuilder::new(para_id, tokio_handle.clone(), Charlie)
+// 		test_service_babe::TestNodeBuilder::new(para_id, tokio_handle.clone(), Charlie)
 // 			.enable_collator()
 // 			.connect_to_relay_chain_nodes(vec![&alice, &bob])
 // 			.build()
 // 			.await;
 
 // 	// run cumulus dave (a parachain full node)
-// 	let dave = cumulus_test_service::TestNodeBuilder::new(para_id, tokio_handle, Dave)
+// 	let dave = test_service_babe::TestNodeBuilder::new(para_id, tokio_handle, Dave)
 // 		.connect_to_parachain_node(&charlie)
 // 		.connect_to_relay_chain_nodes(vec![&alice, &bob])
 // 		.build()
@@ -73,7 +73,7 @@
 // 		.expect("Runtime version exists");
 // 	expected_runtime_version.spec_version += 1;
 
-// 	let wasm = cumulus_test_runtime::wasm_spec_version_incremented::WASM_BINARY
+// 	let wasm = test_runtime_babe::wasm_spec_version_incremented::WASM_BINARY
 // 		.expect("Wasm binary with incremented spec version should have been built");
 
 // 	// schedule runtime upgrade

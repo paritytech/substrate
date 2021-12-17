@@ -28,7 +28,7 @@ use sp_core::storage::Storage;
 use sp_runtime::{generic::Era, BuildStorage, SaturatedConversion};
 
 pub use block_builder::*;
-pub use cumulus_test_runtime as runtime;
+pub use test_runtime_babe as runtime;
 pub use sc_executor::error::Result as ExecutorResult;
 pub use substrate_test_client::*;
 
@@ -40,11 +40,11 @@ mod local_executor {
 		type ExtendHostFunctions = ();
 
 		fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-			cumulus_test_runtime::api::dispatch(method, data)
+			test_runtime_babe::api::dispatch(method, data)
 		}
 
 		fn native_version() -> sc_executor::NativeVersion {
-			cumulus_test_runtime::native_version()
+			test_runtime_babe::native_version()
 		}
 	}
 }
@@ -75,7 +75,7 @@ pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		cumulus_test_service::local_testnet_genesis().build_storage().unwrap()
+		test_service_babe::local_testnet_genesis().build_storage().unwrap()
 	}
 }
 

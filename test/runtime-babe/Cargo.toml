@@ -1,5 +1,5 @@
 [package]
-name = "cumulus-test-runtime"
+name = "test-runtime-babe"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

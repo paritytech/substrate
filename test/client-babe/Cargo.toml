@@ -1,5 +1,5 @@
 [package]
-name = "cumulus-test-client"
+name = "test-client-babe"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -33,8 +33,8 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
 
 # Cumulus deps
-cumulus-test-runtime = { path = "../runtime" }
-cumulus-test-service = { path = "../service" }
+test-runtime-babe = { path = "../runtime-babe" }
+test-service-babe = { path = "../service-babe" }
 
 # Other deps
 codec = { package = "parity-scale-codec", version = "2.3.0", default-features = false, features = ["derive"] }

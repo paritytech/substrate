@@ -18,7 +18,6 @@
 // use cumulus_primitives_parachain_inherent::{ParachainInherentData, INHERENT_IDENTIFIER};
 // use cumulus_test_relay_sproof_builder::RelayStateSproofBuilder;
 
-
 // use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 // use sp_api::ProvideRuntimeApi;
 // use sp_runtime::{
@@ -82,7 +81,7 @@
 // 	inherent_data
 // 		.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 // 		.expect("Put timestamp failed");
-//use cumulus_test_runtime::AccountId;
+//use test_runtime_babe::AccountId;
 // 	let (relay_parent_storage_root, relay_chain_state) =
 // 		relay_sproof_builder.into_state_root_and_proof();
 
@@ -138,7 +137,7 @@
 // 		let last_timestamp =
 // 			self.runtime_api().get_last_timestamp(&at).expect("Get last timestamp");
 
-// 		let timestamp = last_timestamp + cumulus_test_runtime::MinimumPeriod::get();
+// 		let timestamp = last_timestamp + test_runtime_babe::MinimumPeriod::get();
 
 // 		init_block_builder(self, at, validation_data, relay_sproof_builder, timestamp)
 // 	}

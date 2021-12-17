@@ -16,7 +16,7 @@
 
 #![allow(missing_docs)]
 
-use cumulus_test_runtime::{AccountId, BabeConfig, GrandpaConfig, Signature};
+use test_runtime_babe::{AccountId, BabeConfig, GrandpaConfig, Signature};
 use sc_chain_spec::{ChainSpecExtension, ChainSpecGroup};
 use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
@@ -31,13 +31,13 @@ pub type ChainSpec = sc_service::GenericChainSpec<GenesisExt, Extensions>;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct GenesisExt {
 	/// The runtime genesis config.
-	runtime_genesis_config: cumulus_test_runtime::GenesisConfig,
+	runtime_genesis_config: test_runtime_babe::GenesisConfig,
 }
 
 impl sp_runtime::BuildStorage for GenesisExt {
 	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
 		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
-			sp_io::storage::set(cumulus_test_runtime::TEST_RUNTIME_UPGRADE_KEY, &vec![1, 2, 3, 4]);
+			sp_io::storage::set(test_runtime_babe::TEST_RUNTIME_UPGRADE_KEY, &vec![1, 2, 3, 4]);
 		});
 
 		self.runtime_genesis_config.assimilate_storage(storage)
@@ -112,7 +112,7 @@ pub fn get_chain_spec() -> ChainSpec {
 }
 
 /// Local testnet genesis for testing.
-pub fn local_testnet_genesis() -> cumulus_test_runtime::GenesisConfig {
+pub fn local_testnet_genesis() -> test_runtime_babe::GenesisConfig {
 	testnet_genesis(
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		vec![
@@ -144,7 +144,7 @@ fn session_keys(
 fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
-) -> cumulus_test_runtime::GenesisConfig {
+) -> test_runtime_babe::GenesisConfig {
 	let mut initial_authorities: Vec<(
 		AccountId,
 		AccountId,
@@ -161,9 +161,9 @@ fn testnet_genesis(
 	//const STASH: Balance = ENDOWMENT / 1000;
 	//let rng = rand::thread_rng();
 	//let initial_nominators: Vec<AccountId> = vec![];
-	cumulus_test_runtime::GenesisConfig {
-		system: cumulus_test_runtime::SystemConfig {
-			code: cumulus_test_runtime::WASM_BINARY
+	test_runtime_babe::GenesisConfig {
+		system: test_runtime_babe::SystemConfig {
+			code: test_runtime_babe::WASM_BINARY
 				.expect("WASM binary was not build, please build it!")
 				.to_vec(),
 			..Default::default()
@@ -171,14 +171,14 @@ fn testnet_genesis(
 		babe: BabeConfig {
 			authorities: vec![],
 		//	authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1u64)).collect(),
-			epoch_config: Some(cumulus_test_runtime::BABE_GENESIS_EPOCH_CONFIG),
+			epoch_config: Some(test_runtime_babe::BABE_GENESIS_EPOCH_CONFIG),
 		},
 		grandpa: GrandpaConfig {
 			authorities: vec![] //These seem to be set by GenesisBuild
 		//	authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1u64)).collect(),
 		},
 		collective: pallet_collective::pallet::GenesisConfig { ..Default::default() },
-		sudo: cumulus_test_runtime::SudoConfig { key: root_key },
+		sudo: test_runtime_babe::SudoConfig { key: root_key },
 		//session: Default::default(),
 
 		session: SessionConfig {
