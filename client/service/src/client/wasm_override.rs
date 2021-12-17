@@ -55,7 +55,7 @@ const WARN_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Auxiliary structure that holds a wasm blob and its hash.
 #[derive(Debug)]
-pub(crate) struct WasmBlob {
+struct WasmBlob {
 	/// The actual wasm blob, aka the code.
 	code: Vec<u8>,
 	/// The hash of [`Self::code`].
@@ -70,17 +70,17 @@ pub(crate) struct WasmBlob {
 }
 
 impl WasmBlob {
-	pub(crate) fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, spec_name: String) -> Self {
+	fn new(code: Vec<u8>, hash: Vec<u8>, path: PathBuf, spec_name: String) -> Self {
 		Self { code, hash, path, spec_name, last_warn: Default::default() }
 	}
 
-	pub(crate) fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
+	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
 		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages }
 	}
 }
 
 /// Make a hash out of a byte string using the default rust hasher
-pub(crate) fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> Vec<u8> {
+fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> Vec<u8> {
 	let mut state = DefaultHasher::new();
 	val.hash(&mut state);
 	state.finish().to_le_bytes().to_vec()

@@ -1054,13 +1054,14 @@ where
 	) -> sp_blockchain::Result<StateVersion> {
 		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
 			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
-			let code_fetcher = crate::client::wasm_override::WasmBlob::new(
-				wasm.clone(),
-				crate::client::wasm_override::make_hash(&wasm),
-				Default::default(),
-				Default::default(),
-			);
-			let runtime_code = code_fetcher.runtime_code(None);
+
+			let code_fetcher =
+				sp_core::traits::WrappedRuntimeCode(std::borrow::Cow::from(wasm.as_slice()));
+			let runtime_code = sp_core::traits::RuntimeCode {
+				code_fetcher: &code_fetcher,
+				heap_pages: None,
+				hash: Default::default(),
+			};
 			let runtime_version =
 				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
 					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?;
