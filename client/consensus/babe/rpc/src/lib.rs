@@ -247,7 +247,7 @@ mod tests {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
-		let config = Config::get_or_compute(&*client).expect("config available");
+		let config = Config::get(&*client).expect("config available");
 		let (_, link) = block_import(config.clone(), client.clone(), client.clone())
 			.expect("can initialize block-import");
 

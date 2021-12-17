@@ -337,39 +337,40 @@ pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 pub struct Config(sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>);
 
 impl Config {
-	/// Either fetch the slot duration from disk or compute it from the genesis
-	/// state.
-	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self>
+	/// Fetch the config from the runtime.
+	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
-			let has_api_v1 = a.has_api_with::<dyn BabeApi<B>, _>(&b, |v| v == 1)?;
-			let has_api_v2 = a.has_api_with::<dyn BabeApi<B>, _>(&b, |v| v == 2)?;
 
-			if has_api_v1 {
-				#[allow(deprecated)]
-				{
-					Ok(a.configuration_before_version_2(b)?.into())
-				}
-			} else if has_api_v2 {
-				a.configuration(b).map_err(Into::into)
-			} else {
-				Err(sp_blockchain::Error::VersionInvalid(
-					"Unsupported or invalid BabeApi version".to_string(),
-				))
+		let best_hash = client.usage_info().chain.best_hash;
+		let best_block_id = BlockId::Hash(best_hash);
+		let runtime_api = client.runtime_api();
+
+		let version = runtime_api.api_version::<dyn BabeApi<B>>(&best_block_id)?;
+
+		let slot_duration = if version == Some(1) {
+			#[allow(deprecated)]
+			{
+				runtime_api.configuration_before_version_2(&best_block_id)?.into()
 			}
-		})
-		.map(Self)
-		{
-			Ok(s) => Ok(s),
-			Err(s) => {
-				warn!(target: "babe", "Failed to get slot duration");
-				Err(s)
-			},
-		}
+		} else if version == Some(2) {
+			runtime_api.configuration(&best_block_id)?
+		} else {
+			return Err(sp_blockchain::Error::VersionInvalid(
+				"Unsupported or invalid BabeApi version".to_string(),
+			))
+		};
+
+		info!(
+			"⏱  Loaded block-time = {:?} from block {:?}",
+			slot_duration.slot_duration(),
+			best_hash,
+		);
+
+		Ok(Self(sc_consensus_slots::SlotDuration::new(slot_duration)))
 	}
 
 	/// Get the inner slot duration

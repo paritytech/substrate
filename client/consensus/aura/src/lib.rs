@@ -55,6 +55,7 @@ use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
 use sp_consensus::{
 	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
+	SlotData,
 };
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{ByteArray, Pair, Public};
@@ -85,7 +86,7 @@ type AuthorityId<P> = <P as Pair>::Public;
 /// Slot duration type for Aura.
 pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
-/// Get type of `SlotDuration` for Aura.
+/// Get the slot duration for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
 where
 	A: Codec,
@@ -93,7 +94,17 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
-	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
+	let best_hash = client.usage_info().chain.best_hash;
+	let best_block_id = BlockId::Hash(best_hash);
+	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
+
+	log::info!(
+		"⏱  Loaded block-time = {:?} from block {:?}",
+		slot_duration.slot_duration(),
+		best_hash,
+	);
+
+	Ok(SlotDuration::new(slot_duration))
 }
 
 /// Get slot author for given block along with authorities.
