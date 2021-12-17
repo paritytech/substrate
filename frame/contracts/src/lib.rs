@@ -289,7 +289,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			let output = Self::internal_call(
+			let mut output = Self::internal_call(
 				origin,
 				dest,
 				value,
@@ -298,6 +298,11 @@ pub mod pallet {
 				data,
 				None,
 			);
+			if let Ok(retval) = &output.result {
+				if retval.did_revert() {
+					output.result = Err(<Error<T>>::ContractReverted.into());
+				}
+			}
 			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
 		}
 
@@ -346,7 +351,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			let salt_len = salt.len() as u32;
-			let output = Self::internal_instantiate(
+			let mut output = Self::internal_instantiate(
 				origin,
 				value,
 				gas_limit,
@@ -356,6 +361,11 @@ pub mod pallet {
 				salt,
 				None,
 			);
+			if let Ok(retval) = &output.result {
+				if retval.1.did_revert() {
+					output.result = Err(<Error<T>>::ContractReverted.into());
+				}
+			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
 				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
@@ -381,7 +391,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let salt_len = salt.len() as u32;
-			let output = Self::internal_instantiate(
+			let mut output = Self::internal_instantiate(
 				origin,
 				value,
 				gas_limit,
@@ -391,6 +401,11 @@ pub mod pallet {
 				salt,
 				None,
 			);
+			if let Ok(retval) = &output.result {
+				if retval.1.did_revert() {
+					output.result = Err(<Error<T>>::ContractReverted.into());
+				}
+			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
 				T::WeightInfo::instantiate(salt_len / 1024),
@@ -540,6 +555,11 @@ pub mod pallet {
 		StorageDepositLimitExhausted,
 		/// Code removal was denied because the code is still in use by at least one contract.
 		CodeInUse,
+		/// The contract ran to completion but decided to revert its storage changes.
+		/// Please note that this error is only returned from extrinsics. When called directly
+		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
+		/// to determine whether a reversion has taken place.
+		ContractReverted,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.

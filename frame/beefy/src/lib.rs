@@ -47,7 +47,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Authority identifier type
-		type BeefyId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
+		type BeefyId: Member + Parameter + RuntimeAppPublic + MaybeSerializeDeserialize;
 	}
 
 	#[pallet::pallet]
