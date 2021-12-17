@@ -536,9 +536,7 @@ where
 	SlotDurationInvalid(SlotDuration<T>),
 }
 
-/// A slot duration. Create with [`get_or_compute`](Self::get_or_compute).
-// The internal member should stay private here to maintain invariants of
-// `get_or_compute`.
+/// A slot duration. Create with [`Self::new`].
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration<T>(T);
 
