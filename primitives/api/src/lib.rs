@@ -106,7 +106,7 @@ use sp_std::result;
 #[doc(hidden)]
 pub use sp_std::{mem, slice};
 #[doc(hidden)]
-pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
+pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion, RuntimeVersionV0, RuntimeVersionV1};
 #[cfg(feature = "std")]
 use std::{cell::RefCell, panic::UnwindSafe};
 
@@ -656,44 +656,6 @@ pub fn deserialize_runtime_api_info(bytes: [u8; RUNTIME_API_INFO_SIZE]) -> ([u8;
 	(id, version)
 }
 
-#[derive(codec::Encode, codec::Decode)]
-pub struct OldRuntimeVersion {
-	pub spec_name: RuntimeString,
-	pub impl_name: RuntimeString,
-	pub authoring_version: u32,
-	pub spec_version: u32,
-	pub impl_version: u32,
-	pub apis: ApisVec,
-}
-
-impl From<OldRuntimeVersion> for RuntimeVersion {
-	fn from(x: OldRuntimeVersion) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-			transaction_version: 1,
-		}
-	}
-}
-
-impl From<RuntimeVersion> for OldRuntimeVersion {
-	fn from(x: RuntimeVersion) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-		}
-	}
-}
-
-#[cfg(not(feature = "use-state-v0"))]
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
@@ -702,35 +664,11 @@ decl_runtime_apis! {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Returns the version of the runtime.
-		#[changed_in(3)]
-		fn version() -> OldRuntimeVersion;
-		/// Execute the given block.
-		fn execute_block(block: Block);
-		/// Initialize a block with the given header.
-		#[renamed("initialise_block", 2)]
-		fn initialize_block(header: &<Block as BlockT>::Header);
-	}
-
-	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata {
-		/// Returns the metadata of a runtime.
-		fn metadata() -> OpaqueMetadata;
-	}
-}
-
-// With feature 'use-state-v0' we keep core version to 3, so trie layout
-// V0 keeps being used for the runtime.
-#[cfg(feature = "use-state-v0")]
-decl_runtime_apis! {
-	/// The `Core` runtime api that every Substrate runtime needs to implement.
-	#[core_trait]
-	#[api_version(3)]
-	pub trait Core {
-		/// Returns the version of the runtime.
-		fn version() -> RuntimeVersion;
+		#[changed_in(4)]
+		fn version() -> RuntimeVersionV1;
 		/// Returns the version of the runtime.
 		#[changed_in(3)]
-		fn version() -> OldRuntimeVersion;
+		fn version() -> RuntimeVersionV0;
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.

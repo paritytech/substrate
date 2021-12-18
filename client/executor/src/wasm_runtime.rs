@@ -334,22 +334,13 @@ where
 }
 
 fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
-	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &version[..])
+	let v: sp_version::RuntimeVersionCompatibility = Decode::decode(&mut version)
 		.map_err(|_| {
 			WasmError::Instantiation(
 				"failed to decode \"Core_version\" result using old runtime version".into(),
 			)
-		})?
-		.into();
-
-	let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
-	if v.has_api_with(&core_api_id, |v| v >= 3) {
-		sp_api::RuntimeVersion::decode(&mut version).map_err(|_| {
-			WasmError::Instantiation("failed to decode \"Core_version\" result".into())
-		})
-	} else {
-		Ok(v)
-	}
+		})?;
+	Ok(v.into())
 }
 
 fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
@@ -467,6 +458,51 @@ mod tests {
 	}
 
 	#[test]
+	fn old_runtime_version_decodes() {
+		let old_runtime_version = sp_api::RuntimeVersionV0 {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 1)]),
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(1, version.transaction_version);
+	}
+
+	#[test]
+	fn old_runtime_version_decodes_fails_with_version_3() {
+		let old_runtime_version = sp_api::RuntimeVersionV0 {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+		};
+
+		decode_version(&old_runtime_version.encode()).unwrap_err();
+	}
+
+	#[test]
+	fn new_runtime_version_decodes() {
+		let old_runtime_version = sp_api::RuntimeVersionV1 {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+			transaction_version: 3,
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(3, version.transaction_version);
+	}
+
+	#[test]
 	fn embed_runtime_version_works() {
 		let wasm = sp_maybe_compressed_blob::decompress(
 			substrate_test_runtime::wasm_binary_unwrap(),
@@ -482,6 +518,7 @@ mod tests {
 			impl_version: 100,
 			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
 			transaction_version: 100,
+			state_version: 1,
 		};
 
 		let embedded = sp_version::embed::embed_runtime_version(&wasm, runtime_version.clone())

@@ -1355,10 +1355,7 @@ impl<T: Config> Pallet<T> {
 			<BlockHash<T>>::remove(to_remove);
 		}
 
-		#[cfg(feature = "use-state-v0")]
-		let version = sp_core::StateVersion::V0;
-		#[cfg(not(feature = "use-state-v0"))]
-		let version = sp_core::StateVersion::V1;
+		let version = T::Version::get().state_version();
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
