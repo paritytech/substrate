@@ -56,6 +56,28 @@ impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> VoteTally<Votes>
 	fn approval(&self) -> Perbill {
 		Perbill::from_rational(self.ayes, self.ayes.saturating_add(self.nays))
 	}
+
+	#[cfg(features = "runtime-benchmarks")]
+	fn unanimity() -> Self {
+		Self {
+			ayes: Total::get(),
+			nays: Zero::zero(),
+			turnout: Total::get(),
+			dummy: PhantomData,
+		}
+	}
+
+	#[cfg(features = "runtime-benchmarks")]
+	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
+		let turnout = turnout.mul_ceil(Total::get());
+		let ayes = approval.mul_ceil(turnout);
+		Self {
+			ayes,
+			nays: turnout - ayes,
+			turnout,
+			dummy: PhantomData,
+		}
+	}
 }
 
 impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> Tally<Votes, Total> {

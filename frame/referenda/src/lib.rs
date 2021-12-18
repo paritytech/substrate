@@ -392,7 +392,9 @@ pub mod pallet {
 		pub fn nudge_referendum(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			let now = frame_system::Pallet::<T>::block_number();
-			let status = Self::ensure_ongoing(index)?;
+			let mut status = Self::ensure_ongoing(index)?;
+			// This is our wake-up, so we can disregard the alarm.
+			status.alarm = None;
 			let (info, dirty) = Self::service_referendum(now, index, status);
 			if dirty {
 				ReferendumInfoFor::<T>::insert(index, info);
@@ -658,7 +660,7 @@ impl<T: Config> Pallet<T> {
 		if status.alarm.as_ref().map_or(true, |&(when, _)| when != alarm) {
 			println!("Setting alarm at block #{:?} for ref {:?}", alarm, index);
 			// Either no alarm or one that was different
-			Self::kill_alarm(status);
+			Self::ensure_no_alarm(status);
 			status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
 			true
 		} else {
@@ -739,7 +741,7 @@ impl<T: Config> Pallet<T> {
 			// If we didn't move into being decided, then check the timeout.
 			if status.deciding.is_none() && now >= timeout {
 				// Too long without being decided - end it.
-				Self::kill_alarm(&mut status);
+				Self::ensure_no_alarm(&mut status);
 				Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
 				return (
 					ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit),
@@ -757,7 +759,7 @@ impl<T: Config> Pallet<T> {
 			if is_passing {
 				if deciding.confirming.map_or(false, |c| now >= c) {
 					// Passed!
-					Self::kill_alarm(&mut status);
+					Self::ensure_no_alarm(&mut status);
 					Self::note_one_fewer_deciding(status.track, track);
 					let (desired, call_hash) = (status.enactment, status.proposal_hash);
 					Self::schedule_enactment(index, track, desired, status.origin, call_hash);
@@ -779,7 +781,7 @@ impl<T: Config> Pallet<T> {
 			} else {
 				if now >= deciding.since.saturating_add(track.decision_period) {
 					// Failed!
-					Self::kill_alarm(&mut status);
+					Self::ensure_no_alarm(&mut status);
 					Self::note_one_fewer_deciding(status.track, track);
 					Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
 					return (
@@ -797,7 +799,9 @@ impl<T: Config> Pallet<T> {
 					deciding.confirming = None;
 				}
 			}
+			dbg!(&deciding, &status.tally);
 			alarm = Self::decision_time(&deciding, &status.tally, track);
+			println!("decision time for ref #{:?} is {:?}", index, alarm);
 		}
 
 		let dirty_alarm = Self::ensure_alarm_at(&mut status, index, alarm);
@@ -816,11 +820,12 @@ impl<T: Config> Pallet<T> {
 			let until_approval = track.min_approval.delay(approval);
 			let until_turnout = track.min_turnout.delay(turnout);
 			let offset = until_turnout.max(until_approval);
+			dbg!(approval, turnout, until_approval, until_turnout, offset);
 			deciding.since.saturating_add(offset * track.decision_period)
 		})
 	}
 
-	fn kill_alarm(status: &mut ReferendumStatusOf<T>) {
+	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T>) {
 		if let Some((_, last_alarm)) = status.alarm.take() {
 			// Incorrect alarm - cancel it.
 			let _ = T::Scheduler::cancel(last_alarm);

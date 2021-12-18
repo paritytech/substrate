@@ -98,6 +98,10 @@ pub trait VoteTally<Votes> {
 	fn ayes(&self) -> Votes;
 	fn turnout(&self) -> Perbill;
 	fn approval(&self) -> Perbill;
+	#[cfg(feature = "runtime-benchmarks")]
+	fn unanimity() -> Self;
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self;
 }
 
 pub enum PollStatus<Tally, Moment> {

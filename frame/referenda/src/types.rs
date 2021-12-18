@@ -328,7 +328,7 @@ pub enum Curve {
 }
 
 impl Curve {
-	fn threshold(&self, x: Perbill) -> Perbill {
+	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { begin, delta } => *begin - *delta * x,
 		}

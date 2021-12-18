@@ -287,6 +287,24 @@ impl VoteTally<u32> for Tally {
 	fn approval(&self) -> Perbill {
 		Perbill::from_rational(self.ayes, self.ayes + self.nays)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn unanimity() -> Self {
+		Self {
+			ayes: 100,
+			nays: 0,
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
+		let turnout = turnout.mul_ceil(100u32);
+		let ayes = approval.mul_ceil(turnout);
+		Self {
+			ayes,
+			nays: turnout - ayes,
+		}
+	}
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
