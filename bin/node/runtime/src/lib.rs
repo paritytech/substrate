@@ -26,9 +26,9 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		AllowAll, ConstU128, ConstU16, ConstU32, Currency, DenyAll, EnsureOneOf, EqualPrivilegeOnly,
-		Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, OnUnbalanced,
-		U128CurrencyToVote,
+		AllowAll, ConstU128, ConstU16, ConstU32, Currency, DenyAll, EnsureOneOf,
+		EqualPrivilegeOnly, Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier,
+		OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
