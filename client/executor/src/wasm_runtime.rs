@@ -467,51 +467,6 @@ mod tests {
 	}
 
 	#[test]
-	fn old_runtime_version_decodes() {
-		let old_runtime_version = sp_api::OldRuntimeVersion {
-			spec_name: "test".into(),
-			impl_name: "test".into(),
-			authoring_version: 1,
-			spec_version: 1,
-			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 1)]),
-		};
-
-		let version = decode_version(&old_runtime_version.encode()).unwrap();
-		assert_eq!(1, version.transaction_version);
-	}
-
-	#[test]
-	fn old_runtime_version_decodes_fails_with_version_3() {
-		let old_runtime_version = sp_api::OldRuntimeVersion {
-			spec_name: "test".into(),
-			impl_name: "test".into(),
-			authoring_version: 1,
-			spec_version: 1,
-			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
-		};
-
-		decode_version(&old_runtime_version.encode()).unwrap_err();
-	}
-
-	#[test]
-	fn new_runtime_version_decodes() {
-		let old_runtime_version = sp_api::RuntimeVersion {
-			spec_name: "test".into(),
-			impl_name: "test".into(),
-			authoring_version: 1,
-			spec_version: 1,
-			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
-			transaction_version: 3,
-		};
-
-		let version = decode_version(&old_runtime_version.encode()).unwrap();
-		assert_eq!(3, version.transaction_version);
-	}
-
-	#[test]
 	fn embed_runtime_version_works() {
 		let wasm = sp_maybe_compressed_blob::decompress(
 			substrate_test_runtime::wasm_binary_unwrap(),

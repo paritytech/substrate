@@ -148,6 +148,90 @@ macro_rules! create_apis_vec {
 	};
 }
 
+enum RuntimeVersions {
+	V0(RuntimeVersionV0),
+	V1(RuntimeVersionV1),
+	V2(RuntimeVersionV2),
+}
+
+#[derive(codec::Encode, codec::Decode)]
+pub struct RuntimeVersionV0 {
+	pub spec_name: RuntimeString,
+	pub impl_name: RuntimeString,
+	pub authoring_version: u32,
+	pub spec_version: u32,
+	pub impl_version: u32,
+	pub apis: ApisVec,
+}
+
+#[derive(codec::Encode, codec::Decode)]
+struct RuntimeVersionV1 {
+	pub spec_name: RuntimeString,
+	pub impl_name: RuntimeString,
+	pub authoring_version: u32,
+	pub spec_version: u32,
+	pub impl_version: u32,
+	pub apis: ApisVec,
+	pub transaction_version: u32,
+}
+
+impl From<RuntimeVersionV0> for RuntimeVersionV2 {
+	fn from(x: RuntimeVersionV0) -> Self {
+		Self {
+			spec_name: x.spec_name,
+			impl_name: x.impl_name,
+			authoring_version: x.authoring_version,
+			spec_version: x.spec_version,
+			impl_version: x.impl_version,
+			apis: x.apis,
+			transaction_version: 1,
+			state_version: 1,
+		}
+	}
+}
+
+impl From<RuntimeVersionV2> for RuntimeVersionV0 {
+	fn from(x: RuntimeVersionV2) -> Self {
+		Self {
+			spec_name: x.spec_name,
+			impl_name: x.impl_name,
+			authoring_version: x.authoring_version,
+			spec_version: x.spec_version,
+			impl_version: x.impl_version,
+			apis: x.apis,
+		}
+	}
+}
+
+impl From<RuntimeVersionV1> for RuntimeVersionV2 {
+	fn from(x: RuntimeVersionV1) -> Self {
+		Self {
+			spec_name: x.spec_name,
+			impl_name: x.impl_name,
+			authoring_version: x.authoring_version,
+			spec_version: x.spec_version,
+			impl_version: x.impl_version,
+			apis: x.apis,
+			transaction_version: x.transaction_version,
+			state_version: 1,
+		}
+	}
+}
+
+impl From<RuntimeVersionV2> for RuntimeVersionV1 {
+	fn from(x: RuntimeVersionV2) -> Self {
+		Self {
+			spec_name: x.spec_name,
+			impl_name: x.impl_name,
+			authoring_version: x.authoring_version,
+			spec_version: x.spec_version,
+			impl_version: x.impl_version,
+			apis: x.apis,
+			transaction_version: x.transaction_version,
+		}
+	}
+}
+
 /// Runtime version.
 /// This should not be thought of as classic Semver (major/minor/tiny).
 /// This triplet have different semantics and mis-interpretation could cause problems.
@@ -157,7 +241,7 @@ macro_rules! create_apis_vec {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub struct RuntimeVersion {
+struct RuntimeVersionV2 {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
 	/// A different on-chain spec_name to that of the native runtime would normally result
 	/// in node not attempting to sync or author blocks.
@@ -207,7 +291,76 @@ pub struct RuntimeVersion {
 	///
 	/// It need *not* change when a new module is added or when a dispatchable is added.
 	pub transaction_version: u32,
+
+	/// Version of the state implementation used by this runtime.
+	/// Use of an incorrect version is consensus breaking.
+	pub state_version: u32,
 }
+
+struct ReplayInput<'a, I: Input> {
+	input: &'a mut I,
+	replay_buf: Vec<u8>,
+	replay: bool,
+	replay_progress: usize,
+}
+
+impl<'a> codec::Input for JoinInput<'a, 'b> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		if let Some(i_remaining) = self.input.remaining_len()? {
+			if self.replay {
+				Ok(Some(i_remaining + self.replay_buf.len() - self.replay_progress))
+			} else {
+				Ok(Some(i_remaining))
+			}
+		} else {
+			Ok(None)
+		}
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let mut read = 0;
+		if self.replay {
+			if self.replay_progress < self.replay.len() {
+				read = std::cmp::min(self.replay_buf.len() - self.replay_progress, into.len());
+				self.replay_buf[self.replay_progress..].read(&mut into[..read])?;
+			}
+			self.replay_progress += read;
+		}
+		if read < into.len() {
+			self.input.read(&mut into[read..])?;
+		}
+		if !self.replay {
+			self.replay_buf.extend_from_slice(into);
+		}
+		
+		Ok(())
+	}
+}
+
+impl Decode for RuntimeVersionV2 {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		let mut input = ReplayInput {
+			input,
+			replay_buf: Vec::new(),
+			replay: false,
+			replay_progress: 0,
+		};
+		let v: RuntimeVersionV0 = Decode::decode(&mut input)?;
+		input.replay = true;
+
+		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
+		if v.has_api_with(&core_api_id, |v| v < 3) {
+			Ok(v)
+		if v.has_api_with(&core_api_id, |v| v == 3) {
+			Ok(RuntimeVersionV1::decode(&mut input)?.into())
+		} else {
+			Ok(RuntimeVersionV2::decode(&mut input)?.into())
+		}
+	}
+}
+
+/// Current runtime version is `RuntimeVersionV2`.
+pub type RuntimeVersion = RuntimeVersionV2;
 
 #[cfg(feature = "std")]
 impl fmt::Display for RuntimeVersion {
@@ -396,5 +549,61 @@ mod apis_serialize {
 		let mut arr = [0; 8];
 		bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(&mut arr[..]))?;
 		Ok(arr)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use codec::Encode;
+	use sp_api::{Core, RuntimeApiInfo};
+	use sp_wasm_interface::HostFunctions;
+	use substrate_test_runtime::Block;
+
+	#[test]
+	fn old_runtime_version_decodes() {
+		let old_runtime_version = RuntimeVersionV0 {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 1)]),
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(1, version.transaction_version);
+	}
+
+	#[test]
+	fn old_runtime_version_decodes_fails_with_version_3() {
+		let old_runtime_version = RuntimeVersionV0 {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+		};
+
+		decode_version(&old_runtime_version.encode()).unwrap_err();
+	}
+
+	#[test]
+	fn new_runtime_version_decodes() {
+		let old_runtime_version = RuntimeVersion {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+			transaction_version: 3,
+			state_version: 1,
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(3, version.transaction_version);
+		assert_eq!(1, version.transaction_version);
 	}
 }
