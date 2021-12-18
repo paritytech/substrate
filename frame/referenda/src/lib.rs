@@ -40,7 +40,8 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero}, DispatchError, Perbill,
+	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
+	DispatchError, Perbill,
 };
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -727,7 +728,9 @@ impl<T: Config> Pallet<T> {
 				if status.decision_deposit.is_some() {
 					let prepare_end = status.submitted.saturating_add(track.prepare_period);
 					if now >= prepare_end {
-						if let Some(set_alarm) = Self::ready_for_deciding(now, &track, index, &mut status) {
+						if let Some(set_alarm) =
+							Self::ready_for_deciding(now, &track, index, &mut status)
+						{
 							alarm = alarm.min(set_alarm);
 						}
 						dirty = true;
@@ -743,7 +746,11 @@ impl<T: Config> Pallet<T> {
 				Self::ensure_no_alarm(&mut status);
 				Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
 				return (
-					ReferendumInfo::TimedOut(now, status.submission_deposit, status.decision_deposit),
+					ReferendumInfo::TimedOut(
+						now,
+						status.submission_deposit,
+						status.decision_deposit,
+					),
 					true,
 				)
 			}

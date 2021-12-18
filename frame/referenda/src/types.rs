@@ -172,10 +172,7 @@ pub trait TracksInfo<Balance, Moment> {
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
 	fn track_for(origin: &Self::Origin) -> Result<Self::Id, ()>;
 	fn info(id: Self::Id) -> Option<&'static TrackInfo<Balance, Moment>> {
-		Self::tracks()
-			.iter()
-			.find(|x| &x.0 == &id)
-			.map(|x| &x.1)
+		Self::tracks().iter().find(|x| &x.0 == &id).map(|x| &x.1)
 	}
 }
 

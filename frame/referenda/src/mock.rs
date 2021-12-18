@@ -33,7 +33,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, Hash, IdentityLookup},
-	Perbill, DispatchResult,
+	DispatchResult, Perbill,
 };
 
 const MAX_PROPOSALS: u32 = 100;
@@ -290,20 +290,14 @@ impl VoteTally<u32> for Tally {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn unanimity() -> Self {
-		Self {
-			ayes: 100,
-			nays: 0,
-		}
+		Self { ayes: 100, nays: 0 }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
 		let turnout = turnout.mul_ceil(100u32);
 		let ayes = approval.mul_ceil(turnout);
-		Self {
-			ayes,
-			nays: turnout - ayes,
-		}
+		Self { ayes, nays: turnout - ayes }
 	}
 }
 

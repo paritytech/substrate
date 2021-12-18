@@ -18,12 +18,15 @@
 //! Democracy pallet benchmarking.
 
 use super::*;
+use crate::Pallet as Referenda;
+use assert_matches::assert_matches;
 use frame_benchmarking::{account, benchmarks, whitelist_account};
-use frame_support::{assert_ok, traits::{Currency, EnsureOrigin}};
+use frame_support::{
+	assert_ok,
+	traits::{Currency, EnsureOrigin},
+};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Hash};
-use assert_matches::assert_matches;
-use crate::Pallet as Referenda;
 
 const SEED: u32 = 0;
 
@@ -121,10 +124,7 @@ fn skip_timeout_period<T: Config>(index: ReferendumIndex) {
 }
 
 fn nudge<T: Config>(index: ReferendumIndex) {
-	assert_ok!(Referenda::<T>::nudge_referendum(
-		RawOrigin::Root.into(),
-		index,
-	));
+	assert_ok!(Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), index,));
 }
 
 fn alarm_time<T: Config>(index: ReferendumIndex) -> T::BlockNumber {
@@ -134,18 +134,18 @@ fn alarm_time<T: Config>(index: ReferendumIndex) -> T::BlockNumber {
 
 fn is_confirming<T: Config>(index: ReferendumIndex) -> bool {
 	let status = Referenda::<T>::ensure_ongoing(index).unwrap();
-	matches!(status, ReferendumStatus {
-		deciding: Some(DecidingStatus { confirming: Some(_), .. }),
-		..
-	})
+	matches!(
+		status,
+		ReferendumStatus { deciding: Some(DecidingStatus { confirming: Some(_), .. }), .. }
+	)
 }
 
 fn is_not_confirming<T: Config>(index: ReferendumIndex) -> bool {
 	let status = Referenda::<T>::ensure_ongoing(index).unwrap();
-	matches!(status, ReferendumStatus {
-		deciding: Some(DecidingStatus { confirming: None, .. }),
-		..
-	})
+	matches!(
+		status,
+		ReferendumStatus { deciding: Some(DecidingStatus { confirming: None, .. }), .. }
+	)
 }
 
 benchmarks! {
