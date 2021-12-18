@@ -510,7 +510,7 @@ pub struct MultiOnUnbalancedWrapper<Pallet>{
 
 impl<T,I,Tokens> OnUnbalanced<MultiTokenNegativeImbalance<Tokens>> for MultiOnUnbalancedWrapper<Pallet<T,I>> where
 	T: Config<I>,
-	I: Instance, 
+	I: 'static,
 	Tokens: orml_tokens::Config,
 	Tokens::AccountId: From<T::AccountId>,
     <T::Currency as Currency<T::AccountId>>::Balance : From<u128>,
