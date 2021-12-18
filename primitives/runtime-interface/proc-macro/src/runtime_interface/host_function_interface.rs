@@ -35,11 +35,11 @@ use syn::{
 
 use proc_macro2::{Span, TokenStream};
 
-use quote::{quote, ToTokens};
+use quote::quote;
 
 use inflector::Inflector;
 
-use std::iter::{self, Iterator};
+use std::iter::Iterator;
 
 /// Generate the extern host functions for wasm and the `HostFunctions` struct that provides the
 /// implementations for the host functions on the host.
@@ -163,14 +163,20 @@ fn generate_host_functions_struct(
 ) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 
-	let host_functions = get_runtime_interface(trait_def)?
-		.all_versions()
-		.map(|(version, method)| {
-			generate_host_function_implementation(&trait_def.ident, method, version, is_wasm_only)
-		})
-		.collect::<Result<Vec<_>>>()?;
+	let mut host_function_impls = Vec::new();
+	let mut host_function_names = Vec::new();
+	let mut register_bodies = Vec::new();
+	for (version, method) in get_runtime_interface(trait_def)?.all_versions() {
+		let (implementation, name, register_body) =
+			generate_host_function_implementation(&trait_def.ident, method, version, is_wasm_only)?;
+		host_function_impls.push(implementation);
+		host_function_names.push(name);
+		register_bodies.push(register_body);
+	}
 
 	Ok(quote! {
+		#(#host_function_impls)*
+
 		/// Provides implementations for the extern host functions.
 		#[cfg(feature = "std")]
 		pub struct HostFunctions;
@@ -178,7 +184,16 @@ fn generate_host_functions_struct(
 		#[cfg(feature = "std")]
 		impl #crate_::sp_wasm_interface::HostFunctions for HostFunctions {
 			fn host_functions() -> Vec<&'static dyn #crate_::sp_wasm_interface::Function> {
-				vec![ #( #host_functions ),* ]
+				vec![ #( &#host_function_names as &dyn #crate_::sp_wasm_interface::Function ),* ]
+			}
+
+			#crate_::sp_wasm_interface::if_wasmtime_is_enabled! {
+				fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
+					where T: #crate_::sp_wasm_interface::HostFunctionRegistry
+				{
+					#(#register_bodies)*
+					Ok(())
+				}
 			}
 		}
 	})
@@ -194,47 +209,182 @@ fn generate_host_function_implementation(
 	method: &TraitItemMethod,
 	version: u32,
 	is_wasm_only: bool,
-) -> Result<TokenStream> {
+) -> Result<(TokenStream, Ident, TokenStream)> {
 	let name = create_host_function_ident(&method.sig.ident, version, trait_name).to_string();
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
 	let crate_ = generate_crate_access();
 	let signature = generate_wasm_interface_signature_for_host_function(&method.sig)?;
-	let wasm_to_ffi_values =
-		generate_wasm_to_ffi_values(&method.sig, trait_name).collect::<Result<Vec<_>>>()?;
-	let ffi_to_host_values = generate_ffi_to_host_value(&method.sig).collect::<Result<Vec<_>>>()?;
-	let host_function_call = generate_host_function_call(&method.sig, version, is_wasm_only);
-	let into_preallocated_ffi_value = generate_into_preallocated_ffi_value(&method.sig)?;
-	let convert_return_value = generate_return_value_into_wasm_value(&method.sig);
 
-	Ok(quote! {
-		{
-			struct #struct_name;
+	let fn_name = create_function_ident_with_version(&method.sig.ident, version);
+	let ref_and_mut = get_function_argument_types_ref_and_mut(&method.sig);
 
-			impl #crate_::sp_wasm_interface::Function for #struct_name {
-				fn name(&self) -> &str {
-					#name
-				}
+	// List of variable names containing WASM FFI-compatible arguments.
+	let mut ffi_names = Vec::new();
 
-				fn signature(&self) -> #crate_::sp_wasm_interface::Signature {
-					#signature
-				}
+	// List of `$name: $ty` tokens containing WASM FFI-compatible arguments.
+	let mut ffi_args_prototype = Vec::new();
 
-				fn execute(
-					&self,
-					__function_context__: &mut dyn #crate_::sp_wasm_interface::FunctionContext,
-					args: &mut dyn Iterator<Item = #crate_::sp_wasm_interface::Value>,
-				) -> std::result::Result<Option<#crate_::sp_wasm_interface::Value>, String> {
-					#( #wasm_to_ffi_values )*
-					#( #ffi_to_host_values )*
-					#host_function_call
-					#into_preallocated_ffi_value
-					#convert_return_value
-				}
+	// List of variable names containing arguments already converted into native Rust types.
+	// Also includes the preceding `&` or `&mut`. To be used to call the actual implementation of
+	// the host function.
+	let mut host_names_with_ref = Vec::new();
+
+	// List of code snippets to copy over the results returned from a host function through
+	// any `&mut` arguments back into WASM's linear memory.
+	let mut copy_data_into_ref_mut_args = Vec::new();
+
+	// List of code snippets to convert dynamic FFI args (`Value` enum) into concrete static FFI
+	// types (`u32`, etc.).
+	let mut convert_args_dynamic_ffi_to_static_ffi = Vec::new();
+
+	// List of code snippets to convert static FFI args (`u32`, etc.) into native Rust types.
+	let mut convert_args_static_ffi_to_host = Vec::new();
+
+	for ((host_name, host_ty), ref_and_mut) in
+		get_function_argument_names_and_types_without_ref(&method.sig).zip(ref_and_mut)
+	{
+		let ffi_name = generate_ffi_value_var_name(&host_name)?;
+		let host_name_ident = match *host_name {
+			Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+			_ => unreachable!("`generate_ffi_value_var_name` above would return an error on `Pat` != `Ident`; qed"),
+		};
+
+		let ffi_ty = quote! { <#host_ty as #crate_::RIType>::FFIType };
+		ffi_args_prototype.push(quote! { #ffi_name: #ffi_ty });
+		ffi_names.push(quote! { #ffi_name });
+
+		let convert_arg_error = format!(
+			"could not marshal the '{}' argument through the WASM FFI boundary while executing '{}' from interface '{}'",
+			host_name_ident,
+			method.sig.ident,
+			trait_name
+		);
+		convert_args_static_ffi_to_host.push(quote! {
+			let mut #host_name = <#host_ty as #crate_::host::FromFFIValue>::from_ffi_value(__function_context__, #ffi_name)
+				.map_err(|err| format!("{}: {}", err, #convert_arg_error))?;
+		});
+
+		let ref_and_mut_tokens =
+			ref_and_mut.map(|(token_ref, token_mut)| quote!(#token_ref #token_mut));
+
+		host_names_with_ref.push(quote! { #ref_and_mut_tokens #host_name });
+
+		if ref_and_mut.map(|(_, token_mut)| token_mut.is_some()).unwrap_or(false) {
+			copy_data_into_ref_mut_args.push(quote! {
+				<#host_ty as #crate_::host::IntoPreallocatedFFIValue>::into_preallocated_ffi_value(
+					#host_name,
+					__function_context__,
+					#ffi_name,
+				)?;
+			});
+		}
+
+		let arg_count_mismatch_error = format!(
+			"missing argument '{}': number of arguments given to '{}' from interface '{}' does not match the expected number of arguments",
+			host_name_ident,
+			method.sig.ident,
+			trait_name
+		);
+		convert_args_dynamic_ffi_to_static_ffi.push(quote! {
+			let #ffi_name = args.next().ok_or_else(|| #arg_count_mismatch_error.to_owned())?;
+			let #ffi_name: #ffi_ty = #crate_::sp_wasm_interface::TryFromValue::try_from_value(#ffi_name)
+				.ok_or_else(|| #convert_arg_error.to_owned())?;
+		});
+	}
+
+	let ffi_return_ty = match &method.sig.output {
+		ReturnType::Type(_, ty) => quote! { <#ty as #crate_::RIType>::FFIType },
+		ReturnType::Default => quote! { () },
+	};
+
+	let convert_return_value_host_to_static_ffi = match &method.sig.output {
+		ReturnType::Type(_, ty) => quote! {
+			let __result__ = <#ty as #crate_::host::IntoFFIValue>::into_ffi_value(
+				__result__,
+				__function_context__
+			);
+		},
+		ReturnType::Default => quote! {
+			let __result__ = Ok(__result__);
+		},
+	};
+
+	let convert_return_value_static_ffi_to_dynamic_ffi = match &method.sig.output {
+		ReturnType::Type(_, _) => quote! {
+			let __result__ = Ok(Some(#crate_::sp_wasm_interface::IntoValue::into_value(__result__)));
+		},
+		ReturnType::Default => quote! {
+			let __result__ = Ok(None);
+		},
+	};
+
+	if is_wasm_only {
+		host_names_with_ref.push(quote! {
+			__function_context__
+		});
+	}
+
+	let implementation = quote! {
+		#[cfg(feature = "std")]
+		struct #struct_name;
+
+		#[cfg(feature = "std")]
+		impl #struct_name {
+			fn call(
+				__function_context__: &mut dyn #crate_::sp_wasm_interface::FunctionContext,
+				#(#ffi_args_prototype),*
+			) -> std::result::Result<#ffi_return_ty, String> {
+				#(#convert_args_static_ffi_to_host)*
+				let __result__ = #fn_name(#(#host_names_with_ref),*);
+				#(#copy_data_into_ref_mut_args)*
+				#convert_return_value_host_to_static_ffi
+				__result__
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl #crate_::sp_wasm_interface::Function for #struct_name {
+			fn name(&self) -> &str {
+				#name
 			}
 
-			&#struct_name as &dyn #crate_::sp_wasm_interface::Function
+			fn signature(&self) -> #crate_::sp_wasm_interface::Signature {
+				#signature
+			}
+
+			fn execute(
+				&self,
+				__function_context__: &mut dyn #crate_::sp_wasm_interface::FunctionContext,
+				args: &mut dyn Iterator<Item = #crate_::sp_wasm_interface::Value>,
+			) -> std::result::Result<Option<#crate_::sp_wasm_interface::Value>, String> {
+				#(#convert_args_dynamic_ffi_to_static_ffi)*
+				let __result__ = Self::call(
+					__function_context__,
+					#(#ffi_names),*
+				)?;
+				#convert_return_value_static_ffi_to_dynamic_ffi
+				__result__
+			}
 		}
-	})
+	};
+
+	let register_body = quote! {
+		registry.register_static(
+			#crate_::sp_wasm_interface::Function::name(&#struct_name),
+			|mut caller: #crate_::sp_wasm_interface::wasmtime::Caller<T::State>, #(#ffi_args_prototype),*|
+				-> std::result::Result<#ffi_return_ty, #crate_::sp_wasm_interface::wasmtime::Trap>
+			{
+				T::with_function_context(caller, move |__function_context__| {
+					#struct_name::call(
+						__function_context__,
+						#(#ffi_names,)*
+					)
+				}).map_err(#crate_::sp_wasm_interface::wasmtime::Trap::new)
+			}
+		)?;
+	};
+
+	Ok((implementation, struct_name, register_body))
 }
 
 /// Generate the `wasm_interface::Signature` for the given host function `sig`.
@@ -260,86 +410,6 @@ fn generate_wasm_interface_signature_for_host_function(sig: &Signature) -> Resul
 	})
 }
 
-/// Generate the code that converts the wasm values given to `HostFunctions::execute` into the FFI
-/// values.
-fn generate_wasm_to_ffi_values<'a>(
-	sig: &'a Signature,
-	trait_name: &'a Ident,
-) -> impl Iterator<Item = Result<TokenStream>> + 'a {
-	let crate_ = generate_crate_access();
-	let function_name = &sig.ident;
-	let error_message = format!(
-		"Number of arguments given to `{}` does not match the expected number of arguments!",
-		function_name,
-	);
-
-	get_function_argument_names_and_types_without_ref(sig).map(move |(name, ty)| {
-		let try_from_error = format!(
-			"Could not instantiate `{}` from wasm value while executing `{}` from interface `{}`!",
-			name.to_token_stream(),
-			function_name,
-			trait_name,
-		);
-
-		let var_name = generate_ffi_value_var_name(&name)?;
-
-		Ok(quote! {
-			let val = args.next().ok_or_else(|| #error_message)?;
-			let #var_name = <
-				<#ty as #crate_::RIType>::FFIType as #crate_::sp_wasm_interface::TryFromValue
-			>::try_from_value(val).ok_or_else(|| #try_from_error)?;
-		})
-	})
-}
-
-/// Generate the code to convert the ffi values on the host to the host values using `FromFFIValue`.
-fn generate_ffi_to_host_value<'a>(
-	sig: &'a Signature,
-) -> impl Iterator<Item = Result<TokenStream>> + 'a {
-	let mut_access = get_function_argument_types_ref_and_mut(sig);
-	let crate_ = generate_crate_access();
-
-	get_function_argument_names_and_types_without_ref(sig)
-		.zip(mut_access.map(|v| v.and_then(|m| m.1)))
-		.map(move |((name, ty), mut_access)| {
-			let ffi_value_var_name = generate_ffi_value_var_name(&name)?;
-
-			Ok(quote! {
-				let #mut_access #name = <#ty as #crate_::host::FromFFIValue>::from_ffi_value(
-					__function_context__,
-					#ffi_value_var_name,
-				)?;
-			})
-		})
-}
-
-/// Generate the code to call the host function and the ident that stores the result.
-fn generate_host_function_call(sig: &Signature, version: u32, is_wasm_only: bool) -> TokenStream {
-	let host_function_name = create_function_ident_with_version(&sig.ident, version);
-	let result_var_name = generate_host_function_result_var_name(&sig.ident);
-	let ref_and_mut =
-		get_function_argument_types_ref_and_mut(sig).map(|ram| ram.map(|(vr, vm)| quote!(#vr #vm)));
-	let names = get_function_argument_names(sig);
-
-	let var_access = names
-		.zip(ref_and_mut)
-		.map(|(n, ref_and_mut)| quote!( #ref_and_mut #n ))
-		// If this is a wasm only interface, we add the function context as last parameter.
-		.chain(
-			iter::from_fn(|| if is_wasm_only { Some(quote!(__function_context__)) } else { None })
-				.take(1),
-		);
-
-	quote! {
-		let #result_var_name = #host_function_name ( #( #var_access ),* );
-	}
-}
-
-/// Generate the variable name that stores the result of the host function.
-fn generate_host_function_result_var_name(name: &Ident) -> Ident {
-	Ident::new(&format!("{}_result", name), Span::call_site())
-}
-
 /// Generate the variable name that stores the FFI value.
 fn generate_ffi_value_var_name(pat: &Pat) -> Result<Ident> {
 	match pat {
@@ -352,51 +422,5 @@ fn generate_ffi_value_var_name(pat: &Pat) -> Result<Ident> {
 				Ok(Ident::new(&format!("{}_ffi_value", pat_ident.ident), Span::call_site()))
 			},
 		_ => Err(Error::new(pat.span(), "Not supported as variable name!")),
-	}
-}
-
-/// Generate code that copies data from the host back to preallocated wasm memory.
-///
-/// Any argument that is given as `&mut` is interpreted as preallocated memory and it is expected
-/// that the type implements `IntoPreAllocatedFFIValue`.
-fn generate_into_preallocated_ffi_value(sig: &Signature) -> Result<TokenStream> {
-	let crate_ = generate_crate_access();
-	let ref_and_mut = get_function_argument_types_ref_and_mut(sig)
-		.map(|ram| ram.and_then(|(vr, vm)| vm.map(|v| (vr, v))));
-	let names_and_types = get_function_argument_names_and_types_without_ref(sig);
-
-	ref_and_mut
-		.zip(names_and_types)
-		.filter_map(|(ram, (name, ty))| ram.map(|_| (name, ty)))
-		.map(|(name, ty)| {
-			let ffi_var_name = generate_ffi_value_var_name(&name)?;
-
-			Ok(quote! {
-				<#ty as #crate_::host::IntoPreallocatedFFIValue>::into_preallocated_ffi_value(
-					#name,
-					__function_context__,
-					#ffi_var_name,
-				)?;
-			})
-		})
-		.collect()
-}
-
-/// Generate the code that converts the return value into the appropriate wasm value.
-fn generate_return_value_into_wasm_value(sig: &Signature) -> TokenStream {
-	let crate_ = generate_crate_access();
-
-	match &sig.output {
-		ReturnType::Default => quote!(Ok(None)),
-		ReturnType::Type(_, ty) => {
-			let result_var_name = generate_host_function_result_var_name(&sig.ident);
-
-			quote! {
-				<#ty as #crate_::host::IntoFFIValue>::into_ffi_value(
-					#result_var_name,
-					__function_context__,
-				).map(#crate_::sp_wasm_interface::IntoValue::into_value).map(Some)
-			}
-		},
 	}
 }

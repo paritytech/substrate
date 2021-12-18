@@ -30,7 +30,7 @@ use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{Error as ConsensusError, SelectChain};
 use sp_consensus_babe::{digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi};
-use sp_core::crypto::Public;
+use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{collections::HashMap, sync::Arc};

@@ -23,6 +23,7 @@ use frame_support::{
 	traits::StorageInfo,
 };
 use sp_io::hashing::blake2_256;
+use sp_runtime::traits::TrailingZeroInput;
 use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
 
@@ -321,17 +322,14 @@ pub trait BenchmarkingSetup<T, I = ()> {
 }
 
 /// Grab an account, seeded by a name and index.
-pub fn account<AccountId: Decode + Default>(
-	name: &'static str,
-	index: u32,
-	seed: u32,
-) -> AccountId {
+pub fn account<AccountId: Decode>(name: &'static str, index: u32, seed: u32) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
-	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+		.expect("infinite length input; no invalid inputs for type; qed")
 }
 
 /// This caller account is automatically whitelisted for DB reads/writes by the benchmarking macro.
-pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
+pub fn whitelisted_caller<AccountId: Decode>() -> AccountId {
 	account::<AccountId>("whitelisted_caller", 0, 0)
 }
 

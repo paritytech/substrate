@@ -20,6 +20,7 @@ use frame_system::offchain::{SendSignedTransaction, Signer, SubmitTransaction};
 use node_runtime::{Executive, Indices, Runtime, UncheckedExtrinsic};
 use sp_application_crypto::AppKey;
 use sp_core::offchain::{testing::TestTransactionPoolExt, TransactionPoolExt};
+use sp_keyring::sr25519::Keyring::Alice;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
 use std::sync::Arc;
 
@@ -33,7 +34,8 @@ fn should_submit_unsigned_transaction() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	t.execute_with(|| {
-		let signature = Default::default();
+		let signature =
+			pallet_im_online::sr25519::AuthoritySignature::try_from(vec![0; 64]).unwrap();
 		let heartbeat_data = pallet_im_online::Heartbeat {
 			block_number: 1,
 			network_state: Default::default(),
@@ -85,7 +87,7 @@ fn should_submit_signed_transaction() {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -122,7 +124,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -134,7 +136,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -172,7 +174,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
+				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -183,7 +185,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		// submit another one from the same account. The nonce should be incremented.
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
+				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -237,7 +239,7 @@ fn submitted_transaction_should_be_valid() {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});

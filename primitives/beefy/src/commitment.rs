@@ -27,9 +27,9 @@ pub type BeefyPayloadId = [u8; 2];
 pub mod known_payload_ids {
 	use crate::BeefyPayloadId;
 
-	/// A [`Payload`] identifier for Merkle Mountain Range root hash.
+	/// A [`Payload`](super::Payload) identifier for Merkle Mountain Range root hash.
 	///
-	/// Encoded value should contain a [`beefy_primitives::MmrRootHash`] type (i.e. 32-bytes hash).
+	/// Encoded value should contain a [`crate::MmrRootHash`] type (i.e. 32-bytes hash).
 	pub const MMR_ROOT_ID: BeefyPayloadId = *b"mh";
 }
 
@@ -137,7 +137,7 @@ where
 ///
 /// Note that SCALE-encoding of the structure is optimized for size efficiency over the wire,
 /// please take a look at custom [`Encode`] and [`Decode`] implementations and
-/// [`CompactSignedCommitment`] struct.
+/// `CompactSignedCommitment` struct.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignedCommitment<TBlockNumber> {
 	/// The commitment signatures are collected for.

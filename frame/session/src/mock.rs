@@ -32,7 +32,11 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 
-use frame_support::{parameter_types, traits::GenesisBuild, BasicExternalities};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+	BasicExternalities,
+};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -234,8 +238,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 parameter_types! {
-	pub const MinimumPeriod: u64 = 5;
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -255,7 +257,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -264,13 +266,13 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<5>;
 	type WeightInfo = ();
 }
 
