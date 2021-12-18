@@ -128,7 +128,7 @@ mod tests {
 
 	impl frame_system::Config for Runtime {
 		type SS58Prefix = ();
-		type BaseCallFilter = frame_support::traits::Everything;
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type Origin = Origin;
 		type Index = AccountId;
 		type BlockNumber = BlockNumber;

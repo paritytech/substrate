@@ -32,10 +32,10 @@ pub use tokens::{
 
 mod members;
 #[allow(deprecated)]
-pub use members::{AllowAll, DenyAll, Filter};
+pub use members::{Everything, Nothing, Filter};
 pub use members::{
-	AsContains, ChangeMembers, Contains, ContainsLengthBound, Everything, InitializeMembers,
-	IsInVec, Nothing, SortedMembers,
+	AsContains, ChangeMembers, Contains, ContainsLengthBound, AllowAll, InitializeMembers,
+	IsInVec, DenyAll, SortedMembers,
 };
 
 mod validation;

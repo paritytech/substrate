@@ -23,7 +23,7 @@ frame_support::construct_runtime!(
 );
 
 impl system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();

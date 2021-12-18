@@ -90,7 +90,7 @@ impl OnKilledAccount<u64> for RecordKilled {
 }
 
 impl Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;

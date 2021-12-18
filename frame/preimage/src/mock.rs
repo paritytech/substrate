@@ -22,7 +22,7 @@ use super::*;
 use crate as pallet_preimage;
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU32, ConstU64, Everything},
+	traits::{ConstU32, ConstU64, AllowAll},
 	weights::constants::RocksDbWeight,
 };
 use frame_system::EnsureSignedBy;
@@ -53,7 +53,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = Everything;
+	type BaseCallFilter = AllowAll;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;

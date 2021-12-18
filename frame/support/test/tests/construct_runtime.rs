@@ -234,7 +234,7 @@ fn test_pub() -> AccountId {
 }
 
 impl system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;

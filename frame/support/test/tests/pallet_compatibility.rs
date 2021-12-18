@@ -220,7 +220,7 @@ pub mod pallet {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;

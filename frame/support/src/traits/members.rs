@@ -26,25 +26,25 @@ pub trait Contains<T> {
 }
 
 /// A [`Contains`] implementation that contains every value.
-pub enum Everything {}
-impl<T> Contains<T> for Everything {
+pub enum AllowAll {}
+impl<T> Contains<T> for AllowAll {
 	fn contains(_: &T) -> bool {
 		true
 	}
 }
 
 /// A [`Contains`] implementation that contains no value.
-pub enum Nothing {}
-impl<T> Contains<T> for Nothing {
+pub enum DenyAll {}
+impl<T> Contains<T> for DenyAll {
 	fn contains(_: &T) -> bool {
 		false
 	}
 }
 
-#[deprecated = "Use `Everything` instead"]
-pub type AllowAll = Everything;
-#[deprecated = "Use `Nothing` instead"]
-pub type DenyAll = Nothing;
+#[deprecated = "Use `AllowAll` instead"]
+pub type Everything = AllowAll;
+#[deprecated = "Use `DenyAll` instead"]
+pub type Nothing = DenyAll;
 #[deprecated = "Use `Contains` instead"]
 pub trait Filter<T> {
 	fn filter(t: &T) -> bool;

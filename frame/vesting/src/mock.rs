@@ -50,7 +50,7 @@ parameter_types! {
 impl frame_system::Config for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type AccountId = u64;
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockHashCount = ConstU64<250>;
 	type BlockLength = ();
 	type BlockNumber = u64;
