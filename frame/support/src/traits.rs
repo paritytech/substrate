@@ -31,12 +31,12 @@ pub use tokens::{
 };
 
 mod members;
-#[allow(deprecated)]
-pub use members::{Everything, Nothing, Filter};
 pub use members::{
-	AsContains, ChangeMembers, Contains, ContainsLengthBound, AllowAll, InitializeMembers,
-	IsInVec, DenyAll, SortedMembers,
+	AllowAll, AsContains, ChangeMembers, Contains, ContainsLengthBound, DenyAll, InitializeMembers,
+	IsInVec, SortedMembers,
 };
+#[allow(deprecated)]
+pub use members::{Everything, Filter, Nothing};
 
 mod validation;
 pub use validation::{

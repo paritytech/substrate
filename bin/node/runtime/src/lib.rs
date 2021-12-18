@@ -26,8 +26,8 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
-		ConstU128, ConstU16, ConstU32, Currency, EnsureOneOf, EqualPrivilegeOnly, Everything,
-		Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, DenyAll, OnUnbalanced,
+		ConstU128, ConstU16, ConstU32, Currency, DenyAll, EnsureOneOf, EqualPrivilegeOnly,
+		Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, OnUnbalanced,
 		U128CurrencyToVote,
 	},
 	weights::{

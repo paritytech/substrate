@@ -22,7 +22,7 @@ use super::*;
 use crate as pallet_preimage;
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU32, ConstU64, AllowAll},
+	traits::{AllowAll, ConstU32, ConstU64},
 	weights::constants::RocksDbWeight,
 };
 use frame_system::EnsureSignedBy;
