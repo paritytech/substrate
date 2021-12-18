@@ -242,7 +242,7 @@ benchmarks! {
 	// DONE: not deciding, not queued, DD paid, PP not done
 
 	// Not deciding -> not deciding (queued)
-	// TODO: not deciding, not queued, DD paid, PP (just) done, track full
+	// not deciding, not queued, DD paid, PP (just) done, track full
 
 	// Not deciding (queued) -> not deciding (queued)
 	// TODO: not deciding, queued, since removed
@@ -270,23 +270,45 @@ benchmarks! {
 		// free and this failing. It would result in `QUEUE_SIZE - 1` items being shifted for the
 		// insertion at the beginning.
 
-		// First create a referendum to know our track, We keep it out of the track by not placing
-		// the deposit.
-		let (_caller, index) = create_referendum::<T>();
-		// Then, fill the track.
-		for _ in 0..(info::<T>(index).max_deciding - 1) {
-			create_referendum::<T>();
-			place_deposit::<T>(index);
-		}
-
-		// Now the track is full, our referendum will be queued.
+		// First create our referendum and place the deposit. It will be failing.
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 
+		// Then, create enough other referendums to fill the track.
+		let mut others = vec![];
+		for _ in 0..info::<T>(index).max_deciding {
+			let (_caller, index) = create_referendum::<T>();
+			place_deposit::<T>(index);
+			others.push(index);
+		}
+
+		// We will also need enough referenda which are queued and passing, we want `MaxQueued - 1`
+		// in order to force the maximum amount of work to insert ours into the queue.
+		for _ in 1..T::MaxQueued::get() {
+			let (_caller, index) = create_referendum::<T>();
+			place_deposit::<T>(index);
+			make_passing::<T>(index);
+			others.push(index);
+		}
+
+		// Skip to when they can start being decided.
 		skip_prepare_period::<T>(index);
 
+		// Manually nudge the other referenda first to ensure that they begin.
+		for i in others.into_iter() {
+			Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), i);
+		}
+
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);
+		assert!(TrackQueue::<T>::get(&track).into_iter().all(|(_, v)| v > 0u32.into()));
+
+		// Then nudge ours, with the track now full, ours will be queued.
 	}: nudge_referendum(RawOrigin::Root, index)
 	verify {
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
+		assert_eq!(TrackQueue::<T>::get(&track)[0], (index, 0u32.into()));
 	}
 
 	nudge_referendum_no_dd_pp {
