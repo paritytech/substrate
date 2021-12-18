@@ -266,16 +266,29 @@ benchmarks! {
 	// DONE: not deciding, timeout
 
 	nudge_referendum_dd_pp_not_queued_track_full {
-		let (_caller, index) = create_referendum::<T>();
-		skip_prepare_period::<T>(index);
-	}: nudge_referendum(RawOrigin::Root, index)
-	verify {
-		// TODO: worst possible queue situation is with a queue full of passing refs with one slot
+		// NOTE: worst possible queue situation is with a queue full of passing refs with one slot
 		// free and this failing. It would result in `QUEUE_SIZE - 1` items being shifted for the
 		// insertion at the beginning.
-		let status = Referenda::<T>::ensure_ongoing(index).unwrap();
-		assert_matches!(status, ReferendumStatus { deciding: None, .. });
+
+		// First create a referendum to know our track, We keep it out of the track by not placing
+		// the deposit.
+		let (_caller, index) = create_referendum::<T>();
+		// Then, fill the track.
+		for _ in 0..(info::<T>(index).max_deciding - 1) {
+			create_referendum::<T>();
+			place_deposit::<T>(index);
+		}
+
+		// Now the track is full, our referendum will be queued.
+		let (_caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
+
+		skip_prepare_period::<T>(index);
+
+	}: nudge_referendum(RawOrigin::Root, index)
+	verify {
 	}
+
 	nudge_referendum_no_dd_pp {
 		let (_caller, index) = create_referendum::<T>();
 		skip_prepare_period::<T>(index);
