@@ -45,6 +45,7 @@ use sp_runtime::{
 };
 use sp_std::{fmt::Debug, prelude::*};
 
+mod branch;
 mod types;
 pub mod weights;
 pub use pallet::*;
@@ -55,6 +56,7 @@ pub use types::{
 	TrackInfoOf, TracksInfo, VotesOf,
 };
 pub use weights::WeightInfo;
+use branch::{ServiceBranch, BeginDecidingBranch, OneFewerDecidingBranch};
 
 #[cfg(test)]
 mod mock;
@@ -192,7 +194,7 @@ pub mod pallet {
 			proposal_hash: T::Hash,
 		},
 		/// A referendum has moved into the deciding phase.
-		StartedDeciding {
+		DecisionStarted {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The track (and by extension proposal dispatch origin) of this referendum.
@@ -201,6 +203,14 @@ pub mod pallet {
 			proposal_hash: T::Hash,
 			/// The current tally of votes in this referendum.
 			tally: T::Tally,
+		},
+		ConfirmStarted {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+		},
+		ConfirmAborted {
+			/// Index of the referendum.
+			index: ReferendumIndex,
 		},
 		/// A referendum has ended its confirmation phase and is ready for approval.
 		Confirmed {
@@ -419,7 +429,7 @@ pub mod pallet {
 			let branch = if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
 				let now = frame_system::Pallet::<T>::block_number();
 				let (maybe_alarm, branch)
-					= Self::begin_deciding(&mut status, now, track_info);
+					= Self::begin_deciding(&mut status, index, now, track_info);
 				if let Some(set_alarm) = maybe_alarm {
 					Self::ensure_alarm_at(&mut status, index, set_alarm);
 				}
@@ -483,139 +493,6 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 
 	fn is_active(index: Self::Index) -> Option<TrackIdOf<T>> {
 		Self::ensure_ongoing(index).ok().map(|e| e.track)
-	}
-}
-
-enum BeginDecidingBranch {
-	Passing,
-	Failing,
-}
-
-enum ServiceBranch {
-	Fail,
-	NoDeposit,
-	Preparing,
-	Queued,
-	NotQueued,
-	RequeuedInsertion,
-	RequeuedSlide,
-	BeginDecidingPassing,
-	BeginDecidingFailing,
-	BeginConfirming,
-	ContinueConfirming,
-	EndConfirming,
-	ContinueNotConfirming,
-	Approved,
-	Rejected,
-	TimedOut,
-}
-
-impl From<BeginDecidingBranch> for ServiceBranch {
-	fn from(x: BeginDecidingBranch) -> Self {
-		use {BeginDecidingBranch::*, ServiceBranch::*};
-		match x {
-			Passing => BeginDecidingPassing,
-			Failing => BeginDecidingFailing,
-		}
-	}
-}
-
-impl ServiceBranch {
-	fn weight_of_nudge<T: Config>(self) -> frame_support::weights::Weight {
-		use ServiceBranch::*;
-		match self {
-			NoDeposit => T::WeightInfo::nudge_referendum_no_deposit(),
-			Preparing => T::WeightInfo::nudge_referendum_preparing(),
-			Queued => T::WeightInfo::nudge_referendum_queued(),
-			NotQueued => T::WeightInfo::nudge_referendum_not_queued(),
-			RequeuedInsertion => T::WeightInfo::nudge_referendum_requeued_insertion(),
-			RequeuedSlide => T::WeightInfo::nudge_referendum_requeued_slide(),
-			BeginDecidingPassing => T::WeightInfo::nudge_referendum_begin_deciding_passing(),
-			BeginDecidingFailing => T::WeightInfo::nudge_referendum_begin_deciding_failing(),
-			BeginConfirming => T::WeightInfo::nudge_referendum_begin_confirming(),
-			ContinueConfirming => T::WeightInfo::nudge_referendum_continue_confirming(),
-			EndConfirming => T::WeightInfo::nudge_referendum_end_confirming(),
-			ContinueNotConfirming => T::WeightInfo::nudge_referendum_continue_not_confirming(),
-			Approved => T::WeightInfo::nudge_referendum_approved(),
-			Rejected => T::WeightInfo::nudge_referendum_rejected(),
-			TimedOut | Fail => T::WeightInfo::nudge_referendum_timed_out(),
-		}
-	}
-
-	fn max_weight_of_nudge<T: Config>() -> frame_support::weights::Weight {
-		0
-			.max(T::WeightInfo::nudge_referendum_no_deposit())
-			.max(T::WeightInfo::nudge_referendum_preparing())
-			.max(T::WeightInfo::nudge_referendum_queued())
-			.max(T::WeightInfo::nudge_referendum_not_queued())
-			.max(T::WeightInfo::nudge_referendum_requeued_insertion())
-			.max(T::WeightInfo::nudge_referendum_requeued_slide())
-			.max(T::WeightInfo::nudge_referendum_begin_deciding_passing())
-			.max(T::WeightInfo::nudge_referendum_begin_deciding_failing())
-			.max(T::WeightInfo::nudge_referendum_begin_confirming())
-			.max(T::WeightInfo::nudge_referendum_continue_confirming())
-			.max(T::WeightInfo::nudge_referendum_end_confirming())
-			.max(T::WeightInfo::nudge_referendum_continue_not_confirming())
-			.max(T::WeightInfo::nudge_referendum_approved())
-			.max(T::WeightInfo::nudge_referendum_rejected())
-			.max(T::WeightInfo::nudge_referendum_timed_out())
-	}
-
-	fn weight_of_deposit<T: Config>(self) -> Option<frame_support::weights::Weight> {
-		use ServiceBranch::*;
-		Some(match self {
-			Preparing => T::WeightInfo::place_decision_deposit_preparing(),
-			Queued => T::WeightInfo::place_decision_deposit_queued(),
-			NotQueued => T::WeightInfo::place_decision_deposit_not_queued(),
-			BeginDecidingPassing => T::WeightInfo::place_decision_deposit_passing(),
-			BeginDecidingFailing => T::WeightInfo::place_decision_deposit_failing(),
-			BeginConfirming | ContinueConfirming | EndConfirming | ContinueNotConfirming | Approved
-			| Rejected | RequeuedInsertion | RequeuedSlide | TimedOut | Fail | NoDeposit
-			=> return None,
-		})
-	}
-
-	fn max_weight_of_deposit<T: Config>() -> frame_support::weights::Weight {
-		0
-			.max(T::WeightInfo::place_decision_deposit_preparing())
-			.max(T::WeightInfo::place_decision_deposit_queued())
-			.max(T::WeightInfo::place_decision_deposit_not_queued())
-			.max(T::WeightInfo::place_decision_deposit_passing())
-			.max(T::WeightInfo::place_decision_deposit_failing())
-	}
-}
-
-enum OneFewerDecidingBranch {
-	QueueEmpty,
-	BeginDecidingPassing,
-	BeginDecidingFailing,
-}
-
-impl From<BeginDecidingBranch> for OneFewerDecidingBranch {
-	fn from(x: BeginDecidingBranch) -> Self {
-		use {BeginDecidingBranch::*, OneFewerDecidingBranch::*};
-		match x {
-			Passing => BeginDecidingPassing,
-			Failing => BeginDecidingFailing,
-		}
-	}
-}
-
-impl OneFewerDecidingBranch {
-	fn weight<T: Config>(self) -> frame_support::weights::Weight {
-		use OneFewerDecidingBranch::*;
-		match self {
-			QueueEmpty => T::WeightInfo::one_fewer_deciding_queue_empty(),
-			BeginDecidingPassing => T::WeightInfo::one_fewer_deciding_passing(),
-			BeginDecidingFailing => T::WeightInfo::one_fewer_deciding_failing(),
-		}
-	}
-
-	fn max_weight<T: Config>() -> frame_support::weights::Weight {
-		0
-			.max(T::WeightInfo::one_fewer_deciding_queue_empty())
-			.max(T::WeightInfo::one_fewer_deciding_passing())
-			.max(T::WeightInfo::one_fewer_deciding_failing())
 	}
 }
 
@@ -683,6 +560,7 @@ impl<T: Config> Pallet<T> {
 	/// This will properly set up the `confirming` item.
 	fn begin_deciding(
 		status: &mut ReferendumStatusOf<T>,
+		index: ReferendumIndex,
 		now: T::BlockNumber,
 		track: &TrackInfoOf<T>,
 	) -> (Option<T::BlockNumber>, BeginDecidingBranch) {
@@ -694,8 +572,18 @@ impl<T: Config> Pallet<T> {
 			&track.min_approval,
 		);
 		status.in_queue = false;
-		let confirming =
-			if is_passing { Some(now.saturating_add(track.confirm_period)) } else { None };
+		Self::deposit_event(Event::<T>::DecisionStarted {
+			index,
+			tally: status.tally.clone(),
+			proposal_hash: status.proposal_hash.clone(),
+			track: status.track.clone(),
+		});
+		let confirming = if is_passing {
+			Self::deposit_event(Event::<T>::ConfirmStarted { index });
+			Some(now.saturating_add(track.confirm_period))
+		} else {
+			None
+		};
 		let deciding_status = DecidingStatus { since: now, confirming };
 		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
 		status.deciding = Some(deciding_status);
@@ -721,7 +609,7 @@ impl<T: Config> Pallet<T> {
 		if deciding_count < track.max_deciding {
 			// Begin deciding.
 			DecidingCount::<T>::insert(status.track, deciding_count.saturating_add(1));
-			let r = Self::begin_deciding(status, now, track);
+			let r = Self::begin_deciding(status, index, now, track);
 			(r.0, r.1.into())
 		} else {
 			// Add to queue.
@@ -918,6 +806,7 @@ impl<T: Config> Pallet<T> {
 							// Start confirming
 							dirty = true;
 							deciding.confirming = Some(now.saturating_add(track.confirm_period));
+							Self::deposit_event(Event::<T>::ConfirmStarted { index });
 							ServiceBranch::BeginConfirming
 						}
 					}
@@ -941,6 +830,7 @@ impl<T: Config> Pallet<T> {
 						// Stop confirming
 						dirty = true;
 						deciding.confirming = None;
+						Self::deposit_event(Event::<T>::ConfirmAborted { index });
 						ServiceBranch::EndConfirming
 					} else {
 						ServiceBranch::ContinueNotConfirming
