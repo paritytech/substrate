@@ -63,6 +63,33 @@ fn place_deposit<T: Config>(index: ReferendumIndex) {
 	));
 }
 
+fn fill_queue<T: Config>(index: ReferendumIndex, spaces: u32, pass_after: u32) {
+	// First, create enough other referendums to fill the track.
+	let mut others = vec![];
+	for _ in 0..info::<T>(index).max_deciding {
+		let (_caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
+		others.push(index);
+	}
+
+	// We will also need enough referenda which are queued and passing, we want `MaxQueued - 1`
+	// in order to force the maximum amount of work to insert ours into the queue.
+	for _ in spaces..T::MaxQueued::get() {
+		let (_caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
+		make_passing_after::<T>(index, Perbill::from_percent(pass_after));
+		others.push(index);
+	}
+
+	// Skip to when they can start being decided.
+	skip_prepare_period::<T>(index);
+
+	// Manually nudge the other referenda first to ensure that they begin.
+	for i in others.into_iter() {
+		Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), i);
+	}
+}
+
 fn info<T: Config>(index: ReferendumIndex) -> &'static TrackInfoOf<T> {
 	let status = Referenda::<T>::ensure_ongoing(index).unwrap();
 	T::Tracks::info(status.track).expect("Id value returned from T::Tracks")
@@ -163,27 +190,47 @@ benchmarks! {
 		assert_matches!(status, ReferendumInfo::Ongoing(_));
 	}
 
-	// TODO: Track at capacity.
-	// TODO: Track not at capacity and vote failing.
-	// TODO: Track at capacity and vote passing.
-	place_decision_deposit {
-		let caller = funded_account::<T>("caller", 0);
-		whitelist_account!(caller);
-		let origin = move || RawOrigin::Signed(caller.clone());
-		assert_ok!(Referenda::<T>::submit(
-			origin().into(),
-			RawOrigin::Root.into(),
-			T::Hashing::hash_of(&0),
-			AtOrAfter::After(0u32.into())
-		));
-		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
-	}: _(origin(), index)
+	place_decision_deposit_within_pp {
+		let (caller, index) = create_referendum::<T>();
+	}: place_decision_deposit(RawOrigin::Signed(caller), index)
 	verify {
 		let status = ReferendumInfoFor::<T>::get(index).unwrap();
 		assert_matches!(status, ReferendumInfo::Ongoing(ReferendumStatus {
 			decision_deposit: Some(..),
 			..
 		}));
+	}
+
+	// DONE: Track at capacity and worst-case queue.
+	place_decision_deposit_track_at_capacity {
+		let (caller, index) = create_referendum::<T>();
+		fill_queue::<T>(index, 1, 90);
+	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	verify {
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
+		assert_eq!(TrackQueue::<T>::get(&track)[0], (index, 0u32.into()));
+	}
+
+	// DONE: Track not at capacity and vote passing.
+	place_decision_deposit_passing {
+		let (caller, index) = create_referendum::<T>();
+		skip_prepare_period::<T>(index);
+		make_passing::<T>(index);
+	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	verify {
+		let status = Referenda::<T>::ensure_ongoing(index).unwrap();
+		assert!(is_confirming::<T>(index));
+	}
+
+	// DONE: Track not at capacity and vote failing.
+	place_decision_deposit_failing {
+		let (caller, index) = create_referendum::<T>();
+		skip_prepare_period::<T>(index);
+	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	verify {
+		let status = Referenda::<T>::ensure_ongoing(index).unwrap();
+		assert!(is_not_confirming::<T>(index));
 	}
 
 	refund_decision_deposit {
@@ -246,11 +293,11 @@ benchmarks! {
 	// DONE: not deciding, not queued, DD paid, PP not done
 
 	// Not deciding -> not deciding (queued)
-	// not deciding, not queued, DD paid, PP (just) done, track full
+	// DONE: not deciding, not queued, DD paid, PP (just) done, track full
 
 	// Not deciding (queued) -> not deciding (queued)
-	// TODO: not deciding, queued, since removed (insertion needed)
-	// TODO: not deciding, queued, still in (slide needed)
+	// DONE: not deciding, queued, since removed (insertion needed)
+	// DONE: not deciding, queued, still in (slide needed)
 
 	// Not deciding -> deciding
 	// DONE: not deciding, not queued, DD paid, PP (just) done, track empty, passing
@@ -273,31 +320,7 @@ benchmarks! {
 		// First create our referendum and place the deposit. It will be failing.
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
-
-		// Then, create enough other referendums to fill the track.
-		let mut others = vec![];
-		for _ in 0..info::<T>(index).max_deciding {
-			let (_caller, index) = create_referendum::<T>();
-			place_deposit::<T>(index);
-			others.push(index);
-		}
-
-		// We will also need enough referenda which are queued and passing, we want `MaxQueued`
-		// in order to ensure ours will not be queued and thus can force an insertion later.
-		for _ in 0..T::MaxQueued::get() {
-			let (_caller, index) = create_referendum::<T>();
-			place_deposit::<T>(index);
-			make_passing_after::<T>(index, Perbill::from_percent(90));
-			others.push(index);
-		}
-
-		// Skip to when they can start being decided.
-		skip_prepare_period::<T>(index);
-
-		// Manually nudge the other referenda first to ensure that they begin.
-		for i in others.into_iter() {
-			Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), i);
-		}
+		fill_queue::<T>(index, 0, 90);
 
 		// Now nudge ours, with the track now full and the queue full of referenda with votes,
 		// ours will not be in the queue.
@@ -318,31 +341,7 @@ benchmarks! {
 		// First create our referendum and place the deposit. It will be failing.
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
-
-		// Then, create enough other referendums to fill the track.
-		let mut others = vec![];
-		for _ in 0..info::<T>(index).max_deciding {
-			let (_caller, index) = create_referendum::<T>();
-			place_deposit::<T>(index);
-			others.push(index);
-		}
-
-		// We will also need enough referenda which are queued and passing, we want `MaxQueued - 1`
-		// in order to force the maximum amount of work to insert ours into the queue.
-		for _ in 1..T::MaxQueued::get() {
-			let (_caller, index) = create_referendum::<T>();
-			place_deposit::<T>(index);
-			make_passing_after::<T>(index, Perbill::from_percent(90));
-			others.push(index);
-		}
-
-		// Skip to when they can start being decided.
-		skip_prepare_period::<T>(index);
-
-		// Manually nudge the other referenda first to ensure that they begin.
-		for i in others.into_iter() {
-			Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), i);
-		}
+		fill_queue::<T>(index, 1, 90);
 
 		// Now nudge ours, with the track now full, ours will be queued, but with no votes, it
 		// will have the worst position.
@@ -368,31 +367,7 @@ benchmarks! {
 		// First create our referendum and place the deposit. It will be failing.
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
-
-		// Then, create enough other referendums to fill the track.
-		let mut others = vec![];
-		for _ in 0..info::<T>(index).max_deciding {
-			let (_caller, index) = create_referendum::<T>();
-			place_deposit::<T>(index);
-			others.push(index);
-		}
-
-		// We will also need enough referenda which are queued and passing, we want `MaxQueued - 1`
-		// in order to force the maximum amount of work to insert ours into the queue.
-		for _ in 1..T::MaxQueued::get() {
-			let (_caller, index) = create_referendum::<T>();
-			place_deposit::<T>(index);
-			make_passing::<T>(index);
-			others.push(index);
-		}
-
-		// Skip to when they can start being decided.
-		skip_prepare_period::<T>(index);
-
-		// Manually nudge the other referenda first to ensure that they begin.
-		for i in others.into_iter() {
-			Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), i);
-		}
+		fill_queue::<T>(index, 1, 0);
 
 		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);
