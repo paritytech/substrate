@@ -265,9 +265,8 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Propose a referendum on a privileged action.
 		///
-		/// The dispatch origin of this call must be _Signed_ and the sender must
-		/// have funds to cover the deposit.
-		///
+		/// - `origin`: must be `Signed` and the account must have `SubmissionDeposit` funds
+		///   available.
 		/// - `proposal_origin`: The origin from which the proposal should be executed.
 		/// - `proposal_hash`: The hash of the proposal preimage.
 		/// - `enactment_moment`: The moment that the proposal should be enacted.
@@ -310,6 +309,14 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Post the Decision Deposit for a referendum.
+		///
+		/// - `origin`: must be `Signed` and the account must have funds available for the
+		///   referendum's track's Decision Deposit.
+		/// - `index`: The index of the submitted referendum whose Decision Deposit is yet to be
+		///   posted.
+		///
+		/// TODO: Emits `DecisionDepositPlaced`.
 		#[pallet::weight(ServiceBranch::max_weight_of_deposit::<T>())]
 		pub fn place_decision_deposit(
 			origin: OriginFor<T>,
@@ -326,6 +333,13 @@ pub mod pallet {
 			Ok(branch.weight_of_deposit::<T>().into())
 		}
 
+		/// Refund the Decision Deposit for a closed referendum back to the depositor.
+		///
+		/// - `origin`: must be `Signed` or `Root`.
+		/// - `index`: The index of a closed referendum whose Decision Deposit has not yet been
+		///   refunded.
+		///
+		/// TODO: Emits `DecisionDepositRefunded`.
 		#[pallet::weight(T::WeightInfo::refund_decision_deposit())]
 		pub fn refund_decision_deposit(
 			origin: OriginFor<T>,
@@ -342,6 +356,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Cancel an ongoing referendum.
+		///
+		/// - `origin`: must be the `CancelOrigin`.
+		/// - `index`: The index of the referendum to be cancelled.
+		///
+		/// Emits `Cancelled`.
 		#[pallet::weight(T::WeightInfo::cancel())]
 		pub fn cancel(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::CancelOrigin::ensure_origin(origin)?;
@@ -361,6 +381,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Cancel an ongoing referendum and slash the deposits.
+		///
+		/// - `origin`: must be the `KillOrigin`.
+		/// - `index`: The index of the referendum to be cancelled.
+		///
+		/// Emits `Killed`.
 		#[pallet::weight(T::WeightInfo::kill())]
 		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
@@ -379,6 +405,9 @@ pub mod pallet {
 		}
 
 		/// Advance a referendum onto its next logical state. Only used internally.
+		///
+		/// - `origin`: must be `Root`.
+		/// - `index`: the referendum to be advanced.
 		#[pallet::weight(ServiceBranch::max_weight_of_nudge::<T>())]
 		pub fn nudge_referendum(
 			origin: OriginFor<T>,
@@ -397,6 +426,9 @@ pub mod pallet {
 		}
 
 		/// Advance a track onto its next logical state. Only used internally.
+		///
+		/// - `origin`: must be `Root`.
+		/// - `track`: the track to be advanced.
 		///
 		/// Action item for when there is now one fewer referendum in the deciding phase and the
 		/// `DecidingCount` is not yet updated. This means that we should either:
