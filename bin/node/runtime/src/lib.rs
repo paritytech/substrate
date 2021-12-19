@@ -704,28 +704,26 @@ impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
 	type Id = u8;
 	type Origin = <Origin as frame_support::traits::OriginTrait>::PalletsOrigin;
 	fn tracks() -> &'static [(Self::Id, pallet_referenda::TrackInfo<Balance, BlockNumber>)] {
-		static DATA: [(u8, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [
-			(
-				0u8,
-				pallet_referenda::TrackInfo {
-					name: "root",
-					max_deciding: 1,
-					decision_deposit: 10,
-					prepare_period: 4,
-					decision_period: 4,
-					confirm_period: 2,
-					min_enactment_period: 4,
-					min_approval: pallet_referenda::Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(50),
-					},
-					min_turnout: pallet_referenda::Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(100),
-					},
+		static DATA: [(u8, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [(
+			0u8,
+			pallet_referenda::TrackInfo {
+				name: "root",
+				max_deciding: 1,
+				decision_deposit: 10,
+				prepare_period: 4,
+				decision_period: 4,
+				confirm_period: 2,
+				min_enactment_period: 4,
+				min_approval: pallet_referenda::Curve::LinearDecreasing {
+					begin: Perbill::from_percent(100),
+					delta: Perbill::from_percent(50),
 				},
-			),
-		];
+				min_turnout: pallet_referenda::Curve::LinearDecreasing {
+					begin: Perbill::from_percent(100),
+					delta: Perbill::from_percent(100),
+				},
+			},
+		)];
 		&DATA[..]
 	}
 	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()> {

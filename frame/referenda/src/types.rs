@@ -18,11 +18,11 @@
 //! Miscellaneous additional datatypes.
 
 use super::*;
-use sp_std::fmt::Debug;
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
+use sp_std::fmt::Debug;
 
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -261,15 +261,16 @@ pub enum ReferendumInfo<
 }
 
 impl<
-	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
-	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-> ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress> {
+		TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+		Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	> ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress>
+{
 	pub fn take_decision_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
 		use ReferendumInfo::*;
 		match self {

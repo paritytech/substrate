@@ -67,9 +67,11 @@ fn nudge<T: Config>(index: ReferendumIndex) {
 	assert_ok!(Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), index));
 }
 
-fn fill_queue<T: Config>(index: ReferendumIndex, spaces: u32, pass_after: u32)
-	-> Vec<ReferendumIndex>
-{
+fn fill_queue<T: Config>(
+	index: ReferendumIndex,
+	spaces: u32,
+	pass_after: u32,
+) -> Vec<ReferendumIndex> {
 	// First, create enough other referendums to fill the track.
 	let mut others = vec![];
 	for _ in 0..info::<T>(index).max_deciding {

@@ -48,6 +48,7 @@ use sp_std::{fmt::Debug, prelude::*};
 mod branch;
 mod types;
 pub mod weights;
+use branch::{BeginDecidingBranch, OneFewerDecidingBranch, ServiceBranch};
 pub use pallet::*;
 pub use types::{
 	AtOrAfter, BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
@@ -56,7 +57,6 @@ pub use types::{
 	TrackInfoOf, TracksInfo, VotesOf,
 };
 pub use weights::WeightInfo;
-use branch::{ServiceBranch, BeginDecidingBranch, OneFewerDecidingBranch};
 
 #[cfg(test)]
 mod mock;
@@ -380,7 +380,10 @@ pub mod pallet {
 
 		/// Advance a referendum onto its next logical state. Only used internally.
 		#[pallet::weight(ServiceBranch::max_weight_of_nudge::<T>())]
-		pub fn nudge_referendum(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResultWithPostInfo {
+		pub fn nudge_referendum(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let now = frame_system::Pallet::<T>::block_number();
 			let mut status = Self::ensure_ongoing(index)?;
@@ -407,20 +410,21 @@ pub mod pallet {
 			ensure_root(origin)?;
 			let track_info = T::Tracks::info(track).ok_or(Error::<T>::BadTrack)?;
 			let mut track_queue = TrackQueue::<T>::get(track);
-			let branch = if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
-				let now = frame_system::Pallet::<T>::block_number();
-				let (maybe_alarm, branch)
-					= Self::begin_deciding(&mut status, index, now, track_info);
-				if let Some(set_alarm) = maybe_alarm {
-					Self::ensure_alarm_at(&mut status, index, set_alarm);
-				}
-				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
-				TrackQueue::<T>::insert(track, track_queue);
-				branch.into()
-			} else {
-				DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
-				OneFewerDecidingBranch::QueueEmpty
-			};
+			let branch =
+				if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
+					let now = frame_system::Pallet::<T>::block_number();
+					let (maybe_alarm, branch) =
+						Self::begin_deciding(&mut status, index, now, track_info);
+					if let Some(set_alarm) = maybe_alarm {
+						Self::ensure_alarm_at(&mut status, index, set_alarm);
+					}
+					ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+					TrackQueue::<T>::insert(track, track_queue);
+					branch.into()
+				} else {
+					DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
+					OneFewerDecidingBranch::QueueEmpty
+				};
 			Ok(Some(branch.weight::<T>()).into())
 		}
 	}
@@ -568,11 +572,8 @@ impl<T: Config> Pallet<T> {
 		let deciding_status = DecidingStatus { since: now, confirming };
 		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
 		status.deciding = Some(deciding_status);
-		let branch = if is_passing {
-			BeginDecidingBranch::Passing
-		} else {
-			BeginDecidingBranch::Failing
-		};
+		let branch =
+			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };
 		(Some(alarm), branch)
 	}
 
@@ -723,7 +724,8 @@ impl<T: Config> Pallet<T> {
 					branch = if status.decision_deposit.is_some() {
 						let prepare_end = status.submitted.saturating_add(track.prepare_period);
 						if now >= prepare_end {
-							let (maybe_alarm, branch) = Self::ready_for_deciding(now, &track, index, &mut status);
+							let (maybe_alarm, branch) =
+								Self::ready_for_deciding(now, &track, index, &mut status);
 							if let Some(set_alarm) = maybe_alarm {
 								alarm = alarm.min(set_alarm);
 							}
@@ -768,8 +770,17 @@ impl<T: Config> Pallet<T> {
 							Self::ensure_no_alarm(&mut status);
 							Self::note_one_fewer_deciding(status.track, track);
 							let (desired, call_hash) = (status.enactment, status.proposal_hash);
-							Self::schedule_enactment(index, track, desired, status.origin, call_hash);
-							Self::deposit_event(Event::<T>::Confirmed { index, tally: status.tally });
+							Self::schedule_enactment(
+								index,
+								track,
+								desired,
+								status.origin,
+								call_hash,
+							);
+							Self::deposit_event(Event::<T>::Confirmed {
+								index,
+								tally: status.tally,
+							});
 							return (
 								ReferendumInfo::Approved(
 									now,
@@ -779,17 +790,15 @@ impl<T: Config> Pallet<T> {
 								true,
 								ServiceBranch::Approved,
 							)
-						}
-						Some(_) => {
-							ServiceBranch::ContinueConfirming
-						}
+						},
+						Some(_) => ServiceBranch::ContinueConfirming,
 						None => {
 							// Start confirming
 							dirty = true;
 							deciding.confirming = Some(now.saturating_add(track.confirm_period));
 							Self::deposit_event(Event::<T>::ConfirmStarted { index });
 							ServiceBranch::BeginConfirming
-						}
+						},
 					}
 				} else {
 					if now >= deciding.since.saturating_add(track.decision_period) {

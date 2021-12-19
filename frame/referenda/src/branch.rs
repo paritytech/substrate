@@ -15,8 +15,8 @@
 
 //! Helpers for managing the different weights in various algorithmic branches.
 
-use crate::weights::WeightInfo;
 use super::Config;
+use crate::weights::WeightInfo;
 
 pub enum BeginDecidingBranch {
 	Passing,
@@ -44,7 +44,8 @@ pub enum ServiceBranch {
 
 impl From<BeginDecidingBranch> for ServiceBranch {
 	fn from(x: BeginDecidingBranch) -> Self {
-		use {BeginDecidingBranch::*, ServiceBranch::*};
+		use BeginDecidingBranch::*;
+		use ServiceBranch::*;
 		match x {
 			Passing => BeginDecidingPassing,
 			Failing => BeginDecidingFailing,
@@ -75,8 +76,7 @@ impl ServiceBranch {
 	}
 
 	pub fn max_weight_of_nudge<T: Config>() -> frame_support::weights::Weight {
-		0
-			.max(T::WeightInfo::nudge_referendum_no_deposit())
+		0.max(T::WeightInfo::nudge_referendum_no_deposit())
 			.max(T::WeightInfo::nudge_referendum_preparing())
 			.max(T::WeightInfo::nudge_referendum_queued())
 			.max(T::WeightInfo::nudge_referendum_not_queued())
@@ -101,15 +101,22 @@ impl ServiceBranch {
 			NotQueued => T::WeightInfo::place_decision_deposit_not_queued(),
 			BeginDecidingPassing => T::WeightInfo::place_decision_deposit_passing(),
 			BeginDecidingFailing => T::WeightInfo::place_decision_deposit_failing(),
-			BeginConfirming | ContinueConfirming | EndConfirming | ContinueNotConfirming | Approved
-			| Rejected | RequeuedInsertion | RequeuedSlide | TimedOut | Fail | NoDeposit
-			=> return None,
+			BeginConfirming |
+			ContinueConfirming |
+			EndConfirming |
+			ContinueNotConfirming |
+			Approved |
+			Rejected |
+			RequeuedInsertion |
+			RequeuedSlide |
+			TimedOut |
+			Fail |
+			NoDeposit => return None,
 		})
 	}
 
 	pub fn max_weight_of_deposit<T: Config>() -> frame_support::weights::Weight {
-		0
-			.max(T::WeightInfo::place_decision_deposit_preparing())
+		0.max(T::WeightInfo::place_decision_deposit_preparing())
 			.max(T::WeightInfo::place_decision_deposit_queued())
 			.max(T::WeightInfo::place_decision_deposit_not_queued())
 			.max(T::WeightInfo::place_decision_deposit_passing())
@@ -125,7 +132,8 @@ pub enum OneFewerDecidingBranch {
 
 impl From<BeginDecidingBranch> for OneFewerDecidingBranch {
 	fn from(x: BeginDecidingBranch) -> Self {
-		use {BeginDecidingBranch::*, OneFewerDecidingBranch::*};
+		use BeginDecidingBranch::*;
+		use OneFewerDecidingBranch::*;
 		match x {
 			Passing => BeginDecidingPassing,
 			Failing => BeginDecidingFailing,
@@ -144,8 +152,7 @@ impl OneFewerDecidingBranch {
 	}
 
 	pub fn max_weight<T: Config>() -> frame_support::weights::Weight {
-		0
-			.max(T::WeightInfo::one_fewer_deciding_queue_empty())
+		0.max(T::WeightInfo::one_fewer_deciding_queue_empty())
 			.max(T::WeightInfo::one_fewer_deciding_passing())
 			.max(T::WeightInfo::one_fewer_deciding_failing())
 	}
