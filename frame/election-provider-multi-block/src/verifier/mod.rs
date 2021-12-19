@@ -19,15 +19,14 @@
 //!
 //! TODO
 
-use frame_support::BoundedVec;
 // Only these items are public from this pallet.
 pub use pallet::*;
 
 mod pallet;
 
 // internal imports
-use crate::SolutionOf;
-use frame_election_provider_support::{BoundedSupport, PageIndex};
+use crate::{SolutionOf, SupportsOf};
+use frame_election_provider_support::PageIndex;
 use pallet::{QueuedSolution, VerifyingSolution};
 use sp_npos_elections::ElectionScore;
 use std::fmt::Debug;
@@ -71,7 +70,7 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 pub trait Verifier {
 	type Solution;
 	type AccountId;
-	type MaxBackingCountPerTarget: frame_support::traits::Get<u32>;
+	type MaxBackersPerSupport: frame_support::traits::Get<u32>;
 	// NOTE: This one is a tricky, we can't know this in advance. This is determined by the
 	// validator count of staking. We should not set this to be too high, since it would mean that
 	// all of our worse cases are actually worse, but ideally it should follow
@@ -146,7 +145,7 @@ pub trait Verifier {
 impl<T: Config> Verifier for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Solution = SolutionOf<T>;
-	type MaxBackingCountPerTarget = T::MaxBackingCountPerTarget;
+	type MaxBackersPerSupport = T::MaxBackersPerSupport;
 	type MaxSupportsPerPage = T::MaxSupportsPerPage;
 
 	fn set_unverified_solution_page(

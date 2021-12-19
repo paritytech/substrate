@@ -1937,7 +1937,9 @@ dependencies = [
  "paste 1.0.6",
  "scale-info",
  "sp-api",
+ "sp-application-crypto",
  "sp-io",
+ "sp-keystore",
  "sp-runtime",
  "sp-runtime-interface",
  "sp-std",
@@ -4574,9 +4576,11 @@ dependencies = [
  "sp-consensus-babe",
  "sp-core",
  "sp-externalities",
+ "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
+ "sp-tracing",
  "sp-trie",
  "wat",
 ]
@@ -4662,6 +4666,7 @@ dependencies = [
  "pallet-bags-list",
  "pallet-balances",
  "pallet-bounties",
+ "pallet-child-bounties",
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
@@ -4680,6 +4685,7 @@ dependencies = [
  "pallet-multisig",
  "pallet-offences",
  "pallet-offences-benchmarking",
+ "pallet-preimage",
  "pallet-proxy",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
@@ -5334,6 +5340,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-child-bounties"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-balances",
+ "pallet-bounties",
+ "pallet-treasury",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-collective"
 version = "4.0.0-dev"
 dependencies = [
@@ -5355,6 +5380,7 @@ version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
  "bitflags",
+ "env_logger 0.9.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5393,6 +5419,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-core",
+ "sp-rpc",
  "sp-runtime",
  "sp-std",
 ]
@@ -5530,21 +5557,6 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
-]
-
-[[package]]
-name = "pallet-elections"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -5892,6 +5904,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-preimage"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-proxy"
 version = "4.0.0-dev"
 dependencies = [
@@ -5946,6 +5974,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.14",
+ "pallet-preimage",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -8001,6 +8030,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log 0.4.14",
+ "lru 0.6.6",
  "parity-scale-codec",
  "parking_lot 0.11.2",
  "paste 1.0.6",
@@ -9164,7 +9194,7 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9188,7 +9218,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arithmetic"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "criterion",
  "integer-sqrt",
@@ -9357,7 +9387,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "base58",
  "bitflags",
@@ -9409,7 +9439,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core-hashing"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "blake2-rfc",
  "byteorder",
@@ -9439,7 +9469,7 @@ dependencies = [
 
 [[package]]
 name = "sp-debug-derive"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9448,7 +9478,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.10.0-dev"
+version = "0.10.0"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -9489,7 +9519,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "futures 0.3.18",
  "hash-db",
@@ -9522,7 +9552,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keystore"
-version = "0.10.0-dev"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -9600,7 +9630,7 @@ dependencies = [
 
 [[package]]
 name = "sp-panic-handler"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -9619,7 +9649,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -9646,7 +9676,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -9668,7 +9698,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface-proc-macro"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "Inflector",
  "proc-macro-crate 1.1.0",
@@ -9763,7 +9793,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.10.0-dev"
+version = "0.10.0"
 dependencies = [
  "hash-db",
  "hex-literal",
@@ -9788,11 +9818,11 @@ dependencies = [
 
 [[package]]
 name = "sp-std"
-version = "4.0.0-dev"
+version = "4.0.0"
 
 [[package]]
 name = "sp-storage"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -9844,7 +9874,7 @@ dependencies = [
 
 [[package]]
 name = "sp-tracing"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "parity-scale-codec",
  "sp-std",
@@ -9878,7 +9908,7 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "4.0.0-dev"
+version = "4.0.0"
 dependencies = [
  "criterion",
  "hash-db",
@@ -9923,12 +9953,14 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "impl-trait-for-tuples",
+ "log 0.4.14",
  "parity-scale-codec",
  "sp-std",
  "wasmi",
+ "wasmtime",
 ]
 
 [[package]]
@@ -10780,7 +10812,7 @@ dependencies = [
  "chrono",
  "lazy_static",
  "matchers",
- "parking_lot 0.11.2",
+ "parking_lot 0.9.0",
  "regex",
  "serde",
  "serde_json",

@@ -90,21 +90,24 @@
 //!
 //!     pub trait Config: Sized {
 //!         type ElectionProvider: ElectionProvider<
-//!             AccountId,
-//!             BlockNumber,
-//!             DataProvider = Module<Self>,
+//!             AccountId = AccountId,
+//!             BlockNumber = BlockNumber,
+//!             DataProvider = Pallet<Self>,
 //!         >;
 //!     }
 //!
-//!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
+//!     pub struct Pallet<T: Config>(std::marker::PhantomData<T>);
 //!
-//!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
-//!         type MaxVotesPerVoter: frame_support::ConstU32<1>;
+//!     impl<T: Config> ElectionDataProvider for Pallet<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
+//!         const MAXIMUM_VOTES_PER_VOTER: u32 = 1;
+//!
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
 //!         fn voters(maybe_max_len: Option<usize>, _page: PageIndex)
-//!         -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
+//!           -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
 //!         {
 //!             Ok(Default::default())
 //!         }
@@ -124,10 +127,12 @@
 //!     pub struct GenericElectionProvider<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     pub trait Config {
-//!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+//!         type DataProvider: ElectionDataProvider<AccountId=AccountId, BlockNumber = BlockNumber>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
+//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!         type Pages = ();
@@ -147,7 +152,7 @@
 //!
 //!     struct Runtime;
 //!     impl generic_election_provider::Config for Runtime {
-//!         type DataProvider = data_provider_mod::Module<Runtime>;
+//!         type DataProvider = data_provider_mod::Pallet<Runtime>;
 //!     }
 //!
 //!     impl data_provider_mod::Config for Runtime {
@@ -164,10 +169,8 @@
 pub mod onchain;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	traits::{ConstU32, Get},
-	BoundedVec, RuntimeDebug,
-};
+use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
+use scale_info::TypeInfo;
 use sp_npos_elections::EvaluateSupport;
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -175,7 +178,7 @@ use sp_std::{fmt::Debug, prelude::*};
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
 	Assignment, ElectionResult, ExtendedBalance, IdentifierT, NposSolution, PerThing128, Support,
-	Supports, VoteWeight,
+	VoteWeight,
 };
 
 /// Types that are used by the data provider trait.
@@ -191,7 +194,13 @@ pub mod data_provider {
 pub type PageIndex = u32;
 
 /// Something that can provide the data to an [`ElectionProvider`].
-pub trait ElectionDataProvider<AccountId, BlockNumber> {
+pub trait ElectionDataProvider {
+	/// The account identifier type.
+	type AccountId;
+
+	/// The block number type.
+	type BlockNumber;
+
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
@@ -205,7 +214,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	fn targets(
 		maybe_max_len: Option<usize>,
 		remaining_pages: PageIndex,
-	) -> data_provider::Result<Vec<AccountId>>;
+	) -> data_provider::Result<Vec<Self::AccountId>>;
 
 	/// All possible voters for the election.
 	///
@@ -219,9 +228,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining_pages: PageIndex,
-	) -> data_provider::Result<
-		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
-	>;
+	) -> data_provider::Result<Vec<Voter<Self::AccountId, Self::MaxVotesPerVoter>>>;
 
 	/// The number of targets to elect.
 	///
@@ -235,14 +242,18 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// [`ElectionProvider::elect`].
 	///
 	/// This is only useful for stateful election providers.
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber;
+	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber;
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
-		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		_targets: Vec<AccountId>,
+		_voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			BoundedVec<Self::AccountId, Self::MaxVotesPerVoter>,
+		)>,
+		_targets: Vec<Self::AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
 	}
@@ -252,32 +263,45 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_voter(_voter: AccountId, _weight: VoteWeight, _targets: Vec<AccountId>) {}
+	fn add_voter(
+		_voter: Self::AccountId,
+		_weight: VoteWeight,
+		_targets: BoundedVec<Self::AccountId, Self::MaxVotesPerVoter>,
+	) {
+	}
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_target(_target: AccountId) {}
+	fn add_target(_target: Self::AccountId) {}
 
 	/// Clear all voters and targets.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn clear() {}
 }
 
+/// An election data provider that should only be used for testing.
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
-	type MaxVotesPerVoter = ConstU32<0>;
-	fn targets(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<AccountId>> {
+pub struct TestDataProvider<X>(sp_std::marker::PhantomData<X>);
+
+#[cfg(feature = "std")]
+impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountId, BlockNumber)> {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type MaxVotesPerVoter = ();
+
+	fn targets(
+		_maybe_max_len: Option<usize>,
+		_: PageIndex,
+	) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}
 	fn voters(
 		_maybe_max_len: Option<usize>,
 		_: PageIndex,
-	) -> data_provider::Result<
-		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
-	> {
+	) -> data_provider::Result<Vec<Voter<Self::AccountId, Self::MaxVotesPerVoter>>> {
 		Ok(Default::default())
 	}
 	fn desired_targets() -> data_provider::Result<u32> {
@@ -293,14 +317,27 @@ impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for ()
 /// This trait only provides an interface to _request_ an election, i.e.
 /// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
-pub trait ElectionProvider<AccountId, BlockNumber> {
+pub trait ElectionProvider {
+	/// The account identifier type.
+	type AccountId;
+
+	/// The block number type.
+	type BlockNumber;
+
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
 	/// The data provider of the election.
-	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+	type DataProvider: ElectionDataProvider<
+		AccountId = Self::AccountId,
+		BlockNumber = Self::BlockNumber,
+	>;
 
-	type MaxBackingCountPerTarget: Get<u32>;
+	/// Maximum number of backers that a single support may have, in the results returned from this
+	/// election provider.
+	type MaxBackersPerSupport: Get<u32>;
+
+	/// Maximum number of supports that can be returned, per page (i.e. per call to `elect`).
 	type MaxSupportsPerPage: Get<u32>;
 
 	/// The number of pages of support that this election provider can return.
@@ -314,15 +351,7 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect(
-		remaining: PageIndex,
-	) -> Result<
-		BoundedVec<
-			(AccountId, BoundedSupport<AccountId, Self::MaxBackingCountPerTarget>),
-			Self::MaxSupportsPerPage,
-		>,
-		Self::Error,
-	>;
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 
 	/// The index of the most significant page of the election result that is to be returned. This
 	/// is typically [`Pages`] minus one, but is left open.
@@ -337,23 +366,24 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	}
 }
 
+/// An election provider to be used only for testing.
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
+pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
+
+#[cfg(feature = "std")]
+impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNumber)> {
 	type Error = &'static str;
-	type DataProvider = ();
+
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+
+	type DataProvider = TestDataProvider<(Self::AccountId, Self::BlockNumber)>;
 	type Pages = frame_support::traits::ConstU32<1>;
-	type MaxBackingCountPerTarget = ();
+
+	type MaxBackersPerSupport = ();
 	type MaxSupportsPerPage = ();
 
-	fn elect(
-		_: PageIndex,
-	) -> Result<
-		BoundedVec<
-			(AccountId, BoundedSupport<AccountId, Self::MaxBackingCountPerTarget>),
-			Self::MaxSupportsPerPage,
-		>,
-		Self::Error,
-	> {
+	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("<() as ElectionProvider> cannot do anything.")
 	}
 }
@@ -506,10 +536,11 @@ impl<
 	}
 }
 
+/// A voter, at the level of abstraction of this crate.
+pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId, Bound>);
+
 /// A bounded equivalent to [`sp_npos_elections::Support`].
-#[derive(
-	Default, RuntimeDebug, Encode, Decode, Eq, PartialEq, scale_info::TypeInfo, MaxEncodedLen,
-)]
+#[derive(Default, RuntimeDebug, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 pub struct BoundedSupport<AccountId, Bound: Get<u32>> {
 	/// Total support.
 	pub total: ExtendedBalance,
@@ -517,41 +548,30 @@ pub struct BoundedSupport<AccountId, Bound: Get<u32>> {
 	pub voters: BoundedVec<(AccountId, ExtendedBalance), Bound>,
 }
 
-// NOTE: the derive clone does not generate the right code here, sadly.
+impl<AccountId, Bound: Get<u32>> sp_npos_elections::Backings for &BoundedSupport<AccountId, Bound> {
+	fn total(&self) -> ExtendedBalance {
+		self.total
+	}
+}
+
+impl<AccountId: PartialEq, Bound: Get<u32>> PartialEq for BoundedSupport<AccountId, Bound> {
+	fn eq(&self, other: &Self) -> bool {
+		self.total == other.total && self.voters == other.voters
+	}
+}
+impl<AccountId: PartialEq, Bound: Get<u32>> Eq for BoundedSupport<AccountId, Bound> {}
+
 impl<AccountId: Clone, Bound: Get<u32>> Clone for BoundedSupport<AccountId, Bound> {
 	fn clone(&self) -> Self {
 		Self { voters: self.voters.clone(), total: self.total }
 	}
 }
 
-// impl<AccountId, Bound: Get<u32>> BoundedSupport<AccountId, Bound> {
-// 	fn into_unbounded(self) -> sp_npos_elections::Support<AccountId> {
-// 		sp_npos_elections::Support { voters: self.voters.into_inner(), ..self }
-// 	}
-// }
-
 impl<AccountId, Bound: Get<u32>> Into<sp_npos_elections::Support<AccountId>>
 	for BoundedSupport<AccountId, Bound>
 {
 	fn into(self) -> sp_npos_elections::Support<AccountId> {
 		sp_npos_elections::Support { voters: self.voters.into_inner(), total: self.total }
-	}
-}
-
-/// A bounded equivalent to [`sp_npos_elections::EvaluateSupport`].
-pub trait EvaluateBoundedSupports {
-	fn evaluate_bounded(&self) -> sp_npos_elections::ElectionScore;
-}
-
-impl<AccountId: sp_npos_elections::IdentifierT, BInner: Get<u32>, BOuter: Get<u32>>
-	EvaluateBoundedSupports for BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>
-{
-	fn evaluate_bounded(&self) -> sp_npos_elections::ElectionScore {
-		// TODO: for now we just do this with something like endless allocations, as if we totally
-		// YOLO, but this ain't good. On the flip side, we reuse code.
-		let supports = self.clone().into_inner();
-		let supports = supports.into_iter().map(|(a, s)| (a, s.into())).collect::<Vec<_>>();
-		supports.evaluate()
 	}
 }
 
@@ -565,25 +585,137 @@ impl<AccountId, Bound: Get<u32>> TryFrom<sp_npos_elections::Support<AccountId>>
 	}
 }
 
-pub trait TryIntoBoundedSupports<AccountId, BInner: Get<u32>, BOuter: Get<u32>> {
-	fn try_into_bounded_supports(
-		self,
-	) -> Result<BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>, ()>;
+/// A vector of [`BoundedSupport`].
+///
+/// This is a newtype rather than an alias so that we can implement certain foreign traits for it.
+///
+/// Note the order of generic bounds, first comes the outer bound and then the inner. When possible,
+/// use [`BoundedSupportsOf`] to avoid mistakes.
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct BoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>>(
+	pub BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>,
+);
+
+impl<AccountId: PartialEq, BOuter: Get<u32>, BInner: Get<u32>> PartialEq
+	for BoundedSupports<AccountId, BOuter, BInner>
+{
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
+	}
+}
+impl<AccountId: PartialEq, BOuter: Get<u32>, BInner: Get<u32>> Eq
+	for BoundedSupports<AccountId, BOuter, BInner>
+{
 }
 
-impl<AccountId, BInner: Get<u32>, BOuter: Get<u32>>
-	TryIntoBoundedSupports<AccountId, BInner, BOuter> for sp_npos_elections::Supports<AccountId>
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> sp_std::ops::Deref
+	for BoundedSupports<AccountId, BOuter, BInner>
 {
-	fn try_into_bounded_supports(
-		self,
-	) -> Result<BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>, ()> {
+	type Target = BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
+	From<BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>>
+	for BoundedSupports<AccountId, BOuter, BInner>
+{
+	fn from(t: BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>) -> Self {
+		Self(t)
+	}
+}
+
+/// A [`BoundedSupports`] parameterized by something that implements [`ElectionProvider`].
+pub type BoundedSupportsOf<E> = BoundedSupports<
+	<E as ElectionProvider>::AccountId,
+	<E as ElectionProvider>::MaxSupportsPerPage,
+	<E as ElectionProvider>::MaxBackersPerSupport,
+>;
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> EvaluateSupport
+	for BoundedSupports<AccountId, BOuter, BInner>
+{
+	fn evaluate(&self) -> sp_npos_elections::ElectionScore {
+		sp_npos_elections::evaluate_support_core(self.0.iter().map(|(_, s)| s))
+	}
+}
+
+/// Extension trait to convert from [`sp_npos_elections::Supports<AccountId>`] to `BoundedSupports`.
+pub trait TryIntoBoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>> {
+	/// Perform the conversion.
+	fn try_into_bounded_supports(self) -> Result<BoundedSupports<AccountId, BOuter, BInner>, ()>;
+}
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
+	TryIntoBoundedSupports<AccountId, BOuter, BInner> for sp_npos_elections::Supports<AccountId>
+{
+	fn try_into_bounded_supports(self) -> Result<BoundedSupports<AccountId, BOuter, BInner>, ()> {
 		let inner_bounded_supports = self
 			.into_iter()
-			.map(|(a, s)| <BoundedSupport<AccountId, BInner>>::try_from(s).map(|ss| (a, ss)))
+			.map(|(a, s)| s.try_into().map(|s| (a, s)))
 			.collect::<Result<Vec<_>, _>>()
 			.map_err(|_| ())?;
 		let outer_bounded_supports: BoundedVec<_, BOuter> =
 			inner_bounded_supports.try_into().map_err(|_| ())?;
-		Ok(outer_bounded_supports)
+		Ok(outer_bounded_supports.into())
+	}
+}
+
+/// Same as [`TryIntoBoundedSupports`], but wrapped in another vector as well.
+///
+/// The vector can represent a [`PageIndex`].
+pub trait TryIntoBoundedSupportsVec<AccountId, BOuter: Get<u32>, BInner: Get<u32>> {
+	/// Perform the conversion.
+	fn try_into_bounded_supports_vec(
+		self,
+	) -> Result<Vec<BoundedSupports<AccountId, BOuter, BInner>>, ()>;
+}
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
+	TryIntoBoundedSupportsVec<AccountId, BOuter, BInner>
+	for Vec<sp_npos_elections::Supports<AccountId>>
+{
+	fn try_into_bounded_supports_vec(
+		self,
+	) -> Result<Vec<BoundedSupports<AccountId, BOuter, BInner>>, ()> {
+		self.into_iter()
+			.map(|s| s.try_into_bounded_supports())
+			.collect::<Result<Vec<_>, ()>>()
+	}
+}
+
+/// Same as [`TryIntoBoundedSupportsVec`], but the conversion function itself is typed, so that the
+/// generics can be provided using the turbo-fish syntax in case rustc fails to auto-detect it.
+pub trait TryIntoBoundedSupportsVecTyped<AccountId> {
+	/// Perform the conversion.
+	fn try_into_bounded_supports_vec_typed<BOuter, BInner>(
+		self,
+	) -> Result<Vec<BoundedSupports<AccountId, BOuter, BInner>>, ()>
+	where
+		BOuter: Get<u32>,
+		BInner: Get<u32>,
+		Self: Sized + TryIntoBoundedSupportsVec<AccountId, BOuter, BInner>,
+	{
+		<Self as TryIntoBoundedSupportsVec<AccountId, BOuter, BInner>>::try_into_bounded_supports_vec(self)
+	}
+}
+impl<T: Sized, AccountId> TryIntoBoundedSupportsVecTyped<AccountId> for T {}
+
+/// Extension trait to easily convert from unbounded voters to bounded ones.
+pub trait TryIntoBoundedVoters<AccountId, MaxVotesPerVoter: Get<u32>> {
+	/// Perform the conversion.
+	fn try_into_bounded_voters(self) -> Result<Vec<Voter<AccountId, MaxVotesPerVoter>>, ()>;
+}
+
+impl<AccountId, MaxVotesPerVoter: Get<u32>> TryIntoBoundedVoters<AccountId, MaxVotesPerVoter>
+	for Vec<(AccountId, VoteWeight, Vec<AccountId>)>
+{
+	fn try_into_bounded_voters(self) -> Result<Vec<Voter<AccountId, MaxVotesPerVoter>>, ()> {
+		self.into_iter()
+			.map(|(x, y, z)| z.try_into().map(|z| (x, y, z)))
+			.collect::<Result<Vec<_>, _>>()
+			.map_err(|_| ())
 	}
 }

@@ -178,7 +178,7 @@ impl<AccountId> Candidate<AccountId> {
 }
 
 /// A vote being casted by a [`Voter`] to a [`Candidate`] is an `Edge`.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Edge<AccountId> {
 	/// Identifier of the target.
 	///
@@ -191,6 +191,15 @@ pub struct Edge<AccountId> {
 	candidate: CandidatePtr<AccountId>,
 	/// The weight (i.e. stake given to `who`) of this edge.
 	weight: ExtendedBalance,
+}
+
+#[cfg(test)]
+impl<AccountId: Clone> Edge<AccountId> {
+	fn new(candidate: Candidate<AccountId>, weight: ExtendedBalance) -> Self {
+		let who = candidate.who.clone();
+		let candidate = Rc::new(RefCell::new(candidate));
+		Self { weight, who, candidate, load: Default::default() }
+	}
 }
 
 #[cfg(feature = "std")]
@@ -223,7 +232,12 @@ impl<A: IdentifierT> std::fmt::Debug for Voter<A> {
 impl<AccountId: IdentifierT> Voter<AccountId> {
 	/// Create a new `Voter`.
 	pub fn new(who: AccountId) -> Self {
-		Self { who, ..Default::default() }
+		Self {
+			who,
+			edges: Default::default(),
+			budget: Default::default(),
+			load: Default::default(),
+		}
 	}
 
 	/// Returns `true` if `self` votes for `target`.
@@ -339,13 +353,19 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
+#[derive(RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
 	pub total: ExtendedBalance,
 	/// Support from voters.
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
+}
+
+impl<AccountId> Default for Support<AccountId> {
+	fn default() -> Self {
+		Self { total: Default::default(), voters: vec![] }
+	}
 }
 
 /// A target-major representation of the the election outcome.
@@ -397,21 +417,39 @@ pub trait EvaluateSupport {
 
 impl<AccountId: IdentifierT> EvaluateSupport for Supports<AccountId> {
 	fn evaluate(&self) -> ElectionScore {
-		let mut min_support = ExtendedBalance::max_value();
-		let mut sum: ExtendedBalance = Zero::zero();
-		// NOTE: The third element might saturate but fine for now since this will run on-chain and
-		// need to be fast.
-		let mut sum_squared: ExtendedBalance = Zero::zero();
-		for (_, support) in self {
-			sum = sum.saturating_add(support.total);
-			let squared = support.total.saturating_mul(support.total);
-			sum_squared = sum_squared.saturating_add(squared);
-			if support.total < min_support {
-				min_support = support.total;
-			}
-		}
-		[min_support, sum, sum_squared]
+		evaluate_support_core(self.iter().map(|(_, s)| s))
 	}
+}
+
+/// Generic representation of a support.
+pub trait Backings {
+	/// THe
+	fn total(&self) -> ExtendedBalance;
+}
+
+impl<AccountId: IdentifierT> Backings for &Support<AccountId> {
+	fn total(&self) -> ExtendedBalance {
+		self.total
+	}
+}
+
+/// Core implementation of how to evaluate a support (in the most generic form), exported as a
+/// free-standing function for easy re-use.
+pub fn evaluate_support_core(backings: impl Iterator<Item = impl Backings>) -> ElectionScore {
+	let mut min_support = ExtendedBalance::max_value();
+	let mut sum: ExtendedBalance = Zero::zero();
+	// NOTE: The third element might saturate but fine for now since this will run on-chain and
+	// need to be fast.
+	let mut sum_squared: ExtendedBalance = Zero::zero();
+	for b in backings {
+		sum = sum.saturating_add(b.total());
+		let squared = b.total().saturating_mul(b.total());
+		sum_squared = sum_squared.saturating_add(squared);
+		if b.total() < min_support {
+			min_support = b.total();
+		}
+	}
+	[min_support, sum, sum_squared]
 }
 
 /// Compares two sets of election scores based on desirability and returns true if `this` is better
@@ -460,7 +498,15 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 		.enumerate()
 		.map(|(idx, who)| {
 			c_idx_cache.insert(who.clone(), idx);
-			Candidate { who, ..Default::default() }.to_ptr()
+			Candidate {
+				who,
+				score: Default::default(),
+				approval_stake: Default::default(),
+				backed_stake: Default::default(),
+				elected: Default::default(),
+				round: Default::default(),
+			}
+			.to_ptr()
 		})
 		.collect::<Vec<CandidatePtr<AccountId>>>();
 
@@ -481,7 +527,8 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 					edges.push(Edge {
 						who: v.clone(),
 						candidate: Rc::clone(&candidates[*idx]),
-						..Default::default()
+						load: Default::default(),
+						weight: Default::default(),
 					});
 				} // else {} would be wrong votes. We don't really care about it.
 			}

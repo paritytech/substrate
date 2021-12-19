@@ -368,7 +368,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
-	fn prometheus_config(&self, _default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(
+		&self,
+		_default_listen_port: u16,
+		_chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<PrometheusConfig>> {
 		Ok(None)
 	}
 
@@ -452,6 +456,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
+	/// Get maximum different runtimes in cache
+	///
+	/// By default this is `2`.
+	fn runtime_cache_size(&self) -> Result<u8> {
+		Ok(2)
+	}
+
 	/// Activate or not the automatic announcing of blocks after import
 	///
 	/// By default this is `false`.
@@ -482,6 +493,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let is_validator = role.is_authority();
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
 		let telemetry_endpoints = self.telemetry_endpoints(&chain_spec)?;
+		let runtime_cache_size = self.runtime_cache_size()?;
 
 		let unsafe_pruning = self.import_params().map(|p| p.unsafe_pruning).unwrap_or(false);
 
@@ -519,7 +531,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
-			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
+			prometheus_config: self
+				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
 			telemetry_endpoints,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
@@ -534,6 +547,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
+			runtime_cache_size,
 		})
 	}
 

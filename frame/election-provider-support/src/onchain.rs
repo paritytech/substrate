@@ -17,11 +17,10 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{BoundedSupport, ElectionDataProvider, ElectionProvider, PageIndex};
+use crate::{BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex};
 use frame_support::{
 	traits::{ConstU32, Get},
 	weights::DispatchClass,
-	BoundedVec,
 };
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -69,29 +68,35 @@ pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
 	/// Something that provides the data for election.
-	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	type DataProvider: ElectionDataProvider<
+		AccountId = Self::AccountId,
+		BlockNumber = Self::BlockNumber,
+	>;
 	/// Maximum targets to get from the data provider.
 	type TargetsPageSize: Get<Option<usize>>;
 	/// Maximum voters to get from the data provider.
 	type VoterPageSize: Get<Option<usize>>;
+	/// Maximum number of backers allowed per target.
+	///
+	/// This implementation will naively sort the results and trim them.
+	type MaxBackersPerSupport: Get<u32>;
+	/// Maximum number of supports that can be returned per page.
+	///
+	/// Similarly, if this is less than `DataProvider`'s `desired_targets`, then it will naively
+	/// trim the winners based on stake.
+	type MaxSupportsPerPage: Get<u32>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
 	type Error = Error;
 	type DataProvider = T::DataProvider;
-	type Pages = frame_support::traits::ConstU32<1>;
-	type MaxBackingCountPerTarget = ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+	type Pages = ConstU32<1>;
+	type MaxBackersPerSupport = T::MaxBackersPerSupport;
+	type MaxSupportsPerPage = T::MaxSupportsPerPage;
 
-	fn elect(
-		remaining: PageIndex,
-	) -> Result<
-		BoundedVec<
-			(T::AccountId, BoundedSupport<T::AccountId, Self::MaxBackingCountPerTarget>),
-			Self::MaxSupportsPerPage,
-		>,
-		Self::Error,
-	> {
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if remaining != 0 {
 			return Err(Error::NoMoreThenSinglePageExpected)
 		}
@@ -127,16 +132,20 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		);
 
 		let supports = to_supports(&staked);
-		// TODO: shitty allocation.
+		// TODO: shitty allocation. This probably needs to be replaced, and also we need to trim of
+		// it fails, not panic. For now I want to code to unblock.
 		use crate::TryIntoBoundedSupports;
 		let bounded_supports = supports.try_into_bounded_supports().unwrap();
-		Ok(bounded_supports)
+		Ok(bounded_supports.into())
 	}
 }
 
 #[cfg(test)]
 mod tests {
+	use crate::TryIntoBoundedSupports;
+
 	use super::*;
+	use frame_support::traits::ConstU32;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 
@@ -181,6 +190,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type OnSetCode = ();
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl Config for Runtime {
@@ -188,6 +198,8 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type TargetsPageSize = ();
 		type VoterPageSize = ();
+		type MaxBackersPerSupport = ConstU32<16>;
+		type MaxSupportsPerPage = ConstU32<16>;
 	}
 
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
@@ -199,13 +211,18 @@ mod tests {
 		use crate::{data_provider, PageIndex};
 
 		pub struct DataProvider;
-		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
+		impl ElectionDataProvider for DataProvider {
+			type AccountId = AccountId;
+			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
 			fn voters(
 				_: Option<usize>,
 				_: PageIndex,
-			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])])
+			) -> data_provider::Result<Vec<crate::Voter<Self::AccountId, Self::MaxVotesPerVoter>>> {
+				use crate::TryIntoBoundedVoters;
+				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])]
+					.try_into_bounded_voters()
+					.unwrap())
 			}
 
 			fn targets(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<AccountId>> {
@@ -225,13 +242,16 @@ mod tests {
 	#[test]
 	fn onchain_seq_phragmen_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
-			assert_eq!(
-				OnChainPhragmen::elect(0).unwrap(),
-				vec![
-					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
-					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
-				]
-			);
+			let rhs: BoundedSupportsOf<OnChainPhragmen> = vec![
+				(
+					10 as AccountId,
+					Support { total: 25, voters: vec![(1 as AccountId, 10), (3, 15)] },
+				),
+				(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] }),
+			]
+			.try_into_bounded_supports()
+			.unwrap();
+			assert_eq!(OnChainPhragmen::elect(0).unwrap(), rhs);
 		});
 	}
 

@@ -73,7 +73,16 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		);
 		quote! {
 			#compact_impl
-			#[derive(Default, PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
+			#[derive(
+				Default,
+				PartialEq,
+				Eq,
+				Clone,
+				Debug,
+				PartialOrd,
+				Ord,
+				_npos::scale_info::TypeInfo,
+			)]
 		}
 	} else {
 		// automatically derived.
@@ -85,9 +94,9 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			Debug,
 			PartialOrd,
 			Ord,
+			_npos::scale_info::TypeInfo,
 			_npos::codec::Encode,
 			_npos::codec::Decode,
-			_npos::scale_info::TypeInfo,
 		)])
 	};
 

@@ -21,7 +21,7 @@ use super::*;
 use crate as sudo;
 use frame_support::{
 	parameter_types,
-	traits::{Contains, GenesisBuild},
+	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
 };
 use frame_system::limits;
 use sp_core::H256;
@@ -109,7 +109,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(1024);
 }
 
@@ -135,7 +134,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -144,6 +143,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 // Implement the logger module's `Config` on the Test runtime.
@@ -164,7 +164,7 @@ pub type LoggerCall = logger::Call<Test>;
 // Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	sudo::GenesisConfig::<Test> { key: root_key }
+	sudo::GenesisConfig::<Test> { key: Some(root_key) }
 		.assimilate_storage(&mut t)
 		.unwrap();
 	t.into()

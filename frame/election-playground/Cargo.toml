@@ -10,7 +10,7 @@ log = { version = "0.4.14" }
 parking_lot = "0.11.0"
 
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }

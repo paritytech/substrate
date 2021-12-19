@@ -77,7 +77,7 @@ pub trait VerifySeal<Header, Author> {
 /// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
-	type Key: Decode + Default + RuntimeAppPublic;
+	type Key: Decode + RuntimeAppPublic;
 
 	/// The given validator set will be used for the genesis session.
 	/// It is guaranteed that the given validator set will also be used

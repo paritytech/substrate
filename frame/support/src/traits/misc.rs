@@ -60,40 +60,45 @@ impl<T: Default> Get<T> for GetDefault {
 	}
 }
 
-/// Implement `Get<u32>` and `Get<Option<u32>>` using the given const.
-pub struct ConstU32<const T: u32>;
-
-impl<const T: u32> Get<u32> for ConstU32<T> {
-	fn get() -> u32 {
-		T
-	}
+macro_rules! impl_const_get {
+	($name:ident, $t:ty) => {
+		#[derive($crate::RuntimeDebug)]
+		pub struct $name<const T: $t>;
+		impl<const T: $t> Get<$t> for $name<T> {
+			fn get() -> $t {
+				T
+			}
+		}
+		impl<const T: $t> Get<Option<$t>> for $name<T> {
+			fn get() -> Option<$t> {
+				Some(T)
+			}
+		}
+	};
 }
 
-impl<const T: u32> Get<Option<u32>> for ConstU32<T> {
-	fn get() -> Option<u32> {
-		Some(T)
-	}
-}
-
-/// Implement `Get<u8>` and `Get<Option<u8>>` using the given const.
-pub struct ConstU8<const T: u8>;
-
-impl<const T: u8> Get<u8> for ConstU8<T> {
-	fn get() -> u8 {
-		T
-	}
-}
-
-impl<const T: u8> Get<Option<u8>> for ConstU8<T> {
-	fn get() -> Option<u8> {
-		Some(T)
-	}
-}
+impl_const_get!(ConstBool, bool);
+impl_const_get!(ConstU8, u8);
+impl_const_get!(ConstU16, u16);
+impl_const_get!(ConstU32, u32);
+impl_const_get!(ConstU64, u64);
+impl_const_get!(ConstU128, u128);
+impl_const_get!(ConstI8, i8);
+impl_const_get!(ConstI16, i16);
+impl_const_get!(ConstI32, i32);
+impl_const_get!(ConstI64, i64);
+impl_const_get!(ConstI128, i128);
 
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self>;
+}
+
+impl TryDrop for () {
+	fn try_drop(self) -> Result<(), Self> {
+		Ok(())
+	}
 }
 
 /// Return type used when we need to return one of two items, each of the opposite direction or
@@ -577,6 +582,65 @@ impl<T: TypeInfo + 'static> TypeInfo for WrapperKeepOpaque<T> {
 					.field(|f| f.ty::<T>().type_name("T")),
 			)
 	}
+}
+
+/// A interface for looking up preimages from their hash on chain.
+pub trait PreimageProvider<Hash> {
+	/// Returns whether a preimage exists for a given hash.
+	///
+	/// A value of `true` implies that `get_preimage` is `Some`.
+	fn have_preimage(hash: &Hash) -> bool;
+
+	/// Returns the preimage for a given hash.
+	fn get_preimage(hash: &Hash) -> Option<Vec<u8>>;
+
+	/// Returns whether a preimage request exists for a given hash.
+	fn preimage_requested(hash: &Hash) -> bool;
+
+	/// Request that someone report a preimage. Providers use this to optimise the economics for
+	/// preimage reporting.
+	fn request_preimage(hash: &Hash);
+
+	/// Cancel a previous preimage request.
+	fn unrequest_preimage(hash: &Hash);
+}
+
+impl<Hash> PreimageProvider<Hash> for () {
+	fn have_preimage(_: &Hash) -> bool {
+		false
+	}
+	fn get_preimage(_: &Hash) -> Option<Vec<u8>> {
+		None
+	}
+	fn preimage_requested(_: &Hash) -> bool {
+		false
+	}
+	fn request_preimage(_: &Hash) {}
+	fn unrequest_preimage(_: &Hash) {}
+}
+
+/// A interface for managing preimages to hashes on chain.
+///
+/// Note that this API does not assume any underlying user is calling, and thus
+/// does not handle any preimage ownership or fees. Other system level logic that
+/// uses this API should implement that on their own side.
+pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
+	/// Maximum size of a preimage.
+	type MaxSize: Get<u32>;
+
+	/// Store the bytes of a preimage on chain.
+	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
+
+	/// Clear a previously noted preimage. This is infallible and should be treated more like a
+	/// hint - if it was not previously noted or if it is now requested, then this will not do
+	/// anything.
+	fn unnote_preimage(hash: &Hash);
+}
+
+impl<Hash> PreimageRecipient<Hash> for () {
+	type MaxSize = ();
+	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
+	fn unnote_preimage(_: &Hash) {}
 }
 
 #[cfg(test)]

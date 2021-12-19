@@ -29,7 +29,7 @@ use structopt::StructOpt;
 use node_cli::chain_spec::{self, AccountId};
 use sc_keystore::LocalKeystore;
 use sp_core::{
-	crypto::{Public, Ss58Codec},
+	crypto::{ByteArray, Ss58Codec},
 	sr25519,
 };
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};

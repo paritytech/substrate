@@ -128,9 +128,8 @@ mod pallet {
 			// we know that the claimed score is better then what we currently have because of the
 			// pre-dispatch checks, now we only check if the claimed score was *valid*.
 
-			// TODO: this is just a placeholder..
-			use frame_election_provider_support::EvaluateBoundedSupports;
-			let valid_score = supports.evaluate_bounded();
+			use sp_npos_elections::EvaluateSupport;
+			let valid_score = supports.evaluate();
 			assert_eq!(valid_score, paged_solution.score, "{}", error_message);
 
 			log!(info, "queued an unsigned solution with score {:?}", valid_score);

@@ -173,6 +173,17 @@ pub mod pallet {
 		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
 	}
 
+	#[pallet::error]
+	#[cfg_attr(test, derive(PartialEq))]
+	pub enum Error<T> {
+		/// Attempted to place node in front of a node in another bag.
+		NotInSameBag,
+		/// Id not found in list.
+		IdNotFound,
+		/// An Id does not have a greater vote weight than another Id.
+		NotHeavier,
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Declare that some `dislocated` account has, through rewards or penalties, sufficiently
@@ -189,6 +200,20 @@ pub mod pallet {
 			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
 			let _ = Pallet::<T>::do_rebag(&dislocated, current_weight);
 			Ok(())
+		}
+
+		/// Move the caller's Id directly in front of `lighter`.
+		///
+		/// The dispatch origin for this call must be _Signed_ and can only be called by the Id of
+		/// the account going in front of `lighter`.
+		///
+		/// Only works if
+		/// - both nodes are within the same bag,
+		/// - and `origin` has a greater `VoteWeight` than `lighter`.
+		#[pallet::weight(T::WeightInfo::put_in_front_of())]
+		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
+			let heavier = ensure_signed(origin)?;
+			List::<T>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
 		}
 	}
 

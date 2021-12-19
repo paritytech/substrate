@@ -21,18 +21,16 @@ use sp_std::{collections::btree_set::BTreeSet, fmt::Debug};
 use crate::Verifier;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use frame_election_provider_support::PageIndex;
-use frame_election_provider_support::{BoundedSupport, ElectionDataProvider, ElectionProvider};
+use frame_election_provider_support::{BoundedSupports, ElectionDataProvider, ElectionProvider};
 use scale_info::TypeInfo;
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
 use sp_runtime::SaturatedConversion;
 
-/// The supports that's returned from a given [`Verifier`].
-pub type SupportsOf<V> = BoundedVec<
-	(
-		<V as Verifier>::AccountId,
-		BoundedSupport<<V as Verifier>::AccountId, <V as Verifier>::MaxBackingCountPerTarget>,
-	),
+/// The supports that's returned from a given [`Verifier`]. TODO: rename this
+pub type SupportsOf<V> = BoundedSupports<
+	<V as Verifier>::AccountId,
 	<V as Verifier>::MaxSupportsPerPage,
+	<V as Verifier>::MaxBackersPerSupport,
 >;
 
 /// The solution type used by this crate.
@@ -45,10 +43,7 @@ pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex
 /// The accuracy of the election, when submitted from offchain. Derived from [`SolutionOf`].
 pub type SolutionAccuracyOf<T> = <SolutionOf<T> as NposSolution>::Accuracy;
 /// The fallback election type.
-pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider<
-	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
->>::Error;
+pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider>::Error;
 
 /// The relative distribution of a voter's stake among the winning targets.
 pub type AssignmentOf<T> =
@@ -144,10 +139,7 @@ pub type VoterOf<T> = (
 	sp_npos_elections::VoteWeight,
 	BoundedVec<
 		<T as frame_system::Config>::AccountId,
-		<<T as crate::Config>::DataProvider as ElectionDataProvider<
-			<T as frame_system::Config>::AccountId,
-			<T as frame_system::Config>::BlockNumber,
-		>>::MaxVotesPerVoter,
+		<<T as crate::Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
 	>,
 );
 

@@ -24,10 +24,12 @@ use crate::{
 	},
 	verifier as verifier_pallet,
 };
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
+use scale_info::TypeInfo;
 use sp_core::{
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
@@ -74,6 +76,12 @@ sp_npos_elections::generate_solution_type!(
 	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
 );
 
+impl codec::MaxEncodedLen for TestNposSolution {
+	fn max_encoded_len() -> usize {
+		todo!()
+	}
+}
+
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -98,6 +106,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -121,20 +130,21 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
-		(1, 10, vec![10, 20]),
-		(2, 10, vec![30, 40]),
-		(3, 10, vec![40]),
-		(4, 10, vec![10, 20, 40]),
-		(5, 10, vec![10, 30, 40]),
-		(6, 10, vec![20, 30, 40]),
-		(7, 10, vec![20, 30]),
-		(8, 10, vec![10]),
+	pub static Voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, MaxVotesPerVoter>)> = vec![
+		// TODO: how about a `bounded_vec![ConstU32<8>, 1,2,3]`
+		(1, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10, 20]).unwrap()),
+		(2, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![30, 40]).unwrap()),
+		(3, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![40]).unwrap()),
+		(4, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10, 20, 40]).unwrap()),
+		(5, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10, 30, 40]).unwrap()),
+		(6, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![20, 30, 40]).unwrap()),
+		(7, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![20, 30]).unwrap()),
+		(8, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10]).unwrap()),
 		// self votes.
-		(10, 10, vec![10]),
-		(20, 20, vec![20]),
-		(30, 30, vec![30]),
-		(40, 40, vec![40]),
+		(10, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10]).unwrap()),
+		(20, 20, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![20]).unwrap()),
+		(30, 30, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![30]).unwrap()),
+		(40, 40, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![40]).unwrap()),
 	];
 	pub static LastIteratedVoterIndex: Option<usize> = None;
 
@@ -155,6 +165,7 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
+	pub static MaxVotesPerVoter: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 
 	pub static EpochLength: u64 = 30;
 	// by default we stick to 3 pages to host our 12 voters.
@@ -164,7 +175,12 @@ parameter_types! {
 
 	// we have 12 voters in the default setting, this should be enough to make sure they are not
 	// trimmed accidentally in any test.
-	pub static MaxBackingCountPerTarget: u32 = 12;
+	#[derive(Encode, Decode, PartialEq, Eq, Debug, scale_info::TypeInfo, MaxEncodedLen)]
+	pub static MaxBackersPerSupport: u32 = 12;
+	// we have 4 targets in total and we desire `Desired` thereof, no single page can represent more
+	// than the min of these two.
+	#[derive(Encode, Decode, PartialEq, Eq, Debug, scale_info::TypeInfo, MaxEncodedLen)]
+	pub static MaxSupportsPerPage: u32 = (Targets::get().len() as u32).min(DesiredTargets::get());
 	pub static Pages: PageIndex = 3;
 }
 
@@ -250,7 +266,8 @@ impl crate::verifier::Config for Runtime {
 	type Event = Event;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type MaxBackingCountPerTarget = MaxBackingCountPerTarget;
+	type MaxBackersPerSupport = MaxBackersPerSupport;
+	type MaxSupportsPerPage = MaxSupportsPerPage;
 }
 
 pub struct MockUnsignedWeightInfo;
@@ -300,21 +317,25 @@ impl onchain::Config for Runtime {
 	type DataProvider = MockStaking;
 	type TargetsPageSize = ();
 	type VoterPageSize = ();
+	type MaxBackersPerSupport = MaxBackersPerSupport;
+	type MaxSupportsPerPage = MaxSupportsPerPage;
 }
 
 pub struct MockFallback;
-impl ElectionProvider<AccountId, u64> for MockFallback {
+impl ElectionProvider for MockFallback {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = MockStaking;
-	type Pages = frame_support::traits::ConstU8<1>;
-	type MaxBackingCountPerTarget = frame_support::traits::ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = frame_support::traits::ConstU32<{ u32::MAX }>;
+	type Pages = ConstU32<1>;
+	type MaxBackersPerSupport = MaxBackersPerSupport;
+	type MaxSupportsPerPage = MaxSupportsPerPage;
 
 	fn elect(
 		remaining: PageIndex,
 	) -> Result<
 		BoundedVec<
-			(T::AccountId, BoundedSupport<T::AccountId, Self::MaxBackingCountPerTarget>),
+			(Self::AccountId, BoundedSupport<Self::AccountId, Self::MaxBackersPerSupport>),
 			Self::MaxSupportsPerPage,
 		>,
 		Self::Error,
@@ -323,14 +344,20 @@ impl ElectionProvider<AccountId, u64> for MockFallback {
 			onchain::OnChainSequentialPhragmen::<Runtime>::elect(remaining)
 				.map_err(|_| "OnChainSequentialPhragmen failed")
 		} else {
-			InitiateEmergencyPhase::<Runtime>::elect(remaining)
+			// NOTE: this pesky little trick here is to avoid a clash of type, since `Ok` of our
+			// election provider and our fallback is not the same
+			// TODO maybe we should bound this as well in the integrity test or something like that.
+			let err = InitiateEmergencyPhase::<Runtime>::elect(remaining).unwrap_err();
+			Err(err)
 		}
 	}
 }
 
 pub struct MockStaking;
-impl ElectionDataProvider<AccountId, u64> for MockStaking {
-	type MaxVotesPerVoter = ConstU32<{ <TestNposSolution as NposSolution>::LIMIT as u32 }>;
+impl ElectionDataProvider for MockStaking {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
+	type MaxVotesPerVoter = MaxVotesPerVoter;
 
 	fn targets(
 		maybe_max_len: Option<usize>,
@@ -351,7 +378,9 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
+	) -> data_provider::Result<
+		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
+	> {
 		let mut voters = Voters::get();
 
 		// jump to the first non-iterated, if this is a follow up.
@@ -379,6 +408,7 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 
 		Ok(voters)
 	}
+
 	fn desired_targets() -> data_provider::Result<u32> {
 		Ok(DesiredTargets::get())
 	}
@@ -389,7 +419,7 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
-		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, MaxVotesPerVoter>)>,
 		targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
@@ -404,7 +434,11 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 	}
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
+	fn add_voter(
+		voter: AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<AccountId, MaxVotesPerVoter>,
+	) {
 		let mut current = Voters::get();
 		current.push((voter, weight, targets));
 		Voters::set(current);
@@ -419,7 +453,7 @@ impl ElectionDataProvider<AccountId, u64> for MockStaking {
 		// to be on-par with staking, we add a self vote as well. the stake is really not that
 		// important.
 		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
+		current.push((target, ExistentialDeposit::get() as u64, vec![target].try_into().unwrap()));
 		Voters::set(current);
 	}
 }
@@ -429,7 +463,7 @@ pub struct ExtBuilder {}
 
 impl ExtBuilder {
 	pub(crate) fn max_backing_per_target(self, c: u32) -> Self {
-		<MaxBackingCountPerTarget>::set(c);
+		<MaxBackersPerSupport>::set(c);
 		self
 	}
 	pub(crate) fn miner_tx_priority(self, p: u64) -> Self {
@@ -470,7 +504,7 @@ impl ExtBuilder {
 		self
 	}
 	pub(crate) fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
-		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
+		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets.try_into().unwrap())));
 		self
 	}
 	pub(crate) fn signed_max_submission(self, count: u32) -> Self {
@@ -568,7 +602,7 @@ pub fn witness() -> SolutionOrSnapshotSize {
 ///
 /// Return the final supports, which is the outcome. If this succeeds, then the valid variant of the
 /// `QueuedSolution` form `verifier` is ready to be read.
-pub fn roll_to_full_verification() -> Vec<Supports<AccountId>> {
+pub fn roll_to_full_verification() -> Vec<BoundedSupportsOf<MultiBlock>> {
 	// we must be ready to verify.
 	assert_eq!(VerifierPallet::status(), Some(Pages::get() - 1));
 
@@ -598,7 +632,7 @@ pub fn load_solution_for_verification(raw_paged: PagedRawSolution<Runtime>) {
 /// All of the voters in this support must live in a single page of the snapshot, noted by
 /// `snapshot_page`.
 pub fn solution_from_supports(
-	supports: Supports<AccountId>,
+	supports: sp_npos_elections::Supports<AccountId>,
 	snapshot_page: PageIndex,
 ) -> TestNposSolution {
 	let staked = sp_npos_elections::supports_to_staked_assignment(supports);
@@ -617,12 +651,12 @@ pub fn solution_from_supports(
 /// Given vector must be aligned with the snapshot, at most need to be 'pagified' which we do
 /// internally.
 pub fn raw_paged_from_supports(
-	paged_supports: Vec<Supports<AccountId>>,
+	paged_supports: Vec<sp_npos_elections::Supports<AccountId>>,
 	round: u32,
 ) -> PagedRawSolution<Runtime> {
 	let score = {
 		let flattened = paged_supports.iter().cloned().flatten().collect::<Vec<_>>();
-		(&flattened).evaluate()
+		flattened.evaluate()
 	};
 
 	let solution_pages = paged_supports
@@ -630,6 +664,7 @@ pub fn raw_paged_from_supports(
 		.map(|(page_index, page_support)| solution_from_supports(page_support.to_vec(), page_index))
 		.collect::<Vec<_>>();
 
+	let solution_pages = solution_pages.try_into().unwrap();
 	PagedRawSolution { solution_pages, score, round }
 }
 
@@ -744,21 +779,9 @@ pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>
 	}
 }
 
-/// Creates a nested vec where the index of the first vec is the same as the key of the snapshot.
-fn nested_voter_snapshot() -> Vec<Vec<VoterOf<Runtime>>> {
-	let mut flatten: Vec<Vec<VoterOf<Runtime>>> = Vec::with_capacity(Pages::get() as usize);
-	flatten.resize(Pages::get() as usize, vec![]);
-	let voter_snapshot = crate::Snapshot::<Runtime>::voters_iter().collect::<Vec<_>>();
-	for (page, voters) in voter_snapshot {
-		flatten[page as usize] = voters
-	}
-
-	flatten
-}
-
 /// An invalid solution with any score.
 pub fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
-	PagedRawSolution { score, solution_pages: vec![Default::default()], ..Default::default() }
+	PagedRawSolution { score, solution_pages: BoundedVec::default(), ..Default::default() }
 }
 
 /// A real solution that's valid, but has a really bad score.
@@ -769,7 +792,9 @@ pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 			// 2 targets, both voting for themselves
 			votes1: vec![(0, 0), (1, 2)],
 			..Default::default()
-		}],
+		}]
+		.try_into()
+		.unwrap(),
 		round: 1,
 		score: [
 			10,  // lowest staked

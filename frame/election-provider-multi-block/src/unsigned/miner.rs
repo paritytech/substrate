@@ -140,7 +140,7 @@ impl<
 	///
 	/// This always trims the solution to match a few parameters:
 	///
-	/// 1. [`crate::verifier::Config::MaxBackingCountPerTarget`]
+	/// 1. [`crate::verifier::Config::MaxBackersPerSupport`]
 	/// 2. [`crate::unsigned::Config::MinerMaxLength`]
 	/// 3. [`crate::unsigned::Config::MinerMaxWeight`]
 	pub fn mine_solution(
@@ -260,7 +260,7 @@ impl<
 
 		// split the assignments into different pages.
 		let mut paged_assignments: BoundedVec<Vec<AssignmentOf<T>>, T::Pages> =
-			BoundedVec::bounded_capacity(pages as usize);
+			BoundedVec::with_bounded_capacity(pages as usize);
 		paged_assignments.bounded_resize(pages as usize, Default::default());
 		for assignment in trimmed_assignments {
 			// NOTE: this `page` index is LOCAL. It does not correspond to the actual page index of
@@ -398,7 +398,7 @@ impl<
 	}
 
 	/// Trim the given supports so that the count of backings in none of them exceeds
-	/// [`crate::verifier::Config::MaxBackingCountPerTarget`].
+	/// [`crate::verifier::Config::MaxBackersPerSupport`].
 	///
 	/// Note that this should only be called on the *global, non-paginated* supports. Calling this
 	/// on a single page of supports is essentially pointless and does not guarantee anything in
@@ -407,7 +407,7 @@ impl<
 	/// Returns the count of supports trimmed.
 	pub fn trim_supports(supports: &mut sp_npos_elections::Supports<T::AccountId>) -> u32 {
 		let limit =
-			<T::Verifier as crate::verifier::Verifier>::MaxBackingCountPerTarget::get() as usize;
+			<T::Verifier as crate::verifier::Verifier>::MaxBackersPerSupport::get() as usize;
 		let mut count = 0;
 		supports
 			.iter_mut()
@@ -823,8 +823,10 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 mod trim_weight_length {
 	use super::*;
 	use crate::{mock::*, verifier::Verifier};
+	use frame_election_provider_support::{
+		TryIntoBoundedSupportsVec, TryIntoBoundedSupportsVecTyped,
+	};
 	use sp_npos_elections::Support;
-	use sp_runtime::PerU16;
 
 	#[test]
 	fn trim_weight_basic() {
@@ -867,6 +869,8 @@ mod trim_weight_length {
 					// all will stay
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 		});
 
@@ -901,6 +905,8 @@ mod trim_weight_length {
 					vec![(30, Support { total: 7, voters: vec![(7, 7)] })],
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 		})
 	}
@@ -945,6 +951,8 @@ mod trim_weight_length {
 						(30, Support { total: 2, voters: vec![(2, 2)] })
 					]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 		});
 
@@ -980,6 +988,8 @@ mod trim_weight_length {
 						(30, Support { total: 2, voters: vec![(2, 2)] })
 					]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 		})
 	}
@@ -1052,6 +1062,8 @@ mod trim_weight_length {
 					],
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 		});
 
@@ -1089,6 +1101,8 @@ mod trim_weight_length {
 					],
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 		});
 	}
@@ -1097,7 +1111,8 @@ mod trim_weight_length {
 #[cfg(test)]
 mod base_miner {
 	use super::*;
-	use crate::{mock::*, verifier::Verifier};
+	use crate::{mock::*, Snapshot};
+	use frame_election_provider_support::TryIntoBoundedSupportsVecTyped;
 	use sp_npos_elections::Support;
 	use sp_runtime::PerU16;
 
@@ -1170,6 +1185,8 @@ mod base_miner {
 						}
 					)
 				]]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 
 			// NOTE: this is the same as the score of any other test that contains the first 8
@@ -1253,6 +1270,8 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
 					]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 
 			assert_eq!(paged.score, [30, 70, 2500]);
@@ -1339,6 +1358,8 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(3, 10), (4, 10), (2, 5)] })
 					]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 
 			assert_eq!(paged.score, [55, 130, 8650]);
@@ -1405,6 +1426,8 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
 					]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 
 			assert_eq!(paged.score, [15, 40, 850]);
@@ -1499,6 +1522,8 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
 					]
 				]
+				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.unwrap()
 			);
 
 			assert_eq!(paged.score, [30, 70, 2500]);
@@ -1532,7 +1557,7 @@ mod base_miner {
 			.build_and_execute(|| {
 				// 10 and 40 are the default winners, we add a lot more votes to them.
 				for i in 100..105 {
-					VOTERS.with(|v| v.borrow_mut().push((i, i - 96, vec![10])));
+					VOTERS.with(|v| v.borrow_mut().push((i, i - 96, vec![10].try_into().unwrap())));
 				}
 				roll_to_snapshot_created();
 
@@ -1569,6 +1594,9 @@ mod base_miner {
 							)
 						]
 					]
+					.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>(
+					)
+					.unwrap()
 				);
 			})
 	}

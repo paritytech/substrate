@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{helpers, SolutionOf};
+use crate::{helpers, SolutionOf, SupportsOf};
 use frame_election_provider_support::{ExtendedBalance, PageIndex, Support};
 use sp_npos_elections::{ElectionScore, EvaluateSupport, NposSolution};
 use sp_runtime::traits::One;
@@ -66,7 +66,9 @@ mod pallet {
 		/// This must be set such that the memory limits in the rest of the system are well
 		/// respected.
 		// TODO: base miner should be tweaked to respect this.
-		type MaxBackingCountPerTarget: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
+		// TODO: Type info and shit should not be needed, probably because we use this in dispatch
+		// type??
+		type MaxBackersPerSupport: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
 
 		/// Maximum number of supports (aka. winners/validators/targets) that can be represented in
 		/// a page of results.
@@ -267,7 +269,7 @@ mod pallet {
 				entry.0 = entry.0.saturating_add(backing);
 				entry.1 = entry.1.saturating_add(count);
 
-				if entry.1 > T::MaxBackingCountPerTarget::get() {
+				if entry.1 > T::MaxBackersPerSupport::get() {
 					return Err(FeasibilityError::TooManyBackings)
 				}
 			}
@@ -460,13 +462,17 @@ mod pallet {
 		#[cfg(test)]
 		pub(crate) fn get_backing_page(
 			page: PageIndex,
-		) -> Option<Vec<(T::AccountId, (ExtendedBalance, u32))>> {
+		) -> Option<BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxSupportsPerPage>> {
 			QueuedSolutionBackings::<T>::get(page)
 		}
 
 		#[cfg(test)]
-		pub(crate) fn backing_iter(
-		) -> impl Iterator<Item = (PageIndex, Vec<(T::AccountId, (ExtendedBalance, u32))>)> {
+		pub(crate) fn backing_iter() -> impl Iterator<
+			Item = (
+				PageIndex,
+				BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxSupportsPerPage>,
+			),
+		> {
 			QueuedSolutionBackings::<T>::iter()
 		}
 
@@ -500,7 +506,7 @@ mod pallet {
 	/// The `(amount, count)` of backings, divided per page.
 	///
 	/// This is stored because in the last block of verification we need them to compute the score,
-	/// and check `MaxBackingCountPerTarget`.
+	/// and check `MaxBackersPerSupport`.
 	///
 	/// This can only ever live for the invalid variant of the solution. Once it is valid, we don't
 	/// need this information anymore; the score is already computed once in
@@ -701,7 +707,7 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn feasibility_check_page_inner(
 		partial_solution: SolutionOf<T>,
 		page: PageIndex,
-	) -> Result<crate::verifier::SupportsOf<Self>, FeasibilityError> {
+	) -> Result<SupportsOf<Self>, FeasibilityError> {
 		// Read the corresponding snapshots.
 		let snapshot_targets =
 			crate::Snapshot::<T>::targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
@@ -764,7 +770,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			supports
 				.iter()
-				.all(|(_, s)| (s.voters.len() as u32) <= T::MaxBackingCountPerTarget::get()),
+				.all(|(_, s)| (s.voters.len() as u32) <= T::MaxBackersPerSupport::get()),
 			FeasibilityError::TooManyBackings
 		);
 
@@ -781,7 +787,7 @@ impl<T: Config> Pallet<T> {
 
 #[cfg(test)]
 mod feasibility_check {
-	use crate::{mock::*, types::*, unsigned::miner::BaseMiner, verifier::*, *};
+	use crate::{mock::*, types::*, verifier::*, *};
 	// disambiguate event
 	use crate::verifier::Event;
 
@@ -1020,7 +1026,10 @@ mod feasibility_check {
 				// all these voters are in page of the snapshot, the msp!
 				2,
 			);
-			let paged = PagedRawSolution { solution_pages: vec![solution], ..Default::default() };
+			let paged = PagedRawSolution {
+				solution_pages: vec![solution].try_into().unwrap(),
+				..Default::default()
+			};
 			load_solution_for_verification(paged);
 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
 
@@ -1054,7 +1063,10 @@ mod feasibility_check {
 				// all these voters are in page 2 of the snapshot, the msp!
 				2,
 			);
-			let paged = PagedRawSolution { solution_pages: vec![solution], ..Default::default() };
+			let paged = PagedRawSolution {
+				solution_pages: vec![solution].try_into().unwrap(),
+				..Default::default()
+			};
 			load_solution_for_verification(paged);
 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
 
@@ -1073,13 +1085,7 @@ mod feasibility_check {
 #[cfg(test)]
 mod misc {
 	use super::*;
-	use crate::{
-		mock::*,
-		types::*,
-		unsigned::miner::BaseMiner,
-		verifier::{Verifier, *},
-		*,
-	};
+	use crate::mock::*;
 	// disambiguate event
 	use crate::verifier::Event;
 

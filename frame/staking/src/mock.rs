@@ -24,7 +24,8 @@ use frame_election_provider_support::{
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
-		Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
+		ConstU32, ConstU64, Currency, FindAuthor, GenesisBuild, Get, Hooks, Imbalance,
+		OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
@@ -36,10 +37,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
-use std::{
-	cell::RefCell,
-	collections::{BTreeSet},
-};
+use std::{cell::RefCell, collections::BTreeSet};
 use substrate_test_utils::assert_eq_uvec;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -119,12 +117,10 @@ impl FindAuthor<AccountId> for Author11 {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
 			frame_support::weights::constants::WEIGHT_PER_SECOND * 2
 		);
-	pub const MaxLocks: u32 = 1024;
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static ExistentialDeposit: Balance = 1;
 	pub static SlashDeferDuration: EraIndex = 0;
@@ -147,7 +143,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<Balance>;
@@ -156,9 +152,10 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 impl pallet_balances::Config for Test {
-	type MaxLocks = MaxLocks;
+	type MaxLocks = frame_support::traits::ConstU32<1024>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
@@ -168,9 +165,7 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-parameter_types! {
-	pub const UncleGenerations: u64 = 0;
-}
+
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
 		pub other: OtherSessionHandler,
@@ -194,19 +189,18 @@ impl pallet_session::historical::Config for Test {
 }
 impl pallet_authorship::Config for Test {
 	type FindAuthor = Author11;
-	type UncleGenerations = UncleGenerations;
+	type UncleGenerations = ConstU64<0>;
 	type FilterUncle = ();
 	type EventHandler = Pallet<Test>;
 }
-parameter_types! {
-	pub const MinimumPeriod: u64 = 5;
-}
+
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<5>;
 	type WeightInfo = ();
 }
+
 pallet_staking_reward_curve::build! {
 	const I_NPOS: PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
@@ -220,7 +214,6 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 
@@ -390,20 +383,14 @@ impl crate::pallet::pallet::Config for Test {
 	type SessionInterface = Self;
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-<<<<<<< HEAD
 	type ElectionProvider = MockElectionProvider;
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Test>;
 	type WeightInfo = ();
-=======
+	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
-	type GenesisElectionProvider = Self::ElectionProvider;
->>>>>>> 6d09a45caf40a143791deab4f605b95230b787d1
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
-	type WeightInfo = ();
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -613,7 +600,7 @@ impl ExtBuilder {
 		}
 
 		let _ = pallet_staking::GenesisConfig::<Test> {
-			stakers,
+			stakers: stakers.clone(),
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
@@ -626,12 +613,15 @@ impl ExtBuilder {
 
 		let _ = pallet_session::GenesisConfig::<Test> {
 			keys: if self.has_stakers {
-				// genesis election will overwrite this, no worries.
-				Default::default()
+				// set the keys for the first session.
+				stakers
+					.into_iter()
+					.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
+					.collect()
 			} else {
 				// set some dummy validators in genesis.
 				(0..self.validator_count as u64)
-					.map(|x| (x, x, SessionKeys { other: UintAuthorityId(x as u64) }))
+					.map(|id| (id, id, SessionKeys { other: id.into() }))
 					.collect()
 			},
 		}
@@ -670,8 +660,8 @@ fn post_conditions() {
 fn check_count() {
 	let nominator_count = Nominators::<Test>::iter().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
-	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
-	assert_eq!(validator_count, CounterForValidators::<Test>::get());
+	assert_eq!(nominator_count, Nominators::<Test>::count());
+	assert_eq!(validator_count, Validators::<Test>::count());
 
 	// the voters that the `SortedListProvider` list is storing for us.
 	let external_voters = <Test as Config>::SortedListProvider::count();
@@ -777,6 +767,7 @@ pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	bond(stash, ctrl, val);
 	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
+	assert_ok!(Session::set_keys(Origin::signed(ctrl), SessionKeys { other: ctrl.into() }, vec![]));
 }
 
 pub(crate) fn bond_nominator(
