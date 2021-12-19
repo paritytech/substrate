@@ -162,25 +162,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DecidingCount<T: Config> = StorageMap<_, Twox64Concat, TrackIdOf<T>, u32, ValueQuery>;
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		_phantom: sp_std::marker::PhantomData<T>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig { _phantom: Default::default() }
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {
-			ReferendumCount::<T>::put(0 as ReferendumIndex);
-		}
-	}
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
