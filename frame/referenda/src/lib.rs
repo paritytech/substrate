@@ -282,7 +282,7 @@ pub mod pallet {
 		/// - `enactment_moment`: The moment that the proposal should be enacted.
 		///
 		/// Emits `Submitted`.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
 			proposal_origin: PalletsOriginOf<T>,
@@ -310,7 +310,7 @@ pub mod pallet {
 				decision_deposit: None,
 				deciding: None,
 				tally: Default::default(),
-				ayes_in_queue: None,
+				in_queue: false,
 				alarm: Self::set_alarm(nudge_call, now + T::UndecidingTimeout::get()),
 			};
 			ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
@@ -319,23 +319,23 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(ServiceBranch::max_weight_of_deposit::<T>())]
 		pub fn place_decision_deposit(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let mut status = Self::ensure_ongoing(index)?;
 			ensure!(status.decision_deposit.is_none(), Error::<T>::HaveDeposit);
 			let track = Self::track(status.track).ok_or(Error::<T>::NoTrack)?;
 			status.decision_deposit = Some(Self::take_deposit(who, track.decision_deposit)?);
 			let now = frame_system::Pallet::<T>::block_number();
-			let info = Self::service_referendum(now, index, status).0;
+			let (info, _, branch) = Self::service_referendum(now, index, status);
 			ReferendumInfoFor::<T>::insert(index, info);
-			Ok(())
+			Ok(branch.weight_of_deposit::<T>().into())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::refund_decision_deposit())]
 		pub fn refund_decision_deposit(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
@@ -351,7 +351,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::cancel())]
 		pub fn cancel(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::CancelOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
@@ -370,7 +370,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::kill())]
 		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
@@ -388,29 +388,49 @@ pub mod pallet {
 		}
 
 		/// Advance a referendum onto its next logical state. Only used internally.
-		#[pallet::weight(0)]
-		pub fn nudge_referendum(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
+		#[pallet::weight(ServiceBranch::max_weight_of_nudge::<T>())]
+		pub fn nudge_referendum(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let now = frame_system::Pallet::<T>::block_number();
 			let mut status = Self::ensure_ongoing(index)?;
 			// This is our wake-up, so we can disregard the alarm.
 			status.alarm = None;
-			let (info, dirty) = Self::service_referendum(now, index, status);
+			let (info, dirty, branch) = Self::service_referendum(now, index, status);
 			if dirty {
 				ReferendumInfoFor::<T>::insert(index, info);
 			}
-			Ok(())
+			Ok(Some(branch.weight_of_nudge::<T>()).into())
 		}
 
 		/// Advance a track onto its next logical state. Only used internally.
-		#[pallet::weight(0)]
-		pub fn defer_one_fewer_deciding(
+		///
+		/// Action item for when there is now one fewer referendum in the deciding phase and the
+		/// `DecidingCount` is not yet updated. This means that we should either:
+		/// - begin deciding another referendum (and leave `DecidingCount` alone); or
+		/// - decrement `DecidingCount`.
+		#[pallet::weight(OneFewerDecidingBranch::max_weight::<T>())]
+		pub fn one_fewer_deciding(
 			origin: OriginFor<T>,
 			track: TrackIdOf<T>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			Self::act_one_fewer_deciding(track);
-			Ok(())
+			let track_info = T::Tracks::info(track).ok_or(Error::<T>::BadTrack)?;
+			let mut track_queue = TrackQueue::<T>::get(track);
+			let branch = if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
+				let now = frame_system::Pallet::<T>::block_number();
+				let (maybe_alarm, branch)
+					= Self::begin_deciding(&mut status, now, track_info);
+				if let Some(set_alarm) = maybe_alarm {
+					Self::ensure_alarm_at(&mut status, index, set_alarm);
+				}
+				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+				TrackQueue::<T>::insert(track, track_queue);
+				branch.into()
+			} else {
+				DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
+				OneFewerDecidingBranch::QueueEmpty
+			};
+			Ok(Some(branch.weight::<T>()).into())
 		}
 	}
 }
@@ -466,6 +486,139 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 	}
 }
 
+enum BeginDecidingBranch {
+	Passing,
+	Failing,
+}
+
+enum ServiceBranch {
+	Fail,
+	NoDeposit,
+	Preparing,
+	Queued,
+	NotQueued,
+	RequeuedInsertion,
+	RequeuedSlide,
+	BeginDecidingPassing,
+	BeginDecidingFailing,
+	BeginConfirming,
+	ContinueConfirming,
+	EndConfirming,
+	ContinueNotConfirming,
+	Approved,
+	Rejected,
+	TimedOut,
+}
+
+impl From<BeginDecidingBranch> for ServiceBranch {
+	fn from(x: BeginDecidingBranch) -> Self {
+		use {BeginDecidingBranch::*, ServiceBranch::*};
+		match x {
+			Passing => BeginDecidingPassing,
+			Failing => BeginDecidingFailing,
+		}
+	}
+}
+
+impl ServiceBranch {
+	fn weight_of_nudge<T: Config>(self) -> frame_support::weights::Weight {
+		use ServiceBranch::*;
+		match self {
+			NoDeposit => T::WeightInfo::nudge_referendum_no_deposit(),
+			Preparing => T::WeightInfo::nudge_referendum_preparing(),
+			Queued => T::WeightInfo::nudge_referendum_queued(),
+			NotQueued => T::WeightInfo::nudge_referendum_not_queued(),
+			RequeuedInsertion => T::WeightInfo::nudge_referendum_requeued_insertion(),
+			RequeuedSlide => T::WeightInfo::nudge_referendum_requeued_slide(),
+			BeginDecidingPassing => T::WeightInfo::nudge_referendum_begin_deciding_passing(),
+			BeginDecidingFailing => T::WeightInfo::nudge_referendum_begin_deciding_failing(),
+			BeginConfirming => T::WeightInfo::nudge_referendum_begin_confirming(),
+			ContinueConfirming => T::WeightInfo::nudge_referendum_continue_confirming(),
+			EndConfirming => T::WeightInfo::nudge_referendum_end_confirming(),
+			ContinueNotConfirming => T::WeightInfo::nudge_referendum_continue_not_confirming(),
+			Approved => T::WeightInfo::nudge_referendum_approved(),
+			Rejected => T::WeightInfo::nudge_referendum_rejected(),
+			TimedOut | Fail => T::WeightInfo::nudge_referendum_timed_out(),
+		}
+	}
+
+	fn max_weight_of_nudge<T: Config>() -> frame_support::weights::Weight {
+		0
+			.max(T::WeightInfo::nudge_referendum_no_deposit())
+			.max(T::WeightInfo::nudge_referendum_preparing())
+			.max(T::WeightInfo::nudge_referendum_queued())
+			.max(T::WeightInfo::nudge_referendum_not_queued())
+			.max(T::WeightInfo::nudge_referendum_requeued_insertion())
+			.max(T::WeightInfo::nudge_referendum_requeued_slide())
+			.max(T::WeightInfo::nudge_referendum_begin_deciding_passing())
+			.max(T::WeightInfo::nudge_referendum_begin_deciding_failing())
+			.max(T::WeightInfo::nudge_referendum_begin_confirming())
+			.max(T::WeightInfo::nudge_referendum_continue_confirming())
+			.max(T::WeightInfo::nudge_referendum_end_confirming())
+			.max(T::WeightInfo::nudge_referendum_continue_not_confirming())
+			.max(T::WeightInfo::nudge_referendum_approved())
+			.max(T::WeightInfo::nudge_referendum_rejected())
+			.max(T::WeightInfo::nudge_referendum_timed_out())
+	}
+
+	fn weight_of_deposit<T: Config>(self) -> Option<frame_support::weights::Weight> {
+		use ServiceBranch::*;
+		Some(match self {
+			Preparing => T::WeightInfo::place_decision_deposit_preparing(),
+			Queued => T::WeightInfo::place_decision_deposit_queued(),
+			NotQueued => T::WeightInfo::place_decision_deposit_not_queued(),
+			BeginDecidingPassing => T::WeightInfo::place_decision_deposit_passing(),
+			BeginDecidingFailing => T::WeightInfo::place_decision_deposit_failing(),
+			BeginConfirming | ContinueConfirming | EndConfirming | ContinueNotConfirming | Approved
+			| Rejected | RequeuedInsertion | RequeuedSlide | TimedOut | Fail | NoDeposit
+			=> return None,
+		})
+	}
+
+	fn max_weight_of_deposit<T: Config>() -> frame_support::weights::Weight {
+		0
+			.max(T::WeightInfo::place_decision_deposit_preparing())
+			.max(T::WeightInfo::place_decision_deposit_queued())
+			.max(T::WeightInfo::place_decision_deposit_not_queued())
+			.max(T::WeightInfo::place_decision_deposit_passing())
+			.max(T::WeightInfo::place_decision_deposit_failing())
+	}
+}
+
+enum OneFewerDecidingBranch {
+	QueueEmpty,
+	BeginDecidingPassing,
+	BeginDecidingFailing,
+}
+
+impl From<BeginDecidingBranch> for OneFewerDecidingBranch {
+	fn from(x: BeginDecidingBranch) -> Self {
+		use {BeginDecidingBranch::*, OneFewerDecidingBranch::*};
+		match x {
+			Passing => BeginDecidingPassing,
+			Failing => BeginDecidingFailing,
+		}
+	}
+}
+
+impl OneFewerDecidingBranch {
+	fn weight<T: Config>(self) -> frame_support::weights::Weight {
+		use OneFewerDecidingBranch::*;
+		match self {
+			QueueEmpty => T::WeightInfo::one_fewer_deciding_queue_empty(),
+			BeginDecidingPassing => T::WeightInfo::one_fewer_deciding_passing(),
+			BeginDecidingFailing => T::WeightInfo::one_fewer_deciding_failing(),
+		}
+	}
+
+	fn max_weight<T: Config>() -> frame_support::weights::Weight {
+		0
+			.max(T::WeightInfo::one_fewer_deciding_queue_empty())
+			.max(T::WeightInfo::one_fewer_deciding_passing())
+			.max(T::WeightInfo::one_fewer_deciding_failing())
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	pub fn ensure_ongoing(index: ReferendumIndex) -> Result<ReferendumStatusOf<T>, DispatchError> {
 		match ReferendumInfoFor::<T>::get(index) {
@@ -515,7 +668,7 @@ impl<T: Config> Pallet<T> {
 		.map(|x| (when, x));
 		debug_assert!(
 			maybe_result.is_some(),
-			"Unable to schedule a new alarm at #{} (now: #{})?!",
+			"Unable to schedule a new alarm at #{:?} (now: #{:?})?!",
 			when,
 			frame_system::Pallet::<T>::block_number()
 		);
@@ -530,11 +683,9 @@ impl<T: Config> Pallet<T> {
 	/// This will properly set up the `confirming` item.
 	fn begin_deciding(
 		status: &mut ReferendumStatusOf<T>,
-		index: ReferendumIndex,
 		now: T::BlockNumber,
 		track: &TrackInfoOf<T>,
-	) -> Option<T::BlockNumber> {
-		println!("Begining deciding for ref #{:?} at block #{:?}", index, now);
+	) -> (Option<T::BlockNumber>, BeginDecidingBranch) {
 		let is_passing = Self::is_passing(
 			&status.tally,
 			Zero::zero(),
@@ -542,43 +693,42 @@ impl<T: Config> Pallet<T> {
 			&track.min_turnout,
 			&track.min_approval,
 		);
-		dbg!(
-			is_passing,
-			&status.tally,
-			now,
-			track.decision_period,
-			&track.min_turnout,
-			&track.min_approval,
-		);
-		status.ayes_in_queue = None;
+		status.in_queue = false;
 		let confirming =
 			if is_passing { Some(now.saturating_add(track.confirm_period)) } else { None };
 		let deciding_status = DecidingStatus { since: now, confirming };
 		let alarm = Self::decision_time(&deciding_status, &status.tally, track);
 		status.deciding = Some(deciding_status);
-		Some(alarm)
+		let branch = if is_passing {
+			BeginDecidingBranch::Passing
+		} else {
+			BeginDecidingBranch::Failing
+		};
+		(Some(alarm), branch)
 	}
 
+	/// If it returns `Some`, deciding has begun and it needs waking at the given block number. The
+	/// second item is the flag for whether it is confirming or not.
+	///
+	/// If `None`, then it is queued and should be nudged automatically as the queue gets drained.
 	fn ready_for_deciding(
 		now: T::BlockNumber,
 		track: &TrackInfoOf<T>,
 		index: ReferendumIndex,
 		status: &mut ReferendumStatusOf<T>,
-	) -> Option<T::BlockNumber> {
-		println!("ready_for_deciding ref #{:?}", index);
+	) -> (Option<T::BlockNumber>, ServiceBranch) {
 		let deciding_count = DecidingCount::<T>::get(status.track);
 		if deciding_count < track.max_deciding {
 			// Begin deciding.
-			println!("Beginning deciding...");
 			DecidingCount::<T>::insert(status.track, deciding_count.saturating_add(1));
-			Self::begin_deciding(status, index, now, track)
+			let r = Self::begin_deciding(status, now, track);
+			(r.0, r.1.into())
 		} else {
 			// Add to queue.
-			println!("Queuing for decision.");
 			let item = (index, status.tally.ayes());
-			status.ayes_in_queue = Some(status.tally.ayes());
+			status.in_queue = true;
 			TrackQueue::<T>::mutate(status.track, |q| q.insert_sorted_by_key(item, |x| x.1));
-			None
+			(None, ServiceBranch::Queued)
 		}
 	}
 
@@ -596,7 +746,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Schedule a call to `act_one_fewer_deciding` function via the dispatchable
+	/// Schedule a call to `one_fewer_deciding` function via the dispatchable
 	/// `defer_one_fewer_deciding`. We could theoretically call it immediately (and it would be
 	/// overall more efficient), however the weights become rather less easy to measure.
 	fn note_one_fewer_deciding(track: TrackIdOf<T>, _track_info: &TrackInfoOf<T>) {
@@ -611,40 +761,14 @@ impl<T: Config> Pallet<T> {
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
-			MaybeHashed::Value(Call::defer_one_fewer_deciding { track }.into()),
+			MaybeHashed::Value(Call::one_fewer_deciding { track }.into()),
 		);
 		debug_assert!(
 			maybe_result.is_ok(),
-			"Unable to schedule a new alarm at #{} (now: #{})?!",
+			"Unable to schedule a new alarm at #{:?} (now: #{:?})?!",
 			when,
 			now
 		);
-	}
-
-	/// Action item for when there is now one fewer referendum in the deciding phase and the
-	/// `DecidingCount` is not yet updated. This means that we should either:
-	/// - begin deciding another referendum (and leave `DecidingCount` alone); or
-	/// - decrement `DecidingCount`.
-	///
-	/// We defer the actual action to `act_one_fewer_deciding` function via a call in order to
-	/// simplify weight considerations.
-	fn act_one_fewer_deciding(track: TrackIdOf<T>) {
-		if let Some(track_info) = T::Tracks::info(track) {
-			println!("One fewer deciding on {:?}", track);
-			let mut track_queue = TrackQueue::<T>::get(track);
-			if let Some((index, mut status)) = Self::next_for_deciding(&mut track_queue) {
-				println!("Ref #{:?} ready for deciding", index);
-				let now = frame_system::Pallet::<T>::block_number();
-				let maybe_set_alarm = Self::begin_deciding(&mut status, index, now, track_info);
-				if let Some(set_alarm) = maybe_set_alarm {
-					Self::ensure_alarm_at(&mut status, index, set_alarm);
-				}
-				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
-				TrackQueue::<T>::insert(track, track_queue);
-			} else {
-				DecidingCount::<T>::mutate(track, |x| x.saturating_dec());
-			}
-		}
 	}
 
 	/// Ensure that a `service_referendum` alarm happens for the referendum `index` at `alarm`.
@@ -658,13 +782,11 @@ impl<T: Config> Pallet<T> {
 		alarm: T::BlockNumber,
 	) -> bool {
 		if status.alarm.as_ref().map_or(true, |&(when, _)| when != alarm) {
-			println!("Setting alarm at block #{:?} for ref {:?}", alarm, index);
 			// Either no alarm or one that was different
 			Self::ensure_no_alarm(status);
 			status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
 			true
 		} else {
-			println!("Keeping alarm at block #{:?} for ref {:?}", alarm, index);
 			false
 		}
 	}
@@ -694,124 +816,142 @@ impl<T: Config> Pallet<T> {
 		now: T::BlockNumber,
 		index: ReferendumIndex,
 		mut status: ReferendumStatusOf<T>,
-	) -> (ReferendumInfoOf<T>, bool) {
-		println!("#{:?}: Servicing #{:?}", now, index);
+	) -> (ReferendumInfoOf<T>, bool, ServiceBranch) {
 		let mut dirty = false;
 		// Should it begin being decided?
 		let track = match Self::track(status.track) {
 			Some(x) => x,
-			None => return (ReferendumInfo::Ongoing(status), false),
+			None => return (ReferendumInfo::Ongoing(status), false, ServiceBranch::Fail),
 		};
 		let timeout = status.submitted + T::UndecidingTimeout::get();
 		// Default the alarm to the submission timeout.
 		let mut alarm = timeout;
-		if status.deciding.is_none() {
-			// Are we already queued for deciding?
-			if let Some(_) = status.ayes_in_queue.as_ref() {
-				println!("Already queued...");
-				// Does our position in the queue need updating?
-				let ayes = status.tally.ayes();
-				let mut queue = TrackQueue::<T>::get(status.track);
-				let maybe_old_pos = queue.iter().position(|(x, _)| *x == index);
-				let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
-				if maybe_old_pos.is_none() && new_pos > 0 {
-					// Just insert.
-					queue.force_insert_keep_right(new_pos, (index, ayes));
-				} else if let Some(old_pos) = maybe_old_pos {
-					// We were in the queue - slide into the correct position.
-					queue[old_pos].1 = ayes;
-					queue.slide(old_pos, new_pos);
-				}
-				TrackQueue::<T>::insert(status.track, queue);
-			} else {
-				// Are we ready for deciding?
-				if status.decision_deposit.is_some() {
-					let prepare_end = status.submitted.saturating_add(track.prepare_period);
-					if now >= prepare_end {
-						if let Some(set_alarm) =
-							Self::ready_for_deciding(now, &track, index, &mut status)
-						{
-							alarm = alarm.min(set_alarm);
-						}
-						dirty = true;
+		let branch;
+		match &mut status.deciding {
+			None => {
+				// Are we already queued for deciding?
+				if status.in_queue {
+					// Does our position in the queue need updating?
+					let ayes = status.tally.ayes();
+					let mut queue = TrackQueue::<T>::get(status.track);
+					let maybe_old_pos = queue.iter().position(|(x, _)| *x == index);
+					let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
+					branch = if maybe_old_pos.is_none() && new_pos > 0 {
+						// Just insert.
+						queue.force_insert_keep_right(new_pos, (index, ayes));
+						ServiceBranch::RequeuedInsertion
+					} else if let Some(old_pos) = maybe_old_pos {
+						// We were in the queue - slide into the correct position.
+						queue[old_pos].1 = ayes;
+						queue.slide(old_pos, new_pos);
+						ServiceBranch::RequeuedSlide
 					} else {
-						println!("Not deciding, have DD, within PP: Setting alarm to end of PP");
-						alarm = alarm.min(prepare_end);
+						ServiceBranch::NotQueued
+					};
+					TrackQueue::<T>::insert(status.track, queue);
+				} else {
+					// Are we ready for deciding?
+					branch = if status.decision_deposit.is_some() {
+						let prepare_end = status.submitted.saturating_add(track.prepare_period);
+						if now >= prepare_end {
+							let (maybe_alarm, branch) = Self::ready_for_deciding(now, &track, index, &mut status);
+							if let Some(set_alarm) = maybe_alarm {
+								alarm = alarm.min(set_alarm);
+							}
+							dirty = true;
+							branch
+						} else {
+							alarm = alarm.min(prepare_end);
+							ServiceBranch::Preparing
+						}
+					} else {
+						ServiceBranch::NoDeposit
 					}
 				}
-			}
-			// If we didn't move into being decided, then check the timeout.
-			if status.deciding.is_none() && now >= timeout {
-				// Too long without being decided - end it.
-				Self::ensure_no_alarm(&mut status);
-				Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
-				return (
-					ReferendumInfo::TimedOut(
-						now,
-						status.submission_deposit,
-						status.decision_deposit,
-					),
-					true,
-				)
-			}
-		} else if let Some(deciding) = &mut status.deciding {
-			let is_passing = Self::is_passing(
-				&status.tally,
-				now.saturating_sub(deciding.since),
-				track.decision_period,
-				&track.min_turnout,
-				&track.min_approval,
-			);
-			if is_passing {
-				if deciding.confirming.map_or(false, |c| now >= c) {
-					// Passed!
+				// If we didn't move into being decided, then check the timeout.
+				if status.deciding.is_none() && now >= timeout {
+					// Too long without being decided - end it.
 					Self::ensure_no_alarm(&mut status);
-					Self::note_one_fewer_deciding(status.track, track);
-					let (desired, call_hash) = (status.enactment, status.proposal_hash);
-					Self::schedule_enactment(index, track, desired, status.origin, call_hash);
-					Self::deposit_event(Event::<T>::Confirmed { index, tally: status.tally });
+					Self::deposit_event(Event::<T>::TimedOut { index, tally: status.tally });
 					return (
-						ReferendumInfo::Approved(
+						ReferendumInfo::TimedOut(
 							now,
 							status.submission_deposit,
 							status.decision_deposit,
 						),
 						true,
+						ServiceBranch::TimedOut,
 					)
 				}
-				if deciding.confirming.is_none() {
-					// Start confirming
-					dirty = true;
-					deciding.confirming = Some(now.saturating_add(track.confirm_period));
-				}
-			} else {
-				if now >= deciding.since.saturating_add(track.decision_period) {
-					// Failed!
-					Self::ensure_no_alarm(&mut status);
-					Self::note_one_fewer_deciding(status.track, track);
-					Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
-					return (
-						ReferendumInfo::Rejected(
-							now,
-							status.submission_deposit,
-							status.decision_deposit,
-						),
-						true,
-					)
-				}
-				if deciding.confirming.is_some() {
-					// Stop confirming
-					dirty = true;
-					deciding.confirming = None;
-				}
-			}
-			dbg!(&deciding, &status.tally);
-			alarm = Self::decision_time(&deciding, &status.tally, track);
-			println!("decision time for ref #{:?} is {:?}", index, alarm);
+			},
+			Some(deciding) => {
+				let is_passing = Self::is_passing(
+					&status.tally,
+					now.saturating_sub(deciding.since),
+					track.decision_period,
+					&track.min_turnout,
+					&track.min_approval,
+				);
+				branch = if is_passing {
+					match deciding.confirming.clone() {
+						Some(t) if now >= t => {
+							// Passed!
+							Self::ensure_no_alarm(&mut status);
+							Self::note_one_fewer_deciding(status.track, track);
+							let (desired, call_hash) = (status.enactment, status.proposal_hash);
+							Self::schedule_enactment(index, track, desired, status.origin, call_hash);
+							Self::deposit_event(Event::<T>::Confirmed { index, tally: status.tally });
+							return (
+								ReferendumInfo::Approved(
+									now,
+									status.submission_deposit,
+									status.decision_deposit,
+								),
+								true,
+								ServiceBranch::Approved,
+							)
+						}
+						Some(_) => {
+							ServiceBranch::ContinueConfirming
+						}
+						None => {
+							// Start confirming
+							dirty = true;
+							deciding.confirming = Some(now.saturating_add(track.confirm_period));
+							ServiceBranch::BeginConfirming
+						}
+					}
+				} else {
+					if now >= deciding.since.saturating_add(track.decision_period) {
+						// Failed!
+						Self::ensure_no_alarm(&mut status);
+						Self::note_one_fewer_deciding(status.track, track);
+						Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
+						return (
+							ReferendumInfo::Rejected(
+								now,
+								status.submission_deposit,
+								status.decision_deposit,
+							),
+							true,
+							ServiceBranch::Rejected,
+						)
+					}
+					if deciding.confirming.is_some() {
+						// Stop confirming
+						dirty = true;
+						deciding.confirming = None;
+						ServiceBranch::EndConfirming
+					} else {
+						ServiceBranch::ContinueNotConfirming
+					}
+				};
+				alarm = Self::decision_time(&deciding, &status.tally, track);
+			},
 		}
 
 		let dirty_alarm = Self::ensure_alarm_at(&mut status, index, alarm);
-		(ReferendumInfo::Ongoing(status), dirty_alarm || dirty)
+		(ReferendumInfo::Ongoing(status), dirty_alarm || dirty, branch)
 	}
 
 	fn decision_time(
@@ -826,7 +966,6 @@ impl<T: Config> Pallet<T> {
 			let until_approval = track.min_approval.delay(approval);
 			let until_turnout = track.min_turnout.delay(turnout);
 			let offset = until_turnout.max(until_approval);
-			dbg!(approval, turnout, until_approval, until_turnout, offset);
 			deciding.since.saturating_add(offset * track.decision_period)
 		})
 	}

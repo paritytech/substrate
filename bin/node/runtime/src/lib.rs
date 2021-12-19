@@ -694,6 +694,105 @@ impl pallet_bags_list::Config for Runtime {
 }
 
 parameter_types! {
+	pub const AlarmInterval: BlockNumber = 1;
+	pub const SubmissionDeposit: Balance = 100 * DOLLARS;
+	pub const UndecidingTimeout: BlockNumber = 28 * DAYS;
+}
+
+pub struct TracksInfo;
+impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
+	type Id = u8;
+	type Origin = <Origin as frame_support::traits::OriginTrait>::PalletsOrigin;
+	fn tracks() -> &'static [(Self::Id, pallet_referenda::TrackInfo<Balance, BlockNumber>)] {
+		static DATA: [(u8, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [
+			(
+				0u8,
+				pallet_referenda::TrackInfo {
+					name: "root",
+					max_deciding: 1,
+					decision_deposit: 10,
+					prepare_period: 4,
+					decision_period: 4,
+					confirm_period: 2,
+					min_enactment_period: 4,
+					min_approval: pallet_referenda::Curve::LinearDecreasing {
+						begin: Perbill::from_percent(100),
+						delta: Perbill::from_percent(50),
+					},
+					min_turnout: pallet_referenda::Curve::LinearDecreasing {
+						begin: Perbill::from_percent(100),
+						delta: Perbill::from_percent(100),
+					},
+				},
+			),
+		];
+		&DATA[..]
+	}
+	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()> {
+		if let Ok(system_origin) = frame_system::RawOrigin::try_from(id.clone()) {
+			match system_origin {
+				frame_system::RawOrigin::Root => Ok(0),
+				_ => Err(()),
+			}
+		} else {
+			Err(())
+		}
+	}
+}
+
+// TODO: Replace with conviction voting tally.
+use scale_info::TypeInfo;
+#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, Default)]
+pub struct Tally {
+	pub ayes: u32,
+	pub nays: u32,
+}
+
+impl frame_support::traits::VoteTally<u32> for Tally {
+	fn ayes(&self) -> u32 {
+		self.ayes
+	}
+
+	fn turnout(&self) -> Perbill {
+		Perbill::from_percent(self.ayes + self.nays)
+	}
+
+	fn approval(&self) -> Perbill {
+		Perbill::from_rational(self.ayes, self.ayes + self.nays)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn unanimity() -> Self {
+		Self { ayes: 100, nays: 0 }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
+		let turnout = turnout.mul_ceil(100u32);
+		let ayes = approval.mul_ceil(turnout);
+		Self { ayes, nays: turnout - ayes }
+	}
+}
+
+impl pallet_referenda::Config for Runtime {
+	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Runtime>;
+	type Call = Call;
+	type Event = Event;
+	type Scheduler = Scheduler;
+	type Currency = pallet_balances::Pallet<Self>;
+	type CancelOrigin = EnsureRoot<AccountId>;
+	type KillOrigin = EnsureRoot<AccountId>;
+	type Slash = ();
+	type Votes = u32;
+	type Tally = Tally;
+	type SubmissionDeposit = SubmissionDeposit;
+	type MaxQueued = ConstU32<100>;
+	type UndecidingTimeout = UndecidingTimeout;
+	type AlarmInterval = AlarmInterval;
+	type Tracks = TracksInfo;
+}
+
+parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const FastTrackVotingPeriod: BlockNumber = 3 * 24 * 60 * MINUTES;
@@ -1329,6 +1428,7 @@ construct_runtime!(
 		TransactionStorage: pallet_transaction_storage,
 		BagsList: pallet_bags_list,
 		ChildBounties: pallet_child_bounties,
+		Referenda: pallet_referenda,
 	}
 );
 
@@ -1698,6 +1798,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_offences, OffencesBench::<Runtime>);
 			list_benchmark!(list, extra, pallet_preimage, Preimage);
 			list_benchmark!(list, extra, pallet_proxy, Proxy);
+			list_benchmark!(list, extra, pallet_referenda, Referenda);
 			list_benchmark!(list, extra, pallet_scheduler, Scheduler);
 			list_benchmark!(list, extra, pallet_session, SessionBench::<Runtime>);
 			list_benchmark!(list, extra, pallet_staking, Staking);
@@ -1777,6 +1878,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_offences, OffencesBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_preimage, Preimage);
 			add_benchmark!(params, batches, pallet_proxy, Proxy);
+			add_benchmark!(params, batches, pallet_referenda, Referenda);
 			add_benchmark!(params, batches, pallet_scheduler, Scheduler);
 			add_benchmark!(params, batches, pallet_session, SessionBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_staking, Staking);

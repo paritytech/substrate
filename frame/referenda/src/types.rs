@@ -18,6 +18,7 @@
 //! Miscellaneous additional datatypes.
 
 use super::*;
+use sp_std::fmt::Debug;
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
@@ -38,7 +39,6 @@ pub type ReferendumInfoOf<T> = ReferendumInfo<
 	<T as frame_system::Config>::BlockNumber,
 	<T as frame_system::Config>::Hash,
 	BalanceOf<T>,
-	VotesOf<T>,
 	TallyOf<T>,
 	<T as frame_system::Config>::AccountId,
 	ScheduleAddressOf<T>,
@@ -49,7 +49,6 @@ pub type ReferendumStatusOf<T> = ReferendumStatus<
 	<T as frame_system::Config>::BlockNumber,
 	<T as frame_system::Config>::Hash,
 	BalanceOf<T>,
-	VotesOf<T>,
 	TallyOf<T>,
 	<T as frame_system::Config>::AccountId,
 	ScheduleAddressOf<T>,
@@ -144,26 +143,26 @@ pub struct Deposit<AccountId, Balance> {
 #[derive(Clone, Encode, TypeInfo)]
 pub struct TrackInfo<Balance, Moment> {
 	/// Name of this track.
-	pub(crate) name: &'static str,
+	pub name: &'static str,
 	/// A limit for the number of referenda on this track that can be being decided at once.
 	/// For Root origin this should generally be just one.
-	pub(crate) max_deciding: u32,
+	pub max_deciding: u32,
 	/// Amount that must be placed on deposit before a decision can be made.
-	pub(crate) decision_deposit: Balance,
+	pub decision_deposit: Balance,
 	/// Amount of time this must be submitted for before a decision can be made.
-	pub(crate) prepare_period: Moment,
+	pub prepare_period: Moment,
 	/// Amount of time that a decision may take to be approved prior to cancellation.
-	pub(crate) decision_period: Moment,
+	pub decision_period: Moment,
 	/// Amount of time that the approval criteria must hold before it can be approved.
-	pub(crate) confirm_period: Moment,
+	pub confirm_period: Moment,
 	/// Minimum amount of time that an approved proposal must be in the dispatch queue.
-	pub(crate) min_enactment_period: Moment,
+	pub min_enactment_period: Moment,
 	/// Minimum aye votes as percentage of overall conviction-weighted votes needed for
 	/// approval as a function of time into decision period.
-	pub(crate) min_approval: Curve,
+	pub min_approval: Curve,
 	/// Minimum turnout as percentage of overall population that is needed for
 	/// approval as a function of time into decision period.
-	pub(crate) min_turnout: Curve,
+	pub min_turnout: Curve,
 }
 
 pub trait TracksInfo<Balance, Moment> {
@@ -199,23 +198,14 @@ impl<Moment: AtLeast32BitUnsigned + Copy + Parameter> AtOrAfter<Moment> {
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct ReferendumStatus<
-	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Moment: Parameter
-		+ Eq
-		+ PartialEq
-		+ sp_std::fmt::Debug
-		+ Encode
-		+ Decode
-		+ TypeInfo
-		+ Clone
-		+ EncodeLike,
-	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 > {
 	/// The track of this referendum.
 	pub(crate) track: TrackId,
@@ -236,41 +226,27 @@ pub struct ReferendumStatus<
 	pub(crate) deciding: Option<DecidingStatus<Moment>>,
 	/// The current tally of votes in this referendum.
 	pub(crate) tally: Tally,
-	/// The number of aye votes we are in the track queue for, if any. `None` if we're not
-	/// yet in the deciding queue or are already deciding. If a vote results in fewer ayes
-	/// in the `tally` than this, then the voter is required to pay to reorder the track queue.
-	/// Automatic advancement is scheduled when ayes_in_queue is Some value greater than the
-	/// ayes in `tally`.
-	pub(crate) ayes_in_queue: Option<Votes>,
+	/// Whether we have been placed in the queue for being decided or not.
+	pub(crate) in_queue: bool,
+	/// The next scheduled wake-up, if `Some`.
 	pub(crate) alarm: Option<(Moment, ScheduleAddress)>,
 }
 
 /// Info regarding a referendum, present or past.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum ReferendumInfo<
-	TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Moment: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
-	Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
+	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Moment: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 > {
 	/// Referendum has been submitted and is being voted on.
 	Ongoing(
-		ReferendumStatus<
-			TrackId,
-			Origin,
-			Moment,
-			Hash,
-			Balance,
-			Votes,
-			Tally,
-			AccountId,
-			ScheduleAddress,
-		>,
+		ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress>,
 	),
 	/// Referendum finished with approval. Submission deposit is held.
 	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
@@ -285,25 +261,15 @@ pub enum ReferendumInfo<
 }
 
 impl<
-		TrackId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Origin: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Moment: Parameter
-			+ Eq
-			+ PartialEq
-			+ sp_std::fmt::Debug
-			+ Encode
-			+ Decode
-			+ TypeInfo
-			+ Clone
-			+ EncodeLike,
-		Hash: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Balance: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Votes: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		Tally: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		AccountId: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-		ScheduleAddress: Eq + PartialEq + sp_std::fmt::Debug + Encode + Decode + TypeInfo + Clone,
-	> ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Votes, Tally, AccountId, ScheduleAddress>
-{
+	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
+	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+> ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress> {
 	pub fn take_decision_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
 		use ReferendumInfo::*;
 		match self {
@@ -342,7 +308,7 @@ impl Curve {
 }
 
 #[cfg(feature = "std")]
-impl sp_std::fmt::Debug for Curve {
+impl Debug for Curve {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		match self {
 			Self::LinearDecreasing { begin, delta } => {

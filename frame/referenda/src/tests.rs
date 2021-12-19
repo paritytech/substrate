@@ -324,7 +324,7 @@ fn tracks_are_distinguished() {
 						decision_deposit: Some(Deposit { who: 3, amount: 10 }),
 						deciding: None,
 						tally: Tally { ayes: 0, nays: 0 },
-						ayes_in_queue: None,
+						in_queue: false,
 						alarm: Some((5, (5, 0))),
 					})
 				),
@@ -340,7 +340,7 @@ fn tracks_are_distinguished() {
 						decision_deposit: Some(Deposit { who: 4, amount: 1 }),
 						deciding: None,
 						tally: Tally { ayes: 0, nays: 0 },
-						ayes_in_queue: None,
+						in_queue: false,
 						alarm: Some((3, (3, 0))),
 					})
 				),

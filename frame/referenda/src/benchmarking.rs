@@ -63,7 +63,13 @@ fn place_deposit<T: Config>(index: ReferendumIndex) {
 	));
 }
 
-fn fill_queue<T: Config>(index: ReferendumIndex, spaces: u32, pass_after: u32) {
+fn nudge<T: Config>(index: ReferendumIndex) {
+	assert_ok!(Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), index));
+}
+
+fn fill_queue<T: Config>(index: ReferendumIndex, spaces: u32, pass_after: u32)
+	-> Vec<ReferendumIndex>
+{
 	// First, create enough other referendums to fill the track.
 	let mut others = vec![];
 	for _ in 0..info::<T>(index).max_deciding {
@@ -85,9 +91,9 @@ fn fill_queue<T: Config>(index: ReferendumIndex, spaces: u32, pass_after: u32) {
 	skip_prepare_period::<T>(index);
 
 	// Manually nudge the other referenda first to ensure that they begin.
-	for i in others.into_iter() {
-		Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), i);
-	}
+	others.iter().for_each(|&i| nudge::<T>(i));
+
+	others
 }
 
 fn info<T: Config>(index: ReferendumIndex) -> &'static TrackInfoOf<T> {
@@ -101,13 +107,8 @@ fn make_passing_after<T: Config>(index: ReferendumIndex, period_portion: Perbill
 	Referenda::<T>::access_poll(index, |status| {
 		if let PollStatus::Ongoing(tally) = status {
 			*tally = T::Tally::from_requirements(turnout, approval);
-			dbg!(&*tally);
 		}
 	});
-}
-
-fn make_just_passing<T: Config>(index: ReferendumIndex) {
-	make_passing_after::<T>(index, Perbill::one());
 }
 
 fn make_passing<T: Config>(index: ReferendumIndex) {
@@ -150,10 +151,6 @@ fn skip_timeout_period<T: Config>(index: ReferendumIndex) {
 	frame_system::Pallet::<T>::set_block_number(timeout_period_over);
 }
 
-fn nudge<T: Config>(index: ReferendumIndex) {
-	assert_ok!(Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), index,));
-}
-
 fn alarm_time<T: Config>(index: ReferendumIndex) -> T::BlockNumber {
 	let status = Referenda::<T>::ensure_ongoing(index).unwrap();
 	status.alarm.unwrap().0
@@ -186,23 +183,17 @@ benchmarks! {
 		AtOrAfter::After(0u32.into())
 	) verify {
 		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
-		let status = ReferendumInfoFor::<T>::get(index).unwrap();
-		assert_matches!(status, ReferendumInfo::Ongoing(_));
+		assert_matches!(ReferendumInfoFor::<T>::get(index), Some(ReferendumInfo::Ongoing(_)));
 	}
 
-	place_decision_deposit_within_pp {
+	place_decision_deposit_preparing {
 		let (caller, index) = create_referendum::<T>();
 	}: place_decision_deposit(RawOrigin::Signed(caller), index)
 	verify {
-		let status = ReferendumInfoFor::<T>::get(index).unwrap();
-		assert_matches!(status, ReferendumInfo::Ongoing(ReferendumStatus {
-			decision_deposit: Some(..),
-			..
-		}));
+		assert!(Referenda::<T>::ensure_ongoing(index).unwrap().decision_deposit.is_some());
 	}
 
-	// DONE: Track at capacity and worst-case queue.
-	place_decision_deposit_track_at_capacity {
+	place_decision_deposit_queued {
 		let (caller, index) = create_referendum::<T>();
 		fill_queue::<T>(index, 1, 90);
 	}: place_decision_deposit(RawOrigin::Signed(caller), index)
@@ -212,111 +203,110 @@ benchmarks! {
 		assert_eq!(TrackQueue::<T>::get(&track)[0], (index, 0u32.into()));
 	}
 
-	// DONE: Track not at capacity and vote passing.
+	place_decision_deposit_not_queued {
+		let (caller, index) = create_referendum::<T>();
+		fill_queue::<T>(index, 0, 90);
+	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	verify {
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
+		assert!(TrackQueue::<T>::get(&track).into_iter().all(|(i, _)| i != index));
+	}
+
 	place_decision_deposit_passing {
 		let (caller, index) = create_referendum::<T>();
 		skip_prepare_period::<T>(index);
 		make_passing::<T>(index);
 	}: place_decision_deposit(RawOrigin::Signed(caller), index)
 	verify {
-		let status = Referenda::<T>::ensure_ongoing(index).unwrap();
 		assert!(is_confirming::<T>(index));
 	}
 
-	// DONE: Track not at capacity and vote failing.
 	place_decision_deposit_failing {
 		let (caller, index) = create_referendum::<T>();
 		skip_prepare_period::<T>(index);
 	}: place_decision_deposit(RawOrigin::Signed(caller), index)
 	verify {
-		let status = Referenda::<T>::ensure_ongoing(index).unwrap();
 		assert!(is_not_confirming::<T>(index));
 	}
 
 	refund_decision_deposit {
-		let caller = funded_account::<T>("caller", 0);
-		whitelist_account!(caller);
-		let origin = move || RawOrigin::Signed(caller.clone());
-		assert_ok!(Referenda::<T>::submit(
-			origin().into(),
-			RawOrigin::Root.into(),
-			T::Hashing::hash_of(&0),
-			AtOrAfter::After(0u32.into())
-		));
-		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
-		assert_ok!(Referenda::<T>::place_decision_deposit(origin().into(), index));
+		let (caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
 		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), index));
-	}: _(origin(), index)
+	}: _(RawOrigin::Signed(caller), index)
 	verify {
-		let status = ReferendumInfoFor::<T>::get(index).unwrap();
-		assert_matches!(status, ReferendumInfo::Cancelled(_, _, None));
+		assert_matches!(ReferendumInfoFor::<T>::get(index), Some(ReferendumInfo::Cancelled(_, _, None)));
 	}
 
 	cancel {
-		let caller = funded_account::<T>("caller", 0);
-		whitelist_account!(caller);
-		let origin = move || RawOrigin::Signed(caller.clone());
-		assert_ok!(Referenda::<T>::submit(
-			origin().into(),
-			RawOrigin::Root.into(),
-			T::Hashing::hash_of(&0),
-			AtOrAfter::After(0u32.into())
-		));
-		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
-		assert_ok!(Referenda::<T>::place_decision_deposit(origin().into(), index));
-		}: _<T::Origin>(T::CancelOrigin::successful_origin(), index)
+		let (_caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
+	}: _<T::Origin>(T::CancelOrigin::successful_origin(), index)
 	verify {
-		let status = ReferendumInfoFor::<T>::get(index).unwrap();
-		assert_matches!(status, ReferendumInfo::Cancelled(..));
+		assert_matches!(ReferendumInfoFor::<T>::get(index), Some(ReferendumInfo::Cancelled(..)));
 	}
 
 	kill {
-		let caller = funded_account::<T>("caller", 0);
-		whitelist_account!(caller);
-		let origin = move || RawOrigin::Signed(caller.clone());
-		assert_ok!(Referenda::<T>::submit(
-			origin().into(),
-			RawOrigin::Root.into(),
-			T::Hashing::hash_of(&0),
-			AtOrAfter::After(0u32.into())
-		));
-		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
-		assert_ok!(Referenda::<T>::place_decision_deposit(origin().into(), index));
-		}: _<T::Origin>(T::KillOrigin::successful_origin(), index)
+		let (_caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
+	}: _<T::Origin>(T::KillOrigin::successful_origin(), index)
 	verify {
-		let status = ReferendumInfoFor::<T>::get(index).unwrap();
-		assert_matches!(status, ReferendumInfo::Killed(..));
+		assert_matches!(ReferendumInfoFor::<T>::get(index), Some(ReferendumInfo::Killed(..)));
 	}
 
-	// Not deciding -> not deciding
-	// DONE: not deciding, not queued, no DD paid, PP done
-	// DONE: not deciding, not queued, DD paid, PP not done
+	one_fewer_deciding_queue_empty {
+		let (_caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
+		skip_prepare_period::<T>(index);
+		nudge::<T>(index);
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), index));
+		assert_eq!(DecidingCount::<T>::get(&track), 1);
+	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	verify {
+		assert_eq!(DecidingCount::<T>::get(&track), 0);
+	}
 
-	// Not deciding -> not deciding (queued)
-	// DONE: not deciding, not queued, DD paid, PP (just) done, track full
+	one_fewer_deciding_failing {
+		let (_caller, index) = create_referendum::<T>();
+		// No spaces free in the queue.
+		let queued = fill_queue::<T>(index, 0, 90);
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), queued[0]));
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
+		let deciding_count = DecidingCount::<T>::get(&track);
+	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	verify {
+		assert_eq!(DecidingCount::<T>::get(&track), deciding_count);
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);
+		assert!(queued.into_iter().skip(1).all(|i| Referenda::<T>::ensure_ongoing(i)
+			.unwrap()
+			.deciding
+			.map_or(true, |d| d.confirming.is_none())
+		));
+	}
 
-	// Not deciding (queued) -> not deciding (queued)
-	// DONE: not deciding, queued, since removed (insertion needed)
-	// DONE: not deciding, queued, still in (slide needed)
+	one_fewer_deciding_passing {
+		let (_caller, index) = create_referendum::<T>();
+		// No spaces free in the queue.
+		let queued = fill_queue::<T>(index, 0, 0);
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_ok!(Referenda::<T>::cancel(T::CancelOrigin::successful_origin(), queued[0]));
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
+		let deciding_count = DecidingCount::<T>::get(&track);
+	}: one_fewer_deciding(RawOrigin::Root, track.clone())
+	verify {
+		assert_eq!(DecidingCount::<T>::get(&track), deciding_count);
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get() - 1);
+		assert!(queued.into_iter().skip(1).all(|i| Referenda::<T>::ensure_ongoing(i)
+			.unwrap()
+			.deciding
+			.map_or(true, |d| d.confirming.is_some())
+		));
+	}
 
-	// Not deciding -> deciding
-	// DONE: not deciding, not queued, DD paid, PP (just) done, track empty, passing
-	// DONE: not deciding, not queued, DD paid, PP (just) done, track empty, failing
-
-	// Deciding -> deciding
-	// DONE: deciding, passing, not confirming
-	// DONE: deciding, passing, confirming, confirmation period not over
-	// DONE: deciding, failing, confirming, decision period not over
-	// DONE: deciding, failing, not confirming, decision period not over, alarm reset
-
-	// Deciding -> end
-	// DONE: deciding, passing, confirming, confirmation period over (accepted)
-	// DONE: deciding, failing, decision period over (rejected)
-
-	// Not deciding -> end
-	// DONE: not deciding, timeout
-
-	nudge_referendum_queued_insert {
+	nudge_referendum_requeued_insertion {
 		// First create our referendum and place the deposit. It will be failing.
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
@@ -324,7 +314,7 @@ benchmarks! {
 
 		// Now nudge ours, with the track now full and the queue full of referenda with votes,
 		// ours will not be in the queue.
-		Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), index);
+		nudge::<T>(index);
 		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
 		assert!(TrackQueue::<T>::get(&track).into_iter().all(|(i, _)| i != index));
 
@@ -337,7 +327,7 @@ benchmarks! {
 		assert_eq!(t[t.len() - 1].0, index);
 	}
 
-	nudge_referendum_queued_slide {
+	nudge_referendum_requeued_slide {
 		// First create our referendum and place the deposit. It will be failing.
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
@@ -345,7 +335,7 @@ benchmarks! {
 
 		// Now nudge ours, with the track now full, ours will be queued, but with no votes, it
 		// will have the worst position.
-		Referenda::<T>::nudge_referendum(RawOrigin::Root.into(), index);
+		nudge::<T>(index);
 		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
 		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
 		assert_eq!(TrackQueue::<T>::get(&track)[0], (index, 0u32.into()));
@@ -359,7 +349,7 @@ benchmarks! {
 		assert_eq!(t[t.len() - 1].0, index);
 	}
 
-	nudge_referendum_dd_pp_not_queued_track_full {
+	nudge_referendum_queued {
 		// NOTE: worst possible queue situation is with a queue full of passing refs with one slot
 		// free and this failing. It would result in `QUEUE_SIZE - 1` items being shifted for the
 		// insertion at the beginning.
@@ -380,7 +370,24 @@ benchmarks! {
 		assert_eq!(TrackQueue::<T>::get(&track)[0], (index, 0u32.into()));
 	}
 
-	nudge_referendum_no_dd_pp {
+	nudge_referendum_not_queued {
+		// First create our referendum and place the deposit. It will be failing.
+		let (_caller, index) = create_referendum::<T>();
+		place_deposit::<T>(index);
+		fill_queue::<T>(index, 0, 0);
+
+		let track = Referenda::<T>::ensure_ongoing(index).unwrap().track;
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
+		assert!(TrackQueue::<T>::get(&track).into_iter().all(|(_, v)| v > 0u32.into()));
+
+		// Then nudge ours, with the track now full, ours will be queued.
+	}: nudge_referendum(RawOrigin::Root, index)
+	verify {
+		assert_eq!(TrackQueue::<T>::get(&track).len() as u32, T::MaxQueued::get());
+		assert!(TrackQueue::<T>::get(&track).into_iter().all(|(i, _)| i != index));
+	}
+
+	nudge_referendum_no_deposit {
 		let (_caller, index) = create_referendum::<T>();
 		skip_prepare_period::<T>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
@@ -389,7 +396,7 @@ benchmarks! {
 		assert_matches!(status, ReferendumStatus { deciding: None, .. });
 	}
 
-	nudge_referendum_dd_no_pp {
+	nudge_referendum_preparing {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
@@ -398,7 +405,7 @@ benchmarks! {
 		assert_matches!(status, ReferendumStatus { deciding: None, .. });
 	}
 
-	nudge_referendum_timeout {
+	nudge_referendum_timed_out {
 		let (_caller, index) = create_referendum::<T>();
 		skip_timeout_period::<T>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
@@ -407,7 +414,7 @@ benchmarks! {
 		assert_matches!(info, ReferendumInfo::TimedOut(..));
 	}
 
-	nudge_referendum_dd_pp_failing {
+	nudge_referendum_begin_deciding_failing {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 		skip_prepare_period::<T>(index);
@@ -416,7 +423,7 @@ benchmarks! {
 		assert!(is_not_confirming::<T>(index));
 	}
 
-	nudge_referendum_dd_pp_passing {
+	nudge_referendum_begin_deciding_passing {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 		make_passing::<T>(index);
@@ -426,7 +433,7 @@ benchmarks! {
 		assert!(is_confirming::<T>(index));
 	}
 
-	nudge_referendum_deciding_passing_not_confirming {
+	nudge_referendum_begin_confirming {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 		skip_prepare_period::<T>(index);
@@ -438,7 +445,7 @@ benchmarks! {
 		assert!(is_confirming::<T>(index));
 	}
 
-	nudge_referendum_deciding_failing_but_confirming {
+	nudge_referendum_end_confirming {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 		skip_prepare_period::<T>(index);
@@ -451,7 +458,7 @@ benchmarks! {
 		assert!(!is_confirming::<T>(index));
 	}
 
-	nudge_referendum_deciding_failing_not_confirming {
+	nudge_referendum_continue_not_confirming {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 		skip_prepare_period::<T>(index);
@@ -465,7 +472,7 @@ benchmarks! {
 		assert!(!is_confirming::<T>(index));
 	}
 
-	nudge_referendum_deciding_passing_and_confirming {
+	nudge_referendum_continue_confirming {
 		let (_caller, index) = create_referendum::<T>();
 		place_deposit::<T>(index);
 		make_passing::<T>(index);

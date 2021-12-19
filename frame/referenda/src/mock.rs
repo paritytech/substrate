@@ -36,8 +36,6 @@ use sp_runtime::{
 	DispatchResult, Perbill,
 };
 
-const MAX_PROPOSALS: u32 = 100;
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -135,16 +133,6 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const LaunchPeriod: u64 = 2;
-	pub const VotingPeriod: u64 = 2;
-	pub const FastTrackVotingPeriod: u64 = 2;
-	pub const MinimumDeposit: u64 = 1;
-	pub const VoteLockingPeriod: u64 = 3;
-	pub const CooloffPeriod: u64 = 2;
-	pub const MaxVotes: u32 = 100;
-	pub const MaxProposals: u32 = MAX_PROPOSALS;
-	pub static PreimageByteDeposit: u64 = 0;
-	pub static InstantAllowed: bool = false;
 	pub static AlarmInterval: u64 = 1;
 	pub const SubmissionDeposit: u64 = 2;
 	pub const MaxQueued: u32 = 3;
