@@ -36,7 +36,8 @@ pub mod mmr;
 pub mod witness;
 
 pub use commitment::{
-	known_payload_ids, BeefyPayloadId, Commitment, Payload, SignedCommitment, VersionedCommitment,
+	known_payload_ids, BeefyPayloadId, Commitment, Payload, SignedCommitment,
+	VersionedFinalityProof,
 };
 
 use codec::{Codec, Decode, Encode};

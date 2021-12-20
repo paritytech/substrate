@@ -81,6 +81,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
+		ClassAccount::<T, I>::insert(&owner, &class, ());
 		Self::deposit_event(event);
 		Ok(())
 	}
@@ -108,6 +109,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
 			ClassMetadataOf::<T, I>::remove(&class);
 			Attribute::<T, I>::remove_prefix((&class,), None);
+			ClassAccount::<T, I>::remove(&class_details.owner, &class);
 			T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
 
 			Self::deposit_event(Event::Destroyed { class });

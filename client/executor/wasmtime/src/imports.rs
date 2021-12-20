@@ -19,14 +19,11 @@
 use crate::{
 	host::HostContext,
 	runtime::{Store, StoreData},
-	util,
 };
 use sc_executor_common::error::WasmError;
-use sp_wasm_interface::{Function, ValueType};
-use std::{any::Any, convert::TryInto};
-use wasmtime::{
-	Caller, Extern, ExternType, Func, FuncType, ImportType, Memory, MemoryType, Module, Trap, Val,
-};
+use sp_wasm_interface::{FunctionContext, HostFunctions};
+use std::{collections::HashMap, convert::TryInto};
+use wasmtime::{Extern, ExternType, Func, FuncType, ImportType, Memory, MemoryType, Module, Trap};
 
 pub struct Imports {
 	/// Contains the index into `externs` where the memory import is stored if any. `None` if there
@@ -37,16 +34,19 @@ pub struct Imports {
 
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
-pub(crate) fn resolve_imports(
+pub(crate) fn resolve_imports<H>(
 	store: &mut Store,
 	module: &Module,
-	host_functions: &[&'static dyn Function],
 	heap_pages: u64,
 	allow_missing_func_imports: bool,
-) -> Result<Imports, WasmError> {
+) -> Result<Imports, WasmError>
+where
+	H: HostFunctions,
+{
 	let mut externs = vec![];
 	let mut memory_import_index = None;
-	for import_ty in module.imports() {
+	let mut pending_func_imports = HashMap::new();
+	for (index, import_ty) in module.imports().enumerate() {
 		let name = import_name(&import_ty)?;
 
 		if import_ty.module() != "env" {
@@ -57,17 +57,87 @@ pub(crate) fn resolve_imports(
 			)))
 		}
 
-		let resolved = match name {
-			"memory" => {
-				memory_import_index = Some(externs.len());
-				resolve_memory_import(store, &import_ty, heap_pages)?
+		if name == "memory" {
+			memory_import_index = Some(index);
+			externs.push((index, resolve_memory_import(store, &import_ty, heap_pages)?));
+			continue
+		}
+
+		match import_ty.ty() {
+			ExternType::Func(func_ty) => {
+				pending_func_imports.insert(name.to_owned(), (index, import_ty, func_ty));
 			},
 			_ =>
-				resolve_func_import(store, &import_ty, host_functions, allow_missing_func_imports)?,
+				return Err(WasmError::Other(format!(
+					"host doesn't provide any non function imports besides 'memory': {}:{}",
+					import_ty.module(),
+					name,
+				))),
 		};
-		externs.push(resolved);
 	}
+
+	let mut registry = Registry { store, externs, pending_func_imports };
+
+	H::register_static(&mut registry)?;
+	let mut externs = registry.externs;
+
+	if !registry.pending_func_imports.is_empty() {
+		if allow_missing_func_imports {
+			for (_, (index, import_ty, func_ty)) in registry.pending_func_imports {
+				externs.push((
+					index,
+					MissingHostFuncHandler::new(&import_ty)?.into_extern(store, &func_ty),
+				));
+			}
+		} else {
+			let mut names = Vec::new();
+			for (name, (_, import_ty, _)) in registry.pending_func_imports {
+				names.push(format!("'{}:{}'", import_ty.module(), name));
+			}
+			let names = names.join(", ");
+			return Err(WasmError::Other(format!(
+				"runtime requires function imports which are not present on the host: {}",
+				names
+			)))
+		}
+	}
+
+	externs.sort_unstable_by_key(|&(index, _)| index);
+	let externs = externs.into_iter().map(|(_, ext)| ext).collect();
+
 	Ok(Imports { memory_import_index, externs })
+}
+
+struct Registry<'a, 'b> {
+	store: &'a mut Store,
+	externs: Vec<(usize, Extern)>,
+	pending_func_imports: HashMap<String, (usize, ImportType<'b>, FuncType)>,
+}
+
+impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
+	type State = StoreData;
+	type Error = WasmError;
+	type FunctionContext = HostContext<'a>;
+
+	fn with_function_context<R>(
+		caller: wasmtime::Caller<Self::State>,
+		callback: impl FnOnce(&mut dyn FunctionContext) -> R,
+	) -> R {
+		callback(&mut HostContext { caller })
+	}
+
+	fn register_static<Params, Results>(
+		&mut self,
+		fn_name: &str,
+		func: impl wasmtime::IntoFunc<Self::State, Params, Results>,
+	) -> Result<(), Self::Error> {
+		if let Some((index, _, _)) = self.pending_func_imports.remove(fn_name) {
+			let func = Func::wrap(&mut *self.store, func);
+			self.externs.push((index, Extern::Func(func)));
+		}
+
+		Ok(())
+	}
 }
 
 /// When the module linking proposal is supported the import's name can be `None`.
@@ -139,115 +209,6 @@ fn resolve_memory_import(
 	Ok(Extern::Memory(memory))
 }
 
-fn resolve_func_import(
-	store: &mut Store,
-	import_ty: &ImportType,
-	host_functions: &[&'static dyn Function],
-	allow_missing_func_imports: bool,
-) -> Result<Extern, WasmError> {
-	let name = import_name(&import_ty)?;
-
-	let func_ty = match import_ty.ty() {
-		ExternType::Func(func_ty) => func_ty,
-		_ =>
-			return Err(WasmError::Other(format!(
-				"host doesn't provide any non function imports besides 'memory': {}:{}",
-				import_ty.module(),
-				name,
-			))),
-	};
-
-	let host_func = match host_functions.iter().find(|host_func| host_func.name() == name) {
-		Some(host_func) => host_func,
-		None if allow_missing_func_imports =>
-			return Ok(MissingHostFuncHandler::new(import_ty)?.into_extern(store, &func_ty)),
-		None =>
-			return Err(WasmError::Other(format!(
-				"host doesn't provide such function: {}:{}",
-				import_ty.module(),
-				name,
-			))),
-	};
-	if &func_ty != &wasmtime_func_sig(*host_func) {
-		return Err(WasmError::Other(format!(
-			"signature mismatch for: {}:{}",
-			import_ty.module(),
-			name,
-		)))
-	}
-
-	Ok(HostFuncHandler::new(*host_func).into_extern(store))
-}
-
-/// This structure implements `Callable` and acts as a bridge between wasmtime and
-/// substrate host functions.
-struct HostFuncHandler {
-	host_func: &'static dyn Function,
-}
-
-fn call_static<'a>(
-	static_func: &'static dyn Function,
-	wasmtime_params: &[Val],
-	wasmtime_results: &mut [Val],
-	mut caller: Caller<'a, StoreData>,
-) -> Result<(), wasmtime::Trap> {
-	let unwind_result = {
-		let mut host_ctx = HostContext { caller: &mut caller };
-
-		// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
-		// available in substrate.
-		//
-		// This, however, cannot happen since the signature of this function is created from
-		// a `dyn Function` signature of which cannot have a non substrate value by definition.
-		let mut params = wasmtime_params.iter().cloned().map(util::from_wasmtime_val);
-
-		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			static_func.execute(&mut host_ctx, &mut params)
-		}))
-	};
-
-	let execution_result = match unwind_result {
-		Ok(execution_result) => execution_result,
-		Err(err) => return Err(Trap::new(stringify_panic_payload(err))),
-	};
-
-	match execution_result {
-		Ok(Some(ret_val)) => {
-			debug_assert!(
-				wasmtime_results.len() == 1,
-				"wasmtime function signature, therefore the number of results, should always \
-				correspond to the number of results returned by the host function",
-			);
-			wasmtime_results[0] = util::into_wasmtime_val(ret_val);
-			Ok(())
-		},
-		Ok(None) => {
-			debug_assert!(
-				wasmtime_results.len() == 0,
-				"wasmtime function signature, therefore the number of results, should always \
-				correspond to the number of results returned by the host function",
-			);
-			Ok(())
-		},
-		Err(msg) => Err(Trap::new(msg)),
-	}
-}
-
-impl HostFuncHandler {
-	fn new(host_func: &'static dyn Function) -> Self {
-		Self { host_func }
-	}
-
-	fn into_extern(self, store: &mut Store) -> Extern {
-		let host_func = self.host_func;
-		let func_ty = wasmtime_func_sig(self.host_func);
-		let func = Func::new(store, func_ty, move |caller, params, result| {
-			call_static(host_func, params, result, caller)
-		});
-		Extern::Func(func)
-	}
-}
-
 /// A `Callable` handler for missing functions.
 struct MissingHostFuncHandler {
 	module: String,
@@ -268,35 +229,5 @@ impl MissingHostFuncHandler {
 			Err(Trap::new(format!("call to a missing function {}:{}", module, name)))
 		});
 		Extern::Func(func)
-	}
-}
-
-fn wasmtime_func_sig(func: &dyn Function) -> wasmtime::FuncType {
-	let signature = func.signature();
-	let params = signature.args.iter().cloned().map(into_wasmtime_val_type);
-
-	let results = signature.return_value.iter().cloned().map(into_wasmtime_val_type);
-
-	wasmtime::FuncType::new(params, results)
-}
-
-fn into_wasmtime_val_type(val_ty: ValueType) -> wasmtime::ValType {
-	match val_ty {
-		ValueType::I32 => wasmtime::ValType::I32,
-		ValueType::I64 => wasmtime::ValType::I64,
-		ValueType::F32 => wasmtime::ValType::F32,
-		ValueType::F64 => wasmtime::ValType::F64,
-	}
-}
-
-/// Attempt to convert a opaque panic payload to a string.
-fn stringify_panic_payload(payload: Box<dyn Any + Send + 'static>) -> String {
-	match payload.downcast::<&'static str>() {
-		Ok(msg) => msg.to_string(),
-		Err(payload) => match payload.downcast::<String>() {
-			Ok(msg) => *msg,
-			// At least we tried...
-			Err(_) => "Box<Any>".to_string(),
-		},
 	}
 }

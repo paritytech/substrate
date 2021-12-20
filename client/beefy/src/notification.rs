@@ -24,7 +24,8 @@ use sp_runtime::traits::{Block, NumberFor};
 use parking_lot::Mutex;
 
 /// Stream of signed commitments returned when subscribing.
-pub type SignedCommitment<Block> = beefy_primitives::SignedCommitment<NumberFor<Block>>;
+pub type SignedCommitment<Block> =
+	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature>;
 
 /// Stream of signed commitments returned when subscribing.
 type SignedCommitmentStream<Block> = TracingUnboundedReceiver<SignedCommitment<Block>>;

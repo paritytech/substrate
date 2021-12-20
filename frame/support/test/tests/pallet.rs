@@ -19,8 +19,8 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion,
+		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
+		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -536,10 +536,7 @@ pub mod pallet4 {
 }
 
 frame_support::parameter_types!(
-	pub const MyGetParam: u32 = 10;
-	pub const MyGetParam2: u32 = 11;
 	pub const MyGetParam3: u32 = 12;
-	pub const BlockHashCount: u32 = 250;
 );
 
 impl frame_system::Config for Runtime {
@@ -554,7 +551,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -566,12 +563,12 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
-	type MyGetParam2 = MyGetParam2;
+	type MyGetParam = ConstU32<10>;
+	type MyGetParam2 = ConstU32<11>;
 	type MyGetParam3 = MyGetParam3;
 	type Balance = u64;
 }

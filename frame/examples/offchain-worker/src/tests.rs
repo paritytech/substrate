@@ -18,7 +18,10 @@
 use crate as example_offchain_worker;
 use crate::*;
 use codec::Decode;
-use frame_support::{assert_ok, parameter_types};
+use frame_support::{
+	assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::{
 	offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
 	sr25519::Signature,
@@ -49,7 +52,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -68,7 +70,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -77,7 +79,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 type Extrinsic = TestXt<Call, ()>;
@@ -111,8 +113,6 @@ where
 }
 
 parameter_types! {
-	pub const GracePeriod: u64 = 5;
-	pub const UnsignedInterval: u64 = 128;
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
@@ -120,8 +120,8 @@ impl Config for Test {
 	type Event = Event;
 	type AuthorityId = crypto::TestAuthId;
 	type Call = Call;
-	type GracePeriod = GracePeriod;
-	type UnsignedInterval = UnsignedInterval;
+	type GracePeriod = ConstU64<5>;
+	type UnsignedInterval = ConstU64<128>;
 	type UnsignedPriority = UnsignedPriority;
 }
 

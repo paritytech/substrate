@@ -97,7 +97,7 @@ impl<T: Trait> frame_support::inherent::ProvideInherent for Module<T> {
 mod tests {
 	use crate as pallet_test;
 
-	use frame_support::parameter_types;
+	use frame_support::traits::ConstU64;
 
 	type SignedExtra = (
 		frame_system::CheckEra<Runtime>,
@@ -124,10 +124,6 @@ mod tests {
 		}
 	);
 
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-	}
-
 	impl frame_system::Config for Runtime {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type Origin = Origin;
@@ -140,7 +136,7 @@ mod tests {
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = TestHeader;
 		type Event = ();
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type DbWeight = ();
 		type BlockWeights = ();
 		type BlockLength = ();

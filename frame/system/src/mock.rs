@@ -16,7 +16,10 @@
 // limitations under the License.
 
 use crate::{self as frame_system, *};
-use frame_support::parameter_types;
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -42,7 +45,6 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 const MAX_BLOCK_WEIGHT: Weight = 1024;
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 10;
 	pub Version: RuntimeVersion = RuntimeVersion {
 		spec_name: sp_version::create_runtime_str!("test"),
 		impl_name: sp_version::create_runtime_str!("system-test"),
@@ -101,7 +103,7 @@ impl Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
 	type Version = Version;
 	type PalletInfo = PalletInfo;
@@ -111,7 +113,7 @@ impl Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 pub type SysEvent = frame_system::Event<Test>;
