@@ -97,7 +97,7 @@ impl<AuthorityId> ValidatorSet<AuthorityId> {
 		let validators: Vec<AuthorityId> = validators.into_iter().collect();
 		if validators.is_empty() {
 			// No validators; the set would be empty.
-			return None
+			None
 		} else {
 			Some(Self { validators, id })
 		}
