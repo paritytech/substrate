@@ -28,7 +28,7 @@ rustversion = "1.0.5"
 criterion = "0.3.0"
 futures = "0.3.9"
 log = "0.4.14"
-sp-core = { version = "4.0.0", path = "../../core" }
+sp-core = { version = "4.1.0-dev", path = "../../core" }
 
 [[bench]]
 name = "bench"

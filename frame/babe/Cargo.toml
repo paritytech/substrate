@@ -36,7 +36,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-offences = { version = "4.0.0-dev", path = "../offences" }
 pallet-staking = { version = "4.0.0-dev", path = "../staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
 [features]

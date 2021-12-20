@@ -38,7 +38,7 @@ rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
-sp-core = { version = "4.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
