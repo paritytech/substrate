@@ -273,6 +273,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 ///     // Here we are exposing the runtime api versions.
 ///     apis: RUNTIME_API_VERSIONS,
 ///     transaction_version: 1,
+///     state_version: 1,
 /// };
 ///
 /// # fn main() {}
