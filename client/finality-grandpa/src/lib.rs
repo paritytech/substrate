@@ -264,7 +264,7 @@ pub struct Config {
 	pub keystore: Option<SyncCryptoStorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
-	/// Chain specific Grandpa protocol name. See [`crate::protocol_standard_name`].
+	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
 	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
