@@ -212,7 +212,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_election_provider_support::{
-	onchain, BoundedSupport, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex,
+	onchain, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex,
 };
 use frame_support::{
 	ensure,
@@ -591,6 +591,7 @@ pub mod pallet {
 		}
 	}
 
+	// TODO: wtf
 	#[pallet::type_value]
 	pub fn DefaultForRound() -> u32 {
 		1

@@ -169,7 +169,7 @@
 pub mod onchain;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
+use frame_support::{traits::Get, BoundedVec, DefaultNoBound, RuntimeDebug};
 use scale_info::TypeInfo;
 use sp_npos_elections::EvaluateSupport;
 use sp_std::{fmt::Debug, prelude::*};
@@ -591,7 +591,7 @@ impl<AccountId, Bound: Get<u32>> TryFrom<sp_npos_elections::Support<AccountId>>
 ///
 /// Note the order of generic bounds, first comes the outer bound and then the inner. When possible,
 /// use [`BoundedSupportsOf`] to avoid mistakes.
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound)]
 pub struct BoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>>(
 	pub BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>,
 );
@@ -687,7 +687,7 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 }
 
 /// Same as [`TryIntoBoundedSupportsVec`], but the conversion function itself is typed, so that the
-/// generics can be provided using the turbo-fish syntax in case rustc fails to auto-detect it.
+/// generics can be provided using the turbo-fish syntax in case `rustc` fails to auto-detect it.
 pub trait TryIntoBoundedSupportsVecTyped<AccountId> {
 	/// Perform the conversion.
 	fn try_into_bounded_supports_vec_typed<BOuter, BInner>(

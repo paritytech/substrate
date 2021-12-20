@@ -331,15 +331,7 @@ impl ElectionProvider for MockFallback {
 	type MaxBackersPerSupport = MaxBackersPerSupport;
 	type MaxSupportsPerPage = MaxSupportsPerPage;
 
-	fn elect(
-		remaining: PageIndex,
-	) -> Result<
-		BoundedVec<
-			(Self::AccountId, BoundedSupport<Self::AccountId, Self::MaxBackersPerSupport>),
-			Self::MaxSupportsPerPage,
-		>,
-		Self::Error,
-	> {
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChianFallback::get() {
 			onchain::OnChainSequentialPhragmen::<Runtime>::elect(remaining)
 				.map_err(|_| "OnChainSequentialPhragmen failed")
@@ -764,7 +756,7 @@ pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>
 				.into_iter()
 				.map(|uxt| <Extrinsic as codec::Decode>::decode(&mut &*uxt).unwrap())
 				.for_each(|xt| {
-					xt.call.dispatch(frame_system::RawOrigin::None.into());
+					xt.call.dispatch(frame_system::RawOrigin::None.into()).unwrap();
 				});
 			pool.try_write().unwrap().transactions.clear();
 		}
@@ -781,7 +773,11 @@ pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>
 
 /// An invalid solution with any score.
 pub fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
-	PagedRawSolution { score, solution_pages: BoundedVec::default(), ..Default::default() }
+	PagedRawSolution {
+		score,
+		solution_pages: vec![Default::default()].try_into().unwrap(),
+		..Default::default()
+	}
 }
 
 /// A real solution that's valid, but has a really bad score.

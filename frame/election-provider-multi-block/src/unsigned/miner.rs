@@ -384,7 +384,7 @@ impl<
 
 		let all_supports = Self::check_feasibility(paged_solution, "mined")?;
 		let mut total_backings: BTreeMap<T::AccountId, ExtendedBalance> = BTreeMap::new();
-		all_supports.into_iter().flatten().for_each(|(who, support)| {
+		all_supports.into_iter().map(|x| x.0).flatten().for_each(|(who, support)| {
 			let backing = total_backings.entry(who).or_default();
 			*backing = backing.saturating_add(support.total);
 		});
@@ -869,7 +869,7 @@ mod trim_weight_length {
 					// all will stay
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 		});
@@ -905,7 +905,7 @@ mod trim_weight_length {
 					vec![(30, Support { total: 7, voters: vec![(7, 7)] })],
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 		})
@@ -951,7 +951,7 @@ mod trim_weight_length {
 						(30, Support { total: 2, voters: vec![(2, 2)] })
 					]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 		});
@@ -988,7 +988,7 @@ mod trim_weight_length {
 						(30, Support { total: 2, voters: vec![(2, 2)] })
 					]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 		})
@@ -1017,7 +1017,10 @@ mod trim_weight_length {
 
 			// nothing is queued
 			assert!(VerifierPallet::queued_solution().is_none());
-			assert_eq!(supports, vec![vec![], vec![], vec![]]);
+			assert_eq!(
+				supports,
+				vec![vec![], vec![], vec![]].try_into_bounded_supports_vec().unwrap()
+			);
 		})
 	}
 
@@ -1062,7 +1065,7 @@ mod trim_weight_length {
 					],
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 		});
@@ -1101,7 +1104,7 @@ mod trim_weight_length {
 					],
 					vec![(40, Support { total: 9, voters: vec![(2, 2), (3, 3), (4, 4)] })]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 		});
@@ -1112,7 +1115,9 @@ mod trim_weight_length {
 mod base_miner {
 	use super::*;
 	use crate::{mock::*, Snapshot};
-	use frame_election_provider_support::TryIntoBoundedSupportsVecTyped;
+	use frame_election_provider_support::{
+		TryIntoBoundedSupportsVec, TryIntoBoundedSupportsVecTyped,
+	};
 	use sp_npos_elections::Support;
 	use sp_runtime::PerU16;
 
@@ -1185,7 +1190,7 @@ mod base_miner {
 						}
 					)
 				]]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 
@@ -1270,7 +1275,7 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
 					]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 
@@ -1358,7 +1363,7 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(3, 10), (4, 10), (2, 5)] })
 					]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 
@@ -1426,7 +1431,7 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
 					]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 
@@ -1522,7 +1527,7 @@ mod base_miner {
 						(40, Support { total: 25, voters: vec![(2, 10), (3, 10), (4, 5)] })
 					]
 				]
-				.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>()
+				.try_into_bounded_supports_vec()
 				.unwrap()
 			);
 
@@ -1594,8 +1599,7 @@ mod base_miner {
 							)
 						]
 					]
-					.try_into_bounded_supports_vec_typed::<MaxBackersPerSupport, MaxSupportsPerPage>(
-					)
+					.try_into_bounded_supports_vec()
 					.unwrap()
 				);
 			})
@@ -1604,8 +1608,7 @@ mod base_miner {
 
 #[cfg(test)]
 mod offchain_worker_miner {
-	use crate::verifier::{FeasibilityError, Verifier};
-	use frame_election_provider_support::ElectionProvider;
+	use crate::verifier::Verifier;
 	use frame_support::traits::Hooks;
 	use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
@@ -1892,7 +1895,7 @@ mod offchain_worker_miner {
 			assert!(VerifierPallet::queued_solution().is_some());
 
 			// call is cached.
-			let mut call_cache =
+			let call_cache =
 				StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_CACHED_CALL);
 			assert!(matches!(call_cache.get::<crate::unsigned::Call<Runtime>>(), Ok(Some(_))));
 

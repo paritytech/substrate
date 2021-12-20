@@ -270,7 +270,10 @@ mod pallet {
 				crate::Error::<T>::EarlySubmission
 			);
 
-			ensure!(paged_solution.solution_pages.len() == 1, crate::Error::<T>::WrongPageCount);
+			ensure!(
+				dbg!(paged_solution).solution_pages.len() == 1,
+				crate::Error::<T>::WrongPageCount
+			);
 
 			Ok(())
 		}
@@ -290,8 +293,7 @@ mod validate_unsigned {
 		unsigned::{TransactionSource, TransactionValidityError, ValidateUnsigned},
 	};
 
-	use super::*;
-	use crate::{mock::*, types::*, verifier::Verifier, PagedRawSolution};
+	use crate::{mock::*, types::*, verifier::Verifier};
 
 	#[test]
 	fn retracts_weak_score_accepts_threshold_better() {
@@ -377,7 +379,7 @@ mod validate_unsigned {
 			// NOTE: unsigned solutions should have just 1 page, regardless of the configured
 			// page count.
 			roll_to_unsigned_open();
-			let mut attempt = mine_full_solution().unwrap();
+			let attempt = mine_full_solution().unwrap();
 			let call = super::Call::submit_unsigned {
 				paged_solution: Box::new(attempt),
 				witness: witness(),
@@ -389,7 +391,7 @@ mod validate_unsigned {
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(3)),
 			);
 
-			let mut attempt = mine_solution(2).unwrap();
+			let attempt = mine_solution(2).unwrap();
 			let call = super::Call::submit_unsigned {
 				paged_solution: Box::new(attempt),
 				witness: witness(),
@@ -400,7 +402,7 @@ mod validate_unsigned {
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(3)),
 			);
 
-			let mut attempt = mine_solution(1).unwrap();
+			let attempt = mine_solution(1).unwrap();
 			let call = super::Call::submit_unsigned {
 				paged_solution: Box::new(attempt),
 				witness: witness(),
