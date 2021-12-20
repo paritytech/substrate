@@ -40,7 +40,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
@@ -57,7 +56,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -69,12 +68,6 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-
-parameter_types! {
-	pub const GracePeriod: u64 = 5;
-	pub const UnsignedInterval: u64 = 128;
-	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 impl Config for Test {

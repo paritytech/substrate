@@ -382,58 +382,51 @@ where
 		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot)]
 	}
 
-	fn block_import_params(
+	async fn block_import_params(
 		&self,
-	) -> Box<
-		dyn Fn(
-				B::Header,
-				&B::Hash,
-				Vec<B::Extrinsic>,
-				StorageChanges<sp_api::TransactionFor<C, B>, B>,
-				Self::Claim,
-				Self::EpochData,
-			) -> Result<
-				sc_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
-				sp_consensus::Error,
-			> + Send
-			+ 'static,
+		header: B::Header,
+		header_hash: &B::Hash,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		public: Self::Claim,
+		_epoch: Self::EpochData,
+	) -> Result<
+		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		sp_consensus::Error,
 	> {
-		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, public, _epoch| {
-			// sign the pre-sealed hash of the block and then
-			// add it to a digest item.
-			let public_type_pair = public.to_public_crypto_pair();
-			let public = public.to_raw_vec();
-			let signature = SyncCryptoStore::sign_with(
-				&*keystore,
-				<AuthorityId<P> as AppKey>::ID,
-				&public_type_pair,
-				header_hash.as_ref(),
+		// sign the pre-sealed hash of the block and then
+		// add it to a digest item.
+		let public_type_pair = public.to_public_crypto_pair();
+		let public = public.to_raw_vec();
+		let signature = SyncCryptoStore::sign_with(
+			&*self.keystore,
+			<AuthorityId<P> as AppKey>::ID,
+			&public_type_pair,
+			header_hash.as_ref(),
+		)
+		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+		.ok_or_else(|| {
+			sp_consensus::Error::CannotSign(
+				public.clone(),
+				"Could not find key in keystore.".into(),
 			)
-			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-			.ok_or_else(|| {
-				sp_consensus::Error::CannotSign(
-					public.clone(),
-					"Could not find key in keystore.".into(),
-				)
-			})?;
-			let signature = signature
-				.clone()
-				.try_into()
-				.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+		})?;
+		let signature = signature
+			.clone()
+			.try_into()
+			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 
-			let signature_digest_item =
-				<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+		let signature_digest_item =
+			<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
 
-			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
-			import_block.post_digests.push(signature_digest_item);
-			import_block.body = Some(body);
-			import_block.state_action =
-				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
-			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+		import_block.post_digests.push(signature_digest_item);
+		import_block.body = Some(body);
+		import_block.state_action =
+			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
+		import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-			Ok(import_block)
-		})
+		Ok(import_block)
 	}
 
 	fn force_authoring(&self) -> bool {

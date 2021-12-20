@@ -22,7 +22,9 @@ use crate as pallet_identity;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	assert_noop, assert_ok, ord_parameter_types, parameter_types, traits::EnsureOneOf, BoundedVec,
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64, EnsureOneOf},
+	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -47,7 +49,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -65,7 +66,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -75,30 +76,26 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
+
 parameter_types! {
-	pub const BasicDeposit: u64 = 10;
-	pub const FieldDeposit: u64 = 10;
-	pub const SubAccountDeposit: u64 = 10;
-	pub const MaxSubAccounts: u32 = 2;
 	pub const MaxAdditionalFields: u32 = 2;
 	pub const MaxRegistrars: u32 = 20;
 }
+
 ord_parameter_types! {
 	pub const One: u64 = 1;
 	pub const Two: u64 = 2;
@@ -109,10 +106,10 @@ impl pallet_identity::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type Slashed = ();
-	type BasicDeposit = BasicDeposit;
-	type FieldDeposit = FieldDeposit;
-	type SubAccountDeposit = SubAccountDeposit;
-	type MaxSubAccounts = MaxSubAccounts;
+	type BasicDeposit = ConstU64<10>;
+	type FieldDeposit = ConstU64<10>;
+	type SubAccountDeposit = ConstU64<10>;
+	type MaxSubAccounts = ConstU32<2>;
 	type MaxAdditionalFields = MaxAdditionalFields;
 	type MaxRegistrars = MaxRegistrars;
 	type RegistrarOrigin = EnsureOneOrRoot;

@@ -45,7 +45,7 @@ sp-timestamp = { path = "../../../primitives/timestamp", version = "4.0.0-dev" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 
 [dev-dependencies]
-tokio = { version = "1.13.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.15.0", features = ["rt-multi-thread", "macros"] }
 sc-basic-authorship = { path = "../../basic-authorship", version = "0.10.0-dev" }
 substrate-test-runtime-client = { path = "../../../test-utils/runtime/client", version = "2.0.0" }
 substrate-test-runtime-transaction-pool = { path = "../../../test-utils/runtime/transaction-pool", version = "2.0.0" }

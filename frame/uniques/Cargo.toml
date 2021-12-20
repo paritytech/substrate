@@ -20,6 +20,7 @@ sp-runtime = { version = "4.0.0", default-features = false, path = "../../primit
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 sp-std = { version = "4.0.0", path = "../../primitives/std" }

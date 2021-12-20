@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error::Error as CliError, CliConfiguration, Result, SubstrateCli};
+use crate::{error::Error as CliError, Result, SubstrateCli};
 use chrono::prelude::*;
 use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;
@@ -112,15 +112,8 @@ pub struct Runner<C: SubstrateCli> {
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
-		let tokio_runtime = build_runtime()?;
-		let runtime_handle = tokio_runtime.handle().clone();
-
-		Ok(Runner {
-			config: command.create_configuration(cli, runtime_handle)?,
-			tokio_runtime,
-			phantom: PhantomData,
-		})
+	pub fn new(config: Configuration, tokio_runtime: tokio::runtime::Runtime) -> Result<Runner<C>> {
+		Ok(Runner { config, tokio_runtime, phantom: PhantomData })
 	}
 
 	/// Log information about the node itself.

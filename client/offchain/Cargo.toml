@@ -20,7 +20,7 @@ fnv = "1.0.6"
 futures = "0.3.16"
 futures-timer = "3.0.2"
 num_cpus = "1.10"
-parking_lot = "0.11.1"
+parking_lot = "0.11.2"
 rand = "0.7.2"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
@@ -43,7 +43,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-tokio = "1.13"
+tokio = "1.15"
 lazy_static = "1.4.0"
 
 [features]
