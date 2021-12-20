@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 log = "0.4.8"
 prometheus = { version = "0.13.0", default-features = false }
-futures-util = { version = "0.3.17", default-features = false, features = ["io"] }
+futures-util = { version = "0.3.19", default-features = false, features = ["io"] }
 derive_more = "0.99"
 async-std = { version = "1.10.0", features = ["unstable"] }
 tokio = "1.15"
