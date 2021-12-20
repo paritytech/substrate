@@ -26,38 +26,56 @@ use std::{
 };
 use trie_db::{node::NodeOwned, Bytes, CError};
 
-#[derive(Clone)]
 pub struct SharedTrieNodeCache<H: Hasher> {
 	node_cache: Arc<RwLock<HashMap<H::Out, NodeOwned<H::Out>>>>,
-	data_cache: Arc<RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<Bytes>>>>>,
+	data_cache: Option<Arc<RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<Bytes>>>>>>,
 }
 
-impl<H: Hasher> Default for SharedTrieNodeCache<H> {
-	fn default() -> Self {
-		Self { node_cache: Default::default(), data_cache: Default::default() }
+impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
+	fn clone(&self) -> Self {
+		Self {
+			node_cache: self.node_cache.clone(),
+			data_cache: self.data_cache.clone(),
+		}
+	}
+}
+
+impl<H: Hasher> SharedTrieNodeCache<H> {
+	/// Create a new [`SharedTrieNodeCache`].
+	///
+	/// If `enable_data_cache` is `true`, the special data cache will be enabled. The data cache
+	/// caches `key => data` per storage root. So, when trying to access some data in the trie using
+	/// a key, we can directly look up the data instead of traversing the trie.
+	pub fn new(enable_data_cache: bool) -> Self {
+		Self {
+			node_cache: Default::default(),
+			data_cache: enable_data_cache.then(|| Default::default()),
+		}
+	}
+
+	/// Create a new [`LocalTrieNodeCache`] instance from this shared cache.
+	pub fn local_cache(&self) -> LocalTrieNodeCache<H> {
+		LocalTrieNodeCache {
+			shared: self.clone(),
+			local: Default::default(),
+		}
 	}
 }
 
 pub struct LocalTrieNodeCache<H: Hasher> {
 	shared: SharedTrieNodeCache<H>,
 	local: Mutex<HashMap<H::Out, NodeOwned<H::Out>>>,
-	enable_data_cache: bool,
 }
 
 impl<H: Hasher> LocalTrieNodeCache<H> {
-	pub fn new(shared: SharedTrieNodeCache<H>, enable_data_cache: bool) -> Self {
-		Self { enable_data_cache, local: Default::default(), shared }
-	}
-
 	/// Return self as a [`TrieDB`](trie_db::TrieDB) compatible cache.
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
 	pub fn as_trie_db_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
-		let data_cache = if self.enable_data_cache {
-			DataCache::ForStorageRoot(RwLockWriteGuard::map(
-				self.shared.data_cache.write(),
-				|cache| cache.entry(storage_root).or_default(),
-			))
+		let data_cache = if let Some(ref cache) = self.shared.data_cache {
+			DataCache::ForStorageRoot(RwLockWriteGuard::map(cache.write(), |cache| {
+				cache.entry(storage_root).or_default()
+			}))
 		} else {
 			DataCache::Disabled
 		};
@@ -143,13 +161,11 @@ impl<'a, H: Hasher> TrieNodeCache<'a, H> {
 	/// `storage_root` is the new storage root that was obtained after finishing all operations
 	/// using the [`TrieDBMut`](trie_db::TrieDBMut).
 	pub fn merge_into(self, local: &LocalTrieNodeCache<H>, storage_root: H::Out) {
-		let cache = if let DataCache::Fresh(cache) = self.data_cache {
-			cache
-		} else {
-			return
-		};
+		let cache = if let DataCache::Fresh(cache) = self.data_cache { cache } else { return };
 
-		local.shared.data_cache.write().entry(storage_root).or_default().extend(cache);
+		if let Some(ref data_cache) = local.shared.data_cache {
+			data_cache.write().entry(storage_root).or_default().extend(cache);
+		}
 	}
 }
 
