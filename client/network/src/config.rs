@@ -51,7 +51,6 @@ use std::{
 	borrow::Cow,
 	collections::HashMap,
 	convert::TryFrom,
-	error::Error,
 	fs,
 	future::Future,
 	io::{self, Write},
@@ -612,6 +611,28 @@ impl NonDefaultSetConfig {
 	}
 }
 
+/// A trait that enables handling different types with a single relevant multiaddress in a generic
+/// way
+pub trait AsMultiAddr {
+	/// Extract the multiaddress from the type.
+	///
+	/// NOTE: Do not implement this trait for types where it is ambiguous which address should be
+	/// extracted here.
+	fn as_multiaddr(&self) -> &Multiaddr;
+}
+
+impl AsMultiAddr for Multiaddr {
+	fn as_multiaddr(&self) -> &Multiaddr {
+		self
+	}
+}
+
+impl AsMultiAddr for MultiaddrWithPeerId {
+	fn as_multiaddr(&self) -> &Multiaddr {
+		&self.multiaddr
+	}
+}
+
 /// Configuration for the transport layer.
 #[derive(Clone, Debug)]
 pub enum TransportConfig {
@@ -630,6 +651,40 @@ pub enum TransportConfig {
 	/// Only allow connections within the same process.
 	/// Only addresses of the form `/memory/...` will be supported.
 	MemoryOnly,
+}
+
+impl TransportConfig {
+	/// Checks every address and gives an error if any of them do not match the specified transport
+	pub fn check_addresses<'a, T>(
+		&self,
+		addresses: impl IntoIterator<Item = &'a T>,
+	) -> Result<(), crate::error::Error>
+	where
+		T: AsMultiAddr + 'a,
+	{
+		let memory_only = matches!(self, TransportConfig::MemoryOnly);
+		let invalid_addresses: Vec<_> = addresses
+			.into_iter()
+			.map(|x| x.as_multiaddr())
+			.filter(|x| {
+				x.iter().any(|y| {
+					// MemoryOnly can only have `/memory/...` protocols, while
+					// Normal must not have any
+					memory_only != matches!(y, libp2p::core::multiaddr::Protocol::Memory(_))
+				})
+			})
+			.cloned()
+			.collect();
+
+		if invalid_addresses.is_empty() {
+			Ok(())
+		} else {
+			Err(crate::error::Error::AddressesForAnotherTransport {
+				transport: self.clone(),
+				addresses: invalid_addresses,
+			})
+		}
+	}
 }
 
 /// The policy for connections to non-reserved peers.
@@ -742,7 +797,7 @@ where
 	P: AsRef<Path>,
 	F: for<'r> FnOnce(&'r mut [u8]) -> Result<K, E>,
 	G: FnOnce() -> K,
-	E: Error + Send + Sync + 'static,
+	E: std::error::Error + Send + Sync + 'static,
 	W: Fn(&K) -> Vec<u8>,
 {
 	std::fs::read(&file)

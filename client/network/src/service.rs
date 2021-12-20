@@ -142,34 +142,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(mut params: Params<B, H>) -> Result<Self, Error> {
-		// Ensure the listen addresses are consistent with the transport.
-		ensure_addresses_consistent_with_transport(
-			params.network_config.listen_addresses.iter(),
-			&params.network_config.transport,
-		)?;
-		ensure_addresses_consistent_with_transport(
-			params.network_config.boot_nodes.iter().map(|x| &x.multiaddr),
-			&params.network_config.transport,
-		)?;
-		ensure_addresses_consistent_with_transport(
-			params
-				.network_config
-				.default_peers_set
-				.reserved_nodes
-				.iter()
-				.map(|x| &x.multiaddr),
-			&params.network_config.transport,
-		)?;
+		let transport_config = &params.network_config.transport;
+
+		// Ensure all configured addresses are consistent with the transport.
+		transport_config.check_addresses(&params.network_config.listen_addresses)?;
+		transport_config.check_addresses(&params.network_config.boot_nodes)?;
+		transport_config
+			.check_addresses(&params.network_config.default_peers_set.reserved_nodes)?;
 		for extra_set in &params.network_config.extra_sets {
-			ensure_addresses_consistent_with_transport(
-				extra_set.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
-				&params.network_config.transport,
-			)?;
+			transport_config.check_addresses(&extra_set.set_config.reserved_nodes)?;
 		}
-		ensure_addresses_consistent_with_transport(
-			params.network_config.public_addresses.iter(),
-			&params.network_config.transport,
-		)?;
+		transport_config.check_addresses(&params.network_config.public_addresses)?;
 
 		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
 
@@ -212,8 +195,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			&params.network_config,
 			iter::once(Vec::new())
 				.chain(
-					(0..params.network_config.extra_sets.len() - 1)
-						.map(|_| default_notif_handshake_message.clone()),
+					iter::repeat(default_notif_handshake_message)
+						.take(params.network_config.extra_sets.len() - 1),
 				)
 				.collect(),
 			params.block_announce_validator,
@@ -2162,39 +2145,4 @@ impl<'a, B: BlockT> Link<B> for NetworkLink<'a, B> {
 			.user_protocol_mut()
 			.request_justification(hash, number)
 	}
-}
-
-fn ensure_addresses_consistent_with_transport<'a>(
-	addresses: impl Iterator<Item = &'a Multiaddr>,
-	transport: &TransportConfig,
-) -> Result<(), Error> {
-	if matches!(transport, TransportConfig::MemoryOnly) {
-		let addresses: Vec<_> = addresses
-			.filter(|x| {
-				x.iter().any(|y| !matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
-			})
-			.cloned()
-			.collect();
-
-		if !addresses.is_empty() {
-			return Err(Error::AddressesForAnotherTransport {
-				transport: transport.clone(),
-				addresses,
-			})
-		}
-	} else {
-		let addresses: Vec<_> = addresses
-			.filter(|x| x.iter().any(|y| matches!(y, libp2p::core::multiaddr::Protocol::Memory(_))))
-			.cloned()
-			.collect();
-
-		if !addresses.is_empty() {
-			return Err(Error::AddressesForAnotherTransport {
-				transport: transport.clone(),
-				addresses,
-			})
-		}
-	}
-
-	Ok(())
 }
