@@ -55,7 +55,6 @@ use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
 use sp_consensus::{
 	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
-	SlotData,
 };
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{ByteArray, Pair, Public};
