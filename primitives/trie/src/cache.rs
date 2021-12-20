@@ -33,10 +33,7 @@ pub struct SharedTrieNodeCache<H: Hasher> {
 
 impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
 	fn clone(&self) -> Self {
-		Self {
-			node_cache: self.node_cache.clone(),
-			data_cache: self.data_cache.clone(),
-		}
+		Self { node_cache: self.node_cache.clone(), data_cache: self.data_cache.clone() }
 	}
 }
 
@@ -55,10 +52,7 @@ impl<H: Hasher> SharedTrieNodeCache<H> {
 
 	/// Create a new [`LocalTrieNodeCache`] instance from this shared cache.
 	pub fn local_cache(&self) -> LocalTrieNodeCache<H> {
-		LocalTrieNodeCache {
-			shared: self.clone(),
-			local: Default::default(),
-		}
+		LocalTrieNodeCache { shared: self.clone(), local: Default::default() }
 	}
 }
 
@@ -164,7 +158,7 @@ impl<'a, H: Hasher> TrieNodeCache<'a, H> {
 		let cache = if let DataCache::Fresh(cache) = self.data_cache { cache } else { return };
 
 		if let Some(ref data_cache) = local.shared.data_cache {
-			data_cache.write().entry(storage_root).or_default().extend(cache);
+			data_cache.write().entry(storage_root).or_default().extend(dbg!(cache));
 		}
 	}
 }
@@ -190,6 +184,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 	}
 
 	fn insert_node(&mut self, hash: H::Out, node: NodeOwned<H::Out>) {
+		eprintln!("INSERT");
 		self.local_cache.insert(hash, node);
 	}
 
@@ -206,6 +201,125 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 	}
 
 	fn cache_data_for_key(&mut self, key: &[u8], data: Option<Bytes>) {
+		eprintln!("INSERT2");
 		self.data_cache.insert(key.into(), data);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
+
+	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
+	type Layout = crate::Layout<sp_core::Blake2Hasher>;
+	type Cache = super::SharedTrieNodeCache<sp_core::Blake2Hasher>;
+
+	const TEST_DATA: &[(&[u8], &[u8])] =
+		&[(b"key1", b"val1"), (b"key2", b"val2"), (b"key3", b"val3"), (b"key4", b"val4")];
+
+	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
+		let mut db = MemoryDB::default();
+		let mut root = Default::default();
+
+		{
+			let mut trie = TrieDBMutBuilder::<Layout>::new(&mut db, &mut root).build();
+			for (k, v) in TEST_DATA {
+				trie.insert(k, v).expect("Inserts data");
+			}
+		}
+
+		(db, root)
+	}
+
+	#[test]
+	fn basic_cache_works() {
+		let (db, root) = create_trie();
+
+		let shared_cache = Cache::new(true);
+		let local_cache = shared_cache.local_cache();
+
+		{
+			let mut cache = local_cache.as_trie_db_cache(root);
+			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
+				.with_cache(&mut cache)
+				.build();
+			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
+		}
+
+		let cached_data = shared_cache
+			.data_cache
+			.as_ref()
+			.unwrap()
+			.read()
+			.get(&root)
+			.expect("There should be data cached")
+			.get(TEST_DATA[0].0)
+			.unwrap()
+			.clone();
+		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.unwrap());
+		// Local cache wasn't dropped yet, so there should not be any node cached.
+		assert!(shared_cache.node_cache.read().is_empty());
+
+		drop(local_cache);
+		// Now we should have a value cached.
+		assert!(shared_cache.node_cache.read().len() >= 1);
+
+		let local_cache = shared_cache.local_cache();
+		shared_cache
+			.data_cache
+			.as_ref()
+			.unwrap()
+			.write()
+			.entry(root)
+			.or_default()
+			.insert(TEST_DATA[1].0.to_vec(), Some(b"fake_data".to_vec().into()));
+
+		{
+			let mut cache = local_cache.as_trie_db_cache(root);
+			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
+				.with_cache(&mut cache)
+				.build();
+
+			// We should now get the "fake_data", because we inserted this manually to the cache.
+			assert_eq!(b"fake_data".to_vec(), trie.get(TEST_DATA[1].0).unwrap().unwrap());
+		}
+	}
+
+	#[test]
+	fn trie_db_mut_cache_works() {
+		let (mut db, root) = create_trie();
+
+		let new_key = b"new_key".to_vec();
+		// Use some long value to not have it inlined
+		let new_value = vec![23; 64];
+
+		let shared_cache = Cache::new(true);
+		let local_cache = shared_cache.local_cache();
+
+		let mut new_root = root;
+		let mut cache = local_cache.as_trie_db_mut_cache();
+
+		{
+			let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root).unwrap()
+				.with_cache(&mut cache)
+				.build();
+
+			trie.insert(&new_key, &new_value).unwrap();
+		}
+
+		cache.merge_into(&local_cache, new_root);
+
+		let cached_data = shared_cache
+			.data_cache
+			.as_ref()
+			.unwrap()
+			.read()
+			.get(&new_root)
+			.expect("There should be data cached")
+			.get(&new_key)
+			.unwrap()
+			.clone();
+		assert_eq!(Bytes::from(new_value), cached_data.unwrap());
 	}
 }

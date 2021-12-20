@@ -19,14 +19,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+pub mod cache;
 mod error;
 mod node_codec;
 mod node_header;
 mod storage_proof;
 mod trie_codec;
 mod trie_stream;
-#[cfg(feature = "std")]
-pub mod cache;
 
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
@@ -462,7 +462,7 @@ mod tests {
 			let persistent = {
 				let mut memdb = MemoryDB::default();
 				let mut root = Default::default();
-				let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
+				let mut t = TrieDBMutBuilder::<T>::new(&mut memdb, &mut root).build();
 				for (x, y) in input.iter().rev() {
 					t.insert(x, y).unwrap();
 				}
@@ -476,13 +476,13 @@ mod tests {
 		let mut memdb = MemoryDB::default();
 		let mut root = Default::default();
 		{
-			let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
+			let mut t = TrieDBMutBuilder::<T>::new(&mut memdb, &mut root).build();
 			for (x, y) in input.clone() {
 				t.insert(x, y).unwrap();
 			}
 		}
 		{
-			let t = TrieDB::<T>::new(&mut memdb, &root).unwrap();
+			let t = TrieDBBuilder::<T>::new(&memdb, &root).unwrap().build();
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter()
@@ -497,7 +497,7 @@ mod tests {
 	fn default_trie_root() {
 		let mut db = MemoryDB::default();
 		let mut root = TrieHash::<Layout>::default();
-		let mut empty = TrieDBMut::<Layout>::new(&mut db, &mut root);
+		let mut empty = TrieDBMutBuilder::<Layout>::new(&mut db, &mut root).build();
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
 		let root2: Vec<u8> = Layout::trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty())
@@ -614,7 +614,7 @@ mod tests {
 		root: &'db mut TrieHash<T>,
 		v: &[(Vec<u8>, Vec<u8>)],
 	) -> TrieDBMut<'db, T> {
-		let mut t = TrieDBMut::<T>::new(db, root);
+		let mut t = TrieDBMutBuilder::<T>::new(db, root).build();
 		for i in 0..v.len() {
 			let key: &[u8] = &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -743,7 +743,7 @@ mod tests {
 		let mut root = Default::default();
 		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
 
-		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
+		let trie = TrieDBBuilder::<Layout>::new(&mdb, &root).unwrap().build();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();

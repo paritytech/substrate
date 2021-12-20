@@ -44,7 +44,7 @@ where
 	}
 
 	/// Create new trie-based backend.
-	pub fn new_with_cache(storage: S, root: H::Out, cache: sp_trie::LocalTrieNodeCache<H>) -> Self {
+	pub fn new_with_cache(storage: S, root: H::Out, cache: sp_trie::cache::LocalTrieNodeCache<H>) -> Self {
 		TrieBackend { essence: TrieBackendEssence::new_with_cache(storage, root, cache) }
 	}
 

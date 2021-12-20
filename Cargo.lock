@@ -2612,6 +2612,13 @@ version = "0.15.2"
 [[package]]
 name = "hash256-std-hasher"
 version = "0.15.2"
+dependencies = [
+ "crunchy",
+]
+
+[[package]]
+name = "hash256-std-hasher"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92c171d55b98633f4ed3860808f004099b36c1cc29c42cfc53aa8591b21efcf2"
 dependencies = [
@@ -3295,11 +3302,20 @@ checksum = "67c21572b4949434e4fc1e1978b99c5f77064153c59d998bf13ecd96fb5ecba7"
 [[package]]
 name = "keccak-hasher"
 version = "0.15.3"
+dependencies = [
+ "hash-db",
+ "hash256-std-hasher 0.15.2",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "keccak-hasher"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
 dependencies = [
  "hash-db",
- "hash256-std-hasher",
+ "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-keccak",
 ]
 
@@ -9487,7 +9503,7 @@ dependencies = [
  "ed25519-dalek",
  "futures 0.3.16",
  "hash-db",
- "hash256-std-hasher",
+ "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex",
  "hex-literal",
  "impl-serde",
@@ -9741,7 +9757,7 @@ name = "sp-runtime"
 version = "4.0.0-dev"
 dependencies = [
  "either",
- "hash256-std-hasher",
+ "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "impl-trait-for-tuples",
  "log 0.4.14",
  "parity-scale-codec",
@@ -10013,7 +10029,7 @@ dependencies = [
  "trie-bench",
  "trie-db",
  "trie-root",
- "trie-standardmap",
+ "trie-standardmap 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -10952,17 +10968,15 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 [[package]]
 name = "trie-bench"
 version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4edd9bdf0c2e08fd77c0fb2608179cac7ebed997ae18f58d47a2d96425ff51f0"
 dependencies = [
  "criterion",
  "hash-db",
- "keccak-hasher",
+ "keccak-hasher 0.15.3",
  "memory-db",
  "parity-scale-codec",
  "trie-db",
  "trie-root",
- "trie-standardmap",
+ "trie-standardmap 0.15.2",
 ]
 
 [[package]]
@@ -10986,11 +11000,19 @@ dependencies = [
 [[package]]
 name = "trie-standardmap"
 version = "0.15.2"
+dependencies = [
+ "hash-db",
+ "keccak-hasher 0.15.3",
+]
+
+[[package]]
+name = "trie-standardmap"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3161ba520ab28cd8e6b68e1126f1009f6e335339d1a73b978139011703264c8"
 dependencies = [
  "hash-db",
- "keccak-hasher",
+ "keccak-hasher 0.15.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

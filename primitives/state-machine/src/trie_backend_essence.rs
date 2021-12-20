@@ -73,7 +73,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	empty: H::Out,
 	#[cfg(feature = "std")]
 	pub(crate) cache: Arc<RwLock<Cache>>,
-	trie_node_cache: Option<sp_trie::LocalTrieNodeCache<H>>,
+	trie_node_cache: Option<sp_trie::cache::LocalTrieNodeCache<H>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
@@ -93,7 +93,11 @@ where
 	}
 
 	/// Create new trie-based backend.
-	pub fn new_with_cache(storage: S, root: H::Out, cache: sp_trie::LocalTrieNodeCache<H>) -> Self {
+	pub fn new_with_cache(
+		storage: S,
+		root: H::Out,
+		cache: sp_trie::cache::LocalTrieNodeCache<H>,
+	) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
@@ -243,7 +247,7 @@ where
 
 		match self.trie_node_cache {
 			Some(ref cache) => builder
-				.with_cache(&mut cache.as_cache(self.root))
+				.with_cache(&mut cache.as_trie_db_cache(self.root))
 				.build()
 				.get(key)
 				.map_err(map_e),
