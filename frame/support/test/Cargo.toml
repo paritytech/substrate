@@ -25,7 +25,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../../primiti
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 trybuild = "1.0.53"
 pretty_assertions = "1.0.0"
-rustversion = "1.0.5"
+rustversion = "1.0.6"
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 # The "std" feature for this pallet is never activated on purpose, in order to test construct_runtime error message
 test-pallet = { package = "frame-support-test-pallet", default-features = false, path = "pallet" }
