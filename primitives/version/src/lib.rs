@@ -152,7 +152,7 @@ macro_rules! create_apis_vec {
 /// previous runtime version encoding.
 pub struct RuntimeVersionCompatibility(RuntimeVersion);
 
-impl From<RuntimeVersionCompatibility> for RuntimeVersionV2 {
+impl From<RuntimeVersionCompatibility> for RuntimeVersion {
 	fn from(x: RuntimeVersionCompatibility) -> Self {
 		x.0
 	}
