@@ -347,8 +347,7 @@ impl Config {
 	{
 		trace!(target: "babe", "Getting slot duration");
 
-		let best_hash = client.usage_info().chain.best_hash;
-		let best_block_id = BlockId::Hash(best_hash);
+		let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
 		let runtime_api = client.runtime_api();
 
 		let version = runtime_api.api_version::<dyn BabeApi<B>>(&best_block_id)?;
@@ -365,12 +364,6 @@ impl Config {
 				"Unsupported or invalid BabeApi version".to_string(),
 			))
 		};
-
-		info!(
-			"⏱  Loaded block-time = {:?} from block {:?}",
-			slot_duration.slot_duration(),
-			best_hash,
-		);
 
 		Ok(Self(sc_consensus_slots::SlotDuration::new(slot_duration)))
 	}

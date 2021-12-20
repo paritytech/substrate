@@ -94,15 +94,8 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
-	let best_hash = client.usage_info().chain.best_hash;
-	let best_block_id = BlockId::Hash(best_hash);
+	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
 	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
-
-	log::info!(
-		"⏱  Loaded block-time = {:?} from block {:?}",
-		slot_duration.slot_duration(),
-		best_hash,
-	);
 
 	Ok(SlotDuration::new(slot_duration))
 }
