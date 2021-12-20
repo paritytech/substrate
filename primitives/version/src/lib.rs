@@ -79,6 +79,7 @@ pub mod embed;
 /// 	impl_version: 1,
 /// 	apis: RUNTIME_API_VERSIONS,
 /// 	transaction_version: 2,
+/// 	state_version: 1,
 /// };
 ///
 /// # const RUNTIME_API_VERSIONS: sp_version::ApisVec = sp_version::create_apis_vec!([]);
