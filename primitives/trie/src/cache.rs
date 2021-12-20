@@ -49,11 +49,15 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 		Self { enable_data_cache, local: Default::default(), shared }
 	}
 
-	pub fn as_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
+	/// Return self as a [`TrieDB`](trie_db::TrieDB) compatible cache.
+	///
+	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
+	pub fn as_trie_db_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
 		let data_cache = if self.enable_data_cache {
-			DataCache::ForStorageRoot(RwLockWriteGuard::map(self.shared.data_cache.write(), |cache| {
-				cache.entry(storage_root).or_default()
-			}))
+			DataCache::ForStorageRoot(RwLockWriteGuard::map(
+				self.shared.data_cache.write(),
+				|cache| cache.entry(storage_root).or_default(),
+			))
 		} else {
 			DataCache::Disabled
 		};
@@ -62,6 +66,21 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 			shared_cache: self.shared.node_cache.read(),
 			local_cache: self.local.lock(),
 			data_cache,
+		}
+	}
+
+	/// Return self as [`TrieDBMut`](trie_db::TrieDBMut) compatible cache.
+	///
+	/// After finishing all operations with [`TrieDBMut`](trie_db::TrieDBMut) and having obtained
+	/// the new storage root, [`TrieNodeCache::merge_into`] should be called to update this local
+	/// cache instance. If the function is not called, cached data is just thrown away and not
+	/// propagated to the shared cache. So, accessing these new items will be slower, but nothing
+	/// would break because of this.
+	pub fn as_trie_db_mut_cache<'a>(&'a self) -> TrieNodeCache<'a, H> {
+		TrieNodeCache {
+			shared_cache: self.shared.node_cache.read(),
+			local_cache: self.local.lock(),
+			data_cache: DataCache::Fresh(Default::default()),
 		}
 	}
 }
@@ -114,6 +133,24 @@ pub struct TrieNodeCache<'a, H: Hasher> {
 	shared_cache: RwLockReadGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
 	local_cache: MutexGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
 	data_cache: DataCache<'a>,
+}
+
+impl<'a, H: Hasher> TrieNodeCache<'a, H> {
+	/// Merge this cache into the given [`LocalTrieNodeCache`].
+	///
+	/// This function is only required to be called when this instance was created through
+	/// [`LocalTrieNodeCache::as_trie_db_mut_cache`], otherwise this method is a no-op. The given
+	/// `storage_root` is the new storage root that was obtained after finishing all operations
+	/// using the [`TrieDBMut`](trie_db::TrieDBMut).
+	pub fn merge_into(self, local: &LocalTrieNodeCache<H>, storage_root: H::Out) {
+		let cache = if let DataCache::Fresh(cache) = self.data_cache {
+			cache
+		} else {
+			return
+		};
+
+		local.shared.data_cache.write().entry(storage_root).or_default().extend(cache);
+	}
 }
 
 impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
