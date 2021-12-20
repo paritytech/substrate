@@ -117,6 +117,4 @@ impl sp_consensus::SlotData for SlotDuration {
 	fn slot_duration(&self) -> std::time::Duration {
 		std::time::Duration::from_millis(self.0)
 	}
-
-	const SLOT_KEY: &'static [u8] = b"aura_slot_duration";
 }

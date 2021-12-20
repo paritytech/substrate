@@ -8014,7 +8014,6 @@ dependencies = [
  "sc-client-api",
  "sc-consensus",
  "sc-telemetry",
- "sp-api",
  "sp-arithmetic",
  "sp-blockchain",
  "sp-consensus",
