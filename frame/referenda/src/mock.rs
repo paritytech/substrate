@@ -23,7 +23,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, OriginTrait,
+		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait,
 		PreimageRecipient, SortedMembers,
 	},
 	weights::Weight,

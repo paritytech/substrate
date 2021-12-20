@@ -165,11 +165,21 @@ pub struct TrackInfo<Balance, Moment> {
 	pub min_turnout: Curve,
 }
 
+/// Information on the voting tracks.
 pub trait TracksInfo<Balance, Moment> {
+	/// The identifier for a track.
 	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync + 'static;
+
+	/// The origin type from which a track is implied.
 	type Origin;
+
+	/// Return the array of known tracks and their information.
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
+
+	/// Determine the voting track for the given `origin`.
 	fn track_for(origin: &Self::Origin) -> Result<Self::Id, ()>;
+
+	/// Return the track info for track `id`, by default this just looks it up in `Self::tracks()`.
 	fn info(id: Self::Id) -> Option<&'static TrackInfo<Balance, Moment>> {
 		Self::tracks().iter().find(|x| &x.0 == &id).map(|x| &x.1)
 	}
@@ -271,6 +281,8 @@ impl<
 		ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	> ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress>
 {
+	/// Take the Decision Deposit from `self`, if there is one. Returns an `Err` if `self` is not
+	/// in a valid state for the Decision Deposit to be refunded.
 	pub fn take_decision_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
 		use ReferendumInfo::*;
 		match self {
@@ -284,6 +296,8 @@ impl<
 	}
 }
 
+/// Type for describing a curve over the 2-dimensional space of axes between 0-1, as represented
+/// by `(Perbill, Perbill)`.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
 #[cfg_attr(not(feature = "std"), derive(RuntimeDebug))]
 pub enum Curve {
@@ -292,17 +306,32 @@ pub enum Curve {
 }
 
 impl Curve {
+	/// Determine the `y` value for the given `x` value.
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { begin, delta } => *begin - *delta * x,
 		}
 	}
+
+	/// Determine the smallest `x` value such that `passing` returns `true` when passed along with
+	/// the given `y` value.
+	///
+	/// ```nocompile
+	/// let c = Curve::LinearDecreasing { begin: Perbill::one(), delta: Perbill::one() };
+	/// //      ^^^ Can be any curve.
+	/// let y = Perbill::from_percent(50);
+	/// //      ^^^ Can be any value.
+	/// let x = c.delay(y);
+	/// assert!(c.passing(x, y));
+	/// ```
 	pub fn delay(&self, y: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { begin, delta } =>
 				(*begin - y.min(*begin)).min(*delta) / *delta,
 		}
 	}
+
+	/// Return `true` iff the `y` value is greater than the curve at the `x`.
 	pub fn passing(&self, x: Perbill, y: Perbill) -> bool {
 		y >= self.threshold(x)
 	}

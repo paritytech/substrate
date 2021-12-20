@@ -174,6 +174,31 @@ pub mod pallet {
 			/// The hash of the proposal up for referendum.
 			proposal_hash: T::Hash,
 		},
+		/// The decision deposit has been placed.
+		DecisionDepositPlaced {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// The account who placed the deposit.
+			who: T::AccountId,
+			/// The amount placed by the account.
+			amount: BalanceOf<T>,
+		},
+		/// The decision deposit has been refunded.
+		DecisionDepositRefunded {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// The account who placed the deposit.
+			who: T::AccountId,
+			/// The amount placed by the account.
+			amount: BalanceOf<T>,
+		},
+		/// A deposit has been slashaed.
+		DepositSlashed {
+			/// The account who placed the deposit.
+			who: T::AccountId,
+			/// The amount placed by the account.
+			amount: BalanceOf<T>,
+		},
 		/// A referendum has moved into the deciding phase.
 		DecisionStarted {
 			/// Index of the referendum.
@@ -316,7 +341,7 @@ pub mod pallet {
 		/// - `index`: The index of the submitted referendum whose Decision Deposit is yet to be
 		///   posted.
 		///
-		/// TODO: Emits `DecisionDepositPlaced`.
+		/// Emits `DecisionDepositPlaced`.
 		#[pallet::weight(ServiceBranch::max_weight_of_deposit::<T>())]
 		pub fn place_decision_deposit(
 			origin: OriginFor<T>,
@@ -326,10 +351,12 @@ pub mod pallet {
 			let mut status = Self::ensure_ongoing(index)?;
 			ensure!(status.decision_deposit.is_none(), Error::<T>::HaveDeposit);
 			let track = Self::track(status.track).ok_or(Error::<T>::NoTrack)?;
-			status.decision_deposit = Some(Self::take_deposit(who, track.decision_deposit)?);
+			status.decision_deposit = Some(Self::take_deposit(who.clone(), track.decision_deposit)?);
 			let now = frame_system::Pallet::<T>::block_number();
 			let (info, _, branch) = Self::service_referendum(now, index, status);
 			ReferendumInfoFor::<T>::insert(index, info);
+			let e = Event::<T>::DecisionDepositPlaced { index, who, amount: track.decision_deposit };
+			Self::deposit_event(e);
 			Ok(branch.weight_of_deposit::<T>().into())
 		}
 
@@ -339,7 +366,7 @@ pub mod pallet {
 		/// - `index`: The index of a closed referendum whose Decision Deposit has not yet been
 		///   refunded.
 		///
-		/// TODO: Emits `DecisionDepositRefunded`.
+		/// Emits `DecisionDepositRefunded`.
 		#[pallet::weight(T::WeightInfo::refund_decision_deposit())]
 		pub fn refund_decision_deposit(
 			origin: OriginFor<T>,
@@ -351,8 +378,14 @@ pub mod pallet {
 				.take_decision_deposit()
 				.map_err(|_| Error::<T>::Unfinished)?
 				.ok_or(Error::<T>::NoDeposit)?;
-			Self::refund_deposit(Some(deposit));
+			Self::refund_deposit(Some(deposit.clone()));
 			ReferendumInfoFor::<T>::insert(index, info);
+			let e = Event::<T>::DecisionDepositRefunded {
+				index,
+				who: deposit.who,
+				amount: deposit.amount,
+			};
+			Self::deposit_event(e);
 			Ok(())
 		}
 
@@ -386,7 +419,7 @@ pub mod pallet {
 		/// - `origin`: must be the `KillOrigin`.
 		/// - `index`: The index of the referendum to be cancelled.
 		///
-		/// Emits `Killed`.
+		/// Emits `Killed` and `DepositSlashed`.
 		#[pallet::weight(T::WeightInfo::kill())]
 		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
@@ -397,8 +430,8 @@ pub mod pallet {
 			}
 			Self::note_one_fewer_deciding(status.track, track);
 			Self::deposit_event(Event::<T>::Killed { index, tally: status.tally });
-			Self::slash_deposit(Some(status.submission_deposit));
-			Self::slash_deposit(status.decision_deposit);
+			Self::slash_deposit(Some(status.submission_deposit.clone()));
+			Self::slash_deposit(status.decision_deposit.clone());
 			let info = ReferendumInfo::Killed(frame_system::Pallet::<T>::block_number());
 			ReferendumInfoFor::<T>::insert(index, info);
 			Ok(())
@@ -514,6 +547,8 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Check that referendum `index` is in the `Ongoing` state and return the `ReferendumStatus`
+	/// value, or `Err` otherwise.
 	pub fn ensure_ongoing(index: ReferendumIndex) -> Result<ReferendumStatusOf<T>, DispatchError> {
 		match ReferendumInfoFor::<T>::get(index) {
 			Some(ReferendumInfo::Ongoing(status)) => Ok(status),
@@ -544,7 +579,7 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(ok, "LOGIC ERROR: bake_referendum/schedule_named failed");
 	}
 
-	/// Set an alarm.
+	/// Set an alarm to dispatch `call` at block number `when`.
 	fn set_alarm(
 		call: impl Into<CallOf<T>>,
 		when: T::BlockNumber,
@@ -866,6 +901,8 @@ impl<T: Config> Pallet<T> {
 		(ReferendumInfo::Ongoing(status), dirty_alarm || dirty, branch)
 	}
 
+	/// Determine the point at which a referendum will be accepted, move into confirmation with the
+	/// given `tally` or end with rejection (whichever happens sooner).
 	fn decision_time(
 		deciding: &DecidingStatusOf<T>,
 		tally: &T::Tally,
@@ -882,6 +919,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	/// Cancel the alarm in `status`, if one exists.
 	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T>) {
 		if let Some((_, last_alarm)) = status.alarm.take() {
 			// Incorrect alarm - cancel it.
@@ -909,15 +947,20 @@ impl<T: Config> Pallet<T> {
 	fn slash_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T>>>) {
 		if let Some(Deposit { who, amount }) = deposit {
 			T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
+			Self::deposit_event(Event::<T>::DepositSlashed { who, amount });
 		}
 	}
 
+	/// Get the track info value for the track `id`.
 	fn track(id: TrackIdOf<T>) -> Option<&'static TrackInfoOf<T>> {
 		let tracks = T::Tracks::tracks();
 		let index = tracks.binary_search_by_key(&id, |x| x.0).unwrap_or_else(|x| x);
 		Some(&tracks[index].1)
 	}
 
+	/// Determine whether the given `tally` would result in a referendum passing at `elapsed` blocks
+	/// into a total decision `period`, given the two curves for `turnout_needed` and
+	/// `approval_needed`.
 	fn is_passing(
 		tally: &T::Tally,
 		elapsed: T::BlockNumber,
