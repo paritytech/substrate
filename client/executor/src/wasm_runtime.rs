@@ -334,8 +334,8 @@ where
 }
 
 fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
-	let v: sp_version::RuntimeVersionCompatibility = Decode::decode(&mut version)
-		.map_err(|_| {
+	let v: sp_version::RuntimeVersionCompatibility =
+		Decode::decode(&mut version).map_err(|_| {
 			WasmError::Instantiation(
 				"failed to decode \"Core_version\" result using old runtime version".into(),
 			)

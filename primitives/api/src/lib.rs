@@ -106,7 +106,9 @@ use sp_std::result;
 #[doc(hidden)]
 pub use sp_std::{mem, slice};
 #[doc(hidden)]
-pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion, RuntimeVersionV0, RuntimeVersionV1};
+pub use sp_version::{
+	create_apis_vec, ApiId, ApisVec, RuntimeVersion, RuntimeVersionV0, RuntimeVersionV1,
+};
 #[cfg(feature = "std")]
 use std::{cell::RefCell, panic::UnwindSafe};
 

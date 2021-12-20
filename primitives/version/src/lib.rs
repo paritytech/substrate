@@ -340,7 +340,7 @@ impl<'a, I: Input> codec::Input for ReplayInput<'a, I> {
 		if !self.replay {
 			self.replay_buf.extend_from_slice(into);
 		}
-		
+
 		Ok(())
 	}
 }
