@@ -125,7 +125,7 @@ where
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
-	/// Chain specific Grandpa protocol name. See [`beefy_protocol_name::standard_name`].
+	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
 	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
