@@ -19,8 +19,8 @@ futures-util = { version = "0.3.17", default-features = false, features = ["io"]
 derive_more = "0.99"
 async-std = { version = "1.10.0", features = ["unstable"] }
 tokio = "1.15"
-hyper = { version = "0.14.14", default-features = false, features = ["http1", "server", "tcp"] }
+hyper = { version = "0.14.16", default-features = false, features = ["http1", "server", "tcp"] }
 
 [dev-dependencies]
-hyper = { version = "0.14.14", features = ["client"] }
+hyper = { version = "0.14.16", features = ["client"] }
 tokio = { version = "1.15", features = ["rt-multi-thread"] }

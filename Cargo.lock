@@ -2556,9 +2556,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.7"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fd819562fcebdac5afc5c113c3ec36f902840b70fd4fc458799c8ce4607ae55"
+checksum = "8f072413d126e57991455e0a922b31e4c8ba7c2ffbebf6b78b4f8521397d65cd"
 dependencies = [
  "bytes 1.1.0",
  "fnv",
@@ -2782,9 +2782,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.14.14"
+version = "0.14.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b91bb1f221b6ea1f1e4371216b70f40748774c2fb5971b450c07773fb92d26b"
+checksum = "b7ec3e62bdc98a2f0393a5048e4c30ef659440ea6e0e572965103e72bd836f55"
 dependencies = [
  "bytes 1.1.0",
  "futures-channel",
@@ -2812,7 +2812,7 @@ checksum = "5f9f7a97316d44c0af9b0301e65010573a853a9fc97046d7331d7f6bc0fd5a64"
 dependencies = [
  "ct-logs",
  "futures-util",
- "hyper 0.14.14",
+ "hyper 0.14.16",
  "log 0.4.14",
  "rustls",
  "rustls-native-certs",
@@ -2828,7 +2828,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
  "bytes 1.1.0",
- "hyper 0.14.14",
+ "hyper 0.14.16",
  "native-tls",
  "tokio",
  "tokio-native-tls",
@@ -3051,7 +3051,7 @@ checksum = "d2b99d4207e2a04fb4581746903c2bb7eb376f88de9c699d0f3e10feeac0cd3a"
 dependencies = [
  "derive_more",
  "futures 0.3.16",
- "hyper 0.14.14",
+ "hyper 0.14.16",
  "hyper-tls",
  "jsonrpc-core",
  "jsonrpc-pubsub",
@@ -3107,7 +3107,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
 dependencies = [
  "futures 0.3.16",
- "hyper 0.14.14",
+ "hyper 0.14.16",
  "jsonrpc-core",
  "jsonrpc-server-utils",
  "log 0.4.14",
@@ -3215,7 +3215,7 @@ dependencies = [
  "beef",
  "futures-channel",
  "futures-util",
- "hyper 0.14.14",
+ "hyper 0.14.16",
  "log 0.4.14",
  "serde",
  "serde_json",
@@ -8343,7 +8343,7 @@ dependencies = [
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "hex",
- "hyper 0.14.14",
+ "hyper 0.14.16",
  "hyper-rustls",
  "lazy_static",
  "num_cpus",
@@ -10168,7 +10168,7 @@ dependencies = [
  "async-std",
  "derive_more",
  "futures-util",
- "hyper 0.14.14",
+ "hyper 0.14.16",
  "log 0.4.14",
  "prometheus",
  "tokio",
