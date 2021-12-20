@@ -74,8 +74,9 @@ pub mod grandpa_protocol_name {
 	/// Old names for the notifications protocol, used for backward compatibility.
 	pub(crate) const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/grandpa/1"];
 
-	/// Name of the notifications protocol used by Grandpa.
-	/// Must be registered towards the networking in order for Grandpa to properly function.
+	/// Name of the notifications protocol used by GRANDPA.
+	///
+	/// Must be registered towards the networking in order for GRANDPA to properly function.
 	pub fn standard_name<Hash: std::fmt::Display>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
