@@ -28,7 +28,7 @@ codec = { version = "2.0.0", package = "parity-scale-codec" }
 structopt = "0.3.25"
 chrono = "0.4"
 serde = "1.0.132"
-handlebars = "4.1.4"
+handlebars = "4.1.6"
 Inflector = "0.11.4"
 linked-hash-map = "0.5.4"
 log = "0.4.8"
