@@ -11,7 +11,7 @@ use sp_core::H256;
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 #[cfg(feature = "std")]
-use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
+use ver_api::VerApi;
 #[cfg(feature = "std")]
 use sp_api::{ApiExt, ApiRef, ProvideRuntimeApi, TransactionOutcome};
 #[cfg(feature = "std")]
@@ -133,7 +133,7 @@ pub fn shuffle<'a, Block, Api>(
 where
 	Block: BlockT,
 	Api: ProvideRuntimeApi<Block> + 'a,
-	Api::Api: ExtrinsicInfoRuntimeApi<Block>,
+	Api::Api: VerApi<Block>,
 {
     if extrinsics.len() <= 1 {
         return extrinsics;
@@ -144,12 +144,11 @@ where
 			let tx_hash = BlakeTwo256::hash(&tx.encode());
 			let who = api.execute_in_transaction(|api| {
 				// store deserialized data and revert state modification caused by 'get_info' call
-				match api.get_info(block_id, tx.clone()){
+				match api.get_signer(block_id, tx.clone()){
 					Ok(result) => TransactionOutcome::Rollback(result),
 					Err(_) => TransactionOutcome::Rollback(None)
 				}
-			})
-			.map(|info| Some(info.who)).unwrap_or(None);
+			});
 			log::debug!(target: "block_shuffler", "who:{:48}  extrinsic:{:?}",who.clone().map(|x| x.to_ss58check()).unwrap_or_else(|| String::from("None")), tx_hash);
 			(who, tx)
 		}).collect();

@@ -1,5 +1,5 @@
 [package]
-name = "extrinsic-info-runtime-api"
+name = "ver-api"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

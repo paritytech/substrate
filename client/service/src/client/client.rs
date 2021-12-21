@@ -27,7 +27,7 @@ use hash_db::Prefix;
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
-use extrinsic_info_runtime_api::ExtrinsicInfoRuntimeApi;
+use ver_api::VerApi;
 use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_block_builder_ver::{BlockBuilderApi as BlockBuilderApiVer, BlockBuilderProvider as BlockBuilderProviderVer, RecordProof as RecordProofVer};
@@ -1456,7 +1456,7 @@ where
 	Block: BlockT,
 	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
 	<Self as ProvideRuntimeApi<Block>>::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApiVer<Block> + ExtrinsicInfoRuntimeApi<Block>,
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApiVer<Block> + VerApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProofVer>>(
 		&self,
