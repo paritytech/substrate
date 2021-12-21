@@ -38,7 +38,6 @@ use sp_runtime::{
 // example module to test behaviors.
 #[frame_support::pallet]
 pub mod example {
-	use super::*;
 	use frame_support::{dispatch::WithPostDispatchInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
