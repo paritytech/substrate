@@ -158,7 +158,7 @@ impl<'a, H: Hasher> TrieNodeCache<'a, H> {
 		let cache = if let DataCache::Fresh(cache) = self.data_cache { cache } else { return };
 
 		if let Some(ref data_cache) = local.shared.data_cache {
-			data_cache.write().entry(storage_root).or_default().extend(dbg!(cache));
+			data_cache.write().entry(storage_root).or_default().extend(cache);
 		}
 	}
 }
@@ -184,7 +184,6 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 	}
 
 	fn insert_node(&mut self, hash: H::Out, node: NodeOwned<H::Out>) {
-		eprintln!("INSERT");
 		self.local_cache.insert(hash, node);
 	}
 
@@ -201,7 +200,6 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 	}
 
 	fn cache_data_for_key(&mut self, key: &[u8], data: Option<Bytes>) {
-		eprintln!("INSERT2");
 		self.data_cache.insert(key.into(), data);
 	}
 }
