@@ -84,15 +84,39 @@ pub type ValidatorSetId = u64;
 #[derive(Decode, Encode, Debug, PartialEq, Clone, TypeInfo)]
 pub struct ValidatorSet<AuthorityId> {
 	/// Public keys of the validator set elements
-	pub validators: Vec<AuthorityId>,
+	validators: Vec<AuthorityId>,
 	/// Identifier of the validator set
-	pub id: ValidatorSetId,
+	id: ValidatorSetId,
 }
 
 impl<AuthorityId> ValidatorSet<AuthorityId> {
-	/// Return an empty validator set with id of 0.
-	pub fn empty() -> Self {
-		Self { validators: Default::default(), id: Default::default() }
+	/// Return a validator set with the given validators and set id.
+	pub fn new<I>(validators: I, id: ValidatorSetId) -> Option<Self>
+	where
+		I: IntoIterator<Item = AuthorityId>,
+	{
+		let validators: Vec<AuthorityId> = validators.into_iter().collect();
+		if validators.is_empty() {
+			// No validators; the set would be empty.
+			None
+		} else {
+			Some(Self { validators, id })
+		}
+	}
+
+	/// Return a reference to the vec of validators.
+	pub fn validators(&self) -> &[AuthorityId] {
+		&self.validators
+	}
+
+	/// Return the validator set id.
+	pub fn id(&self) -> ValidatorSetId {
+		self.id
+	}
+
+	/// Return the number of validators in the set.
+	pub fn len(&self) -> usize {
+		self.validators.len()
 	}
 }
 
@@ -135,6 +159,26 @@ sp_api::decl_runtime_apis! {
 	pub trait BeefyApi
 	{
 		/// Return the current active BEEFY validator set
-		fn validator_set() -> ValidatorSet<crypto::AuthorityId>;
+		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_application_crypto::ecdsa::{self, Public};
+	use sp_core::Pair;
+
+	#[test]
+	fn validator_set() {
+		// Empty set not allowed.
+		assert_eq!(ValidatorSet::<Public>::new(vec![], 0), None);
+
+		let alice = ecdsa::Pair::from_string("//Alice", None).unwrap();
+		let set_id = 0;
+		let validators = ValidatorSet::<Public>::new(vec![alice.public()], set_id).unwrap();
+
+		assert_eq!(validators.id(), set_id);
+		assert_eq!(validators.validators(), &vec![alice.public()]);
 	}
 }

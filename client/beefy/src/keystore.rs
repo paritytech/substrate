@@ -89,8 +89,8 @@ impl BeefyKeystore {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let pk: Vec<Public> = SyncCryptoStore::ecdsa_public_keys(&*store, KEY_TYPE)
-			.iter()
-			.map(|k| Public::from(k.clone()))
+			.drain(..)
+			.map(Public::from)
 			.collect();
 
 		Ok(pk)
