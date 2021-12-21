@@ -25,7 +25,7 @@ sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
-serde = { version = "1.0.131", features = ["derive"] }
+serde = { version = "1.0.132", features = ["derive"] }
 sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
 sp-io = { version = "4.0.0", path = "../../../primitives/io" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }

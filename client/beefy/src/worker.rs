@@ -20,7 +20,7 @@ use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
@@ -79,7 +79,7 @@ where
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
-	rounds: round::Rounds<Payload, NumberFor<B>>,
+	rounds: Option<round::Rounds<Payload, NumberFor<B>>>,
 	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block: NumberFor<B>,
@@ -125,7 +125,7 @@ where
 			gossip_validator,
 			min_block_delta,
 			metrics,
-			rounds: round::Rounds::new(ValidatorSet::empty()),
+			rounds: None,
 			finality_notifications: client.finality_notification_stream(),
 			best_grandpa_block: client.info().finalized_number,
 			best_beefy_block: None,
@@ -172,7 +172,7 @@ where
 			Some(new)
 		} else {
 			let at = BlockId::hash(header.hash());
-			self.client.runtime_api().validator_set(&at).ok()
+			self.client.runtime_api().validator_set(&at).ok().flatten()
 		};
 
 		trace!(target: "beefy", "🥩 active validator set: {:?}", new);
@@ -190,11 +190,12 @@ where
 	fn verify_validator_set(
 		&self,
 		block: &NumberFor<B>,
-		mut active: ValidatorSet<Public>,
+		active: &ValidatorSet<Public>,
 	) -> Result<(), error::Error> {
-		let active: BTreeSet<Public> = active.validators.drain(..).collect();
+		let active: BTreeSet<&Public> = active.validators().iter().collect();
 
-		let store: BTreeSet<Public> = self.key_store.public_keys()?.drain(..).collect();
+		let public_keys = self.key_store.public_keys()?;
+		let store: BTreeSet<&Public> = public_keys.iter().collect();
 
 		let missing: Vec<_> = store.difference(&active).cloned().collect();
 
@@ -214,26 +215,31 @@ where
 		if let Some(active) = self.validator_set(&notification.header) {
 			// Authority set change or genesis set id triggers new voting rounds
 			//
-			// TODO: (adoerr) Enacting a new authority set will also implicitly 'conclude'
-			// the currently active BEEFY voting round by starting a new one. This is
-			// temporary and needs to be replaced by proper round life cycle handling.
-			if active.id != self.rounds.validator_set_id() ||
-				(active.id == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
+			// TODO: (grandpa-bridge-gadget#366) Enacting a new authority set will also
+			// implicitly 'conclude' the currently active BEEFY voting round by starting a
+			// new one. This should be replaced by proper round life-cycle handling.
+			if self.rounds.is_none() ||
+				active.id() != self.rounds.as_ref().unwrap().validator_set_id() ||
+				(active.id() == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
 			{
 				debug!(target: "beefy", "🥩 New active validator set id: {:?}", active);
-				metric_set!(self, beefy_validator_set_id, active.id);
+				metric_set!(self, beefy_validator_set_id, active.id());
 
 				// BEEFY should produce a signed commitment for each session
-				if active.id != self.last_signed_id + 1 && active.id != GENESIS_AUTHORITY_SET_ID {
+				if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID
+				{
 					metric_inc!(self, beefy_skipped_sessions);
 				}
 
-				// verify the new validator set
-				let _ = self.verify_validator_set(notification.header.number(), active.clone());
+				if log_enabled!(target: "beefy", log::Level::Debug) {
+					// verify the new validator set - only do it if we're also logging the warning
+					let _ = self.verify_validator_set(notification.header.number(), &active);
+				}
 
-				self.rounds = round::Rounds::new(active.clone());
+				let id = active.id();
+				self.rounds = Some(round::Rounds::new(active));
 
-				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", active.id);
+				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
 				self.best_beefy_block = Some(*notification.header.number());
 
@@ -244,9 +250,13 @@ where
 		}
 
 		if self.should_vote_on(*notification.header.number()) {
-			let authority_id = if let Some(id) =
-				self.key_store.authority_id(self.rounds.validators().as_slice())
-			{
+			let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
+				(rounds.validators(), rounds.validator_set_id())
+			} else {
+				debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", notification.header.hash());
+				return
+			};
+			let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
 				debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
 				id
 			} else {
@@ -266,7 +276,7 @@ where
 			let commitment = Commitment {
 				payload,
 				block_number: notification.header.number(),
-				validator_set_id: self.rounds.validator_set_id(),
+				validator_set_id,
 			};
 			let encoded_commitment = commitment.encode();
 
@@ -305,12 +315,19 @@ where
 	fn handle_vote(&mut self, round: (Payload, NumberFor<B>), vote: (Public, Signature)) {
 		self.gossip_validator.note_round(round.1);
 
-		let vote_added = self.rounds.add_vote(&round, vote);
+		let rounds = if let Some(rounds) = self.rounds.as_mut() {
+			rounds
+		} else {
+			debug!(target: "beefy", "🥩 Missing validator set - can't handle vote {:?}", vote);
+			return
+		};
 
-		if vote_added && self.rounds.is_done(&round) {
-			if let Some(signatures) = self.rounds.drop(&round) {
+		let vote_added = rounds.add_vote(&round, vote);
+
+		if vote_added && rounds.is_done(&round) {
+			if let Some(signatures) = rounds.drop(&round) {
 				// id is stored for skipped session metric calculation
-				self.last_signed_id = self.rounds.validator_set_id();
+				self.last_signed_id = rounds.validator_set_id();
 
 				let commitment = Commitment {
 					payload: round.0,
