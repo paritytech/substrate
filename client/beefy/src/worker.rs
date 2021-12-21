@@ -37,7 +37,7 @@ use sp_runtime::{
 use beefy_primitives::{
 	crypto::{AuthorityId, Public, Signature},
 	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
-	ValidatorSet, VersionedCommitment, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 use crate::{
@@ -330,7 +330,7 @@ where
 						BlockId::Number(round.1),
 						(
 							BEEFY_ENGINE_ID,
-							VersionedCommitment::V1(signed_commitment.clone()).encode(),
+							VersionedFinalityProof::V1(signed_commitment.clone()).encode(),
 						),
 					)
 					.is_err()

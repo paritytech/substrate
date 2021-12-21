@@ -48,7 +48,7 @@ frame-system = { path = "../../frame/system" }
 
 log = "0.4.8"
 futures = "0.3.16"
-tokio = { version = "1.13", features = ["signal"] }
+tokio = { version = "1.15", features = ["signal"] }
 # Calling RPC
 jsonrpc-core = "18.0"
 num-traits = "0.2.14"

@@ -622,11 +622,11 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
 
 	impl sc_tracing::TraceHandler for TestTraceHandler {
-		fn handle_span(&self, sd: SpanDatum) {
-			self.0.lock().unwrap().push(sd);
+		fn handle_span(&self, sd: &SpanDatum) {
+			self.0.lock().unwrap().push(sd.clone());
 		}
 
-		fn handle_event(&self, _event: TraceEvent) {}
+		fn handle_event(&self, _event: &TraceEvent) {}
 	}
 
 	let traces = Arc::new(Mutex::new(Vec::new()));

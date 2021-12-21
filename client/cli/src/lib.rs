@@ -224,10 +224,46 @@ pub trait SubstrateCli: Sized {
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		command.init::<Self>()?;
-		Runner::new(self, command)
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
+		Runner::new(config, tokio_runtime)
 	}
 
+	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
+	/// a custom profiler or update the logger configuration before it is initialized.
+	///
+	/// Example:
+	/// ```
+	/// use sc_tracing::{SpanDatum, TraceEvent};
+	/// struct TestProfiler;
+	///
+	/// impl sc_tracing::TraceHandler for TestProfiler {
+	///  	fn handle_span(&self, sd: &SpanDatum) {}
+	/// 		fn handle_event(&self, _event: &TraceEvent) {}
+	/// };
+	///
+	/// fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) -> () {
+	/// 	|logger_builder, config| {
+	/// 			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
+	/// 	}
+	/// }
+	/// ```
+	fn create_runner_with_logger_hook<T: CliConfiguration, F>(
+		&self,
+		command: &T,
+		logger_hook: F,
+	) -> error::Result<Runner<Self>>
+	where
+		F: FnOnce(&mut LoggerBuilder, &Configuration),
+	{
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
+		Runner::new(config, tokio_runtime)
+	}
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
