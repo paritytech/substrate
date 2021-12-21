@@ -18,7 +18,7 @@
 
 //! Wasmi specific impls for sandbox
 
-use sp_wasm_interface::{Pointer, WordSize, FunctionContext};
+use sp_wasm_interface::{Pointer, WordSize, FunctionContext, Value};
 use codec::{Decode, Encode};
 use std::rc::Rc;
 
@@ -32,6 +32,8 @@ use crate::{
 	error,
 	sandbox::{Imports, GuestExternals, trap, GuestFuncIndex, deserialize_result, SandboxContext, SandboxInstance, GuestEnvironment, InstantiationError, BackendInstance},
 };
+
+environmental::environmental!(SandboxContextStore: trait SandboxContext);
 
 impl ImportResolver for Imports {
 	fn resolve_func(
@@ -147,8 +149,6 @@ impl MemoryTransfer for MemoryWrapper {
 	}
 }
 
-environmental::environmental!(SandboxContextStore: trait SandboxContext);
-
 impl<'a> wasmi::Externals for GuestExternals<'a> {
 	fn invoke_index(
 		&mut self,
@@ -253,6 +253,13 @@ where
 	SandboxContextStore::using(sandbox_context, f)
 }
 
+fn with_guest_externals<R, F>(sandbox_instance: &SandboxInstance, state: u32, f: F) -> R
+where
+	F: FnOnce(&mut GuestExternals) -> R,
+{
+	f(&mut GuestExternals { sandbox_instance, state })
+}
+
 pub fn instantiate_wasmi(
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
@@ -284,4 +291,35 @@ pub fn instantiate_wasmi(
 	})?;
 
 	Ok(sandbox_instance)
+}
+
+pub fn invoke_wasmi(
+	instance: &SandboxInstance,
+
+	module: &wasmi::ModuleRef,
+
+	// function to call that is exported from the module
+	export_name: &str,
+
+	// arguments passed to the function
+	args: &[Value],
+
+	// arbitraty context data of the call
+	state: u32,
+
+	sandbox_context: &mut dyn SandboxContext,
+) -> std::result::Result<Option<Value>, wasmi::Error> {
+	with_guest_externals(instance, state, |guest_externals| {
+		with_context_store(sandbox_context, || {
+			let args = args
+				.iter()
+				.cloned()
+				.map(Into::into)
+				.collect::<Vec<_>>();
+
+			module
+				.invoke_export(export_name, &args, guest_externals)
+				.map(|result| result.map(Into::into))
+		})
+	})
 }

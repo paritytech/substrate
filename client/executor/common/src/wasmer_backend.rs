@@ -24,6 +24,8 @@ use std::{rc::Rc, collections::HashMap};
 
 use crate::sandbox::{SandboxContext, InstantiationError, WasmerBackend, GuestEnvironment, SandboxInstance, SupervisorFuncIndex, deserialize_result, BackendInstance};
 
+environmental::environmental!(SandboxContextStore: trait SandboxContext);
+
 pub fn invoke_wasmer(
 	instance: &wasmer::Instance,
 

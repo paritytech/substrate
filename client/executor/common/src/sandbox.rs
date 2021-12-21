@@ -22,7 +22,7 @@
 
 use crate::{
 	error::{Error, Result},
-	util, wasmi_backend::{with_context_store, instantiate_wasmi}, wasmer_backend::{invoke_wasmer, instantiate_wasmer},
+	util, wasmi_backend::{with_context_store, instantiate_wasmi, invoke_wasmi}, wasmer_backend::{invoke_wasmer, instantiate_wasmer},
 };
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
@@ -168,13 +168,6 @@ pub(crate) fn deserialize_result(
 	}
 }
 
-fn with_guest_externals<R, F>(sandbox_instance: &SandboxInstance, state: u32, f: F) -> R
-where
-	F: FnOnce(&mut GuestExternals) -> R,
-{
-	f(&mut GuestExternals { sandbox_instance, state })
-}
-
 /// Module instance in terms of selected backend
 pub(crate) enum BackendInstance {
 	/// Wasmi module instance
@@ -228,19 +221,7 @@ impl SandboxInstance {
 	) -> std::result::Result<Option<sp_wasm_interface::Value>, wasmi::Error> {
 		match &self.backend_instance {
 			BackendInstance::Wasmi(wasmi_instance) => {
-				with_guest_externals(self, state, |guest_externals| {
-					with_context_store(sandbox_context, || {
-						let args = args
-							.iter()
-							.cloned()
-							.map(Into::into)
-							.collect::<Vec<_>>();
-
-						wasmi_instance
-							.invoke_export(export_name, &args, guest_externals)
-							.map(|result| result.map(Into::into))
-					})
-				})
+				invoke_wasmi(self, wasmi_instance, export_name, args, state, sandbox_context)
 			},
 
 			#[cfg(feature = "wasmer-sandbox")]
@@ -333,10 +314,10 @@ fn decode_environment_definition(
 /// An environment in which the guest module is instantiated.
 pub struct GuestEnvironment {
 	/// Function and memory imports of the guest module
-	imports: Imports,
+	pub imports: Imports,
 
 	/// Supervisor functinons mapped to guest index space
-	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+	pub guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
 
 impl GuestEnvironment {
