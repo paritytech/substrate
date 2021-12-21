@@ -38,17 +38,49 @@ pub trait PalletError: Encode + Decode {
 }
 
 macro_rules! impl_for_types {
-	($($typ:ty),+) => {
+	(size: $size:expr, $($typ:ty),+) => {
 		$(
 			impl PalletError for $typ {
-				const MAX_ENCODED_SIZE: usize = 1;
+				const MAX_ENCODED_SIZE: usize = $size;
 			}
 		)+
 	};
 }
 
-impl_for_types!(u8, i8, bool, OptionBool);
+impl_for_types!(size: 0, ());
+impl_for_types!(size: 1, u8, i8, bool, OptionBool);
+impl_for_types!(size: 2, u16, i16);
+impl_for_types!(size: 4, u32, i32);
+impl_for_types!(size: 8, u64, i64);
+// Contains a u64 for secs and u32 for nanos, hence 12 bytes
+impl_for_types!(size: 12, core::time::Duration);
+impl_for_types!(size: 16, u128, i128);
 
 impl<T> PalletError for PhantomData<T> {
 	const MAX_ENCODED_SIZE: usize = 0;
+}
+
+impl<T: PalletError> PalletError for core::ops::Range<T> {
+	const MAX_ENCODED_SIZE: usize = 2 * T::MAX_ENCODED_SIZE;
+}
+
+impl<T: PalletError, const N: usize> PalletError for [T; N] {
+	const MAX_ENCODED_SIZE: usize = T::MAX_ENCODED_SIZE * N;
+}
+
+impl<T: PalletError> PalletError for Option<T> {
+	const MAX_ENCODED_SIZE: usize = 1 + T::MAX_ENCODED_SIZE;
+}
+
+impl<T: PalletError, E: PalletError> PalletError for Result<T, E> {
+	const MAX_ENCODED_SIZE: usize = 1 + if T::MAX_ENCODED_SIZE > E::MAX_ENCODED_SIZE {
+		T::MAX_ENCODED_SIZE
+	} else {
+		E::MAX_ENCODED_SIZE
+	};
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(1, 18)]
+impl PalletError for Tuple {
+	for_tuples!( const MAX_ENCODED_SIZE: usize = #(Tuple::MAX_ENCODED_SIZE)+*; );
 }
