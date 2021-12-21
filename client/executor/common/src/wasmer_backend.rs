@@ -50,8 +50,8 @@ pub fn invoke_wasmer(
 		.map(|v| match *v {
 			Value::I32(val) => wasmer::Val::I32(val),
 			Value::I64(val) => wasmer::Val::I64(val),
-			Value::F32(val) => wasmer::Val::F32(val.into()),
-			Value::F64(val) => wasmer::Val::F64(val.into()),
+			Value::F32(val) => wasmer::Val::F32(f32::from_bits(val)),
+			Value::F64(val) => wasmer::Val::F64(f64::from_bits(val)),
 		})
 		.collect();
 
@@ -71,8 +71,8 @@ pub fn invoke_wasmer(
 			let wasmer_value = match *wasm_value {
 				wasmer::Val::I32(val) => Value::I32(val),
 				wasmer::Val::I64(val) => Value::I64(val),
-				wasmer::Val::F32(val) => Value::F32(val.into()),
-				wasmer::Val::F64(val) => Value::F64(val.into()),
+				wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
+				wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
 				_ =>
 					return Err(wasmi::Error::Function(format!(
 						"Unsupported return value: {:?}",
