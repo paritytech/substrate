@@ -16,7 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Aura consensus data provider
+//! Aura consensus data provider, This allows manual seal author blocks that are valid for
+//! runtimes that expect the aura-specific digests.
 
 use crate::{ConsensusDataProvider, Error};
 use sc_client_api::{AuxStore, UsageProvider};
@@ -36,9 +37,10 @@ use std::{marker::PhantomData, sync::Arc};
 
 /// Consensus data provider for Aura.
 pub struct AuraConsensusDataProvider<B, C> {
-	_client: Arc<C>,
+	// slot duration in milliseconds
 	slot_duration: u64,
-	_phantom: PhantomData<B>,
+	// phantom data for required generics
+	_phantom: PhantomData<(B, C)>,
 }
 
 impl<B, C> AuraConsensusDataProvider<B, C>
@@ -47,11 +49,13 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, AuthorityId>,
 {
+	/// Creates a new instance of the [`AuraConsensusDataProvider`], requires that `client`
+	/// implements [`sp_consensus_aura::AuraApi`]
 	pub fn new(client: Arc<C>) -> Self {
 		let slot_duration =
 			(*slot_duration(&*client).expect("slot_duration is always present; qed.")).get();
 
-		Self { _client: client, slot_duration, _phantom: PhantomData }
+		Self { slot_duration, _phantom: PhantomData }
 	}
 }
 
@@ -70,14 +74,16 @@ where
 	fn create_digest(
 		&self,
 		_parent: &B::Header,
-		_inherents: &InherentData,
+		inherents: &InherentData,
 	) -> Result<Digest, Error> {
 		let time_stamp =
-			*_inherents.timestamp_inherent_data()?.expect("Timestamp is always present; qed");
-		let item = <DigestItem as CompatibleDigestItem<AuthoritySignature>>::aura_pre_digest(
+			*inherents.timestamp_inherent_data()?.expect("Timestamp is always present; qed");
+		// we always calculate the new slot number based on the current time-stamp and the slot
+		// duration.
+		let digest_item = <DigestItem as CompatibleDigestItem<AuthoritySignature>>::aura_pre_digest(
 			(time_stamp / self.slot_duration).into(),
 		);
-		Ok(Digest { logs: vec![item] })
+		Ok(Digest { logs: vec![digest_item] })
 	}
 
 	fn append_block_import(

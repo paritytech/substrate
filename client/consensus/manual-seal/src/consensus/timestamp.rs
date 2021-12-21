@@ -42,39 +42,35 @@ use std::{
 };
 
 /// Provide duration since unix epoch in millisecond for timestamp inherent.
-/// Mocks the timestamp inherent to always produce the timestamp for the next babe slot.
+/// Mocks the timestamp inherent to always produce a valid timestamp for the next slot.
+///
+/// This works by either fetching the `slot_number` from the most recent header and dividing
+/// that value by `slot_duration` in order to fork chains that expect this inherent.
+///
+/// It produces timestamp inherents that are increaed by `slot_duraation` whenever
+/// `provide_inherent_data` is called.
 pub struct SlotTimestampProvider {
-	time: atomic::AtomicU64,
+	// holds the unix millisecnd timestamp for the most recent block
+	unix_millis: atomic::AtomicU64,
+	// configured slot_duration in the runtime
 	slot_duration: u64,
 }
 
 impl SlotTimestampProvider {
-	/// Create a new mocked time stamp provider, for babe
+	/// Create a new mocked time stamp provider, for babe.
 	pub fn babe<B, C>(client: Arc<C>) -> Result<Self, Error>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
-		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
-		let info = client.info();
+		let slot_duration = Config::get(&*client)?.slot_duration;
 
-		// looks like this isn't the first block, rehydrate the fake time.
-		// otherwise we'd be producing blocks for older slots.
-		let time = if info.best_number != Zero::zero() {
-			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
-			let slot = sc_consensus_babe::find_pre_digest::<B>(&header).unwrap().slot();
-			// add the slot duration so there's no collision of slots
-			(*slot * slot_duration) + slot_duration
-		} else {
-			// this is the first block, use the correct time.
-			let now = SystemTime::now();
-			now.duration_since(SystemTime::UNIX_EPOCH)
-				.map_err(|err| Error::StringError(format!("{}", err)))?
-				.as_millis() as u64
-		};
+		let time = Self::with_header(&client, slot_duration, |header| {
+			Ok(*sc_consensus_babe::find_pre_digest::<B>(&header)?.slot()?)
+		})?;
 
-		Ok(Self { time: atomic::AtomicU64::new(time), slot_duration })
+		Ok(Self { unix_millis: atomic::AtomicU64::new(time), slot_duration })
 	}
 
 	/// Create a new mocked time stamp provider, for aura
@@ -85,14 +81,28 @@ impl SlotTimestampProvider {
 		C::Api: AuraApi<B, AuthorityId>,
 	{
 		let slot_duration = (*slot_duration(&*client)?).get();
+
+		let time = Self::with_header(&client, slot_duration, |header| {
+			Ok(*sc_consensus_aura::find_pre_digest::<B, AuthoritySignature>(&header)?)
+		})?;
+
+		Ok(Self { unix_millis: atomic::AtomicU64::new(time), slot_duration })
+	}
+
+	fn with_header<F, C>(client: &Arc<C>, slot_duration: u64, func: F) -> Result<u64, Error>
+	where
+		C: AuxStore + HeaderBackend<B> + UsageProvider<B>,
+		F: Fn(B::Header) -> Result<u64, Error>,
+	{
 		let info = client.info();
 
 		// looks like this isn't the first block, rehydrate the fake time.
 		// otherwise we'd be producing blocks for older slots.
 		let time = if info.best_number != Zero::zero() {
-			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
-			let slot =
-				sc_consensus_aura::find_pre_digest::<B, AuthoritySignature>(&header).unwrap();
+			let header = client
+				.header(BlockId::Hash(info.best_hash))?
+				.ok_or_else(|| format!("best header not found in the db!"))?;
+			let slot = func(header)?;
 			// add the slot duration so there's no collision of slots
 			(*slot * slot_duration) + slot_duration
 		} else {
@@ -103,17 +113,17 @@ impl SlotTimestampProvider {
 				.as_millis() as u64
 		};
 
-		Ok(Self { time: atomic::AtomicU64::new(time), slot_duration })
+		Ok(time)
 	}
 
 	/// Get the current slot number
 	pub fn slot(&self) -> u64 {
-		self.time.load(atomic::Ordering::SeqCst) / self.slot_duration
+		self.unix_millis.load(atomic::Ordering::SeqCst) / self.slot_duration
 	}
 
 	/// Gets the current time stamp.
 	pub fn timestamp(&self) -> sp_timestamp::Timestamp {
-		sp_timestamp::Timestamp::new(self.time.load(atomic::Ordering::SeqCst))
+		sp_timestamp::Timestamp::new(self.unix_millis.load(atomic::Ordering::SeqCst))
 	}
 }
 
@@ -125,7 +135,7 @@ impl InherentDataProvider for SlotTimestampProvider {
 	) -> Result<(), sp_inherents::Error> {
 		// we update the time here.
 		let new_time: InherentType =
-			self.time.fetch_add(self.slot_duration, atomic::Ordering::SeqCst).into();
+			self.unix_millis.fetch_add(self.slot_duration, atomic::Ordering::SeqCst).into();
 		inherent_data.put_data(INHERENT_IDENTIFIER, &new_time)?;
 		Ok(())
 	}

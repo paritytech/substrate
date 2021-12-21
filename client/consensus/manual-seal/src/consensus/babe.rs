@@ -16,7 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! BABE consensus data provider
+//! BABE consensus data provider, This allows manual seal author blocks that are valid for runtimes
+//! that expect babe-specific digests.
 
 use super::ConsensusDataProvider;
 use crate::Error;
