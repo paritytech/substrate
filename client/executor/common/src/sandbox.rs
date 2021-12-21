@@ -57,7 +57,7 @@ impl From<SupervisorFuncIndex> for usize {
 pub(crate) struct GuestFuncIndex(pub(crate) usize);
 
 /// This struct holds a mapping from guest index space to supervisor.
-pub(crate) struct GuestToSupervisorFunctionMapping {
+pub struct GuestToSupervisorFunctionMapping {
 	/// Position of elements in this vector are interpreted
 	/// as indices of guest functions and are mapped to
 	/// corresponding supervisor function indices.
@@ -85,7 +85,7 @@ impl GuestToSupervisorFunctionMapping {
 }
 
 /// Holds sandbox function and memory imports and performs name resolution
-pub(crate) struct Imports {
+pub struct Imports {
 	/// Maps qualified function name to its guest function index
 	func_map: HashMap<(Vec<u8>, Vec<u8>), GuestFuncIndex>,
 
@@ -427,7 +427,7 @@ impl util::MemoryTransfer for Memory {
 /// Wasmer specific context
 #[cfg(feature = "wasmer-sandbox")]
 pub struct WasmerBackend {
-	store: wasmer::Store,
+	pub store: wasmer::Store,
 }
 
 /// Information specific to a particular execution backend

@@ -20,6 +20,7 @@
 
 use codec::Encode;
 use sp_wasm_interface::{Value, Pointer, WordSize, FunctionContext};
+use wasmi::RuntimeValue;
 use std::{rc::Rc, collections::HashMap};
 
 use crate::sandbox::{SandboxContext, InstantiationError, WasmerBackend, GuestEnvironment, SandboxInstance, SupervisorFuncIndex, deserialize_result, BackendInstance};
