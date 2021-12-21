@@ -498,11 +498,12 @@ fn decl_static_assertions(
 			#[doc(hidden)]
 			macro_rules! #assert_macro_name {
 				{
+					pallet_module_name = [{ $mod_name:ident }]
 					error = [{ $error:ident }]
 				} => {
 					#scrate::const_assert! {
 						<
-							#path::$error<#runtime> as #scrate::traits::PalletError
+							#path::$mod_name::$error<#runtime> as #scrate::traits::PalletError
 						>::MAX_ENCODED_SIZE <= #scrate::MAX_PALLET_ERROR_ENCODED_SIZE
 					}
 				};

@@ -54,6 +54,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
+	let pallet_module_name = &def.item.ident;
 	let error_ident = &error.error;
 	let type_impl_gen = &def.type_impl_generics(error.attr_span);
 	let type_use_gen = &def.type_use_generics(error.attr_span);
@@ -173,6 +174,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			} => {
 				$($frame_support::)*tt_return! {
 					$caller
+					pallet_module_name = [{ #pallet_module_name }]
 					error = [{ #error_ident }]
 				}
 			};
