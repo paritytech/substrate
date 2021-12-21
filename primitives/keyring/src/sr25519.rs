@@ -21,7 +21,7 @@ use lazy_static::lazy_static;
 pub use sp_core::sr25519;
 use sp_core::{
 	sr25519::{Pair, Public, Signature},
-	Pair as PairT, Public as PublicT, H256,
+	ByteArray, Pair as PairT, H256,
 };
 use sp_runtime::AccountId32;
 use std::{collections::HashMap, ops::Deref};

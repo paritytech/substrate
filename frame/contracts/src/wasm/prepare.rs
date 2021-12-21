@@ -21,9 +21,11 @@
 
 use crate::{
 	chain_extension::ChainExtension,
-	wasm::{env_def::ImportSatisfyCheck, PrefabWasmModule},
-	Config, Schedule,
+	storage::meter::Diff,
+	wasm::{env_def::ImportSatisfyCheck, OwnerInfo, PrefabWasmModule},
+	AccountIdOf, Config, Schedule,
 };
+use codec::{Encode, MaxEncodedLen};
 use pwasm_utils::parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType};
 use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
@@ -395,20 +397,35 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
+	owner: AccountIdOf<T>,
 ) -> Result<PrefabWasmModule<T>, &'static str> {
 	let (code, (initial, maximum)) =
 		check_and_instrument::<C, T>(original_code.as_ref(), schedule)?;
-	Ok(PrefabWasmModule {
+	let original_code_len = original_code.len();
+
+	let mut module = PrefabWasmModule {
 		instruction_weights_version: schedule.instruction_weights.version,
 		initial,
 		maximum,
-		_reserved: None,
 		code,
-		original_code_len: original_code.len() as u32,
-		refcount: 1,
 		code_hash: T::Hashing::hash(&original_code),
 		original_code: Some(original_code),
-	})
+		owner_info: None,
+	};
+
+	// We need to add the sizes of the `#[codec(skip)]` fields which are stored in different
+	// storage items. This is also why we have `3` items added and not only one.
+	let bytes_added = module
+		.encoded_size()
+		.saturating_add(original_code_len)
+		.saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
+	let deposit = Diff { bytes_added, items_added: 3, ..Default::default() }
+		.to_deposit::<T>()
+		.charge_or_zero();
+
+	module.owner_info = Some(OwnerInfo { owner, deposit, refcount: 0 });
+
+	Ok(module)
 }
 
 /// Loads the given module given in `original_code`, performs some checks on it and
@@ -425,8 +442,9 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 pub fn prepare_contract<T: Config>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
+	owner: AccountIdOf<T>,
 ) -> Result<PrefabWasmModule<T>, &'static str> {
-	do_preparation::<super::runtime::Env, T>(original_code, schedule)
+	do_preparation::<super::runtime::Env, T>(original_code, schedule, owner)
 }
 
 /// The same as [`prepare_contract`] but without constructing a new [`PrefabWasmModule`]
@@ -461,6 +479,7 @@ pub mod benchmarking {
 	pub fn prepare_contract<T: Config>(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
+		owner: AccountIdOf<T>,
 	) -> Result<PrefabWasmModule<T>, &'static str> {
 		let contract_module = ContractModule::new(&original_code, schedule)?;
 		let memory_limits = get_memory_limits(contract_module.scan_imports::<()>(&[])?, schedule)?;
@@ -468,12 +487,15 @@ pub mod benchmarking {
 			instruction_weights_version: schedule.instruction_weights.version,
 			initial: memory_limits.0,
 			maximum: memory_limits.1,
-			_reserved: None,
 			code: contract_module.into_wasm_code()?,
-			original_code_len: original_code.len() as u32,
-			refcount: 1,
 			code_hash: T::Hashing::hash(&original_code),
 			original_code: Some(original_code),
+			owner_info: Some(OwnerInfo {
+				owner,
+				// this is a helper function for benchmarking which skips deposit collection
+				deposit: Default::default(),
+				refcount: 0,
+			}),
 		})
 	}
 }
@@ -481,10 +503,14 @@ pub mod benchmarking {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{exec::Ext, schedule::Limits};
+	use crate::{
+		exec::Ext,
+		schedule::Limits,
+		tests::{Test, ALICE},
+	};
 	use std::fmt;
 
-	impl fmt::Debug for PrefabWasmModule<crate::tests::Test> {
+	impl fmt::Debug for PrefabWasmModule<Test> {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 			write!(f, "PreparedContract {{ .. }}")
 		}
@@ -526,7 +552,7 @@ mod tests {
 					},
 					.. Default::default()
 				};
-				let r = do_preparation::<env::Test, crate::tests::Test>(wasm, &schedule);
+				let r = do_preparation::<env::Test, Test>(wasm, &schedule, ALICE);
 				assert_matches::assert_matches!(r, $($expected)*);
 			}
 		};

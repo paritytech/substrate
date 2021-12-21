@@ -1,8 +1,8 @@
 #[frame_support::pallet]
 mod pallet {
-	use frame_support::pallet_prelude::{Hooks, DispatchResultWithPostInfo};
+	use codec::{Decode, Encode};
+	use frame_support::pallet_prelude::{DispatchResultWithPostInfo, Hooks};
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
-	use codec::{Encode, Decode};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
@@ -13,7 +13,7 @@ mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-	#[derive(Encode, Decode, scale_info::TypeInfo)]
+	#[derive(Encode, Decode, scale_info::TypeInfo, PartialEq, Clone)]
 	struct Bar;
 
 	#[pallet::call]
@@ -25,5 +25,4 @@ mod pallet {
 	}
 }
 
-fn main() {
-}
+fn main() {}

@@ -25,7 +25,7 @@ use parking_lot::RwLock;
 use sp_blockchain::CachedHeaderMetadata;
 use sp_runtime::{
 	generic::{self, BlockId},
-	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as _},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as _, TrailingZeroInput},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
@@ -370,7 +370,8 @@ impl sp_blockchain::HeaderMetadata<Block> for TestApi {
 ///
 /// Part of the test api.
 pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
-	let transfer = Transfer { from: who.into(), to: AccountId::default(), nonce, amount: 1 };
+	let dummy = codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap();
+	let transfer = Transfer { from: who.into(), to: dummy, nonce, amount: 1 };
 	let signature = transfer.using_encoded(|e| who.sign(e)).into();
 	Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
 }

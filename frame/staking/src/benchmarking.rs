@@ -21,6 +21,7 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
+use codec::Decode;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -28,7 +29,7 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, Zero},
+	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
@@ -112,8 +113,8 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
-	assert_ne!(CounterForValidators::<T>::get(), 0);
-	assert_ne!(CounterForNominators::<T>::get(), 0);
+	assert_ne!(Validators::<T>::count(), 0);
+	assert_ne!(Nominators::<T>::count(), 0);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -535,8 +536,9 @@ benchmarks! {
 		let s in 1 .. MAX_SLASHES;
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
+		let dummy = || T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		for _ in 0 .. MAX_SLASHES {
-			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default());
+			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default_from(dummy()));
 		}
 		UnappliedSlashes::<T>::insert(era, &unapplied_slashes);
 
@@ -667,10 +669,11 @@ benchmarks! {
 		let e in 1 .. 100;
 		HistoryDepth::<T>::put(e);
 		CurrentEra::<T>::put(e);
+		let dummy = || -> T::AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
 		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasValidatorPrefs<T>>::insert(i, T::AccountId::default(), ValidatorPrefs::default());
+			<ErasStakers<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasValidatorPrefs<T>>::insert(i, dummy(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
 			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
@@ -695,7 +698,14 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 
 		add_slashing_spans::<T>(&stash, s);
-		Ledger::<T>::insert(&controller, StakingLedger { active: T::Currency::minimum_balance() - One::one(), total: T::Currency::minimum_balance() - One::one(), ..Default::default() });
+		let l = StakingLedger {
+			stash: stash.clone(),
+			active: T::Currency::minimum_balance() - One::one(),
+			total: T::Currency::minimum_balance() - One::one(),
+			unlocking: vec![],
+			claimed_rewards: vec![],
+		};
+		Ledger::<T>::insert(&controller, l);
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));
@@ -922,8 +932,8 @@ mod tests {
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
 
-			assert_eq!(count_validators, CounterForValidators::<Test>::get() as usize);
-			assert_eq!(count_nominators, CounterForNominators::<Test>::get() as usize);
+			assert_eq!(count_validators, Validators::<Test>::count() as usize);
+			assert_eq!(count_nominators, Nominators::<Test>::count() as usize);
 
 			assert_eq!(count_validators, v as usize);
 			assert_eq!(count_nominators, n as usize);
@@ -937,7 +947,7 @@ mod tests {
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get(),
 				false,
 				RewardDestination::Staked,
 			)
@@ -962,7 +972,7 @@ mod tests {
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get(),
 				false,
 				RewardDestination::Staked,
 			)
