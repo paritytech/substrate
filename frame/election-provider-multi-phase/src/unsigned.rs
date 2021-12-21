@@ -1037,7 +1037,7 @@ mod tests {
 				MultiPhase::mine_check_save_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed(DispatchError::Module {
 					index: 2,
-					error: 1,
+					error: [1, 0, 0, 0],
 					message: Some("PreDispatchWrongWinnerCount"),
 				}),
 			);
