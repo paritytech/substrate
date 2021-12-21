@@ -507,6 +507,9 @@ fn decl_static_assertions(
 				};
 				{} => {};
 			}
+
+			#[doc(hidden)]
+			pub use #assert_macro_name;
 		}
 	});
 

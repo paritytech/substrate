@@ -99,7 +99,6 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 }
 
 #[cfg(test)]
-#[cfg_attr(test, macro_use)]
 mod tests {
 	use super::*;
 	use sp_npos_elections::Support;

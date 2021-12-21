@@ -120,7 +120,6 @@ benchmarks! {
 }
 
 #[cfg(test)]
-#[cfg_attr(test, macro_use)]
 pub mod mock {
 	use sp_runtime::{testing::H256, traits::IdentityLookup};
 
