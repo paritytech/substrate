@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,12 +34,10 @@ use sp_runtime::{traits::Block as BlockT, Digest, DigestItem};
 use sp_timestamp::TimestampInherentData;
 use std::{marker::PhantomData, sync::Arc};
 
-/// Consensus data provider for Aura
+/// Consensus data provider for Aura.
 pub struct AuraConsensusDataProvider<B, C> {
 	_client: Arc<C>,
-
 	slot_duration: u64,
-
 	_phantom: PhantomData<B>,
 }
 
