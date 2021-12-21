@@ -37,7 +37,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		error
 	} else {
 		return quote::quote! {
-
 			#[macro_export]
 			#[doc(hidden)]
 			macro_rules! #error_token_unique_id {
