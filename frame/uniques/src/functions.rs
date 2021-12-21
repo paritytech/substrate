@@ -22,7 +22,7 @@ use frame_support::{ensure, traits::Get};
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub(crate) fn do_transfer(
+	pub fn do_transfer(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		dest: T::AccountId,
@@ -53,7 +53,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub(super) fn do_create_class(
+	pub fn do_create_class(
 		class: T::ClassId,
 		owner: T::AccountId,
 		admin: T::AccountId,
@@ -86,7 +86,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub(super) fn do_destroy_class(
+	pub fn do_destroy_class(
 		class: T::ClassId,
 		witness: DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
@@ -122,7 +122,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	pub(super) fn do_mint(
+	pub fn do_mint(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		owner: T::AccountId,
@@ -157,7 +157,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub(super) fn do_burn(
+	pub fn do_burn(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		with_details: impl FnOnce(&ClassDetailsFor<T, I>, &InstanceDetailsFor<T, I>) -> DispatchResult,
