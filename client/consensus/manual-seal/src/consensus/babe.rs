@@ -150,7 +150,7 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = Config::get_or_compute(&*client)?;
+		let config = Config::get(&*client)?;
 
 		Ok(Self { config, client, keystore, epoch_changes, authorities })
 	}

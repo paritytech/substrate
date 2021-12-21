@@ -23,7 +23,6 @@ sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/commo
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machine" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
