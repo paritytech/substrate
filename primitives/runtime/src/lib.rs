@@ -934,11 +934,12 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError::Module { index: 1, error: 2, message: Some("error message") };
+		let error =
+			DispatchError::Module { index: 1, error: [2, 0, 0, 0], message: Some("error message") };
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(encoded, vec![3, 1, 2]);
-		assert_eq!(decoded, DispatchError::Module { index: 1, error: 2, message: None });
+		assert_eq!(decoded, DispatchError::Module { index: 1, error: [2, 0, 0, 0], message: None });
 	}
 
 	#[test]
@@ -950,9 +951,9 @@ mod tests {
 			Other("bar"),
 			CannotLookup,
 			BadOrigin,
-			Module { index: 1, error: 1, message: None },
-			Module { index: 1, error: 2, message: None },
-			Module { index: 2, error: 1, message: None },
+			Module { index: 1, error: [1, 0, 0, 0], message: None },
+			Module { index: 1, error: [2, 0, 0, 0], message: None },
+			Module { index: 2, error: [1, 0, 0, 0], message: None },
 			ConsumerRemaining,
 			NoProviders,
 			Token(TokenError::NoFunds),
@@ -977,8 +978,8 @@ mod tests {
 
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			Module { index: 1, error: 1, message: Some("foo") },
-			Module { index: 1, error: 1, message: None },
+			Module { index: 1, error: [1, 0, 0, 0], message: Some("foo") },
+			Module { index: 1, error: [1, 0, 0, 0], message: None },
 		);
 	}
 
