@@ -484,13 +484,14 @@ fn decl_static_assertions(
 	let error_encoded_size_check = pallet_decls.iter().map(|decl| {
 		let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 		let path = &decl.path;
-		let assert_macro_name = format_ident!("assert_error_encoded_size_{}", count);
+		let assert_macro_name = format_ident!("__assert_error_encoded_size_{}", count);
+		let macro_alias = format_ident!("assert_error_encoded_size_{}", count);
 
 		quote! {
 			#scrate::tt_call! {
 				macro = [{ #path::tt_error_token }]
 				frame_support = [{ #scrate }]
-				~~> #assert_macro_name
+				~~> #macro_alias
 			}
 
 			#[macro_export]
@@ -509,7 +510,7 @@ fn decl_static_assertions(
 			}
 
 			#[doc(hidden)]
-			pub use #assert_macro_name;
+			pub use #assert_macro_name as #macro_alias;
 		}
 	});
 

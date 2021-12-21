@@ -39,7 +39,6 @@ thread_local! {
 	pub static INTEGRITY_TEST_EXEC: RefCell<u32> = RefCell::new(0);
 }
 
-#[macro_use]
 mod module1 {
 	use super::*;
 
@@ -78,7 +77,6 @@ mod module1 {
 	}
 }
 
-#[macro_use]
 mod module2 {
 	use super::*;
 
@@ -119,11 +117,9 @@ mod module2 {
 	}
 }
 
-#[macro_use]
 mod nested {
 	use super::*;
 
-	#[macro_use]
 	pub mod module3 {
 		use super::*;
 
@@ -168,7 +164,6 @@ mod nested {
 	}
 }
 
-#[macro_use]
 pub mod module3 {
 	use super::*;
 
