@@ -412,6 +412,23 @@ where
 			res
 		})
 	}
+
+	/// Enumerate all elements in the counted map after a specified `starting_raw_key` in no
+	/// particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
+		let map_iterator = <Self as MapWrapper>::Map::iter_from(starting_raw_key);
+		crate::storage::PrefixIterator {
+			prefix: map_iterator.prefix,
+			previous_key: map_iterator.previous_key,
+			drain: map_iterator.drain,
+			closure: map_iterator.closure,
+			phantom: Default::default(),
+		}
+	}
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
@@ -1019,6 +1036,25 @@ mod test {
 			assert_eq!(A::drain().collect::<Vec<_>>(), vec![(2, 4)]);
 
 			assert_eq!(A::count(), 0);
+		})
+	}
+
+	#[test]
+	fn test_iter_from() {
+		type A = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 1);
+			A::insert(2, 2);
+			A::insert(3, 3);
+			A::insert(4, 4);
+
+			// no prefix is same as normal iter.
+			assert_eq!(A::iter_from(vec![]).collect::<Vec<_>>(), A::iter().collect::<Vec<_>>());
+
+			let iter_all = A::iter().collect::<Vec<_>>();
+			let (before, after) = iter_all.split_at(2);
+			let last_key = before.last().map(|(k, _)| k).unwrap();
+			assert_eq!(A::iter_from(A::hashed_key_for(last_key)).collect::<Vec<_>>(), after);
 		})
 	}
 
