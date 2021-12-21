@@ -93,15 +93,6 @@ dependencies = [
 
 [[package]]
 name = "ansi_term"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
-dependencies = [
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d52a9bb7ec0cf484c551830a7ce27bd20d67eac647e1befb56b0be4ee39a55d2"
@@ -908,7 +899,7 @@ dependencies = [
 name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
- "ansi_term 0.12.1",
+ "ansi_term",
  "node-cli",
  "rand 0.7.3",
  "sc-chain-spec",
@@ -973,11 +964,11 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "2.33.3"
+version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
+checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
 dependencies = [
- "ansi_term 0.11.0",
+ "ansi_term",
  "atty",
  "bitflags",
  "strsim 0.8.0",
@@ -6777,7 +6768,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0cfe1b2403f172ba0f234e500906ee0a3e493fb81092dac23ebefe129301cc"
 dependencies = [
- "ansi_term 0.12.1",
+ "ansi_term",
  "ctor",
  "diff",
  "output_vt100",
@@ -8204,7 +8195,7 @@ dependencies = [
 name = "sc-informant"
 version = "0.10.0-dev"
 dependencies = [
- "ansi_term 0.12.1",
+ "ansi_term",
  "futures 0.3.16",
  "futures-timer 3.0.2",
  "log 0.4.14",
@@ -8638,7 +8629,7 @@ dependencies = [
 name = "sc-tracing"
 version = "4.0.0-dev"
 dependencies = [
- "ansi_term 0.12.1",
+ "ansi_term",
  "atty",
  "chrono",
  "criterion",
@@ -10311,7 +10302,7 @@ dependencies = [
 name = "substrate-wasm-builder"
 version = "5.0.0-dev"
 dependencies = [
- "ansi_term 0.12.1",
+ "ansi_term",
  "build-helper",
  "cargo_metadata",
  "sp-maybe-compressed-blob",
@@ -10816,7 +10807,7 @@ version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
 dependencies = [
- "ansi_term 0.12.1",
+ "ansi_term",
  "chrono",
  "lazy_static",
  "matchers",
