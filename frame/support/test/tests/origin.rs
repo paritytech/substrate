@@ -26,11 +26,9 @@ use sp_runtime::{generic, traits::BlakeTwo256};
 
 mod system;
 
-#[macro_use]
 mod nested {
 	use super::*;
 
-	#[macro_use]
 	pub mod module {
 		use super::*;
 
@@ -71,7 +69,6 @@ mod nested {
 	}
 }
 
-#[macro_use]
 pub mod module {
 	use super::*;
 
