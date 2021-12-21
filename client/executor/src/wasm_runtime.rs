@@ -470,6 +470,21 @@ mod tests {
 
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
 		assert_eq!(1, version.transaction_version);
+		assert_eq!(0, version.state_version);
+
+		let old_runtime_version = sp_api::RuntimeVersionV1 {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+			transaction_version: 2,
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(2, version.transaction_version);
+		assert_eq!(0, version.state_version);
 	}
 
 	#[test]

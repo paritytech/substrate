@@ -44,7 +44,7 @@ pub use sp_application_crypto as app_crypto;
 pub use sp_core::hashing;
 #[cfg(feature = "std")]
 pub use sp_core::storage::{Storage, StorageChild};
-pub use sp_core::{StateVersion, TRIE_VALUE_NODE_THRESHOLD};
+pub use sp_core::storage::StateVersion;
 
 use sp_core::{
 	crypto::{self, ByteArray},

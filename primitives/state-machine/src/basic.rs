@@ -23,10 +23,10 @@ use hash_db::Hasher;
 use log::warn;
 use sp_core::{
 	storage::{
-		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey,
+		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey, StateVersion,
 	},
 	traits::Externalities,
-	Blake2Hasher, StateVersion,
+	Blake2Hasher,
 };
 use sp_externalities::{Extension, Extensions};
 use sp_trie::{empty_child_trie_root, LayoutV0, LayoutV1, TrieConfiguration};

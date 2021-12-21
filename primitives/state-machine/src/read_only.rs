@@ -21,9 +21,9 @@ use crate::{Backend, StorageKey, StorageValue};
 use codec::Encode;
 use hash_db::Hasher;
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
+	storage::{ChildInfo, TrackedStorageKey, StateVersion},
 	traits::Externalities,
-	Blake2Hasher, StateVersion,
+	Blake2Hasher,
 };
 use std::{
 	any::{Any, TypeId},

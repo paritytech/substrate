@@ -32,11 +32,10 @@ use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{is_child_storage_key, CODE},
-		Storage,
+		Storage, StateVersion,
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
-	StateVersion,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;

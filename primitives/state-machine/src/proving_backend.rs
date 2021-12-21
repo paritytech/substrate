@@ -26,7 +26,7 @@ use codec::{Codec, Decode, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
-use sp_core::{storage::ChildInfo, StateVersion};
+use sp_core::storage::{ChildInfo, StateVersion};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,

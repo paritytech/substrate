@@ -306,67 +306,21 @@ pub struct RuntimeVersionV2 {
 	pub state_version: u32,
 }
 
-struct ReplayInput<'a, I: Input> {
-	input: &'a mut I,
-	replay_buf: sp_std::vec::Vec<u8>,
-	replay: bool,
-	replay_progress: usize,
-}
-
-impl<'a, I: Input> codec::Input for ReplayInput<'a, I> {
-	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
-		if let Some(i_remaining) = self.input.remaining_len()? {
-			if self.replay {
-				Ok(Some(i_remaining + self.replay_buf.len() - self.replay_progress))
-			} else {
-				Ok(Some(i_remaining))
-			}
-		} else {
-			Ok(None)
-		}
-	}
-
-	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
-		let mut read = 0;
-		if self.replay {
-			if self.replay_progress < self.replay_buf.len() {
-				read = sp_std::cmp::min(self.replay_buf.len() - self.replay_progress, into.len());
-				(&mut &self.replay_buf[self.replay_progress..]).read(&mut into[..read])?;
-			}
-			self.replay_progress += read;
-		}
-		if read < into.len() {
-			self.input.read(&mut into[read..])?;
-		}
-		if !self.replay {
-			self.replay_buf.extend_from_slice(into);
-		}
-
-		Ok(())
-	}
-}
-
 impl Decode for RuntimeVersionCompatibility {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		let mut input = ReplayInput {
-			input,
-			replay_buf: sp_std::vec::Vec::new(),
-			replay: false,
-			replay_progress: 0,
-		};
-		let v: RuntimeVersionV0 = Decode::decode(&mut input)?;
+		let v: RuntimeVersionV0 = Decode::decode(input)?;
 
 		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
-		let version = if has_api_with(&v.apis, &core_api_id, |v| v < 3) {
-			v.into()
-		} else if has_api_with(&v.apis, &core_api_id, |v| v == 3) {
-			input.replay = true;
-			RuntimeVersionV1::decode(&mut input)?.into()
-		} else {
-			input.replay = true;
-			RuntimeVersionV2::decode(&mut input)?.into()
+		let mut v: RuntimeVersionV2 = v.into();
+		if has_api_with(&v.apis, &core_api_id, |v| v >= 3) {
+			let transaction_version: u32 = Decode::decode(input)?;
+			v.transaction_version = transaction_version;
+		}
+		if has_api_with(&v.apis, &core_api_id, |v| v > 3) {
+			let state_version: u32 = Decode::decode(input)?;
+			v.state_version = state_version;
 		};
-		Ok(RuntimeVersionCompatibility(version))
+		Ok(RuntimeVersionCompatibility(v))
 	}
 }
 

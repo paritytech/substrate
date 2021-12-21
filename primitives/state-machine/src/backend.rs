@@ -25,9 +25,8 @@ use codec::Encode;
 use hash_db::Hasher;
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
-use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
-	StateVersion,
+use sp_core::storage::{
+	ChildInfo, TrackedStorageKey, StateVersion
 };
 use sp_std::vec::Vec;
 

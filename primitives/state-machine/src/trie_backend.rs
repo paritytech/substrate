@@ -25,8 +25,7 @@ use crate::{
 use codec::{Codec, Decode};
 use hash_db::Hasher;
 use sp_core::{
-	storage::{ChildInfo, ChildType},
-	StateVersion,
+	storage::{ChildInfo, ChildType, StateVersion},
 };
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{

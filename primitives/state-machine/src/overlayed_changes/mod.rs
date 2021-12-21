@@ -27,8 +27,7 @@ use hash_db::Hasher;
 pub use offchain::OffchainOverlayedChanges;
 use sp_core::{
 	offchain::OffchainOverlayedChange,
-	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo},
-	StateVersion,
+	storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo, StateVersion},
 };
 #[cfg(feature = "std")]
 use sp_externalities::{Extension, Extensions};
@@ -583,7 +582,7 @@ impl OverlayedChanges {
 		&self,
 		backend: &B,
 		cache: &mut StorageTransactionCache<B::Transaction, H>,
-		state_version: sp_core::StateVersion,
+		state_version: StateVersion,
 	) -> H::Out
 	where
 		H::Out: Ord + Encode,

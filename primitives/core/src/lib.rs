@@ -85,7 +85,6 @@ pub use self::hasher::keccak::KeccakHasher;
 pub use hash_db::Hasher;
 
 pub use sp_storage as storage;
-pub use sp_storage::{StateVersion, TRIE_VALUE_NODE_THRESHOLD};
 
 #[doc(hidden)]
 pub use sp_std;

@@ -36,7 +36,7 @@ pub use sp_arithmetic::traits::{
 	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
-use sp_core::{self, Hasher, RuntimeDebug, StateVersion, TypeId};
+use sp_core::{self, Hasher, RuntimeDebug, TypeId, storage::StateVersion};
 use sp_std::{
 	self,
 	convert::{TryFrom, TryInto},

@@ -1056,7 +1056,7 @@ where
 			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
 
 			let code_fetcher =
-				sp_core::traits::WrappedRuntimeCode(std::borrow::Cow::from(wasm.as_slice()));
+				sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
 			let runtime_code = sp_core::traits::RuntimeCode {
 				code_fetcher: &code_fetcher,
 				heap_pages: None,
@@ -1068,7 +1068,7 @@ where
 			Ok(runtime_version.state_version())
 		} else {
 			Err(sp_blockchain::Error::VersionInvalid(
-				"Could not fetch runtime from storage.".to_string(),
+				"Runtime missing from initial storage, could not read state version.".to_string(),
 			))
 		}
 	}

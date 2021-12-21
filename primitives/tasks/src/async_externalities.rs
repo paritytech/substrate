@@ -19,9 +19,8 @@
 //! Async externalities.
 
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
+	storage::{ChildInfo, TrackedStorageKey, StateVersion},
 	traits::{Externalities, RuntimeSpawn, RuntimeSpawnExt, SpawnNamed, TaskExecutorExt},
-	StateVersion,
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
 use std::any::{Any, TypeId};

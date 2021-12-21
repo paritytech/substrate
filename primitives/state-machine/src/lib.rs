@@ -1353,10 +1353,10 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
-		storage::ChildInfo,
+		storage::{ChildInfo, StateVersion},
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
-		NativeOrEncoded, NeverNativeValue, StateVersion,
+		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_runtime::traits::BlakeTwo256;
 	use std::{
