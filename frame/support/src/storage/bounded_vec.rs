@@ -364,6 +364,37 @@ where
 	}
 }
 
+/// Try and collect into a `BoundedVec` from an `ExactSizedIterator`.
+///
+/// This useful in preventing the undesirable `.collect::<Vec<_>>().try_into().unwrap()` syntax.
+pub trait TryCollect<T> {
+	type Error: sp_std::fmt::Debug;
+
+	fn try_collect<Bound: Get<u32>>(self) -> Result<BoundedVec<T, Bound>, Self::Error>;
+}
+
+// much nicer would be to do something like this: mark all iterator types that do not increase
+// the length of the iterator (almost all of them?), then ideally you would be able to collect
+// into a bounded vec directly, as long as the entire chain of iterators is made up of iterators
+// that have this market.
+// pub trait NonIncreasingIterator {}
+// impl<I, F> NonIncreasingIterator for sp_std::iter::Map<I, F> {}
+
+impl<I, T> TryCollect<T> for I
+where
+	I: ExactSizeIterator,
+	I: Iterator<Item = T>,
+{
+	type Error = &'static str;
+	fn try_collect<Bound: Get<u32>>(self) -> Result<BoundedVec<T, Bound>, Self::Error> {
+		if self.len() > Bound::get() as usize {
+			Err("iterator length too big")
+		} else {
+			Ok(BoundedVec::<T, Bound>::unchecked_from(self.collect::<Vec<T>>()))
+		}
+	}
+}
+
 #[cfg(test)]
 pub mod test {
 	use super::*;
@@ -473,12 +504,20 @@ pub mod test {
 		);
 	}
 
-	// TODO:
-	// #[test]
-	// fn can_be_collected() {
-	// 	let b1: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
-	// 	let b2 = b1.into_iter().map(|x| x + 1).collect::<BoundedVec<u32, Seven>>();
-	// }
+	#[test]
+	fn can_be_collected() {
+		let b1: BoundedVec<u32, ConstU32<5>> = vec![1, 2, 3, 4].try_into().unwrap();
+		let b2 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<5>>().unwrap();
+		assert_eq!(b2, vec![2, 3, 4, 5]);
+
+		// can also be collected into a collection of length 4.
+		let b3 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<4>>().unwrap();
+		assert_eq!(b3, vec![2, 3, 4, 5]);
+
+		// but not length 3
+		let b4 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<3>>();
+		assert!(b4.is_err());
+	}
 
 	#[test]
 	fn eq_works() {

@@ -81,7 +81,6 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				Debug,
 				PartialOrd,
 				Ord,
-				_npos::scale_info::TypeInfo,
 			)]
 		}
 	} else {

@@ -25,6 +25,7 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU32, Hooks},
 	weights::Weight,
+	BoundedVec,
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
 use parking_lot::RwLock;
@@ -283,6 +284,8 @@ impl onchain::Config for Runtime {
 	type DataProvider = StakingMock;
 	type TargetsPageSize = ();
 	type VoterPageSize = ();
+	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
 }
 
 pub struct MockFallback;
@@ -292,8 +295,10 @@ impl ElectionProvider for MockFallback {
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 	type Pages = ();
+	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
 
-	fn elect(page: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
+	fn elect(page: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		assert_eq!(page, 0);
 
 		if OnChianFallback::get() {
@@ -448,6 +453,7 @@ impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type MaxVotesPerVoter = ConstU32<{ <TestNposSolution as NposSolution>::LIMIT as u32 }>;
+
 	fn targets(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
@@ -465,10 +471,15 @@ impl ElectionDataProvider for StakingMock {
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
+	) -> data_provider::Result<
+		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
+	> {
 		assert!(remaining.is_zero());
 
-		let mut voters = Voters::get();
+		let mut voters = Voters::get()
+			.into_iter()
+			.map(|(x, y, z)| (x, y, z.try_into().unwrap()))
+			.collect::<Vec<_>>();
 		if let Some(max_len) = maybe_max_len {
 			voters.truncate(max_len)
 		}

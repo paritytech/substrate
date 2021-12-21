@@ -230,11 +230,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, PageIndex};
+use frame_election_provider_support::{
+	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, IntoUnboundedVoters, PageIndex,
+	TryIntoBoundedSupports,
+};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	traits::{ConstU32, Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
@@ -314,11 +317,13 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
-	type Pages = frame_support::traits::ConstU8<0>;
+	type Pages = ConstU32<0>;
+	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
 
-	fn elect(_: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
-		Err("NoFallback.")
+		Err("NoFallback. Entering Emergency Phase.")
 	}
 }
 
@@ -675,6 +680,8 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
+			MaxBackersPerSupport = ConstU32<{ u32::MAX }>,
+			MaxSupportsPerPage = ConstU32<{ u32::MAX }>,
 		>;
 
 		/// OCW election solution miner algorithm implementation.
@@ -1295,8 +1302,9 @@ impl<T: Config> Pallet<T> {
 
 		let targets =
 			T::DataProvider::targets(Some(target_limit), 0).map_err(ElectionError::DataProvider)?;
-		let voters =
-			T::DataProvider::voters(Some(voter_limit), 0).map_err(ElectionError::DataProvider)?;
+		let voters = T::DataProvider::voters(Some(voter_limit), 0)
+			.map(IntoUnboundedVoters::into_unbounded_voters)
+			.map_err(ElectionError::DataProvider)?;
 		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
@@ -1450,7 +1458,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
+	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
@@ -1466,7 +1474,10 @@ impl<T: Config> Pallet<T> {
 						.map_err(|fe| ElectionError::Fallback(fe))
 						.map(|supports| (supports, ElectionCompute::Fallback))
 				},
-				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
+				|ReadySolution { supports, compute, .. }| {
+					let supports = supports.try_into_bounded_supports().expect("..");
+					Ok((supports, compute))
+				},
 			)
 			.map(|(supports, compute)| {
 				Self::deposit_event(Event::ElectionFinalized { election_compute: Some(compute) });
@@ -1485,7 +1496,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// record the weight of the given `supports`.
-	fn weigh_supports(supports: &Supports<T::AccountId>) {
+	fn weigh_supports(supports: &BoundedSupportsOf<Self>) {
 		let active_voters = supports
 			.iter()
 			.map(|(_, x)| x)
@@ -1500,9 +1511,16 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
-	type Pages = frame_support::traits::ConstU8<1>;
 
-	fn elect(page: PageIndex) -> Result<Supports<T::AccountId>, Self::Error> {
+	// Can only work with a single page.
+	type Pages = ConstU32<1>;
+
+	// This election provider gives no guarantee in terms of these two parameters, thus not suitable
+	// for a parachain either.
+	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+
+	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
@@ -1942,6 +1960,8 @@ mod tests {
 					(30, Support { total: 40, voters: vec![(2, 5), (4, 5), (30, 30)] }),
 					(40, Support { total: 60, voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)] })
 				]
+				.try_into_bounded_supports()
+				.unwrap()
 			)
 		});
 
@@ -1951,7 +1971,10 @@ mod tests {
 
 			// Zilch solutions thus far.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_eq!(MultiPhase::elect(0).unwrap_err(), ElectionError::Fallback("NoFallback."));
+			assert_eq!(
+				MultiPhase::elect(0).unwrap_err(),
+				ElectionError::Fallback("NoFallback. Entering Emergency Phase.")
+			);
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 		})
@@ -1996,7 +2019,7 @@ mod tests {
 
 			roll_to(29);
 			let err = MultiPhase::elect(0).unwrap_err();
-			assert_eq!(err, ElectionError::Fallback("NoFallback."));
+			assert_eq!(err, ElectionError::Fallback("NoFallback. Entering Emergency Phase."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 		});
 	}

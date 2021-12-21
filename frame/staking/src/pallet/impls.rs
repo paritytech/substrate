@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, PageIndex, SortedListProvider, Supports,
-	VoteWeight, VoteWeightProvider,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ExtendedBalance,
+	PageIndex, SortedListProvider, VoteWeight, VoteWeightProvider,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -464,7 +464,7 @@ impl<T: Config> Pallet<T> {
 				_ => (),
 			}
 
-			/// Clear all storage items that may have bene written to during
+			// Clear all storage items that may have bene written to during
 			// `store_intermediary_staker_info`, and `finalize_staker_info_collection`. This will
 			// be  expensive, but extremely rare to happen.
 			<ErasStakers<T>>::remove_prefix(maybe_starting_era, None);
@@ -498,7 +498,8 @@ impl<T: Config> Pallet<T> {
 			}
 		};
 
-		let proceed_page = |supports: Supports<T::AccountId>, current_page: PageIndex| {
+		let proceed_page = |supports: BoundedSupportsOf<T::ElectionProvider>,
+		                    current_page: PageIndex| {
 			let exposures = Self::collect_exposures(supports);
 			Self::store_intermediary_staker_info(exposures, new_planned_era);
 			let is_last_page = maybe_proceed_next_page(current_page);
@@ -532,10 +533,7 @@ impl<T: Config> Pallet<T> {
 					// once we're at the block where election is expected, kickstart the process of
 					// calling `elect`. Note that we don't do `<=` here for simplicity.
 
-					let first_page = <T::ElectionProvider as ElectionProvider<
-						T::AccountId,
-						T::BlockNumber,
-					>>::msp();
+					let first_page = <T::ElectionProvider as ElectionProvider>::msp();
 
 					let supports = T::ElectionProvider::elect(first_page)
 						.map_err(|_| "first elect page failed")?;
@@ -631,20 +629,20 @@ impl<T: Config> Pallet<T> {
 		elected_stashes
 	}
 
-	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
-	/// [`Exposure`].
+	/// Consume a set of [`BoundedSupportsOf`] and collect them into set of [`Exposure`].
+	// TODO: we collect normal, unbounded exposures here, we can and should migrate this to bounded
+	// as well.
 	fn collect_exposures(
-		supports: Supports<T::AccountId>,
+		supports: BoundedSupportsOf<T::ElectionProvider>,
 	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
 		let total_issuance = T::Currency::total_issuance();
-		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
-			T::CurrencyToVote::to_currency(e, total_issuance)
-		};
+		let to_currency = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
+
+		let _ = supports.clone().into_iter().collect::<Vec<_>>();
 
 		supports
 			.into_iter()
 			.map(|(validator, support)| {
-				// Build `struct exposure` from `support`.
 				let mut others = Vec::with_capacity(support.voters.len());
 				let mut own: BalanceOf<T> = Zero::zero();
 				let mut total: BalanceOf<T> = Zero::zero();
@@ -654,6 +652,7 @@ impl<T: Config> Pallet<T> {
 					.map(|(nominator, weight)| (nominator, to_currency(weight)))
 					.for_each(|(nominator, stake)| {
 						if nominator == validator {
+							debug_assert!(own.is_zero(), "own can only be set once");
 							own = own.saturating_add(stake);
 						} else {
 							others.push(IndividualExposure { who: nominator, value: stake });
@@ -769,7 +768,7 @@ impl<T: Config> Pallet<T> {
 		remaining: PageIndex,
 		last: T::AccountId,
 		slashing_spans: &BTreeMap<T::AccountId, slashing::SlashingSpans>,
-	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	) -> Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxNominations>)> {
 		let to_take = maybe_max_len.unwrap_or(usize::MAX);
 
 		let mut round_voters = vec![];
@@ -783,7 +782,18 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					round_voters.push((nominator.clone(), Self::weight_of(&nominator), targets))
+					// defensive_only: targets length should always be less than the bound, unless
+					// if we change T::MaxNominations.
+					// TODO: maybe don't skip nominators here silently.
+					// TODO: test: reduce maxNominations, observe that invalid voters are skipped.
+					// Same goes for self-votes
+					if let Ok(bounded) = targets.try_into() {
+						round_voters.push((
+							nominator.clone(),
+							Self::weight_of(&nominator),
+							bounded,
+						));
+					}
 				}
 			} else {
 				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
@@ -820,7 +830,7 @@ impl<T: Config> Pallet<T> {
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
 		slashing_spans: &BTreeMap<T::AccountId, slashing::SlashingSpans>,
-	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	) -> Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxNominations>)> {
 		let max_allowed_len = {
 			let nominator_count = Nominators::<T>::count() as usize;
 			let validator_count = Validators::<T>::count() as usize;
@@ -838,10 +848,11 @@ impl<T: Config> Pallet<T> {
 		let mut validators_taken = 0u32;
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
-			let self_vote =
-				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
-			all_voters.push(self_vote);
-			validators_taken.saturating_inc();
+			if let Ok(bounded_self_vote) = vec![validator.clone()].try_into() {
+				let self_vote = (validator.clone(), Self::weight_of(&validator), bounded_self_vote);
+				all_voters.push(self_vote);
+				validators_taken.saturating_inc();
+			}
 		}
 
 		// .. and grab whatever we have left from nominators.
@@ -868,20 +879,20 @@ impl<T: Config> Pallet<T> {
 			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
 				<Nominators<T>>::get(&nominator)
 			{
-				log!(
-					trace,
-					"fetched nominator {:?} with weight {:?}",
-					nominator,
-					weight_of(&nominator)
-				);
 				targets.retain(|stash| {
 					slashing_spans
 						.get(stash)
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), weight_of(&nominator), targets));
-					nominators_taken.saturating_inc();
+					if let Ok(bounded_targets) = targets.try_into() {
+						all_voters.push((
+							nominator.clone(),
+							weight_of(&nominator),
+							bounded_targets,
+						));
+						nominators_taken.saturating_inc();
+					}
 				}
 			} else {
 				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
@@ -940,7 +951,7 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
+	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
@@ -1012,14 +1023,10 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-frame_support::parameter_types! {
-	pub const MaxVotesPerVoter: u32 = T::MAX_NOMINATIONS;
-}
-
-impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
+impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
-	type MaxVotesPerVoter = MaxVotesPerVoter;
+	type MaxVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
@@ -1029,7 +1036,9 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
+	) -> data_provider::Result<
+		Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, Self::MaxVotesPerVoter>)>,
+	> {
 		// check a few counters one last time...
 		debug_assert_eq!(
 			Nominators::<T>::count(),
@@ -1049,11 +1058,11 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
 	) -> data_provider::Result<Vec<T::AccountId>> {
-		if remaining > 0u8 {
+		if remaining > Zero::zero() {
 			return Err("Targets must only have page size 0.")
 		}
 
-		let target_count = CounterForValidators::<T>::get() as usize;
+		let target_count = Validators::<T>::count() as usize;
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
@@ -1098,10 +1107,15 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
+	fn add_voter(
+		voter: T::AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<T::AccountId, Self::MaxVotesPerVoter>,
+	) {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
+
 		<Bonded<T>>::insert(voter.clone(), voter.clone());
 		<Ledger<T>>::insert(
 			voter.clone(),
@@ -1148,7 +1162,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, Self::MaxVotesPerVoter>)>,
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
@@ -1465,6 +1479,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
 	}
+
 	fn iter_from(
 		start: &T::AccountId,
 	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
@@ -1475,22 +1490,28 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 			Err(())
 		}
 	}
+
 	fn count() -> u32 {
 		Nominators::<T>::count()
 	}
+
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id)
 	}
+
 	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
+
 	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
 		// nothing to do on update.
 	}
+
 	fn on_remove(_: &T::AccountId) {
 		// nothing to do on remove.
 	}
+
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
 		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
@@ -1498,6 +1519,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
+
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}

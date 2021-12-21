@@ -78,8 +78,9 @@
 //! ## Example
 //!
 //! ```rust
-//! # use frame_election_provider_support::{*, data_provider, PageIndex};
+//! # use frame_election_provider_support::{*, data_provider, PageIndex, BoundedSupportsOf};
 //! # use sp_npos_elections::{Support, Assignment};
+//! # use frame_support::{traits::{ConstU32, Get}, BoundedVec};
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
@@ -101,21 +102,21 @@
 //!     impl<T: Config> ElectionDataProvider for Pallet<T> {
 //!         type AccountId = AccountId;
 //!         type BlockNumber = BlockNumber;
-//!         const MAXIMUM_VOTES_PER_VOTER: u32 = 1;
+//!         type MaxVotesPerVoter = ConstU32<4>;
 //!
 //!         fn desired_targets() -> data_provider::Result<u32> {
-//!             Ok(1)
+//!             unimplemented!();
 //!         }
 //!         fn voters(maybe_max_len: Option<usize>, _page: PageIndex)
-//!           -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
+//!           -> data_provider::Result<Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>>
 //!         {
-//!             Ok(Default::default())
+//!             unimplemented!();
 //!         }
 //!         fn targets(maybe_max_len: Option<usize>, _page: PageIndex) -> data_provider::Result<Vec<AccountId>> {
-//!             Ok(vec![10, 20, 30])
+//!             unimplemented!();
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-//!             0
+//!             unimplemented!();
 //!         }
 //!     }
 //! }
@@ -136,11 +137,11 @@
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!         type Pages = ();
+//!         type MaxBackersPerSupport = ConstU32<{ u32::MAX} >;
+//!         type MaxSupportsPerPage = ConstU32<{ u32::MAX} >;
 //!
-//!         fn elect(_page: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
-//!             Self::DataProvider::targets(None, 0)
-//!                 .map_err(|_| "failed to elect")
-//!                 .map(|t| vec![(t[0], Support::default())])
+//!         fn elect(_page: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+//!             unimplemented!();
 //!         }
 //!     }
 //! }
@@ -591,10 +592,18 @@ impl<AccountId, Bound: Get<u32>> TryFrom<sp_npos_elections::Support<AccountId>>
 ///
 /// Note the order of generic bounds, first comes the outer bound and then the inner. When possible,
 /// use [`BoundedSupportsOf`] to avoid mistakes.
-#[derive(Debug, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound)]
+#[derive(Debug, Encode, Decode, TypeInfo, MaxEncodedLen, DefaultNoBound)]
 pub struct BoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>>(
 	pub BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>,
 );
+
+impl<AccountId: Clone, BOuter: Get<u32>, BInner: Get<u32>> Clone
+	for BoundedSupports<AccountId, BOuter, BInner>
+{
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
 
 impl<AccountId: PartialEq, BOuter: Get<u32>, BInner: Get<u32>> PartialEq
 	for BoundedSupports<AccountId, BOuter, BInner>
@@ -615,6 +624,17 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> sp_std::ops::Deref
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> IntoIterator
+	for BoundedSupports<AccountId, BOuter, BInner>
+{
+	type Item = (AccountId, BoundedSupport<AccountId, BInner>);
+	type IntoIter = std::vec::IntoIter<Self::Item>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
 	}
 }
 

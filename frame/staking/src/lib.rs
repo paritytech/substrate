@@ -304,6 +304,7 @@ use frame_election_provider_support::ElectionProvider;
 use frame_support::{
 	traits::{ConstU32, Currency, Get},
 	weights::Weight,
+	BoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -351,10 +352,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 
 /// The number of pages that the election provider of staking is expected to provide.
-pub(crate) type PagesOf<T> = <<T as Config>::ElectionProvider as ElectionProvider<
-	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
->>::Pages;
+pub(crate) type PagesOf<T> = <<T as Config>::ElectionProvider as ElectionProvider>::Pages;
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -591,9 +589,11 @@ where
 
 /// A record of the nominations made by a specific account.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Nominations<AccountId> {
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct Nominations<T: Config> {
 	/// The targets of nomination.
-	pub targets: Vec<AccountId>,
+	pub targets: BoundedVec<T::AccountId, T::MaxNominations>,
 	/// The era the nominations were submitted.
 	///
 	/// Except for initial nominations which are considered submitted at era 0.

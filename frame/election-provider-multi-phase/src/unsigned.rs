@@ -24,7 +24,7 @@ use crate::{
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolver, PerThing128};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{

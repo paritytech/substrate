@@ -19,7 +19,7 @@
 
 use crate::{self as pallet_staking, *};
 use frame_election_provider_support::{
-	onchain, ExtendedBalance, PageIndex, SortedListProvider, Support, Supports,
+	onchain, BoundedSupport, BoundedSupportsOf, PageIndex, SortedListProvider,
 };
 use frame_support::{
 	assert_ok, parameter_types,
@@ -251,6 +251,8 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 	type TargetsPageSize = ();
 	type VoterPageSize = ();
+	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
 }
 
 /// A mock election provider that only does a simple on-chain seq-phragmen, but can return the
@@ -262,34 +264,43 @@ pub struct MockElectionProvider;
 // Configurations of the mock election provider.
 parameter_types! {
 	pub static ElectionPages: PageIndex = 1;
-	pub static PaginatedElection: Option<Vec<Supports<AccountId>>> = None;
+	pub static PaginatedElection: Option<Vec<BoundedSupportsOf<MockElectionProvider>>> = None;
 	// if set, we paginate the supports by nominators, else by validators.
 	pub static PaginateNominators: bool = false;
 }
 
 impl MockElectionProvider {
-	/// extract the support of this voter group. this code is among those that I now write and 20
-	/// minutes later I don't have any recollect of how it is working..
+	/// extract the support of this voter group.
+	///
+	/// This code is among those that I now write, and 20 minutes later I don't have any
+	/// recollection of how it is working..
 	fn extract_support(
-		supports: Supports<AccountId>,
+		supports: BoundedSupportsOf<Self>,
 		voter_group: Vec<AccountId>,
-	) -> Supports<AccountId> {
-		supports
+	) -> BoundedSupportsOf<Self> {
+		let inner: BoundedVec<_, _> = supports
 			.into_iter()
 			.map(|(t, s)| (t, s.voters))
 			.map(|(t, s)| {
-				(
-					t,
-					s.into_iter()
-						.filter(|(v, _)| voter_group.iter().any(|x| x == v))
-						.collect::<Vec<_>>(),
-				)
+				let bounded_supports: BoundedVec<_, _> = s
+					.into_iter()
+					.filter(|(v, _)| voter_group.iter().any(|x| x == v))
+					.collect::<Vec<_>>()
+					.try_into()
+					.unwrap();
+				(t, bounded_supports)
 			})
-			.map(|(t, s)| (t, Support { total: s.iter().fold(0, |a, (_, x)| a + x), voters: s }))
+			.map(|(t, s)| {
+				(t, BoundedSupport { total: s.iter().fold(0, |a, (_, x)| a + x), voters: s })
+			})
 			.collect::<Vec<_>>()
+			.try_into()
+			// TODO: If boundedVec has an unlimited bound, we can simply do into().
+			.expect("input was originally of the same bounded type; size has not changed; qed");
+		BoundedSupportsOf::<Self>::from(inner)
 	}
 
-	fn chunk_by_nominators(supports: Supports<AccountId>) -> Vec<Supports<AccountId>> {
+	fn chunk_by_nominators(supports: BoundedSupportsOf<Self>) -> Vec<BoundedSupportsOf<Self>> {
 		let all_voters = supports
 			.iter()
 			.map(|(_, s)| s.voters.clone())
@@ -310,25 +321,31 @@ impl MockElectionProvider {
 		supports_chunked
 	}
 
-	fn chunk_by_validators(supports: Supports<AccountId>) -> Vec<Supports<AccountId>> {
+	fn chunk_by_validators(supports: BoundedSupportsOf<Self>) -> Vec<BoundedSupportsOf<Self>> {
 		let chunks = (supports.len() / (ElectionPages::get() as usize)).max(1);
-		let mut supports_chunked = supports.chunks(chunks).map(|x| x.to_vec()).collect::<Vec<_>>();
+		let mut supports_chunked = supports
+			.chunks(chunks)
+			.map(|x| {
+				let t1: BoundedVec<_, _> = x.to_vec().try_into().unwrap();
+				t1.into()
+			})
+			.collect::<Vec<BoundedSupportsOf<Self>>>();
 		supports_chunked.resize(ElectionPages::get() as usize, Default::default());
 		supports_chunked
 	}
 
-	fn multi_block(remaining: PageIndex) -> Result<Supports<AccountId>, &'static str> {
+	fn multi_block(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, &'static str> {
 		let first_page = ElectionPages::get() - 1;
 		if remaining == first_page {
 			// this is the first page of the election.
 			let all_supports = Self::single_block()?;
-			let mut paginated_supports = if PaginateNominators::get() {
+			let paginated_supports = if PaginateNominators::get() {
 				Self::chunk_by_nominators(all_supports)
 			} else {
 				Self::chunk_by_validators(all_supports)
 			};
 			PaginatedElection::set(Some(paginated_supports.clone()));
-			Ok(paginated_supports.get(remaining as usize).unwrap().to_vec())
+			Ok(paginated_supports.get(remaining as usize).unwrap().clone())
 		} else if remaining < first_page {
 			// this is NOT the first page anymore.
 			let paginated = PaginatedElection::get().expect("PaginatedElection not found");
@@ -337,25 +354,29 @@ impl MockElectionProvider {
 			if remaining == 0 {
 				PaginatedElection::set(None);
 			}
-			Ok(supports.to_vec())
+			Ok(supports.clone())
 		} else {
 			unreachable!()
 		}
 	}
 
-	fn single_block() -> Result<Supports<AccountId>, &'static str> {
+	fn single_block() -> Result<BoundedSupportsOf<Self>, &'static str> {
 		PaginatedElection::set(None);
 		onchain::OnChainSequentialPhragmen::<Test>::elect(0)
 			.map_err(|_| "OnChainSequentialPhragmen")
 	}
 }
 
-impl ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
+impl ElectionProvider for MockElectionProvider {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
 	type DataProvider = Staking;
+	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
+	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
 	type Error = &'static str;
 	type Pages = ElectionPages;
 
-	fn elect(remaining: PageIndex) -> Result<Supports<AccountId>, Self::Error> {
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match ElectionPages::get() {
 			1 => {
 				assert_eq!(remaining, 0);
@@ -368,7 +389,7 @@ impl ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
+	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;

@@ -201,8 +201,9 @@ impl onchain::Config for Runtime {
 	type DataProvider = Staking;
 }
 
+const MAX_NOMINATIONS: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 impl pallet_staking::Config for Runtime {
-	const MAX_NOMINATIONS: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
+	type MaxNominations = ConstU32<{ MAX_NOMINATIONS }>;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;

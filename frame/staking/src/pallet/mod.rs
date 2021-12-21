@@ -17,7 +17,7 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::{ElectionProvider, PageIndex, SortedListProvider};
+use frame_election_provider_support::{PageIndex, SortedListProvider};
 use frame_support::{
 	traits::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
@@ -52,6 +52,7 @@ pub mod pallet {
 	use crate::BenchmarkingConfig;
 
 	use super::*;
+	use frame_election_provider_support::ElectionProvider;
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -78,7 +79,7 @@ pub mod pallet {
 		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 		/// Something that provides the election functionality.
-		type ElectionProvider: frame_election_provider_support::ElectionProvider<
+		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			// we only accept an election provider that has staking as data provider.
@@ -86,14 +87,24 @@ pub mod pallet {
 		>;
 
 		/// Something that provides the election functionality at genesis.
-		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
+		///
+		/// It should have only 1 page, and it should have the same supports bounds as with the
+		/// normal election provider.
+		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
+			Pages = ConstU32<1>,
+			MaxBackersPerSupport = <Self::ElectionProvider as ElectionProvider>::MaxBackersPerSupport,
+			MaxSupportsPerPage = <Self::ElectionProvider as ElectionProvider>::MaxSupportsPerPage
 		>;
 
 		/// Maximum number of nominations per nominator.
-		const MAX_NOMINATIONS: u32;
+		// TODO: we need a LOT of docs and tests about wtf do to if we ever reduce this. Say all
+		// voters in storage have 16 nominations, and now we want to set it to 8. We should ideally
+		// not need any cleanup, and just skip these. Nonetheless, I am not sure how the storage
+		// will react. Need to look into the Decode impl of BoundedVec.
+		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -158,15 +169,6 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
-	}
-
-	#[pallet::extra_constants]
-	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
-		fn MaxNominations() -> u32 {
-			T::MAX_NOMINATIONS
-		}
 	}
 
 	#[pallet::type_value]
@@ -249,7 +251,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
+		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
@@ -743,13 +745,6 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			assert_eq!(
-				<T::GenesisElectionProvider as ElectionProvider<T::AccountId, T::BlockNumber>>::Pages::get(),
-				1,
-				"Genesis election provider must have single page. Use `OnChainSequentialPhragmen` \
-				for an easy example.",
-			);
-
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
 					assert!(
@@ -1075,9 +1070,9 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
+			ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
 
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+			let old = Nominators::<T>::get(stash).map_or_else(Default::default, |x| x.targets);
 
 			let targets = targets
 				.into_iter()
@@ -1092,6 +1087,9 @@ pub mod pallet {
 					})
 				})
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
+
+			let targets =
+				targets.try_into().expect("length is checked; conversion cannot fail; qed");
 
 			let nominations = Nominations {
 				targets,

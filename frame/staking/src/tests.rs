@@ -18,7 +18,9 @@
 //! Tests for the module.
 
 use super::{Event, *};
-use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
+use frame_election_provider_support::{
+	ElectionProvider, SortedListProvider, Support, TryIntoBoundedSupports,
+};
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::WithPostDispatchInfo,
@@ -1908,7 +1910,9 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 				vec![
 					(21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
 					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
-				],
+				]
+				.try_into_bounded_supports()
+				.unwrap(),
 			);
 		});
 }
@@ -1952,7 +1956,9 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 				vec![
 					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
 					(21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
-				],
+				]
+				.try_into_bounded_supports()
+				.unwrap(),
 			);
 		});
 }
@@ -3960,7 +3966,7 @@ fn on_finalize_weight_is_nonzero() {
 
 mod election_data_provider {
 	use super::*;
-	use frame_election_provider_support::ElectionDataProvider;
+	use frame_election_provider_support::{ElectionDataProvider, TryIntoBoundedVoters};
 
 	#[test]
 	fn targets_2sec_block() {
@@ -4060,8 +4066,8 @@ mod election_data_provider {
 			.set_status(41, StakerStatus::Idle)
 			.build_and_execute(|| {
 				// we shall have 2 validators and 5 nominators.
-				assert_eq!(CounterForNominators::<Test>::get(), 5);
-				assert_eq!(CounterForValidators::<Test>::get(), 2);
+				assert_eq!(Nominators::<Test>::count(), 5);
+				assert_eq!(Validators::<Test>::count(), 2);
 
 				// we have 6 voters in total, get them over two pages, each 4 max.
 				assert_eq!(
@@ -4074,12 +4080,16 @@ mod election_data_provider {
 						(101, 500, vec![11, 21]),
 						(61, 500, vec![11]),
 					]
+					.try_into_bounded_voters()
+					.unwrap()
 				);
 
 				assert_eq!(LastIteratedNominator::<Test>::get(), Some(61));
 				assert_eq!(
 					Staking::voters(Some(4), 0).unwrap(),
 					vec![(71, 500, vec![11]), (81, 500, vec![11]), (91, 500, vec![11])]
+						.try_into_bounded_voters()
+						.unwrap()
 				);
 				assert_eq!(LastIteratedNominator::<Test>::get(), None);
 			});
@@ -4317,7 +4327,11 @@ fn count_check_works() {
 		Validators::<Test>::insert(987654321, ValidatorPrefs::default());
 		Nominators::<Test>::insert(
 			987654321,
-			Nominations { targets: vec![], submitted_in: Default::default(), suppressed: false },
+			Nominations {
+				targets: Default::default(),
+				submitted_in: Default::default(),
+				suppressed: false,
+			},
 		);
 	})
 }

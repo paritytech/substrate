@@ -540,7 +540,7 @@ impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 }
 
 impl pallet_staking::Config for Runtime {
-	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
+	type MaxNominations = ConstU32<{ MAX_NOMINATIONS }>;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
