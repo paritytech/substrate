@@ -255,7 +255,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
-	type Error = Error;
+	type Error = BagError;
 
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(List::<T>::iter().map(|n| n.id().clone()))
@@ -269,7 +269,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::contains(id)
 	}
 
-	fn on_insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
+	fn on_insert(id: T::AccountId, weight: VoteWeight) -> Result<(), BagError> {
 		List::<T>::insert(id, weight)
 	}
 
