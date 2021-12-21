@@ -67,7 +67,10 @@ impl SlotTimestampProvider {
 		let slot_duration = Config::get(&*client)?.slot_duration;
 
 		let time = Self::with_header(&client, slot_duration, |header| {
-			Ok(*sc_consensus_babe::find_pre_digest::<B>(&header)?.slot()?)
+			let slot_number = *sc_consensus_babe::find_pre_digest::<B>(&header)
+				.map_err(|err| format!("{}", err))?
+				.slot();
+			Ok(slot_number)
 		})?;
 
 		Ok(Self { unix_millis: atomic::AtomicU64::new(time), slot_duration })
@@ -83,14 +86,17 @@ impl SlotTimestampProvider {
 		let slot_duration = (*slot_duration(&*client)?).get();
 
 		let time = Self::with_header(&client, slot_duration, |header| {
-			Ok(*sc_consensus_aura::find_pre_digest::<B, AuthoritySignature>(&header)?)
+			let slot_number = *sc_consensus_aura::find_pre_digest::<B, AuthoritySignature>(&header)
+				.map_err(|err| format!("{}", err))?;
+			Ok(slot_number)
 		})?;
 
 		Ok(Self { unix_millis: atomic::AtomicU64::new(time), slot_duration })
 	}
 
-	fn with_header<F, C>(client: &Arc<C>, slot_duration: u64, func: F) -> Result<u64, Error>
+	fn with_header<F, C, B>(client: &Arc<C>, slot_duration: u64, func: F) -> Result<u64, Error>
 	where
+		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + UsageProvider<B>,
 		F: Fn(B::Header) -> Result<u64, Error>,
 	{
@@ -104,7 +110,7 @@ impl SlotTimestampProvider {
 				.ok_or_else(|| format!("best header not found in the db!"))?;
 			let slot = func(header)?;
 			// add the slot duration so there's no collision of slots
-			(*slot * slot_duration) + slot_duration
+			(slot * slot_duration) + slot_duration
 		} else {
 			// this is the first block, use the correct time.
 			let now = SystemTime::now();
