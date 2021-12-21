@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 grandpa = { package = "finality-grandpa", version = "0.14.1", default-features = false, features = ["derive-codec"] }
 log = { version = "0.4.8", optional = true }
-serde = { version = "1.0.131", optional = true, features = ["derive"] }
+serde = { version = "1.0.132", optional = true, features = ["derive"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-application-crypto = { version = "4.0.0", default-features = false, path = "../application-crypto" }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }

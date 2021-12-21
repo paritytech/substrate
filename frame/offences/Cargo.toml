@@ -17,7 +17,7 @@ pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-serde = { version = "1.0.131", optional = true }
+serde = { version = "1.0.132", optional = true }
 sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }

@@ -27,7 +27,7 @@ sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machi
 codec = { version = "2.0.0", package = "parity-scale-codec" }
 structopt = "0.3.25"
 chrono = "0.4"
-serde = "1.0.131"
+serde = "1.0.132"
 handlebars = "4.1.4"
 Inflector = "0.11.4"
 linked-hash-map = "0.5.4"

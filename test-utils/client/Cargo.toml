@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = "0.3.16"
 hex = "0.4"
-serde = "1.0.131"
+serde = "1.0.132"
 serde_json = "1.0.71"
 sc-client-api = { version = "4.0.0-dev", path = "../../client/api" }
 sc-client-db = { version = "0.10.0-dev", features = [
