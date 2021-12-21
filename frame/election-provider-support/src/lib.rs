@@ -663,6 +663,27 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 	}
 }
 
+// TODO: most of these conversion traits are doing allocations, but no other way other than unsafe
+// code as it seems.
+
+/// Extension trait to convert an unbounded [`sp_npos_elections::Supports`]
+// NOTE: someday we can have an expensive `SortIntoBoundedSupports` as well.
+pub trait TruncateIntoBoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>> {
+	fn truncate_into_bounded_supports(self) -> BoundedSupports<AccountId, BOuter, BInner>;
+}
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
+	TruncateIntoBoundedSupports<AccountId, BOuter, BInner> for sp_npos_elections::Supports<AccountId>
+{
+	fn truncate_into_bounded_supports(mut self) -> BoundedSupports<AccountId, BOuter, BInner> {
+		// truncate the inner stuff.
+		self.iter_mut().for_each(|(_, s)| s.voters.truncate(BInner::get() as usize));
+		// truncate the outer stuff.
+		self.truncate(BOuter::get() as usize);
+		self.try_into_bounded_supports().expect("truncated self to proper bounds; qed")
+	}
+}
+
 /// Same as [`TryIntoBoundedSupports`], but wrapped in another vector as well.
 ///
 /// The vector can represent a [`PageIndex`].
@@ -686,23 +707,6 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 	}
 }
 
-/// Same as [`TryIntoBoundedSupportsVec`], but the conversion function itself is typed, so that the
-/// generics can be provided using the turbo-fish syntax in case `rustc` fails to auto-detect it.
-pub trait TryIntoBoundedSupportsVecTyped<AccountId> {
-	/// Perform the conversion.
-	fn try_into_bounded_supports_vec_typed<BOuter, BInner>(
-		self,
-	) -> Result<Vec<BoundedSupports<AccountId, BOuter, BInner>>, ()>
-	where
-		BOuter: Get<u32>,
-		BInner: Get<u32>,
-		Self: Sized + TryIntoBoundedSupportsVec<AccountId, BOuter, BInner>,
-	{
-		<Self as TryIntoBoundedSupportsVec<AccountId, BOuter, BInner>>::try_into_bounded_supports_vec(self)
-	}
-}
-impl<T: Sized, AccountId> TryIntoBoundedSupportsVecTyped<AccountId> for T {}
-
 /// Extension trait to easily convert from unbounded voters to bounded ones.
 pub trait TryIntoBoundedVoters<AccountId, MaxVotesPerVoter: Get<u32>> {
 	/// Perform the conversion.
@@ -717,5 +721,16 @@ impl<AccountId, MaxVotesPerVoter: Get<u32>> TryIntoBoundedVoters<AccountId, MaxV
 			.map(|(x, y, z)| z.try_into().map(|z| (x, y, z)))
 			.collect::<Result<Vec<_>, _>>()
 			.map_err(|_| ())
+	}
+}
+
+/// Extension trait to easily convert from bounded voters to unbounded ones.
+pub trait IntoUnboundedVoters<AccountId> {
+	fn into_unbounded_voters(self) -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
+}
+
+impl<AccountId, Bound: Get<u32>> IntoUnboundedVoters<AccountId> for Vec<Voter<AccountId, Bound>> {
+	fn into_unbounded_voters(self) -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+		self.into_iter().map(|(x, y, z)| (x, y, z.into_inner())).collect::<Vec<_>>()
 	}
 }

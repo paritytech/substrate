@@ -1205,7 +1205,7 @@ mod misc {
 #[cfg(test)]
 mod verifier_trait {
 	use super::*;
-	use crate::{mock::*, types::Pagify, unsigned::miner::BaseMiner, verifier::Verifier};
+	use crate::{mock::*, types::Pagify, verifier::Verifier};
 
 	#[test]
 	fn setting_unverified_and_sealing_it() {
@@ -1596,6 +1596,6 @@ mod verifier_trait {
 
 	fn rejects_new_verification_if_ongoing() {
 		todo!("if there's already some verification ongoing, then we don't accept new ones");
-		todo!("not sure what to do about force_set_single_page_valid");
+		// not sure what to do about `force_set_single_page_valid`
 	}
 }

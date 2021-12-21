@@ -52,7 +52,7 @@ mod pallet {
 	}
 
 	impl WeightInfo for () {
-		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
+		fn submit_unsigned(_v: u32, _t: u32, _a: u32, _d: u32) -> Weight {
 			Default::default()
 		}
 	}
@@ -102,7 +102,7 @@ mod pallet {
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
 			paged_solution: Box<PagedRawSolution<T>>,
-			witness: SolutionOrSnapshotSize,
+			_witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
@@ -535,16 +535,7 @@ mod validate_unsigned {
 
 #[cfg(test)]
 mod call {
-	use super::*;
 	use crate::{mock::*, AssignmentOf};
-	use frame_benchmarking::Zero;
-	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
-	use sp_npos_elections::IndexAssignment;
-	use sp_runtime::{
-		offchain::storage_lock::{BlockAndTime, StorageLock},
-		traits::ValidateUnsigned,
-		PerU16,
-	};
 
 	type Assignment = AssignmentOf<Runtime>;
 

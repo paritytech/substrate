@@ -368,6 +368,12 @@ impl<AccountId> Default for Support<AccountId> {
 	}
 }
 
+impl<AccountId: Clone> Support<AccountId> {
+	pub fn self_vote_only(who: AccountId, amount: ExtendedBalance) -> (AccountId, Self) {
+		(who.clone(), Self { total: amount, voters: vec![(who, amount)] })
+	}
+}
+
 /// A target-major representation of the the election outcome.
 ///
 /// Essentially a flat variant of [`SupportMap`].

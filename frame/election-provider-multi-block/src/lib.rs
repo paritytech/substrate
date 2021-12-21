@@ -419,9 +419,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
 		pub fn manage(
-			origin: OriginFor<T>,
-			maybe_force_phase: Option<Phase<T::BlockNumber>>,
-			kill_verifier: bool,
+			_origin: OriginFor<T>,
+			_maybe_force_phase: Option<Phase<T::BlockNumber>>,
+			_kill_verifier: bool,
 		) -> DispatchResultWithPostInfo {
 			// TODO: reset everything, this should only be called in emergencies.
 			todo!();
@@ -436,21 +436,13 @@ pub mod pallet {
 			let signed_deadline = T::SignedPhase::get().saturating_add(unsigned_deadline);
 			let snapshot_deadline = signed_deadline.saturating_add(T::Pages::get().into());
 
-			// TODO: we can build some kind of a state-machine around the phase enum to abstract
-			// this away.
-
-			// now compute the offsets due to pagination.
-			let signed_verification_deadline =
-				signed_deadline.saturating_sub(T::Pages::get().into());
-			let last_unsigned_verification_deadline: T::BlockNumber = T::Pages::get().into();
-
 			let next_election = T::DataProvider::next_election_prediction(now)
 				.max(now)
 				.saturating_sub(T::Lookahead::get());
 			let remaining_blocks = next_election - now;
 			let current_phase = Self::current_phase();
 
-			let last_verification_deadline = log!(
+			log!(
 				trace,
 				"current phase {:?}, next election {:?}, metadata: {:?}",
 				current_phase,
@@ -991,14 +983,12 @@ where
 #[cfg(test)]
 mod phase_rotation {
 	use super::{Event, *};
-	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
+	use crate::{mock::*, Phase};
 	use frame_election_provider_support::ElectionProvider;
-	use frame_support::{assert_noop, assert_ok};
-	use sp_npos_elections::Support;
 
 	#[test]
 	fn phase_rotation_single_page() {
-		ExtBuilder::default().pages(1).build_and_execute(|| {
+		ExtBuilder::default().pages(1).onchain_fallback(true).build_and_execute(|| {
 			// 0 ------- 14 15 ------- 25 ------- 30 -------------- 44 45 ------- 55 ------- 60
 			//              |           |          |                 |   |           |          |
 			//            Signed      Unsigned   Elect        Snapshot  Signed     Unsigned    Elect
@@ -1072,7 +1062,7 @@ mod phase_rotation {
 
 	#[test]
 	fn phase_rotation_multi_page_2() {
-		ExtBuilder::default().pages(2).build_and_execute(|| {
+		ExtBuilder::default().pages(2).onchain_fallback(true).build_and_execute(|| {
 			// 0 -------13 14 15 ------- 25 ------- 30 -------------- 43 44 45 ------- 55 ------- 60
 			//           |     |          |          |                 |     |          |          |
 			//    Snapshot    Signed    Unsigned   Elect        Snapshot    Signed    Unsigned
@@ -1155,7 +1145,7 @@ mod phase_rotation {
 
 	#[test]
 	fn phase_rotation_multi_page_3() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
+		ExtBuilder::default().pages(3).onchain_fallback(true).build_and_execute(|| {
 			#[rustfmt::skip]
 	 		// 0 ------- 12 13 14 15 ------- 25 ------- 30 -------------- 42 43 44 45 ------- 55 ------- 60
 			//            |     |             |          |                |        |          |       |
@@ -1252,11 +1242,10 @@ mod phase_rotation {
 
 #[cfg(test)]
 mod election_provider {
-	use super::{Event, *};
+	use super::*;
 	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
 	use frame_election_provider_support::ElectionProvider;
-	use frame_support::{assert_noop, assert_ok};
-	use sp_npos_elections::Support;
+	use frame_support::assert_ok;
 
 	#[test]
 	fn multi_page_elect_works() {
@@ -1326,7 +1315,6 @@ mod election_provider {
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
 			// load a solution into the verifier
-
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
 
@@ -1385,7 +1373,6 @@ mod election_provider {
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
 			// load a solution into the verifier
-
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
 
@@ -1458,13 +1445,22 @@ mod election_provider {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::{Event, *};
-	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
-	use frame_election_provider_support::ElectionProvider;
-	use frame_support::{assert_noop, assert_ok};
-	use sp_npos_elections::Support;
+mod snapshot {
+	use super::*;
 
+	#[test]
+	fn fetches_exact_voters() {
+		todo!("fetches correct number of voters, based on T::VoterSnapshotPerBlock");
+	}
+
+	#[test]
+	fn fetches_exact_targets() {
+		todo!("fetches correct number of targets, based on T::TargetSnapshotPerBlock");
+	}
+}
+
+#[cfg(test)]
+mod tests {
 	/*
 	#[test]
 	fn signed_phase_void() {

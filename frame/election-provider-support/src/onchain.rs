@@ -17,7 +17,10 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex};
+use crate::{
+	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, IntoUnboundedVoters, PageIndex,
+	TruncateIntoBoundedSupports,
+};
 use frame_support::{
 	traits::{ConstU32, Get},
 	weights::DispatchClass,
@@ -67,23 +70,28 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
+
 	/// Something that provides the data for election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = Self::AccountId,
 		BlockNumber = Self::BlockNumber,
 	>;
+
 	/// Maximum targets to get from the data provider.
 	type TargetsPageSize: Get<Option<usize>>;
+
 	/// Maximum voters to get from the data provider.
 	type VoterPageSize: Get<Option<usize>>;
+
 	/// Maximum number of backers allowed per target.
 	///
-	/// This implementation will naively sort the results and trim them.
+	/// This implementation will naively trim some of the backers, without any sorting.
 	type MaxBackersPerSupport: Get<u32>;
+
 	/// Maximum number of supports that can be returned per page.
 	///
 	/// Similarly, if this is less than `DataProvider`'s `desired_targets`, then it will naively
-	/// trim the winners based on stake.
+	/// trim the winners without any sorting.
 	type MaxSupportsPerPage: Get<u32>;
 }
 
@@ -101,17 +109,15 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 			return Err(Error::NoMoreThenSinglePageExpected)
 		}
 
-		let voters = Self::DataProvider::voters(T::VoterPageSize::get(), 0)
-			.map_err(Error::DataProvider)?
-			.into_iter()
-			.map(|(x, y, z)| (x, y, z.into_inner()))
-			.collect::<Vec<_>>(); // TODO: shitty allocation.
+		let unbounded_voters = Self::DataProvider::voters(T::VoterPageSize::get(), 0)
+			.map(|v| v.into_unbounded_voters())
+			.map_err(Error::DataProvider)?;
 
 		let targets = Self::DataProvider::targets(T::TargetsPageSize::get(), 0)
 			.map_err(Error::DataProvider)?;
 		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
-		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
+		let stake_map: BTreeMap<T::AccountId, VoteWeight> = unbounded_voters
 			.iter()
 			.map(|(validator, vote_weight, _)| (validator.clone(), *vote_weight))
 			.collect();
@@ -119,9 +125,13 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners: _, assignments } =
-			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
-				.map_err(Error::from)?;
+		let ElectionResult { winners: _, assignments } = seq_phragmen::<_, T::Accuracy>(
+			desired_targets as usize,
+			targets,
+			unbounded_voters,
+			None,
+		)
+		.map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
@@ -132,10 +142,7 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		);
 
 		let supports = to_supports(&staked);
-		// TODO: shitty allocation. This probably needs to be replaced, and also we need to trim of
-		// it fails, not panic. For now I want to code to unblock.
-		use crate::TryIntoBoundedSupports;
-		let bounded_supports = supports.try_into_bounded_supports().unwrap();
+		let bounded_supports = supports.truncate_into_bounded_supports();
 		Ok(bounded_supports.into())
 	}
 }
@@ -145,6 +152,7 @@ mod tests {
 	use crate::TryIntoBoundedSupports;
 
 	use super::*;
+	use crate::TryIntoBoundedVoters;
 	use frame_support::traits::ConstU32;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
@@ -219,7 +227,6 @@ mod tests {
 				_: Option<usize>,
 				_: PageIndex,
 			) -> data_provider::Result<Vec<crate::Voter<Self::AccountId, Self::MaxVotesPerVoter>>> {
-				use crate::TryIntoBoundedVoters;
 				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])]
 					.try_into_bounded_voters()
 					.unwrap())

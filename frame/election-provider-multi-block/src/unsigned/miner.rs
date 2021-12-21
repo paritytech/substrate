@@ -21,7 +21,7 @@ use crate::{
 	types::*,
 	verifier::{self},
 };
-use codec::{Decode, Encode};
+use codec::Encode;
 use frame_election_provider_support::{ExtendedBalance, NposSolver, Support, VoteWeight};
 use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::{
@@ -266,7 +266,7 @@ impl<
 			// NOTE: this `page` index is LOCAL. It does not correspond to the actual page index of
 			// the snapshot map, but rather the index in the `voter_pages`.
 			let page = voter_page_fn(&assignment.who).ok_or(MinerError::InvalidPage)?;
-			let mut assignment_page =
+			let assignment_page =
 				paged_assignments.get_mut(page as usize).ok_or(MinerError::InvalidPage)?;
 			assignment_page.push(assignment);
 		}
@@ -592,7 +592,6 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	/// Get a checked solution from the base miner, ensure unsigned-specific checks also pass, then
 	/// return an submittable call.
 	fn mine_checked_call() -> Result<super::Call<T>, OffchainMinerError<T>> {
-		let iters = Self::get_balancing_iters();
 		// we always do reduce in the offchain worker miner.
 		let reduce = true;
 		let witness = crate::Snapshot::<T>::metadata().ok_or::<OffchainMinerError<T>>(
@@ -648,24 +647,6 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 			call.into(),
 		)
 		.map_err(|_| OffchainMinerError::PoolSubmissionFailed)
-	}
-
-	/// Get a random number of iterations to run the balancing in the OCW.
-	///
-	/// Uses the offchain seed to generate a random number, maxed with
-	/// [`Config::MinerMaxIterations`].
-	pub fn get_balancing_iters() -> usize {
-		use sp_runtime::traits::TrailingZeroInput;
-		match T::MinerMaxIterations::get() {
-			0 => 0,
-			max @ _ => {
-				let seed = sp_io::offchain::random_seed();
-				let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
-					.expect("input is padded with zeroes; qed") %
-					max.saturating_add(1);
-				random as usize
-			},
-		}
 	}
 
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way,
@@ -823,9 +804,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 mod trim_weight_length {
 	use super::*;
 	use crate::{mock::*, verifier::Verifier};
-	use frame_election_provider_support::{
-		TryIntoBoundedSupportsVec, TryIntoBoundedSupportsVecTyped,
-	};
+	use frame_election_provider_support::TryIntoBoundedSupportsVec;
 	use sp_npos_elections::Support;
 
 	#[test]
@@ -1115,9 +1094,7 @@ mod trim_weight_length {
 mod base_miner {
 	use super::*;
 	use crate::{mock::*, Snapshot};
-	use frame_election_provider_support::{
-		TryIntoBoundedSupportsVec, TryIntoBoundedSupportsVecTyped,
-	};
+	use frame_election_provider_support::TryIntoBoundedSupportsVec;
 	use sp_npos_elections::Support;
 	use sp_runtime::PerU16;
 
@@ -1741,7 +1718,7 @@ mod offchain_worker_miner {
 			// OCW must have submitted now
 
 			let encoded = pool.read().transactions[0].clone();
-			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+			let extrinsic: Extrinsic = codec::Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
 			assert!(matches!(
 				call,
@@ -1822,7 +1799,7 @@ mod offchain_worker_miner {
 			pool.try_write().unwrap().transactions.clear();
 
 			// ..and cached
-			let mut call_cache =
+			let call_cache =
 				StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_CACHED_CALL);
 			assert!(matches!(call_cache.get::<crate::unsigned::Call<Runtime>>(), Ok(Some(_))));
 
@@ -1862,7 +1839,7 @@ mod offchain_worker_miner {
 			assert_eq!(pool.read().transactions.len(), 1);
 
 			// ..and cached
-			let mut call_cache =
+			let call_cache =
 				StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_CACHED_CALL);
 			assert!(matches!(call_cache.get::<crate::unsigned::Call<Runtime>>(), Ok(Some(_))));
 

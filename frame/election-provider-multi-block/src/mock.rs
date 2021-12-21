@@ -25,11 +25,10 @@ use crate::{
 	verifier as verifier_pallet,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_election_provider_support::{data_provider, ElectionDataProvider};
+use frame_election_provider_support::{data_provider, ElectionDataProvider, Support};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
-use scale_info::TypeInfo;
 use sp_core::{
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
@@ -44,9 +43,6 @@ use sp_runtime::{
 	PerU16, Perbill,
 };
 use std::{sync::Arc, vec};
-
-// TODO: this mock is basically moving toward the direction of integration tests..maybe someday we
-// need to break it down.
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -131,7 +127,6 @@ impl pallet_balances::Config for Runtime {
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
 	pub static Voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, MaxVotesPerVoter>)> = vec![
-		// TODO: how about a `bounded_vec![ConstU32<8>, 1,2,3]`
 		(1, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10, 20]).unwrap()),
 		(2, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![30, 40]).unwrap()),
 		(3, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![40]).unwrap()),
@@ -148,16 +143,10 @@ parameter_types! {
 	];
 	pub static LastIteratedVoterIndex: Option<usize> = None;
 
-	pub static OnChianFallback: bool = true; // TODO: this should be false by default.
+	pub static OnChianFallback: bool = false;
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
-	pub static SignedMaxSubmissions: u32 = 5;
-	pub static SignedDepositBase: Balance = 5;
-	pub static SignedDepositByte: Balance = 0;
-	pub static SignedDepositWeight: Balance = 0;
-	pub static SignedRewardBase: Balance = 7;
-	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
@@ -170,8 +159,8 @@ parameter_types! {
 	pub static EpochLength: u64 = 30;
 	// by default we stick to 3 pages to host our 12 voters.
 	pub static VoterSnapshotPerBlock: VoterIndex = 4;
-	pub static TargetSnapshotPerBlock: TargetIndex = 8; // TODO: test
-	pub static Lookahead: BlockNumber = 0; // TODO: test
+	pub static TargetSnapshotPerBlock: TargetIndex = 8;
+	pub static Lookahead: BlockNumber = 0;
 
 	// we have 12 voters in the default setting, this should be enough to make sure they are not
 	// trimmed accidentally in any test.
@@ -272,7 +261,7 @@ impl crate::verifier::Config for Runtime {
 
 pub struct MockUnsignedWeightInfo;
 impl crate::unsigned::WeightInfo for MockUnsignedWeightInfo {
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
+	fn submit_unsigned(_v: u32, _t: u32, a: u32, _d: u32) -> Weight {
 		a as Weight
 	}
 }
@@ -338,7 +327,6 @@ impl ElectionProvider for MockFallback {
 		} else {
 			// NOTE: this pesky little trick here is to avoid a clash of type, since `Ok` of our
 			// election provider and our fallback is not the same
-			// TODO maybe we should bound this as well in the integrity test or something like that.
 			let err = InitiateEmergencyPhase::<Runtime>::elect(remaining).unwrap_err();
 			Err(err)
 		}
@@ -487,10 +475,6 @@ impl ExtBuilder {
 		<MinerMaxLength>::set(len);
 		self
 	}
-	pub(crate) fn mock_weight_info(self, mock: bool) -> Self {
-		<MockWeightInfo>::set(mock);
-		self
-	}
 	pub(crate) fn desired_targets(self, t: u32) -> Self {
 		<DesiredTargets>::set(t);
 		self
@@ -499,21 +483,10 @@ impl ExtBuilder {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets.try_into().unwrap())));
 		self
 	}
-	pub(crate) fn signed_max_submission(self, count: u32) -> Self {
-		<SignedMaxSubmissions>::set(count);
+	pub(crate) fn onchain_fallback(self, enable: bool) -> Self {
+		OnChianFallback::set(enable);
 		self
 	}
-	pub(crate) fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
-		<SignedDepositBase>::set(base);
-		<SignedDepositByte>::set(byte);
-		<SignedDepositWeight>::set(weight);
-		self
-	}
-	pub(crate) fn signed_weight(self, weight: Weight) -> Self {
-		<SignedMaxWeight>::set(weight);
-		self
-	}
-
 	pub(crate) fn build_unchecked(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -781,7 +754,9 @@ pub fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime>
 }
 
 /// A real solution that's valid, but has a really bad score.
-// TODO: we could deprecate this in favour of `raw_paged_from_supports`.
+///
+/// This is different from `solution_from_supports` in that it does not require the snapshot to
+/// exist.
 pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 	PagedRawSolution {
 		solution_pages: vec![TestNposSolution {
@@ -800,48 +775,76 @@ pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 	}
 }
 
-#[test]
-fn staking_mock_works() {
-	ExtBuilder::default().build_and_execute(|| {
-		assert_eq!(MockStaking::voters(None, 0).unwrap().len(), 12);
-		assert!(LastIteratedVoterIndex::get().is_none());
+#[cfg(test)]
+mod tests {
+	use super::*;
 
-		assert_eq!(
-			MockStaking::voters(Some(4), 0)
-				.unwrap()
-				.into_iter()
-				.map(|(x, _, _)| x)
-				.collect::<Vec<_>>(),
-			vec![1, 2, 3, 4],
-		);
-		assert!(LastIteratedVoterIndex::get().is_none());
+	#[test]
+	fn targets() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(Targets::get().len(), 4);
 
-		assert_eq!(
-			MockStaking::voters(Some(4), 2)
-				.unwrap()
-				.into_iter()
-				.map(|(x, _, _)| x)
-				.collect::<Vec<_>>(),
-			vec![1, 2, 3, 4],
-		);
-		assert_eq!(LastIteratedVoterIndex::get().unwrap(), 4);
-		assert_eq!(
-			MockStaking::voters(Some(4), 1)
-				.unwrap()
-				.into_iter()
-				.map(|(x, _, _)| x)
-				.collect::<Vec<_>>(),
-			vec![5, 6, 7, 8],
-		);
-		assert_eq!(LastIteratedVoterIndex::get().unwrap(), 8);
-		assert_eq!(
-			MockStaking::voters(Some(4), 0)
-				.unwrap()
-				.into_iter()
-				.map(|(x, _, _)| x)
-				.collect::<Vec<_>>(),
-			vec![10, 20, 30, 40],
-		);
-		assert!(LastIteratedVoterIndex::get().is_none());
-	})
+			// any non-zero page is error
+			assert!(MockStaking::targets(None, 1).is_err());
+			assert!(MockStaking::targets(None, 2).is_err());
+
+			// but 0 is fine.
+			assert_eq!(MockStaking::targets(None, 0).unwrap().len(), 4);
+
+			// fetch less targets is error.
+			assert!(MockStaking::targets(Some(2), 0).is_err());
+
+			// more targets is fine.
+			assert!(MockStaking::targets(Some(4), 0).is_ok());
+			assert!(MockStaking::targets(Some(5), 0).is_ok());
+		});
+	}
+
+	#[test]
+	fn multi_page_votes() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(MockStaking::voters(None, 0).unwrap().len(), 12);
+			assert!(LastIteratedVoterIndex::get().is_none());
+
+			assert_eq!(
+				MockStaking::voters(Some(4), 0)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![1, 2, 3, 4],
+			);
+			assert!(LastIteratedVoterIndex::get().is_none());
+
+			assert_eq!(
+				MockStaking::voters(Some(4), 2)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![1, 2, 3, 4],
+			);
+			assert_eq!(LastIteratedVoterIndex::get().unwrap(), 4);
+
+			assert_eq!(
+				MockStaking::voters(Some(4), 1)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![5, 6, 7, 8],
+			);
+			assert_eq!(LastIteratedVoterIndex::get().unwrap(), 8);
+
+			assert_eq!(
+				MockStaking::voters(Some(4), 0)
+					.unwrap()
+					.into_iter()
+					.map(|(x, _, _)| x)
+					.collect::<Vec<_>>(),
+				vec![10, 20, 30, 40],
+			);
+			assert!(LastIteratedVoterIndex::get().is_none());
+		})
+	}
 }

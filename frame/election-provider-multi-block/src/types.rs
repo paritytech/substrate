@@ -69,14 +69,14 @@ pub struct PagedRawSolution<T: crate::Config> {
 
 /// A helper trait to deal with the page index of partial solutions.
 ///
-/// This should only be called on the `Vec<Solution>`. If the solution is *full*, then it returns a
-/// normal iterator that is just mapping the index (usize) to `PageIndex`.
+/// This should only be called on the `Vec<Solution>` or similar types. If the solution is *full*,
+/// then it returns a normal iterator that is just mapping the index (usize) to `PageIndex`.
 ///
 /// if the solution is partial, it shifts the indices sufficiently so that the most significant page
 /// of the solution matches with the most significant page of the snapshot onchain.
-// TODO: we need a consuming version of this as well.
 pub trait Pagify<T> {
 	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_>;
+	fn into_pagify(self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, T)>>;
 }
 
 impl<T> Pagify<T> for Vec<T> {
@@ -93,6 +93,10 @@ impl<T> Pagify<T> for Vec<T> {
 					(new_page, s)
 				}),
 		)
+	}
+
+	fn into_pagify(self, _: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, T)>> {
+		todo!()
 	}
 }
 
