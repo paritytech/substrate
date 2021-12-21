@@ -924,7 +924,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           Module { index: 2, error: 1, message: \
+	                           Module { index: 2, error: [1, 0, 0, 0], message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") }")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
