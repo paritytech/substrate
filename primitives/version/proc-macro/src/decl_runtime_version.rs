@@ -63,7 +63,7 @@ struct RuntimeVersion {
 	impl_version: u32,
 	apis: u8,
 	transaction_version: u32,
-	state_version: u32,
+	state_version: u8,
 }
 
 #[derive(Default, Debug)]
@@ -74,7 +74,7 @@ struct ParseRuntimeVersion {
 	spec_version: Option<u32>,
 	impl_version: Option<u32>,
 	transaction_version: Option<u32>,
-	state_version: Option<u32>,
+	state_version: Option<u8>,
 }
 
 impl ParseRuntimeVersion {
@@ -125,7 +125,7 @@ impl ParseRuntimeVersion {
 		} else if field_name == "transaction_version" {
 			parse_once(&mut self.transaction_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "state_version" {
-			parse_once(&mut self.state_version, field_value, Self::parse_num_literal)?;
+			parse_once(&mut self.state_version, field_value, Self::parse_num_literal_u8)?;
 		} else if field_name == "apis" {
 			// Intentionally ignored
 			//
@@ -149,6 +149,18 @@ impl ParseRuntimeVersion {
 				)),
 		};
 		lit.base10_parse::<u32>()
+	}
+
+	fn parse_num_literal_u8(expr: &Expr) -> Result<u8> {
+		let lit = match *expr {
+			Expr::Lit(ExprLit { lit: Lit::Int(ref lit), .. }) => lit,
+			_ =>
+				return Err(Error::new(
+					expr.span(),
+					"only numeric literals (e.g. `10`) are supported here",
+				)),
+		};
+		lit.base10_parse::<u8>()
 	}
 
 	fn parse_str_literal(expr: &Expr) -> Result<String> {

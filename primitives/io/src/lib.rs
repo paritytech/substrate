@@ -51,8 +51,9 @@ use sp_core::{
 	offchain::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
+	sr25519,
 	storage::StateVersion,
-	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, H256,
+	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
 
 #[cfg(feature = "std")]

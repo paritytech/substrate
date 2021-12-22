@@ -23,11 +23,9 @@ use crate::{
 };
 use codec::Encode;
 use hash_db::Hasher;
+use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
-use sp_core::storage::{
-	ChildInfo, TrackedStorageKey, StateVersion
-};
 use sp_std::vec::Vec;
 
 /// A state backend is used to read state data and can have changes committed

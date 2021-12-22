@@ -32,7 +32,7 @@ use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{is_child_storage_key, CODE},
-		Storage, StateVersion,
+		StateVersion, Storage,
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,

@@ -238,7 +238,7 @@ pub struct RuntimeVersion {
 
 	/// Version of the state implementation used by this runtime.
 	/// Use of an incorrect version is consensus breaking.
-	pub state_version: u32,
+	pub state_version: u8,
 }
 
 /// Struct for decoding without checking `Core` api
@@ -246,33 +246,48 @@ pub struct RuntimeVersion {
 /// This assumes we are using the latest version.
 pub struct RuntimeVersionLatest(pub RuntimeVersion);
 
+fn decode_runtime<I: Input>(
+	input: &mut I,
+	force_latest: bool,
+) -> Result<RuntimeVersion, codec::Error> {
+	let spec_name = Decode::decode(input)?;
+	let impl_name = Decode::decode(input)?;
+	let authoring_version = Decode::decode(input)?;
+	let spec_version = Decode::decode(input)?;
+	let impl_version = Decode::decode(input)?;
+	let apis = Decode::decode(input)?;
+	let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
+	let transaction_version = if force_latest || has_api_with(&apis, &core_api_id, |v| v >= 3) {
+		Decode::decode(input)?
+	} else {
+		1
+	};
+	let state_version = if force_latest || has_api_with(&apis, &core_api_id, |v| v >= 4) {
+		Decode::decode(input)?
+	} else {
+		0
+	};
+	Ok(RuntimeVersion {
+		spec_name,
+		impl_name,
+		authoring_version,
+		spec_version,
+		impl_version,
+		apis,
+		transaction_version,
+		state_version,
+	})
+}
+
 impl Decode for RuntimeVersion {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		let v: RuntimeVersionBasis = Decode::decode(input)?;
-
-		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
-		let mut v: RuntimeVersion = v.into();
-		if has_api_with(&v.apis, &core_api_id, |v| v >= 3) {
-			let transaction_version: u32 = Decode::decode(input)?;
-			v.transaction_version = transaction_version;
-		}
-		if has_api_with(&v.apis, &core_api_id, |v| v > 3) {
-			let state_version: u32 = Decode::decode(input)?;
-			v.state_version = state_version;
-		};
-		Ok(v)
+		decode_runtime(input, false)
 	}
 }
 
 impl Decode for RuntimeVersionLatest {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		let v: RuntimeVersionBasis = Decode::decode(input)?;
-		let mut v: RuntimeVersion = v.into();
-		let transaction_version: u32 = Decode::decode(input)?;
-		v.transaction_version = transaction_version;
-		let state_version: u32 = Decode::decode(input)?;
-		v.state_version = state_version;
-		Ok(RuntimeVersionLatest(v))
+		Ok(RuntimeVersionLatest(decode_runtime(input, true)?))
 	}
 }
 

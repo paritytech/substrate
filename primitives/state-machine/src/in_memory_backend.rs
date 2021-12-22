@@ -22,9 +22,7 @@ use crate::{
 };
 use codec::Codec;
 use hash_db::Hasher;
-use sp_core::storage::{
-	ChildInfo, Storage, StateVersion,
-};
+use sp_core::storage::{ChildInfo, StateVersion, Storage};
 use sp_trie::{empty_trie_root, LayoutV1, MemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
@@ -184,8 +182,8 @@ where
 mod tests {
 	use super::*;
 	use crate::backend::Backend;
-	use sp_runtime::traits::BlakeTwo256;
 	use sp_core::storage::StateVersion;
+	use sp_runtime::traits::BlakeTwo256;
 
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]

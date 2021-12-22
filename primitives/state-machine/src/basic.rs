@@ -23,7 +23,8 @@ use hash_db::Hasher;
 use log::warn;
 use sp_core::{
 	storage::{
-		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey, StateVersion,
+		well_known_keys::is_child_storage_key, ChildInfo, StateVersion, Storage, StorageChild,
+		TrackedStorageKey,
 	},
 	traits::Externalities,
 	Blake2Hasher,

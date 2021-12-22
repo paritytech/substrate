@@ -21,7 +21,7 @@ use crate::{Backend, StorageKey, StorageValue};
 use codec::Encode;
 use hash_db::Hasher;
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey, StateVersion},
+	storage::{ChildInfo, StateVersion, TrackedStorageKey},
 	traits::Externalities,
 	Blake2Hasher,
 };
