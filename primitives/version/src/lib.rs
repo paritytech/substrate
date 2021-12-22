@@ -149,20 +149,10 @@ macro_rules! create_apis_vec {
 	};
 }
 
-/// Runtime Version with support for reading
-/// previous runtime version encoding.
-pub struct RuntimeVersionCompatibility(RuntimeVersion);
-
-impl From<RuntimeVersionCompatibility> for RuntimeVersion {
-	fn from(x: RuntimeVersionCompatibility) -> Self {
-		x.0
-	}
-}
-
-/// Deprecated previous runtime version encoding.
-/// For compatibility.
+/// Deprecated first runtime version encoding.
+/// Used to decode in a compatible way.
 #[derive(codec::Encode, codec::Decode)]
-pub struct RuntimeVersionV0 {
+pub struct RuntimeVersionBasis {
 	pub spec_name: RuntimeString,
 	pub impl_name: RuntimeString,
 	pub authoring_version: u32,
@@ -171,21 +161,8 @@ pub struct RuntimeVersionV0 {
 	pub apis: ApisVec,
 }
 
-/// Deprecated previous runtime version encoding.
-/// For compatibility.
-#[derive(codec::Encode, codec::Decode)]
-pub struct RuntimeVersionV1 {
-	pub spec_name: RuntimeString,
-	pub impl_name: RuntimeString,
-	pub authoring_version: u32,
-	pub spec_version: u32,
-	pub impl_version: u32,
-	pub apis: ApisVec,
-	pub transaction_version: u32,
-}
-
-impl From<RuntimeVersionV0> for RuntimeVersionV2 {
-	fn from(x: RuntimeVersionV0) -> Self {
+impl From<RuntimeVersionBasis> for RuntimeVersion {
+	fn from(x: RuntimeVersionBasis) -> Self {
 		Self {
 			spec_name: x.spec_name,
 			impl_name: x.impl_name,
@@ -199,58 +176,16 @@ impl From<RuntimeVersionV0> for RuntimeVersionV2 {
 	}
 }
 
-impl From<RuntimeVersionV2> for RuntimeVersionV0 {
-	fn from(x: RuntimeVersionV2) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-		}
-	}
-}
-
-impl From<RuntimeVersionV1> for RuntimeVersionV2 {
-	fn from(x: RuntimeVersionV1) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-			transaction_version: x.transaction_version,
-			state_version: 0,
-		}
-	}
-}
-
-impl From<RuntimeVersionV2> for RuntimeVersionV1 {
-	fn from(x: RuntimeVersionV2) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-			transaction_version: x.transaction_version,
-		}
-	}
-}
-
 /// Runtime version.
 /// This should not be thought of as classic Semver (major/minor/tiny).
 /// This triplet have different semantics and mis-interpretation could cause problems.
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly
 /// `authoring_version`, absolutely not `impl_version` since they change the semantics of the
 /// runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Encode, Default, sp_runtime::RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub struct RuntimeVersionV2 {
+pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
 	/// A different on-chain spec_name to that of the native runtime would normally result
 	/// in node not attempting to sync or author blocks.
@@ -306,12 +241,17 @@ pub struct RuntimeVersionV2 {
 	pub state_version: u32,
 }
 
-impl Decode for RuntimeVersionCompatibility {
+/// Struct for decoding without checking `Core` api
+/// version.
+/// This assumes we are using the latest version.
+pub struct RuntimeVersionLatest(pub RuntimeVersion);
+
+impl Decode for RuntimeVersion {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		let v: RuntimeVersionV0 = Decode::decode(input)?;
+		let v: RuntimeVersionBasis = Decode::decode(input)?;
 
 		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
-		let mut v: RuntimeVersionV2 = v.into();
+		let mut v: RuntimeVersion = v.into();
 		if has_api_with(&v.apis, &core_api_id, |v| v >= 3) {
 			let transaction_version: u32 = Decode::decode(input)?;
 			v.transaction_version = transaction_version;
@@ -320,12 +260,21 @@ impl Decode for RuntimeVersionCompatibility {
 			let state_version: u32 = Decode::decode(input)?;
 			v.state_version = state_version;
 		};
-		Ok(RuntimeVersionCompatibility(v))
+		Ok(v)
 	}
 }
 
-/// Current runtime version is `RuntimeVersionV2`.
-pub type RuntimeVersion = RuntimeVersionV2;
+impl Decode for RuntimeVersionLatest {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		let v: RuntimeVersionBasis = Decode::decode(input)?;
+		let mut v: RuntimeVersion = v.into();
+		let transaction_version: u32 = Decode::decode(input)?;
+		v.transaction_version = transaction_version;
+		let state_version: u32 = Decode::decode(input)?;
+		v.state_version = state_version;
+		Ok(RuntimeVersionLatest(v))
+	}
+}
 
 #[cfg(feature = "std")]
 impl fmt::Display for RuntimeVersion {

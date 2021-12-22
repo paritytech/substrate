@@ -107,7 +107,7 @@ use sp_std::result;
 pub use sp_std::{mem, slice};
 #[doc(hidden)]
 pub use sp_version::{
-	create_apis_vec, ApiId, ApisVec, RuntimeVersion, RuntimeVersionV0, RuntimeVersionV1,
+	create_apis_vec, ApiId, ApisVec, RuntimeVersion,
 };
 #[cfg(feature = "std")]
 use std::{cell::RefCell, panic::UnwindSafe};
@@ -666,12 +666,6 @@ decl_runtime_apis! {
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
-		/// Returns the version of the runtime.
-		#[changed_in(4)]
-		fn version() -> RuntimeVersionV1;
-		/// Returns the version of the runtime.
-		#[changed_in(3)]
-		fn version() -> RuntimeVersionV0;
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
