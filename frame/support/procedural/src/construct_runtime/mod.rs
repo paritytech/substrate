@@ -484,6 +484,9 @@ fn decl_static_assertions(
 	let error_encoded_size_check = pallet_decls.iter().map(|decl| {
 		let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 		let path = &decl.path;
+		// This weirdness is required because declarative macros gets hoisted up to the crate root,
+		// and thus doesn't appear in the same module namespace as the tt_call macro. We use a
+		// re-export hack to make the macro appear in the same module namespace.
 		let assert_macro_name = format_ident!("__assert_error_encoded_size_{}", count);
 		let macro_alias = format_ident!("assert_error_encoded_size_{}", count);
 

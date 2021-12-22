@@ -70,10 +70,10 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	let as_str_matches = error.variants.iter().map(|(variant, field_ty, _)| {
 		let variant_str = format!("{}", variant);
 		match field_ty {
-			Some(VariantField { is_named: true, .. }) => {
+			Some(VariantField { is_named: true }) => {
 				quote::quote_spanned!(error.attr_span => Self::#variant { .. } => #variant_str,)
 			},
-			Some(VariantField { is_named: false, .. }) => {
+			Some(VariantField { is_named: false }) => {
 				quote::quote_spanned!(error.attr_span => Self::#variant(..) => #variant_str,)
 			},
 			None => {

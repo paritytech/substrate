@@ -33,52 +33,33 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
 	let max_encoded_size = match data {
-		syn::Data::Struct(syn::DataStruct { struct_token, fields, .. }) => {
-			if fields.len() > 1 {
-				let msg = "Cannot derive `PalletError` for structs with more than 1 field";
-				return syn::Error::new(struct_token.span, msg).into_compile_error().into()
-			}
-
-			match fields {
-				syn::Fields::Named(mut f) if f.named.len() == 1 => {
-					let field_ty = f.named.pop().unwrap().into_value().ty;
-					quote::quote! {
-						<
-							#field_ty as #frame_support::traits::PalletError
-						>::MAX_ENCODED_SIZE
-					}
-				},
-				syn::Fields::Unnamed(mut f) if f.unnamed.len() == 1 => {
-					let field_ty = f.unnamed.pop().unwrap().into_value().ty;
-					quote::quote! {
-						<
-							#field_ty as #frame_support::traits::PalletError
-						>::MAX_ENCODED_SIZE
-					}
-				},
-				_ => quote::quote!(1),
-			}
+		syn::Data::Struct(syn::DataStruct { fields, .. }) => match fields {
+			syn::Fields::Named(f) => {
+				let field_tys = f.named.iter().map(|field| &field.ty);
+				quote::quote! {
+					#(<
+						#field_tys as #frame_support::traits::PalletError
+					>::MAX_ENCODED_SIZE)+*
+				}
+			},
+			syn::Fields::Unnamed(f) => {
+				let field_tys = f.unnamed.iter().map(|field| &field.ty);
+				quote::quote! {
+					#(<
+						#field_tys as #frame_support::traits::PalletError
+					>::MAX_ENCODED_SIZE)+*
+				}
+			},
+			syn::Fields::Unit => quote::quote!(0),
 		},
 		syn::Data::Enum(syn::DataEnum { variants, .. }) => {
 			let field_tys = variants
-				.into_iter()
+				.iter()
 				.map(|variant| {
-					let span = variant.ident.span();
-					let make_err = || {
-						let msg = "Cannot derive `PalletError` for enum with variants \
-							containing more than 1 field";
-						let err = syn::Error::new(span, msg);
-						Err(err)
-					};
-
-					match variant.fields {
-						syn::Fields::Named(mut f) if f.named.len() == 1 =>
-							Ok(Some(f.named.pop().unwrap().into_value().ty)),
-						syn::Fields::Unnamed(mut f) if f.unnamed.len() == 1 =>
-							Ok(Some(f.unnamed.pop().unwrap().into_value().ty)),
-						syn::Fields::Unnamed(mut f) if f.unnamed.len() == 2 => {
-							let second = f.unnamed.pop().unwrap().into_value().ty;
-							let first = f.unnamed.pop().unwrap().into_value().ty;
+					match &variant.fields {
+						syn::Fields::Unnamed(f) if f.unnamed.len() == 2 => {
+							let first = &f.unnamed.first().unwrap().ty;
+							let second = &f.unnamed.last().unwrap().ty;
 
 							match (first, second) {
 								// Check whether we have (PhantomData, Never), if so we skip it.
@@ -93,15 +74,17 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 											.last()
 											.map_or(false, |seg| seg.ident == "Never") =>
 									Ok(None),
-								// Otherwise, it's an error.
-								_ => make_err(),
+								_ => Ok(Some(vec![first, second])),
 							}
 						},
+						syn::Fields::Named(f) =>
+							Ok(Some(f.named.iter().map(|field| &field.ty).collect::<Vec<_>>())),
+						syn::Fields::Unnamed(f) =>
+							Ok(Some(f.unnamed.iter().map(|field| &field.ty).collect::<Vec<_>>())),
 						syn::Fields::Unit => Ok(None),
-						_ => make_err(),
 					}
 				})
-				.collect::<Result<Vec<Option<syn::Type>>, syn::Error>>();
+				.collect::<Result<Vec<Option<Vec<&syn::Type>>>, syn::Error>>();
 
 			let field_tys = match field_tys {
 				Ok(tys) => tys.into_iter().filter_map(identity).collect::<Vec<_>>(),
@@ -111,13 +94,19 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 			if field_tys.is_empty() {
 				quote::quote!(1)
 			} else {
+				let variant_sizes = field_tys.into_iter().map(|variant_field_tys| {
+					quote::quote! {
+						#(<
+							#variant_field_tys as #frame_support::traits::PalletError
+						>::MAX_ENCODED_SIZE)+*
+					}
+				});
+
 				quote::quote! {{
 					let mut size = 1;
-					let mut tmp: usize;
+					let mut tmp = 1;
 					#(
-						tmp = 1 + <
-							#field_tys as #frame_support::traits::PalletError
-						>::MAX_ENCODED_SIZE;
+						tmp += #variant_sizes;
 						size = if tmp > size { tmp } else { size };
 					)*
 					size

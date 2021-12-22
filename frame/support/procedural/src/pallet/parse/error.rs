@@ -27,8 +27,6 @@ mod keyword {
 
 /// Records information about the error enum variants.
 pub struct VariantField {
-	/// The type of the field in the variant.
-	pub ty: syn::Type,
 	/// Whether or not the field is named, i.e. whether it is a tuple variant or struct variant.
 	pub is_named: bool,
 }
@@ -80,19 +78,8 @@ impl ErrorDef {
 			.map(|variant| {
 				let field_ty = match &variant.fields {
 					Fields::Unit => None,
-					Fields::Named(f) if f.named.len() == 1 => Some(VariantField {
-						ty: f.named.first().unwrap().ty.clone(),
-						is_named: true,
-					}),
-					Fields::Unnamed(u) if u.unnamed.len() == 1 => Some(VariantField {
-						ty: u.unnamed.first().unwrap().ty.clone(),
-						is_named: false,
-					}),
-					_ => {
-						let msg = "Invalid pallet::error, unexpected fields, must be `Unit` or \
-							contain only 1 field";
-						return Err(syn::Error::new(variant.fields.span(), msg))
-					},
+					Fields::Named(_) => Some(VariantField { is_named: true }),
+					Fields::Unnamed(_) => Some(VariantField { is_named: false }),
 				};
 				if variant.discriminant.is_some() {
 					let msg = "Invalid pallet::error, unexpected discriminant, discriminants \
