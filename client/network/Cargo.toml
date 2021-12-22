@@ -54,7 +54,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
 thiserror = "1"

@@ -48,7 +48,7 @@ sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consen
 grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }

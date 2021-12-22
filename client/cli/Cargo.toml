@@ -29,7 +29,7 @@ sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" 
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
-sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
