@@ -193,6 +193,7 @@ where
 pub struct LoggerBuilder {
 	directives: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
+	custom_profiler: Option<Box<dyn crate::TraceHandler>>,
 	log_reloading: bool,
 	force_colors: Option<bool>,
 	detailed_output: bool,
@@ -204,6 +205,7 @@ impl LoggerBuilder {
 		Self {
 			directives: directives.into(),
 			profiling: None,
+			custom_profiler: None,
 			log_reloading: false,
 			force_colors: None,
 			detailed_output: false,
@@ -217,6 +219,15 @@ impl LoggerBuilder {
 		profiling_targets: S,
 	) -> &mut Self {
 		self.profiling = Some((tracing_receiver, profiling_targets.into()));
+		self
+	}
+
+	/// Add a custom profiler.
+	pub fn with_custom_profiling(
+		&mut self,
+		custom_profiler: Box<dyn crate::TraceHandler>,
+	) -> &mut Self {
+		self.custom_profiler = Some(custom_profiler);
 		self
 	}
 
@@ -256,7 +267,12 @@ impl LoggerBuilder {
 					self.detailed_output,
 					|builder| enable_log_reloading!(builder),
 				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				let mut profiling =
+					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+
+				self.custom_profiler
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
@@ -269,7 +285,12 @@ impl LoggerBuilder {
 					self.detailed_output,
 					|builder| builder,
 				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				let mut profiling =
+					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+
+				self.custom_profiler
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 

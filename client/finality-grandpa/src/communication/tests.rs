@@ -155,13 +155,13 @@ fn config() -> crate::Config {
 fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::{authorities::AuthoritySet, environment::VoterSetState};
 	use finality_grandpa::round::State as RoundState;
-	use sp_core::{crypto::Public, H256};
+	use sp_core::{crypto::ByteArray, H256};
 	use sp_finality_grandpa::AuthorityId;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
 
-	let voters = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+	let voters = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 1)];
 	let voters = AuthoritySet::genesis(voters).unwrap();
 
 	let set_state = VoterSetState::live(0, &voters, base);

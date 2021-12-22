@@ -23,6 +23,7 @@ use crate::{
 	instance_wrapper::{EntryPoint, InstanceWrapper},
 	util,
 };
+use core::marker::PhantomData;
 
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
@@ -33,7 +34,7 @@ use sc_executor_common::{
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, Value, WordSize};
+use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
 use std::{
 	path::{Path, PathBuf},
 	sync::{
@@ -79,29 +80,31 @@ impl StoreData {
 
 pub(crate) type Store = wasmtime::Store<StoreData>;
 
-enum Strategy {
+enum Strategy<H> {
 	FastInstanceReuse {
 		instance_wrapper: InstanceWrapper,
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
 		heap_base: u32,
 	},
-	RecreateInstance(InstanceCreator),
+	RecreateInstance(InstanceCreator<H>),
 }
 
-struct InstanceCreator {
+struct InstanceCreator<H> {
 	module: Arc<wasmtime::Module>,
-	host_functions: Vec<&'static dyn Function>,
 	heap_pages: u64,
 	allow_missing_func_imports: bool,
 	max_memory_size: Option<usize>,
+	phantom: PhantomData<H>,
 }
 
-impl InstanceCreator {
+impl<H> InstanceCreator<H>
+where
+	H: HostFunctions,
+{
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(
+		InstanceWrapper::new::<H>(
 			&*self.module,
-			&self.host_functions,
 			self.heap_pages,
 			self.allow_missing_func_imports,
 			self.max_memory_size,
@@ -141,19 +144,21 @@ struct InstanceSnapshotData {
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
-pub struct WasmtimeRuntime {
+pub struct WasmtimeRuntime<H> {
 	module: Arc<wasmtime::Module>,
 	snapshot_data: Option<InstanceSnapshotData>,
 	config: Config,
-	host_functions: Vec<&'static dyn Function>,
+	phantom: PhantomData<H>,
 }
 
-impl WasmModule for WasmtimeRuntime {
+impl<H> WasmModule for WasmtimeRuntime<H>
+where
+	H: HostFunctions,
+{
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
-			let mut instance_wrapper = InstanceWrapper::new(
+			let mut instance_wrapper = InstanceWrapper::new::<H>(
 				&self.module,
-				&self.host_functions,
 				self.config.heap_pages,
 				self.config.allow_missing_func_imports,
 				self.config.max_memory_size,
@@ -169,19 +174,19 @@ impl WasmModule for WasmtimeRuntime {
 				&mut InstanceGlobals { instance: &mut instance_wrapper },
 			);
 
-			Strategy::FastInstanceReuse {
+			Strategy::<H>::FastInstanceReuse {
 				instance_wrapper,
 				globals_snapshot,
 				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
 				heap_base,
 			}
 		} else {
-			Strategy::RecreateInstance(InstanceCreator {
+			Strategy::<H>::RecreateInstance(InstanceCreator {
 				module: self.module.clone(),
-				host_functions: self.host_functions.clone(),
 				heap_pages: self.config.heap_pages,
 				allow_missing_func_imports: self.config.allow_missing_func_imports,
 				max_memory_size: self.config.max_memory_size,
+				phantom: PhantomData,
 			})
 		};
 
@@ -191,11 +196,14 @@ impl WasmModule for WasmtimeRuntime {
 
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
-pub struct WasmtimeInstance {
-	strategy: Strategy,
+pub struct WasmtimeInstance<H> {
+	strategy: Strategy<H>,
 }
 
-impl WasmInstance for WasmtimeInstance {
+impl<H> WasmInstance for WasmtimeInstance<H>
+where
+	H: HostFunctions,
+{
 	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
 		match &mut self.strategy {
 			Strategy::FastInstanceReuse {
@@ -483,13 +491,18 @@ enum CodeSupplyMode<'a> {
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
-pub fn create_runtime(
+///
+/// The `H` generic parameter is used to statically pass a set of host functions which are exposed
+/// to the runtime.
+pub fn create_runtime<H>(
 	blob: RuntimeBlob,
 	config: Config,
-	host_functions: Vec<&'static dyn Function>,
-) -> std::result::Result<WasmtimeRuntime, WasmError> {
+) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
+where
+	H: HostFunctions,
+{
 	// SAFETY: this is safe because it doesn't use `CodeSupplyMode::Artifact`.
-	unsafe { do_create_runtime(CodeSupplyMode::Verbatim { blob }, config, host_functions) }
+	unsafe { do_create_runtime::<H>(CodeSupplyMode::Verbatim { blob }, config) }
 }
 
 /// The same as [`create_runtime`] but takes a precompiled artifact, which makes this function
@@ -503,23 +516,27 @@ pub fn create_runtime(
 ///
 /// It is ok though if the `compiled_artifact` was created by code of another version or with
 /// different configuration flags. In such case the caller will receive an `Err` deterministically.
-pub unsafe fn create_runtime_from_artifact(
+pub unsafe fn create_runtime_from_artifact<H>(
 	compiled_artifact: &[u8],
 	config: Config,
-	host_functions: Vec<&'static dyn Function>,
-) -> std::result::Result<WasmtimeRuntime, WasmError> {
-	do_create_runtime(CodeSupplyMode::Artifact { compiled_artifact }, config, host_functions)
+) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
+where
+	H: HostFunctions,
+{
+	do_create_runtime::<H>(CodeSupplyMode::Artifact { compiled_artifact }, config)
 }
 
 /// # Safety
 ///
 /// This is only unsafe if called with [`CodeSupplyMode::Artifact`]. See
 /// [`create_runtime_from_artifact`] to get more details.
-unsafe fn do_create_runtime(
+unsafe fn do_create_runtime<H>(
 	code_supply_mode: CodeSupplyMode<'_>,
 	config: Config,
-	host_functions: Vec<&'static dyn Function>,
-) -> std::result::Result<WasmtimeRuntime, WasmError> {
+) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
+where
+	H: HostFunctions,
+{
 	// Create the engine, store and finally the module from the given code.
 	let mut wasmtime_config = common_config(&config.semantics)?;
 	if let Some(ref cache_path) = config.cache_path {
@@ -566,7 +583,7 @@ unsafe fn do_create_runtime(
 		},
 	};
 
-	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, host_functions })
+	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, phantom: PhantomData })
 }
 
 fn instrument(

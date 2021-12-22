@@ -76,7 +76,7 @@ pub use self::{
 	uint::{U256, U512},
 };
 #[cfg(feature = "full_crypto")]
-pub use crypto::{DeriveJunction, Pair, Public};
+pub use crypto::{ByteArray, DeriveJunction, Pair, Public};
 
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;

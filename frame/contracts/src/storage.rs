@@ -17,10 +17,12 @@
 
 //! This module contains routines for accessing and altering a contract related state.
 
+pub mod meter;
+
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	weights::WeightInfo,
-	CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
+	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -32,24 +34,27 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{traits::Hash, RuntimeDebug};
+use sp_runtime::{
+	traits::{Hash, Zero},
+	RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
-pub type ContractInfo<T> = RawContractInfo<CodeHash<T>>;
+pub type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct RawContractInfo<CodeHash> {
+pub struct RawContractInfo<CodeHash, Balance> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
-	/// This field is reserved for future evolution of format.
-	pub _reserved: Option<()>,
+	/// The amount of balance that is currently deposited to pay for consumed storage.
+	pub storage_deposit: Balance,
 }
 
-impl<CodeHash> RawContractInfo<CodeHash> {
+impl<CodeHash, Balance> RawContractInfo<CodeHash, Balance> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
 	#[cfg(test)]
 	pub fn child_trie_info(&self) -> ChildInfo {
@@ -79,26 +84,49 @@ where
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
 	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-		child::get_raw(&child_trie_info(&trie_id), &blake2_256(key))
+		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
 	/// Update a storage entry into a contract's kv storage.
 	///
-	/// If the `opt_new_value` is `None` then the kv pair is removed.
+	/// If the `new_value` is `None` then the kv pair is removed.
 	///
-	/// This function also updates the bookkeeping info such as: number of total non-empty pairs a
-	/// contract owns, the last block the storage was written to, etc. That's why, in contrast to
-	/// `read`, this function also requires the `account` ID.
+	/// This function also records how much storage was created or removed if a `storage_meter`
+	/// is supplied. It should only be absent for testing or benchmarking code.
 	pub fn write(
-		new_info: &mut ContractInfo<T>,
+		trie_id: &TrieId,
 		key: &StorageKey,
-		opt_new_value: Option<Vec<u8>>,
+		new_value: Option<Vec<u8>>,
+		storage_meter: Option<&mut meter::NestedMeter<T>>,
 	) -> DispatchResult {
 		let hashed_key = blake2_256(key);
-		let child_trie_info = &child_trie_info(&new_info.trie_id);
+		let child_trie_info = &child_trie_info(trie_id);
 
-		match opt_new_value {
-			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, &new_value[..]),
+		if let Some(storage_meter) = storage_meter {
+			let mut diff = meter::Diff::default();
+			let old_len = child::len(&child_trie_info, &hashed_key);
+			match (old_len, new_value.as_ref().map(|v| v.len() as u32)) {
+				(Some(old_len), Some(new_len)) =>
+					if new_len > old_len {
+						diff.bytes_added = new_len - old_len;
+					} else {
+						diff.bytes_removed = old_len - new_len;
+					},
+				(None, Some(new_len)) => {
+					diff.bytes_added = new_len;
+					diff.items_added = 1;
+				},
+				(Some(old_len), None) => {
+					diff.bytes_removed = old_len;
+					diff.items_removed = 1;
+				},
+				(None, None) => (),
+			}
+			storage_meter.charge(&diff)?;
+		}
+
+		match &new_value {
+			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, new_value),
 			None => child::kill(&child_trie_info, &hashed_key),
 		}
 
@@ -118,7 +146,8 @@ where
 			return Err(Error::<T>::DuplicateContract.into())
 		}
 
-		let contract = ContractInfo::<T> { code_hash: ch, trie_id, _reserved: None };
+		let contract =
+			ContractInfo::<T> { code_hash: ch, trie_id, storage_deposit: <BalanceOf<T>>::zero() };
 
 		Ok(contract)
 	}

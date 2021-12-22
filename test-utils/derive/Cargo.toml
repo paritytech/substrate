@@ -10,7 +10,7 @@ description = "Substrate test utilities macros"
 
 [dependencies]
 quote = "1.0.10"
-syn = { version = "1.0.81", features = ["full"] }
+syn = { version = "1.0.82", features = ["full"] }
 proc-macro-crate = "1.1.0"
 proc-macro2 = "1.0.29"
 

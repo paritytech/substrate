@@ -332,7 +332,4 @@ impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
 pub trait SlotData {
 	/// Gets the slot duration.
 	fn slot_duration(&self) -> sp_std::time::Duration;
-
-	/// The static slot key
-	const SLOT_KEY: &'static [u8];
 }
