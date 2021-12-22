@@ -211,7 +211,7 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 /// A signature (a 512-bit value).
-#[derive(Encode, Decode, PassByInner, TypeInfo)]
+#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -258,14 +258,6 @@ impl Clone for Signature {
 		Signature(r)
 	}
 }
-
-impl PartialEq for Signature {
-	fn eq(&self, b: &Self) -> bool {
-		self.0[..] == b.0[..]
-	}
-}
-
-impl Eq for Signature {}
 
 impl From<Signature> for H512 {
 	fn from(v: Signature) -> H512 {
@@ -358,24 +350,6 @@ pub struct LocalizedSignature {
 	pub signer: Public,
 	/// The signature itself.
 	pub signature: Signature,
-}
-
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug, thiserror::Error)]
-pub enum PublicError {
-	/// Bad alphabet.
-	#[error("Base 58 requirement is violated")]
-	BadBase58,
-	/// Bad length.
-	#[error("Length is bad")]
-	BadLength,
-	/// Unknown version.
-	#[error("Unknown version")]
-	UnknownVersion,
-	/// Invalid checksum.
-	#[error("Invalid checksum")]
-	InvalidChecksum,
 }
 
 impl Public {

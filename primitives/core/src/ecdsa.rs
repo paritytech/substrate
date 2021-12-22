@@ -56,42 +56,8 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
+#[derive(Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Public(pub [u8; 33]);
-
-impl PartialOrd for Public {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-impl Ord for Public {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.as_ref().cmp(&other.as_ref())
-	}
-}
-
-impl PartialEq for Public {
-	fn eq(&self, other: &Self) -> bool {
-		self.as_ref() == other.as_ref()
-	}
-}
-
-impl Eq for Public {}
-
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum PublicError {
-	/// Bad alphabet.
-	BadBase58,
-	/// Bad length.
-	BadLength,
-	/// Unknown version.
-	UnknownVersion,
-	/// Invalid checksum.
-	InvalidChecksum,
-}
 
 impl Public {
 	/// A new instance from the given 33-byte `data`.
