@@ -22,7 +22,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::PassByInner;
-use sp_std::cmp::Ordering;
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
@@ -56,7 +55,9 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(
+	Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo, Eq, PartialEq, PartialOrd, Ord,
+)]
 pub struct Public(pub [u8; 33]);
 
 impl Public {
