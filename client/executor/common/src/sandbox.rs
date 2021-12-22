@@ -22,7 +22,7 @@
 
 use crate::{
 	error::{Error, Result},
-	util, wasmi_backend::{with_context_store, instantiate_wasmi, invoke_wasmi}, wasmer_backend::{invoke_wasmer, instantiate_wasmer},
+	util, wasmi_backend::{instantiate_wasmi, invoke_wasmi}, wasmer_backend::{invoke_wasmer, instantiate_wasmer},
 };
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;

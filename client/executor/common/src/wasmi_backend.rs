@@ -246,13 +246,6 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 	}
 }
 
-pub(crate) fn with_context_store<R, F>(sandbox_context: &mut dyn SandboxContext, f: F) -> R
-where
-	F: FnOnce() -> R,
-{
-	SandboxContextStore::using(sandbox_context, f)
-}
-
 fn with_guest_externals<R, F>(sandbox_instance: &SandboxInstance, state: u32, f: F) -> R
 where
 	F: FnOnce(&mut GuestExternals) -> R,
@@ -280,7 +273,7 @@ pub fn instantiate_wasmi(
 	});
 
 	with_guest_externals(&sandbox_instance, state, |guest_externals| {
-		with_context_store(sandbox_context, || {
+		SandboxContextStore::using(sandbox_context, || {
 			wasmi_instance
 				.run_start(guest_externals)
 				.map_err(|_| InstantiationError::StartTrapped)
@@ -310,7 +303,7 @@ pub fn invoke_wasmi(
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Option<Value>, wasmi::Error> {
 	with_guest_externals(instance, state, |guest_externals| {
-		with_context_store(sandbox_context, || {
+		SandboxContextStore::using(sandbox_context, || {
 			let args = args
 				.iter()
 				.cloned()
