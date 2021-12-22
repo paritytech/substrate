@@ -1,5 +1,5 @@
 error[E0277]: the trait bound `MyError: PalletError` is not satisfied
-  --> tests/pallet_ui/error_not_compact.rs:1:1
+  --> tests/pallet_ui/error_does_not_derive_pallet_error.rs:1:1
    |
 1  | #[frame_support::pallet]
    | ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `PalletError` is not implemented for `MyError`
