@@ -1,11 +1,5 @@
-# Lists some code owners.
-#
 # A codeowner just oversees some part of the codebase. If an owned file is changed then the
-# corresponding codeowner receives a review request. An approval of the codeowner is
-# not required for merging a PR though.
-#
-# **This is pretty much an experiment at the moment**. Feel free to remove yourself at any time if
-# you do not want to receive review requests any longer.
+# corresponding codeowner receives a review request.
 #
 # For details about syntax, see:
 # https://help.github.com/en/articles/about-code-owners
