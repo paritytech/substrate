@@ -81,7 +81,7 @@ use sp_state_machine::{
 };
 use sp_trie::{CompactProof, StorageProof};
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{hash_map::DefaultHasher, HashMap, HashSet},
 	marker::PhantomData,
 	panic::UnwindSafe,
 	path::PathBuf,
@@ -1059,7 +1059,12 @@ where
 			let runtime_code = sp_core::traits::RuntimeCode {
 				code_fetcher: &code_fetcher,
 				heap_pages: None,
-				hash: Default::default(),
+				hash: {
+					use std::hash::{Hash, Hasher};
+					let mut state = DefaultHasher::new();
+					wasm.hash(&mut state);
+					state.finish().to_le_bytes().to_vec()
+				},
 			};
 			let runtime_version =
 				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)

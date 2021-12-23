@@ -149,33 +149,6 @@ macro_rules! create_apis_vec {
 	};
 }
 
-/// Deprecated first runtime version encoding.
-/// Used to decode in a compatible way.
-#[derive(codec::Encode, codec::Decode)]
-pub struct RuntimeVersionBasis {
-	pub spec_name: RuntimeString,
-	pub impl_name: RuntimeString,
-	pub authoring_version: u32,
-	pub spec_version: u32,
-	pub impl_version: u32,
-	pub apis: ApisVec,
-}
-
-impl From<RuntimeVersionBasis> for RuntimeVersion {
-	fn from(x: RuntimeVersionBasis) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-			transaction_version: 1,
-			state_version: 0,
-		}
-	}
-}
-
 /// Runtime version.
 /// This should not be thought of as classic Semver (major/minor/tiny).
 /// This triplet have different semantics and mis-interpretation could cause problems.
@@ -242,10 +215,13 @@ pub struct RuntimeVersion {
 }
 
 impl RuntimeVersion {
-	/// `Decode` implementation, with
-	/// possibility to inject the apis
-	/// version (when stored at a different
-	/// location).
+	/// `Decode` while giving a "version hint"
+	///
+	/// There exists multiple versions of [`RuntimeVersion`] and they are versioned using the `Core`
+	/// runtime api:
+	/// - `Core` version < 3 is a runtime version without a transaction version and state version.
+	/// - `Core` version 3 is a runtime version without a state version.
+	/// - `Core` version 4 is the latest runtime version.
 	pub fn decode_with_version_hint<I: Input>(
 		input: &mut I,
 		core_version: Option<u32>,
@@ -301,7 +277,7 @@ fn has_api_with<P: Fn(u32) -> bool>(apis: &ApisVec, id: &ApiId, predicate: P) ->
 	apis.iter().any(|(s, v)| s == id && predicate(*v))
 }
 
-/// Read current declared core version.
+/// Returns the version of the `Core` runtime api.
 pub fn core_version_from_apis(apis: &ApisVec) -> Option<u32> {
 	let id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
 	apis.iter().find(|(s, _v)| s == &id).map(|(_s, v)| *v)
@@ -335,7 +311,8 @@ impl RuntimeVersion {
 	/// V0 trie version will be applied to state.
 	/// Otherwhise, V1 trie version will be use.
 	pub fn state_version(&self) -> StateVersion {
-		(self.state_version as u8).try_into().expect("Invalid state version")
+		// If version > than 1, keep using latest version.
+		self.state_version.try_into().unwrap_or(StateVersion::V1)
 	}
 }
 
