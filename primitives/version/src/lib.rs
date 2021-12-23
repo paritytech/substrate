@@ -241,53 +241,42 @@ pub struct RuntimeVersion {
 	pub state_version: u8,
 }
 
-/// Struct for decoding without checking `Core` api
-/// version.
-/// This assumes we are using the latest version.
-pub struct RuntimeVersionLatest(pub RuntimeVersion);
-
-fn decode_runtime<I: Input>(
-	input: &mut I,
-	force_latest: bool,
-) -> Result<RuntimeVersion, codec::Error> {
-	let spec_name = Decode::decode(input)?;
-	let impl_name = Decode::decode(input)?;
-	let authoring_version = Decode::decode(input)?;
-	let spec_version = Decode::decode(input)?;
-	let impl_version = Decode::decode(input)?;
-	let apis = Decode::decode(input)?;
-	let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
-	let transaction_version = if force_latest || has_api_with(&apis, &core_api_id, |v| v >= 3) {
-		Decode::decode(input)?
-	} else {
-		1
-	};
-	let state_version = if force_latest || has_api_with(&apis, &core_api_id, |v| v >= 4) {
-		Decode::decode(input)?
-	} else {
-		0
-	};
-	Ok(RuntimeVersion {
-		spec_name,
-		impl_name,
-		authoring_version,
-		spec_version,
-		impl_version,
-		apis,
-		transaction_version,
-		state_version,
-	})
+impl RuntimeVersion {
+	/// `Decode` implementation, with
+	/// possibility to inject the apis
+	/// version (when stored at a different
+	/// location).
+	pub fn decode_with_apis<I: Input>(
+		input: &mut I,
+		with_apis: Option<ApisVec>,
+	) -> Result<RuntimeVersion, codec::Error> {
+		let spec_name = Decode::decode(input)?;
+		let impl_name = Decode::decode(input)?;
+		let authoring_version = Decode::decode(input)?;
+		let spec_version = Decode::decode(input)?;
+		let impl_version = Decode::decode(input)?;
+		let apis = if let Some(apis) = with_apis { apis } else { Decode::decode(input)? };
+		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
+		let transaction_version =
+			if has_api_with(&apis, &core_api_id, |v| v >= 3) { Decode::decode(input)? } else { 1 };
+		let state_version =
+			if has_api_with(&apis, &core_api_id, |v| v >= 4) { Decode::decode(input)? } else { 0 };
+		Ok(RuntimeVersion {
+			spec_name,
+			impl_name,
+			authoring_version,
+			spec_version,
+			impl_version,
+			apis,
+			transaction_version,
+			state_version,
+		})
+	}
 }
 
 impl Decode for RuntimeVersion {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		decode_runtime(input, false)
-	}
-}
-
-impl Decode for RuntimeVersionLatest {
-	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Ok(RuntimeVersionLatest(decode_runtime(input, true)?))
+		Self::decode_with_apis(input, None)
 	}
 }
 
