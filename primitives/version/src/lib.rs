@@ -246,7 +246,7 @@ impl RuntimeVersion {
 	/// possibility to inject the apis
 	/// version (when stored at a different
 	/// location).
-	pub fn decode_with_apis<I: Input>(
+	pub fn decode_with_apis_hint<I: Input>(
 		input: &mut I,
 		with_apis: Option<ApisVec>,
 	) -> Result<RuntimeVersion, codec::Error> {
@@ -255,7 +255,8 @@ impl RuntimeVersion {
 		let authoring_version = Decode::decode(input)?;
 		let spec_version = Decode::decode(input)?;
 		let impl_version = Decode::decode(input)?;
-		let apis = if let Some(apis) = with_apis { apis } else { Decode::decode(input)? };
+		let apis = Decode::decode(input)?;
+		let apis = with_apis.unwrap_or(apis);
 		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
 		let transaction_version =
 			if has_api_with(&apis, &core_api_id, |v| v >= 3) { Decode::decode(input)? } else { 1 };
@@ -276,7 +277,7 @@ impl RuntimeVersion {
 
 impl Decode for RuntimeVersion {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Self::decode_with_apis(input, None)
+		Self::decode_with_apis_hint(input, None)
 	}
 }
 

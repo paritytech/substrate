@@ -375,7 +375,7 @@ pub fn read_embedded_version(blob: &RuntimeBlob) -> Result<Option<RuntimeVersion
 		// However the structure found in the `runtime_version` always contain an empty `apis`
 		// field. Therefore the version read will be mistakenly treated as an legacy one.
 		let decoded_version =
-			sp_version::RuntimeVersion::decode_with_apis(&mut version_section, apis)
+			sp_version::RuntimeVersion::decode_with_apis_hint(&mut version_section, apis)
 				.map_err(|_| WasmError::Instantiation("failed to decode version section".into()))?;
 
 		Ok(Some(decoded_version))
