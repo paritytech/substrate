@@ -12,6 +12,9 @@
 #   are more recognizable on GitHub, you can use them for mentioning unlike an email.
 # - The latest matching rule, if multiple, takes precedence.
 
+# Fallback
+* @paritytech/core-devs @paritytech/substrateteamleads
+
 # CI
 /.maintain/ @paritytech/ci
 /.github/ @paritytech/ci
