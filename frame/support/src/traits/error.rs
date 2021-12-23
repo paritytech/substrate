@@ -77,7 +77,8 @@ impl<T: PalletError, E: PalletError> PalletError for Result<T, E> {
 		T::MAX_ENCODED_SIZE
 	} else {
 		E::MAX_ENCODED_SIZE
-	}.saturating_add(1);
+	}
+	.saturating_add(1);
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 18)]
