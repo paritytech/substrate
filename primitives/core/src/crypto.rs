@@ -208,11 +208,14 @@ pub enum PublicError {
 	BadBase58,
 	#[cfg_attr(feature = "std", error("Length is bad"))]
 	BadLength,
-	#[cfg_attr(feature = "std", error(
-		"Unknown SS58 address format `{}`. ` \
+	#[cfg_attr(
+		feature = "std",
+		error(
+			"Unknown SS58 address format `{}`. ` \
 		`To support this address format, you need to call `set_default_ss58_version` at node start up.",
-		_0
-	))]
+			_0
+		)
+	)]
 	UnknownSs58AddressFormat(Ss58AddressFormat),
 	#[cfg_attr(feature = "std", error("Invalid checksum"))]
 	InvalidChecksum,
