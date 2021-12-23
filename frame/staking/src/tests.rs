@@ -4013,7 +4013,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4028,7 +4028,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4040,7 +4040,7 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)

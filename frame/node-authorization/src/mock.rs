@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_node_authorization;
 
-use frame_support::{ord_parameter_types, parameter_types, traits::GenesisBuild};
+use frame_support::{
+	ord_parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+};
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
@@ -44,9 +47,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-}
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type DbWeight = ();
@@ -62,7 +62,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -71,7 +71,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 ord_parameter_types! {
@@ -80,14 +80,11 @@ ord_parameter_types! {
 	pub const Three: u64 = 3;
 	pub const Four: u64 = 4;
 }
-parameter_types! {
-	pub const MaxWellKnownNodes: u32 = 4;
-	pub const MaxPeerIdLength: u32 = 2;
-}
+
 impl Config for Test {
 	type Event = Event;
-	type MaxWellKnownNodes = MaxWellKnownNodes;
-	type MaxPeerIdLength = MaxPeerIdLength;
+	type MaxWellKnownNodes = ConstU32<4>;
+	type MaxPeerIdLength = ConstU32<2>;
 	type AddOrigin = EnsureSignedBy<One, u64>;
 	type RemoveOrigin = EnsureSignedBy<Two, u64>;
 	type SwapOrigin = EnsureSignedBy<Three, u64>;

@@ -29,9 +29,9 @@ sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
+sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 substrate-frame-rpc-system = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/system" }

@@ -180,7 +180,7 @@ where
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				log::error!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
+				log::debug!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
 				return Err(JsonRpseeError::to_call_error(e))
 			},
 		};

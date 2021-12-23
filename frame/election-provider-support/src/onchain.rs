@@ -62,10 +62,15 @@ pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
 	/// Something that provides the data for election.
-	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	type DataProvider: ElectionDataProvider<
+		AccountId = Self::AccountId,
+		BlockNumber = Self::BlockNumber,
+	>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
@@ -160,7 +165,9 @@ mod tests {
 		use crate::data_provider;
 
 		pub struct DataProvider;
-		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
+		impl ElectionDataProvider for DataProvider {
+			type AccountId = AccountId;
+			type BlockNumber = BlockNumber;
 			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
 			fn voters(
 				_: Option<usize>,

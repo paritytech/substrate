@@ -35,12 +35,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "2.0.0" }
+serde = { version = "1.0.132", features = ["derive"] }
 futures = "0.3.16"
 jsonrpsee = { version = "0.6.1", features = ["server"] }
 hex-literal = "0.3.3"
 log = "0.4.8"
 rand = "0.7.2"
-serde = { version = "1.0.126", features = ["derive"] }
 structopt = { version = "0.3.8", optional = true }
 
 # primitives
@@ -49,12 +49,12 @@ sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consen
 grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
-sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
+sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
@@ -114,7 +114,7 @@ sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli"
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
 	"wasmtime",
 ] }
-sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/trie", features = [
+sp-trie = { version = "4.0.0", default-features = false, path = "../../../primitives/trie", features = [
 	"memory-tracker",
 ] }
 

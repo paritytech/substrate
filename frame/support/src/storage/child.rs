@@ -112,8 +112,7 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 pub fn exists(child_info: &ChildInfo, key: &[u8]) -> bool {
 	match child_info.child_type() {
 		ChildType::ParentKeyId =>
-			sp_io::default_child_storage::read(child_info.storage_key(), key, &mut [0; 0][..], 0)
-				.is_some(),
+			sp_io::default_child_storage::exists(child_info.storage_key(), key),
 	}
 }
 

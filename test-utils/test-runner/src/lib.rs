@@ -154,7 +154,7 @@
 //! 			sc_finality_grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain.clone())?;
 //!
 //! 		let (block_import, babe_link) = sc_consensus_babe::block_import(
-//! 			sc_consensus_babe::Config::get_or_compute(&*client)?,
+//! 			sc_consensus_babe::Config::get(&*client)?,
 //! 			grandpa_block_import,
 //! 			client.clone(),
 //! 		)?;

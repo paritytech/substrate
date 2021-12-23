@@ -24,8 +24,7 @@ use frame_support::{
 		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
 		StorageHasher,
 	},
-	parameter_types,
-	traits::Get,
+	traits::{ConstU32, Get},
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
 use scale_info::TypeInfo;
@@ -229,20 +228,16 @@ mod module3 {
 	}
 }
 
-parameter_types! {
-	pub const SomeValue: u32 = 100;
-}
-
 impl module1::Config<module1::Instance1> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
-	type SomeParameter = SomeValue;
+	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module1::Config<module1::Instance2> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
-	type SomeParameter = SomeValue;
+	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module2::Config for Runtime {

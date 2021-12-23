@@ -20,7 +20,7 @@ use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{fungibles::Mutate, FindAuthor},
+	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
 	weights::{
 		DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFeeCoefficient,
 		WeightToFeeCoefficients, WeightToFeePolynomial,
@@ -83,7 +83,6 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub static TransactionByteFee: u64 = 1;
 	pub static WeightToFee: u64 = 1;
 }
@@ -103,7 +102,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -112,23 +111,22 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 10;
-	pub const MaxReserves: u32 = 50;
 }
 
 impl pallet_balances::Config for Runtime {
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<10>;
 	type AccountStore = System;
 	type MaxLocks = ();
 	type WeightInfo = ();
-	type MaxReserves = MaxReserves;
+	type MaxReserves = ConstU32<50>;
 	type ReserveIdentifier = [u8; 8];
 }
 
@@ -145,22 +143,12 @@ impl WeightToFeePolynomial for WeightToFee {
 	}
 }
 
-parameter_types! {
-	pub const OperationalFeeMultiplier: u8 = 5;
-}
-
 impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = WeightToFee;
 	type FeeMultiplierUpdate = ();
-	type OperationalFeeMultiplier = OperationalFeeMultiplier;
-}
-
-parameter_types! {
-	pub const AssetDeposit: u64 = 2;
-	pub const MetadataDeposit: u64 = 0;
-	pub const StringLimit: u32 = 20;
+	type OperationalFeeMultiplier = ConstU8<5>;
 }
 
 impl pallet_assets::Config for Runtime {
@@ -169,12 +157,12 @@ impl pallet_assets::Config for Runtime {
 	type AssetId = u32;
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDeposit = AssetDeposit;
-	type AssetAccountDeposit = frame_support::traits::ConstU64<2>;
-	type MetadataDepositBase = MetadataDeposit;
-	type MetadataDepositPerByte = MetadataDeposit;
-	type ApprovalDeposit = MetadataDeposit;
-	type StringLimit = StringLimit;
+	type AssetDeposit = ConstU64<2>;
+	type AssetAccountDeposit = ConstU64<2>;
+	type MetadataDepositBase = ConstU64<0>;
+	type MetadataDepositPerByte = ConstU64<0>;
+	type ApprovalDeposit = ConstU64<0>;
+	type StringLimit = ConstU32<20>;
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = ();
