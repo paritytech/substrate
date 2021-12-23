@@ -246,9 +246,9 @@ impl RuntimeVersion {
 	/// possibility to inject the apis
 	/// version (when stored at a different
 	/// location).
-	pub fn decode_with_apis_hint<I: Input>(
+	pub fn decode_with_version_hint<I: Input>(
 		input: &mut I,
-		with_apis: Option<ApisVec>,
+		core_version: Option<u32>,
 	) -> Result<RuntimeVersion, codec::Error> {
 		let spec_name = Decode::decode(input)?;
 		let impl_name = Decode::decode(input)?;
@@ -256,12 +256,12 @@ impl RuntimeVersion {
 		let spec_version = Decode::decode(input)?;
 		let impl_version = Decode::decode(input)?;
 		let apis = Decode::decode(input)?;
-		let apis = with_apis.unwrap_or(apis);
-		let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
+		let core_version =
+			if core_version.is_some() { core_version } else { core_version_from_apis(&apis) };
 		let transaction_version =
-			if has_api_with(&apis, &core_api_id, |v| v >= 3) { Decode::decode(input)? } else { 1 };
+			if core_version.map(|v| v >= 3).unwrap_or(false) { Decode::decode(input)? } else { 1 };
 		let state_version =
-			if has_api_with(&apis, &core_api_id, |v| v >= 4) { Decode::decode(input)? } else { 0 };
+			if core_version.map(|v| v >= 4).unwrap_or(false) { Decode::decode(input)? } else { 0 };
 		Ok(RuntimeVersion {
 			spec_name,
 			impl_name,
@@ -277,7 +277,7 @@ impl RuntimeVersion {
 
 impl Decode for RuntimeVersion {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Self::decode_with_apis_hint(input, None)
+		Self::decode_with_version_hint(input, None)
 	}
 }
 
@@ -299,6 +299,12 @@ impl fmt::Display for RuntimeVersion {
 
 fn has_api_with<P: Fn(u32) -> bool>(apis: &ApisVec, id: &ApiId, predicate: P) -> bool {
 	apis.iter().any(|(s, v)| s == id && predicate(*v))
+}
+
+/// Read current declared core version.
+pub fn core_version_from_apis(apis: &ApisVec) -> Option<u32> {
+	let id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
+	apis.iter().find(|(s, _v)| s == &id).map(|(_s, v)| *v)
 }
 
 #[cfg(feature = "std")]
