@@ -516,8 +516,10 @@ dependencies = [
  "parity-scale-codec",
  "sc-rpc",
  "serde",
+ "serde_json",
  "sp-core",
  "sp-runtime",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
