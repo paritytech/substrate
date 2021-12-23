@@ -136,6 +136,55 @@ type BalanceOf<T> =
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(6);
 
+/// Provides the contract address generation method.
+///
+/// See [`DefaultAddressGenerator`] for the default implementation.
+pub trait AddressGenerator<T: frame_system::Config> {
+	/// Generate the address of a contract based on the given instantiate parameters.
+	///
+	/// # Note for implementors
+	/// 1. Make sure that there are no collisions, different inputs never lead to the same output.
+	/// 2. Make sure that the same inputs lead to the same output.
+	/// 3. Changing the implementation through a runtime upgrade without a proper storage migration
+	/// would lead to catastrophic misbehavior.
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId;
+}
+
+/// Default address generator.
+///
+/// This is the default address generator used by contract instantiation. Its result
+/// is only dependend on its inputs. It can therefore be used to reliably predict the
+/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
+/// is no CREATE equivalent because CREATE2 is strictly more powerful.
+///
+/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+pub struct DefaultAddressGenerator;
+
+impl<T> AddressGenerator<T> for DefaultAddressGenerator
+where
+	T: frame_system::Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId {
+		let buf: Vec<_> = deploying_address
+			.as_ref()
+			.iter()
+			.chain(code_hash.as_ref())
+			.chain(salt)
+			.cloned()
+			.collect();
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -227,6 +276,9 @@ pub mod pallet {
 		/// Changing this value for an existing chain might need a storage migration.
 		#[pallet::constant]
 		type DepositPerItem: Get<BalanceOf<Self>>;
+
+		/// The address generator used to generate the addresses of contracts.
+		type AddressGenerator: AddressGenerator<Self>;
 	}
 
 	#[pallet::pallet]
@@ -728,27 +780,16 @@ where
 		Ok(maybe_value)
 	}
 
-	/// Determine the address of a contract,
+	/// Determine the address of a contract.
 	///
-	/// This is the address generation function used by contract instantiation. Its result
-	/// is only dependend on its inputs. It can therefore be used to reliably predict the
-	/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
-	/// is no CREATE equivalent because CREATE2 is strictly more powerful.
-	///
-	/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+	/// This is the address generation function used by contract instantiation. See
+	/// [`DefaultAddressGenerator`] for the default implementation.
 	pub fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
 		salt: &[u8],
 	) -> T::AccountId {
-		let buf: Vec<_> = deploying_address
-			.as_ref()
-			.iter()
-			.chain(code_hash.as_ref())
-			.chain(salt)
-			.cloned()
-			.collect();
-		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
 	}
 
 	/// Store code for benchmarks which does not check nor instrument the code.
