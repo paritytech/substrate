@@ -125,7 +125,8 @@ where
 	}
 
 	fn latest_finalized(&self) -> FutureResult<Option<NumberFor<Block>>> {
-		let result: Result<Option<NumberFor<Block>>, jsonrpc_core::Error> = Ok(None);
+		let result: Result<Option<NumberFor<Block>>, jsonrpc_core::Error> =
+			Ok(self.beefy_best_block.lock().as_ref().cloned());
 		let future = async move { result }.boxed();
 		future.map_err(jsonrpc_core::Error::from).boxed()
 	}

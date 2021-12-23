@@ -246,6 +246,7 @@ where
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
 				self.best_beefy_block = Some(*notification.header.number());
+				*self.rpc_best_beefy.lock() = self.best_beefy_block.clone();
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
 				// have a signed commitment for the block. Remove once the above TODO is done.
@@ -363,6 +364,7 @@ where
 
 				self.signed_commitment_sender.notify(signed_commitment);
 				self.best_beefy_block = Some(round.1);
+				*self.rpc_best_beefy.lock() = self.best_beefy_block.clone();
 
 				metric_set!(self, beefy_best_block, round.1);
 			}
