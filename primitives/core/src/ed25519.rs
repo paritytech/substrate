@@ -301,13 +301,6 @@ impl sp_std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Signature {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		sp_std::hash::Hash::hash(&self.0[..], state);
-	}
-}
-
 impl UncheckedFrom<[u8; 64]> for Signature {
 	fn unchecked_from(data: [u8; 64]) -> Signature {
 		Signature(data)

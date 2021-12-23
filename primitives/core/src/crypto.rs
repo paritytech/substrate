@@ -198,33 +198,35 @@ impl<T: AsRef<str>> From<T> for DeriveJunction {
 }
 
 /// An error type for SS58 decoding.
-#[cfg(feature = "full_crypto")]
-#[derive(Clone, Copy, Eq, PartialEq, thiserror::Error)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[cfg_attr(not(feature = "std"), derive(Debug))]
+#[derive(Clone, Copy, Eq, PartialEq)]
 #[allow(missing_docs)]
+#[cfg(feature = "full_crypto")]
 pub enum PublicError {
-	#[error("Base 58 requirement is violated")]
+	#[cfg_attr(feature = "std", error("Base 58 requirement is violated"))]
 	BadBase58,
-	#[error("Length is bad")]
+	#[cfg_attr(feature = "std", error("Length is bad"))]
 	BadLength,
-	#[error(
+	#[cfg_attr(feature = "std", error(
 		"Unknown SS58 address format `{}`. ` \
 		`To support this address format, you need to call `set_default_ss58_version` at node start up.",
 		_0
-	)]
+	))]
 	UnknownSs58AddressFormat(Ss58AddressFormat),
-	#[error("Invalid checksum")]
+	#[cfg_attr(feature = "std", error("Invalid checksum"))]
 	InvalidChecksum,
-	#[error("Invalid SS58 prefix byte.")]
+	#[cfg_attr(feature = "std", error("Invalid SS58 prefix byte."))]
 	InvalidPrefix,
-	#[error("Invalid SS58 format.")]
+	#[cfg_attr(feature = "std", error("Invalid SS58 format."))]
 	InvalidFormat,
-	#[error("Invalid derivation path.")]
+	#[cfg_attr(feature = "std", error("Invalid derivation path."))]
 	InvalidPath,
-	#[error("Disallowed SS58 Address Format for this datatype.")]
+	#[cfg_attr(feature = "std", error("Disallowed SS58 Address Format for this datatype."))]
 	FormatNotAllowed,
 }
 
-#[cfg(feature = "full_crypto")]
+#[cfg(feature = "std")]
 impl sp_std::fmt::Debug for PublicError {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		// Just use the `Display` implementation
