@@ -37,17 +37,19 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 			syn::Fields::Named(f) => {
 				let field_tys = f.named.iter().map(|field| &field.ty);
 				quote::quote! {
-					#(<
+					0_usize
+					#(.saturating_add(<
 						#field_tys as #frame_support::traits::PalletError
-					>::MAX_ENCODED_SIZE)+*
+					>::MAX_ENCODED_SIZE))*
 				}
 			},
 			syn::Fields::Unnamed(f) => {
 				let field_tys = f.unnamed.iter().map(|field| &field.ty);
 				quote::quote! {
-					#(<
+					0_usize
+					#(.saturating_add(<
 						#field_tys as #frame_support::traits::PalletError
-					>::MAX_ENCODED_SIZE)+*
+					>::MAX_ENCODED_SIZE))*
 				}
 			},
 			syn::Fields::Unit => quote::quote!(0),
@@ -96,18 +98,20 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 			} else {
 				let variant_sizes = field_tys.into_iter().map(|variant_field_tys| {
 					quote::quote! {
-						#(<
+						1_usize
+						#(.saturating_add(<
 							#variant_field_tys as #frame_support::traits::PalletError
-						>::MAX_ENCODED_SIZE)+*
+						>::MAX_ENCODED_SIZE))*
 					}
 				});
 
 				quote::quote! {{
-					let mut size = 1;
-					let mut tmp = 1;
+					let mut size = 1_usize;
+					let mut tmp = 0_usize;
 					#(
-						tmp += #variant_sizes;
+						tmp = #variant_sizes;
 						size = if tmp > size { tmp } else { size };
+						tmp = 0_usize;
 					)*
 					size
 				}}

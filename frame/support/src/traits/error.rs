@@ -61,26 +61,30 @@ impl<T> PalletError for PhantomData<T> {
 }
 
 impl<T: PalletError> PalletError for core::ops::Range<T> {
-	const MAX_ENCODED_SIZE: usize = 2 * T::MAX_ENCODED_SIZE;
+	const MAX_ENCODED_SIZE: usize = T::MAX_ENCODED_SIZE.saturating_mul(2);
 }
 
 impl<T: PalletError, const N: usize> PalletError for [T; N] {
-	const MAX_ENCODED_SIZE: usize = T::MAX_ENCODED_SIZE * N;
+	const MAX_ENCODED_SIZE: usize = T::MAX_ENCODED_SIZE.saturating_mul(N);
 }
 
 impl<T: PalletError> PalletError for Option<T> {
-	const MAX_ENCODED_SIZE: usize = 1 + T::MAX_ENCODED_SIZE;
+	const MAX_ENCODED_SIZE: usize = T::MAX_ENCODED_SIZE.saturating_add(1);
 }
 
 impl<T: PalletError, E: PalletError> PalletError for Result<T, E> {
-	const MAX_ENCODED_SIZE: usize = 1 + if T::MAX_ENCODED_SIZE > E::MAX_ENCODED_SIZE {
+	const MAX_ENCODED_SIZE: usize = if T::MAX_ENCODED_SIZE > E::MAX_ENCODED_SIZE {
 		T::MAX_ENCODED_SIZE
 	} else {
 		E::MAX_ENCODED_SIZE
-	};
+	}.saturating_add(1);
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 18)]
 impl PalletError for Tuple {
-	for_tuples!( const MAX_ENCODED_SIZE: usize = #(Tuple::MAX_ENCODED_SIZE)+*; );
+	const MAX_ENCODED_SIZE: usize = {
+		let mut size = 0_usize;
+		for_tuples!( #(size = size.saturating_add(Tuple::MAX_ENCODED_SIZE);)* );
+		size
+	};
 }
