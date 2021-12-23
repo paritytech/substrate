@@ -50,7 +50,7 @@ log = "0.4.8"
 futures = "0.3.16"
 tokio = { version = "1.15", features = ["signal"] }
 # Calling RPC
-jsonrpsee = { version = "0.6.1", features = ["server"] }
+jsonrpsee = { version = "0.7.0", features = ["server"] }
 num-traits = "0.2.14"
 
 [features]

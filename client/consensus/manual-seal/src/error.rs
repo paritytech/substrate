@@ -20,7 +20,7 @@
 //! This is suitable for a testing environment.
 
 use futures::channel::{mpsc::SendError, oneshot};
-use jsonrpsee::types::error::{CallError, Error as JsonRpseeError};
+use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 use sc_consensus::ImportResult;
 use sp_blockchain::Error as BlockchainError;
 use sp_consensus::Error as ConsensusError;

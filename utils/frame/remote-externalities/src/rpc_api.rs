@@ -19,9 +19,9 @@
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
 use jsonrpsee::{
+	core::client::{Client, ClientT},
 	rpc_params,
-	types::traits::Client,
-	ws_client::{WsClient, WsClientBuilder},
+	ws_client::WsClientBuilder,
 };
 use sp_runtime::{
 	generic::SignedBlock,
@@ -74,7 +74,7 @@ where
 }
 
 /// Build a website client that connects to `from`.
-async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
+async fn build_client<S: AsRef<str>>(from: S) -> Result<Client, String> {
 	WsClientBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.build(from.as_ref())

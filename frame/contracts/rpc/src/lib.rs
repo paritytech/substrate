@@ -24,12 +24,9 @@ use std::{marker::PhantomData, sync::Arc};
 use anyhow::anyhow;
 use codec::Codec;
 use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{
-		async_trait,
-		error::{CallError, Error as JsonRpseeError},
-		RpcResult,
-	},
+	types::error::CallError,
 };
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult,

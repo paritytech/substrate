@@ -42,8 +42,8 @@
 #![deny(unused_crate_dependencies)]
 
 use jsonrpsee::{
+	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{error::Error as JsonRpseeError, RpcResult},
 };
 use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;

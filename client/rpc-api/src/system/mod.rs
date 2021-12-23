@@ -19,8 +19,8 @@
 //! Substrate system API.
 
 use jsonrpsee::{
+	core::{JsonValue, RpcResult},
 	proc_macros::rpc,
-	types::{JsonValue, RpcResult},
 };
 
 pub use self::helpers::{Health, NodeRole, PeerInfo, SyncState, SystemInfo};

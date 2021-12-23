@@ -24,8 +24,8 @@ use futures::{
 	SinkExt,
 };
 use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{async_trait, Error as JsonRpseeError, RpcResult},
 };
 use sc_consensus::ImportedAux;
 use serde::{Deserialize, Serialize};

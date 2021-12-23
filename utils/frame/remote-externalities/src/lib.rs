@@ -23,10 +23,13 @@
 use codec::{Decode, Encode};
 
 use jsonrpsee::{
+	core::{
+		client::{Client, ClientT},
+		Error as RpcError,
+	},
 	proc_macros::rpc,
 	rpc_params,
-	types::{traits::Client, Error as RpcError},
-	ws_client::{WsClient, WsClientBuilder},
+	ws_client::WsClientBuilder,
 };
 
 use log::*;
@@ -126,7 +129,7 @@ impl<P: Into<PathBuf>> From<P> for SnapshotConfig {
 #[derive(Debug)]
 pub struct Transport {
 	uri: String,
-	client: Option<WsClient>,
+	client: Option<Client>,
 }
 
 impl Clone for Transport {
@@ -159,7 +162,7 @@ pub struct OnlineConfig<B: BlockT> {
 
 impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (ws) client.
-	fn rpc_client(&self) -> &WsClient {
+	fn rpc_client(&self) -> &Client {
 		self.transport
 			.client
 			.as_ref()

@@ -18,7 +18,7 @@
 
 //! RPC middlware to collect prometheus metrics on RPC calls.
 
-use jsonrpsee::types::middleware::Middleware;
+use jsonrpsee::core::middleware::Middleware;
 use prometheus_endpoint::{
 	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
 	U64,

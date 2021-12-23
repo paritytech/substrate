@@ -22,7 +22,7 @@
 mod tests;
 
 use self::error::Error;
-use jsonrpsee::types::{async_trait, Error as JsonRpseeError, RpcResult};
+use jsonrpsee::core::{async_trait, Error as JsonRpseeError, RpcResult};
 use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;

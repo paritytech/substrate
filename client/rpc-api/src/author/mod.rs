@@ -18,7 +18,7 @@
 
 //! Substrate block-author/full-node API.
 
-use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::Bytes;
 

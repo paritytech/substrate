@@ -18,8 +18,7 @@
 
 //! Error helpers for Chain RPC module.
 
-use jsonrpsee::types::error::{CallError, Error as JsonRpseeError};
-
+use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 

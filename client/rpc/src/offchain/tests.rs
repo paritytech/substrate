@@ -39,7 +39,7 @@ fn local_storage_should_work() {
 
 #[test]
 fn offchain_calls_considered_unsafe() {
-	use jsonrpsee::types::CallError;
+	use jsonrpsee::types::error::CallError;
 	let storage = InMemOffchainStorage::default();
 	let offchain = Offchain::new(storage, DenyUnsafe::Yes);
 	let key = Bytes(b"offchain_storage".to_vec());

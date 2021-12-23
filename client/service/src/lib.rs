@@ -37,7 +37,7 @@ mod task_manager;
 use std::{collections::HashMap, net::SocketAddr, pin::Pin, task::Poll};
 
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, stream, FutureExt, Stream, StreamExt};
+use futures::{stream, FutureExt, Stream, StreamExt};
 use jsonrpsee::RpcModule;
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
@@ -97,8 +97,9 @@ impl RpcHandlers {
 		&self,
 		method: &str,
 		params: Vec<T>,
-	) -> Option<(String, mpsc::UnboundedReceiver<String>)> {
-		self.0.call_and_subscribe(method, params).await
+		// ) -> Option<(String, mpsc::UnboundedReceiver<String>)> {
+	) -> Option<jsonrpsee::core::server::rpc_module::Subscription> {
+		self.0.subscribe(method, params).await.ok()
 	}
 
 	/// Provides access to the underlying `RpcModule`

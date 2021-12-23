@@ -23,7 +23,7 @@
 use codec::{DecodeAll, FullCodec, FullEncode};
 use core::marker::PhantomData;
 use frame_support::storage::generator::{StorageDoubleMap, StorageMap, StorageValue};
-use jsonrpsee::types::Error as RpcError;
+use jsonrpsee::core::Error as RpcError;
 use sc_rpc_api::state::StateApiClient;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_storage::{StorageData, StorageKey};
@@ -31,7 +31,7 @@ use sp_storage::{StorageData, StorageKey};
 /// A typed query on chain state usable from an RPC client.
 ///
 /// ```no_run
-/// # use jsonrpsee::types::Error as RpcError;
+/// # use jsonrpsee::core::Error as RpcError;
 /// # use jsonrpsee::ws_client::WsClientBuilder;
 /// # use codec::Encode;
 /// # use frame_support::{decl_storage, decl_module};

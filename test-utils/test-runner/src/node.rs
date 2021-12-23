@@ -116,7 +116,7 @@ where
 	/// eg
 	/// ```ignore
 	/// 		let response = node.rpc_handler()
-	/// 		.call_with(""engine_createBlock", vec![true, true]);
+	/// 		.call(""engine_createBlock", vec![true, true]);
 	/// ```
 	pub fn rpc_handler(&self) -> Arc<RpcModule<()>> {
 		self.rpc_handler.clone()

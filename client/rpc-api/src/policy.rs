@@ -21,7 +21,7 @@
 //! Contains a `DenyUnsafe` type that can be used to deny potentially unsafe
 //! RPC when accessed externally.
 
-use jsonrpsee::types::error::{CallError, Error as JsonRpseeError};
+use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 
 /// Signifies whether a potentially unsafe RPC should be denied.
 #[derive(Clone, Copy, Debug)]

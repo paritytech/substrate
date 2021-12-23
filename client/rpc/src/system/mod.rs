@@ -22,7 +22,7 @@
 mod tests;
 
 use futures::channel::oneshot;
-use jsonrpsee::types::{async_trait, error::Error as JsonRpseeError, JsonValue, RpcResult};
+use jsonrpsee::core::{async_trait, error::Error as JsonRpseeError, JsonValue, RpcResult};
 use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
 use sc_utils::mpsc::TracingUnboundedSender;

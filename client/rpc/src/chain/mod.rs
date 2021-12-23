@@ -28,7 +28,7 @@ use std::sync::Arc;
 use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
-	types::{async_trait, RpcResult},
+	core::{async_trait, RpcResult},
 	SubscriptionSink,
 };
 use sc_client_api::BlockchainEvents;

@@ -18,7 +18,7 @@
 
 //! Substrate offchain API.
 
-use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sp_core::{offchain::StorageKind, Bytes};
 
 pub mod error;

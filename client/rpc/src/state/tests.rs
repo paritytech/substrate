@@ -21,7 +21,10 @@ use super::*;
 use crate::testing::{timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
 use futures::executor;
-use jsonrpsee::types::error::SubscriptionClosedError;
+use jsonrpsee::{
+	core::{error::SubscriptionClosed, Error as RpcError},
+	types::{error::CallError as RpcCallError, EmptyParams},
+};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
@@ -223,7 +226,7 @@ async fn should_call_contract() {
 	let (client, _child) =
 		new_full(client, SubscriptionTaskExecutor::new(TaskExecutor), DenyUnsafe::No, None);
 
-	use jsonrpsee::types::{CallError, Error};
+	use jsonrpsee::{core::Error, types::error::CallError};
 
 	assert_matches!(
 		client
@@ -245,7 +248,7 @@ async fn should_notify_about_storage_changes() {
 		);
 
 		let api_rpc = api.into_rpc();
-		let sub = api_rpc.test_subscription("state_subscribeStorage", Vec::<()>::new()).await;
+		let sub = api_rpc.subscribe("state_subscribeStorage", EmptyParams::new()).await.unwrap();
 
 		// Cause a change:
 		let mut builder = client.new_block(Default::default()).unwrap();
@@ -267,7 +270,7 @@ async fn should_notify_about_storage_changes() {
 	// NOTE: previous versions of the subscription code used to return an empty value for the
 	// "initial" storage change here
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
-	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosedError>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosed>()).await, Ok(_));
 }
 
 #[tokio::test]
@@ -286,8 +289,9 @@ async fn should_send_initial_storage_changes_and_notifications() {
 
 		let api_rpc = api.into_rpc();
 		let sub = api_rpc
-			.test_subscription("state_subscribeStorage", [[StorageKey(alice_balance_key.to_vec())]])
-			.await;
+			.subscribe("state_subscribeStorage", [[StorageKey(alice_balance_key.to_vec())]])
+			.await
+			.unwrap();
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder
@@ -308,7 +312,7 @@ async fn should_send_initial_storage_changes_and_notifications() {
 	assert_matches!(timeout_secs(1, sub.next::<StorageChangeSet<H256>>()).await, Ok(_));
 
 	// No more messages to follow
-	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosedError>()).await, Ok(_));
+	assert_matches!(timeout_secs(1, sub.next::<SubscriptionClosed>()).await, Ok(_));
 }
 
 #[tokio::test]
@@ -393,8 +397,6 @@ async fn should_query_storage() {
 
 		// Inverted range.
 		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
-
-		use jsonrpsee::types::{CallError as RpcCallError, Error as RpcError};
 
 		assert_eq!(
 			result.await.map_err(|e| e.to_string()),
@@ -540,8 +542,9 @@ async fn should_notify_on_runtime_version_initially() {
 
 		let api_rpc = api.into_rpc();
 		let sub = api_rpc
-			.test_subscription("state_subscribeRuntimeVersion", Vec::<()>::new())
-			.await;
+			.subscribe("state_subscribeRuntimeVersion", EmptyParams::new())
+			.await
+			.unwrap();
 
 		sub
 	};

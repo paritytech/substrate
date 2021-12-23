@@ -23,8 +23,8 @@
 use beefy_gadget::notification::BeefySignedCommitmentStream;
 use futures::{future, task::Spawn, FutureExt, StreamExt};
 use jsonrpsee::{
+	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{Error as JsonRpseeError, RpcResult},
 	SubscriptionSink,
 };
 use log::warn;

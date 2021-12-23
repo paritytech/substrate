@@ -19,7 +19,7 @@
 //! System RPC module errors.
 
 use crate::system::helpers::Health;
-use jsonrpsee::types::{error::CallError, to_json_raw_value};
+use jsonrpsee::{core::to_json_raw_value, types::error::CallError};
 
 /// System RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;

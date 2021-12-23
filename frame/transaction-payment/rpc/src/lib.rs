@@ -22,12 +22,9 @@ use std::{convert::TryInto, sync::Arc};
 use anyhow::anyhow;
 use codec::{Codec, Decode};
 use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{
-		async_trait,
-		error::{CallError, Error as JsonRpseeError},
-		RpcResult,
-	},
+	types::error::CallError,
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;

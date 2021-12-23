@@ -21,8 +21,9 @@ use std::{fmt::Display, sync::Arc};
 
 use codec::{self, Codec, Decode, Encode};
 use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{async_trait, error::CallError, Error as JsonRpseeError, RpcResult},
+	types::error::CallError,
 };
 
 use sc_rpc_api::DenyUnsafe;

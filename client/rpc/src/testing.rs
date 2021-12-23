@@ -22,9 +22,9 @@ use futures::{
 	executor,
 	task::{FutureObj, Spawn, SpawnError},
 };
-use jsonrpsee::types::{
-	v2::{Response as RpcResponse, RpcError},
-	DeserializeOwned,
+use jsonrpsee::{
+	core::DeserializeOwned,
+	types::{ErrorResponse as RpcError, Response as RpcResponse},
 };
 use sp_core::traits::SpawnNamed;
 use std::future::Future;

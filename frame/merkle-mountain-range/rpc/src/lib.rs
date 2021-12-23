@@ -23,10 +23,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Encode};
-use jsonrpsee::{
-	proc_macros::rpc,
-	types::{async_trait, error::CallError, RpcResult},
-};
+use jsonrpsee::{core::async_trait, proc_macros::rpc, types::error::CallError};
 use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
@@ -42,6 +39,8 @@ const RUNTIME_ERROR: i32 = 8000;
 const MMR_ERROR: i32 = 8010;
 const LEAF_NOT_FOUND_ERROR: i32 = MMR_ERROR + 1;
 const GENERATE_PROOF_ERROR: i32 = MMR_ERROR + 2;
+
+type RpcResult<T> = std::result::Result<T, jsonrpsee::core::Error>;
 
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

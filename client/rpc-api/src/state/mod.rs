@@ -18,7 +18,7 @@
 
 //! Substrate state API.
 
-use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sp_core::{
 	storage::{StorageChangeSet, StorageData, StorageKey},
 	Bytes,

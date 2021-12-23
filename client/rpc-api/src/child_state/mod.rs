@@ -18,7 +18,7 @@
 
 //! Substrate child state API
 use crate::state::ReadProof;
-use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sp_core::storage::{PrefixedStorageKey, StorageData, StorageKey};
 
 /// Substrate child state API

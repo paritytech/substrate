@@ -18,7 +18,7 @@
 
 //! Substrate blockchain API.
 
-use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 
 pub mod error;
