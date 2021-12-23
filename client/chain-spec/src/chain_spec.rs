@@ -507,11 +507,15 @@ mod tests {
 
 		let json = spec.as_json(true).unwrap();
 
-		// Check multiple times that decoding and encoding the chain spec leads always to the same output.
+		// Check multiple times that decoding and encoding the chain spec leads always to the same
+		// output.
 		for _ in 0..10 {
 			assert_eq!(
 				json,
-				TestSpec2::from_json_bytes(json.as_bytes().to_vec()).unwrap().as_json(true).unwrap()
+				TestSpec2::from_json_bytes(json.as_bytes().to_vec())
+					.unwrap()
+					.as_json(true)
+					.unwrap()
 			);
 		}
 	}
