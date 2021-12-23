@@ -246,7 +246,7 @@ mod tests {
 		.encode();
 
 		assert_eq!(
-			sp_version::RuntimeVersion::decode_all(&mut &version_bytes[..]).unwrap(),
+			sp_version::RuntimeVersionLatest::decode_all(&mut &version_bytes[..]).unwrap().0,
 			sp_version::RuntimeVersion {
 				spec_name: "hello".into(),
 				impl_name: "world".into(),
