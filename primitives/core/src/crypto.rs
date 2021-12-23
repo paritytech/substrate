@@ -225,8 +225,8 @@ pub enum PublicError {
 }
 
 #[cfg(feature = "full_crypto")]
-impl std::fmt::Debug for PublicError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl sp_std::fmt::Debug for PublicError {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		// Just use the `Display` implementation
 		write!(f, "{}", self)
 	}

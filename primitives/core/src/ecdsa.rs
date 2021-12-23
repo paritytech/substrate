@@ -55,6 +55,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(
 	Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo, Eq, PartialEq, PartialOrd, Ord,
 )]
@@ -181,13 +182,6 @@ impl<'de> Deserialize<'de> for Public {
 	{
 		Public::from_ss58check(&String::deserialize(deserializer)?)
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))
-	}
-}
-
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Public {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		self.as_ref().hash(state);
 	}
 }
 
