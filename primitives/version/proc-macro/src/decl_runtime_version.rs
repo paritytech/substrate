@@ -228,7 +228,6 @@ fn generate_emit_link_section_decl(contents: &[u8], section_name: &str) -> Token
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::DecodeAll;
 	use std::borrow::Cow;
 
 	#[test]
