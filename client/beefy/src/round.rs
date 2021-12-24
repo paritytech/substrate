@@ -74,15 +74,15 @@ where
 	N: Ord + AtLeast32BitUnsigned + MaybeDisplay + Clone,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
-		self.validator_set.id
+		self.validator_set.id()
 	}
 
-	pub(crate) fn validators(&self) -> Vec<Public> {
-		self.validator_set.validators.clone()
+	pub(crate) fn validators(&self) -> &[Public] {
+		self.validator_set.validators()
 	}
 
 	pub(crate) fn add_vote(&mut self, round: &(H, N), vote: (Public, Signature)) -> bool {
-		if self.validator_set.validators.iter().any(|id| vote.0 == *id) {
+		if self.validator_set.validators().iter().any(|id| vote.0 == *id) {
 			self.rounds.entry(round.clone()).or_default().add_vote(vote)
 		} else {
 			false
@@ -93,7 +93,7 @@ where
 		let done = self
 			.rounds
 			.get(round)
-			.map(|tracker| tracker.is_done(threshold(self.validator_set.validators.len())))
+			.map(|tracker| tracker.is_done(threshold(self.validator_set.len())))
 			.unwrap_or(false);
 
 		debug!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
@@ -108,7 +108,7 @@ where
 
 		Some(
 			self.validator_set
-				.validators
+				.validators()
 				.iter()
 				.map(|authority_id| {
 					signatures.iter().find_map(|(id, sig)| {
@@ -139,26 +139,18 @@ mod tests {
 	fn new_rounds() {
 		sp_tracing::try_init_simple();
 
-		let rounds = Rounds::<H256, NumberFor<Block>>::new(ValidatorSet::<Public>::empty());
-
-		assert_eq!(0, rounds.validator_set_id());
-		assert!(rounds.validators().is_empty());
-
-		let validators = ValidatorSet::<Public> {
-			validators: vec![
-				Keyring::Alice.public(),
-				Keyring::Bob.public(),
-				Keyring::Charlie.public(),
-			],
-			id: 42,
-		};
+		let validators = ValidatorSet::<Public>::new(
+			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			42,
+		)
+		.unwrap();
 
 		let rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
 
 		assert_eq!(42, rounds.validator_set_id());
 
 		assert_eq!(
-			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			rounds.validators()
 		);
 	}
@@ -167,14 +159,11 @@ mod tests {
 	fn add_vote() {
 		sp_tracing::try_init_simple();
 
-		let validators = ValidatorSet::<Public> {
-			validators: vec![
-				Keyring::Alice.public(),
-				Keyring::Bob.public(),
-				Keyring::Charlie.public(),
-			],
-			id: Default::default(),
-		};
+		let validators = ValidatorSet::<Public>::new(
+			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			Default::default(),
+		)
+		.unwrap();
 
 		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
 
@@ -212,14 +201,11 @@ mod tests {
 	fn drop() {
 		sp_tracing::try_init_simple();
 
-		let validators = ValidatorSet::<Public> {
-			validators: vec![
-				Keyring::Alice.public(),
-				Keyring::Bob.public(),
-				Keyring::Charlie.public(),
-			],
-			id: Default::default(),
-		};
+		let validators = ValidatorSet::<Public>::new(
+			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			Default::default(),
+		)
+		.unwrap();
 
 		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
 

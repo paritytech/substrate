@@ -97,8 +97,10 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
-	pub fn validator_set() -> ValidatorSet<T::BeefyId> {
-		ValidatorSet::<T::BeefyId> { validators: Self::authorities(), id: Self::validator_set_id() }
+	pub fn validator_set() -> Option<ValidatorSet<T::BeefyId>> {
+		let validators: Vec<T::BeefyId> = Self::authorities();
+		let id: beefy_primitives::ValidatorSetId = Self::validator_set_id();
+		ValidatorSet::<T::BeefyId>::new(validators, id)
 	}
 
 	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
@@ -109,13 +111,13 @@ impl<T: Config> Pallet<T> {
 
 			let next_id = Self::validator_set_id() + 1u64;
 			<ValidatorSetId<T>>::put(next_id);
-
-			let log = DigestItem::Consensus(
-				BEEFY_ENGINE_ID,
-				ConsensusLog::AuthoritiesChange(ValidatorSet { validators: new, id: next_id })
-					.encode(),
-			);
-			<frame_system::Pallet<T>>::deposit_log(log);
+			if let Some(validator_set) = ValidatorSet::<T::BeefyId>::new(new, next_id) {
+				let log = DigestItem::Consensus(
+					BEEFY_ENGINE_ID,
+					ConsensusLog::AuthoritiesChange(validator_set).encode(),
+				);
+				<frame_system::Pallet<T>>::deposit_log(log);
+			}
 		}
 
 		<NextAuthorities<T>>::put(&queued);

@@ -57,5 +57,5 @@ sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
-tokio = "1.13"
+tokio = "1.15"
 tempfile = "3.1.0"

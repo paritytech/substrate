@@ -27,10 +27,6 @@
 /primitives/sr-sandbox/ @pepyakin
 /primitives/core/src/sandbox.rs @pepyakin
 
-# Offchain
-/client/offchain/ @tomusdrw
-/primitives/offchain/ @tomusdrw
-
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva

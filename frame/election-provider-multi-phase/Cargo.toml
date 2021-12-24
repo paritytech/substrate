@@ -38,7 +38,7 @@ rand = { version = "0.7.3", default-features = false, optional = true, features 
 	"small_rng",
 ] }
 strum = { optional = true, version = "0.22.0" }
-strum_macros = { optional = true, version = "0.22.0" }
+strum_macros = { optional = true, version = "0.23.1" }
 
 [dev-dependencies]
 parking_lot = "0.11.2"

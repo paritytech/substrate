@@ -29,7 +29,7 @@ use sp_core::{
 	Bytes,
 };
 use sp_runtime::BuildStorage;
-use std::{borrow::Cow, collections::HashMap, fs::File, path::PathBuf, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, fs::File, path::PathBuf, sync::Arc};
 
 enum GenesisSource<G> {
 	File(PathBuf),
@@ -131,7 +131,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	}
 }
 
-pub type GenesisStorage = HashMap<StorageKey, StorageData>;
+pub type GenesisStorage = BTreeMap<StorageKey, StorageData>;
 
 /// Raw storage content for genesis block.
 #[derive(Serialize, Deserialize)]
@@ -139,7 +139,7 @@ pub type GenesisStorage = HashMap<StorageKey, StorageData>;
 #[serde(deny_unknown_fields)]
 pub struct RawGenesis {
 	pub top: GenesisStorage,
-	pub children_default: HashMap<StorageKey, GenesisStorage>,
+	pub children_default: BTreeMap<StorageKey, GenesisStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -180,7 +180,7 @@ struct ClientSpec<E> {
 	/// The given `wasm_code` will be used to substitute the on-chain wasm code from the given
 	/// block hash onwards.
 	#[serde(default)]
-	code_substitutes: HashMap<String, Bytes>,
+	code_substitutes: BTreeMap<String, Bytes>,
 }
 
 /// A type denoting empty extensions.
@@ -271,7 +271,7 @@ impl<G, E> ChainSpec<G, E> {
 			extensions,
 			consensus_engine: (),
 			genesis: Default::default(),
-			code_substitutes: HashMap::new(),
+			code_substitutes: BTreeMap::new(),
 		};
 
 		ChainSpec { client_spec, genesis: GenesisSource::Factory(Arc::new(constructor)) }
@@ -416,7 +416,7 @@ where
 		self.genesis = GenesisSource::Storage(storage);
 	}
 
-	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>> {
+	fn code_substitutes(&self) -> std::collections::BTreeMap<String, Vec<u8>> {
 		self.client_spec
 			.code_substitutes
 			.iter()
@@ -430,7 +430,7 @@ mod tests {
 	use super::*;
 
 	#[derive(Debug, Serialize, Deserialize)]
-	struct Genesis(HashMap<String, String>);
+	struct Genesis(BTreeMap<String, String>);
 
 	impl BuildStorage for Genesis {
 		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
@@ -455,10 +455,26 @@ mod tests {
 		assert_eq!(spec2.chain_type(), ChainType::Live)
 	}
 
-	#[derive(Debug, Serialize, Deserialize)]
+	#[derive(Debug, Serialize, Deserialize, Clone)]
 	#[serde(rename_all = "camelCase")]
 	struct Extension1 {
 		my_property: String,
+	}
+
+	impl crate::Extension for Extension1 {
+		type Forks = Option<()>;
+
+		fn get<T: 'static>(&self) -> Option<&T> {
+			None
+		}
+
+		fn get_any(&self, _: std::any::TypeId) -> &dyn std::any::Any {
+			self
+		}
+
+		fn get_any_mut(&mut self, _: std::any::TypeId) -> &mut dyn std::any::Any {
+			self
+		}
 	}
 
 	type TestSpec2 = ChainSpec<Genesis, Extension1>;
@@ -471,5 +487,36 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(spec.extensions().my_property, "Test Extension");
+	}
+
+	#[test]
+	fn chain_spec_raw_output_should_be_deterministic() {
+		let mut spec = TestSpec2::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/chain_spec2.json").to_vec(),
+		))
+		.unwrap();
+
+		let mut storage = spec.build_storage().unwrap();
+
+		// Add some extra data, so that storage "sorting" is tested.
+		let extra_data = &[("random_key", "val"), ("r@nd0m_key", "val"), ("aaarandom_key", "val")];
+		storage
+			.top
+			.extend(extra_data.iter().map(|(k, v)| (k.as_bytes().to_vec(), v.as_bytes().to_vec())));
+		crate::ChainSpec::set_storage(&mut spec, storage);
+
+		let json = spec.as_json(true).unwrap();
+
+		// Check multiple times that decoding and encoding the chain spec leads always to the same
+		// output.
+		for _ in 0..10 {
+			assert_eq!(
+				json,
+				TestSpec2::from_json_bytes(json.as_bytes().to_vec())
+					.unwrap()
+					.as_json(true)
+					.unwrap()
+			);
+		}
 	}
 }

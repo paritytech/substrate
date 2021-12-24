@@ -38,7 +38,6 @@ use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
-use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
 use sp_consensus_slots::Slot;
@@ -537,9 +536,7 @@ where
 	SlotDurationInvalid(SlotDuration<T>),
 }
 
-/// A slot duration. Create with [`get_or_compute`](Self::get_or_compute).
-// The internal member should stay private here to maintain invariants of
-// `get_or_compute`.
+/// A slot duration. Create with [`Self::new`].
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration<T>(T);
 
@@ -554,54 +551,12 @@ impl<T: SlotData> SlotData for SlotDuration<T> {
 	fn slot_duration(&self) -> std::time::Duration {
 		self.0.slot_duration()
 	}
-
-	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
 }
 
 impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
-	/// Either fetch the slot duration from disk or compute it from the
-	/// genesis state.
-	///
-	/// `slot_key` is marked as `'static`, as it should really be a
-	/// compile-time constant.
-	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self>
-	where
-		C: sc_client_api::backend::AuxStore + sc_client_api::UsageProvider<B>,
-		C: ProvideRuntimeApi<B>,
-		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
-		T: SlotData + Encode + Decode + Debug,
-	{
-		let slot_duration = match client.get_aux(T::SLOT_KEY)? {
-			Some(v) => <T as codec::Decode>::decode(&mut &v[..]).map(SlotDuration).map_err(|_| {
-				sp_blockchain::Error::Backend({
-					error!(target: "slots", "slot duration kept in invalid format");
-					"slot duration kept in invalid format".to_string()
-				})
-			}),
-			None => {
-				let best_hash = client.usage_info().chain.best_hash;
-				let slot_duration = cb(client.runtime_api(), &BlockId::hash(best_hash))?;
-
-				info!(
-					"⏱  Loaded block-time = {:?} from block {:?}",
-					slot_duration.slot_duration(),
-					best_hash,
-				);
-
-				slot_duration
-					.using_encoded(|s| client.insert_aux(&[(T::SLOT_KEY, &s[..])], &[]))?;
-
-				Ok(SlotDuration(slot_duration))
-			},
-		}?;
-
-		if slot_duration.slot_duration() == Default::default() {
-			return Err(sp_blockchain::Error::Application(Box::new(Error::SlotDurationInvalid(
-				slot_duration,
-			))))
-		}
-
-		Ok(slot_duration)
+	/// Create a new instance of `Self`.
+	pub fn new(val: T) -> Self {
+		Self(val)
 	}
 
 	/// Returns slot data value.
@@ -875,7 +830,7 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_api::NumberFor;
+	use sp_runtime::traits::NumberFor;
 	use std::time::{Duration, Instant};
 	use substrate_test_runtime_client::runtime::{Block, Header};
 
