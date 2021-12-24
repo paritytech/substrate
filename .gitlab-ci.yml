@@ -625,6 +625,7 @@ cargo-check-macos:
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
   <<:                              *vault-secrets
+  # TODO put 'rusty-cachier --fix-mtime' into check_dependent_project.sh
   script:
     - rusty-cachier --download-cache
     - git clone
