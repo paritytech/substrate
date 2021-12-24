@@ -29,7 +29,7 @@ use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, NumberFor},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
 	ChildStorageCollection, IndexOperation, OffchainChangesCollection, StorageCollection,
@@ -166,10 +166,15 @@ pub trait BlockImportOperation<Block: BlockT> {
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash>;
+	fn reset_storage(
+		&mut self,
+		storage: Storage,
+		state_version: StateVersion,
+	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Set storage changes.
 	fn update_storage(

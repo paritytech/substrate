@@ -34,13 +34,13 @@ use sp_core::{testing::TaskExecutor, H256};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
-	ConsensusEngineId, Justifications,
+	ConsensusEngineId, Justifications, StateVersion,
 };
 use sp_state_machine::{
 	backend::Backend as _, ExecutionStrategy, InMemoryBackend, OverlayedChanges, StateMachine,
 };
 use sp_storage::{ChildInfo, StorageKey};
-use sp_trie::{trie_types::Layout, TrieConfiguration};
+use sp_trie::{LayoutV0, TrieConfiguration};
 use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
@@ -90,7 +90,7 @@ fn construct_block(
 	let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
 	let iter = transactions.iter().map(Encode::encode);
-	let extrinsics_root = Layout::<BlakeTwo256>::ordered_trie_root(iter).into();
+	let extrinsics_root = LayoutV0::<BlakeTwo256>::ordered_trie_root(iter).into();
 
 	let mut header = Header {
 		parent_hash,
@@ -177,7 +177,7 @@ fn construct_genesis_should_work_with_native() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, StateVersion::default()));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -210,7 +210,7 @@ fn construct_genesis_should_work_with_wasm() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, StateVersion::default()));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -243,7 +243,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 	.genesis_map();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
-	let backend = InMemoryBackend::from(storage);
+	let backend = InMemoryBackend::from((storage, StateVersion::default()));
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
@@ -418,8 +418,8 @@ fn uncles_with_multiple_forks() {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//      A1 -> B2 -> B3 -> B4
-	// 	          B2 -> C3
-	// 	    A1 -> D2
+	//	          B2 -> C3
+	//	    A1 -> D2
 	let mut client = substrate_test_runtime_client::new();
 
 	// G -> A1

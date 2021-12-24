@@ -138,6 +138,7 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 			let state_root =
 				<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 					child_content.data.clone().into_iter().collect(),
+					sp_runtime::StateVersion::V1,
 				);
 			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
 			(prefixed_storage_key.into_inner(), state_root.encode())
@@ -145,6 +146,7 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 		let state_root =
 			<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				storage.top.clone().into_iter().chain(child_roots).collect(),
+				sp_runtime::StateVersion::V1,
 			);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 		storage.top.extend(additional_storage_with_genesis(&block));

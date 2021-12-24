@@ -45,7 +45,7 @@ use sc_client_api::{
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
 };
-use sc_executor::RuntimeVersion;
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::{
 	ApiExt, ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi,
@@ -60,8 +60,8 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
-		StorageKey,
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
+		StorageData, StorageKey,
 	},
 	NativeOrEncoded,
 };
@@ -72,7 +72,7 @@ use sp_runtime::{
 	traits::{
 		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion, Zero,
 	},
-	BuildStorage, Digest, Justification, Justifications,
+	BuildStorage, Digest, Justification, Justifications, StateVersion,
 };
 use sp_state_machine::{
 	prove_child_read, prove_range_read_with_child_with_size, prove_read,
@@ -81,7 +81,7 @@ use sp_state_machine::{
 };
 use sp_trie::{CompactProof, StorageProof};
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{hash_map::DefaultHasher, HashMap, HashSet},
 	marker::PhantomData,
 	panic::UnwindSafe,
 	path::PathBuf,
@@ -93,7 +93,6 @@ use std::{
 use {
 	super::call_executor::LocalCallExecutor,
 	sc_client_api::in_mem,
-	sc_executor::RuntimeVersionOf,
 	sp_core::traits::{CodeExecutor, SpawnNamed},
 };
 
@@ -334,8 +333,11 @@ where
 		if info.finalized_state.is_none() {
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
+			let genesis_state_version =
+				Self::resolve_state_version_from_wasm(&genesis_storage, &executor)?;
 			let mut op = backend.begin_operation()?;
-			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis)?;
+			let state_root =
+				op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
@@ -403,7 +405,7 @@ where
 
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		self.executor.runtime_version(id)
+		CallExecutor::runtime_version(&self.executor, id)
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -606,7 +608,11 @@ where
 							}
 						}
 
-						let state_root = operation.op.reset_storage(storage)?;
+						// This is use by fast sync for runtime version to be resolvable from
+						// changes.
+						let state_version =
+							Self::resolve_state_version_from_wasm(&storage, &self.executor)?;
+						let state_root = operation.op.reset_storage(storage, state_version)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
 							// safe fast sync mode, but may happen in unsafe mode.
@@ -1041,6 +1047,35 @@ where
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
+
+	fn resolve_state_version_from_wasm(
+		storage: &Storage,
+		executor: &E,
+	) -> sp_blockchain::Result<StateVersion> {
+		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
+			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
+
+			let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
+			let runtime_code = sp_core::traits::RuntimeCode {
+				code_fetcher: &code_fetcher,
+				heap_pages: None,
+				hash: {
+					use std::hash::{Hash, Hasher};
+					let mut state = DefaultHasher::new();
+					wasm.hash(&mut state);
+					state.finish().to_le_bytes().to_vec()
+				},
+			};
+			let runtime_version =
+				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
+					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?;
+			Ok(runtime_version.state_version())
+		} else {
+			Err(sp_blockchain::Error::VersionInvalid(
+				"Runtime missing from initial storage, could not read state version.".to_string(),
+			))
+		}
+	}
 }
 
 impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA>
@@ -1095,12 +1130,14 @@ where
 		size_limit: usize,
 	) -> sp_blockchain::Result<(CompactProof, u32)> {
 		let state = self.state_at(id)?;
-		let root = state.storage_root(std::iter::empty()).0;
+		// this is a read proof, using version V0 or V1 is equivalent.
+		let root = state.storage_root(std::iter::empty(), StateVersion::V0).0;
 
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 			state, size_limit, start_key,
 		)?;
-		let proof = sp_trie::encode_compact::<sp_trie::Layout<HashFor<Block>>>(proof, root)
+		// This is read proof only, we can use either LayoutV0 or LayoutV1.
+		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}
@@ -1225,7 +1262,8 @@ where
 		start_key: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
 		let mut db = sp_state_machine::MemoryDB::<HashFor<Block>>::new(&[]);
-		let _ = sp_trie::decode_compact::<sp_state_machine::Layout<HashFor<Block>>, _, _>(
+		// Compact encoding
+		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashFor<Block>>, _, _>(
 			&mut db,
 			proof.iter_compact_encoded_nodes(),
 			Some(&root),
@@ -1594,7 +1632,7 @@ where
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
-		self.runtime_version_at(at).map_err(Into::into)
+		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
 	}
 }
 

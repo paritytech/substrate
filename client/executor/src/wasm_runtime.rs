@@ -334,22 +334,11 @@ where
 }
 
 fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
-	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &version[..])
-		.map_err(|_| {
-			WasmError::Instantiation(
-				"failed to decode \"Core_version\" result using old runtime version".into(),
-			)
-		})?
-		.into();
-
-	let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
-	if v.has_api_with(&core_api_id, |v| v >= 3) {
-		sp_api::RuntimeVersion::decode(&mut version).map_err(|_| {
-			WasmError::Instantiation("failed to decode \"Core_version\" result".into())
-		})
-	} else {
-		Ok(v)
-	}
+	Decode::decode(&mut version).map_err(|_| {
+		WasmError::Instantiation(
+			"failed to decode \"Core_version\" result using old runtime version".into(),
+		)
+	})
 }
 
 fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
@@ -373,17 +362,25 @@ fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 /// sections, `Err` will be returned.
 pub fn read_embedded_version(blob: &RuntimeBlob) -> Result<Option<RuntimeVersion>, WasmError> {
 	if let Some(mut version_section) = blob.custom_section_contents("runtime_version") {
-		// We do not use `decode_version` here because the runtime_version section is not supposed
-		// to ever contain a legacy version. Apart from that `decode_version` relies on presence
-		// of a special API in the `apis` field to treat the input as a non-legacy version. However
-		// the structure found in the `runtime_version` always contain an empty `apis` field.
-		// Therefore the version read will be mistakenly treated as an legacy one.
-		let mut decoded_version = sp_api::RuntimeVersion::decode(&mut version_section)
-			.map_err(|_| WasmError::Instantiation("failed to decode version section".into()))?;
+		let apis = blob
+			.custom_section_contents("runtime_apis")
+			.map(decode_runtime_apis)
+			.transpose()?
+			.map(Into::into);
 
-		// Don't stop on this and check if there is a special section that encodes all runtime APIs.
-		if let Some(apis_section) = blob.custom_section_contents("runtime_apis") {
-			decoded_version.apis = decode_runtime_apis(apis_section)?.into();
+		let core_version = apis.as_ref().and_then(|apis| sp_version::core_version_from_apis(apis));
+		// We do not use `RuntimeVersion::decode` here because that `decode_version` relies on
+		// presence of a special API in the `apis` field to treat the input as a non-legacy version.
+		// However the structure found in the `runtime_version` always contain an empty `apis`
+		// field. Therefore the version read will be mistakenly treated as an legacy one.
+		let mut decoded_version = sp_version::RuntimeVersion::decode_with_version_hint(
+			&mut version_section,
+			core_version,
+		)
+		.map_err(|_| WasmError::Instantiation("failed to decode version section".into()))?;
+
+		if let Some(apis) = apis {
+			decoded_version.apis = apis;
 		}
 
 		Ok(Some(decoded_version))
@@ -455,8 +452,19 @@ mod tests {
 	use super::*;
 	use codec::Encode;
 	use sp_api::{Core, RuntimeApiInfo};
+	use sp_runtime::RuntimeString;
 	use sp_wasm_interface::HostFunctions;
 	use substrate_test_runtime::Block;
+
+	#[derive(Encode)]
+	pub struct OldRuntimeVersion {
+		pub spec_name: RuntimeString,
+		pub impl_name: RuntimeString,
+		pub authoring_version: u32,
+		pub spec_version: u32,
+		pub impl_version: u32,
+		pub apis: sp_version::ApisVec,
+	}
 
 	#[test]
 	fn host_functions_are_equal() {
@@ -468,7 +476,7 @@ mod tests {
 
 	#[test]
 	fn old_runtime_version_decodes() {
-		let old_runtime_version = sp_api::OldRuntimeVersion {
+		let old_runtime_version = OldRuntimeVersion {
 			spec_name: "test".into(),
 			impl_name: "test".into(),
 			authoring_version: 1,
@@ -479,11 +487,12 @@ mod tests {
 
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
 		assert_eq!(1, version.transaction_version);
+		assert_eq!(0, version.state_version);
 	}
 
 	#[test]
 	fn old_runtime_version_decodes_fails_with_version_3() {
-		let old_runtime_version = sp_api::OldRuntimeVersion {
+		let old_runtime_version = OldRuntimeVersion {
 			spec_name: "test".into(),
 			impl_name: "test".into(),
 			authoring_version: 1,
@@ -505,10 +514,27 @@ mod tests {
 			impl_version: 1,
 			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
 			transaction_version: 3,
+			state_version: 4,
 		};
 
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
 		assert_eq!(3, version.transaction_version);
+		assert_eq!(0, version.state_version);
+
+		let old_runtime_version = sp_api::RuntimeVersion {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 4)]),
+			transaction_version: 3,
+			state_version: 4,
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(3, version.transaction_version);
+		assert_eq!(4, version.state_version);
 	}
 
 	#[test]
@@ -518,15 +544,15 @@ mod tests {
 			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
 		)
 		.expect("Decompressing works");
-
 		let runtime_version = RuntimeVersion {
 			spec_name: "test_replace".into(),
 			impl_name: "test_replace".into(),
 			authoring_version: 100,
 			spec_version: 100,
 			impl_version: 100,
-			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 4)]),
 			transaction_version: 100,
+			state_version: 1,
 		};
 
 		let embedded = sp_version::embed::embed_runtime_version(&wasm, runtime_version.clone())

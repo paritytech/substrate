@@ -194,9 +194,10 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 
 /// Finalize the block.
 pub fn finalize_block() -> Header {
+	use sp_core::storage::StateVersion;
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
-	let extrinsics_root = trie::blake2_256_ordered_root(txs).into();
+	let extrinsics_root = trie::blake2_256_ordered_root(txs, StateVersion::V0).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
@@ -205,8 +206,8 @@ pub fn finalize_block() -> Header {
 
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
-	let storage_root =
-		Hash::decode(&mut &storage_root()[..]).expect("`storage_root` is a valid hash");
+	let storage_root = Hash::decode(&mut &storage_root(StateVersion::V1)[..])
+		.expect("`storage_root` is a valid hash");
 
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
@@ -351,6 +352,7 @@ mod tests {
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public(),
 		];
+
 		TestExternalities::new_with_code(
 			wasm_binary_unwrap(),
 			sp_core::storage::Storage {
@@ -359,7 +361,7 @@ mod tests {
 					twox_128(b"sys:auth").to_vec() => authorities.encode(),
 					blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-					}
+					},
 				],
 				children_default: map![],
 			},

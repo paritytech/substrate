@@ -293,10 +293,17 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				#crate_::StorageChanges<C::StateBackend, Block>,
 				String
 			> where Self: Sized {
+				let at = #crate_::BlockId::Hash(parent_hash.clone());
+				let state_version = self.call
+					.runtime_version_at(&at)
+					.map(|v| v.state_version())
+					.map_err(|e| format!("Failed to get state version: {:?}", e))?;
+
 				self.changes.replace(Default::default()).into_storage_changes(
 					backend,
 					parent_hash,
 					self.storage_transaction_cache.replace(Default::default()),
+					state_version,
 				)
 			}
 		}

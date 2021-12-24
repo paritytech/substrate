@@ -19,6 +19,9 @@ use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
+// Note that `LayoutV1` usage here (proof compaction) is compatible
+// with `LayoutV0`.
+use crate::LayoutV1 as Layout;
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -95,8 +98,8 @@ impl StorageProof {
 	pub fn into_compact_proof<H: Hasher>(
 		self,
 		root: H::Out,
-	) -> Result<CompactProof, crate::CompactProofError<crate::Layout<H>>> {
-		crate::encode_compact::<crate::Layout<H>>(self, root)
+	) -> Result<CompactProof, crate::CompactProofError<Layout<H>>> {
+		crate::encode_compact::<Layout<H>>(self, root)
 	}
 
 	/// Returns the estimated encoded size of the compact proof.
@@ -124,9 +127,9 @@ impl CompactProof {
 	pub fn to_storage_proof<H: Hasher>(
 		&self,
 		expected_root: Option<&H::Out>,
-	) -> Result<(StorageProof, H::Out), crate::CompactProofError<crate::Layout<H>>> {
+	) -> Result<(StorageProof, H::Out), crate::CompactProofError<Layout<H>>> {
 		let mut db = crate::MemoryDB::<H>::new(&[]);
-		let root = crate::decode_compact::<crate::Layout<H>, _, _>(
+		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
 			self.iter_compact_encoded_nodes(),
 			expected_root,
