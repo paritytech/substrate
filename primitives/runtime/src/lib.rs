@@ -938,7 +938,7 @@ mod tests {
 			DispatchError::Module { index: 1, error: [2, 0, 0, 0], message: Some("error message") };
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(encoded, vec![3, 1, 2]);
+		assert_eq!(encoded, vec![3, 1, 2, 0, 0, 0]);
 		assert_eq!(decoded, DispatchError::Module { index: 1, error: [2, 0, 0, 0], message: None });
 	}
 
