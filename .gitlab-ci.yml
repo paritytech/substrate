@@ -186,7 +186,7 @@ default:
 
 .build-linux-substrate-script:     &build-linux-substrate-script
   - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
-  - mv ./target/release/substrate ./artifacts/substrate/.
+  - mv /cargo_target_dir/release/substrate ./artifacts/substrate/.
   - echo -n "Substrate version = "
   - if [ "${CI_COMMIT_TAG}" ]; then
       echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
@@ -460,7 +460,7 @@ test-deterministic-wasm:
     # build runtime
     - cargo build --verbose --release -p node-runtime
     # make checksum
-    - sha256sum target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum /cargo_target_dir/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
     # clean up – FIXME: can we reuse some of the artifacts?
     - cargo clean
     # build again
@@ -690,7 +690,7 @@ build-linux-subkey:                &build-subkey
     - cd ./bin/utils/subkey
     - SKIP_WASM_BUILD=1 time cargo build --release --verbose
     - cd -
-    - mv ./target/release/subkey ./artifacts/subkey/.
+    - mv /cargo_target_dir/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
@@ -738,8 +738,8 @@ build-rustdoc:
   script:
     - rusty-cachier --download-cache
     - time cargo +nightly doc --workspace --all-features --verbose
-    - rm -f ./target/doc/.lock
-    - mv ./target/doc ./crate-docs
+    - rm -f /cargo_target_dir/doc/.lock
+    - mv /cargo_target_dir/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot
     - chown -R nonroot:nonroot ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
