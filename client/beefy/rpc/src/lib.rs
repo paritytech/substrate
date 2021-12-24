@@ -36,6 +36,40 @@ mod notification;
 
 type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, jsonrpc_core::Error>>;
 
+#[derive(derive_more::Display, derive_more::From)]
+/// Top-level error type for the RPC handler
+pub enum Error {
+	/// The BEEFY RPC endpoint is not ready.
+	#[display(fmt = "BEEFY RPC endpoint not ready")]
+	EndpointNotReady,
+}
+
+/// The error codes returned by jsonrpc.
+pub enum ErrorCode {
+	/// Returned when BEEFY RPC endpoint is not ready.
+	NotReady = 1,
+}
+
+impl From<Error> for ErrorCode {
+	fn from(error: Error) -> Self {
+		match error {
+			Error::EndpointNotReady => ErrorCode::NotReady,
+		}
+	}
+}
+
+impl From<Error> for jsonrpc_core::Error {
+	fn from(error: Error) -> Self {
+		let message = format!("{}", error);
+		let code = ErrorCode::from(error);
+		jsonrpc_core::Error {
+			message,
+			code: jsonrpc_core::ErrorCode::ServerError(code as i64),
+			data: None,
+		}
+	}
+}
+
 /// Provides RPC methods for interacting with BEEFY.
 #[rpc]
 pub trait BeefyApi<Notification, Number> {
@@ -68,7 +102,7 @@ pub trait BeefyApi<Notification, Number> {
 
 	/// Returns the latest beefy finalized block as see by this client.
 	#[rpc(name = "beefy_latestFinalized")]
-	fn latest_finalized(&self) -> FutureResult<Option<Number>>;
+	fn latest_finalized(&self) -> FutureResult<Number>;
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
@@ -124,9 +158,13 @@ where
 		Ok(self.manager.cancel(id))
 	}
 
-	fn latest_finalized(&self) -> FutureResult<Option<NumberFor<Block>>> {
-		let result: Result<Option<NumberFor<Block>>, jsonrpc_core::Error> =
-			Ok(self.beefy_best_block.lock().as_ref().cloned());
+	fn latest_finalized(&self) -> FutureResult<NumberFor<Block>> {
+		let result: Result<NumberFor<Block>, jsonrpc_core::Error> = self
+			.beefy_best_block
+			.lock()
+			.as_ref()
+			.cloned()
+			.ok_or(Error::EndpointNotReady.into());
 		let future = async move { result }.boxed();
 		future.map_err(jsonrpc_core::Error::from).boxed()
 	}
@@ -158,6 +196,17 @@ mod tests {
 		let (tx, rx) = futures::channel::mpsc::unbounded();
 		let meta = sc_rpc::Metadata::new(tx);
 		(meta, rx)
+	}
+
+	#[test]
+	fn uninitialized_rpc_handler() {
+		let (io, _) = setup_io_handler();
+
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_latestFinalized","params":[],"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#;
+
+		let meta = sc_rpc::Metadata::default();
+		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
 	}
 
 	#[test]
