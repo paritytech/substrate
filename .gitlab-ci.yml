@@ -531,10 +531,18 @@ check-tracing:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs
+  variables:
+    RUSTY_CACHIER_TOOLCHAIN: nightly
+  # TODO remove
+  before_script:
+    - *docker-env-rust-prepare-script
   script:
+    - rusty-cachier --fix-mtime
+    - rusty-cachier --download-cache
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+    - rusty-cachier --upload-cache
     - sccache -s
 
 test-full-crypto-feature:
