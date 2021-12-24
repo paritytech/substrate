@@ -75,6 +75,7 @@ default:
     - kubernetes-parity-build
 
 .rust-info-script:                 &rust-info-script
+  - unset RUSTC_WRAPPER
   - rustup show
   - cargo --version
   - rustup +nightly show
