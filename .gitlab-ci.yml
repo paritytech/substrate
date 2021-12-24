@@ -78,8 +78,6 @@ default:
     - kubernetes-parity-build
 
 .docker-env-rust-prepare-script:  &docker-env-rust-prepare-script
-  # TODO decide what to with sccache
-  - unset RUSTC_WRAPPER
   - rustup show
   - cargo --version
   - rustup +nightly show
