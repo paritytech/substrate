@@ -53,6 +53,11 @@ variables:                         &default-vars
 
 default:
   cache:                           {}
+  # TODO remove when pr is readys
+  before_script:
+    - echo "this is a stub job, bye!"
+    - exit 0
+
 
 .collect-artifacts:                &collect-artifacts
   artifacts:
@@ -99,8 +104,9 @@ default:
 
 .docker-env:                       &docker-env
   image:                           "${CI_IMAGE}"
-  before_script:
-    - *docker-env-rust-prepare-script
+  # TODO uncomment below when pr is ready
+  # before_script:
+  #   - *docker-env-rust-prepare-script
   retry:
     max: 2
     when:
@@ -113,10 +119,6 @@ default:
 
 .test-refs:                        &test-refs
   rules:
-    # TODO remove when pr is ready
-    - if: $CI_JOB_NAME != "test-linux-stable"
-      when: never
-
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
@@ -125,10 +127,6 @@ default:
 
 .test-refs-no-trigger:             &test-refs-no-trigger
   rules:
-    # TODO remove when pr is ready
-    - if: $CI_JOB_NAME != "test-linux-stable"
-      when: never
-
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -140,9 +138,6 @@ default:
 
 .test-refs-no-trigger-prs-only:   &test-refs-no-trigger-prs-only
   rules:
-    # TODO remove when pr is ready
-    - if: $CI_JOB_NAME != "test-linux-stable"
-
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -151,9 +146,6 @@ default:
 
 .test-refs-wasmer-sandbox:                        &test-refs-wasmer-sandbox
   rules:
-    # TODO remove when pr is ready
-    - if: $CI_JOB_NAME != "test-linux-stable"
-
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
@@ -174,9 +166,6 @@ default:
 
 .build-refs:                       &build-refs
   rules:
-    # TODO remove when pr is ready
-    - if: $CI_JOB_NAME != "test-linux-stable"
-
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -390,10 +379,11 @@ cargo-check-benches:
   <<:                              *docker-env
   <<:                              *test-refs
   <<:                              *collect-artifacts
-  before_script:
-    # merges in the master branch on PRs
-    - *merge-ref-into-master-script
-    - *docker-env-rust-prepare-script
+  # TODO uncomment below when pr is ready
+  # before_script:
+  #   # merges in the master branch on PRs
+  #   - *merge-ref-into-master-script
+  #   - *docker-env-rust-prepare-script
   script:
     - *cargo-check-benches-script
   tags:
@@ -481,6 +471,9 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
+  # TODO remove when pr is ready
+  before_script:
+    - *docker-env-rust-prepare-script
   script:
     - rusty-cachier --fix-mtime
     - rusty-cachier --download-cache
@@ -561,29 +554,30 @@ test-full-crypto-feature:
 # Mostly same as the job above, additional instrumentation was added to push test run times
 # to the time series database.
 # This is temporary and will be eventually removed.
-bench-test-full-crypto-feature:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *build-refs
-  variables:
-    <<:                            *default-vars
-    RUSTFLAGS:                     "-Cdebug-assertions=y"
-    RUST_BACKTRACE: 1
-  before_script: [""]
-  script:
-    # disable sccache for the bench purposes
-    - unset RUSTC_WRAPPER
-    - START_TIME=`date '+%s'`
-    - cd primitives/core/
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
-    - cd ../application-crypto
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
-    - END_TIME=`date '+%s'`
-    - TOTAL_TIME=`expr $END_TIME - $START_TIME`
-    # send the job time measuring to the prometheus endpoint
-    - curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
-  tags:
-    - linux-docker-compare
+# TODO uncomment below when pr is ready
+# bench-test-full-crypto-feature:
+#   stage:                           test
+#   <<:                              *docker-env
+#   <<:                              *build-refs
+#   variables:
+#     <<:                            *default-vars
+#     RUSTFLAGS:                     "-Cdebug-assertions=y"
+#     RUST_BACKTRACE: 1
+#   before_script: [""]
+#   script:
+#     # disable sccache for the bench purposes
+#     - unset RUSTC_WRAPPER
+#     - START_TIME=`date '+%s'`
+#     - cd primitives/core/
+#     - time cargo +nightly build --verbose --no-default-features --features full_crypto
+#     - cd ../application-crypto
+#     - time cargo +nightly build --verbose --no-default-features --features full_crypto
+#     - END_TIME=`date '+%s'`
+#     - TOTAL_TIME=`expr $END_TIME - $START_TIME`
+#     # send the job time measuring to the prometheus endpoint
+#     - curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
+#   tags:
+#     - linux-docker-compare
 
 
 test-wasmer-sandbox:
