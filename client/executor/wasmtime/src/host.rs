@@ -19,7 +19,7 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::{runtime::StoreData, util};
+use crate::{instance_wrapper::MemoryWrapper, runtime::StoreData, util};
 use codec::{Decode, Encode};
 use log::trace;
 use sc_allocator::FreeingBumpHeapAllocator;
@@ -44,7 +44,7 @@ unsafe impl Send for SandboxStore {}
 /// many different host calls that must share state.
 pub struct HostState {
 	sandbox_store: SandboxStore,
-	allocator: FreeingBumpHeapAllocator,
+	allocator: Option<FreeingBumpHeapAllocator>,
 }
 
 impl HostState {
@@ -54,7 +54,7 @@ impl HostState {
 			sandbox_store: SandboxStore(Some(Box::new(sandbox::Store::new(
 				sandbox::SandboxBackend::TryWasmer,
 			)))),
-			allocator,
+			allocator: Some(allocator),
 		}
 	}
 }
@@ -113,22 +113,36 @@ impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
 		let memory = self.caller.data().memory();
-		let (memory, data) = memory.data_and_store_mut(&mut self.caller);
-		data.host_state_mut()
-			.expect("host state is not empty when calling a function in wasm; qed")
+		let mut allocator = self
+			.host_state_mut()
 			.allocator
-			.allocate(memory, size)
-			.map_err(|e| e.to_string())
+			.take()
+			.expect("allocator is not empty when calling a function in wasm; qed");
+
+		let res = allocator
+			.allocate(&mut MemoryWrapper(&memory, &mut self.caller), size)
+			.map_err(|e| e.to_string());
+
+		self.host_state_mut().allocator = Some(allocator);
+
+		res
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
 		let memory = self.caller.data().memory();
-		let (memory, data) = memory.data_and_store_mut(&mut self.caller);
-		data.host_state_mut()
-			.expect("host state is not empty when calling a function in wasm; qed")
+		let mut allocator = self
+			.host_state_mut()
 			.allocator
-			.deallocate(memory, ptr)
-			.map_err(|e| e.to_string())
+			.take()
+			.expect("allocator is not empty when calling a function in wasm; qed");
+
+		let res = allocator
+			.deallocate(&mut MemoryWrapper(&memory, &mut self.caller), ptr)
+			.map_err(|e| e.to_string());
+
+		self.host_state_mut().allocator = Some(allocator);
+
+		res
 	}
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {

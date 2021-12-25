@@ -95,7 +95,7 @@ impl FunctionExecutor {
 			sandbox_store: Rc::new(RefCell::new(sandbox::Store::new(
 				sandbox::SandboxBackend::Wasmi,
 			))),
-			heap: RefCell::new(sc_allocator::FreeingBumpHeapAllocator::new(heap_base)),
+			heap: RefCell::new(FreeingBumpHeapAllocator::new(heap_base)),
 			memory: m,
 			table: t,
 			host_functions,
@@ -151,15 +151,17 @@ impl FunctionContext for FunctionExecutor {
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
-		let heap = &mut self.heap.borrow_mut();
-		self.memory
-			.with_direct_access_mut(|mem| heap.allocate(mem, size).map_err(|e| e.to_string()))
+		self.heap
+			.borrow_mut()
+			.allocate(&mut MemoryWrapper(&self.memory), size)
+			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
-		let heap = &mut self.heap.borrow_mut();
-		self.memory
-			.with_direct_access_mut(|mem| heap.deallocate(mem, ptr).map_err(|e| e.to_string()))
+		self.heap
+			.borrow_mut()
+			.deallocate(&mut MemoryWrapper(&self.memory), ptr)
+			.map_err(|e| e.to_string())
 	}
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
@@ -419,17 +421,44 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	fn resolve_memory(
 		&self,
 		field_name: &str,
-		_: &wasmi::MemoryDescriptor,
+		desc: &wasmi::MemoryDescriptor,
 	) -> Result<MemoryRef, wasmi::Error> {
 		if field_name == "memory" {
 			match &mut *self.import_memory.borrow_mut() {
 				Some(_) =>
 					Err(wasmi::Error::Instantiation("Memory can not be imported twice!".into())),
 				memory_ref @ None => {
+					if desc.initial() > self.heap_pages {
+						return Err(wasmi::Error::Instantiation(format!(
+							"Wasm minimum heap pages `{}` is bigger than requested heap pages `{}`.",
+							desc.initial(),
+							self.heap_pages,
+						)))
+					}
+
+					if desc.maximum().map_or(false, |m| self.heap_pages > m) {
+						return Err(wasmi::Error::Instantiation(format!(
+							"Requested heap pages `{}` is bigger than maximum requested\
+							 by the runtime wasm module `{}`",
+							self.heap_pages,
+							desc.maximum().unwrap_or(0),
+						)))
+					}
+
+					if desc.maximum() > self.max_heap_pages {
+						return Err(wasmi::Error::Instantiation(format!(
+							"Requested maximum heap pages `{}` is smaller than maximum requested\
+							 by the runtime wasm module `{}`",
+							self.max_heap_pages.unwrap_or(0),
+							desc.maximum().unwrap_or(0),
+						)))
+					}
+
 					let memory = MemoryInstance::alloc(
 						Pages(self.heap_pages as usize),
 						self.max_heap_pages.map(|v| Pages(v as usize)),
 					)?;
+
 					*memory_ref = Some(memory.clone());
 					Ok(memory)
 				},
@@ -812,7 +841,15 @@ impl WasmInstance for WasmiInstance {
 			self.host_functions.clone(),
 			self.allow_missing_func_imports,
 			self.missing_functions.clone(),
-		)
+		);
+
+		// Erase the memory to let the OS reclaim it.
+		//
+		// We are not interested in the result here, if this failed, we will retry it in the next
+		// call to the runtime again.
+		let _ = self.memory.erase();
+
+		res
 	}
 
 	fn get_global_const(&mut self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {

@@ -510,7 +510,8 @@ impl FreeingBumpHeapAllocator {
 
 				return Err(Error::AllocatorOutOfSpace)
 			} else {
-				// Let us growth by at least pages * 2, but in maximum we can allocate `MAX_WASM_PAGES`
+				// Let us growth by at least pages * 2, but in maximum we can allocate
+				// `MAX_WASM_PAGES`
 				let next_pages =
 					std::cmp::min(std::cmp::max(pages * 2, required_pages), MAX_WASM_PAGES);
 

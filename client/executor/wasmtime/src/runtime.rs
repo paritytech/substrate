@@ -20,7 +20,7 @@
 
 use crate::{
 	host::HostState,
-	instance_wrapper::{EntryPoint, InstanceWrapper},
+	instance_wrapper::{EntryPoint, InstanceWrapper, MemoryWrapper},
 	util,
 };
 
@@ -634,9 +634,8 @@ fn inject_input_data(
 ) -> Result<(Pointer<u8>, WordSize)> {
 	let mut ctx = instance.store_mut();
 	let memory = ctx.data().memory();
-	let memory = memory.data_mut(&mut ctx);
 	let data_len = data.len() as WordSize;
-	let data_ptr = allocator.allocate(memory, data_len)?;
+	let data_ptr = allocator.allocate(&mut MemoryWrapper(&memory, &mut ctx), data_len)?;
 	util::write_memory_from(instance.store_mut(), data_ptr, data)?;
 	Ok((data_ptr, data_len))
 }

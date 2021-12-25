@@ -20,14 +20,15 @@
 //! runtime module.
 
 use crate::runtime::{Store, StoreData};
+use sc_allocator::Memory as MemoryT;
 use sc_executor_common::{
 	error::{Error, Result},
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{Pointer, Value, WordSize};
-use std::{marker, slice};
-use wasmtime::{Extern, Func, Global, Instance, Memory, Module, Store, Table, Val};
-use sc_allocator::{Memory as MemoryT, FreeingBumpHeapAllocator};
+use sp_wasm_interface::{Function, Pointer, Value, WordSize};
+use wasmtime::{
+	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
+};
 
 /// Invoked entrypoint format.
 pub enum EntryPointType {
@@ -98,29 +99,21 @@ impl EntryPoint {
 	}
 }
 
-/// Wrapper around [`Memor`] that implements [`MemoryT`].
-struct MemoryWrapper<'a>(&'a Memory);
+/// Wrapper around [`Memory`] that implements [`MemoryT`].
+pub(crate) struct MemoryWrapper<'a, C>(pub &'a wasmtime::Memory, pub &'a mut C);
 
-impl MemoryT for MemoryWrapper<'_> {
-	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R {
-		unsafe {
-			run(self.0.data_unchecked_mut())
-		}
-	}
-
+impl<C: AsContextMut> MemoryT for MemoryWrapper<'_, C> {
 	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R {
-		unsafe {
-			run(self.0.data_unchecked())
-		}
+		run(self.0.data(&self.1))
 	}
 
-	fn pages(&self) -> u32 {
-		self.0.size()
+	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R {
+		run(self.0.data_mut(&mut self.1))
 	}
 
 	fn grow(&mut self, additional: u32) -> std::result::Result<(), ()> {
 		self.0
-			.grow(additional)
+			.grow(&mut self.1, additional as u64)
 			.map_err(|e| {
 				log::error!(
 					target: "wasm-executor",
@@ -130,6 +123,10 @@ impl MemoryT for MemoryWrapper<'_> {
 				)
 			})
 			.map(drop)
+	}
+
+	fn pages(&self) -> u32 {
+		self.0.size(&self.1) as u32
 	}
 }
 
@@ -141,7 +138,8 @@ pub struct InstanceWrapper {
 	instance: Instance,
 	// The memory instance of the `instance`.
 	//
-	// It is important to make sure that we don't make any copies of this to make it easier to proof
+	// It is important to make sure that we don't make any copies of this to make it easier to
+	// proof
 	memory: Memory,
 	store: Store,
 }
@@ -363,63 +361,6 @@ fn get_table(instance: &Instance, ctx: &mut Store) -> Option<Table> {
 
 /// Functions related to memory.
 impl InstanceWrapper {
-	/// Read data from a slice of memory into a destination buffer.
-	///
-	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory.data_unchecked();
-
-			let range = util::checked_range(address.into(), dest.len(), memory.len())
-				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-			dest.copy_from_slice(&memory[range]);
-			Ok(())
-		}
-	}
-
-	/// Write data to a slice of memory.
-	///
-	/// Returns an error if the write would go out of the memory bounds.
-	pub fn write_memory_from(&self, address: Pointer<u8>, data: &[u8]) -> Result<()> {
-		unsafe {
-			// This should be safe since we don't grow up memory while caching this reference and
-			// we give up the reference before returning from this function.
-			let memory = self.memory.data_unchecked_mut();
-
-			let range = util::checked_range(address.into(), data.len(), memory.len())
-				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-			memory[range].copy_from_slice(data);
-			Ok(())
-		}
-	}
-
-	/// Allocate some memory of the given size. Returns pointer to the allocated memory region.
-	///
-	/// Returns `Err` in case memory cannot be allocated. Refer to the allocator documentation
-	/// to get more details.
-	pub fn allocate(
-		&self,
-		allocator: &mut FreeingBumpHeapAllocator,
-		size: WordSize,
-	) -> Result<Pointer<u8>> {
-		let mut memory = MemoryWrapper(&self.memory);
-		allocator.allocate(&mut memory, size).map_err(Into::into)
-	}
-
-	/// Deallocate the memory pointed by the given pointer.
-	///
-	/// Returns `Err` in case the given memory region cannot be deallocated.
-	pub fn deallocate(
-		&self,
-		allocator: &mut FreeingBumpHeapAllocator,
-		ptr: Pointer<u8>,
-	) -> Result<()> {
-		let mut memory = MemoryWrapper(&self.memory);
-		allocator.deallocate(&mut memory, ptr).map_err(Into::into)
-	}
-
 	/// Returns the pointer to the first byte of the linear memory for this instance.
 	pub fn base_ptr(&self) -> *const u8 {
 		self.memory.data_ptr(&self.store)

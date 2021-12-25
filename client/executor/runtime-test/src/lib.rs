@@ -54,92 +54,27 @@ static mut MUTABLE_STATIC: u64 = 32;
 static mut MUTABLE_STATIC_BSS: u64 = 0;
 
 sp_core::wasm_export_functions! {
-	fn test_calling_missing_external() {
-		unsafe { missing_external() }
-	}
+   fn test_calling_missing_external() {
+	   unsafe { missing_external() }
+   }
 
-	fn test_calling_yet_another_missing_external() {
-		unsafe { yet_another_missing_external() }
-	}
+   fn test_calling_yet_another_missing_external() {
+	   unsafe { yet_another_missing_external() }
+   }
 
-	fn test_data_in(input: Vec<u8>) -> Vec<u8> {
-		print("set_storage");
-		storage::set(b"input", &input);
+   fn test_data_in(input: Vec<u8>) -> Vec<u8> {
+	   print("set_storage");
+	   storage::set(b"input", &input);
 
-		print("storage");
-		let foo = storage::get(b"foo").unwrap();
+	   print("storage");
+	   let foo = storage::get(b"foo").unwrap();
 
-		print("set_storage");
-		storage::set(b"baz", &foo);
+	   print("set_storage");
+	   storage::set(b"baz", &foo);
 
-		print("finished!");
-		b"all ok!".to_vec()
-	}
-
-	fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
-		storage::clear_prefix(&input, None);
-		b"all ok!".to_vec()
-	}
-
-	fn test_empty_return() {}
-
-	fn test_dirty_plenty_memory(heap_base: u32, heap_pages: u32) {
-		// This piece of code will dirty multiple pages of memory. The number of pages is given by
-		// the `heap_pages`. It's unit is a wasm page (64KiB). The first page to be cleared
-		// is a wasm page that that follows the one that holds the `heap_base` address.
-		//
-		// This function dirties the **host** pages. I.e. we dirty 4KiB at a time and it will take
-		// 16 writes to process a single wasm page.
-
-		let mut heap_ptr = heap_base as usize;
-
-		// Find the next wasm page boundary.
-		let heap_ptr = round_up_to(heap_ptr, 65536);
-
-		// Make it an actual pointer
-		let heap_ptr = heap_ptr as *mut u8;
-
-		// Traverse the host pages and make each one dirty
-		let host_pages = heap_pages as usize * 16;
-		for i in 0..host_pages {
-			unsafe {
-				// technically this is an UB, but there is no way Rust can find this out.
-				heap_ptr.add(i * 4096).write(0);
-			}
-		}
-
-		fn round_up_to(n: usize, divisor: usize) -> usize {
-			(n + divisor - 1) / divisor
-		}
-	}
-
-	fn test_exhaust_heap() -> u64 {
-		let mut data = Vec::new();
-
-		loop {
-			data.push(Vec::<u8>::with_capacity(10 * 1024 * 1024));
-		}
-	}
-
-	fn test_fp_f32add(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
-		let a = f32::from_le_bytes(a);
-		let b = f32::from_le_bytes(b);
-		f32::to_le_bytes(a + b)
-	}
-
-	fn test_panic() { panic!("test panic") }
-
-	fn test_conditional_panic(input: Vec<u8>) -> Vec<u8> {
-		if input.len() > 0 {
-			panic!("test panic")
-		}
-
-		input
-	}
-
-	fn test_blake2_256(input: Vec<u8>) -> Vec<u8> {
-		blake2_256(&input).to_vec()
-	}
+	   print("finished!");
+	   b"all ok!".to_vec()
+   }
 
    fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
 	   storage::clear_prefix(&input, None);
@@ -397,6 +332,23 @@ sp_core::wasm_export_functions! {
    fn test_panic_in_spawned() {
 	   sp_tasks::spawn(tasks::panicker, vec![]).join();
    }
+
+	fn test_return_i8() -> i8 {
+		-66
+	}
+
+	fn test_take_i8(value: i8) {
+		assert_eq!(value, -66);
+	}
+
+	fn allocate_two_gigabyte() -> u32 {
+		let mut data = Vec::new();
+		for _ in 0..205 {
+			data.push(Vec::<u8>::with_capacity(10 * 1024 * 1024));
+		}
+
+		data.iter().map(|d| d.capacity() as u32).sum()
+	}
 }
 
 #[cfg(not(feature = "std"))]

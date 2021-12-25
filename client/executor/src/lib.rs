@@ -76,7 +76,7 @@ mod tests {
 
 		let executor = WasmExecutor::new(
 			WasmExecutionMethod::Interpreted,
-			Some(8),
+			Some(20),
 			sp_io::SubstrateHostFunctions::host_functions(),
 			8,
 			None,

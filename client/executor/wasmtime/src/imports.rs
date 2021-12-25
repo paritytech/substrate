@@ -95,30 +95,34 @@ fn resolve_memory_import(
 			))),
 	};
 
-	// Increment the min (a.k.a initial) number of pages by `heap_pages` and check if it exceeds the
-	// maximum specified by the import.
-	let initial = requested_memory_ty.minimum().saturating_add(heap_pages);
-	if let Some(max) = requested_memory_ty.maximum() {
-		if initial > max {
-			return Err(WasmError::Other(format!(
-				"incremented number of pages by heap_pages (total={}) is more than maximum requested\
-				by the runtime wasm module {}",
-				initial,
-				max,
-			)))
-		}
+	if requested_memory_ty.minimum() > heap_pages {
+		return Err(WasmError::Other(format!(
+			"Wasm minimum heap pages `{}` is bigger than requested heap pages `{}`.",
+			requested_memory_ty.minimum(),
+			heap_pages,
+		)))
+	}
+
+	if requested_memory_ty.maximum().map_or(false, |m| heap_pages > m) {
+		return Err(WasmError::Other(format!(
+			"Requested heap pages `{}` is bigger than maximum requested\
+			by the runtime wasm module `{}`",
+			heap_pages,
+			requested_memory_ty.maximum().unwrap_or(0),
+		)))
 	}
 
 	// Note that the return value of `maximum` and `minimum`, while a u64,
 	// will always fit into a u32 for 32-bit memories.
 	// 64-bit memories are part of the memory64 proposal for WebAssembly which is not standardized
 	// yet.
-	let minimum: u32 = initial.try_into().map_err(|_| {
+	let minimum: u32 = heap_pages.try_into().map_err(|_| {
 		WasmError::Other(format!(
 			"minimum number of memory pages ({}) doesn't fit into u32",
-			initial
+			heap_pages,
 		))
 	})?;
+
 	let maximum: Option<u32> = match requested_memory_ty.maximum() {
 		Some(max) => Some(max.try_into().map_err(|_| {
 			WasmError::Other(format!(
