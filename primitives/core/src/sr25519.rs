@@ -211,7 +211,8 @@ impl<'de> Deserialize<'de> for Public {
 /// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
-#[derive(Encode, Decode, PassByInner, TypeInfo)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -259,14 +260,6 @@ impl Clone for Signature {
 	}
 }
 
-impl PartialEq for Signature {
-	fn eq(&self, b: &Self) -> bool {
-		self.0[..] == b.0[..]
-	}
-}
-
-impl Eq for Signature {}
-
 impl From<Signature> for [u8; 64] {
 	fn from(v: Signature) -> [u8; 64] {
 		v.0
@@ -313,13 +306,6 @@ impl sp_std::fmt::Debug for Signature {
 	#[cfg(not(feature = "std"))]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
-	}
-}
-
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Signature {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		sp_std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
