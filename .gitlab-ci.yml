@@ -84,6 +84,7 @@ default:
   - cargo +nightly --version
   - sccache -s
   # TODO switch to the release branch when pr is ready
+  #
   - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/-/raw/master/client/install.sh | bash
   - rusty-cachier --check
   - $(rusty-cachier --inject)
