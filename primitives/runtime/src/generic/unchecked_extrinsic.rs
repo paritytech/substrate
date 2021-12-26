@@ -21,7 +21,7 @@ use crate::{
     AccountId32,
 	generic::CheckedExtrinsic,
 	traits::{
-		self, BlakeTwo256, HasAddress, Checkable, Extrinsic, Hash, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
+		self, HasAddress, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
 		SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},

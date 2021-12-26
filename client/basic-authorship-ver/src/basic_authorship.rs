@@ -21,7 +21,6 @@
 // FIXME #1021 move this into sp-consensus
 
 use codec::{Decode, Encode};
-use ver_api::VerApi;
 use futures::{
 	channel::oneshot,
 	future,
@@ -45,12 +44,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
+use ver_api::VerApi;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 use sp_inherents::InherentDataProvider;
-use std::ops::Add;
 use sp_runtime::traits::One;
+use std::ops::Add;
 
 /// Default block size limit in bytes used by [`Proposer`].
 ///
@@ -330,8 +330,8 @@ where
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
 		let api = self.client.runtime_api();
-        let next_block_number = self.parent_number.add(One::one()).add(One::one());
-        let omit_transactions = api.is_new_session(&self.parent_id, next_block_number).unwrap();
+		let next_block_number = self.parent_number.add(One::one()).add(One::one());
+		let omit_transactions = api.is_new_session(&self.parent_id, next_block_number).unwrap();
 
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
@@ -340,7 +340,7 @@ where
 		debug!(target:"block_builder", "found {} inherents", inherents.len());
 		for inherent in inherents {
 			debug!(target:"block_builder", "processing inherent");
-            // TODO now it actually commits changes
+			// TODO now it actually commits changes
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
@@ -369,7 +369,6 @@ where
 		let mut unqueue_invalid = Vec::new();
 		block_builder.apply_previous_block_extrinsics(seed.clone());
 
-
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
 		let mut t2 =
 			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
@@ -392,7 +391,6 @@ where
 		debug!("Pool status: {:?}", self.transaction_pool.status());
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
-
 
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
@@ -441,7 +439,7 @@ where
 					}
 				}
 
-				trace!("[{:?}] Pushing to the block.", pending_tx_hash);
+				trace!(target:"block_builder", "[{:?}] Pushing to the block.", pending_tx_hash);
 				match sc_block_builder::BlockBuilder::push_with_api(
 					&mut block_builder,
 					api,
@@ -497,7 +495,7 @@ where
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		let (block, storage_changes, proof) = block_builder.build_with_seed(seed)?.into_inner();
-        debug!(target: "block_builder","created block {:?}", block);
+		debug!(target: "block_builder","created block {:?}", block);
 
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
@@ -1088,7 +1086,7 @@ where
 // 		assert_eq!(block.extrinsics().len(), 1);
 // 		assert!(
 // 			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
-// 			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
-// 		);
+// 			"Not enough calls to current time, which indicates the test might have ended because of deadline,
+// not soft deadline" 		);
 // 	}
 // }

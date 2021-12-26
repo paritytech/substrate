@@ -149,8 +149,8 @@ where
 					Err(_) => TransactionOutcome::Rollback(None)
 				}
 			});
-			log::debug!(target: "block_shuffler", "who:{:48}  extrinsic:{:?}",who.clone().map(|x| x.to_ss58check()).unwrap_or_else(|| String::from("None")), tx_hash);
-			(who, tx)
+			log::debug!(target: "block_shuffler", "who:{:48}  extrinsic:{:?}",who.clone().map(|x| x.0.to_ss58check()).unwrap_or_else(|| String::from("None")), tx_hash);
+			(who.map(|x| x.0), tx)
 		}).collect();
 
 	shuffle_using_seed(extrinsics, seed)

@@ -34,14 +34,17 @@ use sp_api::{
 use sp_blockchain::{ApplyExtrinsicFailed, Backend, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
-    SaturatedConversion,
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as BlockT, Extrinsic, DigestFor, DigestItemFor, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	traits::{
+		BlakeTwo256, Block as BlockT, DigestFor, DigestItemFor, Extrinsic, Hash, HashFor,
+		Header as HeaderT, NumberFor, One,
+	},
+	SaturatedConversion,
 };
 
+pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use ver_api::VerApi;
-pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use log::info;
 use sc_client_api::backend;
@@ -203,7 +206,6 @@ where
 		})
 	}
 
-
 	/// Push onto the block's list of extrinsics.
 	///
 	/// allows to temporarly validate/execute the task with api provided by other transaction
@@ -216,6 +218,11 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
+		match api.get_signer(block_id, xt.clone()).unwrap() {
+			Some((who, nonce)) => log::debug!(target: "block_builder",
+                "TX[{:?}] {:?} {} ", BlakeTwo256::hash_of(&xt), who, nonce),
+			_ => {},
+		};
 		api.execute_in_transaction(|api| {
 			match api.apply_extrinsic_with_context(
 				block_id,
@@ -237,10 +244,7 @@ where
 	/// Push onto the block's list of extrinsics.
 	///
 	/// validate extrinsics but without commiting the change
-	pub fn push(
-		&mut self,
-		xt: <Block as BlockT>::Extrinsic,
-	) -> Result<(), Error> {
+	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
 		let block_id = &self.block_id;
 		let inherents = &mut self.inherents;
 
@@ -269,60 +273,73 @@ where
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
 
-        let previous_block_header = self.backend.blockchain()
-            .header(BlockId::Hash(parent_hash))
-            .unwrap()
-            .unwrap();
+		let previous_block_header =
+			self.backend.blockchain().header(BlockId::Hash(parent_hash)).unwrap().unwrap();
 
-        let previous_block_extrinsics = self.backend.blockchain()
-            .body(BlockId::Hash(parent_hash))
-            .unwrap()
-            .unwrap_or_default();
+		let previous_block_extrinsics = self
+			.backend
+			.blockchain()
+			.body(BlockId::Hash(parent_hash))
+			.unwrap()
+			.unwrap_or_default();
 
-        let prev_block_extrinsics_count = previous_block_header.count().clone().saturated_into::<usize>();
-        log::debug!(target: "block_builder", "previous block has {} transactions, {} comming from that block", previous_block_extrinsics.len(), prev_block_extrinsics_count);
+		let prev_block_extrinsics_count =
+			previous_block_header.count().clone().saturated_into::<usize>();
+		log::debug!(target: "block_builder", "previous block has {} transactions, {} comming from that block", previous_block_extrinsics.len(), prev_block_extrinsics_count);
 
-        let previous_block_extrinsics = previous_block_extrinsics.iter().take(prev_block_extrinsics_count).cloned().collect::<Vec<_>>();
+		let previous_block_extrinsics = previous_block_extrinsics
+			.iter()
+			.take(prev_block_extrinsics_count)
+			.cloned()
+			.collect::<Vec<_>>();
 
-        // filter out extrinsics only
-        let extrinsics = previous_block_extrinsics.into_iter()
-            .filter(|e| 
-			    self.api.execute_in_transaction(|api| {
-                    match api.get_signer(&self.block_id, e.clone()){
-                        Ok(result) => TransactionOutcome::Rollback(result),
-                        Err(_) => TransactionOutcome::Rollback(None)
-                    }
-                }).is_some()
-            ).collect::<Vec<_>>();
+		// filter out extrinsics only
+		let extrinsics = previous_block_extrinsics
+			.into_iter()
+			.filter(|e| {
+				self.api
+					.execute_in_transaction(|api| match api.get_signer(&self.block_id, e.clone()) {
+						Ok(result) => TransactionOutcome::Rollback(result),
+						Err(_) => TransactionOutcome::Rollback(None),
+					})
+					.is_some()
+			})
+			.collect::<Vec<_>>();
 
-        self.previous_block_extrinsics = Some(extrinsics.clone());
-        let to_be_executed = self.inherents.clone().into_iter().chain(extrinsics.into_iter()).collect::<Vec<_>>();
+		self.previous_block_extrinsics = Some(extrinsics.clone());
+		let to_be_executed = self
+			.inherents
+			.clone()
+			.into_iter()
+			.chain(extrinsics.into_iter())
+			.collect::<Vec<_>>();
 
-        // let shuffled_extrinsics = extrinsics;
-        // filter out inherentes
-        // let shuffled_extrinsics = previous_block_extrinsics.into_iter().filter(|e| e.is_signed().unwrap()).collect::<Vec<_>>();
-        // log::debug!(target: "block_builder", "previous block has {} extrinsics", shuffled_extrinsics.len());
-        let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block, A>(
-            &self.api,
-            &self.block_id,
-            to_be_executed,
-            &seed.seed,
-        );
+		// let shuffled_extrinsics = extrinsics;
+		// filter out inherentes
+		// let shuffled_extrinsics = previous_block_extrinsics.into_iter().filter(|e|
+		// e.is_signed().unwrap()).collect::<Vec<_>>(); log::debug!(target: "block_builder",
+		// "previous block has {} extrinsics", shuffled_extrinsics.len());
+		let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block, A>(
+			&self.api,
+			&self.block_id,
+			to_be_executed,
+			&seed.seed,
+		);
 
-        for xt in shuffled_extrinsics.iter() {
-            log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
-            self.api.execute_in_transaction(|api| {
-                match api.apply_extrinsic_with_context(
-                    block_id,
-                    ExecutionContext::BlockConstruction,
-                    xt.clone(),
-                ) {
-                    Ok(Ok(_)) => TransactionOutcome::Commit(()),
-                    Ok(Err(_tx_validity)) => TransactionOutcome::Rollback(()),
-                    Err(_e) => TransactionOutcome::Rollback(()),
-                }
-            })
-        }
+		for xt in shuffled_extrinsics.iter() {
+			log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
+			self.api.execute_in_transaction(|api| {
+				match api.apply_extrinsic_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				) {
+					Ok(Ok(_)) => TransactionOutcome::Commit(()),
+					Ok(Err(_tx_validity)) => TransactionOutcome::Rollback(()),
+					Err(_e) => TransactionOutcome::Rollback(()),
+				}
+			})
+		}
 	}
 
 	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.
@@ -355,13 +372,15 @@ where
 			.into_storage_changes(&state, changes_trie_state.as_ref(), parent_hash)
 			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 		// store hash of all extrinsics include in given bloack
-        //
-        let curr_block_extrinsics_count = self.extrinsics.len() + self.inherents.len();
-        let all_extrinsics: Vec<_> = self.inherents.iter()
-            .chain(self.extrinsics.iter())
-            .chain(self.previous_block_extrinsics.unwrap().iter())
-            .cloned()
-            .collect();
+		//
+		let curr_block_extrinsics_count = self.extrinsics.len() + self.inherents.len();
+		let all_extrinsics: Vec<_> = self
+			.inherents
+			.iter()
+			.chain(self.extrinsics.iter())
+			.chain(self.previous_block_extrinsics.unwrap().iter())
+			.cloned()
+			.collect();
 
 		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
 			all_extrinsics.iter().map(Encode::encode).collect(),

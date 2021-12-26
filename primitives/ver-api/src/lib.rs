@@ -14,8 +14,9 @@ sp_api::decl_runtime_apis! {
 	/// The `VerApi` api trait for fetching information about extrinsic author and
 	/// nonce
 	pub trait VerApi {
+        // TODO: make AccountId generic
 		/// Provides information about extrinsic signer and nonce
-		fn get_signer(tx: <Block as BlockT>::Extrinsic) -> Option<AccountId32>;
+		fn get_signer(tx: <Block as BlockT>::Extrinsic) -> Option<(AccountId32, u32)>;
 
 		/// Checks if given block will start new session
         fn is_new_session(number: <<Block as BlockT>::Header as HeaderT>::Number) -> bool;
