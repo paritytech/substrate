@@ -1526,7 +1526,7 @@ mod tests {
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(0, BOB, 0, vec![], true);
+			let r = ctx.ext.call(0, BOB, 0, vec![], true, false);
 
 			REACHED_BOTTOM.with(|reached_bottom| {
 				let mut reached_bottom = reached_bottom.borrow_mut();
@@ -1581,7 +1581,7 @@ mod tests {
 				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
 
 			// Call into CHARLIE contract.
-			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true, false), Ok(_));
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -1622,7 +1622,7 @@ mod tests {
 			assert_eq!(*ctx.ext.address(), BOB);
 
 			// Call into charlie contract.
-			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true, false), Ok(_));
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -1925,13 +1925,13 @@ mod tests {
 				let info = ctx.ext.contract_info();
 				assert_eq!(info.storage_deposit, 0);
 				info.storage_deposit = 42;
-				assert_eq!(ctx.ext.call(0, CHARLIE, 0, vec![], true), exec_trapped());
+				assert_eq!(ctx.ext.call(0, CHARLIE, 0, vec![], true, false), exec_trapped());
 				assert_eq!(ctx.ext.contract_info().storage_deposit, 42);
 			}
 			exec_success()
 		});
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			assert!(ctx.ext.call(0, BOB, 0, vec![99], true).is_ok());
+			assert!(ctx.ext.call(0, BOB, 0, vec![99], true, false).is_ok());
 			exec_trapped()
 		});
 
@@ -1960,7 +1960,7 @@ mod tests {
 	fn recursive_call_during_constructor_fails() {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
-				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![], true),
+				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![], true, false),
 				Err(ExecError{error, ..}) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
@@ -2062,7 +2062,7 @@ mod tests {
 		// call the contract passed as input with disabled reentry
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			let dest = Decode::decode(&mut ctx.input_data.as_ref()).unwrap();
-			ctx.ext.call(0, dest, 0, vec![], false)
+			ctx.ext.call(0, dest, 0, vec![], false, false)
 		});
 
 		let code_charlie = MockLoader::insert(Call, |_, _| exec_success());
@@ -2107,7 +2107,7 @@ mod tests {
 	fn call_deny_reentry() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
-				ctx.ext.call(0, CHARLIE, 0, vec![], false)
+				ctx.ext.call(0, CHARLIE, 0, vec![], false, false)
 			} else {
 				exec_success()
 			}
@@ -2115,7 +2115,7 @@ mod tests {
 
 		// call BOB with input set to '1'
 		let code_charlie =
-			MockLoader::insert(Call, |ctx, _| ctx.ext.call(0, BOB, 0, vec![1], true));
+			MockLoader::insert(Call, |ctx, _| ctx.ext.call(0, BOB, 0, vec![1], true, false));
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
@@ -2138,6 +2138,46 @@ mod tests {
 				.map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
 			);
+		});
+	}
+
+	#[test]
+	fn call_preserve_context() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			ctx.ext.call(0, CHARLIE, 0, vec![], false, true)?;
+			exec_success()
+		});
+
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			let caller = ctx.ext.caller();
+			let caller_contract_info =
+				<ContractInfoOf<Test>>::get(caller).ok_or(<Error<Test>>::ContractNotFound)?;
+
+			// caller account_id and contract_info should be preserved
+			assert_eq!(*caller, BOB);
+			assert_eq!(*ctx.ext.contract_info(), caller_contract_info);
+
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			place_contract(&CHARLIE, code_charlie);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+			);
+
+			assert_matches!(result, Ok(_));
 		});
 	}
 
@@ -2289,7 +2329,7 @@ mod tests {
 				.unwrap();
 
 			// a plain call should not influence the account counter
-			ctx.ext.call(0, account_id, 0, vec![], false).unwrap();
+			ctx.ext.call(0, account_id, 0, vec![], false, false).unwrap();
 
 			exec_success()
 		});

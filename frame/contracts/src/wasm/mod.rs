@@ -350,8 +350,9 @@ mod tests {
 			value: u64,
 			data: Vec<u8>,
 			allows_reentry: bool,
+			preserve_context: bool,
 		) -> Result<ExecReturnValue, ExecError> {
-			self.calls.push(CallEntry { to, value, data, allows_reentry });
+			self.calls.push(CallEntry { to, value, data, allows_reentry, preserve_context });
 			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
 		}
 		fn instantiate(
@@ -552,7 +553,13 @@ mod tests {
 
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
+			&[CallEntry {
+				to: ALICE,
+				value: 6,
+				data: vec![1, 2, 3, 4],
+				allows_reentry: true,
+				preserve_context: false
+			}]
 		);
 	}
 
@@ -606,7 +613,13 @@ mod tests {
 
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry { to: ALICE, value: 0x2a, data: input, allows_reentry: false }]
+			&[CallEntry {
+				to: ALICE,
+				value: 0x2a,
+				data: input,
+				allows_reentry: false,
+				preserve_context: false
+			}]
 		);
 	}
 
@@ -661,7 +674,13 @@ mod tests {
 		assert_eq!(result.data.0, input);
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry { to: ALICE, value: 0x2a, data: input, allows_reentry: true }]
+			&[CallEntry {
+				to: ALICE,
+				value: 0x2a,
+				data: input,
+				allows_reentry: true,
+				preserve_context: false
+			}]
 		);
 	}
 
@@ -708,7 +727,13 @@ mod tests {
 		assert_eq!(result.data, call_return_data());
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry { to: ALICE, value: 0x2a, data: input, allows_reentry: false }]
+			&[CallEntry {
+				to: ALICE,
+				value: 0x2a,
+				data: input,
+				allows_reentry: false,
+				preserve_context: false
+			}]
 		);
 	}
 
@@ -872,7 +897,13 @@ mod tests {
 
 		assert_eq!(
 			&mock_ext.calls,
-			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
+			&[CallEntry {
+				to: ALICE,
+				value: 6,
+				data: vec![1, 2, 3, 4],
+				allows_reentry: true,
+				preserve_context: false
+			}]
 		);
 	}
 

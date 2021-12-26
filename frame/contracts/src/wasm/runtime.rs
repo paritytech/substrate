@@ -17,6 +17,18 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
+use bitflags::bitflags;
+use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
+use pwasm_utils::parity_wasm::elements::ValueType;
+
+use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
+use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
+use sp_core::{crypto::UncheckedFrom, Bytes};
+use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
+use sp_runtime::traits::{Bounded, Zero};
+use sp_sandbox::SandboxMemory;
+use sp_std::prelude::*;
+
 use crate::{
 	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
 	gas::{ChargedAmount, Token},
@@ -24,16 +36,6 @@ use crate::{
 	wasm::env_def::ConvertibleToWasm,
 	BalanceOf, CodeHash, Config, Error,
 };
-use bitflags::bitflags;
-use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
-use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
-use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
-use pwasm_utils::parity_wasm::elements::ValueType;
-use sp_core::{crypto::UncheckedFrom, Bytes};
-use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
-use sp_runtime::traits::{Bounded, Zero};
-use sp_sandbox::SandboxMemory;
-use sp_std::prelude::*;
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
 ///
