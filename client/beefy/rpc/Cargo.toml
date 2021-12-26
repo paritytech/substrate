@@ -26,3 +26,11 @@ sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 
 beefy-gadget = { version = "4.0.0-dev", path = "../." }
 beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }
+
+[dev-dependencies]
+serde_json = "1.0.50"
+
+sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = [
+    "test-helpers",
+] }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
