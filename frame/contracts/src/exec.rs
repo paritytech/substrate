@@ -102,6 +102,7 @@ pub trait Ext: sealing::Sealed {
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
 		allows_reentry: bool,
+		preserve_context: bool,
 	) -> Result<ExecReturnValue, ExecError>;
 
 	/// Instantiate a contract from the given code.
@@ -629,6 +630,7 @@ where
 		frame_args: FrameArgs<T, E>,
 		value_transferred: BalanceOf<T>,
 		gas_limit: Weight,
+		preserve_context: bool,
 	) -> Result<E, ExecError> {
 		if self.frames.len() == T::CallStack::size() {
 			return Err(Error::<T>::MaxCallDepthReached.into())
@@ -645,10 +647,10 @@ where
 			<ContractInfoOf<T>>::insert(frame.account_id.clone(), contract.clone());
 		}
 
-		let frame = top_frame_mut!(self);
-		let nested_gas = &mut frame.nested_gas;
-		let nested_storage = &mut frame.nested_storage;
-		let (frame, executable, _) = Self::new_frame(
+		let parent_frame = top_frame_mut!(self);
+		let nested_gas = &mut parent_frame.nested_gas;
+		let nested_storage = &mut parent_frame.nested_storage;
+		let (mut frame, executable, _) = Self::new_frame(
 			frame_args,
 			value_transferred,
 			nested_gas,
@@ -656,6 +658,14 @@ where
 			gas_limit,
 			self.schedule,
 		)?;
+
+		// In order to execute contract in a parent context we need to pass caller account_id
+		// and contract_info to the new frame
+		if preserve_context {
+			frame.account_id = parent_frame.account_id.clone();
+			frame.contract_info = CachedContract::Cached(parent_frame.contract_info().clone());
+		}
+
 		self.frames.push(frame);
 		Ok(executable)
 	}
@@ -896,6 +906,7 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		allows_reentry: bool,
+		preserve_context: bool,
 	) -> Result<ExecReturnValue, ExecError> {
 		// Before pushing the new frame: Protect the caller contract against reentrancy attacks.
 		// It is important to do this before calling `allows_reentry` so that a direct recursion
@@ -916,8 +927,12 @@ where
 					CachedContract::Cached(contract) => Some(contract.clone()),
 					_ => None,
 				});
-			let executable =
-				self.push_frame(FrameArgs::Call { dest: to, cached_info }, value, gas_limit)?;
+			let executable = self.push_frame(
+				FrameArgs::Call { dest: to, cached_info },
+				value,
+				gas_limit,
+				preserve_context,
+			)?;
 			self.run(executable, input_data)
 		};
 
@@ -949,6 +964,7 @@ where
 			},
 			value,
 			gas_limit,
+			false,
 		)?;
 		let account_id = self.top_frame().account_id.clone();
 		self.run(executable, input_data).map(|ret| (account_id, ret))

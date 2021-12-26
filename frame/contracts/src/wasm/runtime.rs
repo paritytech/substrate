@@ -338,6 +338,11 @@ bitflags! {
 		/// the callee (or any of its callees) is denied. This includes the first callee:
 		/// You cannot call into yourself with this flag set.
 		const ALLOW_REENTRY = 0b0000_1000;
+		/// Allow callee execution in the caller context
+		///
+		/// Provides functionality for creating library smart contract that can be upgraded
+		/// without the need of migrating data
+		const PRESERVE_CONTEXT = 0b0001_0000;
 	}
 }
 
@@ -658,8 +663,14 @@ where
 			self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 		}
 		let ext = &mut self.ext;
-		let call_outcome =
-			ext.call(gas, callee, value, input_data, flags.contains(CallFlags::ALLOW_REENTRY));
+		let call_outcome = ext.call(
+			gas,
+			callee,
+			value,
+			input_data,
+			flags.contains(CallFlags::ALLOW_REENTRY),
+			flags.contains(CallFlags::PRESERVE_CONTEXT),
+		);
 
 		// `TAIL_CALL` only matters on an `OK` result. Otherwise the call stack comes to
 		// a halt anyways without anymore code being executed.

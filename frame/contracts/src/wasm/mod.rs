@@ -299,6 +299,7 @@ mod tests {
 		value: u64,
 		data: Vec<u8>,
 		allows_reentry: bool,
+		preserve_context: bool,
 	}
 
 	pub struct MockExt {
