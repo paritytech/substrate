@@ -1095,15 +1095,17 @@ impl<B: BlockT> ChainSync<B> {
 						}
 						self.drain_blocks()
 					},
-					PeerSyncState::DownloadingGap(start_block) => {
-						let start_block = *start_block;
+					PeerSyncState::DownloadingGap(_) => {
 						peer.state = PeerSyncState::Available;
 						if let Some(gap_sync) = &mut self.gap_sync {
 							gap_sync.blocks.clear_peer_download(who);
-							validate_blocks::<B>(&blocks, who, Some(request))?;
-							gap_sync.blocks.insert(start_block, blocks, who.clone());
+							if let Some(start_block) =
+								validate_blocks::<B>(&blocks, who, Some(request))?
+							{
+								gap_sync.blocks.insert(start_block, blocks, who.clone());
+							}
 							gap = true;
-							gap_sync
+							let blocks: Vec<_> = gap_sync
 								.blocks
 								.drain(gap_sync.best_queued_number + One::one())
 								.into_iter()
@@ -1126,7 +1128,9 @@ impl<B: BlockT> ChainSync<B> {
 										state: None,
 									}
 								})
-								.collect()
+								.collect();
+							debug!(target: "sync", "Drained {} gap blocks from {}", blocks.len(), gap_sync.best_queued_number);
+							blocks
 						} else {
 							debug!(target: "sync", "Unexpected gap block response from {}", who);
 							return Err(BadPeer(who.clone(), rep::NO_BLOCK))
