@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use parking_lot::Mutex;
 use std::sync::Arc;
 
 use log::debug;
@@ -24,6 +23,7 @@ use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use sc_utils::mpsc::TracingUnboundedSender;
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -102,8 +102,8 @@ where
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
-	/// TODO
-	pub rpc_best_beefy: Arc<Mutex<Option<NumberFor<B>>>>,
+	/// BEEFY best block sender
+	pub beefy_best_block_sender: TracingUnboundedSender<NumberFor<B>>,
 }
 
 /// Start the BEEFY gadget.
@@ -125,7 +125,7 @@ where
 		signed_commitment_sender,
 		min_block_delta,
 		prometheus_registry,
-		rpc_best_beefy,
+		beefy_best_block_sender,
 	} = beefy_params;
 
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
@@ -155,7 +155,7 @@ where
 		gossip_validator,
 		min_block_delta,
 		metrics,
-		rpc_best_beefy,
+		beefy_best_block_sender,
 	};
 
 	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);

@@ -23,6 +23,7 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
@@ -116,12 +117,26 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	/// Creates a new BeefyRpcHandler instance.
 	pub fn new<E>(
 		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-		beefy_best_block: Arc<Mutex<Option<NumberFor<Block>>>>,
+		beefy_best_block_receiver: TracingUnboundedReceiver<NumberFor<Block>>,
 		executor: E,
 	) -> Self
 	where
 		E: futures::task::Spawn + Send + Sync + 'static,
 	{
+		let beefy_best_block = Arc::new(Mutex::new(None));
+
+		let closure_clone = beefy_best_block.clone();
+		let future = beefy_best_block_receiver.for_each(move |best_beefy| {
+			let async_clone = closure_clone.clone();
+			async move {
+				*async_clone.lock() = Some(best_beefy);
+			}
+		});
+
+		if executor.spawn_obj(futures::task::FutureObj::new(Box::pin(future))).is_err() {
+			log::error!("Failed to spawn best beefy RPC task");
+		}
+
 		let manager = SubscriptionManager::new(Arc::new(executor));
 		Self { signed_commitment_stream, beefy_best_block, manager }
 	}
@@ -178,13 +193,22 @@ mod tests {
 	use beefy_gadget::notification::{BeefySignedCommitmentSender, SignedCommitment};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
+	use sc_utils::mpsc::tracing_unbounded;
 	use substrate_test_runtime_client::runtime::Block;
 
 	fn setup_io_handler(
 	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
+		let (_, r) = tracing_unbounded::<NumberFor<Block>>("mpsc_beefy_best_block_stream");
+		setup_io_handler_with_receiver(r)
+	}
+
+	fn setup_io_handler_with_receiver(
+		receiver: TracingUnboundedReceiver<NumberFor<Block>>,
+	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
 		let (commitment_sender, commitment_stream) = BeefySignedCommitmentStream::channel();
 
-		let handler = BeefyRpcHandler::new(commitment_stream, sc_rpc::testing::TaskExecutor);
+		let handler =
+			BeefyRpcHandler::new(commitment_stream, receiver, sc_rpc::testing::TaskExecutor);
 
 		let mut io = jsonrpc_core::MetaIoHandler::default();
 		io.extend_with(BeefyApi::to_delegate(handler));
@@ -205,6 +229,22 @@ mod tests {
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_latestFinalized","params":[],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#;
 
+		let meta = sc_rpc::Metadata::default();
+		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
+	}
+
+	#[test]
+	fn latest_finalized_rpc() {
+		let (sender, r) = tracing_unbounded::<NumberFor<Block>>("mpsc_beefy_best_block_stream");
+		let (io, _) = setup_io_handler_with_receiver(r);
+
+		// Send BeefyRpcHandler `beefy_best_block = 42`
+		let num: NumberFor<Block> = 42u16.into();
+		sender.unbounded_send(num).unwrap();
+
+		// Verify RPC `beefy_latestFinalized` returns `42`
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_latestFinalized","params":[],"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","result":42,"id":1}"#;
 		let meta = sc_rpc::Metadata::default();
 		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
 	}
