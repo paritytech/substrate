@@ -19,12 +19,12 @@
 //! Wasmi specific impls for sandbox
 
 use sp_wasm_interface::{Pointer, WordSize, FunctionContext, Value};
-use codec::{Decode, Encode};
+use codec::Encode;
 use std::rc::Rc;
 
 use wasmi::{
-	ImportResolver, memory_units::Pages, Externals, MemoryInstance, Module, ModuleInstance,
-	RuntimeArgs, RuntimeValue, Trap, TrapKind, ModuleRef,
+	ImportResolver, Module, ModuleInstance,
+	RuntimeArgs, RuntimeValue, Trap,
 };
 
 use crate::{

@@ -23,9 +23,26 @@ use sp_wasm_interface::{Value, Pointer, WordSize, FunctionContext};
 use wasmi::RuntimeValue;
 use std::{rc::Rc, collections::HashMap};
 
-use crate::sandbox::{SandboxContext, InstantiationError, WasmerBackend, GuestEnvironment, SandboxInstance, SupervisorFuncIndex, deserialize_result, BackendInstance};
+use crate::error::Error;
+use crate::sandbox::{SandboxContext, InstantiationError, GuestEnvironment, SandboxInstance, SupervisorFuncIndex, deserialize_result, BackendInstance, Memory};
+use crate::util::wasmer::MemoryWrapper as WasmerMemoryWrapper;
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
+
+/// Wasmer specific context
+pub struct WasmerBackend {
+	store: wasmer::Store,
+}
+
+impl WasmerBackend {
+	pub fn new() -> Self {
+		let compiler = wasmer_compiler_singlepass::Singlepass::default();
+
+		WasmerBackend {
+			store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()),
+		}
+	}
+}
 
 pub fn invoke_wasmer(
 	instance: &wasmer::Instance,
@@ -37,7 +54,7 @@ pub fn invoke_wasmer(
 	args: &[Value],
 
 	// arbitraty context data of the call
-	state: u32,
+	_state: u32,
 
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Option<Value>, wasmi::Error> {
@@ -190,8 +207,6 @@ pub fn wasmer_dispatch_function(
 ) -> wasmer::Function {
 	wasmer::Function::new(store, func_ty, move |params| {
 		SandboxContextStore::with(|sandbox_context| {
-			use sp_wasm_interface::Value;
-
 			// Serialize arguments into a byte vector.
 			let invoke_args_data = params
 				.iter()
@@ -286,4 +301,14 @@ pub fn wasmer_dispatch_function(
 		})
 		.expect("SandboxContextStore is set when invoking sandboxed functions; qed")
 	})
+}
+
+pub fn wasmer_new_memory(context: &WasmerBackend, initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
+	let ty = wasmer::MemoryType::new(initial, maximum, false);
+	let memory = Memory::Wasmer(WasmerMemoryWrapper::new(
+		wasmer::Memory::new(&context.store, ty)
+			.map_err(|_| Error::InvalidMemoryReference)?,
+	));
+
+	Ok(memory)
 }

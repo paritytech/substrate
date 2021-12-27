@@ -22,15 +22,14 @@
 
 use crate::{
 	error::{Error, Result},
-	util, wasmi_backend::{instantiate_wasmi, invoke_wasmi}, wasmer_backend::{invoke_wasmer, instantiate_wasmer},
+	util, wasmi_backend::{instantiate_wasmi, invoke_wasmi}, wasmer_backend::{invoke_wasmer, instantiate_wasmer, WasmerBackend, wasmer_new_memory},
 };
-use codec::{Decode, Encode};
+use codec::{Decode};
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 use std::{collections::HashMap, rc::Rc};
 use wasmi::{
-	memory_units::Pages, Externals, MemoryInstance, Module, ModuleInstance,
-	RuntimeArgs, RuntimeValue, Trap, TrapKind,
+	memory_units::Pages, MemoryInstance, RuntimeValue, Trap, TrapKind,
 };
 
 #[cfg(feature = "wasmer-sandbox")]
@@ -424,12 +423,6 @@ impl util::MemoryTransfer for Memory {
 	}
 }
 
-/// Wasmer specific context
-#[cfg(feature = "wasmer-sandbox")]
-pub struct WasmerBackend {
-	pub store: wasmer::Store,
-}
-
 /// Information specific to a particular execution backend
 enum BackendContext {
 	/// Wasmi specific context
@@ -450,11 +443,7 @@ impl BackendContext {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			SandboxBackend::Wasmer | SandboxBackend::TryWasmer => {
-				let compiler = wasmer_compiler_singlepass::Singlepass::default();
-
-				BackendContext::Wasmer(WasmerBackend {
-					store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()),
-				})
+				BackendContext::Wasmer(WasmerBackend::new())
 			},
 		}
 	}
@@ -505,13 +494,7 @@ impl<DT: Clone> Store<DT> {
 			)?)),
 
 			#[cfg(feature = "wasmer-sandbox")]
-			BackendContext::Wasmer(context) => {
-				let ty = wasmer::MemoryType::new(initial, maximum, false);
-				Memory::Wasmer(WasmerMemoryWrapper::new(
-					wasmer::Memory::new(&context.store, ty)
-						.map_err(|_| Error::InvalidMemoryReference)?,
-				))
-			},
+			BackendContext::Wasmer(context) => wasmer_new_memory(context, initial, maximum)?,
 		};
 
 		let mem_idx = memories.len();
