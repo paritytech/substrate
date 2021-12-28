@@ -32,6 +32,8 @@ use sp_runtime::traits::{Block, NumberFor};
 
 use beefy_primitives::BeefyApi;
 
+use crate::notification::{BSignedCommitment, BeefyNotificationSender};
+
 mod error;
 mod gossip;
 mod keystore;
@@ -97,7 +99,7 @@ where
 	/// Gossip network
 	pub network: N,
 	/// BEEFY signed commitment sender
-	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
+	pub signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry

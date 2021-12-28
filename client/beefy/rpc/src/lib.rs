@@ -31,7 +31,7 @@ use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
 
-use beefy_gadget::notification::BeefySignedCommitmentStream;
+use beefy_gadget::notification::{BSignedCommitment, BeefyNotificationStream};
 
 mod notification;
 
@@ -108,7 +108,7 @@ pub trait BeefyApi<Notification, Number> {
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
-	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+	signed_commitment_stream: BeefyNotificationStream<BSignedCommitment<Block>>,
 	beefy_best_block: Arc<Mutex<Option<NumberFor<Block>>>>,
 	manager: SubscriptionManager,
 }
@@ -116,7 +116,7 @@ pub struct BeefyRpcHandler<Block: BlockT> {
 impl<Block: BlockT> BeefyRpcHandler<Block> {
 	/// Creates a new BeefyRpcHandler instance.
 	pub fn new<E>(
-		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+		signed_commitment_stream: BeefyNotificationStream<BSignedCommitment<Block>>,
 		beefy_best_block_receiver: TracingUnboundedReceiver<NumberFor<Block>>,
 		executor: E,
 	) -> Self
@@ -142,7 +142,8 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	}
 }
 
-impl<Block> BeefyApi<notification::SignedCommitment, NumberFor<Block>> for BeefyRpcHandler<Block>
+impl<Block> BeefyApi<notification::EncodedSignedCommitment, NumberFor<Block>>
+	for BeefyRpcHandler<Block>
 where
 	Block: BlockT,
 {
@@ -151,12 +152,12 @@ where
 	fn subscribe_justifications(
 		&self,
 		_metadata: Self::Metadata,
-		subscriber: Subscriber<notification::SignedCommitment>,
+		subscriber: Subscriber<notification::EncodedSignedCommitment>,
 	) {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
-			.map(|x| Ok::<_, ()>(Ok(notification::SignedCommitment::new::<Block>(x))));
+			.map(|x| Ok::<_, ()>(Ok(notification::EncodedSignedCommitment::new::<Block>(x))));
 
 		self.manager.add(subscriber, |sink| {
 			stream
@@ -190,24 +191,29 @@ mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
 
-	use beefy_gadget::notification::{BeefySignedCommitmentSender, SignedCommitment};
+	use beefy_gadget::notification::{BSignedCommitment, BeefyNotificationSender};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
 	use sc_utils::mpsc::tracing_unbounded;
 	use substrate_test_runtime_client::runtime::Block;
 
-	fn setup_io_handler(
-	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
+	fn setup_io_handler() -> (
+		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
+		BeefyNotificationSender<BSignedCommitment<Block>>,
+	) {
 		let (_, r) = tracing_unbounded::<NumberFor<Block>>("mpsc_beefy_best_block_stream");
 		setup_io_handler_with_receiver(r)
 	}
 
 	fn setup_io_handler_with_receiver(
 		receiver: TracingUnboundedReceiver<NumberFor<Block>>,
-	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
-		let (commitment_sender, commitment_stream) = BeefySignedCommitmentStream::channel();
+	) -> (
+		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
+		BeefyNotificationSender<BSignedCommitment<Block>>,
+	) {
+		let (commitment_sender, commitment_stream) = BeefyNotificationStream::channel();
 
-		let handler =
+		let handler: BeefyRpcHandler<Block> =
 			BeefyRpcHandler::new(commitment_stream, receiver, sc_rpc::testing::TaskExecutor);
 
 		let mut io = jsonrpc_core::MetaIoHandler::default();
@@ -241,6 +247,9 @@ mod tests {
 		// Send BeefyRpcHandler `beefy_best_block = 42`
 		let num: NumberFor<Block> = 42u16.into();
 		sender.unbounded_send(num).unwrap();
+
+		// Wait a bit so the message is picked up.
+		std::thread::sleep(std::time::Duration::from_millis(200));
 
 		// Verify RPC `beefy_latestFinalized` returns `42`
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_latestFinalized","params":[],"id":1}"#;
@@ -304,9 +313,9 @@ mod tests {
 		);
 	}
 
-	fn create_commitment() -> SignedCommitment<Block> {
+	fn create_commitment() -> BSignedCommitment<Block> {
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
-		SignedCommitment::<Block> {
+		BSignedCommitment::<Block> {
 			commitment: beefy_primitives::Commitment {
 				payload,
 				block_number: 5,
@@ -344,7 +353,7 @@ mod tests {
 		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
 		let recv_commitment: sp_core::Bytes =
 			serde_json::from_value(json_map["result"].take()).unwrap();
-		let recv_commitment: SignedCommitment<Block> =
+		let recv_commitment: BSignedCommitment<Block> =
 			Decode::decode(&mut &recv_commitment[..]).unwrap();
 
 		assert_eq!(recv.method, "beefy_justifications");

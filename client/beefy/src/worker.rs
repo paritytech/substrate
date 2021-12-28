@@ -47,7 +47,8 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification, round, Client,
+	notification::{BSignedCommitment, BeefyNotificationSender},
+	round, Client,
 };
 
 pub(crate) struct WorkerParams<B, BE, C>
@@ -57,7 +58,7 @@ where
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub key_store: BeefyKeystore,
-	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
+	pub signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
@@ -75,7 +76,7 @@ where
 	client: Arc<C>,
 	backend: Arc<BE>,
 	key_store: BeefyKeystore,
-	signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
+	signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
