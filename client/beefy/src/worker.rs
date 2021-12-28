@@ -25,7 +25,6 @@ use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
-use sc_utils::mpsc::TracingUnboundedSender;
 
 use sp_api::BlockId;
 use sp_arithmetic::traits::AtLeast32Bit;
@@ -59,11 +58,11 @@ where
 	pub backend: Arc<BE>,
 	pub key_store: BeefyKeystore,
 	pub signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
+	pub beefy_best_block_sender: BeefyNotificationSender<NumberFor<B>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
-	pub beefy_best_block_sender: TracingUnboundedSender<NumberFor<B>>,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
@@ -89,7 +88,7 @@ where
 	/// Best block a BEEFY voting round has been concluded for
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Used to keep RPC worker up to date on latest/best beefy
-	beefy_best_block_sender: TracingUnboundedSender<NumberFor<B>>,
+	beefy_best_block_sender: BeefyNotificationSender<NumberFor<B>>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	// keep rustc happy
@@ -115,11 +114,11 @@ where
 			backend,
 			key_store,
 			signed_commitment_sender,
+			beefy_best_block_sender,
 			gossip_engine,
 			gossip_validator,
 			min_block_delta,
 			metrics,
-			beefy_best_block_sender,
 		} = worker_params;
 
 		BeefyWorker {
@@ -249,7 +248,7 @@ where
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
 				self.best_beefy_block = Some(*notification.header.number());
-				let _ = self.beefy_best_block_sender.unbounded_send(*notification.header.number());
+				let _ = self.beefy_best_block_sender.notify(*notification.header.number());
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
 				// have a signed commitment for the block. Remove once the above TODO is done.
@@ -367,7 +366,7 @@ where
 
 				self.signed_commitment_sender.notify(signed_commitment);
 				self.best_beefy_block = Some(round.1);
-				let _ = self.beefy_best_block_sender.unbounded_send(round.1);
+				let _ = self.beefy_best_block_sender.notify(round.1);
 
 				metric_set!(self, beefy_best_block, round.1);
 			}

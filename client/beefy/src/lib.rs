@@ -23,7 +23,6 @@ use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
-use sc_utils::mpsc::TracingUnboundedSender;
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -100,12 +99,12 @@ where
 	pub network: N,
 	/// BEEFY signed commitment sender
 	pub signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
+	/// BEEFY best block sender
+	pub beefy_best_block_sender: BeefyNotificationSender<NumberFor<B>>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
-	/// BEEFY best block sender
-	pub beefy_best_block_sender: TracingUnboundedSender<NumberFor<B>>,
 }
 
 /// Start the BEEFY gadget.
@@ -153,11 +152,11 @@ where
 		backend,
 		key_store: key_store.into(),
 		signed_commitment_sender,
+		beefy_best_block_sender,
 		gossip_engine,
 		gossip_validator,
 		min_block_delta,
 		metrics,
-		beefy_best_block_sender,
 	};
 
 	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);

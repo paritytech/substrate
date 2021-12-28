@@ -88,7 +88,8 @@ impl<Payload: Clone> BeefyNotificationStream<Payload> {
 	/// Subscribe to a channel through which signed commitments are sent at the end of each BEEFY
 	/// voting round.
 	pub fn subscribe(&self) -> TracingUnboundedReceiver<Payload> {
-		let (sender, receiver) = tracing_unbounded("mpsc_signed_commitments_notification_stream");
+		// FIXME: tracing string
+		let (sender, receiver) = tracing_unbounded("mpsc_beefy_notification_stream");
 		self.subscribers.lock().push(sender);
 		receiver
 	}
