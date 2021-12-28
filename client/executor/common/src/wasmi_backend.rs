@@ -18,19 +18,19 @@
 
 //! Wasmi specific impls for sandbox
 
-use sp_wasm_interface::{Pointer, WordSize, FunctionContext, Value};
 use codec::Encode;
+use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize};
 use std::rc::Rc;
 
-use wasmi::{
-	ImportResolver, Module, ModuleInstance,
-	RuntimeArgs, RuntimeValue, Trap,
-};
+use wasmi::{ImportResolver, Module, ModuleInstance, RuntimeArgs, RuntimeValue, Trap};
 
 use crate::{
-	util::{MemoryTransfer, checked_range},
 	error,
-	sandbox::{Imports, GuestExternals, trap, GuestFuncIndex, deserialize_result, SandboxContext, SandboxInstance, GuestEnvironment, InstantiationError, BackendInstance},
+	sandbox::{
+		deserialize_result, trap, BackendInstance, GuestEnvironment, GuestExternals,
+		GuestFuncIndex, Imports, InstantiationError, SandboxContext, SandboxInstance,
+	},
+	util::{checked_range, MemoryTransfer},
 };
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
@@ -91,7 +91,6 @@ impl ImportResolver for Imports {
 		Err(wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name)))
 	}
 }
-
 
 /// Wasmi provides direct access to its memory using slices.
 ///
@@ -259,8 +258,7 @@ pub fn instantiate_wasmi(
 	state: u32,
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Rc<SandboxInstance>, InstantiationError> {
-	let wasmi_module =
-		Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+	let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 	let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
 		.map_err(|_| InstantiationError::Instantiation)?;
 
@@ -304,11 +302,7 @@ pub fn invoke_wasmi(
 ) -> std::result::Result<Option<Value>, wasmi::Error> {
 	with_guest_externals(instance, state, |guest_externals| {
 		SandboxContextStore::using(sandbox_context, || {
-			let args = args
-				.iter()
-				.cloned()
-				.map(Into::into)
-				.collect::<Vec<_>>();
+			let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
 			module
 				.invoke_export(export_name, &args, guest_externals)

@@ -22,15 +22,15 @@
 
 use crate::{
 	error::{Error, Result},
-	util, wasmi_backend::{instantiate_wasmi, invoke_wasmi}, wasmer_backend::{invoke_wasmer, instantiate_wasmer, WasmerBackend, wasmer_new_memory},
+	util,
+	wasmer_backend::{instantiate_wasmer, invoke_wasmer, wasmer_new_memory, WasmerBackend},
+	wasmi_backend::{instantiate_wasmi, invoke_wasmi},
 };
-use codec::{Decode};
+use codec::Decode;
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 use std::{collections::HashMap, rc::Rc};
-use wasmi::{
-	memory_units::Pages, MemoryInstance, RuntimeValue, Trap, TrapKind,
-};
+use wasmi::{memory_units::Pages, MemoryInstance, RuntimeValue, Trap, TrapKind};
 
 #[cfg(feature = "wasmer-sandbox")]
 use crate::util::wasmer::MemoryWrapper as WasmerMemoryWrapper;
@@ -78,7 +78,10 @@ impl GuestToSupervisorFunctionMapping {
 	}
 
 	/// Find supervisor function index by its corresponding guest function index
-	pub(crate) fn func_by_guest_index(&self, guest_func_idx: GuestFuncIndex) -> Option<SupervisorFuncIndex> {
+	pub(crate) fn func_by_guest_index(
+		&self,
+		guest_func_idx: GuestFuncIndex,
+	) -> Option<SupervisorFuncIndex> {
 		self.funcs.get(guest_func_idx.0).cloned()
 	}
 }
@@ -93,7 +96,11 @@ pub struct Imports {
 }
 
 impl Imports {
-	pub(crate) fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
+	pub(crate) fn func_by_name(
+		&self,
+		module_name: &str,
+		func_name: &str,
+	) -> Option<GuestFuncIndex> {
 		self.func_map
 			.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned()))
 			.cloned()
@@ -219,14 +226,12 @@ impl SandboxInstance {
 		sandbox_context: &mut dyn SandboxContext,
 	) -> std::result::Result<Option<sp_wasm_interface::Value>, wasmi::Error> {
 		match &self.backend_instance {
-			BackendInstance::Wasmi(wasmi_instance) => {
-				invoke_wasmi(self, wasmi_instance, export_name, args, state, sandbox_context)
-			},
+			BackendInstance::Wasmi(wasmi_instance) =>
+				invoke_wasmi(self, wasmi_instance, export_name, args, state, sandbox_context),
 
 			#[cfg(feature = "wasmer-sandbox")]
-			BackendInstance::Wasmer(wasmer_instance) => {
-				invoke_wasmer(wasmer_instance, export_name, args, state, sandbox_context)
-			},
+			BackendInstance::Wasmer(wasmer_instance) =>
+				invoke_wasmer(wasmer_instance, export_name, args, state, sandbox_context),
 		}
 	}
 
@@ -442,9 +447,8 @@ impl BackendContext {
 			SandboxBackend::TryWasmer => BackendContext::Wasmi,
 
 			#[cfg(feature = "wasmer-sandbox")]
-			SandboxBackend::Wasmer | SandboxBackend::TryWasmer => {
-				BackendContext::Wasmer(WasmerBackend::new())
-			},
+			SandboxBackend::Wasmer | SandboxBackend::TryWasmer =>
+				BackendContext::Wasmer(WasmerBackend::new()),
 		}
 	}
 }
@@ -600,8 +604,7 @@ impl<DT: Clone> Store<DT> {
 		sandbox_context: &mut dyn SandboxContext,
 	) -> std::result::Result<UnregisteredInstance, InstantiationError> {
 		let sandbox_instance = match self.backend_context {
-			BackendContext::Wasmi =>
-				instantiate_wasmi(wasm, guest_env, state, sandbox_context)?,
+			BackendContext::Wasmi => instantiate_wasmi(wasm, guest_env, state, sandbox_context)?,
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(ref context) =>

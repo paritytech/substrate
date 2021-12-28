@@ -19,13 +19,18 @@
 //! Wasmer specific impls for sandbox
 
 use codec::Encode;
-use sp_wasm_interface::{Value, Pointer, WordSize, FunctionContext};
+use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize};
+use std::{collections::HashMap, rc::Rc};
 use wasmi::RuntimeValue;
-use std::{rc::Rc, collections::HashMap};
 
-use crate::error::Error;
-use crate::sandbox::{SandboxContext, InstantiationError, GuestEnvironment, SandboxInstance, SupervisorFuncIndex, deserialize_result, BackendInstance, Memory};
-use crate::util::wasmer::MemoryWrapper as WasmerMemoryWrapper;
+use crate::{
+	error::Error,
+	sandbox::{
+		deserialize_result, BackendInstance, GuestEnvironment, InstantiationError, Memory,
+		SandboxContext, SandboxInstance, SupervisorFuncIndex,
+	},
+	util::wasmer::MemoryWrapper as WasmerMemoryWrapper,
+};
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
 
@@ -38,9 +43,7 @@ impl WasmerBackend {
 	pub fn new() -> Self {
 		let compiler = wasmer_compiler_singlepass::Singlepass::default();
 
-		WasmerBackend {
-			store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()),
-		}
+		WasmerBackend { store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()) }
 	}
 }
 
@@ -78,9 +81,7 @@ pub fn invoke_wasmer(
 	})?;
 
 	if wasmer_result.len() > 1 {
-		return Err(wasmi::Error::Function(
-			"multiple return types are not supported yet".into(),
-		))
+		return Err(wasmi::Error::Function("multiple return types are not supported yet".into()))
 	}
 
 	wasmer_result
@@ -163,12 +164,8 @@ pub fn instantiate_wasmer(
 					.func_by_guest_index(guest_func_index)
 					.ok_or(InstantiationError::ModuleDecoding)?;
 
-				let function = wasmer_dispatch_function(
-					supervisor_func_index,
-					&context.store,
-					func_ty,
-					state,
-				);
+				let function =
+					wasmer_dispatch_function(supervisor_func_index, &context.store, func_ty, state);
 
 				let exports = exports_map
 					.entry(import.module().to_string())
@@ -303,11 +300,14 @@ pub fn wasmer_dispatch_function(
 	})
 }
 
-pub fn wasmer_new_memory(context: &WasmerBackend, initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
+pub fn wasmer_new_memory(
+	context: &WasmerBackend,
+	initial: u32,
+	maximum: Option<u32>,
+) -> crate::error::Result<Memory> {
 	let ty = wasmer::MemoryType::new(initial, maximum, false);
 	let memory = Memory::Wasmer(WasmerMemoryWrapper::new(
-		wasmer::Memory::new(&context.store, ty)
-			.map_err(|_| Error::InvalidMemoryReference)?,
+		wasmer::Memory::new(&context.store, ty).map_err(|_| Error::InvalidMemoryReference)?,
 	));
 
 	Ok(memory)
