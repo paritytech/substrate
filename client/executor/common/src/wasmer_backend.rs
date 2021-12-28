@@ -18,18 +18,21 @@
 
 //! Wasmer specific impls for sandbox
 
+use crate::{
+	error::Result,
+	sandbox::Memory,
+	util::{checked_range, MemoryTransfer},
+};
 use codec::Encode;
 use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize};
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
 use wasmi::RuntimeValue;
-use crate::{error::Result, util::{MemoryTransfer, checked_range}, sandbox::Memory};
-use std::{cell::RefCell, convert::TryInto};
 
 use crate::{
 	error::Error,
 	sandbox::{
-		deserialize_result, BackendInstance, GuestEnvironment, InstantiationError,
-		SandboxContext, SandboxInstance, SupervisorFuncIndex,
+		deserialize_result, BackendInstance, GuestEnvironment, InstantiationError, SandboxContext,
+		SandboxInstance, SupervisorFuncIndex,
 	},
 };
 
@@ -336,8 +339,7 @@ impl MemoryWrapper {
 	/// growing, we cannot guarantee the lifetime of the returned slice reference.
 	unsafe fn memory_as_slice(memory: &wasmer::Memory) -> &[u8] {
 		let ptr = memory.data_ptr() as *const _;
-		let len: usize =
-			memory.data_size().try_into().expect("data size should fit into usize");
+		let len: usize = memory.data_size().try_into().expect("data size should fit into usize");
 
 		if len == 0 {
 			&[]
@@ -355,8 +357,7 @@ impl MemoryWrapper {
 	/// exists at the same time.
 	unsafe fn memory_as_slice_mut(memory: &wasmer::Memory) -> &mut [u8] {
 		let ptr = memory.data_ptr();
-		let len: usize =
-			memory.data_size().try_into().expect("data size should fit into usize");
+		let len: usize = memory.data_size().try_into().expect("data size should fit into usize");
 
 		if len == 0 {
 			&mut []
@@ -430,4 +431,3 @@ impl MemoryTransfer for MemoryWrapper {
 		}
 	}
 }
-

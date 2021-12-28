@@ -23,7 +23,7 @@
 use crate::{
 	error::{Error, Result},
 	util,
-	wasmer_backend::{instantiate_wasmer, invoke_wasmer, WasmerBackend, wasmer_new_memory},
+	wasmer_backend::{instantiate_wasmer, invoke_wasmer, wasmer_new_memory, WasmerBackend},
 	wasmi_backend::{instantiate_wasmi, invoke_wasmi},
 };
 use codec::Decode;
