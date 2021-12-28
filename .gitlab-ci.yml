@@ -575,7 +575,7 @@ cargo-check-macos:
 .check-dependent-project:          &check-dependent-project
   stage:                           build
   <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
+  <<:                              *test-refs-no-trigger-prs-only
   <<:                              *vault-secrets
   script:
     - git clone

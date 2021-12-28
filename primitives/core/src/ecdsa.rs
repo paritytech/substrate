@@ -22,7 +22,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::PassByInner;
-use sp_std::cmp::Ordering;
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
@@ -56,42 +55,11 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(
+	Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo, Eq, PartialEq, PartialOrd, Ord,
+)]
 pub struct Public(pub [u8; 33]);
-
-impl PartialOrd for Public {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-impl Ord for Public {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.as_ref().cmp(&other.as_ref())
-	}
-}
-
-impl PartialEq for Public {
-	fn eq(&self, other: &Self) -> bool {
-		self.as_ref() == other.as_ref()
-	}
-}
-
-impl Eq for Public {}
-
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum PublicError {
-	/// Bad alphabet.
-	BadBase58,
-	/// Bad length.
-	BadLength,
-	/// Unknown version.
-	UnknownVersion,
-	/// Invalid checksum.
-	InvalidChecksum,
-}
 
 impl Public {
 	/// A new instance from the given 33-byte `data`.
@@ -217,15 +185,9 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Public {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		self.as_ref().hash(state);
-	}
-}
-
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Encode, Decode, PassByInner, TypeInfo)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -279,14 +241,6 @@ impl Default for Signature {
 	}
 }
 
-impl PartialEq for Signature {
-	fn eq(&self, b: &Self) -> bool {
-		self.0[..] == b.0[..]
-	}
-}
-
-impl Eq for Signature {}
-
 impl From<Signature> for [u8; 65] {
 	fn from(v: Signature) -> [u8; 65] {
 		v.0
@@ -320,13 +274,6 @@ impl sp_std::fmt::Debug for Signature {
 	#[cfg(not(feature = "std"))]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
-	}
-}
-
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Signature {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		sp_std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 

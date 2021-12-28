@@ -211,7 +211,8 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 /// A signature (a 512-bit value).
-#[derive(Encode, Decode, PassByInner, TypeInfo)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -259,14 +260,6 @@ impl Clone for Signature {
 	}
 }
 
-impl PartialEq for Signature {
-	fn eq(&self, b: &Self) -> bool {
-		self.0[..] == b.0[..]
-	}
-}
-
-impl Eq for Signature {}
-
 impl From<Signature> for H512 {
 	fn from(v: Signature) -> H512 {
 		H512::from(v.0)
@@ -306,13 +299,6 @@ impl sp_std::fmt::Debug for Signature {
 	#[cfg(not(feature = "std"))]
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		Ok(())
-	}
-}
-
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Signature {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		sp_std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -358,24 +344,6 @@ pub struct LocalizedSignature {
 	pub signer: Public,
 	/// The signature itself.
 	pub signature: Signature,
-}
-
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug, thiserror::Error)]
-pub enum PublicError {
-	/// Bad alphabet.
-	#[error("Base 58 requirement is violated")]
-	BadBase58,
-	/// Bad length.
-	#[error("Length is bad")]
-	BadLength,
-	/// Unknown version.
-	#[error("Unknown version")]
-	UnknownVersion,
-	/// Invalid checksum.
-	#[error("Invalid checksum")]
-	InvalidChecksum,
 }
 
 impl Public {
