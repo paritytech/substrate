@@ -45,7 +45,8 @@ use sp_std::prelude::*;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::NegativeImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Config>::Currency as Currency<AccountIdOf<T>>>::NegativeImbalance;
 
 #[frame_support::pallet]
 pub mod pallet {
