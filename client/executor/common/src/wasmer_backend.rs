@@ -22,14 +22,15 @@ use codec::Encode;
 use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize};
 use std::{collections::HashMap, rc::Rc};
 use wasmi::RuntimeValue;
+use crate::{error::Result, util::{MemoryTransfer, checked_range}, sandbox::Memory};
+use std::{cell::RefCell, convert::TryInto};
 
 use crate::{
 	error::Error,
 	sandbox::{
-		deserialize_result, BackendInstance, GuestEnvironment, InstantiationError, Memory,
+		deserialize_result, BackendInstance, GuestEnvironment, InstantiationError,
 		SandboxContext, SandboxInstance, SupervisorFuncIndex,
 	},
-	util::wasmer::MemoryWrapper as WasmerMemoryWrapper,
 };
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
@@ -306,9 +307,127 @@ pub fn wasmer_new_memory(
 	maximum: Option<u32>,
 ) -> crate::error::Result<Memory> {
 	let ty = wasmer::MemoryType::new(initial, maximum, false);
-	let memory = Memory::Wasmer(WasmerMemoryWrapper::new(
+	let memory = Memory::Wasmer(MemoryWrapper::new(
 		wasmer::Memory::new(&context.store, ty).map_err(|_| Error::InvalidMemoryReference)?,
 	));
 
 	Ok(memory)
 }
+
+/// In order to enforce memory access protocol to the backend memory
+/// we wrap it with `RefCell` and encapsulate all memory operations.
+#[derive(Debug, Clone)]
+pub struct MemoryWrapper {
+	buffer: Rc<RefCell<wasmer::Memory>>,
+}
+
+impl MemoryWrapper {
+	/// Take ownership of the memory region and return a wrapper object
+	pub fn new(memory: wasmer::Memory) -> Self {
+		Self { buffer: Rc::new(RefCell::new(memory)) }
+	}
+
+	/// Returns linear memory of the wasm instance as a slice.
+	///
+	/// # Safety
+	///
+	/// Wasmer doesn't provide comprehensive documentation about the exact behavior of the data
+	/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
+	/// growing, we cannot guarantee the lifetime of the returned slice reference.
+	unsafe fn memory_as_slice(memory: &wasmer::Memory) -> &[u8] {
+		let ptr = memory.data_ptr() as *const _;
+		let len: usize =
+			memory.data_size().try_into().expect("data size should fit into usize");
+
+		if len == 0 {
+			&[]
+		} else {
+			core::slice::from_raw_parts(ptr, len)
+		}
+	}
+
+	/// Returns linear memory of the wasm instance as a slice.
+	///
+	/// # Safety
+	///
+	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
+	/// returned it must be ensured that only one mutable and no shared references to memory
+	/// exists at the same time.
+	unsafe fn memory_as_slice_mut(memory: &wasmer::Memory) -> &mut [u8] {
+		let ptr = memory.data_ptr();
+		let len: usize =
+			memory.data_size().try_into().expect("data size should fit into usize");
+
+		if len == 0 {
+			&mut []
+		} else {
+			core::slice::from_raw_parts_mut(ptr, len)
+		}
+	}
+
+	/// Clone the underlying memory object
+	///
+	/// # Safety
+	///
+	/// The sole purpose of `MemoryRef` is to protect the memory from uncontrolled
+	/// access. By returning the memory object "as is" we bypass all of the checks.
+	///
+	/// Intended to use only during module initialization.
+	///
+	/// # Panics
+	///
+	/// Will panic if `MemoryRef` is currently in use.
+	pub unsafe fn clone_inner(&mut self) -> wasmer::Memory {
+		// We take exclusive lock to ensure that we're the only one here
+		self.buffer.borrow_mut().clone()
+	}
+}
+
+impl MemoryTransfer for MemoryWrapper {
+	fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+		let memory = self.buffer.borrow();
+
+		let data_size = memory.data_size().try_into().expect("data size does not fit");
+
+		let range = checked_range(source_addr.into(), size, data_size)
+			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+		let mut buffer = vec![0; range.len()];
+		self.read_into(source_addr, &mut buffer)?;
+
+		Ok(buffer)
+	}
+
+	fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+		unsafe {
+			let memory = self.buffer.borrow();
+
+			// This should be safe since we don't grow up memory while caching this reference
+			// and we give up the reference before returning from this function.
+			let source = Self::memory_as_slice(&memory);
+
+			let range = checked_range(source_addr.into(), destination.len(), source.len())
+				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+			destination.copy_from_slice(&source[range]);
+			Ok(())
+		}
+	}
+
+	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+		unsafe {
+			let memory = self.buffer.borrow_mut();
+
+			// This should be safe since we don't grow up memory while caching this reference
+			// and we give up the reference before returning from this function.
+			let destination = Self::memory_as_slice_mut(&memory);
+
+			let range = checked_range(dest_addr.into(), source.len(), destination.len())
+				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+
+			destination[range].copy_from_slice(source);
+			Ok(())
+		}
+	}
+}
+

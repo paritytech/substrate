@@ -23,7 +23,7 @@
 use crate::{
 	error::{Error, Result},
 	util,
-	wasmer_backend::{instantiate_wasmer, invoke_wasmer, wasmer_new_memory, WasmerBackend},
+	wasmer_backend::{instantiate_wasmer, invoke_wasmer, WasmerBackend, wasmer_new_memory},
 	wasmi_backend::{instantiate_wasmi, invoke_wasmi},
 };
 use codec::Decode;
@@ -33,7 +33,7 @@ use std::{collections::HashMap, rc::Rc};
 use wasmi::{memory_units::Pages, MemoryInstance, RuntimeValue, Trap, TrapKind};
 
 #[cfg(feature = "wasmer-sandbox")]
-use crate::util::wasmer::MemoryWrapper as WasmerMemoryWrapper;
+use crate::wasmer_backend::MemoryWrapper as WasmerMemoryWrapper;
 use crate::wasmi_backend::MemoryWrapper as WasmiMemoryWrapper;
 
 /// Index of a function inside the supervisor.
