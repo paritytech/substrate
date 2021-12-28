@@ -237,6 +237,9 @@ pub mod well_known_keys {
 	}
 }
 
+/// Threshold size to start using trie value nodes in state.
+pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
+
 /// Information related to a child state.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
@@ -397,6 +400,54 @@ impl ChildTrieParentKeyId {
 	fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match other {
 			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
+		}
+	}
+}
+
+/// Different possible state version.
+///
+/// V0 and V1 uses a same trie implementation, but V1 will write external value node in the trie for
+/// value with size at least `TRIE_VALUE_NODE_THRESHOLD`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum StateVersion {
+	/// Old state version, no value nodes.
+	V0 = 0,
+	/// New state version can use value nodes.
+	V1 = 1,
+}
+
+impl Default for StateVersion {
+	fn default() -> Self {
+		StateVersion::V1
+	}
+}
+
+impl From<StateVersion> for u8 {
+	fn from(version: StateVersion) -> u8 {
+		version as u8
+	}
+}
+
+impl sp_std::convert::TryFrom<u8> for StateVersion {
+	type Error = ();
+	fn try_from(val: u8) -> sp_std::result::Result<StateVersion, ()> {
+		match val {
+			0 => Ok(StateVersion::V0),
+			1 => Ok(StateVersion::V1),
+			_ => Err(()),
+		}
+	}
+}
+
+impl StateVersion {
+	/// If defined, values in state of size bigger or equal
+	/// to this threshold will use a separate trie node.
+	/// Otherwhise, value will be inlined in branch or leaf
+	/// node.
+	pub fn state_value_threshold(&self) -> Option<u32> {
+		match self {
+			StateVersion::V0 => None,
+			StateVersion::V1 => Some(TRIE_VALUE_NODE_THRESHOLD),
 		}
 	}
 }

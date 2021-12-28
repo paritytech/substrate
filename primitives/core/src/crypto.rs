@@ -198,23 +198,43 @@ impl<T: AsRef<str>> From<T> for DeriveJunction {
 }
 
 /// An error type for SS58 decoding.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[cfg_attr(not(feature = "std"), derive(Debug))]
+#[derive(Clone, Copy, Eq, PartialEq)]
+#[allow(missing_docs)]
 #[cfg(feature = "full_crypto")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum PublicError {
-	/// Bad alphabet.
+	#[cfg_attr(feature = "std", error("Base 58 requirement is violated"))]
 	BadBase58,
-	/// Bad length.
+	#[cfg_attr(feature = "std", error("Length is bad"))]
 	BadLength,
-	/// Unknown identifier for the encoding.
-	UnknownVersion,
-	/// Invalid checksum.
+	#[cfg_attr(
+		feature = "std",
+		error(
+			"Unknown SS58 address format `{}`. ` \
+		`To support this address format, you need to call `set_default_ss58_version` at node start up.",
+			_0
+		)
+	)]
+	UnknownSs58AddressFormat(Ss58AddressFormat),
+	#[cfg_attr(feature = "std", error("Invalid checksum"))]
 	InvalidChecksum,
-	/// Invalid format.
+	#[cfg_attr(feature = "std", error("Invalid SS58 prefix byte."))]
+	InvalidPrefix,
+	#[cfg_attr(feature = "std", error("Invalid SS58 format."))]
 	InvalidFormat,
-	/// Invalid derivation path.
+	#[cfg_attr(feature = "std", error("Invalid derivation path."))]
 	InvalidPath,
-	/// Disallowed SS58 Address Format for this datatype.
+	#[cfg_attr(feature = "std", error("Disallowed SS58 Address Format for this datatype."))]
 	FormatNotAllowed,
+}
+
+#[cfg(feature = "std")]
+impl sp_std::fmt::Debug for PublicError {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		// Just use the `Display` implementation
+		write!(f, "{}", self)
+	}
 }
 
 /// Key that can be encoded to/from SS58.
@@ -235,7 +255,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		Self::from_ss58check_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
 			v if v == default_ss58_version() => Ok(r),
-			_ => Err(PublicError::UnknownVersion),
+			v => Err(PublicError::UnknownSs58AddressFormat(v)),
 		})
 	}
 
@@ -261,7 +281,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 				let upper = data[1] & 0b00111111;
 				(2, (lower as u16) | ((upper as u16) << 8))
 			},
-			_ => return Err(PublicError::UnknownVersion),
+			_ => return Err(PublicError::InvalidPrefix),
 		};
 		if data.len() != prefix_len + body_len + CHECKSUM_LEN {
 			return Err(PublicError::BadLength)
@@ -290,7 +310,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		Self::from_string_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
 			v if v == default_ss58_version() => Ok(r),
-			_ => Err(PublicError::UnknownVersion),
+			v => Err(PublicError::UnknownSs58AddressFormat(v)),
 		})
 	}
 
@@ -359,7 +379,7 @@ static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = std::sync::atomic::Atomi
 	from_known_address_format(Ss58AddressFormatRegistry::SubstrateAccount),
 );
 
-/// Returns default ss58 format used by the current active process.
+/// Returns default SS58 format used by the current active process.
 #[cfg(feature = "std")]
 pub fn default_ss58_version() -> Ss58AddressFormat {
 	DEFAULT_VERSION.load(std::sync::atomic::Ordering::Relaxed).into()
@@ -371,9 +391,15 @@ pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss5
 	network.unwrap_or_else(default_ss58_version)
 }
 
-/// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
-/// typically used not just to encode format/version but also network identity) that is used for
-/// encoding and decoding SS58 addresses.
+/// Set the default SS58 "version".
+///
+/// This SS58 version/format will be used when encoding/decoding SS58 addresses.
+///
+/// If you want to support a custom SS58 prefix (that isn't yet registered in the `ss58-registry`),
+/// you are required to call this function with your desired prefix [`Ss58AddressFormat::custom`].
+/// This will enable the node to decode ss58 addresses with this prefix.
+///
+/// This SS58 version/format is also only used by the node and not by the runtime.
 #[cfg(feature = "std")]
 pub fn set_default_ss58_version(new_default: Ss58AddressFormat) {
 	DEFAULT_VERSION.store(new_default.into(), std::sync::atomic::Ordering::Relaxed);

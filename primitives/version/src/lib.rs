@@ -40,10 +40,10 @@ use std::collections::HashSet;
 #[cfg(feature = "std")]
 use std::fmt;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Input};
 use scale_info::TypeInfo;
-pub use sp_runtime::create_runtime_str;
 use sp_runtime::RuntimeString;
+pub use sp_runtime::{create_runtime_str, StateVersion};
 #[doc(hidden)]
 pub use sp_std;
 
@@ -79,6 +79,7 @@ pub mod embed;
 /// 	impl_version: 1,
 /// 	apis: RUNTIME_API_VERSIONS,
 /// 	transaction_version: 2,
+/// 	state_version: 1,
 /// };
 ///
 /// # const RUNTIME_API_VERSIONS: sp_version::ApisVec = sp_version::create_apis_vec!([]);
@@ -154,7 +155,7 @@ macro_rules! create_apis_vec {
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly
 /// `authoring_version`, absolutely not `impl_version` since they change the semantics of the
 /// runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Encode, Default, sp_runtime::RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
@@ -207,6 +208,53 @@ pub struct RuntimeVersion {
 	///
 	/// It need *not* change when a new module is added or when a dispatchable is added.
 	pub transaction_version: u32,
+
+	/// Version of the state implementation used by this runtime.
+	/// Use of an incorrect version is consensus breaking.
+	pub state_version: u8,
+}
+
+impl RuntimeVersion {
+	/// `Decode` while giving a "version hint"
+	///
+	/// There exists multiple versions of [`RuntimeVersion`] and they are versioned using the `Core`
+	/// runtime api:
+	/// - `Core` version < 3 is a runtime version without a transaction version and state version.
+	/// - `Core` version 3 is a runtime version without a state version.
+	/// - `Core` version 4 is the latest runtime version.
+	pub fn decode_with_version_hint<I: Input>(
+		input: &mut I,
+		core_version: Option<u32>,
+	) -> Result<RuntimeVersion, codec::Error> {
+		let spec_name = Decode::decode(input)?;
+		let impl_name = Decode::decode(input)?;
+		let authoring_version = Decode::decode(input)?;
+		let spec_version = Decode::decode(input)?;
+		let impl_version = Decode::decode(input)?;
+		let apis = Decode::decode(input)?;
+		let core_version =
+			if core_version.is_some() { core_version } else { core_version_from_apis(&apis) };
+		let transaction_version =
+			if core_version.map(|v| v >= 3).unwrap_or(false) { Decode::decode(input)? } else { 1 };
+		let state_version =
+			if core_version.map(|v| v >= 4).unwrap_or(false) { Decode::decode(input)? } else { 0 };
+		Ok(RuntimeVersion {
+			spec_name,
+			impl_name,
+			authoring_version,
+			spec_version,
+			impl_version,
+			apis,
+			transaction_version,
+			state_version,
+		})
+	}
+}
+
+impl Decode for RuntimeVersion {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Self::decode_with_version_hint(input, None)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -225,6 +273,16 @@ impl fmt::Display for RuntimeVersion {
 	}
 }
 
+fn has_api_with<P: Fn(u32) -> bool>(apis: &ApisVec, id: &ApiId, predicate: P) -> bool {
+	apis.iter().any(|(s, v)| s == id && predicate(*v))
+}
+
+/// Returns the version of the `Core` runtime api.
+pub fn core_version_from_apis(apis: &ApisVec) -> Option<u32> {
+	let id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
+	apis.iter().find(|(s, _v)| s == &id).map(|(_s, v)| *v)
+}
+
 #[cfg(feature = "std")]
 impl RuntimeVersion {
 	/// Check if this version matches other version for calling into runtime.
@@ -237,12 +295,24 @@ impl RuntimeVersion {
 	/// Check if the given api with `api_id` is implemented and the version passes the given
 	/// `predicate`.
 	pub fn has_api_with<P: Fn(u32) -> bool>(&self, id: &ApiId, predicate: P) -> bool {
-		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
+		has_api_with(&self.apis, id, predicate)
 	}
 
 	/// Returns the api version found for api with `id`.
 	pub fn api_version(&self, id: &ApiId) -> Option<u32> {
 		self.apis.iter().find_map(|a| (a.0 == *id).then(|| a.1))
+	}
+}
+
+impl RuntimeVersion {
+	/// Returns state version to use for update.
+	///
+	/// For runtime with core api version less than 4,
+	/// V0 trie version will be applied to state.
+	/// Otherwhise, V1 trie version will be use.
+	pub fn state_version(&self) -> StateVersion {
+		// If version > than 1, keep using latest version.
+		self.state_version.try_into().unwrap_or(StateVersion::V1)
 	}
 }
 

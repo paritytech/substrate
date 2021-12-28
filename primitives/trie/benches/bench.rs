@@ -21,11 +21,11 @@ criterion_main!(benches);
 
 fn benchmark(c: &mut Criterion) {
 	trie_bench::standard_benchmark::<
-		sp_trie::Layout<sp_runtime::traits::BlakeTwo256>,
+		sp_trie::LayoutV1<sp_runtime::traits::BlakeTwo256>,
 		sp_trie::TrieStream,
 	>(c, "substrate-blake2");
 	trie_bench::standard_benchmark::<
-		sp_trie::Layout<sp_runtime::traits::BlakeTwo256>,
+		sp_trie::LayoutV1<sp_runtime::traits::BlakeTwo256>,
 		sp_trie::TrieStream,
 	>(c, "substrate-keccak");
 }

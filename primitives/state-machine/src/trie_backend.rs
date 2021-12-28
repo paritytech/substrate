@@ -24,12 +24,12 @@ use crate::{
 };
 use codec::{Codec, Decode};
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
-	trie_types::{Layout, TrieDB, TrieError},
-	Trie,
+	trie_types::{TrieDB, TrieError},
+	LayoutV0, LayoutV1, Trie,
 };
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
@@ -186,6 +186,7 @@ where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
@@ -195,8 +196,14 @@ where
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
+			let res = match state_version {
+				StateVersion::V0 =>
+					delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(&mut eph, root, delta),
+				StateVersion::V1 =>
+					delta_trie_root::<LayoutV1<H>, _, _, _, _, _>(&mut eph, root, delta),
+			};
 
-			match delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta) {
+			match res {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -209,14 +216,14 @@ where
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
 		let default_root = match child_info.child_type() {
-			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>(),
+			ChildType::ParentKeyId => empty_child_trie_root::<LayoutV1<H>>(),
 		};
-
 		let mut write_overlay = S::Overlay::default();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
 		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
@@ -231,13 +238,20 @@ where
 
 		{
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
-
-			match child_delta_trie_root::<Layout<H>, _, _, _, _, _, _>(
-				child_info.keyspace(),
-				&mut eph,
-				root,
-				delta,
-			) {
+			match match state_version {
+				StateVersion::V0 => child_delta_trie_root::<LayoutV0<H>, _, _, _, _, _, _>(
+					child_info.keyspace(),
+					&mut eph,
+					root,
+					delta,
+				),
+				StateVersion::V1 => child_delta_trie_root::<LayoutV1<H>, _, _, _, _, _, _>(
+					child_info.keyspace(),
+					&mut eph,
+					root,
+					delta,
+				),
+			} {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -269,52 +283,91 @@ pub mod tests {
 	use codec::Encode;
 	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::{trie_types::TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut};
+	use sp_trie::{
+		trie_types::{TrieDBMutV0, TrieDBMutV1},
+		KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+	};
 	use std::{collections::HashSet, iter};
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
-	fn test_db() -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
+	pub(crate) fn test_db(state_version: StateVersion) -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
 		let child_info = ChildInfo::new_default(CHILD_KEY_1);
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
 		{
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(b"value3", &[142; 33]).expect("insert failed");
-			trie.insert(b"value4", &[124; 33]).expect("insert failed");
+			match state_version {
+				StateVersion::V0 => {
+					let mut trie = TrieDBMutV0::new(&mut mdb, &mut root);
+					trie.insert(b"value3", &[142; 33]).expect("insert failed");
+					trie.insert(b"value4", &[124; 33]).expect("insert failed");
+				},
+				StateVersion::V1 => {
+					let mut trie = TrieDBMutV1::new(&mut mdb, &mut root);
+					trie.insert(b"value3", &[142; 33]).expect("insert failed");
+					trie.insert(b"value4", &[124; 33]).expect("insert failed");
+				},
+			};
 		};
 
 		{
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(child_info.prefixed_storage_key().as_slice(), &sub_root[..])
-				.expect("insert failed");
-			trie.insert(b"key", b"value").expect("insert failed");
-			trie.insert(b"value1", &[42]).expect("insert failed");
-			trie.insert(b"value2", &[24]).expect("insert failed");
-			trie.insert(b":code", b"return 42").expect("insert failed");
-			for i in 128u8..255u8 {
-				trie.insert(&[i], &[i]).unwrap();
+
+			fn build<L: sp_trie::TrieLayout>(
+				mut trie: sp_trie::TrieDBMut<L>,
+				child_info: &ChildInfo,
+				sub_root: &[u8],
+			) {
+				trie.insert(child_info.prefixed_storage_key().as_slice(), sub_root)
+					.expect("insert failed");
+				trie.insert(b"key", b"value").expect("insert failed");
+				trie.insert(b"value1", &[42]).expect("insert failed");
+				trie.insert(b"value2", &[24]).expect("insert failed");
+				trie.insert(b":code", b"return 42").expect("insert failed");
+				for i in 128u8..255u8 {
+					trie.insert(&[i], &[i]).unwrap();
+				}
 			}
+
+			match state_version {
+				StateVersion::V0 => {
+					let trie = TrieDBMutV0::new(&mut mdb, &mut root);
+					build(trie, &child_info, &sub_root[..])
+				},
+				StateVersion::V1 => {
+					let trie = TrieDBMutV1::new(&mut mdb, &mut root);
+					build(trie, &child_info, &sub_root[..])
+				},
+			};
 		}
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
-		let (mdb, root) = test_db();
+	pub(crate) fn test_trie(
+		hashed_value: StateVersion,
+	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+		let (mdb, root) = test_db(hashed_value);
 		TrieBackend::new(mdb, root)
 	}
 
 	#[test]
 	fn read_from_storage_returns_some() {
-		assert_eq!(test_trie().storage(b"key").unwrap(), Some(b"value".to_vec()));
+		read_from_storage_returns_some_inner(StateVersion::V0);
+		read_from_storage_returns_some_inner(StateVersion::V1);
+	}
+	fn read_from_storage_returns_some_inner(state_version: StateVersion) {
+		assert_eq!(test_trie(state_version).storage(b"key").unwrap(), Some(b"value".to_vec()));
 	}
 
 	#[test]
 	fn read_from_child_storage_returns_some() {
-		let test_trie = test_trie();
+		read_from_child_storage_returns_some_inner(StateVersion::V0);
+		read_from_child_storage_returns_some_inner(StateVersion::V1);
+	}
+	fn read_from_child_storage_returns_some_inner(state_version: StateVersion) {
+		let test_trie = test_trie(state_version);
 		assert_eq!(
 			test_trie
 				.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3")
@@ -341,12 +394,20 @@ pub mod tests {
 
 	#[test]
 	fn read_from_storage_returns_none() {
-		assert_eq!(test_trie().storage(b"non-existing-key").unwrap(), None);
+		read_from_storage_returns_none_inner(StateVersion::V0);
+		read_from_storage_returns_none_inner(StateVersion::V1);
+	}
+	fn read_from_storage_returns_none_inner(state_version: StateVersion) {
+		assert_eq!(test_trie(state_version).storage(b"non-existing-key").unwrap(), None);
 	}
 
 	#[test]
 	fn pairs_are_not_empty_on_non_empty_storage() {
-		assert!(!test_trie().pairs().is_empty());
+		pairs_are_not_empty_on_non_empty_storage_inner(StateVersion::V0);
+		pairs_are_not_empty_on_non_empty_storage_inner(StateVersion::V1);
+	}
+	fn pairs_are_not_empty_on_non_empty_storage_inner(state_version: StateVersion) {
+		assert!(!test_trie(state_version).pairs().is_empty());
 	}
 
 	#[test]
@@ -361,25 +422,35 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().storage_root(iter::empty()).0 != H256::repeat_byte(0));
+		storage_root_is_non_default_inner(StateVersion::V0);
+		storage_root_is_non_default_inner(StateVersion::V1);
 	}
-
-	#[test]
-	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(iter::empty()).1.drain().is_empty());
+	fn storage_root_is_non_default_inner(state_version: StateVersion) {
+		assert!(
+			test_trie(state_version).storage_root(iter::empty(), state_version).0 !=
+				H256::repeat_byte(0)
+		);
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		let (new_root, mut tx) =
-			test_trie().storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))));
+		storage_root_transaction_is_non_empty_inner(StateVersion::V0);
+		storage_root_transaction_is_non_empty_inner(StateVersion::V1);
+	}
+	fn storage_root_transaction_is_non_empty_inner(state_version: StateVersion) {
+		let (new_root, mut tx) = test_trie(state_version)
+			.storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))), state_version);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie().storage_root(iter::empty()).0);
+		assert!(new_root != test_trie(state_version).storage_root(iter::empty(), state_version).0);
 	}
 
 	#[test]
 	fn prefix_walking_works() {
-		let trie = test_trie();
+		prefix_walking_works_inner(StateVersion::V0);
+		prefix_walking_works_inner(StateVersion::V1);
+	}
+	fn prefix_walking_works_inner(state_version: StateVersion) {
+		let trie = test_trie(state_version);
 
 		let mut seen = HashSet::new();
 		trie.for_keys_with_prefix(b"value", |key| {

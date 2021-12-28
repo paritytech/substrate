@@ -208,13 +208,13 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		ExecutorDispatch: sc_client_api::CallExecutor<Block> + 'static,
+		ExecutorDispatch:
+			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
-
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(

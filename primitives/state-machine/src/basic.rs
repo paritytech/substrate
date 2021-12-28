@@ -23,13 +23,14 @@ use hash_db::Hasher;
 use log::warn;
 use sp_core::{
 	storage::{
-		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey,
+		well_known_keys::is_child_storage_key, ChildInfo, StateVersion, Storage, StorageChild,
+		TrackedStorageKey,
 	},
 	traits::Externalities,
 	Blake2Hasher,
 };
 use sp_externalities::{Extension, Extensions};
-use sp_trie::{empty_child_trie_root, trie_types::Layout, TrieConfiguration};
+use sp_trie::{empty_child_trie_root, LayoutV0, LayoutV1, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
 	collections::BTreeMap,
@@ -273,7 +274,7 @@ impl Externalities for BasicExternalities {
 		crate::ext::StorageAppend::new(current).append(value);
 	}
 
-	fn storage_root(&mut self) -> Vec<u8> {
+	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
 		let prefixed_keys: Vec<_> = self
 			.inner
@@ -284,9 +285,9 @@ impl Externalities for BasicExternalities {
 		// Single child trie implementation currently allows using the same child
 		// empty root for all child trie. Using null storage key until multiple
 		// type of child trie support.
-		let empty_hash = empty_child_trie_root::<Layout<Blake2Hasher>>();
+		let empty_hash = empty_child_trie_root::<LayoutV1<Blake2Hasher>>();
 		for (prefixed_storage_key, child_info) in prefixed_keys {
-			let child_root = self.child_storage_root(&child_info);
+			let child_root = self.child_storage_root(&child_info, state_version);
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(prefixed_storage_key.as_slice());
 			} else {
@@ -294,17 +295,26 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		Layout::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into()
+		match state_version {
+			StateVersion::V0 =>
+				LayoutV0::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into(),
+			StateVersion::V1 =>
+				LayoutV1::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into(),
+		}
 	}
 
-	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
+	fn child_storage_root(
+		&mut self,
+		child_info: &ChildInfo,
+		state_version: StateVersion,
+	) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
 			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
-				.child_storage_root(&child.child_info, delta)
+				.child_storage_root(&child.child_info, delta, state_version)
 				.0
 		} else {
-			empty_child_trie_root::<Layout<Blake2Hasher>>()
+			empty_child_trie_root::<LayoutV1<Blake2Hasher>>()
 		}
 		.encode()
 	}
@@ -389,7 +399,7 @@ mod tests {
 		const ROOT: [u8; 32] =
 			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root()[..], &ROOT);
+		assert_eq!(&ext.storage_root(StateVersion::default())[..], &ROOT);
 	}
 
 	#[test]

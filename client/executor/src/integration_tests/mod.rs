@@ -33,7 +33,7 @@ use sp_core::{
 };
 use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_trie::{trie_types::Layout, TrieConfiguration};
+use sp_trie::{LayoutV1 as Layout, TrieConfiguration};
 use std::sync::Arc;
 use tracing_subscriber::layer::SubscriberExt;
 
@@ -215,21 +215,22 @@ fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 test_wasm_execution!(storage_should_work);
 fn storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
+	// Test value must be bigger than 32 bytes
+	// to test the trie versioning.
+	let value = vec![7u8; 60];
 
 	{
 		let mut ext = ext.ext();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 
-		let output =
-			call_in_wasm("test_data_in", &b"Hello world".to_vec().encode(), wasm_method, &mut ext)
-				.unwrap();
+		let output = call_in_wasm("test_data_in", &value.encode(), wasm_method, &mut ext).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
 	let expected = TestExternalities::new(sp_core::storage::Storage {
 		top: map![
-			b"input".to_vec() => b"Hello world".to_vec(),
+			b"input".to_vec() => value,
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		],

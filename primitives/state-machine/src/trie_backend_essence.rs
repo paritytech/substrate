@@ -20,20 +20,23 @@
 
 use crate::{backend::Consolidate, debug, warn, StorageKey, StorageValue};
 use codec::Encode;
-use hash_db::{self, Hasher, Prefix};
+use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
 use sp_core::storage::ChildInfo;
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value, read_trie_value,
-	trie_types::{Layout, TrieDB, TrieError},
-	DBValue, KeySpacedDB, MemoryDB, PrefixedMemoryDB, Trie, TrieDBIterator,
+	trie_types::{TrieDB, TrieError},
+	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
+// In this module, we only use layout for read operation and empty root,
+// where V1 and V0 are equivalent.
+use sp_trie::LayoutV1 as Layout;
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
@@ -178,7 +181,7 @@ where
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
 	) -> Result<Option<StorageKey>> {
-		let dyn_eph: &dyn hash_db::HashDBRef<_, _>;
+		let dyn_eph: &dyn HashDBRef<_, _>;
 		let keyspace_eph;
 		if let Some(child_info) = child_info.as_ref() {
 			keyspace_eph = KeySpacedDB::new(self, child_info.keyspace());
@@ -189,7 +192,7 @@ where
 
 		let trie =
 			TrieDB::<H>::new(dyn_eph, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
-		let mut iter = trie.iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
+		let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
 		// The key just after the one given in input, basically `key++0`.
 		// Note: We are sure this is the next key if:
@@ -205,7 +208,7 @@ where
 		let next_element = iter.next();
 
 		let next_key = if let Some(next_element) = next_element {
-			let (next_key, _) =
+			let next_key =
 				next_element.map_err(|e| format!("TrieDB iterator next error: {}", e))?;
 			Some(next_key)
 		} else {
@@ -291,17 +294,7 @@ where
 			&self.root
 		};
 
-		let _ = self.trie_iter_inner(
-			root,
-			prefix,
-			|k, _v| {
-				f(&k);
-				true
-			},
-			child_info,
-			None,
-			false,
-		);
+		self.trie_iter_key_inner(root, prefix, |k| f(k), child_info)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
@@ -320,32 +313,70 @@ where
 		};
 		let mut root = H::Out::default();
 		root.as_mut().copy_from_slice(&root_vec);
-		let _ = self.trie_iter_inner(
+		self.trie_iter_key_inner(
 			&root,
 			Some(prefix),
-			|k, _v| {
-				f(&k);
+			|k| {
+				f(k);
 				true
 			},
 			Some(child_info),
-			None,
-			false,
-		);
+		)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		let _ = self.trie_iter_inner(
+		self.trie_iter_key_inner(
 			&self.root,
 			Some(prefix),
-			|k, _v| {
-				f(&k);
+			|k| {
+				f(k);
 				true
 			},
 			None,
-			None,
-			false,
-		);
+		)
+	}
+
+	fn trie_iter_key_inner<F: FnMut(&[u8]) -> bool>(
+		&self,
+		root: &H::Out,
+		prefix: Option<&[u8]>,
+		mut f: F,
+		child_info: Option<&ChildInfo>,
+	) {
+		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(db, root)?;
+			let iter = if let Some(prefix) = prefix.as_ref() {
+				TrieDBKeyIterator::new_prefixed(&trie, prefix)?
+			} else {
+				TrieDBKeyIterator::new(&trie)?
+			};
+
+			for x in iter {
+				let key = x?;
+
+				debug_assert!(prefix
+					.as_ref()
+					.map(|prefix| key.starts_with(prefix))
+					.unwrap_or(true));
+
+				if !f(&key) {
+					break
+				}
+			}
+
+			Ok(())
+		};
+
+		let result = if let Some(child_info) = child_info {
+			let db = KeySpacedDB::new(self, child_info.keyspace());
+			iter(&db)
+		} else {
+			iter(self)
+		};
+		if let Err(e) = result {
+			debug!(target: "trie", "Error while iterating by prefix: {}", e);
+		}
 	}
 
 	fn trie_iter_inner<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -414,13 +445,13 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	overlay: &'a mut S::Overlay,
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> hash_db::AsHashDB<H, DBValue>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn hash_db::HashDB<H, DBValue> + 'b) {
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
 		self
 	}
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, DBValue> + 'b) {
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
 		self
 	}
 }
@@ -435,7 +466,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
+		if let Some(val) = HashDB::get(self.overlay, key, prefix) {
 			Some(val)
 		} else {
 			match self.storage.get(&key, prefix) {
@@ -449,38 +480,37 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::get(self, key, prefix).is_some()
+		HashDB::get(self, key, prefix).is_some()
 	}
 
 	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
-		hash_db::HashDB::insert(self.overlay, prefix, value)
+		HashDB::insert(self.overlay, prefix, value)
 	}
 
 	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
-		hash_db::HashDB::emplace(self.overlay, key, prefix, value)
+		HashDB::emplace(self.overlay, key, prefix, value)
 	}
 
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
-		hash_db::HashDB::remove(self.overlay, key, prefix)
+		HashDB::remove(self.overlay, key, prefix)
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
-	for Ephemeral<'a, S, H>
-{
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for Ephemeral<'a, S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		hash_db::HashDB::get(self, key, prefix)
+		HashDB::get(self, key, prefix)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::contains(self, key, prefix)
+		HashDB::contains(self, key, prefix)
 	}
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Type of in-memory overlay.
-	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
+	type Overlay: HashDB<H, DBValue> + Default + Consolidate;
+
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
@@ -495,35 +525,28 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	}
 }
 
-// This implementation is used by test storage trie clients.
-impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
-	type Overlay = PrefixedMemoryDB<H>;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
-		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-}
-
-impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
-	type Overlay = MemoryDB<H>;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
-		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::AsHashDB<H, DBValue>
-	for TrieBackendEssence<S, H>
+impl<H, KF> TrieBackendStorage<H> for sp_trie::GenericMemoryDB<H, KF>
+where
+	H: Hasher,
+	KF: sp_trie::KeyFunction<H> + Send + Sync,
 {
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn hash_db::HashDB<H, DBValue> + 'b) {
+	type Overlay = Self;
+
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
+		Ok(hash_db::HashDB::get(self, key, prefix))
+	}
+}
+
+impl<S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H, DBValue> for TrieBackendEssence<S, H> {
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
 		self
 	}
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, DBValue> + 'b) {
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
 		self
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue> for TrieBackendEssence<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEssence<S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if *key == self.empty {
 			return Some([0u8].to_vec())
@@ -538,7 +561,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue> for TrieBa
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::get(self, key, prefix).is_some()
+		HashDB::get(self, key, prefix).is_some()
 	}
 
 	fn insert(&mut self, _prefix: Prefix, _value: &[u8]) -> H::Out {
@@ -554,15 +577,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue> for TrieBa
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
-	for TrieBackendEssence<S, H>
-{
+impl<S: TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for TrieBackendEssence<S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		hash_db::HashDB::get(self, key, prefix)
+		HashDB::get(self, key, prefix)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::contains(self, key, prefix)
+		HashDB::contains(self, key, prefix)
 	}
 }
 
@@ -570,7 +591,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
 mod test {
 	use super::*;
 	use sp_core::{Blake2Hasher, H256};
-	use sp_trie::{trie_types::TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut};
+	use sp_trie::{
+		trie_types::TrieDBMutV1 as TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+	};
 
 	#[test]
 	fn next_storage_key_and_next_child_storage_key_work() {

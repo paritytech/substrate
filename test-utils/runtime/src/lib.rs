@@ -29,10 +29,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
-use sp_trie::{
-	trie_types::{TrieDB, TrieDBMut},
-	PrefixedMemoryDB, StorageProof,
-};
+use sp_trie::{trie_types::TrieDB, PrefixedMemoryDB, StorageProof};
 use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
@@ -62,6 +59,8 @@ use sp_runtime::{
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+// bench on latest state.
+use sp_trie::trie_types::TrieDBMutV1 as TrieDBMut;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
@@ -105,6 +104,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
+	state_version: 1,
 };
 
 fn version() -> RuntimeVersion {
@@ -1268,9 +1268,9 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		None,
 	);
 	assert!(ext.storage(b"value3").is_some());
-	assert!(ext.storage_root().as_slice() == &root[..]);
+	assert!(ext.storage_root(Default::default()).as_slice() == &root[..]);
 	ext.place_storage(vec![0], Some(vec![1]));
-	assert!(ext.storage_root().as_slice() != &root[..]);
+	assert!(ext.storage_root(Default::default()).as_slice() != &root[..]);
 }
 
 #[cfg(test)]
@@ -1334,7 +1334,7 @@ mod tests {
 		let mut root = crate::Hash::default();
 		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
 		{
-			let mut trie = sp_trie::trie_types::TrieDBMut::new(&mut mdb, &mut root);
+			let mut trie = sp_trie::trie_types::TrieDBMutV1::new(&mut mdb, &mut root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
 		};
