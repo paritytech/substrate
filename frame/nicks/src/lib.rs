@@ -43,11 +43,9 @@ pub use pallet::*;
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_std::prelude::*;
 
-type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::NegativeImbalance;
 
 #[frame_support::pallet]
 pub mod pallet {
