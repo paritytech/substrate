@@ -820,7 +820,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Default>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>
 {
 	type Success = AccountId;
@@ -833,7 +833,10 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Signed(zero_account_id))
 	}
 }
 
@@ -841,7 +844,7 @@ pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, Acco
 impl<
 		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 		Who: SortedMembers<AccountId>,
-		AccountId: PartialEq + Clone + Ord + Default,
+		AccountId: PartialEq + Clone + Ord + Decode,
 	> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId>
 {
 	type Success = AccountId;
@@ -854,10 +857,13 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
 		let members = Who::sorted_members();
 		let first_member = match members.get(0) {
 			Some(account) => account.clone(),
-			None => Default::default(),
+			None => zero_account_id,
 		};
 		O::from(RawOrigin::Signed(first_member.clone()))
 	}

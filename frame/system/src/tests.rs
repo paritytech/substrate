@@ -486,3 +486,26 @@ fn runtime_updated_digest_emitted_when_heap_pages_changed() {
 		assert_runtime_updated_digest(1);
 	});
 }
+
+#[test]
+fn ensure_signed_stuff_works() {
+	struct Members;
+	impl SortedMembers<u64> for Members {
+		fn sorted_members() -> Vec<u64> {
+			(0..10).collect()
+		}
+	}
+
+	let signed_origin = Origin::signed(0u64);
+	assert_ok!(EnsureSigned::try_origin(signed_origin.clone()));
+	assert_ok!(EnsureSignedBy::<Members, _>::try_origin(signed_origin));
+
+	#[cfg(feature = "runtime-benchmarks")]
+	{
+		let successful_origin: Origin = EnsureSigned::successful_origin();
+		assert_ok!(EnsureSigned::try_origin(successful_origin));
+
+		let successful_origin: Origin = EnsureSignedBy::<Members, _>::successful_origin();
+		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
+	}
+}
