@@ -155,6 +155,9 @@ pub trait Ext: sealing::Sealed {
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
 
+	/// Sets new code hash for existing contract
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>);
+
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
@@ -1014,6 +1017,12 @@ where
 			Some(&mut frame.nested_storage),
 			take_old,
 		)
+	}
+
+	fn set_code_hash(&mut self, code: CodeHash<Self::T>) {
+		let top_frame = &mut self.top_frame_mut();
+		top_frame.contract_info().code_hash = code;
+		<ContractInfoOf<T>>::insert(top_frame.account_id.clone(), top_frame.contract_info());
 	}
 
 	fn address(&self) -> &T::AccountId {

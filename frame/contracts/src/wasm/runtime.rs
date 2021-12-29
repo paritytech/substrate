@@ -1847,4 +1847,20 @@ define_env!(Env, <E: Ext>,
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
 	},
+
+	// Replace code for a contract
+	//
+	// # Parameters
+	//
+	// - code_hash_ptr: a pointer to the buffer that contains new contract code
+	//
+	// # Errors
+	//
+	// - requested buffer is not within the bounds of the sandbox memory.
+	// - the buffer contents cannot be decoded as the required type.
+	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
+		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
+		ctx.ext.set_code_hash(code_hash);
+		Ok(ReturnCode::Success)
+	},
 );
