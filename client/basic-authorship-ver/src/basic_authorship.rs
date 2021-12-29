@@ -21,20 +21,20 @@
 // FIXME #1021 move this into sp-consensus
 
 use codec::{Decode, Encode};
-use ver_api::VerApi;
 use futures::{
 	channel::oneshot,
 	future,
 	future::{Future, FutureExt},
 	select,
 };
+use sp_core::ExecutionContext;
 use log::{debug, error, info, trace, warn};
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, validate_transaction};
 use sc_client_api::backend;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_api::{ApiExt, ProvideRuntimeApi, TransactionOutcome};
-use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
+use sp_blockchain::{ApplyExtrinsicFailed as ApplyExtrinsicFailedOther, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
 use sp_consensus::{
 	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
 };
@@ -45,12 +45,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
+use ver_api::VerApi;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 use sp_inherents::InherentDataProvider;
-use std::ops::Add;
 use sp_runtime::traits::One;
+use std::ops::Add;
 
 /// Default block size limit in bytes used by [`Proposer`].
 ///
@@ -329,18 +330,18 @@ where
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
-		let api = self.client.runtime_api();
-        let next_block_number = self.parent_number.add(One::one()).add(One::one());
-        let omit_transactions = api.is_new_session(&self.parent_id, next_block_number).unwrap();
+		let next_block_number = self.parent_number.add(One::one()).add(One::one());
 
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
+		let api = self.client.runtime_api();
+		let omit_transactions = api.is_new_session(&self.parent_id, next_block_number).unwrap();
 
 		let (seed, inherents) = block_builder.create_inherents(inherent_data.clone())?;
 		debug!(target:"block_builder", "found {} inherents", inherents.len());
 		for inherent in inherents {
 			debug!(target:"block_builder", "processing inherent");
-            // TODO now it actually commits changes
+			// TODO now it actually commits changes
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
@@ -369,7 +370,6 @@ where
 		let mut unqueue_invalid = Vec::new();
 		block_builder.apply_previous_block_extrinsics(seed.clone());
 
-
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
 		let mut t2 =
 			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
@@ -393,15 +393,19 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
+		let block_size =
+			block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
 
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
 		// only in the following(future) block
-		api.execute_in_transaction(|api| {
+		block_builder.record_valid_extrinsics_and_revert_changes(|api| {
+            let mut valid_txs = Vec::new();
 			if omit_transactions {
 				debug!(target:"block_builder", "new session starts in next block, omiting transaction from the pool");
-				return TransactionOutcome::Rollback(());
+				return valid_txs;
 			}
+
 			while let Some(pending_tx) = pending_iterator.next() {
 				let now = (self.now)();
 				if now > deadline {
@@ -415,8 +419,6 @@ where
 				let pending_tx_data = pending_tx.data().clone();
 				let pending_tx_hash = pending_tx.hash().clone();
 
-				let block_size =
-					block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
 				if block_size + pending_tx_data.encoded_size() > block_size_limit {
 					pending_iterator.report_invalid(&pending_tx);
 					if skipped < MAX_SKIPPED_TRANSACTIONS {
@@ -441,14 +443,11 @@ where
 					}
 				}
 
-				trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-				match sc_block_builder::BlockBuilder::push_with_api(
-					&mut block_builder,
-					api,
-					pending_tx_data,
-				) {
+				trace!(target:"block_builder", "[{:?}] Pushing to the block.", pending_tx_hash);
+				match validate_transaction::<Block, C>(&self.parent_id, &api, pending_tx_data.clone()) {
 					Ok(()) => {
 						transaction_pushed = true;
+						valid_txs.push(pending_tx_data);
 						debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 					},
 					Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
@@ -484,7 +483,7 @@ where
 					},
 				}
 			}
-			TransactionOutcome::Rollback(())
+            valid_txs
 		});
 
 		if hit_block_size_limit && !transaction_pushed {
@@ -497,7 +496,7 @@ where
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		let (block, storage_changes, proof) = block_builder.build_with_seed(seed)?.into_inner();
-        debug!(target: "block_builder","created block {:?}", block);
+		debug!(target: "block_builder","created block {:?}", block);
 
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
@@ -1088,7 +1087,7 @@ where
 // 		assert_eq!(block.extrinsics().len(), 1);
 // 		assert!(
 // 			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
-// 			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
-// 		);
+// 			"Not enough calls to current time, which indicates the test might have ended because of deadline,
+// not soft deadline" 		);
 // 	}
 // }

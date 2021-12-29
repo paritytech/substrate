@@ -713,7 +713,7 @@ cfg_if! {
 			impl ver_api::VerApi<Block> for Runtime {
 				fn get_signer(
 					_tx: <Block as BlockT>::Extrinsic,
-				) -> Option<sp_runtime::AccountId32> {
+				) -> Option<(sp_runtime::AccountId32, u32)> {
 					None
 				}
 

@@ -681,7 +681,7 @@ pub trait Header:
     }
 
 	/// Returns seed used for shuffling
-	fn set_seed(&mut self, seed: ShufflingSeed){
+	fn set_seed(&mut self, _seed: ShufflingSeed){
         unimplemented!()
     }
 
@@ -691,7 +691,7 @@ pub trait Header:
     }
 
 	/// Returns seed used for shuffling
-	fn set_count(&mut self, count: Self::Number){
+	fn set_count(&mut self, _count: Self::Number){
         unimplemented!()
     }
 }
