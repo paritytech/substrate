@@ -206,40 +206,17 @@ where
 		})
 	}
 
-	/// Push onto the block's list of extrinsics.
-	///
-	/// allows to temporarly validate/execute the task with api provided by other transaction
-	/// that allows for commiting or rolling back whole transaction
-	pub fn push_with_api(
-		&mut self,
-		api: &A::Api,
-		xt: <Block as BlockT>::Extrinsic,
-	) -> Result<(), Error> {
-		let block_id = &self.block_id;
-		let extrinsics = &mut self.extrinsics;
-
-		match api.get_signer(block_id, xt.clone()).unwrap() {
-			Some((who, nonce)) => log::debug!(target: "block_builder",
-                "TX[{:?}] {:?} {} ", BlakeTwo256::hash_of(&xt), who, nonce),
-			_ => {},
-		};
-		api.execute_in_transaction(|api| {
-			match api.apply_extrinsic_with_context(
-				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone(),
-			) {
-				Ok(Ok(_)) => {
-					extrinsics.push(xt);
-					TransactionOutcome::Commit(Ok(()))
-				},
-				Ok(Err(tx_validity)) => TransactionOutcome::Rollback(Err(
-					ApplyExtrinsicFailed::Validity(tx_validity).into(),
-				)),
-				Err(e) => TransactionOutcome::Rollback(Err(Error::from(e))),
-			}
-		})
-	}
+	pub fn record_valid_extrinsics_and_revert_changes<F: FnOnce(&'_ A::Api) -> Vec<Block::Extrinsic>>(& mut self, call: F) -> ()
+    {
+        let valid_txs = self.api.execute_in_transaction(|api|
+            {
+                let txs = call(&api);
+                TransactionOutcome::Rollback(txs)
+            }
+        );
+        log::debug!(target: "block_builder", "consume {} valid transactios", valid_txs.len());
+        self.extrinsics.extend(valid_txs);
+    }
 
 	/// Push onto the block's list of extrinsics.
 	///
@@ -314,11 +291,6 @@ where
 			.chain(extrinsics.into_iter())
 			.collect::<Vec<_>>();
 
-		// let shuffled_extrinsics = extrinsics;
-		// filter out inherentes
-		// let shuffled_extrinsics = previous_block_extrinsics.into_iter().filter(|e|
-		// e.is_signed().unwrap()).collect::<Vec<_>>(); log::debug!(target: "block_builder",
-		// "previous block has {} extrinsics", shuffled_extrinsics.len());
 		let shuffled_extrinsics = extrinsic_shuffler::shuffle::<Block, A>(
 			&self.api,
 			&self.block_id,
@@ -439,6 +411,38 @@ where
 			size
 		}
 	}
+}
+
+pub fn validate_transaction<'a, Block, Api>(
+	at: &BlockId<Block>,
+	api: &'_ Api::Api,
+	xt: <Block as BlockT>::Extrinsic,
+) -> Result<(), Error> where
+Block: BlockT,
+Api: ProvideRuntimeApi<Block> + 'a,
+Api::Api: VerApi<Block>,
+Api::Api: BlockBuilderApi<Block>,
+{
+	match api.get_signer(at, xt.clone()).unwrap() {
+		Some((who, nonce)) => log::debug!(target: "block_builder",
+			"TX[{:?}] {:?} {} ", BlakeTwo256::hash_of(&xt), who, nonce),
+		_ => {},
+	};
+	api.execute_in_transaction(|api| {
+		match api.apply_extrinsic_with_context(
+			at,
+			ExecutionContext::BlockConstruction,
+			xt.clone(),
+		) {
+			Ok(Ok(_)) => {
+				TransactionOutcome::Commit(Ok(()))
+			},
+			Ok(Err(tx_validity)) => TransactionOutcome::Rollback(Err(
+					ApplyExtrinsicFailed::Validity(tx_validity).into(),
+			)),
+			Err(e) => TransactionOutcome::Rollback(Err(Error::from(e))),
+		}
+	})
 }
 
 // #[cfg(test)]
