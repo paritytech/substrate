@@ -45,10 +45,17 @@ pub trait TracingKeyStr {
 /// The sending half of the notifications channel(s).
 ///
 /// Used to send notifications from the BEEFY gadget side.
-#[derive(Clone)]
 pub struct NotificationSender<Payload: Clone, Error> {
 	subscribers: SharedSenders<Payload>,
 	_err: PhantomData<Error>,
+}
+
+// Because of https://github.com/rust-lang/rust/issues/26925 we need to
+// manually implement `clone` here.
+impl<Payload: Clone, Error> Clone for NotificationSender<Payload, Error> {
+	fn clone(&self) -> Self {
+		Self { subscribers: self.subscribers.clone(), _err: PhantomData }
+	}
 }
 
 impl<Payload: Clone, Error> NotificationSender<Payload, Error> {
@@ -79,11 +86,18 @@ impl<Payload: Clone, Error> NotificationSender<Payload, Error> {
 /// Used to receive notifications generated at the BEEFY gadget side.
 /// The `NotificationStream` entity stores the `SharedSenders` so it can be
 /// used to add more subscriptions.
-#[derive(Clone)]
 pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr, Error> {
 	subscribers: SharedSenders<Payload>,
 	_trace_key: PhantomData<TK>,
 	_err: PhantomData<Error>,
+}
+
+// Because of https://github.com/rust-lang/rust/issues/26925 we need to
+// manually implement `clone` here.
+impl<Payload: Clone, TK: TracingKeyStr, Error> Clone for NotificationStream<Payload, TK, Error> {
+	fn clone(&self) -> Self {
+		Self { subscribers: self.subscribers.clone(), _trace_key: PhantomData, _err: PhantomData }
+	}
 }
 
 impl<Payload: Clone, TK: TracingKeyStr, Error> NotificationStream<Payload, TK, Error> {
