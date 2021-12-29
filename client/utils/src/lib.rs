@@ -38,4 +38,5 @@
 
 pub mod metrics;
 pub mod mpsc;
+pub mod notification;
 pub mod status_sinks;

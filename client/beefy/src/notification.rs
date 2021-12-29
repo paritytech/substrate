@@ -29,21 +29,21 @@ pub type BSignedCommitment<Block> =
 
 /// The sending half of the notifications channel(s) used to send
 /// notifications about best BEEFY block from the gadget side.
-pub type BeefyBestBlockSender<Block> = NotificationSender<NumberFor<Block>>;
+pub type BeefyBestBlockSender<Block> = NotificationSender<NumberFor<Block>, ()>;
 
 /// The receiving half of a notifications channel used to receive
 /// notifications about best BEEFY blocks determined on the gadget side.
 pub type BeefyBestBlockStream<Block> =
-	NotificationStream<NumberFor<Block>, BeefyBestBlockTracingKey>;
+	NotificationStream<NumberFor<Block>, BeefyBestBlockTracingKey, ()>;
 
 /// The sending half of the notifications channel(s) used to send notifications
 /// about signed commitments generated at the end of a BEEFY round.
-pub type BeefySignedCommitmentSender<Block> = NotificationSender<BSignedCommitment<Block>>;
+pub type BeefySignedCommitmentSender<Block> = NotificationSender<BSignedCommitment<Block>, ()>;
 
 /// The receiving half of a notifications channel used to receive notifications
 /// about signed commitments generated at the end of a BEEFY round.
 pub type BeefySignedCommitmentStream<Block> =
-	NotificationStream<BSignedCommitment<Block>, BeefySignedCommitmentTracingKey>;
+	NotificationStream<BSignedCommitment<Block>, BeefySignedCommitmentTracingKey, ()>;
 
 /// Collection of channel sending endpoints shared with the receiver side so they can register
 /// themselves.
@@ -71,27 +71,31 @@ impl TracingKeyStr for BeefySignedCommitmentTracingKey {
 ///
 /// Used to send notifications from the BEEFY gadget side.
 #[derive(Clone)]
-pub struct NotificationSender<Payload: Clone> {
+pub struct NotificationSender<Payload: Clone, Error> {
 	subscribers: SharedSenders<Payload>,
+	_err: PhantomData<Error>,
 }
 
-impl<Payload: Clone> NotificationSender<Payload> {
+impl<Payload: Clone, Error> NotificationSender<Payload, Error> {
 	/// The `subscribers` should be shared with a corresponding `NotificationStream`.
 	fn new(subscribers: SharedSenders<Payload>) -> Self {
-		Self { subscribers }
+		Self { subscribers, _err: PhantomData }
 	}
 
 	/// Send out a notification to all subscribers that a new payload is available for a
 	/// block.
-	pub fn notify(&self, signed_commitment: Payload) {
+	pub fn notify(&self, payload: impl FnOnce() -> Result<Payload, Error>) -> Result<(), Error> {
 		let mut subscribers = self.subscribers.lock();
 
 		// do an initial prune on closed subscriptions
 		subscribers.retain(|n| !n.is_closed());
 
 		if !subscribers.is_empty() {
-			subscribers.retain(|n| n.unbounded_send(signed_commitment.clone()).is_ok());
+			let payload = payload()?;
+			subscribers.retain(|n| n.unbounded_send(payload.clone()).is_ok());
 		}
+
+		Ok(())
 	}
 }
 
@@ -101,14 +105,15 @@ impl<Payload: Clone> NotificationSender<Payload> {
 /// The `NotificationStream` entity stores the `SharedSenders` so it can be
 /// used to add more subscriptions.
 #[derive(Clone)]
-pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr> {
+pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr, Error> {
 	subscribers: SharedSenders<Payload>,
 	_trace_key: PhantomData<TK>,
+	_err: PhantomData<Error>,
 }
 
-impl<Payload: Clone, TK: TracingKeyStr> NotificationStream<Payload, TK> {
+impl<Payload: Clone, TK: TracingKeyStr, Error> NotificationStream<Payload, TK, Error> {
 	/// Creates a new pair of receiver and sender of `Payload` notifications.
-	pub fn channel() -> (NotificationSender<Payload>, Self) {
+	pub fn channel() -> (NotificationSender<Payload, Error>, Self) {
 		let subscribers = Arc::new(Mutex::new(vec![]));
 		let receiver = NotificationStream::new(subscribers.clone());
 		let sender = NotificationSender::new(subscribers);
@@ -119,7 +124,7 @@ impl<Payload: Clone, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	///
 	/// The `subscribers` should be shared with a corresponding `NotificationSender`.
 	fn new(subscribers: SharedSenders<Payload>) -> Self {
-		Self { subscribers, _trace_key: PhantomData }
+		Self { subscribers, _trace_key: PhantomData, _err: PhantomData }
 	}
 
 	/// Subscribe to a channel through which signed commitments are sent at the end of each BEEFY

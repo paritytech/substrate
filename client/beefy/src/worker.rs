@@ -248,7 +248,7 @@ where
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
 				self.best_beefy_block = Some(*notification.header.number());
-				let _ = self.beefy_best_block_sender.notify(*notification.header.number());
+				let _ = self.beefy_best_block_sender.notify(|| Ok(*notification.header.number()));
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
 				// have a signed commitment for the block. Remove once the above TODO is done.
@@ -364,9 +364,9 @@ where
 					trace!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
 				}
 
-				self.signed_commitment_sender.notify(signed_commitment);
+				let _ = self.signed_commitment_sender.notify(|| Ok(signed_commitment));
 				self.best_beefy_block = Some(round.1);
-				let _ = self.beefy_best_block_sender.notify(round.1);
+				let _ = self.beefy_best_block_sender.notify(|| Ok(round.1));
 
 				metric_set!(self, beefy_best_block, round.1);
 			}

@@ -244,7 +244,7 @@ mod tests {
 
 		// Send BeefyRpcHandler `beefy_best_block = 42`
 		let num: NumberFor<Block> = 42u16.into();
-		sender.notify(num);
+		sender.notify(|| Ok(num)).unwrap();
 
 		// Wait a bit so the message is picked up.
 		std::thread::sleep(std::time::Duration::from_millis(200));
@@ -338,7 +338,7 @@ mod tests {
 
 		// Notify with commitment
 		let commitment = create_commitment();
-		commitment_sender.notify(commitment.clone());
+		commitment_sender.notify(|| Ok(commitment.clone())).unwrap();
 
 		// Inspect what we received
 		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());
