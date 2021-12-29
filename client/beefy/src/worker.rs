@@ -46,7 +46,7 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification::{BSignedCommitment, BeefyNotificationSender},
+	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender},
 	round, Client,
 };
 
@@ -57,8 +57,8 @@ where
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub key_store: BeefyKeystore,
-	pub signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
-	pub beefy_best_block_sender: BeefyNotificationSender<NumberFor<B>>,
+	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
@@ -75,7 +75,7 @@ where
 	client: Arc<C>,
 	backend: Arc<BE>,
 	key_store: BeefyKeystore,
-	signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
+	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
@@ -88,7 +88,7 @@ where
 	/// Best block a BEEFY voting round has been concluded for
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Used to keep RPC worker up to date on latest/best beefy
-	beefy_best_block_sender: BeefyNotificationSender<NumberFor<B>>,
+	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	// keep rustc happy

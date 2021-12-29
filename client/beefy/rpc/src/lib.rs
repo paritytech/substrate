@@ -30,7 +30,7 @@ use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
 
-use beefy_gadget::notification::{BSignedCommitment, BeefyNotificationStream};
+use beefy_gadget::notification::{BeefyBestBlockStream, BeefySignedCommitmentStream};
 
 mod notification;
 
@@ -107,7 +107,7 @@ pub trait BeefyApi<Notification, Number> {
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
-	signed_commitment_stream: BeefyNotificationStream<BSignedCommitment<Block>>,
+	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 	beefy_best_block: Arc<Mutex<Option<NumberFor<Block>>>>,
 	manager: SubscriptionManager,
 }
@@ -115,8 +115,8 @@ pub struct BeefyRpcHandler<Block: BlockT> {
 impl<Block: BlockT> BeefyRpcHandler<Block> {
 	/// Creates a new BeefyRpcHandler instance.
 	pub fn new<E>(
-		signed_commitment_stream: BeefyNotificationStream<BSignedCommitment<Block>>,
-		best_block_stream: BeefyNotificationStream<NumberFor<Block>>,
+		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+		best_block_stream: BeefyBestBlockStream<Block>,
 		executor: E,
 	) -> Self
 	where
@@ -191,26 +191,22 @@ mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
 
-	use beefy_gadget::notification::{BSignedCommitment, BeefyNotificationSender};
+	use beefy_gadget::notification::{BSignedCommitment, BeefySignedCommitmentSender};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
 	use substrate_test_runtime_client::runtime::Block;
 
-	fn setup_io_handler() -> (
-		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
-		BeefyNotificationSender<BSignedCommitment<Block>>,
-	) {
-		let (_, stream) = BeefyNotificationStream::channel();
+	fn setup_io_handler(
+	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
+		let (_, stream) = BeefyBestBlockStream::<Block>::channel();
 		setup_io_handler_with_best_block_stream(stream)
 	}
 
 	fn setup_io_handler_with_best_block_stream(
-		best_block_stream: BeefyNotificationStream<NumberFor<Block>>,
-	) -> (
-		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
-		BeefyNotificationSender<BSignedCommitment<Block>>,
-	) {
-		let (commitment_sender, commitment_stream) = BeefyNotificationStream::channel();
+		best_block_stream: BeefyBestBlockStream<Block>,
+	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
+		let (commitment_sender, commitment_stream) =
+			BeefySignedCommitmentStream::<Block>::channel();
 
 		let handler: BeefyRpcHandler<Block> = BeefyRpcHandler::new(
 			commitment_stream,
@@ -243,7 +239,7 @@ mod tests {
 
 	#[test]
 	fn latest_finalized_rpc() {
-		let (sender, stream) = BeefyNotificationStream::channel();
+		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
 		let (io, _) = setup_io_handler_with_best_block_stream(stream);
 
 		// Send BeefyRpcHandler `beefy_best_block = 42`

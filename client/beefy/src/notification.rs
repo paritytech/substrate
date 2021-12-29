@@ -16,31 +16,67 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::NumberFor;
 
 use parking_lot::Mutex;
 
-/// A commitment with matching GRANDPA validators' signatures.
+/// A commitment with matching BEEFY authorities' signatures.
 pub type BSignedCommitment<Block> =
 	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature>;
+
+/// The sending half of the notifications channel(s) used to send
+/// notifications about best BEEFY block from the gadget side.
+pub type BeefyBestBlockSender<Block> = NotificationSender<NumberFor<Block>>;
+
+/// The receiving half of a notifications channel used to receive
+/// notifications about best BEEFY blocks determined on the gadget side.
+pub type BeefyBestBlockStream<Block> =
+	NotificationStream<NumberFor<Block>, BeefyBestBlockTracingKey>;
+
+/// The sending half of the notifications channel(s) used to send notifications
+/// about signed commitments generated at the end of a BEEFY round.
+pub type BeefySignedCommitmentSender<Block> = NotificationSender<BSignedCommitment<Block>>;
+
+/// The receiving half of a notifications channel used to receive notifications
+/// about signed commitments generated at the end of a BEEFY round.
+pub type BeefySignedCommitmentStream<Block> =
+	NotificationStream<BSignedCommitment<Block>, BeefySignedCommitmentTracingKey>;
 
 /// Collection of channel sending endpoints shared with the receiver side so they can register
 /// themselves.
 type SharedSenders<Payload> = Arc<Mutex<Vec<TracingUnboundedSender<Payload>>>>;
 
+pub trait TracingKeyStr {
+	const TRACING_KEY: &'static str;
+}
+
+/// Provides tracing key for BEEFY best block stream.
+#[derive(Clone)]
+pub struct BeefyBestBlockTracingKey;
+impl TracingKeyStr for BeefyBestBlockTracingKey {
+	const TRACING_KEY: &'static str = "mpsc_beefy_best_block_notification_stream";
+}
+
+/// Provides tracing key for BEEFY signed commitments stream.
+#[derive(Clone)]
+pub struct BeefySignedCommitmentTracingKey;
+impl TracingKeyStr for BeefySignedCommitmentTracingKey {
+	const TRACING_KEY: &'static str = "mpsc_beefy_signed_commitments_notification_stream";
+}
+
 /// The sending half of the notifications channel(s).
 ///
 /// Used to send notifications from the BEEFY gadget side.
 #[derive(Clone)]
-pub struct BeefyNotificationSender<Payload: Clone> {
+pub struct NotificationSender<Payload: Clone> {
 	subscribers: SharedSenders<Payload>,
 }
 
-impl<Payload: Clone> BeefyNotificationSender<Payload> {
-	/// The `subscribers` should be shared with a corresponding `BeefyNotificationStream`.
+impl<Payload: Clone> NotificationSender<Payload> {
+	/// The `subscribers` should be shared with a corresponding `NotificationStream`.
 	fn new(subscribers: SharedSenders<Payload>) -> Self {
 		Self { subscribers }
 	}
@@ -62,34 +98,34 @@ impl<Payload: Clone> BeefyNotificationSender<Payload> {
 /// The receiving half of the notifications channel.
 ///
 /// Used to receive notifications generated at the BEEFY gadget side.
-/// The `BeefyNotificationStream` entity stores the `SharedSenders` so it can be
+/// The `NotificationStream` entity stores the `SharedSenders` so it can be
 /// used to add more subscriptions.
 #[derive(Clone)]
-pub struct BeefyNotificationStream<Payload: Clone> {
+pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr> {
 	subscribers: SharedSenders<Payload>,
+	_trace_key: PhantomData<TK>,
 }
 
-impl<Payload: Clone> BeefyNotificationStream<Payload> {
+impl<Payload: Clone, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	/// Creates a new pair of receiver and sender of `Payload` notifications.
-	pub fn channel() -> (BeefyNotificationSender<Payload>, Self) {
+	pub fn channel() -> (NotificationSender<Payload>, Self) {
 		let subscribers = Arc::new(Mutex::new(vec![]));
-		let receiver = BeefyNotificationStream::new(subscribers.clone());
-		let sender = BeefyNotificationSender::new(subscribers);
+		let receiver = NotificationStream::new(subscribers.clone());
+		let sender = NotificationSender::new(subscribers);
 		(sender, receiver)
 	}
 
 	/// Create a new receiver of `Payload` notifications.
 	///
-	/// The `subscribers` should be shared with a corresponding `BeefyNotificationSender`.
+	/// The `subscribers` should be shared with a corresponding `NotificationSender`.
 	fn new(subscribers: SharedSenders<Payload>) -> Self {
-		Self { subscribers }
+		Self { subscribers, _trace_key: PhantomData }
 	}
 
 	/// Subscribe to a channel through which signed commitments are sent at the end of each BEEFY
 	/// voting round.
 	pub fn subscribe(&self) -> TracingUnboundedReceiver<Payload> {
-		// FIXME: tracing string
-		let (sender, receiver) = tracing_unbounded("mpsc_beefy_notification_stream");
+		let (sender, receiver) = tracing_unbounded(TK::TRACING_KEY);
 		self.subscribers.lock().push(sender);
 		receiver
 	}

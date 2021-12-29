@@ -27,11 +27,11 @@ use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
-use sp_runtime::traits::{Block, NumberFor};
+use sp_runtime::traits::Block;
 
 use beefy_primitives::BeefyApi;
 
-use crate::notification::{BSignedCommitment, BeefyNotificationSender};
+use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
 
 mod error;
 mod gossip;
@@ -98,9 +98,9 @@ where
 	/// Gossip network
 	pub network: N,
 	/// BEEFY signed commitment sender
-	pub signed_commitment_sender: BeefyNotificationSender<BSignedCommitment<B>>,
+	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	/// BEEFY best block sender
-	pub beefy_best_block_sender: BeefyNotificationSender<NumberFor<B>>,
+	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
