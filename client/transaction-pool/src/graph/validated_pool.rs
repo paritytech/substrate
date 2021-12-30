@@ -569,12 +569,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 		Ok(())
 	}
 
-	/// Get rotator reference.
-	#[cfg(feature = "test-helpers")]
-	pub fn rotator(&self) -> &PoolRotator<ExtrinsicHash<B>> {
-		&self.rotator
-	}
-
 	/// Get api reference.
 	pub fn api(&self) -> &B {
 		&self.api

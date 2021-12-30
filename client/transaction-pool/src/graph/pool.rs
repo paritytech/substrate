@@ -444,163 +444,16 @@ impl<B: ChainApi> Clone for Pool<B> {
 #[cfg(test)]
 mod tests {
 	use super::{super::base_pool::Limit, *};
+	use crate::tests::{pool, uxt, TestApi, INVALID_NONCE};
 	use assert_matches::assert_matches;
-	use codec::Encode;
 	use futures::executor::block_on;
 	use parking_lot::Mutex;
 	use sc_transaction_pool_api::TransactionStatus;
-	use sp_runtime::{
-		traits::Hash,
-		transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction},
-	};
-	use std::{
-		collections::{HashMap, HashSet},
-		time::Instant,
-	};
-	use substrate_test_runtime::{AccountId, Block, Extrinsic, Hashing, Transfer, H256};
+	use sp_runtime::transaction_validity::TransactionSource;
+	use std::{collections::HashMap, time::Instant};
+	use substrate_test_runtime::{AccountId, Extrinsic, Transfer, H256};
 
-	const INVALID_NONCE: u64 = 254;
 	const SOURCE: TransactionSource = TransactionSource::External;
-
-	#[derive(Clone, Debug, Default)]
-	struct TestApi {
-		delay: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
-		invalidate: Arc<Mutex<HashSet<H256>>>,
-		clear_requirements: Arc<Mutex<HashSet<H256>>>,
-		add_requirements: Arc<Mutex<HashSet<H256>>>,
-	}
-
-	impl ChainApi for TestApi {
-		type Block = Block;
-		type Error = error::Error;
-		type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
-		type BodyFuture = futures::future::Ready<error::Result<Option<Vec<Extrinsic>>>>;
-
-		/// Verify extrinsic at given block.
-		fn validate_transaction(
-			&self,
-			at: &BlockId<Self::Block>,
-			_source: TransactionSource,
-			uxt: ExtrinsicFor<Self>,
-		) -> Self::ValidationFuture {
-			let hash = self.hash_and_length(&uxt).0;
-			let block_number = self.block_id_to_number(at).unwrap().unwrap();
-
-			let res = match uxt {
-				Extrinsic::Transfer { transfer, .. } => {
-					let nonce = transfer.nonce;
-
-					// This is used to control the test flow.
-					if nonce > 0 {
-						let opt = self.delay.lock().take();
-						if let Some(delay) = opt {
-							if delay.recv().is_err() {
-								println!("Error waiting for delay!");
-							}
-						}
-					}
-
-					if self.invalidate.lock().contains(&hash) {
-						InvalidTransaction::Custom(0).into()
-					} else if nonce < block_number {
-						InvalidTransaction::Stale.into()
-					} else {
-						let mut transaction = ValidTransaction {
-							priority: 4,
-							requires: if nonce > block_number {
-								vec![vec![nonce as u8 - 1]]
-							} else {
-								vec![]
-							},
-							provides: if nonce == INVALID_NONCE {
-								vec![]
-							} else {
-								vec![vec![nonce as u8]]
-							},
-							longevity: 3,
-							propagate: true,
-						};
-
-						if self.clear_requirements.lock().contains(&hash) {
-							transaction.requires.clear();
-						}
-
-						if self.add_requirements.lock().contains(&hash) {
-							transaction.requires.push(vec![128]);
-						}
-
-						Ok(transaction)
-					}
-				},
-				Extrinsic::IncludeData(_) => Ok(ValidTransaction {
-					priority: 9001,
-					requires: vec![],
-					provides: vec![vec![42]],
-					longevity: 9001,
-					propagate: false,
-				}),
-				Extrinsic::Store(_) => Ok(ValidTransaction {
-					priority: 9001,
-					requires: vec![],
-					provides: vec![vec![43]],
-					longevity: 9001,
-					propagate: false,
-				}),
-				_ => unimplemented!(),
-			};
-
-			futures::future::ready(Ok(res))
-		}
-
-		/// Returns a block number given the block id.
-		fn block_id_to_number(
-			&self,
-			at: &BlockId<Self::Block>,
-		) -> Result<Option<NumberFor<Self>>, Self::Error> {
-			Ok(match at {
-				BlockId::Number(num) => Some(*num),
-				BlockId::Hash(_) => None,
-			})
-		}
-
-		/// Returns a block hash given the block id.
-		fn block_id_to_hash(
-			&self,
-			at: &BlockId<Self::Block>,
-		) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error> {
-			Ok(match at {
-				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
-				BlockId::Hash(_) => None,
-			})
-		}
-
-		/// Hash the extrinsic.
-		fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (BlockHash<Self>, usize) {
-			let encoded = uxt.encode();
-			let len = encoded.len();
-			(Hashing::hash(&encoded), len)
-		}
-
-		fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
-			futures::future::ready(Ok(None))
-		}
-
-		fn block_header(
-			&self,
-			_: &BlockId<Self::Block>,
-		) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-			Ok(None)
-		}
-	}
-
-	fn uxt(transfer: Transfer) -> Extrinsic {
-		let signature = TryFrom::try_from(&[0; 64][..]).unwrap();
-		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
-	}
-
-	fn pool() -> Pool<TestApi> {
-		Pool::new(Default::default(), true.into(), TestApi::default().into())
-	}
 
 	#[test]
 	fn should_validate_and_import_transaction() {
@@ -636,7 +489,7 @@ mod tests {
 		});
 
 		// when
-		pool.validated_pool.rotator().ban(&Instant::now(), vec![pool.hash_of(&uxt)]);
+		pool.validated_pool.ban(&Instant::now(), vec![pool.hash_of(&uxt)]);
 		let res = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt));
 		assert_eq!(pool.validated_pool().status().ready, 0);
 		assert_eq!(pool.validated_pool().status().future, 0);
@@ -767,9 +620,9 @@ mod tests {
 		assert_eq!(pool.validated_pool().status().future, 0);
 		assert_eq!(pool.validated_pool().status().ready, 0);
 		// make sure they are temporarily banned as well
-		assert!(pool.validated_pool.rotator().is_banned(&hash1));
-		assert!(pool.validated_pool.rotator().is_banned(&hash2));
-		assert!(pool.validated_pool.rotator().is_banned(&hash3));
+		assert!(pool.validated_pool.is_banned(&hash1));
+		assert!(pool.validated_pool.is_banned(&hash2));
+		assert!(pool.validated_pool.is_banned(&hash3));
 	}
 
 	#[test]
@@ -792,7 +645,7 @@ mod tests {
 		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()])).unwrap();
 
 		// then
-		assert!(pool.validated_pool.rotator().is_banned(&hash1));
+		assert!(pool.validated_pool.is_banned(&hash1));
 	}
 
 	#[test]
@@ -832,8 +685,8 @@ mod tests {
 
 		// then
 		assert_eq!(pool.validated_pool().status().future, 1);
-		assert!(pool.validated_pool.rotator().is_banned(&hash1));
-		assert!(!pool.validated_pool.rotator().is_banned(&hash2));
+		assert!(pool.validated_pool.is_banned(&hash1));
+		assert!(!pool.validated_pool.is_banned(&hash2));
 	}
 
 	#[test]

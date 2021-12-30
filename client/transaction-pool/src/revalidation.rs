@@ -35,10 +35,7 @@ use sp_runtime::{
 use futures::prelude::*;
 use std::time::Duration;
 
-#[cfg(not(feature = "test-helpers"))]
 const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
-#[cfg(feature = "test-helpers")]
-pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(1);
 
 const MIN_BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
@@ -213,35 +210,24 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	/// It does two things: periodically tries to process some transactions
 	/// from the queue and also accepts messages to enqueue some more
 	/// transactions from the pool.
-	pub async fn run<R: intervalier::IntoStream>(
+	pub async fn run(
 		mut self,
 		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
-		interval: R,
-	) where
-		R: Send,
-		R::Guard: Send,
-	{
-		let interval = interval.into_stream().fuse();
+		interval: Duration,
+	) {
+		let interval_fut = futures_timer::Delay::new(interval);
 		let from_queue = from_queue.fuse();
-		futures::pin_mut!(interval, from_queue);
+		futures::pin_mut!(interval_fut, from_queue);
 		let this = &mut self;
 
 		loop {
 			futures::select! {
-				_guard = interval.next() => {
+				// Using `fuse()` in here is okay, because we reset the interval when it has fired.
+				_ = (&mut interval_fut).fuse() => {
 					let next_batch = this.prepare_batch();
 					let batch_len = next_batch.len();
 
 					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
-
-					#[cfg(feature = "test-helpers")]
-					{
-						use intervalier::Guard;
-						// only trigger test events if something was processed
-						if batch_len == 0 {
-							_guard.expect("Always some() in tests").skip();
-						}
-					}
 
 					if batch_len > 0 || this.len() > 0 {
 						log::debug!(
@@ -251,6 +237,8 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 							this.len(),
 						);
 					}
+
+					interval_fut.reset(interval);
 				},
 				workload = from_queue.next() => {
 					match workload {
@@ -298,15 +286,11 @@ where
 	}
 
 	/// New revalidation queue with background worker.
-	pub fn new_with_interval<R: intervalier::IntoStream>(
+	pub fn new_with_interval(
 		api: Arc<Api>,
 		pool: Arc<Pool<Api>>,
-		interval: R,
-	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>)
-	where
-		R: Send + 'static,
-		R::Guard: Send,
-	{
+		interval: Duration,
+	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
 		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
@@ -321,24 +305,7 @@ where
 		api: Arc<Api>,
 		pool: Arc<Pool<Api>>,
 	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
-		Self::new_with_interval(
-			api,
-			pool,
-			intervalier::Interval::new(BACKGROUND_REVALIDATION_INTERVAL),
-		)
-	}
-
-	/// New revalidation queue with background worker and test signal.
-	#[cfg(feature = "test-helpers")]
-	pub fn new_test(
-		api: Arc<Api>,
-		pool: Arc<Pool<Api>>,
-	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>, intervalier::BackSignalControl) {
-		let (interval, notifier) =
-			intervalier::BackSignalInterval::new(BACKGROUND_REVALIDATION_INTERVAL);
-		let (queue, background) = Self::new_with_interval(api, pool, interval);
-
-		(queue, background, notifier)
+		Self::new_with_interval(api, pool, BACKGROUND_REVALIDATION_INTERVAL)
 	}
 
 	/// Queue some transaction for later revalidation.
@@ -371,4 +338,41 @@ where
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use super::*;
+	use crate::{
+		graph::Pool,
+		tests::{uxt, TestApi},
+	};
+	use futures::executor::block_on;
+	use sc_transaction_pool_api::TransactionSource;
+	use sp_runtime::generic::BlockId;
+	use substrate_test_runtime::{AccountId, Transfer, H256};
+
+	#[test]
+	fn revalidation_queue_works() {
+		let api = Arc::new(TestApi::default());
+		let pool = Arc::new(Pool::new(Default::default(), true.into(), api.clone()));
+		let queue = Arc::new(RevalidationQueue::new(api.clone(), pool.clone()));
+
+		let uxt = uxt(Transfer {
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
+			amount: 5,
+			nonce: 0,
+		});
+		let uxt_hash = block_on(pool.submit_one(
+			&BlockId::number(0),
+			TransactionSource::External,
+			uxt.clone(),
+		))
+		.expect("Should be valid");
+
+		block_on(queue.revalidate_later(0, vec![uxt_hash]));
+
+		// revalidated in sync offload 2nd time
+		assert_eq!(api.validation_requests().len(), 2);
+		// number of ready
+		assert_eq!(pool.validated_pool().status().ready, 1);
+	}
+}

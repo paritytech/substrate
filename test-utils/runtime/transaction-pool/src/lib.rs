@@ -25,7 +25,9 @@ use parking_lot::RwLock;
 use sp_blockchain::CachedHeaderMetadata;
 use sp_runtime::{
 	generic::{self, BlockId},
-	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as _, TrailingZeroInput},
+	traits::{
+		BlakeTwo256, Block as BlockT, Hash as HashT, Header as _, NumberFor, TrailingZeroInput,
+	},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
@@ -227,7 +229,7 @@ impl TestApi {
 	}
 }
 
-impl sc_transaction_pool::test_helpers::ChainApi for TestApi {
+impl sc_transaction_pool::ChainApi for TestApi {
 	type Block = Block;
 	type Error = Error;
 	type ValidationFuture = futures::future::Ready<Result<TransactionValidity, Error>>;
@@ -237,7 +239,7 @@ impl sc_transaction_pool::test_helpers::ChainApi for TestApi {
 		&self,
 		at: &BlockId<Self::Block>,
 		_source: TransactionSource,
-		uxt: sc_transaction_pool::test_helpers::ExtrinsicFor<Self>,
+		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
 		self.validation_requests.write().push(uxt.clone());
 
@@ -297,7 +299,7 @@ impl sc_transaction_pool::test_helpers::ChainApi for TestApi {
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<sc_transaction_pool::test_helpers::NumberFor<Self>>, Error> {
+	) -> Result<Option<NumberFor<Self::Block>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) =>
 				self.chain.read().block_by_hash.get(x).map(|b| *b.header.number()),
@@ -308,7 +310,7 @@ impl sc_transaction_pool::test_helpers::ChainApi for TestApi {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<sc_transaction_pool::test_helpers::BlockHash<Self>>, Error> {
+	) -> Result<Option<<Self::Block as BlockT>::Hash>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(x.clone()),
 			generic::BlockId::Number(num) =>
@@ -318,10 +320,7 @@ impl sc_transaction_pool::test_helpers::ChainApi for TestApi {
 		})
 	}
 
-	fn hash_and_length(
-		&self,
-		ex: &sc_transaction_pool::test_helpers::ExtrinsicFor<Self>,
-	) -> (Hash, usize) {
+	fn hash_and_length(&self, ex: &<Self::Block as BlockT>::Extrinsic) -> (Hash, usize) {
 		Self::hash_and_length_inner(ex)
 	}
 
