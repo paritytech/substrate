@@ -122,13 +122,13 @@ pub(crate) fn create_and_compile(
 	let (wasm_binary, wasm_binary_compressed, bloaty) =
 		compact_wasm_file(&project, project_cargo_toml, wasm_binary_name);
 
-	wasm_binary
-		.as_ref()
-		.map(|wasm_binary| copy_wasm_to_target_directory(project_cargo_toml, wasm_binary));
+	if let Some(wasm_binary) = wasm_binary.as_ref() {
+		copy_wasm_to_target_directory(project_cargo_toml, wasm_binary)
+	}
 
-	wasm_binary_compressed.as_ref().map(|wasm_binary_compressed| {
+	if let Some(wasm_binary_compressed) = wasm_binary_compressed.as_ref() {
 		copy_wasm_to_target_directory(project_cargo_toml, wasm_binary_compressed)
-	});
+	}
 
 	generate_rerun_if_changed_instructions(project_cargo_toml, &project, &wasm_workspace);
 

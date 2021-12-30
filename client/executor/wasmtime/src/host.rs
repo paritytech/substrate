@@ -209,7 +209,7 @@ impl<'a, 'b, 'c> Sandbox for HostContext<'a, 'b, 'c> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &*args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)

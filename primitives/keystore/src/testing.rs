@@ -482,9 +482,8 @@ mod tests {
 		assert!(res.is_none());
 
 		// insert key, sign again
-		let res =
+		let _res =
 			SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
-		assert_eq!((), res);
 
 		let res =
 			SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();

@@ -544,7 +544,7 @@ impl<T: Config> Pallet<T> {
 
 		// Time to finish. We might have reduced less than expected due to rounding error. Increase
 		// one last time if we have any room left, the reduce until we are sure we are below limit.
-		while voters + 1 <= max_voters && weight_with(voters + 1) < max_weight {
+		while voters < max_voters && weight_with(voters + 1) < max_weight {
 			voters += 1;
 		}
 		while voters.checked_sub(1).is_some() && weight_with(voters) > max_weight {

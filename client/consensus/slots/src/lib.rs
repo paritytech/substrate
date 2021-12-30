@@ -595,8 +595,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 					best_hash,
 				);
 
-				slot_duration
-					.using_encoded(|s| client.insert_aux(&[(T::SLOT_KEY, &s[..])], &[]))?;
+				slot_duration.using_encoded(|s| client.insert_aux(&[(T::SLOT_KEY, &*s)], &[]))?;
 
 				Ok(SlotDuration(slot_duration))
 			},

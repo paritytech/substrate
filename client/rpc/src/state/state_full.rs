@@ -441,10 +441,7 @@ where
 		keys: Option<Vec<StorageKey>>,
 	) {
 		let keys = Into::<Option<Vec<_>>>::into(keys);
-		let stream = match self
-			.client
-			.storage_changes_notification_stream(keys.as_ref().map(|x| &**x), None)
-		{
+		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(err) => {
 				let _ = subscriber.reject(client_err(err).into());

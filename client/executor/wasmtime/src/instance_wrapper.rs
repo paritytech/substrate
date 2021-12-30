@@ -56,6 +56,7 @@ pub struct EntryPoint {
 
 impl EntryPoint {
 	/// Call this entry point.
+	#[allow(clippy::useless_conversion)]
 	pub fn call(
 		&self,
 		ctx: impl AsContextMut,

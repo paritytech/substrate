@@ -61,17 +61,12 @@ pub mod pallet {
 	pub(super) type NextKeys<T: Config> =
 		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub keys: Vec<AuthorityId>,
 	}
 
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { keys: Default::default() }
-		}
-	}
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {

@@ -140,7 +140,7 @@ impl InherentError {
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
+			<InherentError as codec::Decode>::decode(&mut &*data).ok()
 		} else {
 			None
 		}
@@ -227,7 +227,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		&self,
 		inherent_data: &mut InherentData,
 	) -> Result<(), sp_inherents::Error> {
-		inherent_data.put_data(INHERENT_IDENTIFIER, &InherentType::from(self.timestamp))
+		inherent_data.put_data(INHERENT_IDENTIFIER, &self.timestamp)
 	}
 
 	async fn try_handle_error(

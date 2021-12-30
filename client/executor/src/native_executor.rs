@@ -336,10 +336,7 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 			.into_iter()
 			// filter out any host function overrides provided.
 			.filter(|host_fn| {
-				extended
-					.iter()
-					.find(|ext_host_fn| host_fn.name() == ext_host_fn.name())
-					.is_none()
+				!extended.iter().any(|ext_host_fn| host_fn.name() == ext_host_fn.name())
 			})
 			.collect::<Vec<_>>();
 

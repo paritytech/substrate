@@ -39,7 +39,7 @@ fn assets() -> Vec<(u64, u32, u32)> {
 				Some(Some(item))
 			}
 		})
-		.filter_map(|item| item)
+		.flatten()
 	{
 		let details = Class::<Test>::get(class).unwrap();
 		let instances = Asset::<Test>::iter_prefix(class).count() as u32;

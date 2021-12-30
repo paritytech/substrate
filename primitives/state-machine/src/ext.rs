@@ -572,7 +572,7 @@ where
 					target: "state",
 					method = "ChildStorageRoot",
 					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
-					child_info = %HexDisplay::from(&storage_key.as_ref()),
+					child_info = %HexDisplay::from(&storage_key),
 					storage_root = %HexDisplay::from(&root.as_ref()),
 					cached = false,
 				);
@@ -589,7 +589,7 @@ where
 					target: "state",
 					method = "ChildStorageRoot",
 					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
-					child_info = %HexDisplay::from(&storage_key.as_ref()),
+					child_info = %HexDisplay::from(&storage_key),
 					storage_root = %HexDisplay::from(&root.as_ref()),
 					cached = false,
 				);

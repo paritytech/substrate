@@ -125,6 +125,7 @@ fn discard_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted
 	}
 }
 
+#[allow(clippy::redundant_slicing)]
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut (&mut [OverlayLevel<BlockHash, Key>], &mut [OverlayLevel<BlockHash, Key>]),
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
@@ -261,8 +262,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				.push((to_meta_key(LAST_CANONICAL, &()), last_canonicalized.encode()));
 			self.last_canonicalized = Some(last_canonicalized);
 		} else if self.last_canonicalized.is_some() {
-			if number < front_block_number ||
-				number >= front_block_number + self.levels.len() as u64 + 1
+			if number < front_block_number || number > front_block_number + self.levels.len() as u64
 			{
 				trace!(target: "state-db", "Failed to insert block {}, current is {} .. {})",
 					number,

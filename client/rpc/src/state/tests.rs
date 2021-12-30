@@ -32,7 +32,7 @@ use substrate_test_runtime_client::{prelude::*, runtime};
 const STORAGE_KEY: &[u8] = b"child";
 
 fn prefixed_storage_key() -> PrefixedStorageKey {
-	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	child_info.prefixed_storage_key()
 }
 

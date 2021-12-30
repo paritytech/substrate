@@ -182,7 +182,7 @@ pub fn storage_iter_with_suffix<T: Decode + Sized>(
 	prefix.extend_from_slice(suffix);
 	let previous_key = prefix.clone();
 	let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
-		let value = T::decode(&mut &raw_value[..])?;
+		let value = T::decode(&mut &*raw_value)?;
 		Ok((raw_key_without_prefix.to_vec(), value))
 	};
 
@@ -216,7 +216,7 @@ pub fn storage_key_iter_with_suffix<
 	let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
 		let mut key_material = H::reverse(raw_key_without_prefix);
 		let key = K::decode(&mut key_material)?;
-		let value = T::decode(&mut &raw_value[..])?;
+		let value = T::decode(&mut &*raw_value)?;
 		Ok((key, value))
 	};
 	PrefixIterator { prefix, previous_key, drain: false, closure, phantom: Default::default() }

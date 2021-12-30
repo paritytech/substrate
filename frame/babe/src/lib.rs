@@ -310,17 +310,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type NextEpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 		pub epoch_config: Option<BabeEpochConfiguration>,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			GenesisConfig { authorities: Default::default(), epoch_config: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]

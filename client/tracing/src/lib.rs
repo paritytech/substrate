@@ -598,6 +598,7 @@ mod tests {
 				// emit event
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
 				for msg in rx.recv() {
+					#[allow(clippy::bool_comparison)]
 					if msg == false {
 						break
 					}

@@ -119,7 +119,7 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	let name = syn::parse_macro_input!(arg as Expr);
 
 	let crate_name = match crate_name("sc-tracing") {
-		Ok(FoundCrate::Itself) => Ident::from(Ident::new("sc_tracing", Span::call_site())),
+		Ok(FoundCrate::Itself) => Ident::new("sc_tracing", Span::call_site()),
 		Ok(FoundCrate::Name(crate_name)) => Ident::new(&crate_name, Span::call_site()),
 		Err(e) => return Error::new(Span::call_site(), e).to_compile_error().into(),
 	};

@@ -94,7 +94,7 @@ impl<H: HeaderT> sp_inherents::InherentDataProvider for InherentDataProvider<H> 
 			return None
 		}
 
-		let error = InherentError::decode(&mut &error[..]).ok()?;
+		let error = InherentError::decode(&mut &*error).ok()?;
 
 		Some(Err(Error::Application(Box::from(format!("{:?}", error)))))
 	}

@@ -132,7 +132,7 @@ fn call_in_wasm<E: Externalities>(
 		None,
 	);
 	executor.uncached_call(
-		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		ext,
 		true,
 		function,
@@ -484,7 +484,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 
 	let err = executor
 		.uncached_call(
-			RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+			RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 			&mut ext.ext(),
 			true,
 			"test_exhaust_heap",
@@ -496,7 +496,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 }
 
 fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn WasmModule> {
-	let blob = RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..])
+	let blob = RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap())
 		.expect("failed to create a runtime blob out of test runtime");
 
 	crate::wasm_runtime::create_wasm_runtime_with_code(
@@ -603,7 +603,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 				assert_eq!(
 					executor
 						.uncached_call(
-							RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+							RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 							&mut ext,
 							true,
 							"test_twox_128",
@@ -697,7 +697,7 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 	let error_result =
 		call_in_wasm("test_panic_in_spawned", &[], wasm_method, &mut ext).unwrap_err();
 
-	assert!(format!("{}", error_result).contains("Spawned task"));
+	assert!(error_result.contains("Spawned task"));
 }
 
 test_wasm_execution!(memory_is_cleared_between_invocations);

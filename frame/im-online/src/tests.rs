@@ -341,7 +341,7 @@ fn should_not_send_a_report_if_already_online() {
 		UintAuthorityId::set_all_keys(vec![1, 2, 3]);
 		// we expect error, since the authority is already online.
 		let mut res = ImOnline::send_heartbeats(4).unwrap();
-		assert_eq!(res.next().unwrap().unwrap(), ());
+		res.next().unwrap().unwrap();
 		assert_eq!(res.next().unwrap().unwrap_err(), OffchainErr::AlreadyOnline(1));
 		assert_eq!(res.next().unwrap().unwrap_err(), OffchainErr::AlreadyOnline(2));
 		assert_eq!(res.next(), None);

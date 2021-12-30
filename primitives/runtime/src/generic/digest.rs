@@ -33,17 +33,11 @@ use crate::{
 use sp_core::RuntimeDebug;
 
 /// Generic header digest.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
 pub struct Digest {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem>,
-}
-
-impl Default for Digest {
-	fn default() -> Self {
-		Self { logs: Vec::new() }
-	}
 }
 
 impl Digest {

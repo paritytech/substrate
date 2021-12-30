@@ -1546,7 +1546,7 @@ macro_rules! decl_module {
 					<Self as $crate::traits::GetStorageVersion>::current_storage_version(),
 				);
 
-				(|| { $( $impl )* })()
+				{ $( $impl )* }
 			}
 
 			#[cfg(feature = "try-runtime")]

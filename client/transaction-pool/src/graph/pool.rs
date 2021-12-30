@@ -224,12 +224,8 @@ impl<B: ChainApi> Pool<B> {
 		hashes: &[ExtrinsicHash<B>],
 	) -> Result<(), B::Error> {
 		// Get details of all extrinsics that are already in the pool
-		let in_pool_tags = self
-			.validated_pool
-			.extrinsics_tags(hashes)
-			.into_iter()
-			.filter_map(|x| x)
-			.flatten();
+		let in_pool_tags =
+			self.validated_pool.extrinsics_tags(hashes).into_iter().flatten().flatten();
 
 		// Prune all transactions that provide given tags
 		let prune_status = self.validated_pool.prune_tags(in_pool_tags)?;

@@ -67,7 +67,7 @@ pub trait TransactionStorageProofInherentData {
 
 impl TransactionStorageProofInherentData for InherentData {
 	fn storage_proof(&self) -> Result<Option<TransactionStorageProof>, Error> {
-		Ok(self.get_data(&INHERENT_IDENTIFIER)?)
+		self.get_data(&INHERENT_IDENTIFIER)
 	}
 }
 
@@ -104,7 +104,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 			return None
 		}
 
-		let error = InherentError::decode(&mut &error[..]).ok()?;
+		let error = InherentError::decode(&mut &*error).ok()?;
 
 		Some(Err(Error::Application(Box::from(format!("{:?}", error)))))
 	}

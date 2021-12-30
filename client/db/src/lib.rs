@@ -1976,7 +1976,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		});
 		let database_cache = MemorySize::from_bytes(0);
 		let state_cache =
-			MemorySize::from_bytes((*&self.shared_cache).read().used_storage_cache_size());
+			MemorySize::from_bytes(self.shared_cache.read().used_storage_cache_size());
 		let state_db = self.storage.state_db.memory_info();
 
 		Some(UsageInfo {

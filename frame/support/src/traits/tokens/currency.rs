@@ -143,7 +143,10 @@ pub trait Currency<AccountId> {
 	) -> Result<(), Self::NegativeImbalance> {
 		let v = value.peek();
 		match Self::deposit_into_existing(who, v) {
-			Ok(opposite) => Ok(drop(value.offset(opposite))),
+			Ok(opposite) => {
+				drop(value.offset(opposite));
+				Ok(())
+			},
 			_ => Err(value),
 		}
 	}
@@ -184,7 +187,10 @@ pub trait Currency<AccountId> {
 	) -> Result<(), Self::PositiveImbalance> {
 		let v = value.peek();
 		match Self::withdraw(who, v, reasons, liveness) {
-			Ok(opposite) => Ok(drop(value.offset(opposite))),
+			Ok(opposite) => {
+				drop(value.offset(opposite));
+				Ok(())
+			},
 			_ => Err(value),
 		}
 	}

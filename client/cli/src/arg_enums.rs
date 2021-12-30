@@ -51,7 +51,7 @@ impl std::str::FromStr for WasmExecutionMethod {
 			}
 			#[cfg(not(feature = "wasmtime"))]
 			{
-				Err(format!("`Compiled` variant requires the `wasmtime` feature to be enabled"))
+				Err("`Compiled` variant requires the `wasmtime` feature to be enabled".to_string())
 			}
 		} else {
 			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))

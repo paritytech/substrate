@@ -72,7 +72,7 @@ struct VersionedRuntime {
 
 impl VersionedRuntime {
 	/// Run the given closure `f` with an instance of this runtime.
-	fn with_instance<'c, R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
+	fn with_instance<R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,
@@ -336,7 +336,7 @@ pub fn create_wasm_runtime_with_code(
 }
 
 fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
-	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &version[..])
+	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &*version)
 		.map_err(|_| {
 			WasmError::Instantiation(
 				"failed to decode \"Core_version\" result using old runtime version".into(),
@@ -464,6 +464,7 @@ mod tests {
 	fn host_functions_are_equal() {
 		let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
+		#[allow(clippy::eq_op)]
 		let equal = &host_functions[..] == &host_functions[..];
 		assert!(equal, "Host functions are not equal");
 	}

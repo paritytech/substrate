@@ -70,7 +70,7 @@ fn sign<P: sp_core::Pair>(
 	message: Vec<u8>,
 ) -> error::Result<String> {
 	let pair = utils::pair_from_suri::<P>(suri, password)?;
-	Ok(format!("{}", hex::encode(pair.sign(&message))))
+	Ok(hex::encode(pair.sign(&message)))
 }
 
 #[cfg(test)]

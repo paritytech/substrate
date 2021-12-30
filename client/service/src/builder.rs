@@ -363,7 +363,7 @@ where
 		spawn_handle,
 		config.clone(),
 	)?;
-	Ok(crate::client::Client::new(
+	crate::client::Client::new(
 		backend,
 		executor,
 		genesis_storage,
@@ -373,7 +373,7 @@ where
 		prometheus_registry,
 		telemetry,
 		config,
-	)?)
+	)
 }
 
 /// Parameters to pass into `build`.

@@ -736,7 +736,7 @@ pub mod pallet {
 					_ => None,
 				})
 				.fold(Zero::zero(), |acc, n| acc + n);
-			let dupe = leaderboard.iter().find(|&&(_, ref c)| c == &candidate).is_some();
+			let dupe = leaderboard.iter().any(|&(_, ref c)| c == &candidate);
 			if total == actual_total && !dupe {
 				// insert into leaderboard
 				leaderboard[0] = (total, candidate);
@@ -1104,7 +1104,7 @@ impl<T: Config> Pallet<T> {
 				<RegisterInfoOf<T>>::remove(old);
 
 				// and candidate is not a winner.
-				if incoming.iter().find(|e| *e == old).is_none() {
+				if !incoming.iter().any(|e| e == old) {
 					// slash the bond.
 					let (imbalance, _) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
 					T::LoserCandidate::on_unbalanced(imbalance);
