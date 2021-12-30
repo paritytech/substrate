@@ -104,6 +104,19 @@ pub trait Ext: sealing::Sealed {
 		allows_reentry: bool,
 	) -> Result<ExecReturnValue, ExecError>;
 
+	/// Execute code in the current frame
+	///
+	/// Returns the original code size of the called contract.
+	///
+	/// # Return Value
+	///
+	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
+	fn call_code(
+		&mut self,
+		code: CodeHash<Self::T>,
+		input_data: Vec<u8>,
+	) -> Result<ExecReturnValue, ExecError>;
+
 	/// Instantiate a contract from the given code.
 	///
 	/// Returns the original code size of the called contract.
@@ -338,6 +351,8 @@ enum FrameArgs<'a, T: Config, E> {
 		dest: T::AccountId,
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
+		/// The executable whose `call` function is run.
+		executable: Option<E>,
 	},
 	Instantiate {
 		/// The contract or signed origin which instantiates the new contract.
@@ -493,7 +508,7 @@ where
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<ExecReturnValue, ExecError> {
 		let (mut stack, executable) = Self::new(
-			FrameArgs::Call { dest, cached_info: None },
+			FrameArgs::Call { dest, cached_info: None, executable: None },
 			origin,
 			gas_meter,
 			storage_meter,
@@ -586,14 +601,18 @@ where
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
 		let (account_id, contract_info, executable, entry_point, account_counter) = match frame_args
 		{
-			FrameArgs::Call { dest, cached_info } => {
+			FrameArgs::Call { dest, cached_info, executable } => {
 				let contract = if let Some(contract) = cached_info {
 					contract
 				} else {
 					<ContractInfoOf<T>>::get(&dest).ok_or(<Error<T>>::ContractNotFound)?
 				};
 
-				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)?;
+				let executable = if let Some(executable) = executable {
+					executable
+				} else {
+					E::from_storage(contract.code_hash, schedule, gas_meter)?
+				};
 
 				(dest, contract, executable, ExportedFunction::Call, None)
 			},
@@ -656,6 +675,7 @@ where
 			gas_limit,
 			self.schedule,
 		)?;
+
 		self.frames.push(frame);
 		Ok(executable)
 	}
@@ -916,8 +936,11 @@ where
 					CachedContract::Cached(contract) => Some(contract.clone()),
 					_ => None,
 				});
-			let executable =
-				self.push_frame(FrameArgs::Call { dest: to, cached_info }, value, gas_limit)?;
+			let executable = self.push_frame(
+				FrameArgs::Call { dest: to, cached_info, executable: None },
+				value,
+				gas_limit,
+			)?;
 			self.run(executable, input_data)
 		};
 
@@ -928,6 +951,27 @@ where
 		self.top_frame_mut().allows_reentry = true;
 
 		result
+	}
+
+	fn call_code(
+		&mut self,
+		code_hash: CodeHash<Self::T>,
+		input_data: Vec<u8>,
+	) -> Result<ExecReturnValue, ExecError> {
+		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())?;
+		let top_frame = self.top_frame_mut();
+		let contract_info = top_frame.contract_info().clone();
+		let account_id = top_frame.account_id.clone();
+		let executable = self.push_frame(
+			FrameArgs::Call {
+				dest: account_id,
+				cached_info: Some(contract_info),
+				executable: Some(executable),
+			},
+			self.minimum_balance(),
+			0,
+		)?;
+		self.run(executable, input_data)
 	}
 
 	fn instantiate(

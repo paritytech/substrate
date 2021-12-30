@@ -1173,6 +1173,68 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	seal_call_code {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| {
+				let code = WasmModule::<T>::dummy_with_bytes(i);
+				Contracts::<T>::store_code_raw(code.code, whitelisted_caller())?;
+				Ok(code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+		let hashes_len = hashes_bytes.len();
+		let hashes_offset = 0;
+
+		let value = T::Currency::minimum_balance();
+		assert!(value > 0u32.into());
+		let value_bytes = value.encode();
+		let value_offset = hashes_offset + hashes_len;
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_call_code",
+				params: vec![
+					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
+				],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: hashes_offset as u32,
+					value: hashes_bytes,
+				},
+				DataSegment {
+					offset: value_offset as u32,
+					value: value_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Regular(Instruction::I32Const(0)), // flags
+				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
+				Regular(Instruction::I32Const(value_offset as i32)), // input_data_ptr
+				Regular(Instruction::I32Const(0)), // input_data_len
+				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
+				Regular(Instruction::I32Const(0)), // output_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		instance.set_balance(value * (r * API_BENCHMARK_BATCH_SIZE + 1).into());
+		let callee = instance.addr.clone();
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
+
 	// We assume that every instantiate sends at least the minimum balance.
 	seal_instantiate {
 		let r in 0 .. API_BENCHMARK_BATCHES;

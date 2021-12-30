@@ -180,6 +180,8 @@ pub enum RuntimeCosts {
 	Transfer,
 	/// Weight of calling `seal_call` for the given input size.
 	CallBase(u32),
+	/// Weight of calling `seal_call_code` for the given input size.
+	CallCode(u32),
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
 	/// Weight of output received through `seal_call` for the given size.
@@ -249,6 +251,8 @@ impl RuntimeCosts {
 				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
+			CallCode(len) =>
+				s.call_code.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
 				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
@@ -339,6 +343,15 @@ bitflags! {
 		/// You cannot call into yourself with this flag set.
 		const ALLOW_REENTRY = 0b0000_1000;
 	}
+}
+
+/// Invariant of the call performed.
+///
+/// CallCode is to execute deployed code in caller contract context
+/// Call is to call to another instantiated contract
+enum CallType {
+	Call(u32),
+	CallCode(u32),
 }
 
 /// This is only appropriate when writing out data of constant size that does not depend on user
@@ -635,7 +648,7 @@ where
 	fn call(
 		&mut self,
 		flags: CallFlags,
-		callee_ptr: u32,
+		callee: CallType,
 		gas: u64,
 		value_ptr: u32,
 		input_data_ptr: u32,
@@ -643,9 +656,11 @@ where
 		output_ptr: u32,
 		output_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		self.charge_gas(RuntimeCosts::CallBase(input_data_len))?;
-		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
-			self.read_sandbox_memory_as(callee_ptr)?;
+		let call_cost = match callee {
+			CallType::Call(_) => RuntimeCosts::CallBase(input_data_len),
+			CallType::CallCode(_) => RuntimeCosts::CallCode(input_data_len),
+		};
+		self.charge_gas(call_cost)?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
 			self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?.clone()
@@ -657,9 +672,24 @@ where
 		if value > 0u32.into() {
 			self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 		}
-		let ext = &mut self.ext;
-		let call_outcome =
-			ext.call(gas, callee, value, input_data, flags.contains(CallFlags::ALLOW_REENTRY));
+
+		let call_outcome = match callee {
+			CallType::CallCode(code_hash_ptr) => {
+				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
+				self.ext.call_code(code_hash, input_data)
+			},
+			CallType::Call(callee_ptr) => {
+				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
+					self.read_sandbox_memory_as(callee_ptr)?;
+				self.ext.call(
+					gas,
+					callee,
+					value,
+					input_data,
+					flags.contains(CallFlags::ALLOW_REENTRY),
+				)
+			},
+		};
 
 		// `TAIL_CALL` only matters on an `OK` result. Otherwise the call stack comes to
 		// a halt anyways without anymore code being executed.
@@ -872,7 +902,7 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::ALLOW_REENTRY,
-			callee_ptr,
+			CallType::Call(callee_ptr),
 			gas,
 			value_ptr,
 			input_data_ptr,
@@ -924,7 +954,7 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
-			callee_ptr,
+			CallType::Call(callee_ptr),
 			gas,
 			value_ptr,
 			input_data_ptr,
@@ -1726,5 +1756,45 @@ define_env!(Env, <E: Ext>,
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
+	},
+
+	// Execute code in the context of the current contract.
+	//
+	// # Parameters
+	//
+	// - flags: See [`CallFlags`] for a documenation of the supported flags.
+	// - code_hash: a pointer to the address of the code to be called.
+	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
+	// - input_data_len: length of the input data buffer.
+	// - output_ptr: a pointer where the output buffer is copied to.
+	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
+	//   and the actual length is written to.
+	//
+	// # Errors
+	//
+	// An error means that the call wasn't successful output buffer is returned unless
+	// stated otherwise.
+	//
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	[__unstable__] seal_call_code(
+		ctx,
+		flags: u32,
+		code_hash_ptr: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> ReturnCode => {
+		ctx.call(
+			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
+			CallType::CallCode(code_hash_ptr),
+			0u64,
+			0u32,
+			input_data_ptr,
+			input_data_len,
+			output_ptr,
+			output_len_ptr,
+		)
 	},
 );
