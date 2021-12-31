@@ -734,7 +734,7 @@ where
 	SlashedLimit: Get<u32>,
 	ReportersLimit: Get<u32>,
 {
-	fn default_from(validator: AccountId) -> Self {
+	pub fn default_from(validator: AccountId) -> Self {
 		Self {
 			validator,
 			own: Zero::zero(),
