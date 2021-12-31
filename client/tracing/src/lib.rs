@@ -36,7 +36,6 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use std::{
 	fmt,
-	sync::mpsc::{Receiver, Sender},
 	time::{Duration, Instant},
 };
 use tracing::{
@@ -465,7 +464,10 @@ impl From<SpanDatum> for sp_rpc::tracing::Span {
 mod tests {
 	use super::*;
 	use parking_lot::Mutex;
-	use std::sync::Arc;
+	use std::sync::{
+		mpsc::{Receiver, Sender},
+		Arc,
+	};
 	use tracing_subscriber::layer::SubscriberExt;
 
 	struct TestTraceHandler {
