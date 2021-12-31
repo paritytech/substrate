@@ -22,7 +22,7 @@
 
 mod mock;
 
-use sp_runtime::traits::{One, StaticLookup};
+use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::benchmarks;
@@ -61,7 +61,8 @@ benchmarks! {
 			RewardDestination::Staked,
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
-		let keys = T::Keys::default();
+
+		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		// Whitelist controller account from further DB operations.
 		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
@@ -77,7 +78,7 @@ benchmarks! {
 			RewardDestination::Staked
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
-		let keys = T::Keys::default();
+		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
 		// Whitelist controller account from further DB operations.

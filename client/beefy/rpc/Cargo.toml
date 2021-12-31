@@ -10,7 +10,7 @@ description = "RPC for the BEEFY Client gadget for substrate"
 [dependencies]
 futures = "0.3.16"
 log = "0.4"
-serde = { version = "1.0.130", features = ["derive"] }
+serde = { version = "1.0.132", features = ["derive"] }
 
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
@@ -21,8 +21,16 @@ codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive
 
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 
 beefy-gadget = { version = "4.0.0-dev", path = "../." }
 beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }
+
+[dev-dependencies]
+serde_json = "1.0.50"
+
+sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = [
+    "test-helpers",
+] }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

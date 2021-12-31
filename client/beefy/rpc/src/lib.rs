@@ -112,3 +112,135 @@ where
 		Ok(self.manager.cancel(id))
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use jsonrpc_core::{types::Params, Notification, Output};
+
+	use beefy_gadget::notification::{BeefySignedCommitmentSender, SignedCommitment};
+	use beefy_primitives::{known_payload_ids, Payload};
+	use codec::{Decode, Encode};
+	use substrate_test_runtime_client::runtime::Block;
+
+	fn setup_io_handler(
+	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
+		let (commitment_sender, commitment_stream) = BeefySignedCommitmentStream::channel();
+
+		let handler = BeefyRpcHandler::new(commitment_stream, sc_rpc::testing::TaskExecutor);
+
+		let mut io = jsonrpc_core::MetaIoHandler::default();
+		io.extend_with(BeefyApi::to_delegate(handler));
+
+		(io, commitment_sender)
+	}
+
+	fn setup_session() -> (sc_rpc::Metadata, futures::channel::mpsc::UnboundedReceiver<String>) {
+		let (tx, rx) = futures::channel::mpsc::unbounded();
+		let meta = sc_rpc::Metadata::new(tx);
+		(meta, rx)
+	}
+
+	#[test]
+	fn subscribe_and_unsubscribe_to_justifications() {
+		let (io, _) = setup_io_handler();
+		let (meta, _) = setup_session();
+
+		// Subscribe
+		let sub_request =
+			r#"{"jsonrpc":"2.0","method":"beefy_subscribeJustifications","params":[],"id":1}"#;
+		let resp = io.handle_request_sync(sub_request, meta.clone());
+		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
+
+		let sub_id = match resp {
+			Output::Success(success) => success.result,
+			_ => panic!(),
+		};
+
+		// Unsubscribe
+		let unsub_req = format!(
+			"{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
+			sub_id
+		);
+		assert_eq!(
+			io.handle_request_sync(&unsub_req, meta.clone()),
+			Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()),
+		);
+
+		// Unsubscribe again and fail
+		assert_eq!(
+			io.handle_request_sync(&unsub_req, meta),
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
+		);
+	}
+
+	#[test]
+	fn subscribe_and_unsubscribe_with_wrong_id() {
+		let (io, _) = setup_io_handler();
+		let (meta, _) = setup_session();
+
+		// Subscribe
+		let sub_request =
+			r#"{"jsonrpc":"2.0","method":"beefy_subscribeJustifications","params":[],"id":1}"#;
+		let resp = io.handle_request_sync(sub_request, meta.clone());
+		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
+		assert!(matches!(resp, Output::Success(_)));
+
+		// Unsubscribe with wrong ID
+		assert_eq!(
+			io.handle_request_sync(
+				r#"{"jsonrpc":"2.0","method":"beefy_unsubscribeJustifications","params":["FOO"],"id":1}"#,
+				meta.clone()
+			),
+			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into())
+		);
+	}
+
+	fn create_commitment() -> SignedCommitment<Block> {
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		SignedCommitment::<Block> {
+			commitment: beefy_primitives::Commitment {
+				payload,
+				block_number: 5,
+				validator_set_id: 0,
+			},
+			signatures: vec![],
+		}
+	}
+
+	#[test]
+	fn subscribe_and_listen_to_one_justification() {
+		let (io, commitment_sender) = setup_io_handler();
+		let (meta, receiver) = setup_session();
+
+		// Subscribe
+		let sub_request =
+			r#"{"jsonrpc":"2.0","method":"beefy_subscribeJustifications","params":[],"id":1}"#;
+
+		let resp = io.handle_request_sync(sub_request, meta.clone());
+		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
+		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
+
+		// Notify with commitment
+		let commitment = create_commitment();
+		commitment_sender.notify(commitment.clone());
+
+		// Inspect what we received
+		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());
+		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
+		let mut json_map = match recv.params {
+			Params::Map(json_map) => json_map,
+			_ => panic!(),
+		};
+
+		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
+		let recv_commitment: sp_core::Bytes =
+			serde_json::from_value(json_map["result"].take()).unwrap();
+		let recv_commitment: SignedCommitment<Block> =
+			Decode::decode(&mut &recv_commitment[..]).unwrap();
+
+		assert_eq!(recv.method, "beefy_justifications");
+		assert_eq!(recv_sub_id, sub_id);
+		assert_eq!(recv_commitment, commitment);
+	}
+}

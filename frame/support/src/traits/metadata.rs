@@ -135,7 +135,7 @@ pub trait GetCallMetadata {
 }
 
 /// The version of a crate.
-#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Clone, Copy, Default)]
+#[derive(Debug, Eq, PartialEq, Encode, Decode, Clone, Copy, Default)]
 pub struct CrateVersion {
 	/// The major version of the crate.
 	pub major: u16,
@@ -175,7 +175,7 @@ pub const STORAGE_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__STORAGE_VERSION__:";
 ///
 /// Each storage version of a pallet is stored in the state under a fixed key. See
 /// [`STORAGE_VERSION_STORAGE_KEY_POSTFIX`] for how this key is built.
-#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy, PartialOrd, Default)]
+#[derive(Debug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy, PartialOrd, Default)]
 pub struct StorageVersion(u16);
 
 impl StorageVersion {

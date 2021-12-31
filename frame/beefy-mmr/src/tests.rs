@@ -84,10 +84,9 @@ fn should_contain_mmr_digest() {
 				beefy_log(ConsensusLog::MmrRoot(
 					hex!("f3e3afbfa69e89cd1e99f8d3570155962f3346d1d8758dc079be49ef70387758").into()
 				)),
-				beefy_log(ConsensusLog::AuthoritiesChange(ValidatorSet {
-					validators: vec![mock_beefy_id(3), mock_beefy_id(4),],
-					id: 1,
-				})),
+				beefy_log(ConsensusLog::AuthoritiesChange(
+					ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4),], 1,).unwrap()
+				)),
 				beefy_log(ConsensusLog::MmrRoot(
 					hex!("7d4ae4524bae75d52b63f08eab173b0c263eb95ae2c55c3a1d871241bd0cc559").into()
 				)),

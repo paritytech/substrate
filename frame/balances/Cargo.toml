@@ -15,8 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -24,7 +24,7 @@ log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
 
 [features]
@@ -39,5 +39,5 @@ std = [
 	"frame-system/std",
 	"log/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

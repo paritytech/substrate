@@ -14,12 +14,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.1" }
+mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.2" }
 
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -46,5 +46,5 @@ std = [
 	"frame-system/std",
 	"pallet-mmr-primitives/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

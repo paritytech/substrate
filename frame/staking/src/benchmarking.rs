@@ -21,6 +21,7 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
+use codec::Decode;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -28,7 +29,7 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, Zero},
+	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
@@ -41,9 +42,10 @@ use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
-const MAX_VALIDATORS: u32 = 100;
-const MAX_NOMINATORS: u32 = 1000;
 const MAX_SLASHES: u32 = 1000;
+
+type MaxValidators<T> = <<T as Config>::BenchmarkingConfig as BenchmarkingConfig>::MaxValidators;
+type MaxNominators<T> = <<T as Config>::BenchmarkingConfig as BenchmarkingConfig>::MaxNominators;
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
@@ -111,8 +113,8 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
-	assert_ne!(CounterForValidators::<T>::get(), 0);
-	assert_ne!(CounterForNominators::<T>::get(), 0);
+	assert_ne!(Validators::<T>::count(), 0);
+	assert_ne!(Nominators::<T>::count(), 0);
 
 	// Give Era Points
 	let individual = BoundedBTreeMap::<_, _, T::MaxValidatorsCount>::try_from(
@@ -483,7 +485,7 @@ benchmarks! {
 	}
 
 	set_validator_count {
-		let validator_count = MAX_VALIDATORS;
+		let validator_count = MaxValidators::<T>::get();
 	}: _(RawOrigin::Root, validator_count)
 	verify {
 		assert_eq!(ValidatorCount::<T>::get(), validator_count);
@@ -500,7 +502,7 @@ benchmarks! {
 
 	// Worst case scenario, the list of invulnerables is very long.
 	set_invulnerables {
-		let v in 0 .. MAX_VALIDATORS;
+		let v in 0 .. MaxValidators::<T>::get();
 		let mut invulnerables = Vec::new();
 		for i in 0 .. v {
 			invulnerables.push(account("invulnerable", i, SEED));
@@ -536,9 +538,10 @@ benchmarks! {
 		let s in 1 .. MAX_SLASHES;
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
+		let dummy = || T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		for _ in 0 .. MAX_SLASHES {
 			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>, T::MaxIndividualExposures,
-				T::MaxReportersCount>::default());
+				T::MaxReportersCount>::default_from(dummy()));
 		}
 		let unapplied_slashes = WeakBoundedVec::<_, T::MaxUnappliedSlashes>::try_from(unapplied_slashes)
 			.expect("MAX_SLASHES should be <= MaxUnappliedSlashes, runtime benchmarks need adjustment");
@@ -672,10 +675,11 @@ benchmarks! {
 		let e in 1 .. 100;
 		HistoryDepth::<T>::put(e);
 		CurrentEra::<T>::put(e);
+		let dummy = || -> T::AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
 		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::default());
-			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::default());
-			<ErasValidatorPrefs<T>>::insert(i, T::AccountId::default(), ValidatorPrefs::default());
+			<ErasStakers<T>>::insert(i, dummy(), Exposure::default());
+			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::default());
+			<ErasValidatorPrefs<T>>::insert(i, dummy(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
 			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::default());
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
@@ -700,7 +704,14 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 
 		add_slashing_spans::<T>(&stash, s);
-		Ledger::<T>::insert(&controller, StakingLedger { active: T::Currency::minimum_balance() - One::one(), total: T::Currency::minimum_balance() - One::one(), ..Default::default() });
+		let l = StakingLedger {
+			stash: stash.clone(),
+			active: T::Currency::minimum_balance() - One::one(),
+			total: T::Currency::minimum_balance() - One::one(),
+			unlocking: Default::default(),
+			claimed_rewards: Default::default(),
+		};
+		Ledger::<T>::insert(&controller, l);
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));
@@ -815,9 +826,9 @@ benchmarks! {
 
 	get_npos_voters {
 		// number of validator intention.
-		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
+		let v in (MaxValidators::<T>::get() / 2) .. MaxValidators::<T>::get();
 		// number of nominator intention.
-		let n in (MAX_NOMINATORS / 2) .. MAX_NOMINATORS;
+		let n in (MaxNominators::<T>::get() / 2) .. MaxNominators::<T>::get();
 		// total number of slashing spans. Assigned to validators randomly.
 		let s in 1 .. 20;
 
@@ -840,9 +851,9 @@ benchmarks! {
 
 	get_npos_targets {
 		// number of validator intention.
-		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
+		let v in (MaxValidators::<T>::get() / 2) .. MaxValidators::<T>::get();
 		// number of nominator intention.
-		let n = MAX_NOMINATORS;
+		let n = MaxNominators::<T>::get();
 
 		let _ = create_validators_with_nominators_for_era::<T>(
 			v, n, T::MaxNominations::get() as usize, false, None
@@ -852,19 +863,21 @@ benchmarks! {
 		assert_eq!(targets.len() as u32, v);
 	}
 
-	set_staking_limits {
+	set_staking_configs {
 		// This function always does the same thing... just write to 4 storage items.
 	}: _(
 		RawOrigin::Root,
 		BalanceOf::<T>::max_value(),
 		BalanceOf::<T>::max_value(),
 		Some(u32::MAX),
-		Some(Percent::max_value())
+		Some(Percent::max_value()),
+		Perbill::max_value()
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
+		assert_eq!(MinCommission::<T>::get(), Perbill::from_percent(100));
 	}
 
 	chill_other {
@@ -880,12 +893,13 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		Staking::<T>::set_staking_limits(
+		Staking::<T>::set_staking_configs(
 			RawOrigin::Root.into(),
 			BalanceOf::<T>::max_value(),
 			BalanceOf::<T>::max_value(),
 			Some(0),
-			Some(Percent::from_percent(0))
+			Some(Percent::from_percent(0)),
+			Zero::zero(),
 		)?;
 
 		let caller = whitelisted_caller();
@@ -913,21 +927,16 @@ mod tests {
 		ExtBuilder::default().build_and_execute(|| {
 			let v = 10;
 			let n = 100;
+			let max: u32 = <Test as Config>::MaxNominations::get();
 
-			create_validators_with_nominators_for_era::<Test>(
-				v,
-				n,
-				<Test as Config>::MaxNominations::get() as usize,
-				false,
-				None,
-			)
-			.unwrap();
+			create_validators_with_nominators_for_era::<Test>(v, n, max as usize, false, None)
+				.unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
 
-			assert_eq!(count_validators, CounterForValidators::<Test>::get() as usize);
-			assert_eq!(count_nominators, CounterForNominators::<Test>::get() as usize);
+			assert_eq!(count_validators, Validators::<Test>::count() as usize);
+			assert_eq!(count_nominators, Nominators::<Test>::count() as usize);
 
 			assert_eq!(count_validators, v as usize);
 			assert_eq!(count_nominators, n as usize);
@@ -938,14 +947,11 @@ mod tests {
 	fn create_validator_with_nominators_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let n = 10;
+			let max: u32 = <Test as Config>::MaxRewardableIndividualExposures::get();
 
-			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
-				n,
-				<Test as Config>::MaxRewardableIndividualExposures::get() as u32,
-				false,
-				RewardDestination::Staked,
-			)
-			.unwrap();
+			let (validator_stash, nominators) =
+				create_validator_with_nominators::<Test>(n, max, false, RewardDestination::Staked)
+					.unwrap();
 
 			assert_eq!(nominators.len() as u32, n);
 
@@ -963,14 +969,11 @@ mod tests {
 	fn add_slashing_spans_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let n = 10;
+			let max: u32 = <Test as Config>::MaxRewardableIndividualExposures::get();
 
-			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
-				n,
-				<Test as Config>::MaxRewardableIndividualExposures::get() as u32,
-				false,
-				RewardDestination::Staked,
-			)
-			.unwrap();
+			let (validator_stash, _nominators) =
+				create_validator_with_nominators::<Test>(n, max, false, RewardDestination::Staked)
+					.unwrap();
 
 			// Add 20 slashing spans
 			let num_of_slashing_spans = 20;

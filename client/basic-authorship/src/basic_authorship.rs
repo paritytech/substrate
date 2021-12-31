@@ -346,10 +346,23 @@ where
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
+		let propose_with_start = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
-		for inherent in block_builder.create_inherents(inherent_data)? {
+		let create_inherents_start = time::Instant::now();
+		let inherents = block_builder.create_inherents(inherent_data)?;
+		let create_inherents_end = time::Instant::now();
+
+		self.metrics.report(|metrics| {
+			metrics.create_inherents_time.observe(
+				create_inherents_end
+					.saturating_duration_since(create_inherents_start)
+					.as_secs_f64(),
+			);
+		});
+
+		for inherent in inherents {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
@@ -529,6 +542,14 @@ where
 
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+
+		let propose_with_end = time::Instant::now();
+		self.metrics.report(|metrics| {
+			metrics.create_block_proposal_time.observe(
+				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
+			);
+		});
+
 		Ok(Proposal { block, proof, storage_changes })
 	}
 }
@@ -560,7 +581,7 @@ mod tests {
 			amount: Default::default(),
 			nonce,
 			from: AccountKeyring::Alice.into(),
-			to: Default::default(),
+			to: AccountKeyring::Bob.into(),
 		}
 		.into_signed_tx()
 	}
@@ -572,7 +593,7 @@ mod tests {
 			amount: 1,
 			nonce: 0,
 			from: pair.public(),
-			to: Default::default(),
+			to: AccountKeyring::Bob.into(),
 		};
 		let signature = pair.sign(&transfer.encode()).into();
 		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
@@ -756,14 +777,14 @@ mod tests {
 					amount: Default::default(),
 					nonce: 2,
 					from: AccountKeyring::Alice.into(),
-					to: Default::default(),
+					to: AccountKeyring::Bob.into(),
 				}.into_resources_exhausting_tx(),
 				extrinsic(3),
 				Transfer {
 					amount: Default::default(),
 					nonce: 4,
 					from: AccountKeyring::Alice.into(),
-					to: Default::default(),
+					to: AccountKeyring::Bob.into(),
 				}.into_resources_exhausting_tx(),
 				extrinsic(5),
 				extrinsic(6),

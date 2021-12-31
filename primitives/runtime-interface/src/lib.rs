@@ -80,17 +80,17 @@
 //!
 //! | Type | FFI type | Conversion |
 //! |----|----|----|
-//! | `u8` | `u8` | `Identity` |
-//! | `u16` | `u16` | `Identity` |
+//! | `u8` | `u32` | zero-extended to 32-bits |
+//! | `u16` | `u32` | zero-extended to 32-bits |
 //! | `u32` | `u32` | `Identity` |
 //! | `u64` | `u64` | `Identity` |
 //! | `i128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
-//! | `i8` | `i8` | `Identity` |
-//! | `i16` | `i16` | `Identity` |
+//! | `i8` | `i32` | sign-extended to 32-bits |
+//! | `i16` | `i32` | sign-extended to 32-bits |
 //! | `i32` | `i32` | `Identity` |
 //! | `i64` | `i64` | `Identity` |
 //! | `u128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
-//! | `bool` | `u8` | `if v { 1 } else { 0 }` |
+//! | `bool` | `u32` | `if v { 1 } else { 0 }` |
 //! | `&str` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `&[u8]` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //! | `Vec<u8>` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
@@ -325,7 +325,9 @@ pub use util::{pack_ptr_and_len, unpack_ptr_and_len};
 pub trait RIType {
 	/// The ffi type that is used to represent `Self`.
 	#[cfg(feature = "std")]
-	type FFIType: sp_wasm_interface::IntoValue + sp_wasm_interface::TryFromValue;
+	type FFIType: sp_wasm_interface::IntoValue
+		+ sp_wasm_interface::TryFromValue
+		+ sp_wasm_interface::WasmTy;
 	#[cfg(not(feature = "std"))]
 	type FFIType;
 }

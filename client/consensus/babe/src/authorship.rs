@@ -27,7 +27,7 @@ use sp_consensus_babe::{
 	make_transcript, make_transcript_data, AuthorityId, BabeAuthorityWeight, Slot, BABE_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{blake2_256, crypto::Public, U256};
+use sp_core::{blake2_256, crypto::ByteArray, U256};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 /// Calculates the primary selection threshold for a given authority, taking

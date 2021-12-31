@@ -303,10 +303,10 @@ mod pallet;
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, Get},
+	traits::{ConstU32, Currency, Get},
 	weights::Weight,
-	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, OrdNoBound, PartialEqNoBound,
-	RuntimeDebugNoBound, WeakBoundedVec,
+	BoundedVec, CloneNoBound, EqNoBound, OrdNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -373,14 +373,12 @@ pub struct ActiveEraInfo {
 ///
 /// This points will be used to reward validators and their respective nominators.
 /// `Limit` bounds the number of points earned by a given validator.
-#[derive(
-	PartialEqNoBound, Encode, Decode, DefaultNoBound, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
-)]
+#[derive(PartialEqNoBound, Encode, Decode, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(Limit))]
 #[codec(mel_bound(Limit: Get<u32>))]
 pub struct EraRewardPoints<AccountId, Limit>
 where
-	AccountId: Ord + MaxEncodedLen + Default + PartialEq + fmt::Debug,
+	AccountId: Ord + MaxEncodedLen + PartialEq + fmt::Debug,
 	Limit: Get<u32>,
 {
 	/// Total number of points. Equals the sum of reward points for each validator.
@@ -389,9 +387,19 @@ where
 	individual: BoundedBTreeMap<AccountId, RewardPoint, Limit>,
 }
 
+impl<AccountId, Limit> Default for EraRewardPoints<AccountId, Limit>
+where
+	AccountId: Ord + MaxEncodedLen + PartialEq + fmt::Debug,
+	Limit: Get<u32>,
+{
+	fn default() -> Self {
+		EraRewardPoints { total: Default::default(), individual: Default::default() }
+	}
+}
+
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
@@ -465,13 +473,12 @@ pub struct UnlockChunk<Balance: HasCompact> {
 	TypeInfo,
 	MaxEncodedLen,
 )]
-#[cfg_attr(feature = "runtime-benchmarks", derive(DefaultNoBound))]
 #[codec(mel_bound(UnlockingLimit: Get<u32>, RewardsLimit: Get<u32>))]
 #[scale_info(skip_type_params(UnlockingLimit, RewardsLimit))]
 pub struct StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
 where
-	Balance: HasCompact + MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
-	AccountId: MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Clone + Eq + fmt::Debug,
+	AccountId: MaxEncodedLen + Clone + Eq + fmt::Debug,
 	UnlockingLimit: Get<u32>,
 	RewardsLimit: Get<u32>,
 {
@@ -496,13 +503,23 @@ where
 impl<AccountId, Balance, UnlockingLimit, RewardsLimit>
 	StakingLedger<AccountId, Balance, UnlockingLimit, RewardsLimit>
 where
-	Balance:
-		HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Clone + Default + Eq + fmt::Debug,
-	AccountId: MaxEncodedLen + Clone + Default + Eq + fmt::Debug,
-	Balance: MaxEncodedLen + Clone + Default,
+	Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Clone + Eq + fmt::Debug + Zero,
+	AccountId: MaxEncodedLen + Clone + Eq + fmt::Debug,
+	Balance: MaxEncodedLen + Clone,
 	UnlockingLimit: Get<u32>,
 	RewardsLimit: Get<u32>,
 {
+	/// Initializes the default object using the given `validator`.
+	pub fn default_from(stash: AccountId) -> Self {
+		Self {
+			stash,
+			total: Zero::zero(),
+			active: Zero::zero(),
+			unlocking: Default::default(),
+			claimed_rewards: Default::default(),
+		}
+	}
+
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
@@ -650,7 +667,6 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	Encode,
 	Decode,
 	CloneNoBound,
-	DefaultNoBound,
 	RuntimeDebugNoBound,
 	TypeInfo,
 	MaxEncodedLen,
@@ -659,8 +675,8 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 #[codec(mel_bound(Limit: Get<u32>, Balance: HasCompact))]
 pub struct Exposure<AccountId, Balance, Limit>
 where
-	AccountId: MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
-	Balance: HasCompact + MaxEncodedLen + Eq + Default + Clone + Ord + fmt::Debug,
+	AccountId: MaxEncodedLen + Eq + Clone + Ord + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Eq + Clone + Ord + fmt::Debug,
 	Limit: Get<u32>,
 {
 	/// The total balance backing this validator.
@@ -671,6 +687,17 @@ where
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: WeakBoundedVec<IndividualExposure<AccountId, Balance>, Limit>,
+}
+
+impl<AccountId, Balance, Limit> Default for Exposure<AccountId, Balance, Limit>
+where
+	AccountId: MaxEncodedLen + Eq + Clone + Ord + fmt::Debug,
+	Balance: HasCompact + MaxEncodedLen + Eq + Clone + Ord + fmt::Debug + Default,
+	Limit: Get<u32>,
+{
+	fn default() -> Self {
+		Self { total: Default::default(), own: Default::default(), others: Default::default() }
+	}
 }
 
 /// A pending slash record. The value of the slash has been computed but not applied yet,
@@ -699,21 +726,21 @@ where
 	payout: Balance,
 }
 
-impl<AccountId, Balance, SlashedLimit, ReportersLimit> Default
-	for UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
+impl<AccountId, Balance, SlashedLimit, ReportersLimit>
+	UnappliedSlash<AccountId, Balance, SlashedLimit, ReportersLimit>
 where
-	Balance: HasCompact + MaxEncodedLen + Default,
-	AccountId: MaxEncodedLen + Default,
+	Balance: HasCompact + MaxEncodedLen + Zero,
+	AccountId: MaxEncodedLen,
 	SlashedLimit: Get<u32>,
 	ReportersLimit: Get<u32>,
 {
-	fn default() -> Self {
+	fn default_from(validator: AccountId) -> Self {
 		Self {
-			validator: AccountId::default(),
-			own: Balance::default(),
+			validator,
+			own: Zero::zero(),
 			others: Default::default(),
 			reporters: Default::default(),
-			payout: Balance::default(),
+			payout: Zero::zero(),
 		}
 	}
 }
@@ -908,4 +935,24 @@ where
 	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
+}
+
+/// Configurations of the benchmarking of the pallet.
+pub trait BenchmarkingConfig {
+	/// The maximum number of validators to use.
+	type MaxValidators: Get<u32>;
+	/// The maximum number of nominators to use.
+	type MaxNominators: Get<u32>;
+}
+
+/// A mock benchmarking config for pallet-staking.
+///
+/// Should only be used for testing.
+#[cfg(feature = "std")]
+pub struct TestBenchmarkingConfig;
+
+#[cfg(feature = "std")]
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	type MaxValidators = ConstU32<100>;
+	type MaxNominators = ConstU32<100>;
 }
