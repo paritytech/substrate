@@ -2452,7 +2452,7 @@ pub(crate) mod tests {
 			let storage = vec![(vec![1, 3, 5], None), (vec![5, 5, 5], Some(vec![4, 5, 6]))];
 
 			let (root, overlay) = op.old_state.storage_root(
-				storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
+				storage.iter().map(|(k, v)| (k, v.as_ref().map(|v| &v[..]))),
 				state_version,
 			);
 			op.update_db_storage(overlay).unwrap();
@@ -3000,7 +3000,7 @@ pub(crate) mod tests {
 			let storage = vec![(b"test".to_vec(), Some(b"test2".to_vec()))];
 
 			let (root, overlay) = op.old_state.storage_root(
-				storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
+				storage.iter().map(|(k, v)| (k, v.as_ref().map(|v| &v[..]))),
 				state_version,
 			);
 			op.update_db_storage(overlay).unwrap();

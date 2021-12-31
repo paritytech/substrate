@@ -208,7 +208,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		}
 		let (root, parent_txs) = self.storage_root(
 			delta
-				.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+				.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))
 				.chain(child_roots.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))),
 			state_version,
 		);
