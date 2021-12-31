@@ -665,7 +665,7 @@ fn code_using_trie() -> u64 {
 
 	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
-			iter.flatten().Count() as u64
+			iter.flatten().count() as u64
 		} else {
 			102
 		}
