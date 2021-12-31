@@ -138,9 +138,9 @@ impl IsFatalError for InherentError {
 impl InherentError {
 	/// Try to create an instance ouf of the given identifier and data.
 	#[cfg(feature = "std")]
-	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
+	pub fn try_from(id: &InherentIdentifier, mut data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as codec::Decode>::decode(&mut &*data).ok()
+			<InherentError as codec::Decode>::decode(&mut data).ok()
 		} else {
 			None
 		}

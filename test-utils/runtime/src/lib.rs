@@ -665,11 +665,7 @@ fn code_using_trie() -> u64 {
 
 	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
-			let mut iter_pairs = Vec::new();
-			for (key, value) in iter.flatten() {
-				iter_pairs.push((key, value.to_vec()));
-			}
-			iter_pairs.len() as u64
+			iter.flatten().Count() as u64
 		} else {
 			102
 		}
