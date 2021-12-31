@@ -1104,7 +1104,7 @@ impl<T: Config> Pallet<T> {
 				<RegisterInfoOf<T>>::remove(old);
 
 				// and candidate is not a winner.
-				if !incoming.iter().any(|e| e == old) {
+				if incoming.iter().all(|e| e != old) {
 					// slash the bond.
 					let (imbalance, _) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
 					T::LoserCandidate::on_unbalanced(imbalance);
