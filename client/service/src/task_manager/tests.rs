@@ -37,7 +37,6 @@ impl DropTester {
 	}
 
 	fn wait_on_drop(&self) {
-		#[allow(clippy::while_immutable_condition)]
 		while *self != 0 {
 			std::thread::sleep(std::time::Duration::from_millis(10));
 		}

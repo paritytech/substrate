@@ -36,6 +36,7 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use std::{
 	fmt,
+	sync::mpsc::{Receiver, Sender},
 	time::{Duration, Instant},
 };
 use tracing::{
@@ -591,15 +592,14 @@ mod tests {
 			let span1 = tracing::info_span!(target: "test_target", "test_span1");
 			let _guard1 = span1.enter();
 
-			let (tx, rx) = mpsc::channel();
+			let (tx, rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 			let handle = thread::spawn(move || {
 				let span2 = tracing::info_span!(target: "test_target", "test_span2");
 				let _guard2 = span2.enter();
 				// emit event
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
 				for msg in rx.recv() {
-					#[allow(clippy::bool_comparison)]
-					if msg == false {
+					if !msg {
 						break
 					}
 				}

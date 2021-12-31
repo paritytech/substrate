@@ -125,7 +125,6 @@ fn discard_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted
 	}
 }
 
-#[allow(clippy::redundant_slicing)]
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut (&mut [OverlayLevel<BlockHash, Key>], &mut [OverlayLevel<BlockHash, Key>]),
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
@@ -135,12 +134,12 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	hash: &BlockHash,
 ) -> u32 {
 	let (first, mut remainder) = if let Some((first, rest)) = levels.0.split_first_mut() {
-		(Some(first), (rest, &mut levels.1[..]))
+		(Some(first), (rest, &mut *levels.1))
 	} else {
 		if let Some((first, rest)) = levels.1.split_first_mut() {
-			(Some(first), (&mut levels.0[..], rest))
+			(Some(first), (&mut *levels.0, rest))
 		} else {
-			(None, (&mut levels.0[..], &mut levels.1[..]))
+			(None, (&mut *levels.0, &mut *levels.1))
 		}
 	};
 	let mut pinned_children = 0;

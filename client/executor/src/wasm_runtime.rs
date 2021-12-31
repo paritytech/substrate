@@ -464,7 +464,6 @@ mod tests {
 	fn host_functions_are_equal() {
 		let host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
-		#[allow(clippy::eq_op)]
 		let equal = &host_functions[..] == &host_functions[..];
 		assert!(equal, "Host functions are not equal");
 	}
