@@ -83,14 +83,14 @@ fn construct_block<E: Externalities>(
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
 ) -> (Vec<u8>, Hash) {
-	use sp_trie::{trie_types::Layout, TrieConfiguration};
+	use sp_trie::{LayoutV0, TrieConfiguration};
 
 	// sign extrinsics.
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 	// calculate the header fields that we can.
 	let extrinsics_root =
-		Layout::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
+		LayoutV0::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
 			.to_fixed_bytes()
 			.into();
 
@@ -194,7 +194,7 @@ fn bench_execute_block(c: &mut Criterion) {
 				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
 			};
 
-			let executor = NativeElseWasmExecutor::new(wasm_method, None, 8);
+			let executor = NativeElseWasmExecutor::new(wasm_method, None, 8, 2);
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(compact_code_unwrap().into()),
 				hash: vec![1, 2, 3],

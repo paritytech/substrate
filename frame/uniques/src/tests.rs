@@ -48,6 +48,15 @@ fn assets() -> Vec<(u64, u32, u32)> {
 	r
 }
 
+fn classes() -> Vec<(u64, u32)> {
+	let mut r: Vec<_> = ClassAccount::<Test>::iter().map(|x| (x.0, x.1)).collect();
+	r.sort();
+	let mut s: Vec<_> = Class::<Test>::iter().map(|x| (x.1.owner, x.0)).collect();
+	s.sort();
+	assert_eq!(r, s);
+	r
+}
+
 macro_rules! bvec {
 	($( $x:tt )*) => {
 		vec![$( $x )*].try_into().unwrap()
@@ -73,10 +82,12 @@ fn basic_setup_works() {
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 
 		assert_ok!(Uniques::force_create(Origin::root(), 1, 2, true));
+		assert_eq!(classes(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Uniques::mint(Origin::signed(2), 1, 69, 1));
 		assert_eq!(assets(), vec![(1, 0, 42), (1, 1, 69)]);
 	});
@@ -88,7 +99,7 @@ fn lifecycle_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
-
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, bvec![0, 0], false));
 		assert_eq!(Balances::reserved_balance(&1), 5);
 		assert!(ClassMetadataOf::<Test>::contains_key(0));
@@ -120,6 +131,7 @@ fn lifecycle_should_work() {
 		assert!(!ClassMetadataOf::<Test>::contains_key(0));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 69));
+		assert_eq!(classes(), vec![]);
 		assert_eq!(assets(), vec![]);
 	});
 }
@@ -142,6 +154,7 @@ fn mint_should_work() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::owner(0, 42).unwrap(), 1);
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_eq!(assets(), vec![(1, 0, 42)]);
 	});
 }
@@ -204,7 +217,9 @@ fn transfer_owner_should_work() {
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 100);
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
+		assert_eq!(classes(), vec![(1, 0)]);
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(1), 0, 2));
+		assert_eq!(classes(), vec![(2, 0)]);
 		assert_eq!(Balances::total_balance(&1), 98);
 		assert_eq!(Balances::total_balance(&2), 102);
 		assert_eq!(Balances::reserved_balance(&1), 0);
@@ -220,6 +235,7 @@ fn transfer_owner_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::set_metadata(Origin::signed(2), 0, 42, bvec![0u8; 20], false));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(2), 0, 3));
+		assert_eq!(classes(), vec![(3, 0)]);
 		assert_eq!(Balances::total_balance(&2), 57);
 		assert_eq!(Balances::total_balance(&3), 145);
 		assert_eq!(Balances::reserved_balance(&2), 0);

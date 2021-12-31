@@ -57,15 +57,20 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 ///
 /// WARNING: the user of this pallet must ensure that the `Accuracy` type will work nicely with the
 /// normalization operation done inside `seq_phragmen`. See
-/// [`sp_npos_elections::assignment::try_normalize`] for more info.
+/// [`sp_npos_elections::Assignment::try_normalize`] for more info.
 pub trait Config: frame_system::Config {
 	/// The accuracy used to compute the election:
 	type Accuracy: PerThing128;
 	/// Something that provides the data for election.
-	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	type DataProvider: ElectionDataProvider<
+		AccountId = Self::AccountId,
+		BlockNumber = Self::BlockNumber,
+	>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
@@ -145,6 +150,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
 	impl Config for Runtime {
@@ -159,7 +165,9 @@ mod tests {
 		use crate::data_provider;
 
 		pub struct DataProvider;
-		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
+		impl ElectionDataProvider for DataProvider {
+			type AccountId = AccountId;
+			type BlockNumber = BlockNumber;
 			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
 			fn voters(
 				_: Option<usize>,

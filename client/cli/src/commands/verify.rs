@@ -19,7 +19,7 @@
 //! implementation of the `verify` subcommand
 
 use crate::{error, utils, with_crypto_scheme, CryptoSchemeFlag};
-use sp_core::{crypto::Ss58Codec, Public};
+use sp_core::crypto::{ByteArray, Ss58Codec};
 use structopt::StructOpt;
 
 /// The `verify` command
@@ -66,19 +66,14 @@ impl VerifyCmd {
 fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result<()>
 where
 	Pair: sp_core::Pair,
-	Pair::Signature: Default + AsMut<[u8]>,
+	Pair::Signature: for<'a> std::convert::TryFrom<&'a [u8]>,
 {
-	let mut signature = Pair::Signature::default();
-	if sig_data.len() != signature.as_ref().len() {
-		return Err(error::Error::SignatureInvalidLength {
-			read: sig_data.len(),
-			expected: signature.as_ref().len(),
-		})
-	}
-	signature.as_mut().copy_from_slice(&sig_data);
+	let signature =
+		Pair::Signature::try_from(&sig_data).map_err(|_| error::Error::SignatureFormatInvalid)?;
 
 	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
 		Pair::Public::from_slice(pubkey_vec.as_slice())
+			.map_err(|_| error::Error::KeyFormatInvalid)?
 	} else {
 		Pair::Public::from_string(uri)?
 	};

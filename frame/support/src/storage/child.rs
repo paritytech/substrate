@@ -24,7 +24,7 @@
 pub use crate::sp_io::KillStorageResult;
 use crate::sp_std::prelude::*;
 use codec::{Codec, Decode, Encode};
-pub use sp_core::storage::{ChildInfo, ChildType};
+pub use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> {
@@ -112,8 +112,7 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 pub fn exists(child_info: &ChildInfo, key: &[u8]) -> bool {
 	match child_info.child_type() {
 		ChildType::ParentKeyId =>
-			sp_io::default_child_storage::read(child_info.storage_key(), key, &mut [0; 0][..], 0)
-				.is_some(),
+			sp_io::default_child_storage::exists(child_info.storage_key(), key),
 	}
 }
 
@@ -168,9 +167,10 @@ pub fn put_raw(child_info: &ChildInfo, key: &[u8], value: &[u8]) {
 }
 
 /// Calculate current child root value.
-pub fn root(child_info: &ChildInfo) -> Vec<u8> {
+pub fn root(child_info: &ChildInfo, version: StateVersion) -> Vec<u8> {
 	match child_info.child_type() {
-		ChildType::ParentKeyId => sp_io::default_child_storage::root(child_info.storage_key()),
+		ChildType::ParentKeyId =>
+			sp_io::default_child_storage::root(child_info.storage_key(), version),
 	}
 }
 

@@ -19,8 +19,8 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion,
+		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
+		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -453,9 +453,21 @@ pub mod pallet2 {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> where
-		T::AccountId: From<SomeType1> + SomeAssociation1
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+			Self::deposit_event(Event::Something(11));
+			0
+		}
+		fn on_finalize(_: BlockNumberFor<T>) {
+			Self::deposit_event(Event::Something(21));
+		}
+		fn on_runtime_upgrade() -> Weight {
+			Self::deposit_event(Event::Something(31));
+			0
+		}
 	}
 
 	#[pallet::call]
@@ -469,6 +481,7 @@ pub mod pallet2 {
 		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::event]
+	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
 		/// Something
 		Something(u32),
@@ -523,10 +536,7 @@ pub mod pallet4 {
 }
 
 frame_support::parameter_types!(
-	pub const MyGetParam: u32 = 10;
-	pub const MyGetParam2: u32 = 11;
 	pub const MyGetParam3: u32 = 12;
-	pub const BlockHashCount: u32 = 250;
 );
 
 impl frame_system::Config for Runtime {
@@ -541,7 +551,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -553,11 +563,12 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
-	type MyGetParam2 = MyGetParam2;
+	type MyGetParam = ConstU32<10>;
+	type MyGetParam2 = ConstU32<11>;
 	type MyGetParam3 = MyGetParam3;
 	type Balance = u64;
 }
@@ -963,10 +974,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 10);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -974,10 +985,62 @@ fn pallet_hooks_expand() {
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example(pallet::Event::Something(20)),
+			Event::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example(pallet::Event::Something(30)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+	})
+}
+
+#[test]
+fn all_pallets_type_reversed_order_is_correct() {
+	TestExternalities::default().execute_with(|| {
+		frame_system::Pallet::<Runtime>::set_block_number(1);
+
+		#[allow(deprecated)]
+		{
+			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
+			AllPalletsWithoutSystemReversed::on_finalize(1);
+
+			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
+		}
+
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[0].event,
+			Event::Example2(pallet2::Event::Something(11)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Example(pallet::Event::Something(10)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
 	})
@@ -1498,4 +1561,49 @@ fn test_storage_info() {
 			},
 		],
 	);
+}
+
+#[test]
+fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
+	fn _b(t: (System, (Example4, (Example2, (Example,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystem) {}
+	fn _b(t: (System, (Example, (Example2, (Example4,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystem) {}
+	fn _b(t: (Example, (Example2, (Example4,)))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example, (System,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example,)))) {
+		_a(t)
+	}
 }

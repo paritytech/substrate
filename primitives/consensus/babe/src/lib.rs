@@ -242,8 +242,6 @@ impl sp_consensus::SlotData for BabeGenesisConfiguration {
 	fn slot_duration(&self) -> std::time::Duration {
 		std::time::Duration::from_millis(self.slot_duration)
 	}
-
-	const SLOT_KEY: &'static [u8] = b"babe_configuration";
 }
 
 /// Configuration data used by the BABE consensus engine.

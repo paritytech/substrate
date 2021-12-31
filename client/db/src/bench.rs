@@ -34,7 +34,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	traits::{Block as BlockT, HashFor},
-	Storage,
+	StateVersion, Storage,
 };
 use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, ProofRecorder,
@@ -73,6 +73,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		}
 	}
 }
+
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
@@ -105,9 +106,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 		record_proof: bool,
 		enable_tracking: bool,
 	) -> Result<Self, String> {
+		let state_version = sp_runtime::StateVersion::default();
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
-		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
+		sp_state_machine::TrieDBMutV1::<HashFor<B>>::new(&mut mdb, &mut root);
 
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
@@ -138,6 +140,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 				genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 				child_delta,
+				state_version,
 			);
 		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
@@ -415,6 +418,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, Self::Transaction)
 	where
 		B::Hash: Ord,
@@ -422,13 +426,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state
 			.borrow()
 			.as_ref()
-			.map_or(Default::default(), |s| s.storage_root(delta))
+			.map_or(Default::default(), |s| s.storage_root(delta, state_version))
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (B::Hash, bool, Self::Transaction)
 	where
 		B::Hash: Ord,
@@ -436,7 +441,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state
 			.borrow()
 			.as_ref()
-			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
+			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta, state_version))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

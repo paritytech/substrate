@@ -19,7 +19,7 @@
 //! A method call executor interface.
 
 use codec::{Decode, Encode};
-use sc_executor::RuntimeVersion;
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_core::NativeOrEncoded;
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -42,7 +42,7 @@ pub trait ExecutorProvider<Block: BlockT> {
 }
 
 /// Method call executor.
-pub trait CallExecutor<B: BlockT> {
+pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// Externalities error type.
 	type Error: sp_state_machine::Error;
 

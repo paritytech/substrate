@@ -42,8 +42,9 @@ pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::traits::Zero;
 #[doc(hidden)]
-pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
+pub use sp_runtime::StateVersion;
 #[doc(hidden)]
+pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
 pub use sp_storage::TrackedStorageKey;
 pub use utils::*;
 
@@ -1079,7 +1080,7 @@ macro_rules! impl_benchmark {
 
 					// Time the storage root recalculation.
 					let start_storage_root = $crate::benchmarking::current_time();
-					$crate::storage_root();
+					$crate::storage_root($crate::StateVersion::V1);
 					let finish_storage_root = $crate::benchmarking::current_time();
 					let elapsed_storage_root = finish_storage_root - start_storage_root;
 
@@ -1266,21 +1267,21 @@ macro_rules! impl_benchmark_test {
 /// 	fn bench_accumulate_dummy() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_accumulate_dummy::<Test>());
-/// 		}
+/// 		})
 /// 	}
 ///
 /// 	#[test]
 /// 	fn bench_set_dummy() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_set_dummy::<Test>());
-/// 		}
+/// 		})
 /// 	}
 ///
 /// 	#[test]
 /// 	fn bench_sort_vector() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_sort_vector::<Test>());
-/// 		}
+/// 		})
 /// 	}
 /// }
 /// ```
