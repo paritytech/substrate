@@ -309,7 +309,7 @@ where
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(&header);
-		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
+		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests, &header.seed().seed);
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
@@ -326,6 +326,7 @@ where
 		block_number: &System::BlockNumber,
 		parent_hash: &System::Hash,
 		digest: &Digest<System::Hash>,
+		seed: &sp_core::H256,
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
@@ -337,6 +338,9 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
+
+        <frame_system::Pallet<System>>::set_block_seed(seed);
+
 		weight = weight.saturating_add(<frame_system::Pallet<System> as OnInitialize<
 			System::BlockNumber,
 		>>::on_initialize(*block_number));
@@ -375,21 +379,22 @@ where
 		let header = block.header();
 
         // TODO uncomment when block & header will be extended
-		// let prev_seed: ShufflingSeed = Default::default();
-		// let seed = header.seed();
-        //
-		// let new_seed = VRFOutput::from_bytes(&seed.seed.as_bytes())
-		// 	.expect("cannot parse shuffling seed");
-        //
-		// let proof = VRFProof::from_bytes(&seed.proof.as_bytes())
-		// 	.expect("cannot parse shuffling seed proof");
-        //
-		// let input = vrf::make_transcript(create_shuffling_seed_input_data(&prev_seed));
-        //
-		// schnorrkel::PublicKey::from_bytes(&[])
-		// 	.and_then(|p| p.vrf_verify(input, &new_seed, &proof))
-        //     .expect("shuffling seed validation failed")
-		// 	.unwrap();
+		let prev_seed: ShufflingSeed = Default::default();
+		let seed = header.seed();
+
+		let new_seed = VRFOutput::from_bytes(&seed.seed.as_bytes())
+			.expect("cannot parse shuffling seed");
+
+		let proof = VRFProof::from_bytes(&seed.proof.as_bytes())
+			.expect("cannot parse shuffling seed proof");
+        
+
+        let ctx = schnorrkel::signing_context(b"hello world");
+        let mut transcript = merlin::Transcript::new(b"shuffling_seed");
+        transcript.append_message(b"prev_seed", prev_seed.seed.as_bytes());
+		schnorrkel::PublicKey::from_bytes(&[])
+			.and_then(|p| p.vrf_verify(transcript, &new_seed, &proof))
+            .expect("shuffling seed validation failed");
 
 
 		// Check that `parent_hash` is correct.

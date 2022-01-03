@@ -596,6 +596,12 @@ pub mod pallet {
 	pub type BlockHash<T: Config> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
 
+	/// Map of block numbers to block hashes.
+	#[pallet::storage]
+	#[pallet::getter(fn block_seed)]
+	pub type BlockSeed<T: Config> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, sp_core::H256, ValueQuery>;
+
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_data)]
@@ -1362,6 +1368,9 @@ impl<T: Config> Pallet<T> {
 			current_weight.add(weight, class);
 		});
 	}
+
+	pub fn set_block_seed(seed: &sp_core::H256){
+    }
 
 	/// Start the execution of a particular block.
 	pub fn initialize(

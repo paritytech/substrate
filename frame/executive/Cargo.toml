@@ -29,6 +29,7 @@ sp-ver = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../primitives/keystore", optional=true}
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated", "u64_backend"], default-features = false}
+merlin = { version = "2.0", default-features = false }
     
 
 [dev-dependencies]
