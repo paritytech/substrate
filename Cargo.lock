@@ -1898,7 +1898,7 @@ checksum = "e8ac3ff5224ef91f3c97e03eb1de2db82743427e91aaa5ac635f454f0b164f5a"
 dependencies = [
  "either",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "num-traits",
  "parity-scale-codec",
@@ -2390,12 +2390,6 @@ name = "futures-task"
 version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ee7c6485c30167ce4dfb83ac568a849fe53274c831081476ee13e0dce1aad72"
-
-[[package]]
-name = "futures-timer"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1de7508b218029b0f01662ed8f61b1c964b3ae99d6f25462d0f55a595109df6"
 
 [[package]]
 name = "futures-timer"
@@ -2975,16 +2969,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "intervalier"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64fa110ec7b8f493f416eed552740d10e7030ad5f63b2308f82c9608ec2df275"
-dependencies = [
- "futures 0.3.16",
- "futures-timer 2.0.2",
-]
-
-[[package]]
 name = "io-lifetimes"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3481,7 +3465,7 @@ dependencies = [
  "either",
  "fnv",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "lazy_static",
  "libsecp256k1",
  "log 0.4.14",
@@ -3745,7 +3729,7 @@ dependencies = [
  "asynchronous-codec 0.6.0",
  "bytes 1.1.0",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
@@ -3834,7 +3818,7 @@ checksum = "7399c5b6361ef525d41c11fcf51635724f832baf5819b30d3d873eabb4fbae4b"
 dependencies = [
  "async-io",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "if-watch",
  "ipnet",
  "libc",
@@ -7625,7 +7609,7 @@ dependencies = [
  "async-trait",
  "derive_more",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "ip_network",
  "libp2p",
  "log 0.4.14",
@@ -7652,7 +7636,7 @@ name = "sc-basic-authorship"
 version = "0.10.0-dev"
 dependencies = [
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.2",
@@ -7816,7 +7800,7 @@ version = "0.10.0-dev"
 dependencies = [
  "async-trait",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "libp2p",
  "log 0.4.14",
  "parking_lot 0.11.2",
@@ -8007,7 +7991,7 @@ dependencies = [
  "async-trait",
  "derive_more",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.2",
@@ -8030,7 +8014,7 @@ version = "0.10.0-dev"
 dependencies = [
  "async-trait",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "parity-scale-codec",
  "sc-client-api",
@@ -8163,7 +8147,7 @@ dependencies = [
  "finality-grandpa",
  "fork-tree",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.2",
@@ -8228,7 +8212,7 @@ version = "0.10.0-dev"
 dependencies = [
  "ansi_term",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "parity-util-mem",
  "sc-client-api",
@@ -8269,7 +8253,7 @@ dependencies = [
  "fnv",
  "fork-tree",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "hex",
  "ip_network",
  "libp2p",
@@ -8316,7 +8300,7 @@ version = "0.10.0-dev"
 dependencies = [
  "async-std",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "libp2p",
  "log 0.4.14",
  "lru 0.7.0",
@@ -8335,7 +8319,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "libp2p",
  "log 0.4.14",
  "parking_lot 0.11.2",
@@ -8362,7 +8346,7 @@ dependencies = [
  "bytes 1.1.0",
  "fnv",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "hex",
  "hyper 0.14.16",
  "hyper-rustls",
@@ -8512,7 +8496,7 @@ dependencies = [
  "directories",
  "exit-future",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "hash-db",
  "jsonrpc-core",
  "jsonrpc-pubsub",
@@ -8704,8 +8688,8 @@ dependencies = [
  "assert_matches",
  "criterion",
  "futures 0.3.16",
+ "futures-timer",
  "hex",
- "intervalier",
  "linked-hash-map",
  "log 0.4.14",
  "parity-scale-codec",
@@ -8749,7 +8733,7 @@ name = "sc-utils"
 version = "4.0.0-dev"
 dependencies = [
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "lazy_static",
  "prometheus",
 ]
@@ -9348,7 +9332,7 @@ version = "0.10.0-dev"
 dependencies = [
  "async-trait",
  "futures 0.3.16",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "parity-scale-codec",
  "sp-core",
@@ -9910,7 +9894,7 @@ name = "sp-timestamp"
 version = "4.0.0-dev"
 dependencies = [
  "async-trait",
- "futures-timer 3.0.2",
+ "futures-timer",
  "log 0.4.14",
  "parity-scale-codec",
  "sp-api",
