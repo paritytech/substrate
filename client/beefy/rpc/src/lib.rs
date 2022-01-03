@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -92,5 +92,112 @@ where
 		self.executor
 			.spawn_obj(fut.into())
 			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use beefy_gadget::notification::{BeefySignedCommitmentSender, SignedCommitment};
+	use beefy_primitives::{known_payload_ids, Payload};
+	use codec::{Decode, Encode};
+	use jsonrpsee::{types::EmptyParams, RpcModule};
+	use substrate_test_runtime_client::runtime::Block;
+
+	fn setup_io_handler() -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>)
+	{
+		let (commitment_sender, commitment_stream) = BeefySignedCommitmentStream::channel();
+
+		(
+			BeefyRpcHandler::new(commitment_stream, sc_rpc::SubscriptionTaskExecutor::default())
+				.into_rpc(),
+			commitment_sender,
+		)
+	}
+
+	#[tokio::test]
+	async fn subscribe_and_unsubscribe_to_justifications() {
+		let (rpc, _) = setup_io_handler();
+
+		// Subscribe call.
+		let sub = rpc
+			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
+
+		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
+
+		// Unsubscribe
+		let unsub_req = format!(
+			"{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
+			ser_id
+		);
+		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
+
+		assert_eq!(response, r#"{"jsonrpc":"2.0","result":"Unsubscribed","id":1}"#);
+
+		// Unsubscribe again and fail
+		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
+		let expected = format!(
+			r#"{{"jsonrpc":"2.0","error":{{"code":-32002,"message":"Server error","data":"Invalid subscription ID={}"}},"id":1}}"#,
+			ser_id
+		);
+
+		assert_eq!(response, expected);
+	}
+
+	#[tokio::test]
+	async fn subscribe_and_unsubscribe_with_wrong_id() {
+		let (rpc, _) = setup_io_handler();
+		// Subscribe call.
+		let _sub = rpc
+			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
+
+		// Unsubscribe with wrong ID
+		let (response, _) = rpc
+			.raw_json_request(
+				r#"{"jsonrpc":"2.0","method":"beefy_unsubscribeJustifications","params":["FOO"],"id":1}"#,
+			)
+			.await
+			.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Server error","data":"Invalid subscription ID=\"FOO\""},"id":1}"#;
+
+		assert_eq!(response, expected);
+	}
+
+	fn create_commitment() -> SignedCommitment<Block> {
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		SignedCommitment::<Block> {
+			commitment: beefy_primitives::Commitment {
+				payload,
+				block_number: 5,
+				validator_set_id: 0,
+			},
+			signatures: vec![],
+		}
+	}
+
+	#[tokio::test]
+	async fn subscribe_and_listen_to_one_justification() {
+		let (rpc, commitment_sender) = setup_io_handler();
+
+		// Subscribe
+		let mut sub = rpc
+			.subscribe("beefy_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
+
+		// Notify with commitment
+		let commitment = create_commitment();
+		commitment_sender.notify(commitment.clone());
+
+		// Inspect what we received
+		let (bytes, recv_sub_id) = sub.next::<sp_core::Bytes>().await.unwrap().unwrap();
+		let recv_commitment: SignedCommitment<Block> = Decode::decode(&mut &bytes[..]).unwrap();
+		assert_eq!(&recv_sub_id, sub.subscription_id());
+		assert_eq!(recv_commitment, commitment);
 	}
 }

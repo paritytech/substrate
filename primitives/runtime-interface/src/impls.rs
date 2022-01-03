@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -543,4 +543,8 @@ impl PassBy for sp_wasm_interface::Value {
 
 impl PassBy for sp_storage::TrackedStorageKey {
 	type PassBy = Codec<Self>;
+}
+
+impl PassBy for sp_storage::StateVersion {
+	type PassBy = Enum<Self>;
 }
