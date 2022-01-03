@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -83,6 +83,7 @@ pub fn create_extrinsic(
 		.unwrap_or(2) as u64;
 	let tip = 0;
 	let extra: node_runtime::SignedExtra = (
+		frame_system::CheckNonZeroSender::<node_runtime::Runtime>::new(),
 		frame_system::CheckSpecVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckTxVersion::<node_runtime::Runtime>::new(),
 		frame_system::CheckGenesis::<node_runtime::Runtime>::new(),
@@ -99,6 +100,7 @@ pub fn create_extrinsic(
 		function.clone(),
 		extra.clone(),
 		(
+			(),
 			node_runtime::VERSION.spec_version,
 			node_runtime::VERSION.transaction_version,
 			genesis_hash,
@@ -159,6 +161,7 @@ pub fn new_partial(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
+		config.runtime_cache_size,
 	);
 
 	let (client, backend, keystore_container, task_manager) =
@@ -193,7 +196,7 @@ pub fn new_partial(
 	let justification_import = grandpa_block_import.clone();
 
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
-		sc_consensus_babe::Config::get_or_compute(&*client)?,
+		sc_consensus_babe::Config::get(&*client)?,
 		grandpa_block_import,
 		client.clone(),
 	)?;
@@ -717,6 +720,7 @@ mod tests {
 				let function =
 					Call::Balances(BalancesCall::transfer { dest: to.into(), value: amount });
 
+				let check_non_zero_sender = frame_system::CheckNonZeroSender::new();
 				let check_spec_version = frame_system::CheckSpecVersion::new();
 				let check_tx_version = frame_system::CheckTxVersion::new();
 				let check_genesis = frame_system::CheckGenesis::new();
@@ -725,6 +729,7 @@ mod tests {
 				let check_weight = frame_system::CheckWeight::new();
 				let tx_payment = pallet_asset_tx_payment::ChargeAssetTxPayment::from(0, None);
 				let extra = (
+					check_non_zero_sender,
 					check_spec_version,
 					check_tx_version,
 					check_genesis,
@@ -736,7 +741,7 @@ mod tests {
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ()),
+					((), spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ()),
 				);
 				let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
 				let (function, extra, _) = raw_payload.deconstruct();

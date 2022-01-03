@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -186,7 +186,7 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	/// This will be used as storage at genesis.
 	fn set_storage(&mut self, storage: Storage);
 	/// Returns code substitutes that should be used for the on chain wasm.
-	fn code_substitutes(&self) -> std::collections::HashMap<String, Vec<u8>>;
+	fn code_substitutes(&self) -> std::collections::BTreeMap<String, Vec<u8>>;
 }
 
 impl std::fmt::Debug for dyn ChainSpec {

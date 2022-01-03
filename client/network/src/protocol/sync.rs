@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -2539,8 +2539,10 @@ fn validate_blocks<Block: BlockT>(
 		}
 		if let (Some(header), Some(body)) = (&b.header, &b.body) {
 			let expected = *header.extrinsics_root();
-			let got =
-				HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode).collect());
+			let got = HashFor::<Block>::ordered_trie_root(
+				body.iter().map(Encode::encode).collect(),
+				sp_runtime::StateVersion::V0,
+			);
 			if expected != got {
 				debug!(
 					target:"sync",

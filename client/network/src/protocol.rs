@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -132,21 +132,22 @@ impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			peers: {
-				let g = Gauge::new("sync_peers", "Number of peers we sync with")?;
+				let g = Gauge::new("substrate_sync_peers", "Number of peers we sync with")?;
 				register(g, r)?
 			},
 			queued_blocks: {
-				let g = Gauge::new("sync_queued_blocks", "Number of blocks in import queue")?;
+				let g =
+					Gauge::new("substrate_sync_queued_blocks", "Number of blocks in import queue")?;
 				register(g, r)?
 			},
 			fork_targets: {
-				let g = Gauge::new("sync_fork_targets", "Number of fork sync targets")?;
+				let g = Gauge::new("substrate_sync_fork_targets", "Number of fork sync targets")?;
 				register(g, r)?
 			},
 			justifications: {
 				let g = GaugeVec::new(
 					Opts::new(
-						"sync_extra_justifications",
+						"substrate_sync_extra_justifications",
 						"Number of extra justifications requests",
 					),
 					&["status"],

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,7 +73,7 @@ use sp_runtime::{
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, Either, Perbill, RuntimeDebug,
+	DispatchError, Perbill, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -85,8 +85,8 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
-		Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
-		PalletInfo, SortedMembers, StoredMap,
+		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
+		OriginTrait, PalletInfo, SortedMembers, StoredMap,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -114,8 +114,11 @@ pub mod mocking;
 mod tests;
 pub mod weights;
 
+pub mod migrations;
+
 pub use extensions::{
-	check_genesis::CheckGenesis, check_mortality::CheckMortality, check_nonce::CheckNonce,
+	check_genesis::CheckGenesis, check_mortality::CheckMortality,
+	check_non_zero_sender::CheckNonZeroSender, check_nonce::CheckNonce,
 	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
 	check_weight::CheckWeight,
 };
@@ -124,13 +127,19 @@ pub use extensions::check_mortality::CheckMortality as CheckEra;
 pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
+///
+/// The merkle proof is using the same trie as runtime state with
+/// `state_version` 0.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
 	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
 }
 
 /// Compute the trie root of a list of extrinsics.
+///
+/// The merkle proof is using the same trie as runtime state with
+/// `state_version` 0.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
-	H::ordered_trie_root(xts)
+	H::ordered_trie_root(xts, sp_core::storage::StateVersion::V0)
 }
 
 /// An object to track the currently used extrinsic weight in a block.
@@ -148,6 +157,36 @@ impl<T: Config> SetCode<T> for () {
 	fn set_code(code: Vec<u8>) -> DispatchResult {
 		<Pallet<T>>::update_code_in_storage(&code)?;
 		Ok(())
+	}
+}
+
+/// Numeric limits over the ability to add a consumer ref using `inc_consumers`.
+pub trait ConsumerLimits {
+	/// The number of consumers over which `inc_consumers` will cease to work.
+	fn max_consumers() -> RefCount;
+	/// The maximum number of additional consumers expected to be over be added at once using
+	/// `inc_consumers_without_limit`.
+	///
+	/// Note: This is not enforced and it's up to the chain's author to ensure this reflects the
+	/// actual situation.
+	fn max_overflow() -> RefCount;
+}
+
+impl<const Z: u32> ConsumerLimits for ConstU32<Z> {
+	fn max_consumers() -> RefCount {
+		Z
+	}
+	fn max_overflow() -> RefCount {
+		Z
+	}
+}
+
+impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, MaxOverflow) {
+	fn max_consumers() -> RefCount {
+		MaxNormal::get()
+	}
+	fn max_overflow() -> RefCount {
+		MaxOverflow::get()
 	}
 }
 
@@ -235,7 +274,6 @@ pub mod pallet {
 			+ Debug
 			+ MaybeDisplay
 			+ Ord
-			+ Default
 			+ MaxEncodedLen;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
@@ -306,6 +344,9 @@ pub mod pallet {
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
 		type OnSetCode: SetCode<Self>;
+
+		/// The maximum number of consumers allowed on a single account.
+		type MaxConsumers: ConsumerLimits;
 	}
 
 	#[pallet::pallet]
@@ -314,15 +355,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedToTripleRefCount::<T>::get() {
-				UpgradedToTripleRefCount::<T>::put(true);
-				migrations::migrate_to_triple_ref_count::<T>()
-			} else {
-				0
-			}
-		}
-
 		fn integrity_test() {
 			T::BlockWeights::get().validate().expect("The weights are invalid.");
 		}
@@ -346,7 +378,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
-			ensure_signed(origin)?;
+			ensure_signed_or_root(origin)?;
 			Ok(().into())
 		}
 
@@ -633,46 +665,6 @@ pub mod pallet {
 	}
 }
 
-pub mod migrations {
-	use super::*;
-
-	#[allow(dead_code)]
-	/// Migrate from unique `u8` reference counting to triple `u32` reference counting.
-	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)| {
-			Some(AccountInfo {
-				nonce,
-				consumers: rc as RefCount,
-				providers: 1,
-				sufficients: 0,
-				data,
-			})
-		});
-		T::BlockWeights::get().max_block
-	}
-
-	#[allow(dead_code)]
-	/// Migrate from unique `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(
-			|_key, (nonce, consumers, data)| {
-				Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
-			},
-		);
-		T::BlockWeights::get().max_block
-	}
-
-	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
-			|_key, (nonce, consumers, providers, data)| {
-				Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
-			},
-		);
-		T::BlockWeights::get().max_block
-	}
-}
-
 #[cfg(feature = "std")]
 impl GenesisConfig {
 	/// Direct implementation of `GenesisBuild::build_storage`.
@@ -828,7 +820,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Default>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>
 {
 	type Success = AccountId;
@@ -841,7 +833,10 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Signed(zero_account_id))
 	}
 }
 
@@ -849,7 +844,7 @@ pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, Acco
 impl<
 		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 		Who: SortedMembers<AccountId>,
-		AccountId: PartialEq + Clone + Ord + Default,
+		AccountId: PartialEq + Clone + Ord + Decode,
 	> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId>
 {
 	type Success = AccountId;
@@ -862,10 +857,13 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
 		let members = Who::sorted_members();
 		let first_member = match members.get(0) {
 			Some(account) => account.clone(),
-			None => Default::default(),
+			None => zero_account_id,
 		};
 		O::from(RawOrigin::Signed(first_member.clone()))
 	}
@@ -902,29 +900,6 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	}
 }
 
-/// The "OR gate" implementation of `EnsureOrigin`.
-///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-pub struct EnsureOneOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
-impl<
-		AccountId,
-		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-		L: EnsureOrigin<O>,
-		R: EnsureOrigin<O>,
-	> EnsureOrigin<O> for EnsureOneOf<AccountId, L, R>
-{
-	type Success = Either<L::Success, R::Success>;
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		L::try_origin(o)
-			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		L::successful_origin()
-	}
-}
-
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, BadOrigin>
@@ -933,6 +908,22 @@ where
 {
 	match o.into() {
 		Ok(RawOrigin::Signed(t)) => Ok(t),
+		_ => Err(BadOrigin),
+	}
+}
+
+/// Ensure that the origin `o` represents either a signed extrinsic (i.e. transaction) or the root.
+/// Returns `Ok` with the account that signed the extrinsic, `None` if it was root,  or an `Err`
+/// otherwise.
+pub fn ensure_signed_or_root<OuterOrigin, AccountId>(
+	o: OuterOrigin,
+) -> Result<Option<AccountId>, BadOrigin>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
+{
+	match o.into() {
+		Ok(RawOrigin::Root) => Ok(None),
+		Ok(RawOrigin::Signed(t)) => Ok(Some(t)),
 		_ => Err(BadOrigin),
 	}
 }
@@ -1172,8 +1163,27 @@ impl<T: Config> Pallet<T> {
 
 	/// Increment the reference counter on an account.
 	///
-	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	/// The account `who`'s `providers` must be non-zero and the current number of consumers must
+	/// be less than `MaxConsumers::max_consumers()` or this will return an error.
 	pub fn inc_consumers(who: &T::AccountId) -> Result<(), DispatchError> {
+		Account::<T>::try_mutate(who, |a| {
+			if a.providers > 0 {
+				if a.consumers < T::MaxConsumers::max_consumers() {
+					a.consumers = a.consumers.saturating_add(1);
+					Ok(())
+				} else {
+					Err(DispatchError::TooManyConsumers)
+				}
+			} else {
+				Err(DispatchError::NoProviders)
+			}
+		})
+	}
+
+	/// Increment the reference counter on an account, ignoring the `MaxConsumers` limits.
+	///
+	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	pub fn inc_consumers_without_limit(who: &T::AccountId) -> Result<(), DispatchError> {
 		Account::<T>::try_mutate(who, |a| {
 			if a.providers > 0 {
 				a.consumers = a.consumers.saturating_add(1);
@@ -1217,7 +1227,8 @@ impl<T: Config> Pallet<T> {
 
 	/// True if the account has at least one provider reference.
 	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
-		Account::<T>::get(who).providers > 0
+		let a = Account::<T>::get(who);
+		a.providers > 0 && a.consumers < T::MaxConsumers::max_consumers()
 	}
 
 	/// Deposits an event into this block's event record.
@@ -1356,7 +1367,8 @@ impl<T: Config> Pallet<T> {
 			<BlockHash<T>>::remove(to_remove);
 		}
 
-		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
+		let version = T::Version::get().state_version();
+		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
 		<T::Header as traits::Header>::new(

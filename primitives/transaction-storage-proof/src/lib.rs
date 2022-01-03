@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -143,7 +143,7 @@ pub mod registration {
 	use sp_trie::TrieMut;
 
 	type Hasher = sp_core::Blake2Hasher;
-	type TrieLayout = sp_trie::Layout<Hasher>;
+	type TrieLayout = sp_trie::LayoutV1<Hasher>;
 
 	/// Create a new inherent data provider instance for a given parent block hash.
 	pub fn new_data_provider<B, C>(

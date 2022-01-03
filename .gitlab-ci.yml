@@ -39,13 +39,10 @@ variables:                         &default-vars
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
-  # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.13"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example-* subkey chain-spec-builder"
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
-  SIMNET_FEATURES_PATH:            "simnet_tests/tests"
+  PIPELINE_SCRIPTS_TAG:            "v0.4"
 
 default:
   cache:                           {}
@@ -458,21 +455,6 @@ test-linux-stable:                 &test-linux
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
-unleash-check:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
-  script:
-    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash de-dev-deps
-    # Reuse build artifacts when running checks (cuts down check time by 3x)
-    # TODO: Implement this optimization in cargo-unleash rather than here
-    - mkdir -p target/unleash
-    - export CARGO_TARGET_DIR=target/unleash
-    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
-  # FIXME: this job must not fail, or unleash-to-crates-io will publish broken stuff
-  allow_failure:                   true
-
 test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
@@ -593,7 +575,7 @@ cargo-check-macos:
 .check-dependent-project:          &check-dependent-project
   stage:                           build
   <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
+  <<:                              *test-refs-no-trigger-prs-only
   <<:                              *vault-secrets
   script:
     - git clone
@@ -606,6 +588,7 @@ cargo-check-macos:
         --substrate
         "$DEPENDENT_REPO"
         "$GITHUB_PR_TOKEN"
+        "$CARGO_UPDATE_CRATES"
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -615,11 +598,13 @@ check-dependent-polkadot:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
+    CARGO_UPDATE_CRATES: "sp-io"
 
 check-dependent-cumulus:
   <<: *check-dependent-project
   variables:
     DEPENDENT_REPO: cumulus
+    CARGO_UPDATE_CRATES: "sp-io polkadot-runtime-common"
 
 
 build-linux-substrate:
@@ -636,18 +621,6 @@ build-linux-substrate:
     - *build-linux-substrate-script
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-
-
-#Build binary for simnet quick tests.
-build-linux-substrate-simnet:
-  stage:                           build
-  <<:                              *collect-artifacts-short
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger-prs-only
-  before_script:
-    - mkdir -p ./artifacts/substrate/
-  script:
-    - *build-linux-substrate-script
 
 build-linux-subkey:                &build-subkey
   stage:                           build
@@ -677,6 +650,18 @@ build-macos-subkey:
   tags:
     - osx
 
+check-rustdoc:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  variables:
+    <<:                            *default-vars
+    SKIP_WASM_BUILD:               1
+    RUSTDOCFLAGS:                  "-Dwarnings"
+  script:
+    - time cargo +nightly doc --workspace --all-features --verbose --no-deps
+    - sccache -s
+
 build-rustdoc:
   stage:                           build
   <<:                              *docker-env
@@ -692,7 +677,6 @@ build-rustdoc:
     paths:
     - ./crate-docs/
   script:
-    # FIXME: it fails with `RUSTDOCFLAGS="-Dwarnings"`
     - time cargo +nightly doc --workspace --all-features --verbose
     - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
@@ -735,7 +719,6 @@ build-rustdoc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout --all
-    # pass artifacts to the trigger-simnet job
     - echo "SUBSTRATE_IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
     - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
@@ -751,30 +734,6 @@ publish-docker-substrate:
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
-  artifacts:
-    reports:
-      # this artifact is used in trigger-simnet job
-      # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
-      dotenv: ./artifacts/substrate/build.env
-
-#publish artifact for quick simnet tests
-publish-docker-substrate-simnet:
-  stage:                           publish
-  <<:                              *build-push-docker-image
-  <<:                              *test-refs-no-trigger-prs-only
-  needs:
-    - job:                         build-linux-substrate-simnet
-      artifacts:                   true
-  variables:
-    <<:                            *default-vars
-    GIT_STRATEGY:                  none
-    DOCKERFILE:                    $PRODUCT.Dockerfile
-    PRODUCT:                       substrate
-    IMAGE_NAME:                    docker.io/paritypr/$PRODUCT
-  artifacts:
-    reports:
-      # this artifact is used in simnet-tests-quick job
-      dotenv: ./artifacts/substrate/build.env
 
 publish-docker-subkey:
   stage:                           publish
@@ -903,18 +862,6 @@ publish-draft-release:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
-unleash-to-crates-io:
-  stage:                           publish
-  <<:                              *docker-env
-  <<:                              *vault-secrets
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-  script:
-    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
-  allow_failure:                   true
-
 #### stage:                        deploy
 
 deploy-prometheus-alerting-rules:
@@ -936,62 +883,3 @@ deploy-prometheus-alerting-rules:
       changes:
         - .gitlab-ci.yml
         - .maintain/monitoring/**/*
-
-# Runs "quick" and "long" tests on nightly schedule and on commit / merge to master
-# A "quick" test is a smoke test where basic check-expect tests run by
-# checking values from metrics exposed by the app.
-# A "long" test is the load testing where we send 50K transactions into the
-# network and check if all completed successfully
-simnet-tests:
-  stage:                           deploy
-  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
-  <<:                              *kubernetes-env
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "master"
-  needs:
-    - job:                         publish-docker-substrate
-  # variables:
-  # `build.env` brings here `${SUBSTRATE_IMAGE_NAME}` and `${SUBSTRATE_IMAGE_TAG}`
-  # (`$VERSION` here, # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
-  # ${SIMNET_REF} is a gitlab variable
-  before_script:
-    - echo "Simnet Tests Config
-      docker.io/paritytech/simnet:${SIMNET_REF}
-      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
-  script:
-    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
-        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
-        --config="simnet_tests/configs/default_local_testnet.toml"
-        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
-  retry: 2
-  tags:
-    - substrate-simnet
-
-#run quick simnet-tests for each PR
-simnet-tests-quick:
-  stage:                           deploy
-  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
-  <<:                              *kubernetes-env
-  <<:                              *test-refs-no-trigger-prs-only
-  variables:
-    SIMNET_FEATURES:               "${SIMNET_FEATURES_PATH}/quick"
-  needs:
-    - job:                         publish-docker-substrate-simnet
-  before_script:
-    - echo "Simnet Tests Config
-      docker.io/paritytech/simnet:${SIMNET_REF}
-      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
-  script:
-    - echo "Image=${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
-    - echo "Features=${SIMNET_FEATURES}"
-    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
-        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
-        --config="simnet_tests/configs/default_local_testnet.toml"
-        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
-        --features="${SIMNET_FEATURES}"
-  tags:
-    - substrate-simnet
-

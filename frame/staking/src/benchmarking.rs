@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ use super::*;
 use crate::Pallet as Staking;
 use testing_utils::*;
 
+use codec::Decode;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -28,7 +29,7 @@ use frame_support::{
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, Zero},
+	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
 use sp_staking::SessionIndex;
@@ -112,8 +113,8 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
-	assert_ne!(CounterForValidators::<T>::get(), 0);
-	assert_ne!(CounterForNominators::<T>::get(), 0);
+	assert_ne!(Validators::<T>::count(), 0);
+	assert_ne!(Nominators::<T>::count(), 0);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -535,8 +536,9 @@ benchmarks! {
 		let s in 1 .. MAX_SLASHES;
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
+		let dummy = || T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		for _ in 0 .. MAX_SLASHES {
-			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default());
+			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default_from(dummy()));
 		}
 		UnappliedSlashes::<T>::insert(era, &unapplied_slashes);
 
@@ -667,10 +669,11 @@ benchmarks! {
 		let e in 1 .. 100;
 		HistoryDepth::<T>::put(e);
 		CurrentEra::<T>::put(e);
+		let dummy = || -> T::AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
 		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasValidatorPrefs<T>>::insert(i, T::AccountId::default(), ValidatorPrefs::default());
+			<ErasStakers<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasValidatorPrefs<T>>::insert(i, dummy(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
 			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
@@ -695,7 +698,14 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 
 		add_slashing_spans::<T>(&stash, s);
-		Ledger::<T>::insert(&controller, StakingLedger { active: T::Currency::minimum_balance() - One::one(), total: T::Currency::minimum_balance() - One::one(), ..Default::default() });
+		let l = StakingLedger {
+			stash: stash.clone(),
+			active: T::Currency::minimum_balance() - One::one(),
+			total: T::Currency::minimum_balance() - One::one(),
+			unlocking: vec![],
+			claimed_rewards: vec![],
+		};
+		Ledger::<T>::insert(&controller, l);
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::SortedListProvider::contains(&stash));
@@ -842,7 +852,7 @@ benchmarks! {
 		assert_eq!(targets.len() as u32, v);
 	}
 
-	set_staking_limits {
+	set_staking_configs {
 		// This function always does the same thing... just write to 4 storage items.
 	}: _(
 		RawOrigin::Root,
@@ -850,13 +860,15 @@ benchmarks! {
 		BalanceOf::<T>::max_value(),
 		Some(u32::MAX),
 		Some(u32::MAX),
-		Some(Percent::max_value())
+		Some(Percent::max_value()),
+		Perbill::max_value()
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
+		assert_eq!(MinCommission::<T>::get(), Perbill::from_percent(100));
 	}
 
 	chill_other {
@@ -872,13 +884,14 @@ benchmarks! {
 		let stash = scenario.origin_stash1.clone();
 		assert!(T::SortedListProvider::contains(&stash));
 
-		Staking::<T>::set_staking_limits(
+		Staking::<T>::set_staking_configs(
 			RawOrigin::Root.into(),
 			BalanceOf::<T>::max_value(),
 			BalanceOf::<T>::max_value(),
 			Some(0),
 			Some(0),
-			Some(Percent::from_percent(0))
+			Some(Percent::from_percent(0)),
+			Zero::zero(),
 		)?;
 
 		let caller = whitelisted_caller();
@@ -919,8 +932,8 @@ mod tests {
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
 
-			assert_eq!(count_validators, CounterForValidators::<Test>::get() as usize);
-			assert_eq!(count_nominators, CounterForNominators::<Test>::get() as usize);
+			assert_eq!(count_validators, Validators::<Test>::count() as usize);
+			assert_eq!(count_nominators, Nominators::<Test>::count() as usize);
 
 			assert_eq!(count_validators, v as usize);
 			assert_eq!(count_nominators, n as usize);
@@ -934,7 +947,7 @@ mod tests {
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get(),
 				false,
 				RewardDestination::Staked,
 			)
@@ -959,7 +972,7 @@ mod tests {
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get(),
 				false,
 				RewardDestination::Staked,
 			)

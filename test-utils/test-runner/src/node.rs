@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -195,7 +195,11 @@ where
 	{
 		let signed_data = if let Some(signer) = signer {
 			let extra = self.with_state(|| T::signed_extras(signer.clone()));
-			Some((signer.into(), MultiSignature::Sr25519(Default::default()), extra))
+			Some((
+				signer.into(),
+				MultiSignature::Sr25519(sp_core::sr25519::Signature::from_raw([0u8; 64])),
+				extra,
+			))
 		} else {
 			None
 		};

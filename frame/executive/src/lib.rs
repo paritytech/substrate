@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -582,7 +582,10 @@ mod tests {
 
 	use frame_support::{
 		assert_err, parameter_types,
-		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons},
+		traits::{
+			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
+			WithdrawReasons,
+		},
 		weights::{IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
@@ -673,7 +676,7 @@ mod tests {
 
 			#[pallet::weight(0)]
 			pub fn calculate_storage_root(_origin: OriginFor<T>) -> DispatchResult {
-				let root = sp_io::storage::root();
+				let root = sp_io::storage::root(sp_runtime::StateVersion::V1);
 				sp_io::storage::set("storage_root".as_bytes(), &root);
 				Ok(())
 			}
@@ -736,7 +739,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::builder()
 				.base_block(10)
@@ -763,7 +765,7 @@ mod tests {
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = RuntimeVersion;
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<Balance>;
@@ -772,6 +774,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	type Balance = u64;
@@ -792,12 +795,11 @@ mod tests {
 
 	parameter_types! {
 		pub const TransactionByteFee: Balance = 0;
-		pub const OperationalFeeMultiplier: u8 = 5;
 	}
 	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
-		type OperationalFeeMultiplier = OperationalFeeMultiplier;
+		type OperationalFeeMultiplier = ConstU8<5>;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
@@ -900,17 +902,32 @@ mod tests {
 		t.into()
 	}
 
+	fn new_test_ext_v0(balance_factor: Balance) -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		(t, sp_runtime::StateVersion::V0).into()
+	}
+
 	#[test]
 	fn block_import_works() {
-		new_test_ext(1).execute_with(|| {
+		block_import_works_inner(
+			new_test_ext_v0(1),
+			hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
+		);
+		block_import_works_inner(
+			new_test_ext(1),
+			hex!("75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5").into(),
+		);
+	}
+	fn block_import_works_inner(mut ext: sp_io::TestExternalities, state_root: H256) {
+		ext.execute_with(|| {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!(
-						"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
-					)
-					.into(),
+					state_root,
 					extrinsics_root: hex!(
 						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					)
@@ -951,7 +968,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!(
-						"49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
+						"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5"
 					)
 					.into(),
 					extrinsics_root: [0u8; 32].into(),
