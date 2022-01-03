@@ -28,7 +28,7 @@ beefy-gadget = { version = "4.0.0-dev", path = "../." }
 beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }
 
 [dev-dependencies]
-serde_json = "1.0.50"
+serde_json = "1.0.74"
 
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = [
     "test-helpers",
