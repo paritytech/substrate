@@ -17,17 +17,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::{helpers::SyncState, *};
+use assert_matches::assert_matches;
 use futures::prelude::*;
-use jsonrpsee::{
-	core::Error as RpcError,
-	rpc_params,
-	types::{EmptyParams, Response},
-	RpcModule,
-};
+use jsonrpsee::{core::Error as RpcError, types::EmptyParams, RpcModule};
 use sc_network::{self, config::Role, PeerId};
 use sc_rpc_api::system::helpers::PeerInfo;
 use sc_utils::mpsc::tracing_unbounded;
-use serde_json::value::to_raw_value;
 use sp_core::H256;
 use std::{
 	env,
@@ -137,7 +132,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 			impl_name: "testclient".into(),
 			impl_version: "0.2.0".into(),
 			chain_name: "testchain".into(),
-			properties: serde_json::from_str(r#"{"prop": "something"}"#).unwrap(),
+			properties: Default::default(),
 			chain_type: Default::default(),
 		},
 		tx,
@@ -172,12 +167,12 @@ async fn system_chain_works() {
 
 #[tokio::test]
 async fn system_properties_works() {
-	// TODO: (dp) annoying, initialize the Map
-	// assert_eq!(
-	// 	api(None).call("system_properties", EmptyParams::new()).await.unwrap(),
-	// 	sc_chain_spec::Properties { prop: "something"},
-	// 	// r#"{"jsonrpc":"2.0","result":{"prop":"something"},"id":0}"#.to_owned(),
-	// );
+	type Map = serde_json::map::Map<String, serde_json::Value>;
+
+	assert_eq!(
+		api(None).call::<_, Map>("system_properties", EmptyParams::new()).await.unwrap(),
+		Map::new()
+	);
 }
 
 #[tokio::test]
@@ -310,40 +305,31 @@ async fn system_sync_state() {
 async fn system_network_add_reserved() {
 	let good_peer_id =
 		["/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"];
-	let good: () = api(None)
+	let _good: () = api(None)
 		.call("system_addReservedPeer", good_peer_id)
 		.await
 		.expect("good peer id works");
 
 	let bad_peer_id = ["/ip4/198.51.100.19/tcp/30333"];
-	// TODO: (dp) sort out when it compiles
-	// let bad = api(None).call("system_addReservedPeer", bad_peer_id).await.unwrap_err();
-	// assert_eq!(bad.error.message, "Peer id is missing from the address");
+	assert_matches!(
+		api(None).call::<_, ()>("system_addReservedPeer", bad_peer_id).await,
+		Err(RpcError::Request(e)) if e.contains("Peer id is missing from the address")
+	);
 }
 
 #[tokio::test]
 async fn system_network_remove_reserved() {
-	// TODO: (dp) fix once things compile
-	// let good_peer_id =
-	// to_raw_value(&["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"]).unwrap();
-	let good: () = api(None)
-		// .call("system_removeReservedPeer", Some(good_peer_id))
+	let _good_peer: () = api(None)
 		.call("system_removeReservedPeer", ["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"])
 		.await
 		.expect("call with good peer id works");
 
 	let bad_peer_id =
 		["/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"];
-	let bad = api(None)
-		.call::<_, String>("system_removeReservedPeer", bad_peer_id)
-		.await
-		.unwrap_err();
-	// let bad: RpcError = serde_json::from_str(&bad).unwrap();
-	dbg!(bad);
-	assert_eq!(
-		// bad.error.message,
-		"bad",
-		"base-58 decode error: provided string contained invalid character '/' at byte 0"
+
+	assert_matches!(
+		api(None).call::<_, String>("system_removeReservedPeer", bad_peer_id).await,
+		Err(RpcError::Request(e)) if e.contains("base-58 decode error: provided string contained invalid character '/' at byte 0\"")
 	);
 }
 #[tokio::test]
@@ -368,22 +354,20 @@ fn test_add_reset_log_filter() {
 		for line in std::io::stdin().lock().lines() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {
-				let filter = to_raw_value(&"test_after_add").unwrap();
-				let fut = async move {
-					api(None).call::<_, String>("system_addLogFilter", [filter]).await
-				};
-				futures::executor::block_on(fut).expect("`system_add_log_filter` failed");
+				let filter = "test_after_add";
+				let fut =
+					async move { api(None).call::<_, ()>("system_addLogFilter", [filter]).await };
+				futures::executor::block_on(fut).expect("`system_addLogFilter` failed");
 			} else if line.contains("add_trace") {
-				let filter = to_raw_value(&"test_before_add=trace").unwrap();
-				let fut = async move {
-					api(None).call::<_, String>("system_addLogFilter", [filter]).await
-				};
-				futures::executor::block_on(fut).expect("`system_add_log_filter (trace)` failed");
+				let filter = "test_before_add=trace";
+				let fut =
+					async move { api(None).call::<_, ()>("system_addLogFilter", [filter]).await };
+				futures::executor::block_on(fut).expect("`system_addLogFilter (trace)` failed");
 			} else if line.contains("reset") {
 				let fut = async move {
-					api(None).call::<_, String>("system_resetLogFilter", EmptyParams::new()).await
+					api(None).call::<_, ()>("system_resetLogFilter", EmptyParams::new()).await
 				};
-				futures::executor::block_on(fut).expect("`system_add_log_filter (trace)` failed");
+				futures::executor::block_on(fut).expect("`system_resetLogFilter` failed");
 			} else if line.contains("exit") {
 				return
 			}

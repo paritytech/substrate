@@ -206,7 +206,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpsee::{core::Error as RpcError, types::EmptyParams};
 	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::AppPair;
 	use sp_core::crypto::key_types::BABE;
@@ -253,18 +252,12 @@ mod tests {
 	async fn epoch_authorship_works() {
 		let babe_rpc = test_babe_rpc_module(DenyUnsafe::No);
 		let api = babe_rpc.into_rpc();
-		let response = api
-			.call::<_, HashMap<AuthorityId, EpochAuthorship>>(
-				"babe_epochAuthorship",
-				EmptyParams::new(),
-			)
-			.await
-			.unwrap();
 
-		let expected = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":0}"#;
+		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+		let (response, _) = api.raw_json_request(request).await.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
-		// TODO: (dp) match on the error here. Fix when it compiles.
-		// assert_eq!(response, Some(expected.to_string()));
+		assert_eq!(&response, expected);
 	}
 
 	#[tokio::test]
@@ -272,14 +265,10 @@ mod tests {
 		let babe_rpc = test_babe_rpc_module(DenyUnsafe::Yes);
 		let api = babe_rpc.into_rpc();
 
-		let response = api
-			.call::<_, HashMap<AuthorityId, EpochAuthorship>>(
-				"babe_epochAuthorship",
-				EmptyParams::new(),
-			)
-			.await
-			.unwrap_err();
-		// TODO: (dp) match on the error here. Fix when it compiles.
-		// assert_eq!(response.error.message, "RPC call is unsafe to be called externally");
+		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params":[],"id":1}"#;
+		let (response, _) = api.raw_json_request(request).await.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"RPC call is unsafe to be called externally"},"id":1}"#;
+
+		assert_eq!(&response, expected);
 	}
 }

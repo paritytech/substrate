@@ -22,8 +22,11 @@ use crate::testing::timeout_secs;
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
-	core::{error::{SubscriptionClosed, SubscriptionClosedReason}, Error as RpcError},
-	types::{EmptyParams, Response, SubscriptionId},
+	core::{
+		error::{SubscriptionClosed, SubscriptionClosedReason},
+		Error as RpcError,
+	},
+	types::EmptyParams,
 	RpcModule,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
@@ -102,11 +105,10 @@ async fn author_submit_transaction_should_not_cause_error() {
 
 	assert_eq!(response, extrinsic_hash);
 
-	// Can't submit the same extrinsic twice
-	let err = api.call::<_, H256>("author_submitExtrinsic", [xt]).await.unwrap_err();
-
-	// TODO: (dp) Fix this when it compiles, match on error
-	// assert!(response.error.message.contains("Already imported"));
+	assert_matches!(
+		api.call::<_, H256>("author_submitExtrinsic", [xt]).await,
+		Err(RpcError::Request(e)) if e.contains("Already imported")
+	);
 }
 
 #[tokio::test]
@@ -159,8 +161,11 @@ async fn author_should_return_watch_validation_error() {
 		.await
 		.unwrap();
 
-	let (pool_error, _) =
-		timeout_secs(10, sub.next::<SubscriptionClosed>()).await.unwrap().unwrap().unwrap();
+	let (pool_error, _) = timeout_secs(10, sub.next::<SubscriptionClosed>())
+		.await
+		.unwrap()
+		.unwrap()
+		.unwrap();
 	assert_matches!(pool_error.close_reason(), SubscriptionClosedReason::Server(reason) => {
 		assert_eq!(reason, "Transaction pool error")
 	});
@@ -227,7 +232,7 @@ async fn author_should_insert_key() {
 		suri.to_string(),
 		keypair.public().0.to_vec().into(),
 	);
-	api.call::<_, bool>("author_insertKey", params).await.unwrap();
+	api.call::<_, ()>("author_insertKey", params).await.unwrap();
 	let pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
 
 	assert!(
@@ -280,19 +285,16 @@ async fn author_has_session_keys() {
 		.unwrap();
 	assert_eq!(inexistent, false, "Inexistent key is not in the session keys");
 
-	let invalid = {
-		let err = api
-			.call::<_, bool>("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])])
-			.await
-			.unwrap_err();
-		// TODO: (dp) fix this
-		format!("{:?}", err)
-	};
-	assert_eq!(invalid, "Session keys are not encoded correctly");
+	assert_matches!(
+		api.call::<_, bool>("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])]).await,
+		Err(RpcError::Request(e)) if e.contains("Session keys are not encoded correctly")
+	);
 }
 
 #[tokio::test]
 async fn author_has_key() {
+	let _ = env_logger::try_init();
+
 	let api = TestSetup::into_rpc();
 	let suri = "//Alice";
 	let alice_keypair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
@@ -302,7 +304,7 @@ async fn author_has_key() {
 		Bytes::from(alice_keypair.public().0.to_vec()),
 	);
 
-	api.call::<_, bool>("author_insertKey", params).await.expect("insertKey works");
+	api.call::<_, ()>("author_insertKey", params).await.expect("insertKey works");
 
 	let bob_keypair = ed25519::Pair::from_string("//Bob", None).expect("Generates keypair");
 

@@ -156,7 +156,6 @@ mod tests {
 	use sc_finality_grandpa::{
 		report, AuthorityId, FinalityProof, GrandpaJustification, GrandpaJustificationSender,
 	};
-	use sc_rpc::testing::deser_call;
 	use sp_blockchain::HeaderBackend;
 	use sp_core::crypto::ByteArray;
 	use sp_keyring::Ed25519Keyring;
@@ -292,7 +291,7 @@ mod tests {
 	async fn uninitialized_rpc_handler() {
 		let (rpc, _) = setup_io_handler(EmptyVoterState);
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"GRANDPA RPC endpoint not ready"},"id":0}"#.to_string();
-		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[]}"#;
+		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 
 		assert_eq!(expected_response, result,);
@@ -315,7 +314,7 @@ mod tests {
 			}]\
 		},\"id\":0}".to_string();
 
-		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[]}"#;
+		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 		assert_eq!(expected_response, result);
 	}
@@ -323,51 +322,52 @@ mod tests {
 	#[tokio::test]
 	async fn subscribe_and_unsubscribe_to_justifications() {
 		let (rpc, _) = setup_io_handler(TestVoterState);
-		// TODO: (dp) all responses are wrong here. Fix when it compiles.
 		// Subscribe call.
-		let sub_resp = rpc
+		let sub = rpc
 			.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
 			.await
 			.unwrap();
 
-		// // Unsubscribe
-		// assert_eq!(
-		// 	rpc.call("grandpa_unsubscribeJustifications", [sub_resp.subscription_id()])
-		// 		.await
-		// 		.unwrap(),
-		// 	Some(r#"{"jsonrpc":"2.0","result":"Unsubscribed","id":0}"#.into())
-		// );
+		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
 
-		// // Unsubscribe again and fail
-		// assert_eq!(
-		// 	rpc.call("grandpa_unsubscribeJustifications", [sub_resp.subscription_id()])
-		// 		.await
-		// 		.unwrap(),
-		// 	Some(format!(
-		// 		r#"{{"jsonrpc":"2.0","error":{{"code":-32002,"message":"Server error","data":"Invalid
-		// subscription ID={}"}},"id":0}}"#, 		serde_json::to_string(&sub_resp.subscription_id()).
-		// unwrap(), 	))
-		// );
+		// Unsubscribe
+		let unsub_req = format!(
+			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
+			ser_id
+		);
+		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
+
+		assert_eq!(response, r#"{"jsonrpc":"2.0","result":"Unsubscribed","id":1}"#);
+
+		// Unsubscribe again and fail
+		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
+		let expected = format!(
+			r#"{{"jsonrpc":"2.0","error":{{"code":-32002,"message":"Server error","data":"Invalid subscription ID={}"}},"id":1}}"#,
+			ser_id
+		);
+
+		assert_eq!(response, expected);
 	}
 
 	#[tokio::test]
 	async fn subscribe_and_unsubscribe_with_wrong_id() {
 		let (rpc, _) = setup_io_handler(TestVoterState);
-		// TODO: (dp) all responses are wrong here. Fix when it compiles.
-		// // Subscribe call.
-		// let sub_resp = rpc
-		// 	.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
-		// 	.await
-		// 	.unwrap();
+		// Subscribe call.
+		let _sub = rpc
+			.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
+			.await
+			.unwrap();
 
-		// // Unsubscribe with wrong ID
-		// assert_eq!(
-		// 	rpc.call("grandpa_unsubscribeJustifications", [SubscriptionId::Str("FOO".into())])
-		// 		.await.unwrap(),
-		// 	Some(
-		// 		r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Server error","data":"Invalid
-		// subscription ID type, must be integer"},"id":0}"#.into() 	)
-		// );
+		// Unsubscribe with wrong ID
+		let (response, _) = rpc
+			.raw_json_request(
+				r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#,
+			)
+			.await
+			.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Server error","data":"Invalid subscription ID=\"FOO\""},"id":1}"#;
+
+		assert_eq!(response, expected);
 	}
 
 	fn create_justification() -> GrandpaJustification<Block> {
@@ -457,8 +457,7 @@ mod tests {
 		let (rpc, _) =
 			setup_io_handler_with_finality_proofs(TestVoterState, Some(finality_proof.clone()));
 
-		let bytes: sp_core::Bytes =
-			deser_call(rpc.call("grandpa_proveFinality", [42]).await.unwrap());
+		let bytes: sp_core::Bytes = rpc.call("grandpa_proveFinality", [42]).await.unwrap();
 		let finality_proof_rpc: FinalityProof<Header> = Decode::decode(&mut &bytes[..]).unwrap();
 		assert_eq!(finality_proof_rpc, finality_proof);
 	}

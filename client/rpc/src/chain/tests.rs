@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use crate::testing::{deser_call, timeout_secs, TaskExecutor};
+use crate::testing::{timeout_secs, TaskExecutor};
 use assert_matches::assert_matches;
 use jsonrpsee::types::EmptyParams;
 use sc_block_builder::BlockBuilderProvider;
@@ -80,13 +80,13 @@ async fn should_return_a_block() {
 	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	let res: SignedBlock<Block> =
-		deser_call(api.call("chain_getBlock", [H256::from(client.genesis_hash())]).await.unwrap());
+		api.call("chain_getBlock", [H256::from(client.genesis_hash())]).await.unwrap();
 
 	// Genesis block is not justified
 	assert!(res.justifications.is_none());
 
 	let res: SignedBlock<Block> =
-		deser_call(api.call("chain_getBlock", [H256::from(block_hash)]).await.unwrap());
+		api.call("chain_getBlock", [H256::from(block_hash)]).await.unwrap();
 	assert_eq!(
 		res.block,
 		Block {
@@ -103,8 +103,7 @@ async fn should_return_a_block() {
 		}
 	);
 
-	let res: SignedBlock<Block> =
-		deser_call(api.call("chain_getBlock", Vec::<H256>::new()).await.unwrap());
+	let res: SignedBlock<Block> = api.call("chain_getBlock", Vec::<H256>::new()).await.unwrap();
 	assert_eq!(
 		res.block,
 		Block {
@@ -122,9 +121,9 @@ async fn should_return_a_block() {
 	);
 
 	assert_matches!(
-		deser_call::<Option<Header>>(
-			api.call("chain_getBlock", [H256::from_low_u64_be(5)]).await.unwrap()
-		),
+		api.call::<_, Option<Header>>("chain_getBlock", [H256::from_low_u64_be(5)])
+			.await
+			.unwrap(),
 		None
 	);
 }
@@ -194,8 +193,7 @@ async fn should_return_finalized_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 	let api = new_full(client.clone(), SubscriptionTaskExecutor::new(TaskExecutor)).into_rpc();
 
-	let res: H256 =
-		deser_call(api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap());
+	let res: H256 = api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap();
 	assert_eq!(res, client.genesis_hash());
 
 	// import new block
@@ -203,14 +201,12 @@ async fn should_return_finalized_hash() {
 	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// no finalization yet
-	let res: H256 =
-		deser_call(api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap());
+	let res: H256 = api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap();
 	assert_eq!(res, client.genesis_hash());
 
 	// finalize
 	client.finalize_block(BlockId::number(1), None).unwrap();
-	let res: H256 =
-		deser_call(api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap());
+	let res: H256 = api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap();
 	assert_eq!(res, client.block_hash(1).unwrap().unwrap());
 }
 
