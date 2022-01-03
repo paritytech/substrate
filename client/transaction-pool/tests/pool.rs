@@ -238,7 +238,7 @@ fn should_revalidate_during_maintenance() {
 	// test that pool revalidated transaction that left ready and not included in the block
 	assert_eq!(
 		futures::executor::block_on_stream(watcher).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::Invalid,],
+		vec![TransactionStatus::Ready, TransactionStatus::Invalid],
 	);
 }
 
@@ -297,7 +297,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 
 	assert_eq!(
 		futures::executor::block_on_stream(watcher).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::Invalid,],
+		vec![TransactionStatus::Ready, TransactionStatus::Invalid],
 	);
 
 	assert_eq!(pool.status().ready, 0);
