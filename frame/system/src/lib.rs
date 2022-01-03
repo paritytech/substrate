@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -128,13 +128,19 @@ pub use frame_support::dispatch::RawOrigin;
 pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
+///
+/// The merkle proof is using the same trie as runtime state with
+/// `state_version` 0.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
 	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
 }
 
 /// Compute the trie root of a list of extrinsics.
+///
+/// The merkle proof is using the same trie as runtime state with
+/// `state_version` 0.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
-	H::ordered_trie_root(xts)
+	H::ordered_trie_root(xts, sp_core::storage::StateVersion::V0)
 }
 
 /// An object to track the currently used extrinsic weight in a block.
@@ -793,7 +799,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Default>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>
 {
 	type Success = AccountId;
@@ -806,7 +812,10 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Signed(zero_account_id))
 	}
 }
 
@@ -814,7 +823,7 @@ pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, Acco
 impl<
 		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 		Who: SortedMembers<AccountId>,
-		AccountId: PartialEq + Clone + Ord + Default,
+		AccountId: PartialEq + Clone + Ord + Decode,
 	> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId>
 {
 	type Success = AccountId;
@@ -827,10 +836,13 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
 		let members = Who::sorted_members();
 		let first_member = match members.get(0) {
 			Some(account) => account.clone(),
-			None => Default::default(),
+			None => zero_account_id,
 		};
 		O::from(RawOrigin::Signed(first_member.clone()))
 	}
@@ -1334,7 +1346,8 @@ impl<T: Config> Pallet<T> {
 			<BlockHash<T>>::remove(to_remove);
 		}
 
-		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
+		let version = T::Version::get().state_version();
+		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
 		<T::Header as traits::Header>::new(

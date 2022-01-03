@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-use sp_storage::{ChildInfo, TrackedStorageKey};
+use sp_storage::{ChildInfo, StateVersion, TrackedStorageKey};
 
 pub use extensions::{Extension, ExtensionStore, Extensions};
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
@@ -157,7 +157,7 @@ pub trait Externalities: ExtensionStore {
 	/// This will also update all child storage keys in the top-level storage map.
 	///
 	/// The returned hash is defined by the `Block` and is SCALE encoded.
-	fn storage_root(&mut self) -> Vec<u8>;
+	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8>;
 
 	/// Get the trie root of a child storage map.
 	///
@@ -165,7 +165,11 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// If the storage root equals the default hash as defined by the trie, the key in the top-level
 	/// storage map will be removed.
-	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8>;
+	fn child_storage_root(
+		&mut self,
+		child_info: &ChildInfo,
+		state_version: StateVersion,
+	) -> Vec<u8>;
 
 	/// Append storage item.
 	///
