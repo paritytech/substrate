@@ -89,7 +89,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		default_heap_pages: None,
-		offchain_worker: OffchainWorkerConfig { enabled: true, indexing_enabled: false },
+		offchain_worker: OffchainWorkerConfig { ocw_enabled: true, finality_ocw_enabled:true, indexing_enabled: false },
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: Some(Sr25519Keyring::Alice.to_seed()),

@@ -285,7 +285,7 @@ pub trait Hooks<BlockNumber> {
 	/// Any state alterations are lost and are not persisted.
 	fn offchain_worker(_n: BlockNumber) {}
 
-	/// Alike [`offchain_worker`], but it is executed only when block `_n`
+	/// Alike [`Self::offchain_worker`], but it is executed only when block `_n`
 	/// is finalized.
 	///
 	/// Similar to regular offchain workers this will only be triggered
