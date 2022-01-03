@@ -20,7 +20,7 @@
 
 #![warn(missing_docs)]
 
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -100,7 +100,11 @@ pub trait BeefyApi<Notification, Number> {
 		id: SubscriptionId,
 	) -> jsonrpc_core::Result<bool>;
 
-	/// Returns the latest beefy finalized block as see by this client.
+	/// Returns the latest BEEFY finalized block number as seen by this client.
+	///
+	/// The latest BEEFY block might not be available if the BEEFY gadget is not running
+	/// in the network or if the client is still initializing or syncing with the network.
+	/// In such case an error would be returned.
 	#[rpc(name = "beefy_latestFinalized")]
 	fn latest_finalized(&self) -> FutureResult<Number>;
 }
@@ -108,7 +112,7 @@ pub trait BeefyApi<Notification, Number> {
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	beefy_best_block: Arc<Mutex<Option<NumberFor<Block>>>>,
+	beefy_best_block: Arc<RwLock<Option<NumberFor<Block>>>>,
 	manager: SubscriptionManager,
 }
 
@@ -122,19 +126,19 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	where
 		E: futures::task::Spawn + Send + Sync + 'static,
 	{
-		let beefy_best_block = Arc::new(Mutex::new(None));
+		let beefy_best_block = Arc::new(RwLock::new(None));
 
 		let stream = best_block_stream.subscribe();
 		let closure_clone = beefy_best_block.clone();
 		let future = stream.for_each(move |best_beefy| {
 			let async_clone = closure_clone.clone();
 			async move {
-				*async_clone.lock() = Some(best_beefy);
+				*async_clone.write() = Some(best_beefy);
 			}
 		});
 
 		if executor.spawn_obj(futures::task::FutureObj::new(Box::pin(future))).is_err() {
-			log::error!("Failed to spawn best beefy RPC task");
+			log::error!("Failed to spawn BEEFY RPC background task");
 		}
 
 		let manager = SubscriptionManager::new(Arc::new(executor));
@@ -177,7 +181,7 @@ where
 	fn latest_finalized(&self) -> FutureResult<NumberFor<Block>> {
 		let result: Result<NumberFor<Block>, jsonrpc_core::Error> = self
 			.beefy_best_block
-			.lock()
+			.read()
 			.as_ref()
 			.cloned()
 			.ok_or(Error::EndpointNotReady.into());
@@ -246,14 +250,22 @@ mod tests {
 		let num: NumberFor<Block> = 42u16.into();
 		sender.notify(|| Ok(num)).unwrap();
 
-		// Wait a bit so the message is picked up.
-		std::thread::sleep(std::time::Duration::from_millis(200));
+		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
 
 		// Verify RPC `beefy_latestFinalized` returns `42`
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_latestFinalized","params":[],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","result":42,"id":1}"#;
-		let meta = sc_rpc::Metadata::default();
-		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
+		let expected = r#"{"jsonrpc":"2.0","result":42,"id":1}"#;
+		while std::time::Instant::now() < deadline {
+			let meta = sc_rpc::Metadata::default();
+			if Some(expected.into()) == io.handle_request_sync(request, meta) {
+				// Success
+				return
+			}
+			std::thread::sleep(std::time::Duration::from_millis(50));
+		}
+		panic!(
+			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?"
+		);
 	}
 
 	#[test]
