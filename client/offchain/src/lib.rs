@@ -165,10 +165,7 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 		Self {
 			client,
 			_block: PhantomData,
-			thread_pool: Mutex::new(ThreadPool::with_name(
-				"offchain-worker".into(),
-				threads,
-			)),
+			thread_pool: Mutex::new(ThreadPool::with_name("offchain-worker".into(), threads)),
 			shared_http_client: api::SharedClient::new(),
 			enable_http: options.enable_http_requests,
 			// in case both finality and regular workers are running we will
@@ -233,12 +230,7 @@ where
 		);
 		if version < 3 {
 			let msg = "Skipping running finality offchain workers, because they are not supported by current runtime";
-			tracing::error!(
-				target: LOG_TARGET,
-				"{}. Version: {} < 3",
-				msg,
-				version
-			);
+			tracing::error!(target: LOG_TARGET, "{}. Version: {} < 3", msg, version);
 
 			return Either::Right(future::ready(()))
 		}
@@ -325,8 +317,7 @@ where
 			let runtime = client.runtime_api();
 			let api = Box::new(api);
 			tracing::debug!(target: LOG_TARGET, "Running offchain workers at {:?}", at);
-			let context =
-				ExecutionContext::OffchainCall(Some((api, capabilities)));
+			let context = ExecutionContext::OffchainCall(Some((api, capabilities)));
 			let run = {
 				#[allow(deprecated)]
 				match version {

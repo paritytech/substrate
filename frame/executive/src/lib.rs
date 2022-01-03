@@ -558,7 +558,9 @@ where
 				*header.number(),
 			)
 		} else {
-			<AllPalletsWithSystem as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
+			<AllPalletsWithSystem as OffchainWorker<System::BlockNumber>>::offchain_worker(
+				*header.number(),
+			)
 		}
 	}
 }
