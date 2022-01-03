@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sc_utils::notification::{NotificationSender, NotificationStream, TracingKeyStr};
-use sp_runtime::traits::NumberFor;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A commitment with matching BEEFY authorities' signatures.
 pub type BSignedCommitment<Block> =
@@ -25,12 +25,12 @@ pub type BSignedCommitment<Block> =
 
 /// The sending half of the notifications channel(s) used to send
 /// notifications about best BEEFY block from the gadget side.
-pub type BeefyBestBlockSender<Block> = NotificationSender<NumberFor<Block>, ()>;
+pub type BeefyBestBlockSender<Block> = NotificationSender<<Block as BlockT>::Header, ()>;
 
 /// The receiving half of a notifications channel used to receive
 /// notifications about best BEEFY blocks determined on the gadget side.
 pub type BeefyBestBlockStream<Block> =
-	NotificationStream<NumberFor<Block>, BeefyBestBlockTracingKey, ()>;
+	NotificationStream<<Block as BlockT>::Header, BeefyBestBlockTracingKey, ()>;
 
 /// The sending half of the notifications channel(s) used to send notifications
 /// about signed commitments generated at the end of a BEEFY round.

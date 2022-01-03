@@ -247,8 +247,16 @@ where
 
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
-				self.best_beefy_block = Some(*notification.header.number());
-				let _ = self.beefy_best_block_sender.notify(|| Ok(*notification.header.number()));
+				let block_num = *notification.header.number();
+				self.best_beefy_block = Some(block_num);
+				if let Err(err) = self.client.header(BlockId::number(block_num)).map(|h| {
+					if let Some(header) = h {
+						let _ = self.beefy_best_block_sender.notify(|| Ok(header));
+					}
+				}) {
+					error!(target: "beefy", "🥩 Failed to get header for block number {}; err: {:?}",
+						block_num, err);
+				}
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
 				// have a signed commitment for the block. Remove once the above TODO is done.
@@ -365,8 +373,16 @@ where
 				}
 
 				let _ = self.signed_commitment_sender.notify(|| Ok(signed_commitment));
-				self.best_beefy_block = Some(round.1);
-				let _ = self.beefy_best_block_sender.notify(|| Ok(round.1));
+				let block_num = round.1;
+				self.best_beefy_block = Some(block_num);
+				if let Err(err) = self.client.header(BlockId::number(block_num)).map(|h| {
+					if let Some(header) = h {
+						let _ = self.beefy_best_block_sender.notify(|| Ok(header));
+					}
+				}) {
+					error!(target: "beefy", "🥩 Failed to get header for block number {}; err: {:?}",
+						block_num, err);
+				}
 
 				metric_set!(self, beefy_best_block, round.1);
 			}

@@ -23,7 +23,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::Block as BlockT;
 
 use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
 use jsonrpc_derive::rpc;
@@ -72,7 +72,7 @@ impl From<Error> for jsonrpc_core::Error {
 
 /// Provides RPC methods for interacting with BEEFY.
 #[rpc]
-pub trait BeefyApi<Notification, Number> {
+pub trait BeefyApi<Notification, Header> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -100,19 +100,19 @@ pub trait BeefyApi<Notification, Number> {
 		id: SubscriptionId,
 	) -> jsonrpc_core::Result<bool>;
 
-	/// Returns the latest BEEFY finalized block number as seen by this client.
+	/// Returns header of the latest BEEFY finalized block as seen by this client.
 	///
 	/// The latest BEEFY block might not be available if the BEEFY gadget is not running
 	/// in the network or if the client is still initializing or syncing with the network.
 	/// In such case an error would be returned.
-	#[rpc(name = "beefy_latestFinalized")]
-	fn latest_finalized(&self) -> FutureResult<Number>;
+	#[rpc(name = "beefy_getFinalizedBlockHeader")]
+	fn latest_finalized(&self) -> FutureResult<Header>;
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	beefy_best_block: Arc<RwLock<Option<NumberFor<Block>>>>,
+	beefy_best_block: Arc<RwLock<Option<Block::Header>>>,
 	manager: SubscriptionManager,
 }
 
@@ -146,7 +146,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	}
 }
 
-impl<Block> BeefyApi<notification::EncodedSignedCommitment, NumberFor<Block>>
+impl<Block> BeefyApi<notification::EncodedSignedCommitment, Block::Header>
 	for BeefyRpcHandler<Block>
 where
 	Block: BlockT,
@@ -178,8 +178,8 @@ where
 		Ok(self.manager.cancel(id))
 	}
 
-	fn latest_finalized(&self) -> FutureResult<NumberFor<Block>> {
-		let result: Result<NumberFor<Block>, jsonrpc_core::Error> = self
+	fn latest_finalized(&self) -> FutureResult<Block::Header> {
+		let result: Result<Block::Header, jsonrpc_core::Error> = self
 			.beefy_best_block
 			.read()
 			.as_ref()
@@ -198,7 +198,11 @@ mod tests {
 	use beefy_gadget::notification::{BSignedCommitment, BeefySignedCommitmentSender};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
-	use substrate_test_runtime_client::runtime::Block;
+	use sp_runtime::{
+		generic::Digest,
+		traits::{BlakeTwo256, Hash},
+	};
+	use substrate_test_runtime_client::runtime::{Block, Header};
 
 	fn setup_io_handler(
 	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
@@ -234,7 +238,8 @@ mod tests {
 	fn uninitialized_rpc_handler() {
 		let (io, _) = setup_io_handler();
 
-		let request = r#"{"jsonrpc":"2.0","method":"beefy_latestFinalized","params":[],"id":1}"#;
+		let request =
+			r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedBlockHeader","params":[],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#;
 
 		let meta = sc_rpc::Metadata::default();
@@ -246,15 +251,31 @@ mod tests {
 		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
 		let (io, _) = setup_io_handler_with_best_block_stream(stream);
 
-		// Send BeefyRpcHandler `beefy_best_block = 42`
-		let num: NumberFor<Block> = 42u16.into();
-		sender.notify(|| Ok(num)).unwrap();
+		let header = Header {
+			parent_hash: BlakeTwo256::hash(b"1"),
+			number: 2,
+			state_root: BlakeTwo256::hash(b"3"),
+			extrinsics_root: BlakeTwo256::hash(b"4"),
+			digest: Digest { logs: vec![] },
+		};
+		sender.notify(|| Ok(header)).unwrap();
+
+		// Verify RPC `beefy_getFinalizedBlockHeader` returns expected header.
+		let request =
+			r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedBlockHeader","params":[],"id":1}"#;
+		let expected = "{\
+			\"jsonrpc\":\"2.0\",\
+			\"result\":{\
+				\"digest\":{\"logs\":[]},\
+				\"extrinsicsRoot\":\"0xeb8649214997574e20c464388a172420d25403682bbbb80c496831c8cc1f8f0d\",\
+				\"number\":\"0x2\",\
+				\"parentHash\":\"0x92cdf578c47085a5992256f0dcf97d0b19f1f1c9de4d5fe30c3ace6191b6e5db\",\
+				\"stateRoot\":\"0x581348337b0f3e148620173daaa5f94d00d881705dcbf0aa83efdaba61d2ede1\"\
+			},\
+			\"id\":1\
+		}";
 
 		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-
-		// Verify RPC `beefy_latestFinalized` returns `42`
-		let request = r#"{"jsonrpc":"2.0","method":"beefy_latestFinalized","params":[],"id":1}"#;
-		let expected = r#"{"jsonrpc":"2.0","result":42,"id":1}"#;
 		while std::time::Instant::now() < deadline {
 			let meta = sc_rpc::Metadata::default();
 			if Some(expected.into()) == io.handle_request_sync(request, meta) {
@@ -286,7 +307,7 @@ mod tests {
 
 		// Unsubscribe
 		let unsub_req = format!(
-			"{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
+			r#"{{"jsonrpc":"2.0","method":"beefy_unsubscribeJustifications","params":[{}],"id":1}}"#,
 			sub_id
 		);
 		assert_eq!(
@@ -297,7 +318,7 @@ mod tests {
 		// Unsubscribe again and fail
 		assert_eq!(
 			io.handle_request_sync(&unsub_req, meta),
-			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into()),
+			Some(r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#.into()),
 		);
 	}
 
@@ -319,7 +340,7 @@ mod tests {
 				r#"{"jsonrpc":"2.0","method":"beefy_unsubscribeJustifications","params":["FOO"],"id":1}"#,
 				meta.clone()
 			),
-			Some("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"Invalid subscription id.\"},\"id\":1}".into())
+			Some(r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#.into())
 		);
 	}
 
