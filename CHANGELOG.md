@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.7.0]
 ### Changed
-- Bonding period set to 3 eras
+- Bonding period set to 3 eras, SlashDeferDuration set to 2 eras
 
 ## [2.6.0]
 ### Changed
