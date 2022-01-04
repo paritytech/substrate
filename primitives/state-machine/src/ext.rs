@@ -98,7 +98,7 @@ where
 	/// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
-	pub(crate) backend: &'a B,
+	backend: &'a B,
 	/// The cache for the storage transactions.
 	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H>,
 	/// Pseudo-unique id used for tracing.
