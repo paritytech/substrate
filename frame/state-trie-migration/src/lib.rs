@@ -187,7 +187,6 @@ pub mod pallet {
 		pub(crate) _ph: sp_std::marker::PhantomData<T>,
 	}
 
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks", feature = "try-runtime"))]
 	impl<T: Config> sp_std::fmt::Debug for MigrationTask<T> {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 			f.debug_struct("MigrationTask")
