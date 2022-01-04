@@ -22,6 +22,7 @@ use std::marker::PhantomData;
 use super::*;
 use crate::{AccountVote, Conviction, Vote};
 use codec::{Decode, Encode};
+use frame_support::{CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound};
 use frame_support::traits::VoteTally;
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -30,8 +31,8 @@ use sp_runtime::{
 };
 
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct Tally<Votes, Total> {
+#[derive(CloneNoBound, DefaultNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound, TypeInfo, Encode, Decode)]
+pub struct Tally<Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug, Total> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
 	pub ayes: Votes,
 	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
@@ -42,7 +43,10 @@ pub struct Tally<Votes, Total> {
 	dummy: PhantomData<Total>,
 }
 
-impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> VoteTally<Votes>
+impl<
+	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned,
+	Total: Get<Votes>,
+> VoteTally<Votes>
 	for Tally<Votes, Total>
 {
 	fn ayes(&self) -> Votes {
@@ -70,7 +74,10 @@ impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> VoteTally<Votes>
 	}
 }
 
-impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> Tally<Votes, Total> {
+impl<
+	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned,
+	Total: Get<Votes>,
+> Tally<Votes, Total> {
 	/// Create a new tally.
 	pub fn new(vote: Vote, balance: Votes) -> Self {
 		let Delegations { votes, capital } = vote.conviction.votes(balance);
@@ -80,6 +87,10 @@ impl<Votes: Copy + AtLeast32BitUnsigned, Total: Get<Votes>> Tally<Votes, Total> 
 			turnout: capital,
 			dummy: PhantomData,
 		}
+	}
+
+	pub fn from_parts(ayes: Votes, nays: Votes, turnout: Votes) -> Self {
+		Self { ayes, nays, turnout, dummy: PhantomData }
 	}
 
 	/// Add an account's vote into the tally.

@@ -130,39 +130,61 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 	}
 }
 
+/// Information concerning the delegation of some voting power.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct Delegating<Balance, AccountId, BlockNumber> {
+	/// The amount of balance delegated.
+	pub balance: Balance,
+	/// The account to which the voting power is delegated.
+	pub target: AccountId,
+	/// Th conviction with which the voting power is delegated. When this gets undelegated, the
+	/// relevant lock begins.
+	pub conviction: Conviction,
+	/// The total amount of delegations that this account has received, post-conviction-weighting.
+	pub delegations: Delegations<Balance>,
+	/// Any pre-existing locks from past voting/delegating activity.
+	pub prior: PriorLock<BlockNumber, Balance>,
+}
+
+/// Information concerning the direct vote-casting of some voting power.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct Casting<Balance, BlockNumber, ReferendumIndex> {
+	/// The current votes of the account.
+	pub votes: Vec<(ReferendumIndex, AccountVote<Balance>)>,
+	/// The total amount of delegations that this account has received, post-conviction-weighting.
+	pub delegations: Delegations<Balance>,
+	/// Any pre-existing locks from past voting/delegating activity.
+	pub prior: PriorLock<BlockNumber, Balance>,
+}
+
 /// An indicator for what an account is doing; it can either be delegating or voting.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Voting<Balance, AccountId, BlockNumber, ReferendumIndex> {
-	/// The account is voting directly. `delegations` is the total amount of post-conviction voting
-	/// weight that it controls from those that have delegated to it.
-	Direct {
-		/// The current votes of the account.
-		votes: Vec<(ReferendumIndex, AccountVote<Balance>)>,
-		/// The total amount of delegations that this account has received.
-		delegations: Delegations<Balance>,
-		/// Any pre-existing locks from past voting/delegating activity.
-		prior: PriorLock<BlockNumber, Balance>,
-	},
+	/// The account is voting directly.
+	Casting(Casting<Balance, BlockNumber, ReferendumIndex>),
 	/// The account is delegating `balance` of its balance to a `target` account with `conviction`.
-	Delegating {
-		balance: Balance,
-		target: AccountId,
-		conviction: Conviction,
-		/// The total amount of delegations that this account has received.
-		delegations: Delegations<Balance>,
-		/// Any pre-existing locks from past voting/delegating activity.
-		prior: PriorLock<BlockNumber, Balance>,
-	},
+	Delegating(Delegating<Balance, AccountId, BlockNumber>),
 }
 
 impl<Balance: Default, AccountId, BlockNumber: Zero, ReferendumIndex> Default
 	for Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
 {
 	fn default() -> Self {
-		Voting::Direct {
+		Voting::Casting(Casting {
 			votes: Vec::new(),
 			delegations: Default::default(),
 			prior: PriorLock(Zero::zero(), Default::default()),
+		})
+	}
+}
+
+impl<Balance, AccountId, BlockNumber, ReferendumIndex> AsMut<PriorLock<BlockNumber, Balance>>
+	for Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
+{
+	fn as_mut(&mut self) -> &mut PriorLock<BlockNumber, Balance> {
+		match self {
+			Voting::Casting(Casting { prior, .. }) => prior,
+			Voting::Delegating(Delegating { prior, .. }) => prior,
 		}
 	}
 }
@@ -175,19 +197,15 @@ impl<
 	> Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
-		match self {
-			Voting::Direct { prior, .. } => prior,
-			Voting::Delegating { prior, .. } => prior,
-		}
-		.rejig(now);
+		AsMut::<PriorLock<BlockNumber, Balance>>::as_mut(self).rejig(now);
 	}
 
 	/// The amount of this account's balance that much currently be locked due to voting.
 	pub fn locked_balance(&self) -> Balance {
 		match self {
-			Voting::Direct { votes, prior, .. } =>
+			Voting::Casting(Casting { votes, prior, .. }) =>
 				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
-			Voting::Delegating { balance, .. } => *balance,
+			Voting::Delegating(Delegating { balance, .. }) => *balance,
 		}
 	}
 
@@ -197,8 +215,8 @@ impl<
 		prior: PriorLock<BlockNumber, Balance>,
 	) {
 		let (d, p) = match self {
-			Voting::Direct { ref mut delegations, ref mut prior, .. } => (delegations, prior),
-			Voting::Delegating { ref mut delegations, ref mut prior, .. } => (delegations, prior),
+			Voting::Casting(Casting { ref mut delegations, ref mut prior, .. }) => (delegations, prior),
+			Voting::Delegating(Delegating { ref mut delegations, ref mut prior, .. }) => (delegations, prior),
 		};
 		*d = delegations;
 		*p = prior;

@@ -336,7 +336,7 @@ pub fn tally(r: ReferendumIndex) -> Tally {
 
 pub fn set_tally(index: ReferendumIndex, ayes: u32, nays: u32) {
 	<Referenda as Polls<Tally>>::access_poll(index, |status| {
-		let tally = status.ensure_ongoing().unwrap();
+		let tally = status.ensure_ongoing().unwrap().0;
 		tally.ayes = ayes;
 		tally.nays = nays;
 	});

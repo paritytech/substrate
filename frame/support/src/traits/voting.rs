@@ -104,16 +104,16 @@ pub trait VoteTally<Votes> {
 	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self;
 }
 
-pub enum PollStatus<Tally, Moment> {
+pub enum PollStatus<Tally, Moment, Class> {
 	None,
-	Ongoing(Tally),
+	Ongoing(Tally, Class),
 	Completed(Moment, bool),
 }
 
-impl<Tally, Moment> PollStatus<Tally, Moment> {
-	pub fn ensure_ongoing(self) -> Option<Tally> {
+impl<Tally, Moment, Class> PollStatus<Tally, Moment, Class> {
+	pub fn ensure_ongoing(self) -> Option<(Tally, Class)> {
 		match self {
-			Self::Ongoing(t) => Some(t),
+			Self::Ongoing(t, c) => Some((t, c)),
 			_ => None,
 		}
 	}
@@ -125,20 +125,22 @@ pub trait Polls<Tally> {
 	type Class: Parameter + Member;
 	type Moment;
 
-	/// `Some` if the referendum `index` can be voted on, along with the class of referendum. Once
-	/// this is `None`, existing votes may be cancelled permissionlessly.
-	fn is_active(index: Self::Index) -> Option<Self::Class>;
+	/// Provides a slice of values that `T` may take.
+	fn classes() -> Vec<Self::Class>;
 
+	/// `Some` if the referendum `index` can be voted on, along with the tally and class of
+	/// referendum.
+	///
 	/// Don't use this if you might mutate - use `try_access_poll` instead.
-	fn tally<R>(index: Self::Index) -> Option<Tally>;
+	fn as_ongoing(index: Self::Index) -> Option<(Tally, Self::Class)>;
 
 	fn access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment>) -> R,
+		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment, Self::Class>) -> R,
 	) -> R;
 
 	fn try_access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment>) -> Result<R, DispatchError>,
+		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment, Self::Class>) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError>;
 }

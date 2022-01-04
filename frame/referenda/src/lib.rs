@@ -534,48 +534,52 @@ impl<T: Config> Polls<T::Tally> for Pallet<T> {
 	type Moment = T::BlockNumber;
 	type Class = TrackIdOf<T>;
 
+	fn classes() -> Vec<Self::Class> {
+		T::Tracks::tracks().iter().map(|x| x.0).collect()
+	}
+
 	fn access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber>) -> R,
+		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T>>) -> R,
 	) -> R {
 		match ReferendumInfoFor::<T>::get(index) {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
-				let result = f(PollStatus::Ongoing(&mut status.tally));
+				let result = f(PollStatus::Ongoing(&mut status.tally, status.track));
 				let now = frame_system::Pallet::<T>::block_number();
 				Self::ensure_alarm_at(&mut status, index, now + One::one());
 				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				result
 			},
-			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
-			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Completed(end, false)),
+			Some(ReferendumInfo::Approved(end, ..))
+			=> f(PollStatus::Completed(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..))
+			=> f(PollStatus::Completed(end, false)),
 			_ => f(PollStatus::None),
 		}
 	}
 
 	fn try_access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber>) -> Result<R, DispatchError>,
+		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T>>) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
 		match ReferendumInfoFor::<T>::get(index) {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
-				let result = f(PollStatus::Ongoing(&mut status.tally))?;
+				let result = f(PollStatus::Ongoing(&mut status.tally, status.track))?;
 				let now = frame_system::Pallet::<T>::block_number();
 				Self::ensure_alarm_at(&mut status, index, now + One::one());
 				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				Ok(result)
 			},
-			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
-			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Completed(end, false)),
+			Some(ReferendumInfo::Approved(end, ..))
+			=> f(PollStatus::Completed(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..))
+			=> f(PollStatus::Completed(end, false)),
 			_ => f(PollStatus::None),
 		}
 	}
 
-	fn tally<R>(index: Self::Index) -> Option<T::Tally> {
-		Some(Self::ensure_ongoing(index).ok()?.tally)
-	}
-
-	fn is_active(index: Self::Index) -> Option<TrackIdOf<T>> {
-		Self::ensure_ongoing(index).ok().map(|e| e.track)
+	fn as_ongoing(index: Self::Index) -> Option<(T::Tally, TrackIdOf<T>)> {
+		Self::ensure_ongoing(index).ok().map(|x| (x.tally, x.track))
 	}
 }
 

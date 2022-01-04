@@ -17,6 +17,8 @@
 
 //! The crate's tests.
 
+use std::collections::BTreeMap;
+
 use super::*;
 use crate as pallet_conviction_voting;
 use frame_support::{
@@ -162,28 +164,71 @@ impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
 	}
 }
 
+#[derive(Clone)]
+pub enum TestPollState {
+	Ongoing(TallyOf<Test>, u8),
+	Completed(u64, bool),
+}
+use TestPollState::*;
+
+parameter_types! {
+	pub static Polls: BTreeMap<u8, TestPollState> = vec![
+		(1, Completed(1, true)),
+		(2, Completed(2, false)),
+		(3, Ongoing(Tally::from_parts(1, 2, 3), 0)),
+	].into_iter().collect();
+}
+
 pub struct TestReferenda;
-impl Polls<TallyOf<Test>> for TestReferenda {
+impl frame_support::traits::Polls<TallyOf<Test>> for TestReferenda {
 	type Index = u8;
 	type Votes = u64;
 	type Moment = u64;
-	fn is_active(_index: u8) -> bool {
-		false
+	type Class = u8;
+	fn classes() -> Vec<u8> { vec![0, 1, 2] }
+	fn as_ongoing(index: u8) -> Option<(TallyOf<Test>, Self::Class)> {
+		Polls::get().remove(&index)
+			.and_then(|x| if let TestPollState::Ongoing(t, c) = x { Some((t, c)) } else { None })
 	}
 	fn access_poll<R>(
-		_index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64>) -> R,
+		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64, u8>) -> R,
 	) -> R {
-		f(PollStatus::None)
+		let mut polls = Polls::get();
+		let entry = polls.get_mut(&index);
+		let r = match entry {
+			Some(Ongoing(ref mut tally_mut_ref, class)) => {
+				f(PollStatus::Ongoing(tally_mut_ref, *class))
+			},
+			Some(Completed(when, succeeded)) => {
+				f(PollStatus::Completed(*when, *succeeded))
+			},
+			None => {
+				f(PollStatus::None)
+			}
+		};
+		Polls::set(polls);
+		r
 	}
 	fn try_access_poll<R>(
-		_index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64>) -> Result<R, DispatchError>,
+		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut TallyOf<Test>, u64, u8>) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
-		f(PollStatus::None)
-	}
-	fn tally<R>(_index: Self::Index) -> Option<TallyOf<Test>> {
-		None
+		let mut polls = Polls::get();
+		let entry = polls.get_mut(&index);
+		let r = match entry {
+			Some(Ongoing(ref mut tally_mut_ref, class)) => {
+				f(PollStatus::Ongoing(tally_mut_ref, *class))
+			},
+			Some(Completed(when, succeeded)) => {
+				f(PollStatus::Completed(*when, *succeeded))
+			},
+			None => {
+				f(PollStatus::None)
+			}
+		}?;
+		Polls::set(polls);
+		Ok(r)
 	}
 }
 
@@ -250,14 +295,30 @@ fn big_nay(who: u64) -> AccountVote<u64> {
 	AccountVote::Standard { vote: BIG_NAY, balance: Balances::free_balance(&who) }
 }
 
-fn tally(_r: u32) -> TallyOf<Test> {
-	todo!()
+fn tally(index: u8) -> TallyOf<Test> {
+	<TestReferenda as frame_support::traits::Polls<TallyOf<Test>>>::as_ongoing(index)
+		.expect("No tally")
+		.0
+}
+
+#[test]
+#[ignore]
+#[should_panic(expected = "No tally")]
+fn unknown_poll_should_panic() {
+	let _ = tally(0);
+}
+
+#[test]
+#[ignore]
+#[should_panic(expected = "No tally")]
+fn completed_poll_should_panic() {
+	let _ = tally(1);
 }
 
 #[test]
 fn basic_stuff() {
 	new_test_ext_execute_with_cond(|_x| {
-		let _ = tally(0);
+		assert_eq!(tally(3), Tally::from_parts(1, 2, 3));
 		let _ = aye(0);
 		let _ = nay(0);
 		let _ = big_aye(0);
