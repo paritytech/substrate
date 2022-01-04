@@ -109,6 +109,7 @@ pub mod pallet {
 	pub trait WeightInfo {
 		fn process_top_key(x: u32) -> Weight;
 		fn continue_migrate() -> Weight;
+		fn continue_migrate_wrong_witness() -> Weight;
 		fn migrate_custom_top_fail() -> Weight;
 		fn migrate_custom_top_success() -> Weight;
 	}
@@ -118,6 +119,9 @@ pub mod pallet {
 			1000000
 		}
 		fn continue_migrate() -> Weight {
+			1000000
+		}
+		fn continue_migrate_wrong_witness() -> Weight {
 			1000000
 		}
 		fn migrate_custom_top_fail() -> Weight {
@@ -605,6 +609,12 @@ pub mod pallet {
 		/// that executing the current `MigrationTask` with the given `limits` will not exceed
 		/// `real_size_upper` bytes of read data.
 		///
+		/// The `witness_task` is merely a helper to prevent the caller from being slashed or
+		/// generally trigger a migration that they do not intend. This parameter is just a message
+		/// from caller, saying that they believed `witness_task` was the last state of the
+		/// migration, and they only wish for their transaction to do anything, if this assumption
+		/// holds. In case `witness_task` does not match, the transaction fails.
+		///
 		/// Based on the documentation of [`MigrationTask::migrate_until_exhaustion`], the
 		/// recommended way of doing this is to pass a `limit` that only bounds `count`, as the
 		/// `size` limit can always be overwritten.
@@ -618,6 +628,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			limits: MigrationLimits,
 			real_size_upper: u32,
+			witness_task: MigrationTask<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
@@ -632,6 +643,16 @@ pub mod pallet {
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut task = Self::migration_process();
+			ensure!(
+				task == witness_task,
+				DispatchErrorWithPostInfo {
+					error: "wrong witness".into(),
+					post_info: PostDispatchInfo {
+						actual_weight: Some(T::WeightInfo::continue_migrate_wrong_witness()),
+						pays_fee: Pays::Yes
+					}
+				}
+			);
 			task.migrate_until_exhaustion(limits);
 
 			// ensure that the migration witness data was correct.
@@ -1008,9 +1029,30 @@ mod benchmarks {
 
 	frame_benchmarking::benchmarks! {
 		continue_migrate {
+			// note that this benchmark should migrate nothing, as we only want the overhead weight of the bookkeeping,
+			// and the migration cost itself is noted via the `dynamic_weight` function.
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
-		}: _(frame_system::RawOrigin::Signed(caller), null, 0)
+		}: _(frame_system::RawOrigin::Signed(caller), null, 0, StateTrieMigration::<T>::migration_process())
+		verify {
+			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
+		}
+
+		continue_migrate_wrong_witness {
+			let null = MigrationLimits::default();
+			let caller = frame_benchmarking::whitelisted_caller();
+			let bad_witness = MigrationTask { current_top: Some(vec![1u8]), ..Default::default() };
+		}: {
+			assert!(
+				StateTrieMigration::<T>::continue_migrate(
+					frame_system::RawOrigin::Signed(caller).into(),
+					null,
+					0,
+					bad_witness,
+				)
+				.is_err()
+			)
+		}
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default())
 		}
@@ -1453,6 +1495,7 @@ mod test {
 					Origin::signed(1),
 					MigrationLimits { item: 5, size: sp_runtime::traits::Bounded::max_value() },
 					Bounded::max_value(),
+					MigrationProcess::<Test>::get()
 				),
 				"max signed limits not respected"
 			);
@@ -1463,8 +1506,20 @@ mod test {
 					Origin::signed(2),
 					MigrationLimits { item: 5, size: 100 },
 					100,
+					MigrationProcess::<Test>::get()
 				),
 				"not enough funds"
+			);
+
+			// can't submit with bad witness.
+			frame_support::assert_err_ignore_postinfo!(
+				StateTrieMigration::continue_migrate(
+					Origin::signed(1),
+					MigrationLimits { item: 5, size: 100 },
+					100,
+					MigrationTask { current_top: Some(vec![1u8]), ..Default::default() }
+				),
+				"wrong witness"
 			);
 
 			// migrate all keys in a series of submissions
@@ -1476,7 +1531,8 @@ mod test {
 				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
 					Origin::signed(1),
 					SignedMigrationMaxLimits::get(),
-					task.dyn_size
+					task.dyn_size,
+					MigrationProcess::<Test>::get()
 				));
 
 				// no funds should remain reserved.
