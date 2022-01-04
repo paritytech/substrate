@@ -54,7 +54,6 @@ std = [
 	"futures",
 	"parking_lot",
 ]
-old_state = []
 
 with-tracing = [
 	"sp-tracing/with-tracing"
