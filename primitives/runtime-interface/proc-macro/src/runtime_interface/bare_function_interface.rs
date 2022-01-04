@@ -45,9 +45,29 @@ use quote::{quote, quote_spanned};
 
 use std::iter;
 
+fn not_feature_force_version(
+	feature_force_version: &Vec<(String, String, u32)>,
+	method: &TraitItemMethod,
+) -> TokenStream {
+	let method = method.sig.ident.to_string();
+	for (feature, method_patch, _version_patch) in feature_force_version {
+		if &method == method_patch {
+			return quote! {
+				#[cfg(not(feature=#feature))]
+			}
+		}
+	}
+	quote! {}
+}
+
 /// Generate one bare function per trait method. The name of the bare function is equal to the name
 /// of the trait method.
-pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Result<TokenStream> {
+pub fn generate(
+	trait_def: &ItemTrait,
+	is_wasm_only: bool,
+	tracing: bool,
+	feature_force_version: &Vec<(String, String, u32)>,
+) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let runtime_interface = get_runtime_interface(trait_def)?;
 
@@ -55,7 +75,35 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Res
 	let token_stream: Result<TokenStream> = runtime_interface.latest_versions().try_fold(
 		TokenStream::new(),
 		|mut t, (latest_version, method)| {
-			t.extend(function_for_method(method, latest_version, is_wasm_only)?);
+			t.extend(function_for_method(
+				method,
+				latest_version,
+				is_wasm_only,
+				not_feature_force_version(&feature_force_version, &method),
+			)?);
+			Ok(t)
+		},
+	);
+
+	// forced version
+	let token_stream: Result<TokenStream> = feature_force_version.iter().try_fold(
+		token_stream?,
+		|mut t, (feature, method, force_version)| {
+			// lookup method
+			let (_, full_method) = runtime_interface
+				.all_versions()
+				.find(|(version, full_method)| {
+					version == force_version && &full_method.sig.ident.to_string() == method
+				})
+				.expect("Force version not found");
+
+			let feature_check = quote!(#[cfg(feature=#feature)]);
+			t.extend(function_for_method(
+				full_method,
+				*force_version,
+				is_wasm_only,
+				feature_check,
+			)?);
 			Ok(t)
 		},
 	);
@@ -77,11 +125,15 @@ fn function_for_method(
 	method: &TraitItemMethod,
 	latest_version: u32,
 	is_wasm_only: bool,
+	feature_check: TokenStream,
 ) -> Result<TokenStream> {
-	let std_impl =
-		if !is_wasm_only { function_std_latest_impl(method, latest_version)? } else { quote!() };
+	let std_impl = if !is_wasm_only {
+		function_std_latest_impl(method, latest_version, &feature_check)?
+	} else {
+		quote!()
+	};
 
-	let no_std_impl = function_no_std_impl(method)?;
+	let no_std_impl = function_no_std_impl(method, feature_check)?;
 
 	Ok(quote! {
 		#std_impl
@@ -91,7 +143,10 @@ fn function_for_method(
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
-fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
+fn function_no_std_impl(
+	method: &TraitItemMethod,
+	feature_check: TokenStream,
+) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let host_function_name = create_exchangeable_host_function_ident(&method.sig.ident);
 	let args = get_function_arguments(&method.sig);
@@ -100,6 +155,7 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 
 	Ok(quote! {
+		#feature_check
 		#[cfg(not(feature = "std"))]
 		#( #attrs )*
 		pub fn #function_name( #( #args, )* ) #return_value {
@@ -112,7 +168,11 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 /// Generate call to latest function version for `cfg((feature = "std")`
 ///
 /// This should generate simple `fn func(..) { func_version_<latest_version>(..) }`.
-fn function_std_latest_impl(method: &TraitItemMethod, latest_version: u32) -> Result<TokenStream> {
+fn function_std_latest_impl(
+	method: &TraitItemMethod,
+	latest_version: u32,
+	feature_check: &TokenStream,
+) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed);
 	let arg_names = get_function_argument_names(&method.sig).collect::<Vec<_>>();
@@ -122,6 +182,7 @@ fn function_std_latest_impl(method: &TraitItemMethod, latest_version: u32) -> Re
 		create_function_ident_with_version(&method.sig.ident, latest_version);
 
 	Ok(quote_spanned! { method.span() =>
+		#feature_check
 		#[cfg(feature = "std")]
 		#( #attrs )*
 		pub fn #function_name( #( #args, )* ) #return_value {

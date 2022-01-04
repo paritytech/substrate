@@ -72,6 +72,21 @@ where
 		)
 	}
 
+	/// Get an externalities implementation, using the given `proving_backend`.
+	///
+	/// This will be capable of computing the PoV. See [`execute_and_get_proof`].
+	pub fn proving_ext<'a>(
+		&'a mut self,
+		proving_backend: &'a InMemoryProvingBackend<'a, H>,
+	) -> Ext<H, InMemoryProvingBackend<'a, H>> {
+		Ext::new(
+			&mut self.overlay,
+			&mut self.storage_transaction_cache,
+			&proving_backend,
+			Some(&mut self.extensions),
+		)
+	}
+
 	/// Create a new instance of `TestExternalities` with storage.
 	pub fn new(storage: Storage) -> Self {
 		Self::new_with_code_and_state(&[], storage, Default::default())

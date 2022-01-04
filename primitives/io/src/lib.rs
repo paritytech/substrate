@@ -100,7 +100,7 @@ pub enum KillStorageResult {
 }
 
 /// Interface for accessing the storage from within the runtime.
-#[runtime_interface]
+#[runtime_interface(feature_force_version=old_state,root,1)]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
 	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -260,7 +260,7 @@ pub trait Storage {
 
 /// Interface for accessing the child storage for default child trie,
 /// from within the runtime.
-#[runtime_interface]
+#[runtime_interface(feature_force_version=old_state,root,1)]
 pub trait DefaultChildStorage {
 	/// Get a default child storage value for a given key.
 	///
@@ -1632,6 +1632,12 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
 pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher>;
+
+/// A backend capable of generating storage proofs, with hash types aligned with
+/// [`TestExternalities`].
+#[cfg(feature = "std")]
+pub type InMemoryProvingBackend<'a> =
+	sp_state_machine::InMemoryProvingBackend<'a, sp_core::Blake2Hasher>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///

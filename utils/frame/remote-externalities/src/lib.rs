@@ -117,12 +117,6 @@ pub struct OfflineConfig {
 	pub state_snapshot: SnapshotConfig,
 }
 
-impl<P: Into<PathBuf>> From<P> for SnapshotConfig {
-	fn from(p: P) -> Self {
-		Self { path: p.into() }
-	}
-}
-
 /// Description of the transport protocol (for online execution).
 #[derive(Debug)]
 pub struct Transport {
@@ -174,7 +168,7 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
 			transport: Transport { uri: DEFAULT_TARGET.to_owned(), client: None },
-			scrape_children: false,
+			scrape_children: true,
 			at: None,
 			state_snapshot: None,
 			pallets: vec![],
@@ -687,7 +681,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		// inject manual key values.
 		if !self.hashed_key_values.is_empty() {
-			log::debug!(
+			log::info!(
 				target: LOG_TARGET,
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
@@ -697,7 +691,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		// exclude manual key values.
 		if !self.hashed_blacklist.is_empty() {
-			log::debug!(
+			log::info!(
 				target: LOG_TARGET,
 				"excluding externalities from {} keys",
 				self.hashed_blacklist.len()

@@ -49,3 +49,4 @@ std = [
 #
 # This sets the max logging level to `off` for `log`.
 disable-logging = ["log/max_level_off"]
+old_state = ["sp-runtime/old_state"]
