@@ -252,10 +252,11 @@ pub mod pallet {
 		/// Migrate keys until either of the given limits are exhausted, or if no more top keys
 		/// exist.
 		///
-		/// Note that this can return after the **first** migration tick that causes exhaustion. In
-		/// other words, this should not be used in any environment where resources are strictly
-		/// bounded (e.g. a parachain), but it is acceptable otherwise (relay chain, offchain
-		/// workers).
+		/// Note that this can return after the **first** migration tick that causes exhaustion,
+		/// specifically in the case of the `size` constrain. The reason for this is that before
+		/// reading a key, we simply cannot know how many bytes it is. In other words, this should
+		/// not be used in any environment where resources are strictly bounded (e.g. a parachain),
+		/// but it is acceptable otherwise (relay chain, offchain workers).
 		pub(crate) fn migrate_until_exhaustion(&mut self, limits: MigrationLimits) {
 			log!(debug, "running migrations on top of {:?} until {:?}", self, limits);
 
@@ -596,21 +597,27 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call can be any signed account.
 		///
-		/// This transaction has NO MONETARY INCENTIVES. calling it will only incur transaction fees
-		/// on the caller, with no rewards paid out.
+		/// This transaction has NO MONETARY INCENTIVES. calling it will not reward anyone. Albeit,
+		/// Upon successful execution, the transaction fee is returned.
 		///
-		/// The sum of the byte length of all the data read must be provided for up-front
-		/// fee-payment and weighing.
+		/// The (potentially over-estimated) of the byte length of all the data read must be
+		/// provided for up-front fee-payment and weighing. In essence, the caller is guaranteeing
+		/// that executing the current `MigrationTask` with the given `limits` will not exceed
+		/// `real_size_upper` bytes of read data.
+		///
+		/// Based on the documentation of [`MigrationTask::migrate_until_exhaustion`], the
+		/// recommended way of doing this is to pass a `limit` that only bounds `count`, as the
+		/// `size` limit can always be overwritten.
 		#[pallet::weight(
 			// the migration process
-			Pallet::<T>::dynamic_weight(limits.item, * real_size)
+			Pallet::<T>::dynamic_weight(limits.item, * real_size_upper)
 			// rest of the operations, like deposit etc.
 			+ T::WeightInfo::continue_migrate()
 		)]
 		pub fn continue_migrate(
 			origin: OriginFor<T>,
 			limits: MigrationLimits,
-			real_size: u32,
+			real_size_upper: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
@@ -628,7 +635,7 @@ pub mod pallet {
 			task.migrate_until_exhaustion(limits);
 
 			// ensure that the migration witness data was correct.
-			if real_size != task.dyn_size {
+			if real_size_upper < task.dyn_size {
 				// let the imbalance burn.
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
@@ -641,8 +648,14 @@ pub mod pallet {
 				compute: MigrationCompute::Signed,
 			});
 
+			let actual_weight = Some(
+				Pallet::<T>::dynamic_weight(limits.item, task.dyn_size) +
+					T::WeightInfo::continue_migrate(),
+			);
 			MigrationProcess::<T>::put(task);
-			Ok(Pays::No.into())
+			let pays = Pays::No;
+
+			Ok((actual_weight, pays).into())
 		}
 
 		/// Migrate the list of top keys by iterating each of them one by one.
@@ -1563,7 +1576,6 @@ mod remote_tests {
 	use codec::Encode;
 	use mock::run_to_block_and_drain_pool;
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
-	use sp_io::InMemoryProvingBackend;
 	use sp_runtime::traits::{Bounded, HashFor};
 	use std::sync::Arc;
 
@@ -1587,7 +1599,7 @@ mod remote_tests {
 						..Default::default()
 					},
 				))
-				.state_version(sp_core::StateVersion::V0)
+				.state_version(sp_core::storage::StateVersion::V0)
 				.build()
 				.await
 				.unwrap();
@@ -1600,13 +1612,22 @@ mod remote_tests {
 
 			let mut duration = 0;
 			// set the version to 1, as if the upgrade happened.
-			ext.state_version = sp_core::StateVersion::V1;
+			ext.state_version = sp_core::storage::StateVersion::V1;
+
+			let (top_left, child_left) =
+				ext.as_backend().essence().check_migration_state().unwrap();
+			// assert!(top_left > 0); TODO
+
+			log::info!(
+				target: LOG_TARGET,
+				"initial check: top_left: {}, child_left: {}",
+				top_left,
+				child_left,
+			);
 
 			loop {
-				let trie_backend = ext.backend.clone();
-				let last_state_root = trie_backend.root().clone();
-				let proving_backend = InMemoryProvingBackend::new(&trie_backend);
-				let (finished, proof) = ext.execute_and_get_proof(&proving_backend, || {
+				let last_state_root = ext.backend.root().clone();
+				let (finished, proof) = ext.execute_and_prove(|| {
 					run_to_block(now + 1);
 					if StateTrieMigration::migration_process().finished() {
 						return true
@@ -1616,21 +1637,16 @@ mod remote_tests {
 					false
 				});
 
-				let (top_left, child_left) =
-					ext.as_backend().essence().check_migration_state().unwrap();
 				let compact_proof =
 					proof.clone().into_compact_proof::<HashFor<Block>>(last_state_root).unwrap();
 				log::info!(
 					target: LOG_TARGET,
-					"proceeded to #{}, original proof: {}, compact proof size: {}, compact zstd compressed: {} // top_left: {}, child_left: {}",
+					"proceeded to #{}, original proof: {}, compact proof size: {}, compact zstd compressed: {}",
 					now,
 					proof.encoded_size(),
 					compact_proof.encoded_size(),
 					zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap().len(),
-					top_left,
-					child_left,
 				);
-				proving_backend.clear_recorder();
 				ext.commit_all().unwrap();
 
 				if finished {
@@ -1676,7 +1692,7 @@ mod remote_tests {
 						..Default::default()
 					},
 				))
-				.state_version(sp_core::StateVersion::V0)
+				.state_version(sp_core::storage::StateVersion::V0)
 				.build()
 				.await
 				.unwrap();
@@ -1690,7 +1706,16 @@ mod remote_tests {
 
 			let mut duration = 0;
 			// set the version to 1, as if the upgrade happened.
-			ext.state_version = sp_core::StateVersion::V1;
+			ext.state_version = sp_core::storage::StateVersion::V1;
+
+			let (top_left, child_left) =
+				ext.as_backend().essence().check_migration_state().unwrap();
+			log::info!(
+				target: LOG_TARGET,
+				"initial check: top_left: {}, child_left: {}",
+				top_left,
+				child_left,
+			);
 
 			loop {
 				let finished = ext.execute_with(|| {
@@ -1702,15 +1727,6 @@ mod remote_tests {
 					now += 1;
 					false
 				});
-
-				let (top_left, child_left) =
-					ext.as_backend().essence().check_migration_state().unwrap();
-				log::info!(
-					target: LOG_TARGET,
-					"(top_left: {}, child_left {})",
-					top_left,
-					child_left,
-				);
 
 				if finished {
 					break

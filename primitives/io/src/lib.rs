@@ -1633,12 +1633,6 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 #[cfg(feature = "std")]
 pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher>;
 
-/// A backend capable of generating storage proofs, with hash types aligned with
-/// [`TestExternalities`].
-#[cfg(feature = "std")]
-pub type InMemoryProvingBackend<'a> =
-	sp_state_machine::InMemoryProvingBackend<'a, sp_core::Blake2Hasher>;
-
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
 /// All these host functions will be callable from inside the Wasm environment.
