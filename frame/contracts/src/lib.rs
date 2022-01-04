@@ -257,12 +257,12 @@ pub mod pallet {
 		/// The maximum number of tries that can be queued for deletion.
 		///
 		/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
-		/// immediatly but the deletion of the storage item it has accumulated is performaned
+		/// immediately but the deletion of the storage item it has accumulated is performed
 		/// later. The contract address is put into the deletion queue. This defines how many
 		/// contracts can be queued up at the same time. If that limit is reached `seal_terminate`
 		/// will fail. The action then must be retried in a later block.
 		///
-		/// The reason for limiting the queue depth are:
+		/// The reasons for limiting the queue depth are:
 		///
 		/// 1. The queue is in storage in order to be persistent between blocks. We want to limit
 		/// 	the amount of storage that can be consumed.
@@ -275,7 +275,7 @@ pub mod pallet {
 		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
 		///
 		/// The amount of weight that is dedicated per block to work on the deletion queue. Larger
-		/// values allow more trie keys to be deleted in each each block but reduce the amount of
+		/// values allow more trie keys to be deleted in each block but reduce the amount of
 		/// weight that is left for transactions. See [`Self::DeletionQueueDepth`] for more
 		/// information about the deletion queue.
 		#[pallet::constant]
