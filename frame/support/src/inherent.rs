@@ -42,8 +42,9 @@ pub trait ProvideInherent {
 	///
 	/// NOTE: All checks necessary to ensure that the inherent is correct and that can be done in
 	/// the runtime should happen in the returned `Call`.
-	/// E.g. if this provides a block producer, check in the returned extrinsic that the producer is
-	/// eligible to create the block.
+	/// E.g. if this provides the timestamp, the call will check that the given timestamp is
+	/// increasing the old timestamp by more than a minimum and it will also check that the
+	/// timestamp hasn't already been set.
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
 	/// Determines whether this inherent is required in this block.
