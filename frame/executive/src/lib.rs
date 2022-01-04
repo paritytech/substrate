@@ -339,7 +339,7 @@ where
 			frame_system::InitKind::Full,
 		);
 
-        <frame_system::Pallet<System>>::set_block_seed(seed);
+		<frame_system::Pallet<System>>::set_block_seed(&(frame_system::Pallet::<System>::block_number()), seed);
 
 		weight = weight.saturating_add(<frame_system::Pallet<System> as OnInitialize<
 			System::BlockNumber,
@@ -378,14 +378,23 @@ where
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
-        // TODO uncomment when block & header will be extended
-		let prev_seed: ShufflingSeed = Default::default();
-		let seed = header.seed();
+		// Check that `parent_hash` is correct.
+		let n = header.number().clone();
+		assert!(
+			n > System::BlockNumber::zero() &&
+				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
+					*header.parent_hash(),
+			"Parent hash should be valid.",
+		);
 
-		let new_seed = VRFOutput::from_bytes(&seed.seed.as_bytes())
+        // Check that shuffling seed is generated properly
+		let prev_seed = <frame_system::Pallet<System>>::block_seed(n - System::BlockNumber::one());
+		let seed_and_proof = header.seed();
+
+		let new_seed = VRFOutput::from_bytes(&seed_and_proof.seed.as_bytes())
 			.expect("cannot parse shuffling seed");
 
-		let proof = VRFProof::from_bytes(&seed.proof.as_bytes())
+		let proof = VRFProof::from_bytes(&seed_and_proof.proof.as_bytes())
 			.expect("cannot parse shuffling seed proof");
         
 
@@ -395,16 +404,6 @@ where
 		schnorrkel::PublicKey::from_bytes(&[])
 			.and_then(|p| p.vrf_verify(transcript, &new_seed, &proof))
             .expect("shuffling seed validation failed");
-
-
-		// Check that `parent_hash` is correct.
-		let n = header.number().clone();
-		assert!(
-			n > System::BlockNumber::zero() &&
-				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
-					*header.parent_hash(),
-			"Parent hash should be valid.",
-		);
 
 		if let Err(i) = System::ensure_inherents_are_first(block) {
 			panic!("Invalid inherent position for extrinsic at index {}", i);
