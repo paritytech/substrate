@@ -728,9 +728,7 @@ where
 	fn pop_frame(&mut self, persist: bool) {
 		// Revert the account counter in case of a failed instantiation.
 		if !persist && self.top_frame().entry_point == ExportedFunction::Constructor {
-			if let Some(c) = self.account_counter.as_mut() {
-				*c = c.wrapping_sub(1);
-			}
+			self.account_counter.as_mut().map(|c| *c = c.wrapping_sub(1));
 		}
 
 		// Pop the current frame from the stack and return it in case it needs to interact
