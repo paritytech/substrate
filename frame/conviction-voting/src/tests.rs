@@ -22,24 +22,14 @@ use std::collections::BTreeMap;
 use super::*;
 use crate as pallet_conviction_voting;
 use frame_support::{
-	ord_parameter_types, parameter_types,
-	traits::{ConstU32, Contains, EqualPrivilegeOnly, OnInitialize, SortedMembers},
-	weights::Weight,
+	ord_parameter_types, parameter_types, assert_ok,
+	traits::{ConstU32, Contains, SortedMembers},
 };
-use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
 };
-
-const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
-const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
-const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
-const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
-
-const MAX_PROPOSALS: u32 = 100;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -52,7 +42,6 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Config, Event<T>},
 		Voting: pallet_conviction_voting::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -97,22 +86,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
-}
-impl pallet_scheduler::Config for Test {
-	type Event = Event;
-	type Origin = Origin;
-	type PalletsOrigin = OriginCaller;
-	type Call = Call;
-	type MaximumWeight = MaximumSchedulerWeight;
-	type ScheduleOrigin = EnsureRoot<u64>;
-	type MaxScheduledPerBlock = ();
-	type WeightInfo = ();
-	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type PreimageProvider = ();
-	type NoPreimagePostponement = ();
-}
-parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub const MaxLocks: u32 = 10;
 }
@@ -136,7 +109,7 @@ parameter_types! {
 	pub const VoteLockingPeriod: u64 = 3;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
-	pub const MaxProposals: u32 = MAX_PROPOSALS;
+	pub const MaxProposals: u32 = 100;
 	pub static PreimageByteDeposit: u64 = 0;
 	pub static InstantAllowed: bool = false;
 }
@@ -175,7 +148,7 @@ parameter_types! {
 	pub static Polls: BTreeMap<u8, TestPollState> = vec![
 		(1, Completed(1, true)),
 		(2, Completed(2, false)),
-		(3, Ongoing(Tally::from_parts(1, 2, 3), 0)),
+		(3, Ongoing(Tally::from_parts(0, 0, 0), 0)),
 	].into_iter().collect();
 }
 
@@ -254,12 +227,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-/// Execute the function two times, with `true` and with `false`.
-pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) {
-	new_test_ext().execute_with(|| (execute.clone())(false));
-	new_test_ext().execute_with(|| execute(true));
-}
-
 #[test]
 fn params_should_work() {
 	new_test_ext().execute_with(|| {
@@ -270,59 +237,83 @@ fn params_should_work() {
 
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
-	Scheduler::on_initialize(System::block_number());
 }
 
-fn fast_forward_to(n: u64) {
+#[allow(dead_code)]
+fn run_to(n: u64) {
 	while System::block_number() < n {
 		next_block();
 	}
 }
 
-fn aye(who: u64) -> AccountVote<u64> {
-	AccountVote::Standard { vote: AYE, balance: Balances::free_balance(&who) }
+fn aye(amount: u64, conviction: u8) -> AccountVote<u64> {
+	let vote = Vote { aye: true, conviction: conviction.try_into().unwrap() };
+	AccountVote::Standard { vote, balance: amount }
 }
 
-fn nay(who: u64) -> AccountVote<u64> {
-	AccountVote::Standard { vote: NAY, balance: Balances::free_balance(&who) }
-}
-
-fn big_aye(who: u64) -> AccountVote<u64> {
-	AccountVote::Standard { vote: BIG_AYE, balance: Balances::free_balance(&who) }
-}
-
-fn big_nay(who: u64) -> AccountVote<u64> {
-	AccountVote::Standard { vote: BIG_NAY, balance: Balances::free_balance(&who) }
+fn nay(amount: u64, conviction: u8) -> AccountVote<u64> {
+	let vote = Vote { aye: false, conviction: conviction.try_into().unwrap() };
+	AccountVote::Standard { vote, balance: amount }
 }
 
 fn tally(index: u8) -> TallyOf<Test> {
 	<TestReferenda as frame_support::traits::Polls<TallyOf<Test>>>::as_ongoing(index)
-		.expect("No tally")
+		.expect("No poll")
 		.0
+}
+
+fn class(index: u8) -> u8 {
+	<TestReferenda as frame_support::traits::Polls<TallyOf<Test>>>::as_ongoing(index)
+		.expect("No poll")
+		.1
 }
 
 #[test]
 #[ignore]
-#[should_panic(expected = "No tally")]
+#[should_panic(expected = "No poll")]
 fn unknown_poll_should_panic() {
 	let _ = tally(0);
 }
 
 #[test]
 #[ignore]
-#[should_panic(expected = "No tally")]
+#[should_panic(expected = "No poll")]
 fn completed_poll_should_panic() {
 	let _ = tally(1);
 }
 
 #[test]
 fn basic_stuff() {
-	new_test_ext_execute_with_cond(|_x| {
-		assert_eq!(tally(3), Tally::from_parts(1, 2, 3));
-		let _ = aye(0);
-		let _ = nay(0);
-		let _ = big_aye(0);
-		let _ = big_nay(0);
-		fast_forward_to(1);
+	new_test_ext().execute_with(|| {
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+	});
+}
+
+#[test]
+fn basic_voting_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(2, 5)));
+		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(2, 5)));
+		assert_eq!(tally(3), Tally::from_parts(0, 10, 2));
+		assert_eq!(Balances::usable_balance(1), 8);
+
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(5, 1)));
+		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(5, 1)));
+		assert_eq!(tally(3), Tally::from_parts(0, 5, 5));
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
+		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(10, 0)));
+		assert_eq!(tally(3), Tally::from_parts(0, 1, 10));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		assert_ok!(Voting::remove_vote(Origin::signed(1), None, 3));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+
+		assert_ok!(Voting::unlock(Origin::signed(1), class(3), 1));
+		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
