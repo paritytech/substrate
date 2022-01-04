@@ -85,7 +85,7 @@ pub trait ManualSealApi<Hash> {
 	) -> RpcResult<bool>;
 }
 
-/// A struct that implements the [`ManualSealApi`].
+/// A struct that implements the [`ManualSealApiServer`].
 pub struct ManualSeal<Hash> {
 	import_block_channel: mpsc::Sender<EngineCommand<Hash>>,
 }

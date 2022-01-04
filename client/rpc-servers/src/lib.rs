@@ -22,7 +22,7 @@
 
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
-	ws_server::{WsServerBuilder, WsServerHandle},
+	ws_server::{RandomStringIdProvider, WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
 use std::net::SocketAddr;
@@ -107,6 +107,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	let mut builder = WsServerBuilder::new()
 		.max_request_body_size(max_request_body_size as u32)
 		.max_connections(max_connections as u64)
+		.set_id_provider(RandomStringIdProvider::new(16))
 		.custom_tokio_runtime(rt.clone());
 
 	if let Some(cors) = cors {
