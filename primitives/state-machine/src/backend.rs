@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,12 +23,9 @@ use crate::{
 };
 use codec::Encode;
 use hash_db::Hasher;
+use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
-use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
-	StateVersion,
-};
 use sp_std::vec::Vec;
 
 /// A state backend is used to read state data and can have changes committed
@@ -301,32 +298,6 @@ where
 	fn consolidate(&mut self, other: Self) {
 		sp_trie::GenericMemoryDB::consolidate(self, other)
 	}
-}
-
-/// Insert input pairs into memory db.
-#[cfg(test)]
-pub(crate) fn insert_into_memory_db<H, I>(
-	mdb: &mut sp_trie::MemoryDB<H>,
-	input: I,
-) -> Option<H::Out>
-where
-	H: Hasher,
-	I: IntoIterator<Item = (StorageKey, StorageValue)>,
-{
-	use sp_trie::{trie_types::TrieDBMutV1, TrieMut};
-
-	let mut root = <H as Hasher>::Out::default();
-	{
-		let mut trie = TrieDBMutV1::<H>::new(mdb, &mut root);
-		for (key, value) in input {
-			if let Err(e) = trie.insert(&key, &value) {
-				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None
-			}
-		}
-	}
-
-	Some(root)
 }
 
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@
 
 pub use crate::{
 	chain::Client,
-	on_demand_layer::{AlwaysBadChecker, OnDemand},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -82,11 +81,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
-
-	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
-	/// If `Some`, the network worker will process these requests and answer them.
-	/// Normally used only for light clients.
-	pub on_demand: Option<Arc<OnDemand<B>>>,
 
 	/// Pool of transactions.
 	///

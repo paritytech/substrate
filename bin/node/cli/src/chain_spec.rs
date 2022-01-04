@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -295,10 +295,7 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
-		system: SystemConfig {
-			code: wasm_binary_unwrap().to_vec(),
-			changes_trie_config: Default::default(),
-		},
+		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
 		},
@@ -341,7 +338,7 @@ pub fn testnet_genesis(
 				.collect(),
 			phantom: Default::default(),
 		},
-		sudo: SudoConfig { key: root_key },
+		sudo: SudoConfig { key: Some(root_key) },
 		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),

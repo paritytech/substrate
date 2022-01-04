@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ use codec::{Codec, Decode, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
-use sp_core::{storage::ChildInfo, StateVersion};
+use sp_core::storage::{ChildInfo, StateVersion};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
@@ -222,6 +222,11 @@ where
 	pub fn estimate_encoded_size(&self) -> usize {
 		self.0.essence().backend_storage().proof_recorder.estimate_encoded_size()
 	}
+
+	/// Clear the proof recorded data.
+	pub fn clear_recorder(&self) {
+		self.0.essence().backend_storage().proof_recorder.reset()
+	}
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
@@ -361,7 +366,9 @@ where
 	}
 }
 
-/// Create proof check backend.
+/// Create a backend used for checking the proof., using `H` as hasher.
+///
+/// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,

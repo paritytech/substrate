@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,10 +23,11 @@ use hash_db::Hasher;
 use log::warn;
 use sp_core::{
 	storage::{
-		well_known_keys::is_child_storage_key, ChildInfo, Storage, StorageChild, TrackedStorageKey,
+		well_known_keys::is_child_storage_key, ChildInfo, StateVersion, Storage, StorageChild,
+		TrackedStorageKey,
 	},
 	traits::Externalities,
-	Blake2Hasher, StateVersion,
+	Blake2Hasher,
 };
 use sp_externalities::{Extension, Extensions};
 use sp_trie::{empty_child_trie_root, LayoutV0, LayoutV1, TrieConfiguration};
@@ -316,10 +317,6 @@ impl Externalities for BasicExternalities {
 			empty_child_trie_root::<LayoutV1<Blake2Hasher>>()
 		}
 		.encode()
-	}
-
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		Ok(None)
 	}
 
 	fn storage_start_transaction(&mut self) {

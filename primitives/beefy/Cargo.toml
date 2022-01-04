@@ -4,21 +4,23 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
+repository = "https://github.com/paritytech/substrate"
+description = "Primitives for BEEFY protocol."
 
 [dependencies]
 codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 sp-api = { version = "4.0.0-dev", path = "../api", default-features = false }
-sp-application-crypto = { version = "4.0.0-dev", path = "../application-crypto", default-features = false }
-sp-core = { version = "4.0.0-dev", path = "../core", default-features = false }
-sp-runtime = { version = "4.0.0-dev", path = "../runtime", default-features = false }
-sp-std = { version = "4.0.0-dev", path = "../std", default-features = false }
+sp-application-crypto = { version = "4.0.0", path = "../application-crypto", default-features = false }
+sp-core = { version = "4.1.0-dev", path = "../core", default-features = false }
+sp-runtime = { version = "4.0.0", path = "../runtime", default-features = false }
+sp-std = { version = "4.0.0", path = "../std", default-features = false }
 
 [dev-dependencies]
+hex = "0.4.3"
 hex-literal = "0.3"
-
-sp-keystore = { version = "0.10.0-dev", path = "../keystore" }
+sp-keystore = { version = "0.10.0", path = "../keystore" }
 
 [features]
 default = ["std"]

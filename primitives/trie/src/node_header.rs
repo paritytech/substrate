@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2015-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,10 +37,7 @@ pub(crate) enum NodeHeader {
 
 impl NodeHeader {
 	pub(crate) fn contains_hash_of_value(&self) -> bool {
-		match self {
-			NodeHeader::HashedValueBranch(_) | NodeHeader::HashedValueLeaf(_) => true,
-			_ => false,
-		}
+		matches!(self, NodeHeader::HashedValueBranch(_) | NodeHeader::HashedValueLeaf(_))
 	}
 }
 
@@ -123,7 +120,7 @@ pub(crate) fn size_and_prefix_iterator(
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
 	let max_value = 255u8 >> prefix_mask;
-	let l1 = sp_std::cmp::min(max_value as usize - 1, size);
+	let l1 = sp_std::cmp::min((max_value as usize).saturating_sub(1), size);
 	let (first_byte, mut rem) = if size == l1 {
 		(once(prefix + l1 as u8), 0)
 	} else {

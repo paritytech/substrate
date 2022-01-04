@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,10 +24,7 @@ use crate::{
 };
 use codec::{Codec, Decode};
 use hash_db::Hasher;
-use sp_core::{
-	storage::{ChildInfo, ChildType},
-	StateVersion,
-};
+use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
@@ -303,13 +300,13 @@ pub mod tests {
 			match state_version {
 				StateVersion::V0 => {
 					let mut trie = TrieDBMutV0::new(&mut mdb, &mut root);
-					trie.insert(b"value3", &[142]).expect("insert failed");
-					trie.insert(b"value4", &[124]).expect("insert failed");
+					trie.insert(b"value3", &[142; 33]).expect("insert failed");
+					trie.insert(b"value4", &[124; 33]).expect("insert failed");
 				},
 				StateVersion::V1 => {
 					let mut trie = TrieDBMutV1::new(&mut mdb, &mut root);
-					trie.insert(b"value3", &[142]).expect("insert failed");
-					trie.insert(b"value4", &[124]).expect("insert failed");
+					trie.insert(b"value3", &[142; 33]).expect("insert failed");
+					trie.insert(b"value4", &[124; 33]).expect("insert failed");
 				},
 			};
 		};
@@ -375,7 +372,7 @@ pub mod tests {
 			test_trie
 				.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3")
 				.unwrap(),
-			Some(vec![142u8]),
+			Some(vec![142u8; 33]),
 		);
 		// Change cache entry to check that caching is active.
 		test_trie

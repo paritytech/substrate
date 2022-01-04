@@ -341,18 +341,18 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
-			let last_child =
-				self.last_child.as_ref().expect("value checked to be `Some`; qed");
+			let last_child = self.last_child.as_ref().expect("value checked to be `Some`; qed");
 			let last_top = self.last_top.clone().expect("value checked to be `Some`; qed");
 
 			let child_root = Pallet::<T>::child_io_key(&last_top);
-			let added_size = if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
-				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::default_child_storage::set(child_root, last_child, &data);
-				data.len() as u32
-			} else {
-				Zero::zero()
-			};
+			let added_size =
+				if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
+					self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
+					sp_io::default_child_storage::set(child_root, last_child, &data);
+					data.len() as u32
+				} else {
+					Zero::zero()
+				};
 
 			self.dyn_child_items.saturating_inc();
 			let next_key = sp_io::default_child_storage::next_key(child_root, last_child);
@@ -760,7 +760,9 @@ pub mod pallet {
 					let mut new_task = Self::migration_process();
 					new_task.migrate_until_exhaustion(MigrationLimits {
 						size: chain_limits.size,
-						item: task.dyn_total_items().saturating_sub(T::UnsignedBackOff::get().max(1)),
+						item: task
+							.dyn_total_items()
+							.saturating_sub(T::UnsignedBackOff::get().max(1)),
 					});
 					task = new_task;
 				}
@@ -1010,6 +1012,7 @@ mod mock {
 		type SystemWeightInfo = ();
 		type SS58Prefix = SS58Prefix;
 		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
 	parameter_types! {

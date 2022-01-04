@@ -4,6 +4,8 @@ version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+repository = "https://github.com/paritytech/substrate"
+description = "BEEFY Client gadget for substrate"
 
 [dependencies]
 fnv = "1.0.6"
@@ -14,15 +16,15 @@ thiserror = "1.0"
 wasm-timer = "0.2.5"
 
 codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
-prometheus = { version = "0.9.0", package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" }
+prometheus = { version = "0.10.0-dev", package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" }
 
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
-sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
+sp-application-crypto = { version = "4.0.0", path = "../../primitives/application-crypto" }
+sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
+sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
@@ -33,6 +35,7 @@ sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
 
 [dev-dependencies]
+sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 
 strum = { version = "0.22", features = ["derive"] }

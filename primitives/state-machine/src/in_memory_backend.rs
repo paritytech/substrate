@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,10 +22,7 @@ use crate::{
 };
 use codec::Codec;
 use hash_db::Hasher;
-use sp_core::{
-	storage::{ChildInfo, Storage},
-	StateVersion,
-};
+use sp_core::storage::{ChildInfo, StateVersion, Storage};
 use sp_trie::{empty_trie_root, LayoutV1, MemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
@@ -185,12 +182,13 @@ where
 mod tests {
 	use super::*;
 	use crate::backend::Backend;
+	use sp_core::storage::StateVersion;
 	use sp_runtime::traits::BlakeTwo256;
 
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let state_version = sp_core::StateVersion::default();
+		let state_version = StateVersion::default();
 		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
@@ -206,7 +204,7 @@ mod tests {
 
 	#[test]
 	fn insert_multiple_times_child_data_works() {
-		let state_version = sp_core::StateVersion::default();
+		let state_version = StateVersion::default();
 		let mut storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 

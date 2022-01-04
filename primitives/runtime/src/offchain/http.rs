@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -531,6 +531,38 @@ mod tests {
 
 			let body = response.body();
 			assert_eq!(body.clone().collect::<Vec<_>>(), b"1234".to_vec());
+			assert_eq!(body.error(), &None);
+		})
+	}
+
+	#[test]
+	fn should_send_huge_response() {
+		let (offchain, state) = testing::TestOffchainExt::new();
+		let mut t = TestExternalities::default();
+		t.register_extension(OffchainWorkerExt::new(offchain));
+
+		t.execute_with(|| {
+			let request: Request = Request::get("http://localhost:1234");
+			let pending = request.add_header("X-Auth", "hunter2").send().unwrap();
+			// make sure it's sent correctly
+			state.write().fulfill_pending_request(
+				0,
+				testing::PendingRequest {
+					method: "GET".into(),
+					uri: "http://localhost:1234".into(),
+					headers: vec![("X-Auth".into(), "hunter2".into())],
+					sent: true,
+					..Default::default()
+				},
+				vec![0; 5923],
+				None,
+			);
+
+			// wait
+			let response = pending.wait().unwrap();
+
+			let body = response.body();
+			assert_eq!(body.clone().collect::<Vec<_>>(), vec![0; 5923]);
 			assert_eq!(body.error(), &None);
 		})
 	}

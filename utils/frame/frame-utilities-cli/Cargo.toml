@@ -11,10 +11,10 @@ documentation = "https://docs.rs/substrate-frame-cli"
 readme = "README.md"
 
 [dependencies]
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-structopt = "0.3.8"
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+structopt = "0.3.25"
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 

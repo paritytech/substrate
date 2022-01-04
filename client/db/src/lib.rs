@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,14 +28,11 @@
 
 #![warn(missing_docs)]
 
-pub mod light;
 pub mod offchain;
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub mod bench;
 
-mod cache;
-mod changes_tries_storage;
 mod children;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
@@ -56,7 +53,6 @@ use std::{
 };
 
 use crate::{
-	changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction},
 	stats::StateUsageStats,
 	storage_cache::{new_shared_cache, CachingState, SharedCache, SyncingCachingState},
 	utils::{meta_keys, read_db, read_meta, DatabaseType, Meta},
@@ -64,8 +60,7 @@ use crate::{
 use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sc_client_api::{
-	backend::{NewBlockState, ProvideChtRoots, PrunableStateChangesTrieStorage},
-	cht,
+	backend::NewBlockState,
 	leaves::{FinalizationDisplaced, LeafSet},
 	utils::is_descendent_of,
 	IoInfo, MemoryInfo, MemorySize, UsageInfo,
@@ -79,11 +74,10 @@ use sp_blockchain::{
 use sp_core::{
 	offchain::OffchainOverlayedChange,
 	storage::{well_known_keys, ChildInfo},
-	ChangesTrieConfiguration,
 };
 use sp_database::Transaction;
 use sp_runtime::{
-	generic::{BlockId, DigestItem},
+	generic::BlockId,
 	traits::{
 		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
@@ -91,9 +85,8 @@ use sp_runtime::{
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChangesTrieCacheAction, ChangesTrieTransaction,
-	ChildStorageCollection, DBValue, IndexOperation, OffchainChangesCollection, StateMachineStats,
-	StorageCollection, UsageInfo as StateUsageInfo,
+	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IndexOperation,
+	OffchainChangesCollection, StateMachineStats, StorageCollection, UsageInfo as StateUsageInfo,
 };
 use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
 
@@ -104,7 +97,6 @@ pub use sp_database::Database;
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
-const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const CACHE_HEADERS: usize = 8;
 
 /// Default value for storage cache child ratio.
@@ -408,11 +400,9 @@ pub(crate) mod columns {
 	pub const HEADER: u32 = 4;
 	pub const BODY: u32 = 5;
 	pub const JUSTIFICATIONS: u32 = 6;
-	pub const CHANGES_TRIE: u32 = 7;
 	pub const AUX: u32 = 8;
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
-	pub const CACHE: u32 = 10;
 	/// Transactions
 	pub const TRANSACTION: u32 = 11;
 }
@@ -507,13 +497,6 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	fn update_block_gap(&self, gap: Option<(NumberFor<Block>, NumberFor<Block>)>) {
 		let mut meta = self.meta.write();
 		meta.block_gap = gap;
-	}
-
-	// Get block changes trie root, if available.
-	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
-		self.header(block).map(|header| {
-			header.and_then(|header| header.digest().log(DigestItem::as_changes_trie_root).cloned())
-		})
 	}
 }
 
@@ -648,10 +631,6 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<dyn sc_client_api::blockchain::Cache<Block>>> {
-		None
-	}
-
 	fn leaves(&self) -> ClientResult<Vec<Block::Hash>> {
 		Ok(self.leaves.read().hashes())
 	}
@@ -704,12 +683,6 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 	}
 }
 
-impl<Block: BlockT> sc_client_api::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
-	fn cache(&self) -> Option<Arc<dyn sc_client_api::blockchain::Cache<Block>>> {
-		None
-	}
-}
-
 impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	type Error = sp_blockchain::Error;
 
@@ -747,62 +720,6 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	}
 }
 
-impl<Block: BlockT> ProvideChtRoots<Block> for BlockchainDb<Block> {
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let cht_number = match cht::block_to_cht_number(cht_size, block) {
-			Some(number) => number,
-			None => return Ok(None),
-		};
-
-		let cht_start: NumberFor<Block> = cht::start_number(cht::size(), cht_number);
-
-		let mut current_num = cht_start;
-		let cht_range = ::std::iter::from_fn(|| {
-			let old_current_num = current_num;
-			current_num = current_num + One::one();
-			Some(old_current_num)
-		});
-
-		cht::compute_root::<Block::Header, HashFor<Block>, _>(
-			cht::size(),
-			cht_number,
-			cht_range.map(|num| self.hash(num)),
-		)
-		.map(Some)
-	}
-
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let cht_number = match cht::block_to_cht_number(cht_size, block) {
-			Some(number) => number,
-			None => return Ok(None),
-		};
-
-		let cht_start: NumberFor<Block> = cht::start_number(cht::size(), cht_number);
-
-		let mut current_num = cht_start;
-		let cht_range = ::std::iter::from_fn(|| {
-			let old_current_num = current_num;
-			current_num = current_num + One::one();
-			Some(old_current_num)
-		});
-
-		cht::compute_root::<Block::Header, HashFor<Block>, _>(
-			cht::size(),
-			cht_number,
-			cht_range.map(|num| self.changes_trie_root(BlockId::Number(num))),
-		)
-		.map(Some)
-	}
-}
-
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
@@ -810,9 +727,6 @@ pub struct BlockImportOperation<Block: BlockT> {
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	offchain_storage_updates: OffchainChangesCollection,
-	changes_trie_updates: MemoryDB<HashFor<Block>>,
-	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>>,
-	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
@@ -864,26 +778,13 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			)
 		});
 
-		let mut changes_trie_config = None;
 		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.iter().map(|(k, v)| {
-				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
-					changes_trie_config = Some(Decode::decode(&mut &v[..]));
-				}
-				(&k[..], Some(&v[..]))
-			}),
+			storage.top.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
 			child_delta,
 			state_version,
 		);
 
-		let changes_trie_config = match changes_trie_config {
-			Some(Ok(c)) => Some(c),
-			Some(Err(_)) => return Err(sp_blockchain::Error::InvalidState.into()),
-			None => None,
-		};
-
 		self.db_updates = transaction;
-		self.changes_trie_config_update = Some(changes_trie_config);
 		Ok(root)
 	}
 }
@@ -906,11 +807,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		leaf_state: NewBlockState,
 	) -> ClientResult<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
-		if let Some(changes_trie_config_update) =
-			changes_tries_storage::extract_new_configuration(&header)
-		{
-			self.changes_trie_config_update = Some(changes_trie_config_update.clone());
-		}
 		self.pending_block =
 			Some(PendingBlock { header, body, indexed_body, justifications, leaf_state });
 		Ok(())
@@ -944,15 +840,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		let root = self.apply_new_state(storage, state_version)?;
 		self.commit_state = commit;
 		Ok(root)
-	}
-
-	fn update_changes_trie(
-		&mut self,
-		update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
-	) -> ClientResult<()> {
-		self.changes_trie_updates = update.0;
-		self.changes_trie_build_cache_update = Some(update.1);
-		Ok(())
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>
@@ -1112,7 +999,6 @@ impl<T: Clone> FrozenForDuration<T> {
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
-	changes_tries_storage: DbChangesTrieStorage<Block>,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block>,
@@ -1172,7 +1058,6 @@ impl<Block: BlockT> Backend<Block> {
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
-		let meta = blockchain.meta.clone();
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let state_db: StateDb<_, _> = StateDb::new(
 			config.state_pruning.clone(),
@@ -1183,22 +1068,10 @@ impl<Block: BlockT> Backend<Block> {
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
-		let changes_tries_storage = DbChangesTrieStorage::new(
-			db,
-			blockchain.header_metadata_cache.clone(),
-			columns::META,
-			columns::CHANGES_TRIE,
-			columns::KEY_LOOKUP,
-			columns::HEADER,
-			columns::CACHE,
-			meta,
-			if is_archive_pruning { None } else { Some(MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR) },
-		)?;
 
 		let backend = Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
-			changes_tries_storage,
 			blockchain,
 			canonicalization_delay,
 			shared_cache: new_shared_cache(
@@ -1335,7 +1208,6 @@ impl<Block: BlockT> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
-		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
@@ -1343,15 +1215,7 @@ impl<Block: BlockT> Backend<Block> {
 		self.ensure_sequential_finalization(header, last_finalized)?;
 		let with_state = sc_client_api::Backend::have_state_at(self, &hash, number);
 
-		self.note_finalized(
-			transaction,
-			false,
-			header,
-			*hash,
-			changes_trie_cache_ops,
-			finalization_displaced,
-			with_state,
-		)?;
+		self.note_finalized(transaction, header, *hash, finalization_displaced, with_state)?;
 
 		if let Some(justification) = justification {
 			transaction.set_from_vec(
@@ -1417,7 +1281,6 @@ impl<Block: BlockT> Backend<Block> {
 			(meta.best_number, meta.finalized_hash, meta.finalized_number, meta.block_gap.clone())
 		};
 
-		let mut changes_trie_cache_ops = None;
 		for (block, justification) in operation.finalized_blocks {
 			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
 			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
@@ -1427,7 +1290,6 @@ impl<Block: BlockT> Backend<Block> {
 				&block_header,
 				Some(last_finalized_hash),
 				justification,
-				&mut changes_trie_cache_ops,
 				&mut finalization_displaced_leaves,
 			)?);
 			last_finalized_hash = block_hash;
@@ -1491,11 +1353,6 @@ impl<Block: BlockT> Backend<Block> {
 					lookup_key.clone(),
 				);
 				transaction.set(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
-
-				// for tests, because config is set from within the reset_storage
-				if operation.changes_trie_config_update.is_none() {
-					operation.changes_trie_config_update = Some(None);
-				}
 
 				if operation.commit_state {
 					transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
@@ -1595,7 +1452,6 @@ impl<Block: BlockT> Backend<Block> {
 
 			let header = &pending_block.header;
 			let is_best = pending_block.leaf_state.is_best();
-			let changes_trie_updates = operation.changes_trie_updates;
 			debug!(target: "db",
 				"DB Commit {:?} ({}), best={}, state={}, existing={}",
 				hash, number, is_best, operation.commit_state, existing_header,
@@ -1610,10 +1466,8 @@ impl<Block: BlockT> Backend<Block> {
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
 				self.note_finalized(
 					&mut transaction,
-					true,
 					header,
 					hash,
-					&mut changes_trie_cache_ops,
 					&mut finalization_displaced_leaves,
 					operation.commit_state,
 				)?;
@@ -1623,21 +1477,6 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			if !existing_header {
-				let changes_trie_config_update = operation.changes_trie_config_update;
-				changes_trie_cache_ops = Some(self.changes_tries_storage.commit(
-					&mut transaction,
-					changes_trie_updates,
-					cache::ComplexBlockId::new(
-						*header.parent_hash(),
-						if number.is_zero() { Zero::zero() } else { number - One::one() },
-					),
-					cache::ComplexBlockId::new(hash, number),
-					header,
-					finalized,
-					changes_trie_config_update,
-					changes_trie_cache_ops,
-				)?);
-
 				{
 					let mut leaves = self.blockchain.leaves.write();
 					leaves.import(hash, number, parent_hash);
@@ -1764,11 +1603,6 @@ impl<Block: BlockT> Backend<Block> {
 			);
 		}
 
-		if let Some(changes_trie_build_cache_update) = operation.changes_trie_build_cache_update {
-			self.changes_tries_storage.commit_build_cache(changes_trie_build_cache_update);
-		}
-		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
-
 		if let Some((enacted, retracted)) = cache_update {
 			self.shared_cache.write().sync(&enacted, &retracted);
 		}
@@ -1787,10 +1621,8 @@ impl<Block: BlockT> Backend<Block> {
 	fn note_finalized(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		is_inserted: bool,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
-		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 		with_state: bool,
 	) -> ClientResult<()> {
@@ -1813,18 +1645,6 @@ impl<Block: BlockT> Backend<Block> {
 				|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e),
 			)?;
 			apply_state_commit(transaction, commit);
-		}
-
-		if !f_num.is_zero() {
-			let new_changes_trie_cache_ops = self.changes_tries_storage.finalize(
-				transaction,
-				*f_header.parent_hash(),
-				f_hash,
-				f_num,
-				if is_inserted { Some(&f_header) } else { None },
-				changes_trie_cache_ops.take(),
-			)?;
-			*changes_trie_cache_ops = Some(new_changes_trie_cache_ops);
 		}
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
@@ -2053,9 +1873,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
 			offchain_storage_updates: Default::default(),
-			changes_trie_config_update: None,
-			changes_trie_updates: MemoryDB::default(),
-			changes_trie_build_cache_update: None,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
 			set_head: None,
@@ -2106,19 +1923,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let header = self.blockchain.expect_header(block)?;
 		let mut displaced = None;
 
-		let mut changes_trie_cache_ops = None;
 		let m = self.finalize_block_with_transaction(
 			&mut transaction,
 			&hash,
 			&header,
 			None,
 			justification,
-			&mut changes_trie_cache_ops,
 			&mut displaced,
 		)?;
 		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(m);
-		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
 	}
 
@@ -2163,10 +1977,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.storage.db.commit(transaction)?;
 
 		Ok(())
-	}
-
-	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block>> {
-		Some(&self.changes_tries_storage)
 	}
 
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
@@ -2225,7 +2035,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
 				let mut transaction = Transaction::new();
-				let removed_number = best_number;
 				let removed =
 					self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(|| {
 						sp_blockchain::Error::UnknownBlock(format!(
@@ -2258,10 +2067,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 						let key =
 							utils::number_and_hash_to_lookup_key(best_number.clone(), &best_hash)?;
-						let changes_trie_cache_ops = self.changes_tries_storage.revert(
-							&mut transaction,
-							&cache::ComplexBlockId::new(removed.hash(), removed_number),
-						)?;
 						if update_finalized {
 							transaction.set_from_vec(
 								columns::META,
@@ -2300,7 +2105,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 							best_hash,
 						);
 						self.storage.db.commit(transaction)?;
-						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 						self.blockchain.update_meta(MetaUpdate {
 							hash: best_hash,
 							number: best_number,
@@ -2362,11 +2166,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			apply_state_commit(&mut transaction, commit);
 		}
 		transaction.remove(columns::KEY_LOOKUP, hash.as_ref());
-		let changes_trie_cache_ops = self
-			.changes_tries_storage
-			.revert(&mut transaction, &cache::ComplexBlockId::new(*hash, hdr.number))?;
-
-		self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 		leaves.revert(hash.clone(), hdr.number);
 		leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 		self.storage.db.commit(transaction)?;
@@ -2478,31 +2277,15 @@ pub(crate) mod tests {
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 	use sp_core::H256;
 	use sp_runtime::{
-		generic::DigestItem,
 		testing::{Block as RawBlock, ExtrinsicWrapper, Header},
 		traits::{BlakeTwo256, Hash},
-		ConsensusEngineId,
+		ConsensusEngineId, StateVersion,
 	};
-	use sp_state_machine::{TrieDBMutV1 as TrieDBMut, TrieMut};
 
 	const CONS0_ENGINE_ID: ConsensusEngineId = *b"CON0";
 	const CONS1_ENGINE_ID: ConsensusEngineId = *b"CON1";
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
-
-	pub fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<BlakeTwo256>) {
-		let mut changes_root = H256::default();
-		let mut changes_trie_update = MemoryDB::<BlakeTwo256>::default();
-		{
-			let mut trie =
-				TrieDBMut::<BlakeTwo256>::new(&mut changes_trie_update, &mut changes_root);
-			for (key, value) in changes {
-				trie.insert(&key, &value).unwrap();
-			}
-		}
-
-		(changes_root, changes_trie_update)
-	}
 
 	pub fn insert_header(
 		backend: &Backend<Block>,
@@ -2518,24 +2301,18 @@ pub(crate) mod tests {
 		backend: &Backend<Block>,
 		number: u64,
 		parent_hash: H256,
-		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+		_changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		extrinsics_root: H256,
 		body: Vec<ExtrinsicWrapper<u64>>,
 		transaction_index: Option<Vec<IndexOperation>>,
 	) -> H256 {
 		use sp_runtime::testing::Digest;
 
-		let mut digest = Digest::default();
-		let mut changes_trie_update = Default::default();
-		if let Some(changes) = changes {
-			let (root, update) = prepare_changes(changes);
-			digest.push(DigestItem::ChangesTrieRoot(root));
-			changes_trie_update = update;
-		}
+		let digest = Digest::default();
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest,
 			extrinsics_root,
 		};
@@ -2552,8 +2329,6 @@ pub(crate) mod tests {
 		if let Some(index) = transaction_index {
 			op.update_transaction_index(index).unwrap();
 		}
-		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear))
-			.unwrap();
 		backend.commit_operation(op).unwrap();
 
 		header_hash
@@ -3274,38 +3049,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn header_cht_root_works() {
-		use sc_client_api::ProvideChtRoots;
-
-		let backend = Backend::<Block>::new_test(10, 10);
-
-		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
-		let mut prev_hash =
-			insert_header(&backend, 0, Default::default(), None, Default::default());
-		let cht_size: u64 = cht::size();
-		for i in 1..1 + cht_size + cht_size + 1 {
-			prev_hash = insert_header(&backend, i, prev_hash, None, Default::default());
-		}
-
-		let blockchain = backend.blockchain();
-
-		let cht_root_1 = blockchain
-			.header_cht_root(cht_size, cht::start_number(cht_size, 0))
-			.unwrap()
-			.unwrap();
-		let cht_root_2 = blockchain
-			.header_cht_root(cht_size, cht::start_number(cht_size, 0) + cht_size / 2)
-			.unwrap()
-			.unwrap();
-		let cht_root_3 = blockchain
-			.header_cht_root(cht_size, cht::end_number(cht_size, 0))
-			.unwrap()
-			.unwrap();
-		assert_eq!(cht_root_1, cht_root_2);
-		assert_eq!(cht_root_2, cht_root_3);
-	}
-
-	#[test]
 	fn prune_blocks_on_finalize() {
 		for storage in &[TransactionStorageMode::BlockBody, TransactionStorageMode::StorageChain] {
 			let backend = Backend::<Block>::new_test_with_tx_storage(2, 0, *storage);
@@ -3501,7 +3244,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number: 1,
 			parent_hash: block0,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
 		};
@@ -3513,7 +3256,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number: 2,
 			parent_hash: block1,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
 		};
@@ -3536,7 +3279,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number: 1,
 			parent_hash: block0,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
 		};

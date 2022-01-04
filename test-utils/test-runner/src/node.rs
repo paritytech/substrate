@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,10 +25,7 @@ use futures::{
 };
 use jsonrpc_core::MetaIoHandler;
 use manual_seal::EngineCommand;
-use sc_client_api::{
-	backend::{self, Backend},
-	CallExecutor, ExecutorProvider,
-};
+use sc_client_api::{backend::Backend, CallExecutor, ExecutorProvider};
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
 use sc_transaction_pool_api::TransactionPool;
@@ -160,9 +157,6 @@ where
 	{
 		let id = BlockId::Hash(self.client.info().best_hash);
 		let mut overlay = OverlayedChanges::default();
-		let changes_trie =
-			backend::changes_tries_state_at_block(&id, self.backend.changes_trie_storage())
-				.unwrap();
 		let mut cache = StorageTransactionCache::<
 			T::Block,
 			<TFullBackend<T::Block> as Backend<T::Block>>::State,
@@ -176,13 +170,7 @@ where
 			.state_at(id.clone())
 			.expect(&format!("State at block {} not found", id));
 
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut cache,
-			&state_backend,
-			changes_trie.clone(),
-			Some(&mut extensions),
-		);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &state_backend, Some(&mut extensions));
 		sp_externalities::set_and_run_with_externalities(&mut ext, closure)
 	}
 
@@ -207,7 +195,11 @@ where
 	{
 		let signed_data = if let Some(signer) = signer {
 			let extra = self.with_state(|| T::signed_extras(signer.clone()));
-			Some((signer.into(), MultiSignature::Sr25519(Default::default()), extra))
+			Some((
+				signer.into(),
+				MultiSignature::Sr25519(sp_core::sr25519::Signature::from_raw([0u8; 64])),
+				extra,
+			))
 		} else {
 			None
 		};
@@ -273,8 +265,6 @@ where
 			let signal = tokio::signal::ctrl_c();
 			futures::pin_mut!(signal);
 			futures::future::select(task, signal).await;
-			// we don't really care whichever comes first.
-			task_manager.clean_shutdown().await
 		}
 	}
 }

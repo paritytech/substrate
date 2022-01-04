@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error::Error as CliError, CliConfiguration, Result, SubstrateCli};
+use crate::{error::Error as CliError, Result, SubstrateCli};
 use chrono::prelude::*;
 use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;
@@ -98,7 +98,7 @@ where
 	pin_mut!(f);
 
 	tokio_runtime.block_on(main(f))?;
-	tokio_runtime.block_on(task_manager.clean_shutdown());
+	drop(task_manager);
 
 	Ok(())
 }
@@ -112,15 +112,8 @@ pub struct Runner<C: SubstrateCli> {
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
-		let tokio_runtime = build_runtime()?;
-		let runtime_handle = tokio_runtime.handle().clone();
-
-		Ok(Runner {
-			config: command.create_configuration(cli, runtime_handle)?,
-			tokio_runtime,
-			phantom: PhantomData,
-		})
+	pub fn new(config: Configuration, tokio_runtime: tokio::runtime::Runtime) -> Result<Runner<C>> {
+		Ok(Runner { config, tokio_runtime, phantom: PhantomData })
 	}
 
 	/// Log information about the node itself.
@@ -132,7 +125,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc3-f4940588c-x86_64-linux-gnu
 	/// 2020-06-03 16:14:21 ❤️  by Parity Technologies <admin@parity.io>, 2017-2020
 	/// 2020-06-03 16:14:21 📋 Chain specification: Flaming Fir
-	/// 2020-06-03 16:14:21 🏷 Node name: jolly-rod-7462
+	/// 2020-06-03 16:14:21 🏷  Node name: jolly-rod-7462
 	/// 2020-06-03 16:14:21 👤 Role: FULL
 	/// 2020-06-03 16:14:21 💾 Database: RocksDb at /tmp/c/chains/flamingfir7/db
 	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
@@ -154,7 +147,6 @@ impl<C: SubstrateCli> Runner<C> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
-		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		Ok(res?)
 	}
 
@@ -200,7 +192,7 @@ pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 	info!("✌️  version {}", C::impl_version());
 	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::today().year());
 	info!("📋 Chain specification: {}", config.chain_spec.name());
-	info!("🏷 Node name: {}", config.network.node_name);
+	info!("🏷  Node name: {}", config.network.node_name);
 	info!("👤 Role: {}", config.display_role());
 	info!(
 		"💾 Database: {} at {}",

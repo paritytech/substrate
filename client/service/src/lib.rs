@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -68,14 +68,14 @@ use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use sc_network::config::{OnDemand, TransactionImport, TransactionImportFuture};
+pub use sc_network::config::{TransactionImport, TransactionImportFuture};
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
-pub use task_manager::{SpawnTaskHandle, TaskManager};
+pub use task_manager::{SpawnTaskHandle, TaskManager, DEFAULT_GROUP_NAME};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -576,7 +576,7 @@ mod tests {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
-			to: Default::default(),
+			to: AccountKeyring::Bob.into(),
 		}
 		.into_signed_tx();
 		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))

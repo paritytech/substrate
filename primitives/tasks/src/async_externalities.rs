@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,9 +19,8 @@
 //! Async externalities.
 
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
+	storage::{ChildInfo, StateVersion, TrackedStorageKey},
 	traits::{Externalities, RuntimeSpawn, RuntimeSpawnExt, SpawnNamed, TaskExecutorExt},
-	StateVersion,
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
 use std::any::{Any, TypeId};
@@ -137,10 +136,6 @@ impl Externalities for AsyncExternalities {
 		_state_version: StateVersion,
 	) -> Vec<u8> {
 		panic!("`child_storage_root`: should not be used in async externalities!")
-	}
-
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		panic!("`storage_changes_root`: should not be used in async externalities!")
 	}
 
 	fn storage_start_transaction(&mut self) {

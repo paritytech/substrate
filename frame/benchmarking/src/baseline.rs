@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +18,27 @@
 //! A set of benchmarks which can establish a global baseline for all other
 //! benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use crate::benchmarks;
 use codec::Encode;
 use frame_system::Pallet as System;
-use sp_runtime::traits::Hash;
+use sp_application_crypto::KeyTypeId;
+use sp_runtime::{
+	traits::{AppVerify, Hash},
+	RuntimeAppPublic,
+};
 use sp_std::prelude::*;
+
+pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
+
+mod app_sr25519 {
+	use super::TEST_KEY_TYPE_ID;
+	use sp_application_crypto::{app_crypto, sr25519};
+	app_crypto!(sr25519, TEST_KEY_TYPE_ID);
+}
+
+type SignerId = app_sr25519::Public;
 
 pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
@@ -71,6 +87,23 @@ benchmarks! {
 		(0..=100_000u32).for_each(|j| hash = T::Hashing::hash(&j.to_be_bytes()));
 	} verify {
 		assert!(hash != T::Hash::default());
+	}
+
+	sr25519_verification {
+		let i in 1 .. 100;
+
+		let public = SignerId::generate_pair(None);
+
+		let sigs_count: u8 = i.try_into().unwrap();
+		let msg_and_sigs: Vec<_> = (0..sigs_count).map(|j| {
+			let msg = vec![j, j];
+			(msg.clone(), public.sign(&msg).unwrap())
+		})
+		.collect();
+	}: {
+		msg_and_sigs.iter().for_each(|(msg, sig)| {
+			assert!(sig.verify(&msg[..], &public));
+		});
 	}
 
 	#[skip_meta]
@@ -162,12 +195,19 @@ pub mod mock {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
 	impl super::Config for Test {}
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
+		use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+		use sp_std::sync::Arc;
+
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		sp_io::TestExternalities::new(t)
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
+
+		ext
 	}
 }

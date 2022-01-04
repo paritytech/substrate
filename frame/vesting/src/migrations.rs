@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,7 +70,7 @@ pub(crate) mod v1 {
 
 		for (_key, schedules) in Vesting::<T>::iter() {
 			assert!(
-				schedules.len() == 1,
+				schedules.len() >= 1,
 				"A bounded vec with incorrect count of items was created."
 			);
 

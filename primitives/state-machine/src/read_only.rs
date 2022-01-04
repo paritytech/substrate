@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,9 +21,9 @@ use crate::{Backend, StorageKey, StorageValue};
 use codec::Encode;
 use hash_db::Hasher;
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
+	storage::{ChildInfo, StateVersion, TrackedStorageKey},
 	traits::Externalities,
-	Blake2Hasher, StateVersion,
+	Blake2Hasher,
 };
 use std::{
 	any::{Any, TypeId},
@@ -155,10 +155,6 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		_state_version: StateVersion,
 	) -> Vec<u8> {
 		unimplemented!("child_storage_root is not supported in ReadOnlyExternalities")
-	}
-
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		unimplemented!("storage_changes_root is not supported in ReadOnlyExternalities")
 	}
 
 	fn storage_start_transaction(&mut self) {

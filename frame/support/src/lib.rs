@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,7 @@ pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
 #[doc(hidden)]
-pub use sp_runtime::RuntimeDebug;
+pub use sp_runtime::{RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
@@ -751,9 +751,9 @@ macro_rules! assert_noop {
 		$x:expr,
 		$y:expr $(,)?
 	) => {
-		let h = $crate::storage_root();
+		let h = $crate::storage_root($crate::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root());
+		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
 	};
 }
 
@@ -766,9 +766,9 @@ macro_rules! assert_storage_noop {
 	(
 		$x:expr
 	) => {
-		let h = $crate::storage_root();
+		let h = $crate::storage_root($crate::StateVersion::V1);
 		$x;
-		assert_eq!(h, $crate::storage_root());
+		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
 	};
 }
 
@@ -1330,6 +1330,7 @@ pub mod pallet_prelude {
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
+	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{
@@ -1748,7 +1749,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
-/// When implementating the storage info (when #[pallet::generate_storage_info]` is specified
+/// When implementating the storage info (when `#[pallet::generate_storage_info]` is specified
 /// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
 /// This can be useful for storage which can never go into PoV (Proof of Validity).
 ///

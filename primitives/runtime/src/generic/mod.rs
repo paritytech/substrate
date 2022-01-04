@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ mod unchecked_extrinsic;
 pub use self::{
 	block::{Block, BlockId, SignedBlock},
 	checked_extrinsic::CheckedExtrinsic,
-	digest::{ChangesTrieSignal, Digest, DigestItem, DigestItemRef, OpaqueDigestItemId},
+	digest::{Digest, DigestItem, DigestItemRef, OpaqueDigestItemId},
 	era::{Era, Phase},
 	header::Header,
 	unchecked_extrinsic::{SignedPayload, UncheckedExtrinsic},

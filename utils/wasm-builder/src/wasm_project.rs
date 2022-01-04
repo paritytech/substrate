@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -266,8 +266,7 @@ fn create_project_cargo_toml(
 	let mut package = Table::new();
 	package.insert("name".into(), format!("{}-wasm", crate_name).into());
 	package.insert("version".into(), "1.0.0".into());
-	package.insert("edition".into(), "2018".into());
-	package.insert("resolver".into(), "2".into());
+	package.insert("edition".into(), "2021".into());
 
 	wasm_workspace_toml.insert("package".into(), package.into());
 

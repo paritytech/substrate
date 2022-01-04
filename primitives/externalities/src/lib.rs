@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -176,13 +176,6 @@ pub trait Externalities: ExtensionStore {
 	/// This assumes specific format of the storage item. Also there is no way to undo this
 	/// operation.
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>);
-
-	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
-	///
-	/// `parent` expects a SCALE encoded hash.
-	///
-	/// The returned hash is defined by the `Block` and is SCALE encoded.
-	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
 	/// Start a new nested transaction.
 	///

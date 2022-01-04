@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,14 +24,14 @@ use sp_runtime_interface_test_wasm::{test_api::HostFunctions, wasm_binary_unwrap
 use sp_runtime_interface_test_wasm_deprecated::wasm_binary_unwrap as wasm_binary_deprecated_unwrap;
 
 use sc_executor_common::runtime_blob::RuntimeBlob;
-use sp_wasm_interface::HostFunctions as HostFunctionsT;
+use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions as HostFunctionsT};
 
 use std::{
 	collections::HashSet,
 	sync::{Arc, Mutex},
 };
 
-type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
+type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256>;
 
 fn call_wasm_method_with_result<HF: HostFunctionsT>(
 	binary: &[u8],
@@ -39,16 +39,11 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 ) -> Result<TestExternalities, String> {
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
-	let mut host_functions = HF::host_functions();
-	host_functions.extend(sp_io::SubstrateHostFunctions::host_functions());
 
-	let executor = sc_executor::WasmExecutor::new(
-		sc_executor::WasmExecutionMethod::Interpreted,
-		Some(8),
-		host_functions,
-		8,
-		None,
-	);
+	let executor = sc_executor::WasmExecutor::<
+		ExtendedHostFunctions<sp_io::SubstrateHostFunctions, HF>,
+	>::new(sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None, 2);
+
 	executor
 		.uncached_call(
 			RuntimeBlob::uncompress_if_needed(binary).expect("Failed to parse binary"),
