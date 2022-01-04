@@ -40,7 +40,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	type Transaction: Consolidate + Default + Send;
 
 	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H>;
+	type TrieBackendStorage: TrieBackendStorage<H, Overlay = Self::Transaction>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
