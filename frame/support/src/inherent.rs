@@ -62,6 +62,8 @@ pub trait ProvideInherent {
 	/// one inherent for which:
 	/// * type is [`Self::Call`],
 	/// * [`Self::is_inherent`] returns true.
+	///
+	/// NOTE: This is currently only checked by block validators, not all full nodes.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
 		Ok(None)
 	}
