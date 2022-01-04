@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 hex = "0.4"
 hex-literal = "0.3.4"
 tempfile = "3.1.0"
-tokio = { version = "1.13.0", features = ["time"] }
+tokio = { version = "1.15.0", features = ["time"] }
 log = "0.4.8"
 fdlimit = "0.2.1"
 parking_lot = "0.11.2"

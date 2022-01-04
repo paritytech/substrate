@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -85,7 +85,7 @@ type AuthorityId<P> = <P as Pair>::Public;
 /// Slot duration type for Aura.
 pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
-/// Get type of `SlotDuration` for Aura.
+/// Get the slot duration for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
 where
 	A: Codec,
@@ -93,7 +93,10 @@ where
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
-	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
+	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
+	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
+
+	Ok(SlotDuration::new(slot_duration))
 }
 
 /// Get slot author for given block along with authorities.

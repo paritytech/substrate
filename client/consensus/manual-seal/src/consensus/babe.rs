@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -154,7 +154,7 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = Config::get_or_compute(&*client)?;
+		let config = Config::get(&*client)?;
 
 		Ok(Self { config, client, keystore, epoch_changes, authorities })
 	}
@@ -327,7 +327,7 @@ impl SlotTimestampProvider {
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
-		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
+		let slot_duration = Config::get(&*client)?.slot_duration;
 		let info = client.info();
 
 		// looks like this isn't the first block, rehydrate the fake time.
