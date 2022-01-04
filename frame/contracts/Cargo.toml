@@ -2,9 +2,9 @@
 name = "pallet-contracts"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for WASM contracts"
 readme = "README.md"
@@ -18,8 +18,9 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
-pwasm-utils = { version = "0.18", default-features = false }
+pwasm-utils = { version = "0.18.2", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
@@ -27,6 +28,7 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
+libsecp256k1 = { version = "0.7", optional = true, default-features = false, features = ["hmac", "static-context"] }
 rand = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
 
@@ -36,16 +38,17 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "common" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 assert_matches = "1"
+env_logger = "0.9"
 hex-literal = "0.3"
-pretty_assertions = "0.7"
+pretty_assertions = "1"
 wat = "1"
 
 # Substrate Dependencies
@@ -59,6 +62,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-io/std",
@@ -73,9 +77,11 @@ std = [
 	"pallet-contracts-proc-macro/full",
 	"log/std",
 	"rand/std",
+	"libsecp256k1/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
+	"libsecp256k1",
 	"rand",
 	"rand_pcg",
 	"unstable-interface",

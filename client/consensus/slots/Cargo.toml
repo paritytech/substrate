@@ -3,10 +3,10 @@ name = "sc-consensus-slots"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
@@ -16,14 +16,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-arithmetic = { version = "4.0.0-dev", path = "../../../primitives/arithmetic" }
+sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
+sp-arithmetic = { version = "4.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
-sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machine" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
@@ -31,7 +30,7 @@ sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.11"
-thiserror = "1.0.21"
+thiserror = "1.0.30"
 async-trait = "0.1.50"
 
 [dev-dependencies]

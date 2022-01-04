@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ use crate::{
 	params::{ImportParams, SharedParams},
 	CliConfiguration,
 };
-use sc_client_api::UsageProvider;
+use sc_client_api::HeaderBackend;
 use sc_service::chain_ops::import_blocks;
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -68,7 +68,7 @@ impl ImportBlocksCmd {
 	/// Run the import-blocks command
 	pub async fn run<B, C, IQ>(&self, client: Arc<C>, import_queue: IQ) -> error::Result<()>
 	where
-		C: UsageProvider<B> + Send + Sync + 'static,
+		C: HeaderBackend<B> + Send + Sync + 'static,
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		IQ: sc_service::ImportQueue<B> + 'static,
 	{

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,10 +25,8 @@ use libp2p::{
 		transport::{Boxed, OptionalTransport},
 		upgrade,
 	},
-	identity, mplex, noise, PeerId, Transport,
+	dns, identity, mplex, noise, tcp, websocket, PeerId, Transport,
 };
-#[cfg(not(target_os = "unknown"))]
-use libp2p::{dns, tcp, websocket};
 use std::{sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -60,20 +58,16 @@ pub fn build_transport(
 		let desktop_trans =
 			websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
 		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans.clone()));
-		OptionalTransport::some(if let Ok(dns) = dns_init {
+		EitherTransport::Left(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
 		} else {
 			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
 		})
 	} else {
-		// For the in-memory case we set up the transport with an `.or_transport` below.
-		OptionalTransport::none()
+		EitherTransport::Right(OptionalTransport::some(
+			libp2p::core::transport::MemoryTransport::default(),
+		))
 	};
-	let transport = transport.or_transport(if memory_only {
-		OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
-	} else {
-		OptionalTransport::none()
-	});
 
 	let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
 

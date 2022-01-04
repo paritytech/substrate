@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -243,11 +243,21 @@ impl TaskExecutor {
 }
 
 impl SpawnNamed for TaskExecutor {
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 }
@@ -299,19 +309,19 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 				)),
 				function: match self.content.block_type {
 					BlockType::RandomTransfersKeepAlive =>
-						Call::Balances(BalancesCall::transfer_keep_alive(
-							sp_runtime::MultiAddress::Id(receiver),
-							node_runtime::ExistentialDeposit::get() + 1,
-						)),
+						Call::Balances(BalancesCall::transfer_keep_alive {
+							dest: sp_runtime::MultiAddress::Id(receiver),
+							value: node_runtime::ExistentialDeposit::get() + 1,
+						}),
 					BlockType::RandomTransfersReaping => {
-						Call::Balances(BalancesCall::transfer(
-							sp_runtime::MultiAddress::Id(receiver),
+						Call::Balances(BalancesCall::transfer {
+							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
-							100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
-						))
+							value: 100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+						})
 					},
-					BlockType::Noop => Call::System(SystemCall::remark(Vec::new())),
+					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,
@@ -390,7 +400,7 @@ impl BenchDb {
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8),
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Compiled, None, 8, 2),
 			&keyring.generate_genesis(),
 			None,
 			None,
@@ -581,7 +591,6 @@ impl BenchKeyring {
 	/// Generate genesis with accounts from this keyring endowed with some balance.
 	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
-			false,
 			Some(node_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)

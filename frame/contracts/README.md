@@ -34,7 +34,7 @@ reverted at the current call's contract level. For example, if contract A calls 
 then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state
 changes still persist.
 
-One gas is equivalent to one [weight](https://substrate.dev/docs/en/knowledgebase/learn-substrate/weight)
+One gas is equivalent to one [weight](https://docs.substrate.io/v3/runtime/weights-and-fees)
 which is defined as one picosecond of execution time on the runtime's reference machine.
 
 ### Notable Scenarios
@@ -48,6 +48,34 @@ fails, A can decide how to handle that failure, either proceeding or reverting A
 ### Dispatchable functions
 
 Those are documented in the [reference documentation](https://docs.rs/pallet-contracts/latest/pallet_contracts/#dispatchable-functions).
+
+### Interface exposed to contracts
+
+Each contract is one WebAssembly module that looks like this:
+
+```wat
+(module
+    ;; Invoked by pallet-contracts when a contract is instantiated.
+    ;; No arguments and empty return type.
+    (func (export "deploy"))
+
+    ;; Invoked by pallet-contracts when a contract is called.
+    ;; No arguments and empty return type.
+    (func (export "call"))
+
+    ;; If a contract uses memory it must be imported. Memory is optional.
+    ;; The maximum allowed memory size depends on the pallet-contracts configuration.
+    (import "env" "memory" (memory 1 1))
+
+    ;; This is one of many functions that can be imported and is implemented by pallet-contracts.
+    ;; This function is used to copy the result buffer and flags back to the caller.
+    (import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+)
+```
+
+The documentation of all importable functions can be found
+[here](https://github.com/paritytech/substrate/blob/master/frame/contracts/src/wasm/runtime.rs).
+Look for the `define_env!` macro invocation.
 
 ## Usage
 

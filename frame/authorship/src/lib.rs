@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -115,7 +115,7 @@ where
 	}
 }
 
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
 #[cfg_attr(any(feature = "std", test), derive(PartialEq))]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
@@ -170,7 +170,9 @@ pub mod pallet {
 
 			<DidSetUncles<T>>::put(false);
 
-			T::EventHandler::note_author(Self::author());
+			if let Some(author) = Self::author() {
+				T::EventHandler::note_author(author);
+			}
 
 			0
 		}
@@ -238,7 +240,7 @@ pub mod pallet {
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 			let uncles = data.uncles().unwrap_or_default();
-			let mut set_uncles = Vec::new();
+			let mut new_uncles = Vec::new();
 
 			if !uncles.is_empty() {
 				let prev_uncles = <Uncles<T>>::get();
@@ -257,10 +259,10 @@ pub mod pallet {
 					match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
 						Ok(_) => {
 							let hash = uncle.hash();
-							set_uncles.push(uncle);
+							new_uncles.push(uncle);
 							existing_hashes.push(hash);
 
-							if set_uncles.len() == MAX_UNCLES {
+							if new_uncles.len() == MAX_UNCLES {
 								break
 							}
 						},
@@ -271,10 +273,10 @@ pub mod pallet {
 				}
 			}
 
-			if set_uncles.is_empty() {
+			if new_uncles.is_empty() {
 				None
 			} else {
-				Some(Call::set_uncles(set_uncles))
+				Some(Call::set_uncles { new_uncles })
 			}
 		}
 
@@ -283,14 +285,14 @@ pub mod pallet {
 			_data: &InherentData,
 		) -> result::Result<(), Self::Error> {
 			match call {
-				Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES =>
+				Call::set_uncles { ref new_uncles } if new_uncles.len() > MAX_UNCLES =>
 					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into())),
 				_ => Ok(()),
 			}
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::set_uncles(_))
+			matches!(call, Call::set_uncles { .. })
 		}
 	}
 }
@@ -300,20 +302,18 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
 	/// as afterwards.
-	pub fn author() -> T::AccountId {
+	pub fn author() -> Option<T::AccountId> {
 		// Check the memoized storage value.
 		if let Some(author) = <Author<T>>::get() {
-			return author
+			return Some(author)
 		}
 
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-			<Author<T>>::put(&author);
-			author
-		} else {
-			Default::default()
-		}
+		T::FindAuthor::find_author(pre_runtime_digests).map(|a| {
+			<Author<T>>::put(&a);
+			a
+		})
 	}
 
 	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
@@ -329,14 +329,13 @@ impl<T: Config> Pallet<T> {
 				UncleEntryItem::InclusionHeight(_) => None,
 				UncleEntryItem::Uncle(h, _) => Some(h),
 			});
-			let author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
+			let maybe_author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
 			let hash = uncle.hash();
 
-			T::EventHandler::note_uncle(
-				author.clone().unwrap_or_default(),
-				now - uncle.number().clone(),
-			);
-			uncles.push(UncleEntryItem::Uncle(hash, author));
+			if let Some(author) = maybe_author.clone() {
+				T::EventHandler::note_uncle(author, now - uncle.number().clone());
+			}
+			uncles.push(UncleEntryItem::Uncle(hash, maybe_author));
 		}
 
 		<Uncles<T>>::put(&uncles);
@@ -406,7 +405,11 @@ impl<T: Config> Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authorship;
-	use frame_support::{parameter_types, ConsensusEngineId};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64},
+		ConsensusEngineId,
+	};
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::DigestItem,
@@ -429,7 +432,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -449,7 +451,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -458,15 +460,12 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-	}
-
-	parameter_types! {
-		pub const UncleGenerations: u64 = 5;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet::Config for Test {
 		type FindAuthor = AuthorGiven;
-		type UncleGenerations = UncleGenerations;
+		type UncleGenerations = ConstU64<5>;
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}
@@ -692,7 +691,7 @@ mod tests {
 			header.digest_mut().pop(); // pop the seal off.
 			System::initialize(&1, &Default::default(), header.digest(), Default::default());
 
-			assert_eq!(Authorship::author(), author);
+			assert_eq!(Authorship::author(), Some(author));
 		});
 	}
 

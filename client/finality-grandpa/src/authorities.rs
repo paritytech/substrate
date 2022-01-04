@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -168,7 +168,7 @@ pub struct AuthoritySet<H, N> {
 	/// Track at which blocks the set id changed. This is useful when we need to prove finality for
 	/// a given block since we can figure out what set the block belongs to and when the set
 	/// started/ended.
-	authority_set_changes: AuthoritySetChanges<N>,
+	pub(crate) authority_set_changes: AuthoritySetChanges<N>,
 }
 
 impl<H, N> AuthoritySet<H, N>
@@ -714,6 +714,17 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		}
 	}
 
+	pub(crate) fn insert(&mut self, block_number: N) {
+		let idx = self
+			.0
+			.binary_search_by_key(&block_number, |(_, n)| n.clone())
+			.unwrap_or_else(|b| b);
+
+		let set_id = if idx == 0 { 0 } else { self.0[idx - 1].0 + 1 };
+		assert!(idx == self.0.len() || self.0[idx].0 != set_id);
+		self.0.insert(idx, (set_id, block_number));
+	}
+
 	/// Returns an iterator over all historical authority set changes starting at the given block
 	/// number (excluded). The iterator yields a tuple representing the set id and the block number
 	/// of the last block in that set.
@@ -742,7 +753,7 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::crypto::Public;
+	use sp_core::crypto::{ByteArray, UncheckedFrom};
 
 	fn static_is_descendent_of<A>(value: bool) -> impl Fn(&A, &A) -> Result<bool, std::io::Error> {
 		move |_, _| Ok(value)
@@ -757,7 +768,7 @@ mod tests {
 
 	#[test]
 	fn current_limit_filters_min() {
-		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 1)];
 
 		let mut authorities = AuthoritySet {
 			current_authorities: current_authorities.clone(),
@@ -791,7 +802,7 @@ mod tests {
 
 	#[test]
 	fn changes_iterated_in_pre_order() {
-		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 1)];
 
 		let mut authorities = AuthoritySet {
 			current_authorities: current_authorities.clone(),
@@ -883,8 +894,8 @@ mod tests {
 			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
-		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
-		let set_b = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 5)];
+		let set_b = vec![(AuthorityId::from_slice(&[2; 32]).unwrap(), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -966,8 +977,8 @@ mod tests {
 			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
-		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
-		let set_c = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 5)];
+		let set_c = vec![(AuthorityId::from_slice(&[2; 32]).unwrap(), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -1046,7 +1057,7 @@ mod tests {
 			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
-		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -1117,8 +1128,8 @@ mod tests {
 			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
-		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
-		let set_b = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 5)];
+		let set_b = vec![(AuthorityId::from_slice(&[2; 32]).unwrap(), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -1217,7 +1228,7 @@ mod tests {
 			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
-		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 5)];
 
 		// we create a forced change with no delay
 		let change_a = PendingChange {
@@ -1242,7 +1253,7 @@ mod tests {
 
 	#[test]
 	fn forced_changes_blocked_by_standard_changes() {
-		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 1)];
 
 		let mut authorities = AuthoritySet {
 			current_authorities: set_a.clone(),
@@ -1367,7 +1378,7 @@ mod tests {
 
 	#[test]
 	fn next_change_works() {
-		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 1)];
 
 		let mut authorities = AuthoritySet {
 			current_authorities: current_authorities.clone(),
@@ -1482,8 +1493,10 @@ mod tests {
 			None,
 		);
 
-		let invalid_authorities_weight =
-			vec![(AuthorityId::from_slice(&[1; 32]), 5), (AuthorityId::from_slice(&[2; 32]), 0)];
+		let invalid_authorities_weight = vec![
+			(AuthorityId::from_slice(&[1; 32]).unwrap(), 5),
+			(AuthorityId::from_slice(&[2; 32]).unwrap(), 0),
+		];
 
 		// authority weight of zero is invalid
 		assert_eq!(AuthoritySet::<(), ()>::genesis(invalid_authorities_weight.clone()), None);
@@ -1499,7 +1512,8 @@ mod tests {
 		);
 
 		let mut authority_set =
-			AuthoritySet::<(), u64>::genesis(vec![(AuthorityId::from_slice(&[1; 32]), 5)]).unwrap();
+			AuthoritySet::<(), u64>::genesis(vec![(AuthorityId::unchecked_from([1; 32]), 5)])
+				.unwrap();
 
 		let invalid_change_empty_authorities = PendingChange {
 			next_authorities: vec![],
@@ -1539,7 +1553,7 @@ mod tests {
 
 	#[test]
 	fn cleans_up_stale_forced_changes_when_applying_standard_change() {
-		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]).unwrap(), 1)];
 
 		let mut authorities = AuthoritySet {
 			current_authorities: current_authorities.clone(),
@@ -1630,6 +1644,18 @@ mod tests {
 
 		assert_eq!(authorities.pending_forced_changes.len(), 1);
 		assert_eq!(authorities.pending_forced_changes.first().unwrap().canon_hash, "D");
+	}
+
+	#[test]
+	fn authority_set_changes_insert() {
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 41);
+		authority_set_changes.append(1, 81);
+		authority_set_changes.append(4, 121);
+
+		authority_set_changes.insert(101);
+		assert_eq!(authority_set_changes.get_set_id(100), AuthoritySetChangeId::Set(2, 101));
+		assert_eq!(authority_set_changes.get_set_id(101), AuthoritySetChangeId::Set(2, 101));
 	}
 
 	#[test]

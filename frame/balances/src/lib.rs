@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -167,6 +167,7 @@ use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::traits::GenesisBuild;
 use frame_support::{
 	ensure,
+	pallet_prelude::DispatchResult,
 	traits::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
 		Currency, ExistenceRequirement,
@@ -177,12 +178,13 @@ use frame_support::{
 	WeakBoundedVec,
 };
 use frame_system as system;
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
+	ArithmeticError, DispatchError, RuntimeDebug,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -206,7 +208,8 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Debug
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ TypeInfo;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
@@ -268,8 +271,6 @@ pub mod pallet {
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
 		///     that the transfer will not kill the origin account.
 		/// ---------------------------------
-		/// - Base Weight: 73.64 µs, worst case scenario (account created, account removed)
-		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::transfer())]
@@ -297,16 +298,6 @@ pub mod pallet {
 		/// it will reset the account nonce (`frame_system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
-		///
-		/// # <weight>
-		/// - Independent of the arguments.
-		/// - Contains a limited number of reads and writes.
-		/// ---------------------
-		/// - Base Weight:
-		///     - Creating: 27.56 µs
-		///     - Killing: 35.11 µs
-		/// - DB Weight: 1 Read, 1 Write to `who`
-		/// # </weight>
 		#[pallet::weight(
 			T::WeightInfo::set_balance_creating() // Creates a new account.
 				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
@@ -343,7 +334,7 @@ pub mod pallet {
 
 				(account.free, account.reserved)
 			})?;
-			Self::deposit_event(Event::BalanceSet(who, free, reserved));
+			Self::deposit_event(Event::BalanceSet { who, free, reserved });
 			Ok(().into())
 		}
 
@@ -378,11 +369,6 @@ pub mod pallet {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Pallet.html#method.transfer
-		/// # <weight>
-		/// - Cheaper than transfer because account cannot be killed.
-		/// - Base Weight: 51.4 µs
-		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
-		/// #</weight>
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
@@ -417,7 +403,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			keep_alive: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			use fungible::Inspect;
 			let transactor = ensure_signed(origin)?;
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive);
@@ -429,33 +415,55 @@ pub mod pallet {
 				reducible_balance,
 				keep_alive.into(),
 			)?;
-			Ok(().into())
+			Ok(())
+		}
+
+		/// Unreserve some balance from a user by force.
+		///
+		/// Can only be called by ROOT.
+		#[pallet::weight(T::WeightInfo::force_unreserve())]
+		pub fn force_unreserve(
+			origin: OriginFor<T>,
+			who: <T::Lookup as StaticLookup>::Source,
+			amount: T::Balance,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(who)?;
+			let _leftover = <Self as ReservableCurrency<_>>::unreserve(&who, amount);
+			Ok(())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", T::Balance = "Balance")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// An account was created with some free balance. \[account, free_balance\]
-		Endowed(T::AccountId, T::Balance),
+		/// An account was created with some free balance.
+		Endowed { account: T::AccountId, free_balance: T::Balance },
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
-		/// resulting in an outright loss. \[account, balance\]
-		DustLost(T::AccountId, T::Balance),
-		/// Transfer succeeded. \[from, to, value\]
-		Transfer(T::AccountId, T::AccountId, T::Balance),
-		/// A balance was set by root. \[who, free, reserved\]
-		BalanceSet(T::AccountId, T::Balance, T::Balance),
-		/// Some amount was deposited (e.g. for transaction fees). \[who, deposit\]
-		Deposit(T::AccountId, T::Balance),
-		/// Some balance was reserved (moved from free to reserved). \[who, value\]
-		Reserved(T::AccountId, T::Balance),
-		/// Some balance was unreserved (moved from reserved to free). \[who, value\]
-		Unreserved(T::AccountId, T::Balance),
+		/// resulting in an outright loss.
+		DustLost { account: T::AccountId, amount: T::Balance },
+		/// Transfer succeeded.
+		Transfer { from: T::AccountId, to: T::AccountId, amount: T::Balance },
+		/// A balance was set by root.
+		BalanceSet { who: T::AccountId, free: T::Balance, reserved: T::Balance },
+		/// Some balance was reserved (moved from free to reserved).
+		Reserved { who: T::AccountId, amount: T::Balance },
+		/// Some balance was unreserved (moved from reserved to free).
+		Unreserved { who: T::AccountId, amount: T::Balance },
 		/// Some balance was moved from the reserve of the first account to the second account.
 		/// Final argument indicates the destination balance type.
-		/// \[from, to, balance, destination_status\]
-		ReserveRepatriated(T::AccountId, T::AccountId, T::Balance, Status),
+		ReserveRepatriated {
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: T::Balance,
+			destination_status: Status,
+		},
+		/// Some amount was deposited (e.g. for transaction fees).
+		Deposit { who: T::AccountId, amount: T::Balance },
+		/// Some amount was withdrawn from the account (e.g. for transaction fees).
+		Withdraw { who: T::AccountId, amount: T::Balance },
+		/// Some amount was removed from the account (e.g. for misbehavior).
+		Slashed { who: T::AccountId, amount: T::Balance },
 	}
 
 	/// Old name generated by `decl_event`.
@@ -599,7 +607,7 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 }
 
 /// Simplified reasons for withdrawing balance.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub enum Reasons {
 	/// Paying system transaction fees.
 	Fee = 0,
@@ -633,7 +641,7 @@ impl BitOr for Reasons {
 
 /// A single lock on a balance. There can be many of these on an account and they "overlap", so the
 /// same balance is frozen by multiple locks.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct BalanceLock<Balance> {
 	/// An identifier for this lock. Only one lock may be in existence for each identifier.
 	pub id: LockIdentifier,
@@ -644,7 +652,7 @@ pub struct BalanceLock<Balance> {
 }
 
 /// Store named reserved balance.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct ReserveData<ReserveIdentifier, Balance> {
 	/// The identifier for the named reserve.
 	pub id: ReserveIdentifier,
@@ -653,7 +661,7 @@ pub struct ReserveData<ReserveIdentifier, Balance> {
 }
 
 /// All balance information for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AccountData<Balance> {
 	/// Non-reserved part of the balance. There may still be restrictions on this, but it is the
 	/// total pool what may in principle be transferred, reserved and used for tipping.
@@ -700,7 +708,7 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 // A value placed in storage that represents the current version of the Balances storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic. This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 enum Releases {
 	V1_0_0,
 	V2_0_0,
@@ -719,7 +727,7 @@ pub struct DustCleaner<T: Config<I>, I: 'static = ()>(
 impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
 	fn drop(&mut self) {
 		if let Some((who, dust)) = self.0.take() {
-			Pallet::<T, I>::deposit_event(Event::DustLost(who, dust.peek()));
+			Pallet::<T, I>::deposit_event(Event::DustLost { account: who, amount: dust.peek() });
 			T::DustRemoval::on_unbalanced(dust);
 		}
 	}
@@ -916,7 +924,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		result.map(|(maybe_endowed, maybe_dust, result)| {
 			if let Some(endowed) = maybe_endowed {
-				Self::deposit_event(Event::Endowed(who.clone(), endowed));
+				Self::deposit_event(Event::Endowed { account: who.clone(), free_balance: endowed });
 			}
 			let dust_cleaner = DustCleaner(maybe_dust.map(|dust| (who.clone(), dust)));
 			(result, dust_cleaner)
@@ -963,7 +971,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			Locks::<T, I>::insert(who, bounded_locks);
 			if !existed {
-				if system::Pallet::<T>::inc_consumers(who).is_err() {
+				if system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
 					// since the funds that are under the lock will themselves be stored in the
 					// account and therefore will need a reference.
@@ -1028,12 +1036,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		)?;
 
-		Self::deposit_event(Event::ReserveRepatriated(
-			slashed.clone(),
-			beneficiary.clone(),
-			actual,
-			status,
-		));
+		Self::deposit_event(Event::ReserveRepatriated {
+			from: slashed.clone(),
+			to: beneficiary.clone(),
+			amount: actual,
+			destination_status: status,
+		});
 		Ok(actual)
 	}
 }
@@ -1086,6 +1094,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			Ok(())
 		})?;
 		TotalIssuance::<T, I>::mutate(|t| *t += amount);
+		Self::deposit_event(Event::Deposit { who: who.clone(), amount });
 		Ok(())
 	}
 
@@ -1106,6 +1115,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			},
 		)?;
 		TotalIssuance::<T, I>::mutate(|t| *t -= actual);
+		Self::deposit_event(Event::Withdraw { who: who.clone(), amount });
 		Ok(actual)
 	}
 }
@@ -1124,7 +1134,14 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 
 impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
 	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
-		Self::mutate_account(who, |account| account.free = amount)?;
+		Self::mutate_account(who, |account| {
+			account.free = amount;
+			Self::deposit_event(Event::BalanceSet {
+				who: who.clone(),
+				free: account.free,
+				reserved: account.reserved,
+			});
+		})?;
 		Ok(())
 	}
 
@@ -1503,7 +1520,11 @@ where
 		)?;
 
 		// Emit transfer event.
-		Self::deposit_event(Event::Transfer(transactor.clone(), dest.clone(), value));
+		Self::deposit_event(Event::Transfer {
+			from: transactor.clone(),
+			to: dest.clone(),
+			amount: value,
+		});
 
 		Ok(())
 	}
@@ -1566,7 +1587,13 @@ where
 					}
 				},
 			) {
-				Ok(r) => return r,
+				Ok((imbalance, not_slashed)) => {
+					Self::deposit_event(Event::Slashed {
+						who: who.clone(),
+						amount: value.saturating_sub(not_slashed),
+					});
+					return (imbalance, not_slashed)
+				},
 				Err(_) => (),
 			}
 		}
@@ -1591,6 +1618,7 @@ where
 			|account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
 				ensure!(!is_new, Error::<T, I>::DeadAccount);
 				account.free = account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
+				Self::deposit_event(Event::Deposit { who: who.clone(), amount: value });
 				Ok(PositiveImbalance::new(value))
 			},
 		)
@@ -1623,6 +1651,7 @@ where
 					None => return Ok(Self::PositiveImbalance::zero()),
 				};
 
+				Self::deposit_event(Event::Deposit { who: who.clone(), amount: value });
 				Ok(PositiveImbalance::new(value))
 			},
 		)
@@ -1660,6 +1689,7 @@ where
 
 				account.free = new_free_account;
 
+				Self::deposit_event(Event::Withdraw { who: who.clone(), amount: value });
 				Ok(NegativeImbalance::new(value))
 			},
 		)
@@ -1692,6 +1722,11 @@ where
 					SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
 				};
 				account.free = value;
+				Self::deposit_event(Event::BalanceSet {
+					who: who.clone(),
+					free: account.free,
+					reserved: account.reserved,
+				});
 				Ok(imbalance)
 			},
 		)
@@ -1735,7 +1770,7 @@ where
 			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReasons::RESERVE, account.free)
 		})?;
 
-		Self::deposit_event(Event::Reserved(who.clone(), value));
+		Self::deposit_event(Event::Reserved { who: who.clone(), amount: value });
 		Ok(())
 	}
 
@@ -1767,7 +1802,7 @@ where
 			},
 		};
 
-		Self::deposit_event(Event::Unreserved(who.clone(), actual.clone()));
+		Self::deposit_event(Event::Unreserved { who: who.clone(), amount: actual.clone() });
 		value - actual
 	}
 
@@ -1807,7 +1842,13 @@ where
 				// underflow should never happen, but it if does, there's nothing to be done here.
 				(NegativeImbalance::new(actual), value - actual)
 			}) {
-				Ok(r) => return r,
+				Ok((imbalance, not_slashed)) => {
+					Self::deposit_event(Event::Slashed {
+						who: who.clone(),
+						amount: value.saturating_sub(not_slashed),
+					});
+					return (imbalance, not_slashed)
+				},
 				Err(_) => (),
 			}
 		}
@@ -1948,6 +1989,7 @@ where
 					// `actual <= to_change` and `to_change <= amount`; qed;
 					reserves[index].amount -= actual;
 
+					Self::deposit_event(Event::Slashed { who: who.clone(), amount: actual });
 					(imb, value - actual)
 				},
 				Err(_) => (NegativeImbalance::zero(), value),

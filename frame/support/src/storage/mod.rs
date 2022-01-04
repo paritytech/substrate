@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@
 
 //! Stuff to do with the runtime's storage.
 
+pub use self::types::StorageEntryMetadataBuilder;
 use crate::{
 	hash::{ReversibleStorageHasher, StorageHasher},
 	storage::types::{
@@ -785,10 +786,12 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter;
 }
 
-/// Iterate over a prefix and decode raw_key and raw_value into `T`.
+/// Iterate or drain over a prefix and decode raw_key and raw_value into `T`.
 ///
 /// If any decoding fails it skips it and continues to the next key.
-pub struct PrefixIterator<T> {
+///
+/// If draining, then the hook `OnRemoval::on_removal` is called after each removal.
+pub struct PrefixIterator<T, OnRemoval = ()> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
@@ -796,9 +799,21 @@ pub struct PrefixIterator<T> {
 	/// Function that take `(raw_key_without_prefix, raw_value)` and decode `T`.
 	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+	phantom: core::marker::PhantomData<OnRemoval>,
 }
 
-impl<T> PrefixIterator<T> {
+/// Trait for specialising on removal logic of [`PrefixIterator`].
+pub trait PrefixIteratorOnRemoval {
+	/// This function is called whenever a key/value is removed.
+	fn on_removal(key: &[u8], value: &[u8]);
+}
+
+/// No-op implementation.
+impl PrefixIteratorOnRemoval for () {
+	fn on_removal(_key: &[u8], _value: &[u8]) {}
+}
+
+impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 	/// Creates a new `PrefixIterator`, iterating after `previous_key` and filtering out keys that
 	/// are not prefixed with `prefix`.
 	///
@@ -812,7 +827,13 @@ impl<T> PrefixIterator<T> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		PrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
+		PrefixIterator {
+			prefix,
+			previous_key,
+			drain: false,
+			closure: decode_fn,
+			phantom: Default::default(),
+		}
 	}
 
 	/// Get the last key that has been iterated upon and return it.
@@ -837,7 +858,7 @@ impl<T> PrefixIterator<T> {
 	}
 }
 
-impl<T> Iterator for PrefixIterator<T> {
+impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for PrefixIterator<T, OnRemoval> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -858,7 +879,8 @@ impl<T> Iterator for PrefixIterator<T> {
 						},
 					};
 					if self.drain {
-						unhashed::kill(&self.previous_key)
+						unhashed::kill(&self.previous_key);
+						OnRemoval::on_removal(&self.previous_key, &raw_value);
 					}
 					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
@@ -1111,14 +1133,18 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	fn iter_values() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
@@ -1126,6 +1152,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 			previous_key: prefix.to_vec(),
 			drain: false,
 			closure: |_raw_key, mut raw_value| Value::decode(&mut raw_value),
+			phantom: Default::default(),
 		}
 	}
 
@@ -1200,7 +1227,7 @@ mod private {
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
-	impl<Hash: Encode> Sealed for Digest<Hash> {}
+	impl Sealed for Digest {}
 	impl<T, S> Sealed for BoundedVec<T, S> {}
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
@@ -1240,7 +1267,7 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
 /// format ever changes, we need to remove this here.
-impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+impl StorageAppend<DigestItem> for Digest {}
 
 /// Marker trait that is implemented for types that support the `storage::append` api with a limit
 /// on the number of element.
@@ -1377,7 +1404,7 @@ mod test {
 	use super::*;
 	use crate::{assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
-	use core::convert::{TryFrom, TryInto};
+	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
@@ -1462,8 +1489,8 @@ mod test {
 	fn digest_storage_append_works_as_expected() {
 		TestExternalities::default().execute_with(|| {
 			struct Storage;
-			impl generator::StorageValue<Digest<u32>> for Storage {
-				type Query = Digest<u32>;
+			impl generator::StorageValue<Digest> for Storage {
+				type Query = Digest;
 
 				fn module_prefix() -> &'static [u8] {
 					b"MyModule"
@@ -1473,23 +1500,20 @@ mod test {
 					b"Storage"
 				}
 
-				fn from_optional_value_to_query(v: Option<Digest<u32>>) -> Self::Query {
+				fn from_optional_value_to_query(v: Option<Digest>) -> Self::Query {
 					v.unwrap()
 				}
 
-				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest<u32>> {
+				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest> {
 					Some(v)
 				}
 			}
 
-			Storage::append(DigestItem::ChangesTrieRoot(1));
 			Storage::append(DigestItem::Other(Vec::new()));
 
 			let value = unhashed::get_raw(&Storage::storage_value_final_key()).unwrap();
 
-			let expected = Digest {
-				logs: vec![DigestItem::ChangesTrieRoot(1), DigestItem::Other(Vec::new())],
-			};
+			let expected = Digest { logs: vec![DigestItem::Other(Vec::new())] };
 			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
 		});
 	}
@@ -1612,7 +1636,7 @@ mod test {
 
 			assert_eq!(final_vec, vec![1, 2, 3, 4, 5]);
 
-			let mut iter = PrefixIterator::new(
+			let mut iter = PrefixIterator::<_>::new(
 				iter.prefix().to_vec(),
 				stored_key,
 				|mut raw_key_without_prefix, mut raw_value| {
@@ -1691,22 +1715,17 @@ mod test {
 		});
 	}
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
-
-	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, Seven>>
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]
 	fn try_append_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			Foo::put(bounded);
 			assert_ok!(Foo::try_append(4));
 			assert_ok!(Foo::try_append(5));
@@ -1717,7 +1736,7 @@ mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooMap::insert(1, bounded);
 
 			assert_ok!(FooMap::try_append(1, 4));
@@ -1732,17 +1751,17 @@ mod test {
 			assert_ok!(FooMap::try_append(2, 4));
 			assert_eq!(
 				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
 			);
 			assert_ok!(FooMap::try_append(2, 5));
 			assert_eq!(
 				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooDoubleMap::insert(1, 1, bounded);
 
 			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
@@ -1757,12 +1776,12 @@ mod test {
 			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
 			);
 			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 	}

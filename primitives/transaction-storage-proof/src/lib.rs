@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -51,7 +51,7 @@ impl IsFatalError for InherentError {
 
 /// Holds a chunk of data retrieved from storage along with
 /// a proof that the data was stored at that location in the trie.
-#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+#[derive(Encode, Decode, Clone, PartialEq, Debug, scale_info::TypeInfo)]
 pub struct TransactionStorageProof {
 	/// Data chunk that is proved to exist.
 	pub chunk: Vec<u8>,
@@ -143,7 +143,7 @@ pub mod registration {
 	use sp_trie::TrieMut;
 
 	type Hasher = sp_core::Blake2Hasher;
-	type TrieLayout = sp_trie::Layout<Hasher>;
+	type TrieLayout = sp_trie::LayoutV1<Hasher>;
 
 	/// Create a new inherent data provider instance for a given parent block hash.
 	pub fn new_data_provider<B, C>(

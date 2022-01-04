@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -76,13 +76,7 @@ impl KeystoreParams {
 	/// Returns a vector of remote-urls and the local Keystore configuration
 	pub fn keystore_config(&self, config_dir: &Path) -> Result<(Option<String>, KeystoreConfig)> {
 		let password = if self.password_interactive {
-			#[cfg(not(target_os = "unknown"))]
-			{
-				let password = input_keystore_password()?;
-				Some(SecretString::new(password))
-			}
-			#[cfg(target_os = "unknown")]
-			None
+			Some(SecretString::new(input_keystore_password()?))
 		} else if let Some(ref file) = self.password_filename {
 			let password = fs::read_to_string(file).map_err(|e| format!("{}", e))?;
 			Some(SecretString::new(password))
@@ -113,7 +107,6 @@ impl KeystoreParams {
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String> {
 	rpassword::read_password_from_tty(Some("Keystore password: "))
 		.map_err(|e| format!("{:?}", e).into())

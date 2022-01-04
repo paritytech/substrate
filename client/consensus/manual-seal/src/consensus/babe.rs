@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -49,7 +49,8 @@ use sp_consensus_slots::Slot;
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	generic::{BlockId, Digest},
-	traits::{Block as BlockT, DigestFor, DigestItemFor, Header, Zero},
+	traits::{Block as BlockT, Header, Zero},
+	DigestItem,
 };
 use sp_timestamp::{InherentType, TimestampInherentData, INHERENT_IDENTIFIER};
 
@@ -153,7 +154,7 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = Config::get_or_compute(&*client)?;
+		let config = Config::get(&*client)?;
 
 		Ok(Self { config, client, keystore, epoch_changes, authorities })
 	}
@@ -193,11 +194,7 @@ where
 {
 	type Transaction = TransactionFor<C, B>;
 
-	fn create_digest(
-		&self,
-		parent: &B::Header,
-		inherents: &InherentData,
-	) -> Result<DigestFor<B>, Error> {
+	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
 		let slot = inherents
 			.babe_inherent_data()?
 			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
@@ -207,7 +204,7 @@ where
 		let logs = if let Some((predigest, _)) =
 			authorship::claim_slot(slot, &epoch, &self.keystore)
 		{
-			vec![<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(predigest)]
+			vec![<DigestItem as CompatibleDigestItem>::babe_pre_digest(predigest)]
 		} else {
 			// well we couldn't claim a slot because this is an existing chain and we're not in the
 			// authorities. we need to tell BabeBlockImport that the epoch has changed, and we put
@@ -244,13 +241,13 @@ where
 					});
 
 					vec![
-						DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
-						DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode()),
+						DigestItem::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
+						DigestItem::Consensus(BABE_ENGINE_ID, next_epoch.encode()),
 					]
 				},
 				ViableEpochDescriptor::UnimportedGenesis(_) => {
 					// since this is the genesis, secondary predigest works for now.
-					vec![DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode())]
+					vec![DigestItem::PreRuntime(BABE_ENGINE_ID, predigest.encode())]
 				},
 			}
 		};
@@ -330,7 +327,7 @@ impl SlotTimestampProvider {
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
-		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
+		let slot_duration = Config::get(&*client)?.slot_duration;
 		let info = client.info();
 
 		// looks like this isn't the first block, rehydrate the fake time.

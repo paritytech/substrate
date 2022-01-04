@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,7 +88,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// ```
 ///
 /// The given struct provides function to convert from/to `Assignment` as part of
-/// [`sp_npos_elections::Solution`] trait:
+/// `sp_npos_elections::Solution` trait:
 ///
 /// - `fn from_assignment<..>(..)`
 /// - `fn into_assignment<..>(..)`

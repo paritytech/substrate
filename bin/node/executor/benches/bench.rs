@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,7 @@ const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
 
 const HEAP_PAGES: u64 = 20;
 
-type TestExternalities<H> = CoreTestExternalities<H, u64>;
+type TestExternalities<H> = CoreTestExternalities<H>;
 
 #[derive(Debug)]
 enum ExecutionMethod {
@@ -83,14 +83,14 @@ fn construct_block<E: Externalities>(
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
 ) -> (Vec<u8>, Hash) {
-	use sp_trie::{trie_types::Layout, TrieConfiguration};
+	use sp_trie::{LayoutV0, TrieConfiguration};
 
 	// sign extrinsics.
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 	// calculate the header fields that we can.
 	let extrinsics_root =
-		Layout::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
+		LayoutV0::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
 			.to_fixed_bytes()
 			.into();
 
@@ -162,11 +162,14 @@ fn test_blocks(
 	let mut test_ext = new_test_ext(genesis_config);
 	let mut block1_extrinsics = vec![CheckedExtrinsic {
 		signed: None,
-		function: Call::Timestamp(pallet_timestamp::Call::set(0)),
+		function: Call::Timestamp(pallet_timestamp::Call::set { now: 0 }),
 	}];
 	block1_extrinsics.extend((0..20).map(|i| CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(i, 0))),
-		function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 1 * DOLLARS)),
+		function: Call::Balances(pallet_balances::Call::transfer {
+			dest: bob().into(),
+			value: 1 * DOLLARS,
+		}),
 	}));
 	let block1 =
 		construct_block(executor, &mut test_ext.ext(), 1, GENESIS_HASH.into(), block1_extrinsics);
@@ -185,13 +188,13 @@ fn bench_execute_block(c: &mut Criterion) {
 
 	for strategy in execution_methods {
 		group.bench_function(format!("{:?}", strategy), |b| {
-			let genesis_config = node_testing::genesis::config(false, Some(compact_code_unwrap()));
+			let genesis_config = node_testing::genesis::config(Some(compact_code_unwrap()));
 			let (use_native, wasm_method) = match strategy {
 				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
 				ExecutionMethod::Wasm(wasm_method) => (false, wasm_method),
 			};
 
-			let executor = NativeElseWasmExecutor::new(wasm_method, None, 8);
+			let executor = NativeElseWasmExecutor::new(wasm_method, None, 8, 2);
 			let runtime_code = RuntimeCode {
 				code_fetcher: &sp_core::traits::WrappedRuntimeCode(compact_code_unwrap().into()),
 				hash: vec![1, 2, 3],

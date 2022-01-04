@@ -2,9 +2,9 @@
 name = "pallet-authority-discovery"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for authority discovery"
 readme = "README.md"
@@ -14,20 +14,21 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
-sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
+sp-application-crypto = { version = "4.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
 	"derive",
 ] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 pallet-session = { version = "4.0.0-dev", features = [
 	"historical",
 ], path = "../session", default-features = false }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 
 [features]
@@ -36,6 +37,7 @@ std = [
 	"sp-application-crypto/std",
 	"sp-authority-discovery/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"pallet-session/std",
 	"sp-runtime/std",

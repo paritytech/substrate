@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,6 +30,14 @@ pub enum RuntimeString {
 	/// The owned mode that wraps a `Vec<u8>`.
 	#[cfg(not(feature = "std"))]
 	Owned(Vec<u8>),
+}
+
+impl scale_info::TypeInfo for RuntimeString {
+	type Identity = str;
+
+	fn type_info() -> scale_info::Type {
+		Self::Identity::type_info()
+	}
 }
 
 /// Convenience macro to use the format! interface to get a `RuntimeString::Owned`
@@ -80,6 +88,18 @@ impl AsRef<[u8]> for RuntimeString {
 		match self {
 			Self::Borrowed(val) => val.as_ref(),
 			Self::Owned(val) => val.as_ref(),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::ops::Deref for RuntimeString {
+	type Target = str;
+
+	fn deref(&self) -> &str {
+		match self {
+			Self::Borrowed(val) => &val,
+			Self::Owned(val) => &val,
 		}
 	}
 }

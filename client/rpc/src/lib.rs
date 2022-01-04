@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -54,7 +54,8 @@ impl SubscriptionTaskExecutor {
 
 impl Spawn for SubscriptionTaskExecutor {
 	fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
-		self.0.spawn("substrate-rpc-subscription", future.map(drop).boxed());
+		self.0
+			.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
 		Ok(())
 	}
 

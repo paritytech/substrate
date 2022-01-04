@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,13 +20,14 @@
 // end::description[]
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::PassByInner;
-use sp_std::cmp::Ordering;
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
-	CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic, UncheckedFrom,
+	ByteArray, CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic,
+	UncheckedFrom,
 };
 #[cfg(feature = "full_crypto")]
 use crate::{
@@ -54,42 +55,11 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner, MaxEncodedLen)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(
+	Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo, Eq, PartialEq, PartialOrd, Ord,
+)]
 pub struct Public(pub [u8; 33]);
-
-impl PartialOrd for Public {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-impl Ord for Public {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.as_ref().cmp(&other.as_ref())
-	}
-}
-
-impl PartialEq for Public {
-	fn eq(&self, other: &Self) -> bool {
-		self.as_ref() == other.as_ref()
-	}
-}
-
-impl Eq for Public {}
-
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum PublicError {
-	/// Bad alphabet.
-	BadBase58,
-	/// Bad length.
-	BadLength,
-	/// Unknown version.
-	UnknownVersion,
-	/// Invalid checksum.
-	InvalidChecksum,
-}
 
 impl Public {
 	/// A new instance from the given 33-byte `data`.
@@ -112,17 +82,11 @@ impl Public {
 	}
 }
 
-impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 33 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 33];
-		r.copy_from_slice(data);
-		Self(r)
-	}
+impl ByteArray for Public {
+	const LEN: usize = 33;
+}
 
+impl TraitPublic for Public {
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
 	}
@@ -142,12 +106,6 @@ impl From<&Public> for CryptoTypePublicPair {
 
 impl Derive for Public {}
 
-impl Default for Public {
-	fn default() -> Self {
-		Public([0u8; 33])
-	}
-}
-
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
@@ -164,11 +122,12 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 33 {
-			Ok(Self::from_slice(data))
-		} else {
-			Err(())
+		if data.len() != Self::LEN {
+			return Err(())
 		}
+		let mut r = [0u8; Self::LEN];
+		r.copy_from_slice(data);
+		Ok(Self::unchecked_from(r))
 	}
 }
 
@@ -226,15 +185,9 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Public {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		self.as_ref().hash(state);
-	}
-}
-
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Encode, Decode, PassByInner)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -288,14 +241,6 @@ impl Default for Signature {
 	}
 }
 
-impl PartialEq for Signature {
-	fn eq(&self, b: &Self) -> bool {
-		self.0[..] == b.0[..]
-	}
-}
-
-impl Eq for Signature {}
-
 impl From<Signature> for [u8; 65] {
 	fn from(v: Signature) -> [u8; 65] {
 		v.0
@@ -332,10 +277,9 @@ impl sp_std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
-impl sp_std::hash::Hash for Signature {
-	fn hash<H: sp_std::hash::Hasher>(&self, state: &mut H) {
-		sp_std::hash::Hash::hash(&self.0[..], state);
+impl UncheckedFrom<[u8; 65]> for Signature {
+	fn unchecked_from(data: [u8; 65]) -> Signature {
+		Signature(data)
 	}
 }
 
@@ -639,7 +583,10 @@ impl CryptoType for Pair {
 mod test {
 	use super::*;
 	use crate::{
-		crypto::{set_default_ss58_version, PublicError, DEV_PHRASE},
+		crypto::{
+			set_default_ss58_version, PublicError, Ss58AddressFormat, Ss58AddressFormatRegistry,
+			DEV_PHRASE,
+		},
 		keccak_256,
 	};
 	use hex_literal::hex;
@@ -771,26 +718,24 @@ mod test {
 
 	#[test]
 	fn ss58check_format_check_works() {
-		use crate::crypto::Ss58AddressFormat;
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let format = Ss58AddressFormat::Reserved46;
+		let format = Ss58AddressFormatRegistry::Reserved46Account.into();
 		let s = public.to_ss58check_with_version(format);
 		assert_eq!(Public::from_ss58check_with_version(&s), Err(PublicError::FormatNotAllowed));
 	}
 
 	#[test]
 	fn ss58check_full_roundtrip_works() {
-		use crate::crypto::Ss58AddressFormat;
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
-		let format = Ss58AddressFormat::PolkadotAccount;
+		let format = Ss58AddressFormatRegistry::PolkadotAccount.into();
 		let s = public.to_ss58check_with_version(format);
 		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
 		assert_eq!(k, public);
 		assert_eq!(f, format);
 
-		let format = Ss58AddressFormat::Custom(64);
+		let format = Ss58AddressFormat::custom(64);
 		let s = public.to_ss58check_with_version(format);
 		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
 		assert_eq!(k, public);
@@ -804,10 +749,10 @@ mod test {
 		if std::env::var("RUN_CUSTOM_FORMAT_TEST") == Ok("1".into()) {
 			use crate::crypto::Ss58AddressFormat;
 			// temp save default format version
-			let default_format = Ss58AddressFormat::default();
+			let default_format = crate::crypto::default_ss58_version();
 			// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
 
-			set_default_ss58_version(Ss58AddressFormat::Custom(200));
+			set_default_ss58_version(Ss58AddressFormat::custom(200));
 			// custom addr encoded by version 200
 			let addr = "4pbsSkWcBaYoFHrKJZp5fDVUKbqSYD9dhZZGvpp3vQ5ysVs5ybV";
 			Public::from_ss58check(&addr).unwrap();

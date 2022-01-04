@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@
 
 use super::{Pallet as Treasury, *};
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::{ensure, traits::OnInitialize};
 use frame_system::RawOrigin;
 
@@ -94,6 +94,6 @@ benchmarks_instance_pallet! {
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}
-}
 
-impl_benchmark_test_suite!(Treasury, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Treasury, crate::tests::new_test_ext(), crate::tests::Test);
+}

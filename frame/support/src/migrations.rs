@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,9 +58,9 @@ impl PalletVersionToStorageVersionHelper for T {
 ///
 /// This will remove all `PalletVersion's` from the state and insert the current storage version.
 pub fn migrate_from_pallet_version_to_storage_version<
-	AllPallets: PalletVersionToStorageVersionHelper,
+	Pallets: PalletVersionToStorageVersionHelper,
 >(
 	db_weight: &RuntimeDbWeight,
 ) -> Weight {
-	AllPallets::migrate(db_weight)
+	Pallets::migrate(db_weight)
 }

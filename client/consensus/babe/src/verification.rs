@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,8 +31,8 @@ use sp_consensus_babe::{
 	make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use sp_consensus_slots::Slot;
-use sp_core::{Pair, Public};
-use sp_runtime::traits::{DigestItemFor, Header};
+use sp_core::{ByteArray, Pair};
+use sp_runtime::{traits::Header, DigestItem};
 
 /// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
@@ -61,10 +61,7 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 /// with each having different validation logic.
 pub(super) fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
-) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>>
-where
-	DigestItemFor<B>: CompatibleDigestItem,
-{
+) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
 	let VerificationParams { mut header, pre_digest, slot_now, epoch } = params;
 
 	let authorities = &epoch.authorities;
@@ -114,7 +111,7 @@ where
 			);
 
 			check_secondary_plain_header::<B>(pre_hash, secondary, sig, &epoch)?;
-		}
+		},
 		PreDigest::SecondaryVRF(secondary)
 			if epoch.config.allowed_slots.is_secondary_vrf_slots_allowed() =>
 		{
@@ -125,7 +122,7 @@ where
 			);
 
 			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, &epoch)?;
-		}
+		},
 		_ => return Err(babe_err(Error::SecondarySlotAssignmentsDisabled)),
 	}
 
@@ -137,9 +134,9 @@ where
 	Ok(CheckedHeader::Checked(header, info))
 }
 
-pub(super) struct VerifiedHeaderInfo<B: BlockT> {
-	pub(super) pre_digest: DigestItemFor<B>,
-	pub(super) seal: DigestItemFor<B>,
+pub(super) struct VerifiedHeaderInfo {
+	pub(super) pre_digest: DigestItem,
+	pub(super) seal: DigestItem,
 	pub(super) author: AuthorityId,
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -508,14 +508,14 @@ impl Metrics {
 		Ok(Self {
 			registered_messages: register(
 				Counter::new(
-					"network_gossip_registered_messages_total",
+					"substrate_network_gossip_registered_messages_total",
 					"Number of registered messages by the gossip service.",
 				)?,
 				registry,
 			)?,
 			expired_messages: register(
 				Counter::new(
-					"network_gossip_expired_messages_total",
+					"substrate_network_gossip_expired_messages_total",
 					"Number of expired messages by the gossip service.",
 				)?,
 				registry,
@@ -696,10 +696,10 @@ mod tests {
 		let mut network = NoOpNetwork::default();
 
 		let peer_id = PeerId::random();
-		consensus.new_peer(&mut network, peer_id.clone(), ObservedRole::Full);
+		consensus.new_peer(&mut network, peer_id, ObservedRole::Full);
 		assert!(consensus.peers.contains_key(&peer_id));
 
-		consensus.peer_disconnected(&mut network, peer_id.clone());
+		consensus.peer_disconnected(&mut network, peer_id);
 		assert!(!consensus.peers.contains_key(&peer_id));
 	}
 

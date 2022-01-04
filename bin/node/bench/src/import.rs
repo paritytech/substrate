@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -135,18 +135,20 @@ impl core::Benchmark for ImportBenchmark {
 			.inspect_state(|| {
 				match self.block_type {
 					BlockType::RandomTransfersKeepAlive => {
-						// should be 5 per signed extrinsic + 1 per unsigned
+						// should be 7 per signed extrinsic + 1 per unsigned
 						// we have 1 unsigned and the rest are signed in the block
-						// those 5 events per signed are:
-						//    - new account (RawEvent::NewAccount) as we always transfer fund to
-						//      non-existant account
-						//    - endowed (RawEvent::Endowed) for this new account
-						//    - successful transfer (RawEvent::Transfer) for this transfer operation
-						//    - deposit event for charging transaction fee
+						// those 7 events per signed are:
+						//    - withdraw (Balances::Withdraw) for charging the transaction fee
+						//    - new account (System::NewAccount) as we always transfer fund to
+						//      non-existent account
+						//    - endowed (Balances::Endowed) for this new account
+						//    - successful transfer (Event::Transfer) for this transfer operation
+						//    - 2x deposit (Balances::Deposit and Treasury::Deposit) for depositing
+						//      the transaction fee into the treasury
 						//    - extrinsic success
 						assert_eq!(
 							node_runtime::System::events().len(),
-							(self.block.extrinsics.len() - 1) * 5 + 1,
+							(self.block.extrinsics.len() - 1) * 7 + 1,
 						);
 					},
 					BlockType::Noop => {

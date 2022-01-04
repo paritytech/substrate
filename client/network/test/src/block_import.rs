@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -46,14 +46,14 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 		client,
 		hash,
 		number,
-		peer_id.clone(),
+		peer_id,
 		IncomingBlock {
 			hash,
 			header,
 			body: Some(Vec::new()),
 			indexed_body: None,
 			justifications,
-			origin: Some(peer_id.clone()),
+			origin: Some(peer_id),
 			allow_missing_state: false,
 			import_existing: false,
 			state: None,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -79,12 +79,12 @@ impl fmt::Debug for Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::Io(ref err) => Some(err),
-			Error::Client(ref err) => Some(err),
-			Error::DuplicateBootnode { .. } => None,
-			Error::Prometheus(ref err) => Some(err),
-			Error::AddressesForAnotherTransport { .. } => None,
-			Error::DuplicateRequestResponseProtocol { .. } => None,
+			Self::Io(ref err) => Some(err),
+			Self::Client(ref err) => Some(err),
+			Self::Prometheus(ref err) => Some(err),
+			Self::DuplicateBootnode { .. } |
+			Self::AddressesForAnotherTransport { .. } |
+			Self::DuplicateRequestResponseProtocol { .. } => None,
 		}
 	}
 }

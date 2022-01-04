@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -78,21 +78,21 @@ pub trait WasmInstance: Send {
 	/// Before execution, instance is reset.
 	///
 	/// Returns the encoded result on success.
-	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error>;
+	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error>;
 
 	/// Call an exported method on this WASM instance.
 	///
 	/// Before execution, instance is reset.
 	///
 	/// Returns the encoded result on success.
-	fn call_export(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
+	fn call_export(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
 		self.call(method.into(), data)
 	}
 
 	/// Get the value from a global with the given `name`.
 	///
 	/// This method is only suitable for getting immutable globals.
-	fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
+	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>, Error>;
 
 	/// **Testing Only**. This function returns the base address of the linear memory.
 	///

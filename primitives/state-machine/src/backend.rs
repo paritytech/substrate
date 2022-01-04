@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,9 +21,9 @@ use crate::{
 	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage, ChildStorageCollection,
 	StorageCollection, StorageKey, StorageValue, UsageInfo,
 };
-use codec::{Decode, Encode};
+use codec::Encode;
 use hash_db::Hasher;
-use sp_core::storage::{well_known_keys, ChildInfo, TrackedStorageKey};
+use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
@@ -140,6 +140,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord;
@@ -151,6 +152,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord;
@@ -176,7 +178,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
-
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
@@ -186,6 +187,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_deltas: impl Iterator<
 			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord + Encode,
@@ -194,7 +196,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
-			let (child_root, empty, child_txs) = self.child_storage_root(&child_info, child_delta);
+			let (child_root, empty, child_txs) =
+				self.child_storage_root(&child_info, child_delta, state_version);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -205,8 +208,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		}
 		let (root, parent_txs) = self.storage_root(
 			delta
-				.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))
+				.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
 				.chain(child_roots.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))),
+			state_version,
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -286,36 +290,14 @@ impl Consolidate for Vec<(Option<ChildInfo>, StorageCollection)> {
 	}
 }
 
-impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMemoryDB<H, KF> {
+impl<H, KF> Consolidate for sp_trie::GenericMemoryDB<H, KF>
+where
+	H: Hasher,
+	KF: sp_trie::KeyFunction<H>,
+{
 	fn consolidate(&mut self, other: Self) {
 		sp_trie::GenericMemoryDB::consolidate(self, other)
 	}
-}
-
-/// Insert input pairs into memory db.
-#[cfg(test)]
-pub(crate) fn insert_into_memory_db<H, I>(
-	mdb: &mut sp_trie::MemoryDB<H>,
-	input: I,
-) -> Option<H::Out>
-where
-	H: Hasher,
-	I: IntoIterator<Item = (StorageKey, StorageValue)>,
-{
-	use sp_trie::{trie_types::TrieDBMut, TrieMut};
-
-	let mut root = <H as Hasher>::Out::default();
-	{
-		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
-		for (key, value) in input {
-			if let Err(e) = trie.insert(&key, &value) {
-				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None
-			}
-		}
-	}
-
-	Some(root)
 }
 
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
@@ -330,7 +312,11 @@ impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
 	for BackendRuntimeCode<'a, B, H>
 {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
-		self.backend.storage(well_known_keys::CODE).ok().flatten().map(Into::into)
+		self.backend
+			.storage(sp_core::storage::well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.map(Into::into)
 	}
 }
 
@@ -348,17 +334,17 @@ where
 	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
 		let hash = self
 			.backend
-			.storage_hash(well_known_keys::CODE)
+			.storage_hash(sp_core::storage::well_known_keys::CODE)
 			.ok()
 			.flatten()
 			.ok_or("`:code` hash not found")?
 			.encode();
 		let heap_pages = self
 			.backend
-			.storage(well_known_keys::HEAP_PAGES)
+			.storage(sp_core::storage::well_known_keys::HEAP_PAGES)
 			.ok()
 			.flatten()
-			.and_then(|d| Decode::decode(&mut &d[..]).ok());
+			.and_then(|d| codec::Decode::decode(&mut &d[..]).ok());
 
 		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
 	}

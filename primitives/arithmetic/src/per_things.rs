@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -425,7 +425,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
 		pub struct $name($type);
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
@@ -830,6 +830,16 @@ macro_rules! implement_per_thing {
 			#[inline]
 			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
 				Some(*self * *rhs)
+			}
+		}
+
+		impl $crate::traits::Zero for $name {
+			fn zero() -> Self {
+				Self::zero()
+			}
+
+			fn is_zero(&self) -> bool {
+				self == &Self::zero()
 			}
 		}
 

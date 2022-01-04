@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,11 @@
 
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
+use scale_info::TypeInfo;
 use sp_std::vec::Vec;
+// Note that `LayoutV1` usage here (proof compaction) is compatible
+// with `LayoutV0`.
+use crate::LayoutV1 as Layout;
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -26,13 +30,13 @@ use sp_std::vec::Vec;
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
 /// Storage proof in compact form.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct CompactProof {
 	pub encoded_nodes: Vec<Vec<u8>>,
 }
@@ -66,6 +70,7 @@ impl StorageProof {
 	pub fn into_nodes(self) -> Vec<Vec<u8>> {
 		self.trie_nodes
 	}
+
 	/// Creates a `MemoryDB` from `Self`.
 	pub fn into_memory_db<H: Hasher>(self) -> crate::MemoryDB<H> {
 		self.into()
@@ -93,14 +98,15 @@ impl StorageProof {
 	pub fn into_compact_proof<H: Hasher>(
 		self,
 		root: H::Out,
-	) -> Result<CompactProof, crate::CompactProofError<crate::Layout<H>>> {
-		crate::encode_compact::<crate::Layout<H>>(self, root)
+	) -> Result<CompactProof, crate::CompactProofError<Layout<H>>> {
+		crate::encode_compact::<Layout<H>>(self, root)
 	}
 
 	/// Returns the estimated encoded size of the compact proof.
 	///
-	/// Runing this operation is a slow operation (build the whole compact proof) and should only be
-	/// in non sensitive path.
+	/// Running this operation is a slow operation (build the whole compact proof) and should only
+	/// be in non sensitive path.
+	///
 	/// Return `None` on error.
 	pub fn encoded_compact_size<H: Hasher>(self, root: H::Out) -> Option<usize> {
 		let compact_proof = self.into_compact_proof::<H>(root);
@@ -121,9 +127,9 @@ impl CompactProof {
 	pub fn to_storage_proof<H: Hasher>(
 		&self,
 		expected_root: Option<&H::Out>,
-	) -> Result<(StorageProof, H::Out), crate::CompactProofError<crate::Layout<H>>> {
+	) -> Result<(StorageProof, H::Out), crate::CompactProofError<Layout<H>>> {
 		let mut db = crate::MemoryDB::<H>::new(&[]);
-		let root = crate::decode_compact::<crate::Layout<H>, _, _>(
+		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
 			self.iter_compact_encoded_nodes(),
 			expected_root,

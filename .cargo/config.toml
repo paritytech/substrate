@@ -1,0 +1,14 @@
+#
+# An auto defined `clippy` feature was introduced,
+# but it was found to clash with user defined features,
+# so was renamed to `cargo-clippy`.
+#
+# If you want standard clippy run:
+# RUSTFLAGS= cargo clippy
+[target.'cfg(feature = "cargo-clippy")']
+rustflags = [
+  "-Aclippy::all",
+  "-Dclippy::correctness",
+  "-Aclippy::if-same-then-else",
+  "-Aclippy::clone-double-ref"
+]

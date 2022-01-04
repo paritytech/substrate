@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@ pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 		&self,
 		target_hash: <Block as BlockT>::Hash,
 		_maybe_max_number: Option<NumberFor<Block>>,
-	) -> Result<Option<<Block as BlockT>::Hash>, Error> {
-		Ok(Some(target_hash))
+	) -> Result<<Block as BlockT>::Hash, Error> {
+		Ok(target_hash)
 	}
 }

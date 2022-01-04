@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,9 +22,8 @@ use sc_cli::{
 	utils::print_from_uri, with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams,
 	OutputTypeFlag,
 };
-use sp_core::crypto::{Ss58AddressFormat, Ss58Codec};
+use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::AccountIdConversion;
-use std::convert::{TryFrom, TryInto};
 use structopt::StructOpt;
 
 /// The `palletid` command
@@ -78,7 +77,7 @@ impl PalletIdCmd {
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			print_from_uri(
-				&account_id.to_ss58check_with_version(self.network.clone().unwrap_or_default()),
+				&account_id.to_ss58check_with_version(unwrap_or_default_ss58_version(self.network)),
 				password,
 				self.network,
 				self.output_scheme.output_type.clone()

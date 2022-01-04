@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,16 +24,21 @@ use crate as pallet_bounties;
 use std::cell::RefCell;
 
 use frame_support::{
-	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::OnInitialize,
-	weights::Weight, PalletId,
+	assert_noop, assert_ok,
+	pallet_prelude::GenesisBuild,
+	parameter_types,
+	traits::{ConstU32, ConstU64, OnInitialize},
+	PalletId,
 };
 
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill,
+	Perbill, Storage,
 };
+
+use super::Event as BountiesEvent;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -52,9 +57,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
@@ -73,7 +75,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -82,10 +84,9 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -93,7 +94,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -102,13 +103,10 @@ thread_local! {
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
-	pub const ProposalBondMinimum: u64 = 1;
-	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
-	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const MaxApprovals: u32 = 100;
 }
+
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
@@ -118,32 +116,28 @@ impl pallet_treasury::Config for Test {
 	type Event = Event;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
-	type ProposalBondMinimum = ProposalBondMinimum;
-	type SpendPeriod = SpendPeriod;
+	type ProposalBondMinimum = ConstU64<1>;
+	type SpendPeriod = ConstU64<2>;
 	type Burn = Burn;
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
-	type MaxApprovals = MaxApprovals;
+	type MaxApprovals = ConstU32<100>;
 }
 parameter_types! {
-	pub const BountyDepositBase: u64 = 80;
-	pub const BountyDepositPayoutDelay: u64 = 3;
-	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
-	pub const BountyValueMinimum: u64 = 1;
-	pub const MaximumReasonLength: u32 = 16384;
 }
 impl Config for Test {
 	type Event = Event;
-	type BountyDepositBase = BountyDepositBase;
-	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
-	type BountyUpdatePeriod = BountyUpdatePeriod;
+	type BountyDepositBase = ConstU64<80>;
+	type BountyDepositPayoutDelay = ConstU64<3>;
+	type BountyUpdatePeriod = ConstU64<20>;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
-	type BountyValueMinimum = BountyValueMinimum;
-	type DataDepositPerByte = DataDepositPerByte;
-	type MaximumReasonLength = MaximumReasonLength;
+	type BountyValueMinimum = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type MaximumReasonLength = ConstU32<16384>;
 	type WeightInfo = ();
+	type ChildBountyManager = ();
 }
 
 type TreasuryError = pallet_treasury::Error<Test>;
@@ -160,7 +154,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-fn last_event() -> RawEvent<u64, u128> {
+fn last_event() -> BountiesEvent<Test> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -396,7 +390,7 @@ fn propose_bounty_works() {
 
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 10, b"1234567890".to_vec()));
 
-		assert_eq!(last_event(), RawEvent::BountyProposed(0));
+		assert_eq!(last_event(), BountiesEvent::BountyProposed { index: 0 });
 
 		let deposit: u64 = 85 + 5;
 		assert_eq!(Balances::reserved_balance(0), deposit);
@@ -458,7 +452,7 @@ fn close_bounty_works() {
 
 		let deposit: u64 = 80 + 5;
 
-		assert_eq!(last_event(), RawEvent::BountyRejected(0, deposit));
+		assert_eq!(last_event(), BountiesEvent::BountyRejected { index: 0, bond: deposit });
 
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
@@ -690,7 +684,10 @@ fn award_and_claim_bounty_works() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 56, 3));
+		assert_eq!(
+			last_event(),
+			BountiesEvent::BountyClaimed { index: 0, payout: 56, beneficiary: 3 }
+		);
 
 		assert_eq!(Balances::free_balance(4), 14); // initial 10 + fee 4
 
@@ -729,7 +726,10 @@ fn claim_handles_high_fee() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 0, 3));
+		assert_eq!(
+			last_event(),
+			BountiesEvent::BountyClaimed { index: 0, payout: 0, beneficiary: 3 }
+		);
 
 		assert_eq!(Balances::free_balance(4), 70); // 30 + 50 - 10
 		assert_eq!(Balances::free_balance(3), 0);
@@ -806,7 +806,7 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
 		assert_ok!(Bounties::close_bounty(Origin::root(), 0));
 
-		assert_eq!(last_event(), RawEvent::BountyCanceled(0));
+		assert_eq!(last_event(), BountiesEvent::BountyCanceled { index: 0 });
 
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 
@@ -935,6 +935,48 @@ fn extend_expiry() {
 }
 
 #[test]
+fn test_migration_v4() {
+	let mut s = Storage::default();
+
+	let index: u32 = 10;
+
+	let bounty = Bounty::<u128, u64, u64> {
+		proposer: 0,
+		value: 20,
+		fee: 20,
+		curator_deposit: 20,
+		bond: 50,
+		status: BountyStatus::<u128, u64>::Proposed,
+	};
+
+	let data = vec![
+		(pallet_bounties::BountyCount::<Test>::hashed_key().to_vec(), 10.encode().to_vec()),
+		(pallet_bounties::Bounties::<Test>::hashed_key_for(index), bounty.encode().to_vec()),
+		(pallet_bounties::BountyDescriptions::<Test>::hashed_key_for(index), vec![0, 0]),
+		(
+			pallet_bounties::BountyApprovals::<Test>::hashed_key().to_vec(),
+			vec![10 as u32].encode().to_vec(),
+		),
+	];
+
+	s.top = data.into_iter().collect();
+
+	sp_io::TestExternalities::new(s).execute_with(|| {
+		use frame_support::traits::PalletInfo;
+		let old_pallet_name = <Test as frame_system::Config>::PalletInfo::name::<Bounties>()
+			.expect("Bounties is part of runtime, so it has a name; qed");
+		let new_pallet_name = "NewBounties";
+
+		crate::migrations::v4::pre_migration::<Test, Bounties, _>(old_pallet_name, new_pallet_name);
+		crate::migrations::v4::migrate::<Test, Bounties, _>(old_pallet_name, new_pallet_name);
+		crate::migrations::v4::post_migration::<Test, Bounties, _>(
+			old_pallet_name,
+			new_pallet_name,
+		);
+	});
+}
+
+#[test]
 fn genesis_funding_works() {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let initial_funding = 100;
@@ -950,5 +992,44 @@ fn genesis_funding_works() {
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
 		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
+	});
+}
+
+#[test]
+fn unassign_curator_self() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 1, 10));
+		assert_ok!(Bounties::accept_curator(Origin::signed(1), 0));
+
+		assert_eq!(Balances::free_balance(1), 93);
+		assert_eq!(Balances::reserved_balance(1), 5);
+
+		System::set_block_number(8);
+		<Treasury as OnInitialize<u64>>::on_initialize(8);
+
+		assert_ok!(Bounties::unassign_curator(Origin::signed(1), 0));
+
+		assert_eq!(
+			Bounties::bounties(0).unwrap(),
+			Bounty {
+				proposer: 0,
+				fee: 10,
+				curator_deposit: 0,
+				value: 50,
+				bond: 85,
+				status: BountyStatus::Funded,
+			}
+		);
+
+		assert_eq!(Balances::free_balance(1), 98);
+		assert_eq!(Balances::reserved_balance(1), 0); // not slashed
 	});
 }

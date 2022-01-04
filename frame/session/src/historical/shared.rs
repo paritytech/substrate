@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,8 @@
 //! Shared logic between on-chain and off-chain components used for slashing using an off-chain
 //! worker.
 
-use super::SessionIndex;
 use codec::Encode;
+use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 
 pub(super) const PREFIX: &[u8] = b"session_historical";

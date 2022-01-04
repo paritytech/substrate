@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,28 +23,20 @@
 #![warn(unused_extern_crates)]
 
 mod api;
+pub mod error;
 mod graph;
 mod metrics;
 mod revalidation;
+#[cfg(test)]
+mod tests;
 
-pub mod error;
-
-/// Common types for testing the transaction pool
-#[cfg(feature = "test-helpers")]
-pub mod test_helpers {
-	pub use super::{
-		graph::{BlockHash, ChainApi, ExtrinsicFor, NumberFor, Pool},
-		revalidation::RevalidationQueue,
-	};
-}
-
-pub use crate::api::{FullChainApi, LightChainApi};
+pub use crate::api::FullChainApi;
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
 	prelude::*,
 };
-pub use graph::{Options, Transaction};
+pub use graph::{base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction};
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
@@ -56,7 +48,8 @@ use std::{
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
 	ChainEvent, ImportNotificationStream, MaintainedTransactionPool, PoolFuture, PoolStatus,
-	TransactionFor, TransactionPool, TransactionSource, TransactionStatusStreamFor, TxHash,
+	ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
+	TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
@@ -69,7 +62,7 @@ use crate::metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
 type BoxedReadyIterator<Hash, Data> =
-	Box<dyn Iterator<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
+	Box<dyn ReadyTransactions<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
 
 type ReadyIteratorFor<PoolApi> =
 	BoxedReadyIterator<graph::ExtrinsicHash<PoolApi>, graph::ExtrinsicFor<PoolApi>>;
@@ -78,9 +71,6 @@ type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output = ReadyIteratorFor<Pool
 
 /// A transaction pool for a full node.
 pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
-/// A transaction pool for a light node.
-pub type LightPool<Block, Client, Fetcher> =
-	BasicPool<LightChainApi<Client, Fetcher, Block>, Block>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -138,7 +128,6 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
 where
 	PoolApi: graph::ChainApi<Block = Block>,
@@ -173,13 +162,10 @@ where
 	PoolApi: graph::ChainApi<Block = Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api, for tests.
-	#[cfg(feature = "test-helpers")]
-	pub fn new_test(
-		pool_api: Arc<PoolApi>,
-	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>, intervalier::BackSignalControl) {
+	pub fn new_test(pool_api: Arc<PoolApi>) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
 		let pool = Arc::new(graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
-		let (revalidation_queue, background_task, notifier) =
-			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
+		let (revalidation_queue, background_task) =
+			revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
 		(
 			Self {
 				api: pool_api,
@@ -190,7 +176,6 @@ where
 				metrics: Default::default(),
 			},
 			background_task,
-			notifier,
 		)
 	}
 
@@ -217,7 +202,7 @@ where
 		};
 
 		if let Some(background_task) = background_task {
-			spawner.spawn_essential("txpool-background", background_task);
+			spawner.spawn_essential("txpool-background", Some("transaction-pool"), background_task);
 		}
 
 		Self {
@@ -240,7 +225,6 @@ where
 	}
 
 	/// Get access to the underlying api
-	#[cfg(feature = "test-helpers")]
 	pub fn api(&self) -> &PoolApi {
 		&self.api
 	}
@@ -364,33 +348,6 @@ where
 	}
 }
 
-impl<Block, Client, Fetcher> LightPool<Block, Client, Fetcher>
-where
-	Block: BlockT,
-	Client: sp_blockchain::HeaderBackend<Block> + sc_client_api::UsageProvider<Block> + 'static,
-	Fetcher: sc_client_api::Fetcher<Block> + 'static,
-{
-	/// Create new basic transaction pool for a light node with the provided api.
-	pub fn new_light(
-		options: graph::Options,
-		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnEssentialNamed,
-		client: Arc<Client>,
-		fetcher: Arc<Fetcher>,
-	) -> Self {
-		let pool_api = Arc::new(LightChainApi::new(client.clone(), fetcher));
-		Self::with_revalidation_type(
-			options,
-			false.into(),
-			pool_api,
-			prometheus,
-			RevalidationType::Light,
-			spawner,
-			client.usage_info().chain.best_number,
-		)
-	}
-}
-
 impl<Block, Client> FullPool<Block, Client>
 where
 	Block: BlockT,
@@ -451,7 +408,7 @@ where
 		at: &BlockId<Self::Block>,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
-		use graph::{ChainApi, ValidatedTransaction};
+		use graph::ValidatedTransaction;
 		use sp_runtime::{
 			traits::SaturatedConversion, transaction_validity::TransactionValidityError,
 		};

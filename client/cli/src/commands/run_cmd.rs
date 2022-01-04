@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
@@ -89,7 +89,7 @@ pub struct RunCmd {
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
 	/// proxy server to filter out dangerous methods. More details:
-	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
@@ -127,9 +127,9 @@ pub struct RunCmd {
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
-	/// Size of the RPC HTTP server thread pool.
-	#[structopt(long = "rpc-http-threads", value_name = "COUNT")]
-	pub rpc_http_threads: Option<usize>,
+	/// Set the the maximum WebSocket output buffer size in MiB. Default is 16.
+	#[structopt(long = "ws-max-out-buffer-capacity")]
+	pub ws_max_out_buffer_capacity: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	///
@@ -238,6 +238,10 @@ pub struct RunCmd {
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
 
+	/// Maximum number of different runtimes that can be cached.
+	#[structopt(long, default_value = "2")]
+	pub runtime_cache_size: u8,
+
 	/// Run a temporary node.
 	///
 	/// A temporary directory will be created to store the configuration and will be deleted
@@ -245,6 +249,8 @@ pub struct RunCmd {
 	///
 	/// Note: the directory is random per process execution. This directory is used as base path
 	/// which includes: database, node key and keystore.
+	///
+	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
 }
@@ -359,17 +365,24 @@ impl CliConfiguration for RunCmd {
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn prometheus_config(&self, default_listen_port: u16) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(
+		&self,
+		default_listen_port: u16,
+		chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<PrometheusConfig>> {
 		Ok(if self.no_prometheus {
 			None
 		} else {
 			let interface =
 				if self.prometheus_external { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
 
-			Some(PrometheusConfig::new_with_default_registry(SocketAddr::new(
-				interface.into(),
-				self.prometheus_port.unwrap_or(default_listen_port),
-			)))
+			Some(PrometheusConfig::new_with_default_registry(
+				SocketAddr::new(
+					interface.into(),
+					self.prometheus_port.unwrap_or(default_listen_port),
+				),
+				chain_spec.id().into(),
+			))
 		})
 	}
 
@@ -379,10 +392,6 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
 		Ok(self.ws_max_connections)
-	}
-
-	fn rpc_http_threads(&self) -> Result<Option<usize>> {
-		Ok(self.rpc_http_threads)
 	}
 
 	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
@@ -440,6 +449,10 @@ impl CliConfiguration for RunCmd {
 		Ok(self.rpc_max_payload)
 	}
 
+	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
+		Ok(self.ws_max_out_buffer_capacity)
+	}
+
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		Ok(self.pool_config.transaction_pool())
 	}
@@ -448,11 +461,20 @@ impl CliConfiguration for RunCmd {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
 	}
 
+	fn runtime_cache_size(&self) -> Result<u8> {
+		Ok(self.runtime_cache_size)
+	}
+
 	fn base_path(&self) -> Result<Option<BasePath>> {
 		Ok(if self.tmp {
 			Some(BasePath::new_temp_dir()?)
 		} else {
-			self.shared_params().base_path()
+			match self.shared_params().base_path() {
+				Some(r) => Some(r),
+				// If `dev` is enabled, we use the temp base path.
+				None if self.shared_params().is_dev() => Some(BasePath::new_temp_dir()?),
+				None => None,
+			}
 		})
 	}
 }

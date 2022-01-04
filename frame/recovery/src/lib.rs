@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -155,6 +155,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion};
 use sp_std::prelude::*;
 
@@ -176,7 +177,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// An active recovery process.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 	/// The block number when the recovery process started.
 	created: BlockNumber,
@@ -188,7 +189,7 @@ pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 }
 
 /// Configuration for recovering an account.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 	/// The minimum number of blocks since the start of the recovery process before the account
 	/// can be recovered.
@@ -205,8 +206,8 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{ensure, pallet_prelude::*, traits::Get, Parameter};
-	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 	use sp_runtime::ArithmeticError;
 
 	#[pallet::pallet]
@@ -260,24 +261,23 @@ pub mod pallet {
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
-		/// A recovery process has been set up for an \[account\].
-		RecoveryCreated(T::AccountId),
+		/// A recovery process has been set up for an account.
+		RecoveryCreated { account: T::AccountId },
 		/// A recovery process has been initiated for lost account by rescuer account.
-		/// \[lost, rescuer\]
-		RecoveryInitiated(T::AccountId, T::AccountId),
+		RecoveryInitiated { lost_account: T::AccountId, rescuer_account: T::AccountId },
 		/// A recovery process for lost account by rescuer account has been vouched for by sender.
-		/// \[lost, rescuer, sender\]
-		RecoveryVouched(T::AccountId, T::AccountId, T::AccountId),
+		RecoveryVouched {
+			lost_account: T::AccountId,
+			rescuer_account: T::AccountId,
+			sender: T::AccountId,
+		},
 		/// A recovery process for lost account by rescuer account has been closed.
-		/// \[lost, rescuer\]
-		RecoveryClosed(T::AccountId, T::AccountId),
+		RecoveryClosed { lost_account: T::AccountId, rescuer_account: T::AccountId },
 		/// Lost account has been successfully recovered by rescuer account.
-		/// \[lost, rescuer\]
-		AccountRecovered(T::AccountId, T::AccountId),
-		/// A recovery process has been removed for an \[account\].
-		RecoveryRemoved(T::AccountId),
+		AccountRecovered { lost_account: T::AccountId, rescuer_account: T::AccountId },
+		/// A recovery process has been removed for an account.
+		RecoveryRemoved { lost_account: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -409,7 +409,10 @@ pub mod pallet {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
 			<Proxy<T>>::insert(&rescuer, &lost);
-			Self::deposit_event(Event::<T>::AccountRecovered(lost, rescuer));
+			Self::deposit_event(Event::<T>::AccountRecovered {
+				lost_account: lost,
+				rescuer_account: rescuer,
+			});
 			Ok(())
 		}
 
@@ -472,7 +475,7 @@ pub mod pallet {
 			// Create the recovery configuration storage item
 			<Recoverable<T>>::insert(&who, recovery_config);
 
-			Self::deposit_event(Event::<T>::RecoveryCreated(who));
+			Self::deposit_event(Event::<T>::RecoveryCreated { account: who });
 			Ok(())
 		}
 
@@ -519,7 +522,10 @@ pub mod pallet {
 			};
 			// Create the active recovery storage item
 			<ActiveRecoveries<T>>::insert(&account, &who, recovery_status);
-			Self::deposit_event(Event::<T>::RecoveryInitiated(account, who));
+			Self::deposit_event(Event::<T>::RecoveryInitiated {
+				lost_account: account,
+				rescuer_account: who,
+			});
 			Ok(())
 		}
 
@@ -568,7 +574,11 @@ pub mod pallet {
 			}
 			// Update storage with the latest details
 			<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
-			Self::deposit_event(Event::<T>::RecoveryVouched(lost, rescuer, who));
+			Self::deposit_event(Event::<T>::RecoveryVouched {
+				lost_account: lost,
+				rescuer_account: rescuer,
+				sender: who,
+			});
 			Ok(())
 		}
 
@@ -617,7 +627,10 @@ pub mod pallet {
 			frame_system::Pallet::<T>::inc_consumers(&who).map_err(|_| Error::<T>::BadState)?;
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
-			Self::deposit_event(Event::<T>::AccountRecovered(account, who));
+			Self::deposit_event(Event::<T>::AccountRecovered {
+				lost_account: account,
+				rescuer_account: who,
+			});
 			Ok(())
 		}
 
@@ -656,7 +669,10 @@ pub mod pallet {
 				BalanceStatus::Free,
 			);
 			debug_assert!(res.is_ok());
-			Self::deposit_event(Event::<T>::RecoveryClosed(who, rescuer));
+			Self::deposit_event(Event::<T>::RecoveryClosed {
+				lost_account: who,
+				rescuer_account: rescuer,
+			});
 			Ok(())
 		}
 
@@ -692,7 +708,7 @@ pub mod pallet {
 
 			// Unreserve the initial deposit for the recovery configuration.
 			T::Currency::unreserve(&who, recovery_config.deposit);
-			Self::deposit_event(Event::<T>::RecoveryRemoved(who));
+			Self::deposit_event(Event::<T>::RecoveryRemoved { lost_account: who });
 			Ok(())
 		}
 

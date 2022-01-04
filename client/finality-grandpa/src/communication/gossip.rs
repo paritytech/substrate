@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -593,7 +593,7 @@ impl<N: Ord> Peers<N> {
 			let mut peers = self
 				.inner
 				.iter()
-				.map(|(peer_id, info)| (peer_id.clone(), info.clone()))
+				.map(|(peer_id, info)| (*peer_id, info.clone()))
 				.collect::<Vec<_>>();
 
 			peers.shuffle(&mut rand::thread_rng());
@@ -618,9 +618,9 @@ impl<N: Ord> Peers<N> {
 		let mut n_authorities_added = 0;
 		for peer_id in shuffled_authorities {
 			if n_authorities_added < half_lucky {
-				first_stage_peers.insert(peer_id.clone());
+				first_stage_peers.insert(*peer_id);
 			} else if n_authorities_added < one_and_a_half_lucky {
-				second_stage_peers.insert(peer_id.clone());
+				second_stage_peers.insert(*peer_id);
 			} else {
 				break
 			}
@@ -637,11 +637,11 @@ impl<N: Ord> Peers<N> {
 			}
 
 			if first_stage_peers.len() < LUCKY_PEERS {
-				first_stage_peers.insert(peer_id.clone());
+				first_stage_peers.insert(*peer_id);
 				second_stage_peers.remove(peer_id);
 			} else if second_stage_peers.len() < n_second_stage_peers {
 				if !first_stage_peers.contains(peer_id) {
-					second_stage_peers.insert(peer_id.clone());
+					second_stage_peers.insert(*peer_id);
 				}
 			} else {
 				break
@@ -1299,7 +1299,7 @@ impl Metrics {
 			messages_validated: register(
 				CounterVec::new(
 					Opts::new(
-						"finality_grandpa_communication_gossip_validator_messages",
+						"substrate_finality_grandpa_communication_gossip_validator_messages",
 						"Number of messages validated by the finality grandpa gossip validator.",
 					),
 					&["message", "action"],
@@ -1670,7 +1670,7 @@ mod tests {
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sc_network_test::Block;
-	use sp_core::{crypto::Public, H256};
+	use sp_core::{crypto::UncheckedFrom, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1691,7 +1691,7 @@ mod tests {
 
 		let base = (H256::zero(), 0);
 
-		let voters = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+		let voters = vec![(AuthorityId::unchecked_from([1; 32]), 1)];
 		let voters = AuthoritySet::genesis(voters).unwrap();
 
 		let set_state = VoterSetState::live(0, &voters, base);
@@ -1861,7 +1861,7 @@ mod tests {
 
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 		let set_id = 1;
-		let auth = AuthorityId::from_slice(&[1u8; 32]);
+		let auth = AuthorityId::unchecked_from([1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1878,8 +1878,8 @@ mod tests {
 						target_hash: Default::default(),
 						target_number: 10,
 					}),
-					signature: Default::default(),
-					id: AuthorityId::from_slice(&[2u8; 32]),
+					signature: UncheckedFrom::unchecked_from([1; 64]),
+					id: UncheckedFrom::unchecked_from([2u8; 32]),
 				},
 			},
 		);
@@ -1894,7 +1894,7 @@ mod tests {
 						target_hash: Default::default(),
 						target_number: 10,
 					}),
-					signature: Default::default(),
+					signature: UncheckedFrom::unchecked_from([1; 64]),
 					id: auth.clone(),
 				},
 			},
@@ -1909,7 +1909,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_slice(&[1u8; 32]);
+		let auth = AuthorityId::unchecked_from([1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1972,7 +1972,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(config(), set_state.clone(), None, None);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_slice(&[1u8; 32]);
+		let auth = AuthorityId::unchecked_from([1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -2550,12 +2550,13 @@ mod tests {
 	fn allow_noting_different_authorities_for_same_set() {
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
-		let a1 = vec![AuthorityId::from_slice(&[0; 32])];
+		let a1 = vec![UncheckedFrom::unchecked_from([0; 32])];
 		val.note_set(SetId(1), a1.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a1);
 
-		let a2 = vec![AuthorityId::from_slice(&[1; 32]), AuthorityId::from_slice(&[2; 32])];
+		let a2 =
+			vec![UncheckedFrom::unchecked_from([1; 32]), UncheckedFrom::unchecked_from([2; 32])];
 		val.note_set(SetId(1), a2.clone(), |_, _| {});
 
 		assert_eq!(val.inner().read().authorities, a2);

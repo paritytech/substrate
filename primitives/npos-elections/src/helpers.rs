@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,7 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{
-	Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight, WithApprovalOf,
-};
+use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight};
 use sp_arithmetic::PerThing;
 use sp_std::prelude::*;
 
@@ -79,11 +77,6 @@ pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 		assignment.try_normalize().map_err(|err| Error::ArithmeticError(err))?;
 	}
 	Ok(ratio)
-}
-
-/// consumes a vector of winners with backing stake to just winners.
-pub fn to_without_backing<A: IdentifierT>(winners: Vec<WithApprovalOf<A>>) -> Vec<A> {
-	winners.into_iter().map(|(who, _)| who).collect::<Vec<A>>()
 }
 
 #[cfg(test)]

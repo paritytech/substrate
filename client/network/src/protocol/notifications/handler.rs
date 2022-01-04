@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -256,7 +256,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 					Protocol { config, in_upgrade, state: State::Closed { pending_opening: false } }
 				})
 				.collect(),
-			peer_id: peer_id.clone(),
+			peer_id: *peer_id,
 			endpoint: connected_point.clone(),
 			when_connection_open: Instant::now(),
 			events_queue: VecDeque::with_capacity(16),
@@ -365,10 +365,12 @@ struct NotificationsSinkInner {
 	/// Sender to use in asynchronous contexts. Uses an asynchronous mutex.
 	async_channel: FuturesMutex<mpsc::Sender<NotificationsSinkMessage>>,
 	/// Sender to use in synchronous contexts. Uses a synchronous mutex.
+	/// Contains `None` if the channel was full at some point, in which case the channel will
+	/// be closed in the near future anyway.
 	/// This channel has a large capacity and is meant to be used in contexts where
 	/// back-pressure cannot be properly exerted.
 	/// It will be removed in a future version.
-	sync_channel: Mutex<mpsc::Sender<NotificationsSinkMessage>>,
+	sync_channel: Mutex<Option<mpsc::Sender<NotificationsSinkMessage>>>,
 }
 
 /// Message emitted through the [`NotificationsSink`] and processed by the background task
@@ -400,14 +402,20 @@ impl NotificationsSink {
 	/// This method will be removed in a future version.
 	pub fn send_sync_notification<'a>(&'a self, message: impl Into<Vec<u8>>) {
 		let mut lock = self.inner.sync_channel.lock();
-		let result =
-			lock.try_send(NotificationsSinkMessage::Notification { message: message.into() });
 
-		if result.is_err() {
-			// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
-			// buffer, and therefore `try_send` will succeed.
-			let _result2 = lock.clone().try_send(NotificationsSinkMessage::ForceClose);
-			debug_assert!(_result2.map(|()| true).unwrap_or_else(|err| err.is_disconnected()));
+		if let Some(tx) = lock.as_mut() {
+			let result =
+				tx.try_send(NotificationsSinkMessage::Notification { message: message.into() });
+
+			if result.is_err() {
+				// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
+				// buffer, and therefore `try_send` will succeed.
+				let _result2 = tx.clone().try_send(NotificationsSinkMessage::ForceClose);
+				debug_assert!(_result2.map(|()| true).unwrap_or_else(|err| err.is_disconnected()));
+
+				// Destroy the sender in order to not send more `ForceClose` messages.
+				*lock = None;
+			}
 		}
 	}
 
@@ -463,7 +471,7 @@ impl NotifsHandlerProto {
 	/// is always the same whether we open a substream ourselves or respond to handshake from
 	/// the remote.
 	pub fn new(list: impl Into<Vec<ProtocolConfig>>) -> Self {
-		NotifsHandlerProto { protocols: list.into() }
+		Self { protocols: list.into() }
 	}
 }
 
@@ -552,9 +560,9 @@ impl ProtocolsHandler for NotifsHandler {
 				let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
 				let notifications_sink = NotificationsSink {
 					inner: Arc::new(NotificationsSinkInner {
-						peer_id: self.peer_id.clone(),
+						peer_id: self.peer_id,
 						async_channel: FuturesMutex::new(async_tx),
-						sync_channel: Mutex::new(sync_tx),
+						sync_channel: Mutex::new(Some(sync_tx)),
 					}),
 				};
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -363,7 +363,17 @@ macro_rules! implement_fixed {
 		/// A fixed point number representation in the range.
 		#[doc = $title]
 		#[derive(
-			Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord,
+			Encode,
+			Decode,
+			CompactAs,
+			Default,
+			Copy,
+			Clone,
+			PartialEq,
+			Eq,
+			PartialOrd,
+			Ord,
+			scale_info::TypeInfo,
 		)]
 		pub struct $name($inner_type);
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -69,6 +69,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 		from: <Self::Runtime as frame_system::Config>::AccountId,
 	) -> Self::SignedExtras {
 		(
+			frame_system::CheckNonZeroSender::<Self::Runtime>::new(),
 			frame_system::CheckSpecVersion::<Self::Runtime>::new(),
 			frame_system::CheckTxVersion::<Self::Runtime>::new(),
 			frame_system::CheckGenesis::<Self::Runtime>::new(),
@@ -77,7 +78,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 				frame_system::Pallet::<Self::Runtime>::account_nonce(from),
 			),
 			frame_system::CheckWeight::<Self::Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Self::Runtime>::from(0),
+			pallet_asset_tx_payment::ChargeAssetTxPayment::<Self::Runtime>::from(0, None),
 		)
 	}
 }
@@ -88,18 +89,17 @@ mod tests {
 	use node_cli::chain_spec::development_config;
 	use sp_keyring::sr25519::Keyring::Alice;
 	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
-	use test_runner::{build_runtime, client_parts, task_executor, ConfigOrChainSpec, Node};
+	use test_runner::{build_runtime, client_parts, ConfigOrChainSpec, Node};
 
 	#[test]
 	fn test_runner() {
 		let tokio_runtime = build_runtime().unwrap();
-		let task_executor = task_executor(tokio_runtime.handle().clone());
-		let (rpc, task_manager, client, pool, command_sink, backend) = client_parts::<
-			NodeTemplateChainInfo,
-		>(
-			ConfigOrChainSpec::ChainSpec(Box::new(development_config()), task_executor),
-		)
-		.unwrap();
+		let (rpc, task_manager, client, pool, command_sink, backend) =
+			client_parts::<NodeTemplateChainInfo>(ConfigOrChainSpec::ChainSpec(
+				Box::new(development_config()),
+				tokio_runtime.handle().clone(),
+			))
+			.unwrap();
 		let node = Node::<NodeTemplateChainInfo>::new(
 			rpc,
 			task_manager,
@@ -116,7 +116,7 @@ mod tests {
 			let alice = MultiSigner::from(Alice.public()).into_account();
 			let _hash = node
 				.submit_extrinsic(
-					frame_system::Call::remark((b"hello world").to_vec()),
+					frame_system::Call::remark { remark: (b"hello world").to_vec() },
 					Some(alice),
 				)
 				.await

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -223,8 +223,7 @@ fn system_local_listen_addresses_works() {
 #[test]
 fn system_peers() {
 	let peer_id = PeerId::random();
-	let req = api(Status { peer_id: peer_id.clone(), peers: 1, is_syncing: false, is_dev: true })
-		.system_peers();
+	let req = api(Status { peer_id, peers: 1, is_syncing: false, is_dev: true }).system_peers();
 	let res = executor::block_on(req).unwrap();
 
 	assert_eq!(
@@ -309,7 +308,10 @@ fn test_add_reset_log_filter() {
 
 	// Enter log generation / filter reload
 	if std::env::var("TEST_LOG_FILTER").is_ok() {
-		sc_tracing::logging::LoggerBuilder::new("test_before_add=debug").init().unwrap();
+		let mut builder = sc_tracing::logging::LoggerBuilder::new("test_before_add=debug");
+		builder.with_log_reloading(true);
+		builder.init().unwrap();
+
 		for line in std::io::stdin().lock().lines() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {

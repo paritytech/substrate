@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,9 @@
 //! Testing utilities.
 
 use crate::{
-	codec::{Codec, Decode, Encode},
+	codec::{Codec, Decode, Encode, MaxEncodedLen},
 	generic,
+	scale_info::TypeInfo,
 	traits::{
 		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, OpaqueKeys,
 		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
@@ -29,7 +30,7 @@ use crate::{
 };
 use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
 use sp_core::{
-	crypto::{key_types, CryptoType, Dummy, Public},
+	crypto::{key_types, ByteArray, CryptoType, Dummy},
 	U256,
 };
 pub use sp_core::{sr25519, H256};
@@ -58,6 +59,8 @@ use std::{
 	Deserialize,
 	PartialOrd,
 	Ord,
+	MaxEncodedLen,
+	TypeInfo,
 )]
 pub struct UintAuthorityId(pub u64);
 
@@ -74,10 +77,10 @@ impl From<UintAuthorityId> for u64 {
 }
 
 impl UintAuthorityId {
-	/// Convert this authority id into a public key.
-	pub fn to_public_key<T: Public>(&self) -> T {
+	/// Convert this authority ID into a public key.
+	pub fn to_public_key<T: ByteArray>(&self) -> T {
 		let bytes: [u8; 32] = U256::from(self.0).into();
-		T::from_slice(&bytes)
+		T::from_slice(&bytes).unwrap()
 	}
 }
 
@@ -167,7 +170,7 @@ impl traits::IdentifyAccount for UintAuthorityId {
 }
 
 /// A dummy signature type, to match `UintAuthorityId`.
-#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo)]
 pub struct TestSignature(pub u64, pub Vec<u8>);
 
 impl traits::Verify for TestSignature {
@@ -179,10 +182,10 @@ impl traits::Verify for TestSignature {
 }
 
 /// Digest item
-pub type DigestItem = generic::DigestItem<H256>;
+pub type DigestItem = generic::DigestItem;
 
 /// Header Digest
-pub type Digest = generic::Digest<H256>;
+pub type Digest = generic::Digest;
 
 /// Block Header
 pub type Header = generic::Header<u64, BlakeTwo256>;
@@ -288,7 +291,7 @@ where
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct TestXt<Call, Extra> {
 	/// Signature of the extrinsic.
 	pub signature: Option<(u64, Extra)>,

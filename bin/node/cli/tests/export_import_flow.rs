@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -182,13 +182,13 @@ impl<'a> ExportImportRevertExecutor<'a> {
 	}
 }
 
-#[test]
-fn export_import_revert() {
+#[tokio::test]
+async fn export_import_revert() {
 	let base_path = tempdir().expect("could not create a temp dir");
 	let exported_blocks_file = base_path.path().join("exported_blocks");
 	let db_path = base_path.path().join("db");
 
-	common::run_node_for_a_while(base_path.path(), &["--dev"]);
+	common::run_node_for_a_while(base_path.path(), &["--dev"]).await;
 
 	let mut executor = ExportImportRevertExecutor::new(&base_path, &exported_blocks_file, &db_path);
 

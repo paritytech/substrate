@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +43,7 @@ pub fn debug_derive(ast: DeriveInput) -> proc_macro::TokenStream {
 	gen.into()
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "force-debug")))]
 mod implementation {
 	use super::*;
 
@@ -58,7 +58,7 @@ mod implementation {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "force-debug"))]
 mod implementation {
 	use super::*;
 	use proc_macro2::Span;

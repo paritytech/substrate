@@ -4,4 +4,4 @@ error: No api implementation given!
 17 | sp_api::impl_runtime_apis! {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `sp_api::impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)

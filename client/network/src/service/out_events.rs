@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -142,7 +142,7 @@ impl OutChannels {
 		let metrics =
 			if let Some(registry) = registry { Some(Metrics::register(registry)?) } else { None };
 
-		Ok(OutChannels { event_streams: Vec::new(), metrics: Arc::new(metrics) })
+		Ok(Self { event_streams: Vec::new(), metrics: Arc::new(metrics) })
 	}
 
 	/// Adds a new [`Sender`] to the collection.
@@ -192,7 +192,7 @@ impl Metrics {
 		Ok(Self {
 			events_total: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_events_total",
+					"substrate_sub_libp2p_out_events_events_total",
 					"Number of broadcast network events that have been sent or received across all \
 					 channels"
 				),
@@ -200,7 +200,7 @@ impl Metrics {
 			)?, registry)?,
 			notifications_sizes: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_notifications_sizes",
+					"substrate_sub_libp2p_out_events_notifications_sizes",
 					"Size of notification events that have been sent or received across all \
 					 channels"
 				),
@@ -208,7 +208,7 @@ impl Metrics {
 			)?, registry)?,
 			num_channels: register(GaugeVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_num_channels",
+					"substrate_sub_libp2p_out_events_num_channels",
 					"Number of internal active channels that broadcast network events",
 				),
 				&["name"]

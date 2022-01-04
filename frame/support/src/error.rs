@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,6 @@
 
 //! Macro for declaring a module error.
 
-#[doc(hidden)]
-pub use frame_metadata::{DecodeDifferent, ErrorMetadata, ModuleErrorMetadata};
 #[doc(hidden)]
 pub use sp_runtime::traits::{BadOrigin, LookupError};
 
@@ -87,10 +85,13 @@ macro_rules! decl_error {
 		}
 	) => {
 		$(#[$attr])*
+		#[derive($crate::scale_info::TypeInfo)]
+		#[scale_info(skip_type_params($generic $(, $inst_generic)?), capture_docs = "always")]
 		pub enum $error<$generic: $trait $(, $inst_generic: $instance)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
 			#[doc(hidden)]
+			#[codec(skip)]
 			__Ignore(
 				$crate::sp_std::marker::PhantomData<($generic, $( $inst_generic)?)>,
 				$crate::Never,
@@ -157,24 +158,6 @@ macro_rules! decl_error {
 					error: err.as_u8(),
 					message: Some(err.as_str()),
 				}
-			}
-		}
-
-		impl<$generic: $trait $(, $inst_generic: $instance)?> $crate::error::ModuleErrorMetadata
-			for $error<$generic $(, $inst_generic)?>
-		$( where $( $where_ty: $where_bound ),* )?
-		{
-			fn metadata() -> &'static [$crate::error::ErrorMetadata] {
-				&[
-					$(
-						$crate::error::ErrorMetadata {
-							name: $crate::error::DecodeDifferent::Encode(stringify!($name)),
-							documentation: $crate::error::DecodeDifferent::Encode(&[
-								$( $doc_attr ),*
-							]),
-						}
-					),*
-				]
 			}
 		}
 	};

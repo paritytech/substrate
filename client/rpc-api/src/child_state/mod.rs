@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -65,6 +65,15 @@ pub trait ChildStateApi<Hash> {
 		key: StorageKey,
 		hash: Option<Hash>,
 	) -> FutureResult<Option<StorageData>>;
+
+	/// Returns child storage entries for multiple keys at a specific block's state.
+	#[rpc(name = "childstate_getStorageEntries")]
+	fn storage_entries(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		hash: Option<Hash>,
+	) -> FutureResult<Vec<Option<StorageData>>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
 	#[rpc(name = "childstate_getStorageHash")]

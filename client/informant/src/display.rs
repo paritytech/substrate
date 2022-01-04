@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use crate::OutputFormat;
 use ansi_term::Colour;
 use log::info;
 use sc_client_api::ClientInfo;
-use sc_network::{NetworkStatus, SyncState};
+use sc_network::{NetworkStatus, SyncState, WarpSyncPhase, WarpSyncProgress};
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
 use std::{
 	convert::{TryFrom, TryInto},
@@ -97,11 +97,17 @@ impl<B: BlockT> InformantDisplay<B> {
 			net_status.state_sync,
 			net_status.warp_sync,
 		) {
+			(
+				_,
+				_,
+				_,
+				Some(WarpSyncProgress { phase: WarpSyncPhase::DownloadingBlocks(n), .. }),
+			) => ("⏩", "Block history".into(), format!(", #{}", n)),
 			(_, _, _, Some(warp)) => (
 				"⏩",
 				"Warping".into(),
 				format!(
-					", {}, ({:.2}) Mib",
+					", {}, {:.2} Mib",
 					warp.phase,
 					(warp.total_bytes as f32) / (1024f32 * 1024f32)
 				),
@@ -110,7 +116,7 @@ impl<B: BlockT> InformantDisplay<B> {
 				"⚙️ ",
 				"Downloading state".into(),
 				format!(
-					", {}%, ({:.2}) Mib",
+					", {}%, {:.2} Mib",
 					state.percentage,
 					(state.size as f32) / (1024f32 * 1024f32)
 				),

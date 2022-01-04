@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,7 @@
 // limitations under the License.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use frame_support::{decl_event, decl_module};
-use frame_system as system;
+use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -25,24 +24,24 @@ use sp_runtime::{
 	Perbill,
 };
 
+#[frame_support::pallet]
 mod module {
-	use super::*;
+	use frame_support::pallet_prelude::*;
 
-	pub trait Config: system::Config {
-		type Event: From<Event> + Into<<Self as system::Config>::Event>;
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin {
-			pub fn deposit_event() = default;
-		}
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event {
+		Complex(Vec<u8>, u32, u16, u128),
 	}
-
-	decl_event!(
-		pub enum Event {
-			Complex(Vec<u8>, u32, u16, u128),
-		}
-	);
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -55,12 +54,11 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Module: module::{Pallet, Call, Event},
+		Module: module::{Pallet, Event},
 	}
 );
 
 frame_support::parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
 			4 * 1024 * 1024, Perbill::from_percent(75),
@@ -70,7 +68,7 @@ frame_support::parameter_types! {
 			4 * 1024 * 1024, Perbill::from_percent(75),
 		);
 }
-impl system::Config for Runtime {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = BlockLength;
@@ -85,7 +83,7 @@ impl system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -94,6 +92,7 @@ impl system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl module::Config for Runtime {
@@ -101,14 +100,17 @@ impl module::Config for Runtime {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
+	frame_system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap()
+		.into()
 }
 
 fn deposit_events(n: usize) {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
 		for _ in 0..n {
-			module::Module::<Runtime>::deposit_event(module::Event::Complex(
+			module::Pallet::<Runtime>::deposit_event(module::Event::Complex(
 				vec![1, 2, 3],
 				2,
 				3,

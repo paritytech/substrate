@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
+use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///
@@ -36,7 +36,8 @@ use sp_std::{convert::TryFrom, fmt, marker::PhantomData, prelude::*};
 ///
 /// The length of the vec is not strictly bounded. Decoding a vec with more element that the bound
 /// is accepted, and some method allow to bypass the restriction with warnings.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct WeakBoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
 impl<T: Decode, S: Get<u32>> Decode for WeakBoundedVec<T, S> {
@@ -89,7 +90,7 @@ impl<T, S> WeakBoundedVec<T, S> {
 		self.0.retain(f)
 	}
 
-	/// Exactly the same semantics as [`Vec::get_mut`].
+	/// Exactly the same semantics as [`slice::get_mut`].
 	pub fn get_mut<I: SliceIndex<[T]>>(
 		&mut self,
 		index: I,
@@ -170,12 +171,12 @@ impl<T, S> Default for WeakBoundedVec<T, S> {
 }
 
 #[cfg(feature = "std")]
-impl<T, S> fmt::Debug for WeakBoundedVec<T, S>
+impl<T, S> std::fmt::Debug for WeakBoundedVec<T, S>
 where
-	T: fmt::Debug,
+	T: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("WeakBoundedVec").field(&self.0).field(&Self::bound()).finish()
 	}
 }
@@ -306,7 +307,7 @@ where
 	fn max_encoded_len() -> usize {
 		// WeakBoundedVec<T, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
-		// https://substrate.dev/rustdocs/v3.0.0/src/parity_scale_codec/codec.rs.html#798-808
+		// https://docs.substrate.io/v3/advanced/scale-codec
 		codec::Compact(S::get())
 			.encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
@@ -317,36 +318,32 @@ where
 pub mod test {
 	use super::*;
 	use crate::Twox128;
+	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
 
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-		pub const Four: u32 = 4;
-	}
-
-	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), WeakBoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), WeakBoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), WeakBoundedVec<u32, Seven>>
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), WeakBoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]
 	fn try_append_is_correct() {
-		assert_eq!(WeakBoundedVec::<u32, Seven>::bound(), 7);
+		assert_eq!(WeakBoundedVec::<u32, ConstU32<7>>::bound(), 7);
 	}
 
 	#[test]
 	fn decode_len_works() {
 		TestExternalities::default().execute_with(|| {
-			let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			Foo::put(bounded);
 			assert_eq!(Foo::decode_len().unwrap(), 3);
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooMap::insert(1, bounded);
 			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
 			assert!(FooMap::decode_len(0).is_none());
@@ -354,7 +351,7 @@ pub mod test {
 		});
 
 		TestExternalities::default().execute_with(|| {
-			let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 			FooDoubleMap::insert(1, 1, bounded);
 			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
@@ -365,7 +362,7 @@ pub mod test {
 
 	#[test]
 	fn try_insert_works() {
-		let mut bounded: WeakBoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let mut bounded: WeakBoundedVec<u32, ConstU32<4>> = vec![1, 2, 3].try_into().unwrap();
 		bounded.try_insert(1, 0).unwrap();
 		assert_eq!(*bounded, vec![1, 0, 2, 3]);
 
@@ -376,13 +373,13 @@ pub mod test {
 	#[test]
 	#[should_panic(expected = "insertion index (is 9) should be <= len (is 3)")]
 	fn try_inert_panics_if_oob() {
-		let mut bounded: WeakBoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let mut bounded: WeakBoundedVec<u32, ConstU32<4>> = vec![1, 2, 3].try_into().unwrap();
 		bounded.try_insert(9, 0).unwrap();
 	}
 
 	#[test]
 	fn try_push_works() {
-		let mut bounded: WeakBoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		let mut bounded: WeakBoundedVec<u32, ConstU32<4>> = vec![1, 2, 3].try_into().unwrap();
 		bounded.try_push(0).unwrap();
 		assert_eq!(*bounded, vec![1, 2, 3, 0]);
 
@@ -391,7 +388,7 @@ pub mod test {
 
 	#[test]
 	fn deref_coercion_works() {
-		let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+		let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
 		// these methods come from deref-ed vec.
 		assert_eq!(bounded.len(), 3);
 		assert!(bounded.iter().next().is_some());
@@ -400,7 +397,7 @@ pub mod test {
 
 	#[test]
 	fn try_mutate_works() {
-		let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
 		let bounded = bounded.try_mutate(|v| v.push(7)).unwrap();
 		assert_eq!(bounded.len(), 7);
 		assert!(bounded.try_mutate(|v| v.push(8)).is_none());
@@ -408,20 +405,20 @@ pub mod test {
 
 	#[test]
 	fn slice_indexing_works() {
-		let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
 		assert_eq!(&bounded[0..=2], &[1, 2, 3]);
 	}
 
 	#[test]
 	fn vec_eq_works() {
-		let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
 		assert_eq!(bounded, vec![1, 2, 3, 4, 5, 6]);
 	}
 
 	#[test]
 	fn too_big_succeed_to_decode() {
 		let v: Vec<u32> = vec![1, 2, 3, 4, 5];
-		let w = WeakBoundedVec::<u32, Four>::decode(&mut &v.encode()[..]).unwrap();
+		let w = WeakBoundedVec::<u32, ConstU32<4>>::decode(&mut &v.encode()[..]).unwrap();
 		assert_eq!(v, *w);
 	}
 }

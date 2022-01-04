@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,18 +63,18 @@ benchmarks! {
 	} verify {
 		assert!(sp_consensus_babe::check_equivocation_proof::<Header>(equivocation_proof2));
 	}
+
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(3),
+		crate::mock::Test,
+	)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::mock::*;
-
-	frame_benchmarking::impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::new_test_ext(3),
-		crate::mock::Test,
-	);
 
 	#[test]
 	fn test_generate_equivocation_report_blob() {

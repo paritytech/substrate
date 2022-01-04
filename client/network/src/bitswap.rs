@@ -39,8 +39,7 @@ use libp2p::{
 		UpgradeInfo,
 	},
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
-		OneShotHandler, PollParameters, ProtocolsHandler,
+		NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler, PollParameters,
 	},
 };
 use log::{debug, error, trace};
@@ -190,7 +189,7 @@ pub struct Bitswap<B> {
 impl<B: BlockT> Bitswap<B> {
 	/// Create a new instance of the bitswap protocol handler.
 	pub fn new(client: Arc<dyn Client<B>>) -> Self {
-		Bitswap { client, ready_blocks: Default::default() }
+		Self { client, ready_blocks: Default::default() }
 	}
 }
 
@@ -297,15 +296,14 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		self.ready_blocks.push_back((peer, response));
 	}
 
-	fn poll(&mut self, _ctx: &mut Context, _: &mut impl PollParameters) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent,
-		>,
-	>{
+	fn poll(
+		&mut self,
+		_ctx: &mut Context,
+		_: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-				peer_id: peer_id.clone(),
+				peer_id,
 				handler: NotifyHandler::Any,
 				event: message,
 			})

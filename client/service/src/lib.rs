@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -39,7 +39,6 @@ use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
 use codec::{Decode, Encode};
 use futures::{stream, Future, FutureExt, Stream, StreamExt};
 use log::{debug, error, warn};
-use parity_util_mem::MallocSizeOf;
 use sc_network::PeerId;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::{
@@ -50,17 +49,16 @@ use sp_runtime::{
 pub use self::{
 	builder::{
 		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
-		new_full_parts, new_light_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer,
-		NetworkStarter, NoopRpcExtensionBuilder, RpcExtensionBuilder, SpawnTasksParams,
-		TFullBackend, TFullCallExecutor, TFullClient, TLightBackend, TLightBackendWithHash,
-		TLightCallExecutor, TLightClient, TLightClientWithBackend,
+		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
+		NoopRpcExtensionBuilder, RpcExtensionBuilder, SpawnTasksParams, TFullBackend,
+		TFullCallExecutor, TFullClient,
 	},
 	client::{ClientConfig, LocalCallExecutor},
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods,
-	TaskExecutor, TaskType, TransactionStorageMode,
+	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -70,26 +68,16 @@ use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use sc_network::config::{OnDemand, TransactionImport, TransactionImportFuture};
+pub use sc_network::config::{TransactionImport, TransactionImportFuture};
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
-pub use task_manager::{SpawnTaskHandle, TaskManager};
+pub use task_manager::{SpawnTaskHandle, TaskManager, DEFAULT_GROUP_NAME};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
-
-/// A type that implements `MallocSizeOf` on native but not wasm.
-#[cfg(not(target_os = "unknown"))]
-pub trait MallocSizeOfWasm: MallocSizeOf {}
-#[cfg(target_os = "unknown")]
-pub trait MallocSizeOfWasm {}
-#[cfg(not(target_os = "unknown"))]
-impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
-#[cfg(target_os = "unknown")]
-impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
@@ -305,7 +293,6 @@ async fn build_network_future<
 }
 
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-#[cfg(not(target_os = "unknown"))]
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
 	impl Drop for HttpServer {
@@ -340,7 +327,6 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
 /// alive.
-#[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
 	H: FnMut(
 		sc_rpc::DenyUnsafe,
@@ -408,7 +394,6 @@ fn start_rpc_servers<
 		maybe_start_server(config.rpc_http, |address| {
 			sc_rpc_server::start_http(
 				address,
-				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
@@ -419,6 +404,7 @@ fn start_rpc_servers<
 					),
 				)?,
 				config.rpc_max_payload,
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?
@@ -437,29 +423,14 @@ fn start_rpc_servers<
 					),
 				)?,
 				config.rpc_max_payload,
+				config.ws_max_out_buffer_capacity,
 				server_metrics.clone(),
+				config.tokio_handle.clone(),
 			)
 			.map_err(Error::from)
 		})?
 		.map(|s| waiting::WsServer(Some(s))),
 	)))
-}
-
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
-/// alive.
-#[cfg(target_os = "unknown")]
-fn start_rpc_servers<
-	H: FnMut(
-		sc_rpc::DenyUnsafe,
-		sc_rpc_server::RpcMiddleware,
-	) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>,
->(
-	_: &Configuration,
-	_: H,
-	_: Option<sc_rpc_server::RpcMetrics>,
-	_: sc_rpc_server::ServerMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	Ok(Box::new(()))
 }
 
 /// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
@@ -527,7 +498,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			Box::pin(futures::future::ready(TransactionImport::None));
+			return Box::pin(futures::future::ready(TransactionImport::None))
 		}
 
 		let encoded = transaction.encode();
@@ -605,7 +576,7 @@ mod tests {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
-			to: Default::default(),
+			to: AccountKeyring::Bob.into(),
 		}
 		.into_signed_tx();
 		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))

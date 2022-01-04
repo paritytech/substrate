@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,8 +19,8 @@
 
 use crate::{
 	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
-	to_support_map, to_supports, Assignment, ElectionResult, EvaluateSupport, ExtendedBalance,
-	IndexAssignment, NposSolution, StakedAssignment, Support, Voter,
+	to_support_map, Assignment, ElectionResult, ExtendedBalance, IndexAssignment, NposSolution,
+	StakedAssignment, Support, Voter,
 };
 use rand::{self, SeedableRng};
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
@@ -192,16 +192,15 @@ fn balancing_core_works() {
 #[test]
 fn voter_normalize_ops_works() {
 	use crate::{Candidate, Edge};
-	use sp_std::{cell::RefCell, rc::Rc};
 	// normalize
 	{
 		let c1 = Candidate { who: 10, elected: false, ..Default::default() };
 		let c2 = Candidate { who: 20, elected: false, ..Default::default() };
 		let c3 = Candidate { who: 30, elected: false, ..Default::default() };
 
-		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
-		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
-		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+		let e1 = Edge::new(c1, 30);
+		let e2 = Edge::new(c2, 33);
+		let e3 = Edge::new(c3, 30);
 
 		let mut v = Voter { who: 1, budget: 100, edges: vec![e1, e2, e3], ..Default::default() };
 
@@ -214,9 +213,9 @@ fn voter_normalize_ops_works() {
 		let c2 = Candidate { who: 20, elected: true, ..Default::default() };
 		let c3 = Candidate { who: 30, elected: true, ..Default::default() };
 
-		let e1 = Edge { candidate: Rc::new(RefCell::new(c1)), weight: 30, ..Default::default() };
-		let e2 = Edge { candidate: Rc::new(RefCell::new(c2)), weight: 33, ..Default::default() };
-		let e3 = Edge { candidate: Rc::new(RefCell::new(c3)), weight: 30, ..Default::default() };
+		let e1 = Edge::new(c1, 30);
+		let e2 = Edge::new(c2, 33);
+		let e3 = Edge::new(c3, 30);
 
 		let mut v = Voter { who: 1, budget: 100, edges: vec![e1, e2, e3], ..Default::default() };
 
@@ -259,8 +258,7 @@ fn phragmen_poc_works() {
 	);
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
-	let winners = to_without_backing(winners);
-	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_map = to_support_map::<AccountId>(&staked);
 
 	assert_eq_uvec!(
 		staked,
@@ -315,8 +313,7 @@ fn phragmen_poc_works_with_balancing() {
 	);
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
-	let winners = to_without_backing(winners);
-	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_map = to_support_map::<AccountId>(&staked);
 
 	assert_eq_uvec!(
 		staked,
@@ -515,7 +512,7 @@ fn phragmen_large_scale_test() {
 	)
 	.unwrap();
 
-	assert_eq_uvec!(to_without_backing(winners.clone()), vec![24, 22]);
+	assert_eq_uvec!(winners.iter().map(|(x, _)| *x).collect::<Vec<_>>(), vec![24, 22]);
 	check_assignments_sum(&assignments);
 }
 
@@ -649,8 +646,7 @@ fn phragmen_self_votes_should_be_kept() {
 	);
 
 	let staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
-	let winners = to_without_backing(result.winners);
-	let supports = to_support_map::<AccountId>(&winners, &staked_assignments).unwrap();
+	let supports = to_support_map::<AccountId>(&staked_assignments);
 
 	assert_eq!(supports.get(&5u64), None);
 	assert_eq!(
@@ -670,9 +666,8 @@ fn duplicate_target_is_ignored() {
 
 	let ElectionResult { winners, assignments } =
 		seq_phragmen::<_, Perbill>(2, candidates, voters, None).unwrap();
-	let winners = to_without_backing(winners);
 
-	assert_eq!(winners, vec![(2), (3)]);
+	assert_eq!(winners, vec![(2, 140), (3, 110)]);
 	assert_eq!(
 		assignments
 			.into_iter()
@@ -689,9 +684,8 @@ fn duplicate_target_is_ignored_when_winner() {
 
 	let ElectionResult { winners, assignments } =
 		seq_phragmen::<_, Perbill>(2, candidates, voters, None).unwrap();
-	let winners = to_without_backing(winners);
 
-	assert_eq!(winners, vec![1, 2]);
+	assert_eq!(winners, vec![(1, 100), (2, 100)]);
 	assert_eq!(
 		assignments
 			.into_iter()
@@ -699,31 +693,6 @@ fn duplicate_target_is_ignored_when_winner() {
 			.collect::<Vec<_>>(),
 		vec![(10, vec![1, 2]), (20, vec![1, 2]),],
 	);
-}
-
-#[test]
-fn support_map_and_vec_can_be_evaluated() {
-	let candidates = vec![1, 2, 3];
-	let voters = vec![(10, vec![1, 2]), (20, vec![1, 3]), (30, vec![2, 3])];
-
-	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
-		2,
-		candidates,
-		voters
-			.iter()
-			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
-			.collect::<Vec<_>>(),
-		None,
-	)
-	.unwrap();
-
-	let staked = assignment_ratio_to_staked(assignments, &stake_of);
-	let winners = to_without_backing(winners);
-	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
-	let support_vec = to_supports(&winners, &staked).unwrap();
-
-	assert_eq!(support_map.evaluate(), support_vec.evaluate());
 }
 
 mod assignment_convert_normalize {

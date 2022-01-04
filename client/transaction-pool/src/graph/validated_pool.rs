@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use std::{
 use futures::channel::mpsc::{channel, Sender};
 use parking_lot::{Mutex, RwLock};
 use retain_mut::RetainMut;
-use sc_transaction_pool_api::{error, PoolStatus};
+use sc_transaction_pool_api::{error, PoolStatus, ReadyTransactions};
 use serde::Serialize;
 use sp_runtime::{
 	generic::BlockId,
@@ -111,7 +111,6 @@ pub struct ValidatedPool<B: ChainApi> {
 	rotator: PoolRotator<ExtrinsicHash<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
@@ -570,12 +569,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 		Ok(())
 	}
 
-	/// Get rotator reference.
-	#[cfg(feature = "test-helpers")]
-	pub fn rotator(&self) -> &PoolRotator<ExtrinsicHash<B>> {
-		&self.rotator
-	}
-
 	/// Get api reference.
 	pub fn api(&self) -> &B {
 		&self.api
@@ -631,7 +624,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> impl Iterator<Item = TransactionFor<B>> + Send {
+	pub fn ready(&self) -> impl ReadyTransactions<Item = TransactionFor<B>> + Send {
 		self.pool.read().ready()
 	}
 

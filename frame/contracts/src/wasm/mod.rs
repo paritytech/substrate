@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,11 +31,12 @@ use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
 	wasm::env_def::FunctionImplProvider,
-	CodeHash, Config, Schedule,
+	AccountIdOf, BalanceOf, CodeHash, CodeStorage, Config, Schedule,
 };
-use codec::{Decode, Encode};
-use frame_support::dispatch::DispatchError;
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
+use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
 #[cfg(test)]
 pub use tests::MockExt;
@@ -45,12 +46,12 @@ pub use tests::MockExt;
 /// # Note
 ///
 /// This data structure is mostly immutable once created and stored. The exceptions that
-/// can be changed by calling a contract are `refcount`, `instruction_weights_version` and `code`.
-/// `refcount` can change when a contract instantiates a new contract or self terminates.
-/// `instruction_weights_version` and `code` when a contract with an outdated instrumention is
-/// called. Therefore one must be careful when holding any in-memory representation of this
+/// can be changed by calling a contract are `instruction_weights_version` and `code`.
+/// `instruction_weights_version` and `code` change when a contract with an outdated instrumentation
+/// is called. Therefore one must be careful when holding any in-memory representation of this
 /// type while calling into a contract as those fields can get out of date.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct PrefabWasmModule<T: Config> {
 	/// Version of the instruction weights with which the code was instrumented.
 	#[codec(compact)]
@@ -61,26 +62,8 @@ pub struct PrefabWasmModule<T: Config> {
 	/// The maximum memory size of a contract's sandbox.
 	#[codec(compact)]
 	maximum: u32,
-	/// The number of contracts that use this as their contract code.
-	///
-	/// If this number drops to zero this module is removed from storage.
-	#[codec(compact)]
-	refcount: u64,
-	/// This field is reserved for future evolution of format.
-	///
-	/// For now this field is serialized as `None`. In the future we are able to change the
-	/// type parameter to a new struct that contains the fields that we want to add.
-	/// That new struct would also contain a reserved field for its future extensions.
-	/// This works because in SCALE `None` is encoded independently from the type parameter
-	/// of the option.
-	_reserved: Option<()>,
 	/// Code instrumented with the latest schedule.
 	code: Vec<u8>,
-	/// The size of the uninstrumented code.
-	///
-	/// We cache this value here in order to avoid the need to pull the pristine code
-	/// from storage when we only need its length for rent calculations.
-	original_code_len: u32,
 	/// The uninstrumented, pristine version of the code.
 	///
 	/// It is not stored because the pristine code has its own storage item. The value
@@ -94,6 +77,27 @@ pub struct PrefabWasmModule<T: Config> {
 	/// when loading the module from storage.
 	#[codec(skip)]
 	code_hash: CodeHash<T>,
+	// This isn't needed for contract execution and does not get loaded from storage by default.
+	// It is `Some` if and only if this struct was generated from code.
+	#[codec(skip)]
+	owner_info: Option<OwnerInfo<T>>,
+}
+
+/// Information that belongs to a [`PrefabWasmModule`] but is stored separately.
+///
+/// It is stored in a separate storage entry to avoid loading the code when not necessary.
+#[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct OwnerInfo<T: Config> {
+	/// The account that has deployed the contract and hence is allowed to remove it.
+	owner: AccountIdOf<T>,
+	/// The amount of balance that was deposited by the owner in order to deploy it.
+	#[codec(compact)]
+	deposit: BalanceOf<T>,
+	/// The number of contracts that use this as their code.
+	#[codec(compact)]
+	refcount: u64,
 }
 
 impl ExportedFunction {
@@ -111,11 +115,43 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Create the module by checking and instrumenting `original_code`.
+	///
+	/// This does **not** store the module. For this one need to either call [`Self::store`]
+	/// or [`<Self as Executable>::execute`].
 	pub fn from_code(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
+		owner: AccountIdOf<T>,
 	) -> Result<Self, DispatchError> {
-		prepare::prepare_contract(original_code, schedule).map_err(Into::into)
+		prepare::prepare_contract(original_code, schedule, owner).map_err(Into::into)
+	}
+
+	/// Store the code without instantiating it.
+	///
+	/// Otherwise the code is stored when [`<Self as Executable>::execute`] is called.
+	pub fn store(self) -> DispatchResult {
+		code_cache::store(self, false)
+	}
+
+	/// Remove the code from storage and refund the deposit to its owner.
+	///
+	/// Applies all necessary checks before removing the code.
+	pub fn remove(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
+		code_cache::try_remove::<T>(origin, code_hash)
+	}
+
+	/// Returns whether there is a deposit to be payed for this module.
+	///
+	/// Returns `0` if the module is already in storage and hence no deposit will
+	/// be charged when storing it.
+	pub fn open_deposit(&self) -> BalanceOf<T> {
+		if <CodeStorage<T>>::contains_key(&self.code_hash) {
+			0u32.into()
+		} else {
+			// Only already in-storage contracts have their `owner_info` set to `None`.
+			// Therefore it is correct to return `0` in this case.
+			self.owner_info.as_ref().map(|i| i.deposit).unwrap_or_default()
+		}
 	}
 
 	/// Create and store the module without checking nor instrumenting the passed code.
@@ -123,28 +159,30 @@ where
 	/// # Note
 	///
 	/// This is useful for benchmarking where we don't want instrumentation to skew
-	/// our results.
+	/// our results. This also does not collect any deposit from the `owner`.
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
-	) -> Result<(), DispatchError> {
-		let executable = prepare::benchmarking::prepare_contract(original_code, schedule)
+		owner: T::AccountId,
+	) -> DispatchResult {
+		let executable = prepare::benchmarking::prepare_contract(original_code, schedule, owner)
 			.map_err::<DispatchError, _>(Into::into)?;
-		code_cache::store(executable);
-		Ok(())
-	}
-
-	/// Return the refcount of the module.
-	#[cfg(test)]
-	pub fn refcount(&self) -> u64 {
-		self.refcount
+		code_cache::store(executable, false)
 	}
 
 	/// Decrement instruction_weights_version by 1. Panics if it is already 0.
 	#[cfg(test)]
 	pub fn decrement_version(&mut self) {
 		self.instruction_weights_version = self.instruction_weights_version.checked_sub(1).unwrap();
+	}
+}
+
+impl<T: Config> OwnerInfo<T> {
+	/// Return the refcount of the module.
+	#[cfg(test)]
+	pub fn refcount(&self) -> u64 {
+		self.refcount
 	}
 }
 
@@ -157,22 +195,11 @@ where
 		schedule: &Schedule<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		code_cache::load(code_hash, Some((schedule, gas_meter)))
+		code_cache::load(code_hash, schedule, gas_meter)
 	}
 
-	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError> {
-		code_cache::load(code_hash, None)
-	}
-
-	fn add_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>) -> Result<(), DispatchError> {
-		code_cache::increment_refcount::<T>(code_hash, gas_meter)
-	}
-
-	fn remove_user(
-		code_hash: CodeHash<T>,
-		gas_meter: &mut GasMeter<T>,
-	) -> Result<(), DispatchError> {
-		code_cache::decrement_refcount::<T>(code_hash, gas_meter)
+	fn remove_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+		code_cache::decrement_refcount::<T>(code_hash)
 	}
 
 	fn execute<E: Ext<T = T>>(
@@ -181,8 +208,8 @@ where
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
 	) -> ExecResult {
-		let memory =
-			sp_sandbox::Memory::new(self.initial, Some(self.maximum)).unwrap_or_else(|_| {
+		let memory = sp_sandbox::default_executor::Memory::new(self.initial, Some(self.maximum))
+			.unwrap_or_else(|_| {
 				// unlike `.expect`, explicit panic preserves the source location.
 				// Needed as we can't use `RUST_BACKTRACE` in here.
 				panic!(
@@ -192,23 +219,22 @@ where
 				)
 			});
 
-		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
+		let mut imports = sp_sandbox::default_executor::EnvironmentDefinitionBuilder::new();
 		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
 		runtime::Env::impls(&mut |module, name, func_ptr| {
 			imports.add_host_func(module, name, func_ptr);
 		});
 
-		let mut runtime = Runtime::new(ext, input_data, memory);
-
 		// We store before executing so that the code hash is available in the constructor.
 		let code = self.code.clone();
 		if let &ExportedFunction::Constructor = function {
-			code_cache::store(self)
+			code_cache::store(self, true)?;
 		}
 
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
-		let result = sp_sandbox::Instance::new(&code, &imports, &mut runtime)
+		let mut runtime = Runtime::new(ext, input_data, memory);
+		let result = sp_sandbox::default_executor::Instance::new(&code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(function.identifier(), &[], &mut runtime));
 
 		runtime.to_execution_result(result)
@@ -220,14 +246,6 @@ where
 
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
-	}
-
-	fn aggregate_code_len(&self) -> u32 {
-		self.original_code_len.saturating_add(self.code_len())
-	}
-
-	fn refcount(&self) -> u32 {
-		self.refcount as u32
 	}
 }
 
@@ -258,7 +276,7 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq)]
 	struct InstantiateEntry {
 		code_hash: H256,
-		endowment: u64,
+		value: u64,
 		data: Vec<u8>,
 		gas_left: u64,
 		salt: Vec<u8>,
@@ -295,6 +313,7 @@ mod tests {
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
+		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -315,6 +334,7 @@ mod tests {
 				schedule: Default::default(),
 				gas_meter: GasMeter::new(10_000_000_000),
 				debug_buffer: Default::default(),
+				ecdsa_recover: Default::default(),
 			}
 		}
 	}
@@ -337,13 +357,13 @@ mod tests {
 			&mut self,
 			gas_limit: Weight,
 			code_hash: CodeHash<Test>,
-			endowment: u64,
+			value: u64,
 			data: Vec<u8>,
 			salt: &[u8],
 		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
-				endowment,
+				value,
 				data: data.to_vec(),
 				gas_left: gas_limit,
 				salt: salt.to_vec(),
@@ -386,9 +406,6 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn contract_deposit(&self) -> u64 {
-			16
-		}
 		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
 			(H256::from_slice(subject), 42)
 		}
@@ -418,13 +435,24 @@ mod tests {
 			self.runtime_calls.borrow_mut().push(call);
 			Ok(Default::default())
 		}
+		fn ecdsa_recover(
+			&self,
+			signature: &[u8; 65],
+			message_hash: &[u8; 32],
+		) -> Result<[u8; 33], ()> {
+			self.ecdsa_recover.borrow_mut().push((signature.clone(), message_hash.clone()));
+			Ok([3; 33])
+		}
+		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
+			unimplemented!()
+		}
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
 		let executable =
-			PrefabWasmModule::<<MockExt as Ext>::T>::from_code(wasm, &schedule).unwrap();
+			PrefabWasmModule::<<MockExt as Ext>::T>::from_code(wasm, &schedule, ALICE).unwrap();
 		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
 	}
 
@@ -528,11 +556,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contract_call_forward_input() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal1" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
@@ -583,11 +610,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contract_call_clone_input() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal1" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -639,11 +665,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contract_call_tail_call() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal1" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -751,7 +776,7 @@ mod tests {
 			&mock_ext.instantiates[..],
 			[InstantiateEntry {
 				code_hash,
-				endowment: 3,
+				value: 3,
 				data,
 				gas_left: _,
 				salt,
@@ -848,6 +873,51 @@ mod tests {
 			&mock_ext.calls,
 			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
 		);
+	}
+
+	#[cfg(feature = "unstable-interface")]
+	const CODE_ECDSA_RECOVER: &str = r#"
+(module
+	;; seal_ecdsa_recover(
+	;;    signature_ptr: u32,
+	;;    message_hash_ptr: u32,
+	;;    output_ptr: u32
+	;; ) -> u32
+	(import "__unstable__" "seal_ecdsa_recover" (func $seal_ecdsa_recover (param i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $seal_ecdsa_recover
+				(i32.const 36) ;; Pointer to signature.
+				(i32.const 4)  ;; Pointer to message hash.
+				(i32.const 36) ;; Pointer for output - public key.
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Hash of message.
+	(data (i32.const 4)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+	;; Signature
+	(data (i32.const 36)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01"
+	)
+)
+"#;
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn contract_ecdsa_recover() {
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_ECDSA_RECOVER, vec![], &mut mock_ext));
+		assert_eq!(mock_ext.ecdsa_recover.into_inner(), [([1; 65], [1; 32])]);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"
@@ -1338,51 +1408,6 @@ mod tests {
 		assert_ok!(execute(CODE_MINIMUM_BALANCE, vec![], MockExt::default()));
 	}
 
-	const CODE_CONTRACT_DEPOSIT: &str = r#"
-(module
-	(import "seal0" "seal_contract_deposit" (func $seal_contract_deposit (param i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; size of our buffer is 32 bytes
-	(data (i32.const 32) "\20")
-
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
-
-	(func (export "call")
-		(call $seal_contract_deposit (i32.const 0) (i32.const 32))
-
-		;; assert len == 8
-		(call $assert
-			(i32.eq
-				(i32.load (i32.const 32))
-				(i32.const 8)
-			)
-		)
-
-		;; assert that contents of the buffer is equal to the i64 value of 16.
-		(call $assert
-			(i64.eq
-				(i64.load (i32.const 0))
-				(i64.const 16)
-			)
-		)
-	)
-	(func (export "deploy"))
-)
-"#;
-
-	#[test]
-	fn contract_deposit() {
-		assert_ok!(execute(CODE_CONTRACT_DEPOSIT, vec![], MockExt::default()));
-	}
-
 	const CODE_RANDOM: &str = r#"
 (module
 	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
@@ -1740,7 +1765,7 @@ mod tests {
 				data: Bytes(hex!("445566778899").to_vec()),
 			}
 		);
-		assert!(output.is_success());
+		assert!(!output.did_revert());
 	}
 
 	#[test]
@@ -1756,7 +1781,7 @@ mod tests {
 				data: Bytes(hex!("5566778899").to_vec()),
 			}
 		);
-		assert!(!output.is_success());
+		assert!(output.did_revert());
 	}
 
 	const CODE_OUT_OF_BOUNDS_ACCESS: &str = r#"
@@ -1910,8 +1935,7 @@ mod tests {
 	#[test]
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
-		use std::convert::TryInto;
-		let call = Call::System(frame_system::Call::remark(b"Hello World".to_vec()));
+		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
 		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);
