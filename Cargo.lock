@@ -3254,7 +3254,7 @@ dependencies = [
  "http",
  "jsonrpsee-types",
  "log 0.4.14",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "rustls-native-certs",
  "serde",
  "serde_json",
@@ -3454,7 +3454,7 @@ dependencies = [
  "libp2p-yamux",
  "multiaddr",
  "parking_lot 0.11.2",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "smallvec 1.7.0",
  "wasm-timer",
 ]
@@ -3479,7 +3479,7 @@ dependencies = [
  "multihash 0.14.0",
  "multistream-select",
  "parking_lot 0.11.2",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "prost",
  "prost-build",
  "rand 0.8.4",
@@ -3720,7 +3720,7 @@ checksum = "0f1a458bbda880107b5b36fcb9b5a1ef0c329685da0e203ed692a8ebe64cc92c"
 dependencies = [
  "futures 0.3.16",
  "log 0.4.14",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "rand 0.7.3",
  "salsa20",
  "sha3",
@@ -3739,7 +3739,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log 0.4.14",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "prost",
  "prost-build",
  "rand 0.7.3",
@@ -4408,7 +4408,7 @@ dependencies = [
  "bytes 1.1.0",
  "futures 0.3.16",
  "log 0.4.14",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "smallvec 1.7.0",
  "unsigned-varint 0.7.0",
 ]
@@ -6633,11 +6633,11 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "1.0.8"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "576bc800220cc65dac09e99e97b08b358cfab6e17078de8dc5fee223bd2d0c08"
+checksum = "58ad3879ad3baf4e44784bc6a718a8698867bb991f8ce24d1bcbe2cfb4c3a75e"
 dependencies = [
- "pin-project-internal 1.0.8",
+ "pin-project-internal 1.0.10",
 ]
 
 [[package]]
@@ -6653,9 +6653,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-internal"
-version = "1.0.8"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e8fe8163d14ce7f0cdac2e040116f22eac817edabff0be91e8aff7e9accf389"
+checksum = "744b6f092ba29c3650faf274db506afd39944f48420f6c86b17cfe0ee1cb36bb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8269,7 +8269,7 @@ dependencies = [
  "lru 0.7.0",
  "parity-scale-codec",
  "parking_lot 0.11.2",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "prost",
  "prost-build",
  "quickcheck",
@@ -8510,7 +8510,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.2",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "rand 0.7.3",
  "sc-block-builder",
  "sc-chain-spec",
@@ -8638,7 +8638,7 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "parking_lot 0.11.2",
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -10822,7 +10822,7 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
- "pin-project 1.0.8",
+ "pin-project 1.0.10",
  "tracing",
 ]
 
