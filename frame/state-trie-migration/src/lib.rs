@@ -687,13 +687,13 @@ pub mod pallet {
 			T::WeightInfo::migrate_custom_top_success()
 				.max(T::WeightInfo::migrate_custom_top_fail())
 			.saturating_add(
-				Pallet::<T>::dynamic_weight(keys.len() as u32, *total_size)
+				Pallet::<T>::dynamic_weight(keys.len() as u32, *witness_size)
 			)
 		)]
 		pub fn migrate_custom_top(
 			origin: OriginFor<T>,
 			keys: Vec<Vec<u8>>,
-			total_size: u32,
+			witness_size: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
@@ -711,10 +711,10 @@ pub mod pallet {
 				}
 			}
 
-			if dyn_size != total_size {
+			if dyn_size > witness_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
-				return Err("Wrong witness data".into())
+				return Err("wrong witness data".into())
 			}
 
 			Self::deposit_event(Event::<T>::Migrated {
@@ -1571,7 +1571,7 @@ mod test {
 					vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 					69, // wrong witness
 				),
-				"Wrong witness data"
+				"wrong witness data"
 			);
 
 			// no funds should remain reserved.
