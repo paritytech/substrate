@@ -247,7 +247,7 @@ where
 					self.spawn_handle.clone(),
 				)
 				.with_storage_transaction_cache(
-					storage_transaction_cache.as_mut().map(|c| &mut **c),
+					storage_transaction_cache.as_deref_mut(),
 				)
 				.set_parent_hash(at_hash);
 				state_machine.execute_using_consensus_failure_handler(
