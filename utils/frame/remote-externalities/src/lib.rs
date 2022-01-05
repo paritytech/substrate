@@ -808,8 +808,13 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
+		let state_version = self.state_version;
 		let (top_kv, child_kv) = self.pre_build().await?;
-		let mut ext = TestExternalities::new_with_code(Default::default(), Default::default());
+		let mut ext = TestExternalities::new_with_code_and_state(
+			Default::default(),
+			Default::default(),
+			state_version,
+		);
 
 		info!(target: LOG_TARGET, "injecting a total of {} top keys", top_kv.len());
 		for (k, v) in top_kv {
