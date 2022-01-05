@@ -381,8 +381,7 @@ pub trait TryCollect<T> {
 
 impl<I, T> TryCollect<T> for I
 where
-	I: ExactSizeIterator,
-	I: Iterator<Item = T>,
+	I: ExactSizeIterator + Iterator<Item = T>,
 {
 	type Error = &'static str;
 
