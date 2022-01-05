@@ -229,7 +229,7 @@ impl<G, E> ChainSpec<G, E> {
 
 	/// Optional network fork identifier.
 	pub fn fork_id(&self) -> Option<&str> {
-		self.client_spec.fork_id.as_ref().map(String::as_str)
+		self.client_spec.fork_id.as_deref()
 	}
 
 	/// Additional loosly-typed properties of the chain.
