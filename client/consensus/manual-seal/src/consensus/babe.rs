@@ -279,7 +279,7 @@ where
 		// a quick check to see if we're in the authorities
 		let epoch = self.epoch(parent, slot)?;
 		let (authority, _) = self.authorities.first().expect("authorities is non-emptyp; qed");
-		let has_authority = epoch.authorities.iter().find(|(id, _)| *id == *authority).is_some();
+		let has_authority = epoch.authorities.iter().any(|(id, _)| *id == *authority);
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");

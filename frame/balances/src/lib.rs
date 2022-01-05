@@ -409,12 +409,7 @@ pub mod pallet {
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive);
 			let dest = T::Lookup::lookup(dest)?;
 			let keep_alive = if keep_alive { KeepAlive } else { AllowDeath };
-			<Self as Currency<_>>::transfer(
-				&transactor,
-				&dest,
-				reducible_balance,
-				keep_alive.into(),
-			)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
 			Ok(())
 		}
 
@@ -619,7 +614,7 @@ pub enum Reasons {
 
 impl From<WithdrawReasons> for Reasons {
 	fn from(r: WithdrawReasons) -> Reasons {
-		if r == WithdrawReasons::from(WithdrawReasons::TRANSACTION_PAYMENT) {
+		if r == WithdrawReasons::TRANSACTION_PAYMENT {
 			Reasons::Fee
 		} else if r.contains(WithdrawReasons::TRANSACTION_PAYMENT) {
 			Reasons::All

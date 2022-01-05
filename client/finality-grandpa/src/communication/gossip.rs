@@ -615,8 +615,7 @@ impl<N: Ord> Peers<N> {
 		// `LUCKY_PEERS / 2` is filled we start allocating to the second stage set.
 		let half_lucky = LUCKY_PEERS / 2;
 		let one_and_a_half_lucky = LUCKY_PEERS + half_lucky;
-		let mut n_authorities_added = 0;
-		for peer_id in shuffled_authorities {
+		for (n_authorities_added, peer_id) in shuffled_authorities.enumerate() {
 			if n_authorities_added < half_lucky {
 				first_stage_peers.insert(*peer_id);
 			} else if n_authorities_added < one_and_a_half_lucky {
@@ -624,8 +623,6 @@ impl<N: Ord> Peers<N> {
 			} else {
 				break
 			}
-
-			n_authorities_added += 1;
 		}
 
 		// fill up first and second sets with remaining peers (either full or authorities)

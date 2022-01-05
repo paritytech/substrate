@@ -1993,7 +1993,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		});
 		let database_cache = MemorySize::from_bytes(0);
 		let state_cache =
-			MemorySize::from_bytes((*&self.shared_cache).read().used_storage_cache_size());
+			MemorySize::from_bytes(self.shared_cache.read().used_storage_cache_size());
 		let state_db = self.storage.state_db.memory_info();
 
 		Some(UsageInfo {
@@ -2452,7 +2452,7 @@ pub(crate) mod tests {
 			let storage = vec![(vec![1, 3, 5], None), (vec![5, 5, 5], Some(vec![4, 5, 6]))];
 
 			let (root, overlay) = op.old_state.storage_root(
-				storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
+				storage.iter().map(|(k, v)| (k.as_slice(), v.as_ref().map(|v| &v[..]))),
 				state_version,
 			);
 			op.update_db_storage(overlay).unwrap();
@@ -3000,7 +3000,7 @@ pub(crate) mod tests {
 			let storage = vec![(b"test".to_vec(), Some(b"test2".to_vec()))];
 
 			let (root, overlay) = op.old_state.storage_root(
-				storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
+				storage.iter().map(|(k, v)| (k.as_slice(), v.as_ref().map(|v| &v[..]))),
 				state_version,
 			);
 			op.update_db_storage(overlay).unwrap();

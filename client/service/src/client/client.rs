@@ -1409,10 +1409,9 @@ where
 		id: &BlockId<Block>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self
-			.state_at(id)?
+		self.state_at(id)?
 			.storage_hash(&key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn child_storage_keys(
@@ -1449,10 +1448,9 @@ where
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self
-			.state_at(id)?
+		self.state_at(id)?
 			.child_storage_hash(child_info, &key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 }
 

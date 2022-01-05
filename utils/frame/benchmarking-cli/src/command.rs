@@ -176,9 +176,7 @@ impl BenchmarkCmd {
 			.filter(|item| pallet.is_empty() || pallet == &b"*"[..] || pallet == &item.pallet[..])
 			.for_each(|item| {
 				for benchmark in &item.benchmarks {
-					if extrinsic.is_empty() ||
-						&extrinsic[..] == &b"*"[..] ||
-						extrinsic == benchmark.name
+					if extrinsic.is_empty() || extrinsic == &b"*"[..] || extrinsic == benchmark.name
 					{
 						benchmarks_to_run.push((
 							item.pallet.clone(),

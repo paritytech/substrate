@@ -223,7 +223,7 @@ impl<G, E> ChainSpec<G, E> {
 
 	/// Network protocol id.
 	pub fn protocol_id(&self) -> Option<&str> {
-		self.client_spec.protocol_id.as_ref().map(String::as_str)
+		self.client_spec.protocol_id.as_deref()
 	}
 
 	/// Additional loosly-typed properties of the chain.

@@ -101,7 +101,7 @@ mod implementation {
 		}
 	}
 
-	fn derive_fields<'a>(name_str: &str, fields: Fields) -> TokenStream {
+	fn derive_fields(name_str: &str, fields: Fields) -> TokenStream {
 		match fields {
 			Fields::Named { names, this } => {
 				let names_str: Vec<_> = names.iter().map(|x| x.to_string()).collect();

@@ -267,7 +267,7 @@ pub struct Config {
 
 impl Config {
 	fn name(&self) -> &str {
-		self.name.as_ref().map(|s| s.as_str()).unwrap_or("<unknown>")
+		self.name.as_deref().unwrap_or("<unknown>")
 	}
 }
 
