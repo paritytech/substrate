@@ -254,13 +254,13 @@ pub mod pallet {
 		/// In other words only the origin called "root contract" is allowed to execute then.
 		type CallStack: smallvec::Array<Item = Frame<Self>>;
 
-		/// The maximum number of tries that can be queued for deletion.
+		/// The maximum number of contracts that can be pending for deletion.
 		///
 		/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
-		/// immediately, but the deletion of the storage item it has accumulated is performed
-		/// later. The contract address is put into the deletion queue. This defines how many
+		/// immediately, but the deletion of the storage items it has accumulated is performed
+		/// later. The contract is put into the deletion queue. This defines how many
 		/// contracts can be queued up at the same time. If that limit is reached `seal_terminate`
-		/// will fail. The action then must be retried in a later block.
+		/// will fail. The action must be retried in a later block in that case.
 		///
 		/// The reasons for limiting the queue depth are:
 		///
