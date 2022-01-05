@@ -1292,9 +1292,6 @@ impl pallet_state_trie_migration::Config for Runtime {
 	type SignedDepositPerItem = MigrationSignedDepositPerItem;
 	type SignedDepositBase = MigrationSignedDepositBase;
 	type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
-	type UnsignedPriority = ImOnlineUnsignedPriority;
-	type UnsignedBackOff = frame_support::traits::ConstU32<5>;
-	type OffchainRepeat = frame_support::traits::ConstU32<3>;
 	type WeightInfo = ();
 }
 

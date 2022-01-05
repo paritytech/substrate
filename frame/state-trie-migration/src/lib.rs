@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,17 +36,6 @@
 //! 1` bytes from `n` different keys, while the next key is suddenly `:code:`, and there is no way
 //! to bail out of this.
 //!
-//! ### Unsigned migration
-//!
-//! This system will use the offchain worker threads to correct the downside of the previous item:
-//! knowing exactly the byte size of migration in each block. Offchain worker threads will first
-//! find the maximum number of keys that can be migrated whilst staying below a certain byte size
-//! limit offchain, and then submit that back to the chain as an unsigned transaction that can only
-//! be included by validators.
-//!
-//! This approach is safer, and ensures that the migration reads do not take more than a certain
-//! amount, yet it does impose some work on the validators/collators.
-//!
 //! ### Signed migration
 //!
 //! as a backup, the migration process can be set in motion via signed transactions that basically
@@ -61,9 +50,8 @@
 //!
 //! ---
 //!
-//! Initially, this pallet does not contain any auto/unsigned migrations. They must be manually
-//! enabled by the `ControlOrigin`. Note that these two migration types cannot co-exist And only one
-//! can be enable at each point in time.
+//! Initially, this pallet does not contain any auto migration. They must be manually enabled by the
+//! `ControlOrigin`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -84,20 +72,15 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{
-		dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo, TransactionPriority},
+		dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 		ensure,
 		pallet_prelude::*,
 		traits::{Currency, Get},
-		unsigned::ValidateUnsigned,
 	};
-	use frame_system::{
-		ensure_none, ensure_signed,
-		offchain::{SendTransactionTypes, SubmitTransaction},
-		pallet_prelude::*,
-	};
+	use frame_system::{self, ensure_signed, pallet_prelude::*};
 	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
 	use sp_runtime::{
-		offchain::storage::{MutateStorageError, StorageValueRef},
+		self,
 		traits::{Saturating, Zero},
 	};
 	use sp_std::prelude::*;
@@ -232,13 +215,9 @@ pub mod pallet {
 
 	impl<T: Config> MigrationTask<T> {
 		/// Return true if the task is finished.
+		#[cfg(test)]
 		pub(crate) fn finished(&self) -> bool {
 			self.current_top.is_none() && self.current_child.is_none()
-		}
-
-		/// Returns `true` if the task fully complies with the given limits.
-		pub(crate) fn fully_complies_with(&self, limits: MigrationLimits) -> bool {
-			self.dyn_total_items() <= limits.item && self.dyn_size <= limits.size
 		}
 
 		/// Check if there's any work left, or if we have exhausted the limits already.
@@ -411,8 +390,6 @@ pub mod pallet {
 	pub enum MigrationCompute {
 		/// A signed origin triggered the migration.
 		Signed,
-		/// An unsigned origin triggered the migration.
-		Unsigned,
 		/// An automatic task triggered the migration.
 		Auto,
 	}
@@ -435,7 +412,7 @@ pub mod pallet {
 
 	/// Configurations of this pallet.
 	#[pallet::config]
-	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+	pub trait Config: frame_system::Config {
 		/// Origin that can control the configurations of this pallet.
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
 
@@ -460,24 +437,6 @@ pub mod pallet {
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
-
-		/// The priority used for unsigned transactions.
-		type UnsignedPriority: Get<TransactionPriority>;
-
-		/// The number of items that offchain worker will subtract from the first item count that
-		/// causes an over-consumption.
-		///
-		/// This is a safety feature to assist the offchain worker submitted transactions and help
-		/// them not exceed the byte limit of the task. Nonetheless, the fundamental problem is that
-		/// if a transaction is ensured to not exceed any limit at block `t` when it is generated,
-		/// there is no guarantee that the same assumption holds at block `t + x`, when this
-		/// transaction is actually executed. This is where this value comes into play, and by
-		/// reducing the number of keys that will be migrated, further reduces the chance of byte
-		/// limit being exceeded.
-		type UnsignedBackOff: Get<u32>;
-
-		/// The repeat frequency of offchain workers.
-		type OffchainRepeat: Get<Self::BlockNumber>;
 	}
 
 	/// Migration progress.
@@ -495,17 +454,6 @@ pub mod pallet {
 	#[pallet::getter(fn auto_limits)]
 	pub type AutoLimits<T> = StorageValue<_, Option<MigrationLimits>, ValueQuery>;
 
-	/// The size limits imposed on unsigned migrations.
-	///
-	/// This should:
-	/// 1. be large enough to accommodate things like `:code`
-	/// 2. small enough to never brick a parachain due to PoV limits.
-	///
-	/// if set to `None`, then no unsigned migration happens.
-	#[pallet::storage]
-	#[pallet::getter(fn unsigned_limits)]
-	pub type UnsignedLimits<T> = StorageValue<_, Option<MigrationLimits>, ValueQuery>;
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// control the automatic migration.
@@ -517,83 +465,7 @@ pub mod pallet {
 			maybe_config: Option<MigrationLimits>,
 		) -> DispatchResultWithPostInfo {
 			T::ControlOrigin::ensure_origin(origin)?;
-			ensure!(
-				maybe_config.is_some() ^ Self::unsigned_limits().is_some(),
-				"unsigned and auto migration cannot co-exist"
-			);
 			AutoLimits::<T>::put(maybe_config);
-			Ok(().into())
-		}
-
-		/// control the unsigned migration.
-		///
-		/// The dispatch origin of this call must be [`Config::ControlOrigin`].
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn control_unsigned_migration(
-			origin: OriginFor<T>,
-			maybe_limit: Option<MigrationLimits>,
-		) -> DispatchResultWithPostInfo {
-			T::ControlOrigin::ensure_origin(origin)?;
-			ensure!(
-				maybe_limit.is_some() ^ Self::auto_limits().is_some(),
-				"unsigned and auto migration cannot co-exist"
-			);
-			UnsignedLimits::<T>::put(maybe_limit);
-			Ok(().into())
-		}
-
-		/// The unsigned call that can be submitted by offchain workers.
-		///
-		/// This can only be valid if it is generated from the local node, which means only
-		/// validators can generate this call.
-		///
-		/// The `item_limit` should be used as the limit on the number of items migrated, and the
-		/// submitter must guarantee that using this item limit, `size` does not go over
-		/// `Self::unsigned_limits().size`.
-		///
-		/// The `witness_size` should always be equal to `Self::unsigned_limits().size` and is only
-		/// used for weighing.
-		#[pallet::weight(
-			// for reading and writing `migration_process`
-			T::DbWeight::get().reads_writes(1, 1)
-				.saturating_add(
-					// for executing the migration itself.
-					Pallet::<T>::dynamic_weight(*item_limit, *witness_size)
-				)
-		)]
-		pub fn continue_migrate_unsigned(
-			origin: OriginFor<T>,
-			item_limit: u32,
-			witness_size: u32,
-			_witness_task: MigrationTask<T>,
-		) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
-			let chain_limits =
-				Self::unsigned_limits().ok_or("unsigned limit not set, tx not allowed.")?;
-			ensure!(witness_size == chain_limits.size, "wrong witness data");
-
-			let mut task = Self::migration_process();
-			// pre-dispatch and validate-unsigned already assure this.
-			debug_assert_eq!(task, _witness_task);
-
-			// we run the task with the given item limit, and the chain size limit..
-			task.migrate_until_exhaustion(MigrationLimits {
-				size: chain_limits.size,
-				item: item_limit,
-			});
-
-			// .. and we assert that the size limit must have been fully met with the given item
-			// limit.
-			assert!(task.fully_complies_with(chain_limits));
-
-			Self::deposit_event(Event::<T>::Migrated {
-				top: task.dyn_top_items,
-				child: task.dyn_child_items,
-				compute: MigrationCompute::Unsigned,
-			});
-
-			MigrationProcess::<T>::put(task);
-
 			Ok(().into())
 		}
 
@@ -794,10 +666,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn integrity_test() {
-			assert!(!T::UnsignedBackOff::get().is_zero(), "UnsignedBackOff should not be zero");
-		}
-
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if let Some(limits) = Self::auto_limits() {
 				let mut task = Self::migration_process();
@@ -823,121 +691,9 @@ pub mod pallet {
 				T::DbWeight::get().reads(1)
 			}
 		}
-
-		fn offchain_worker(now: BlockNumberFor<T>) {
-			if Self::ensure_offchain_repeat_frequency(now).is_err() {
-				return
-			}
-
-			log!(debug, "started offchain worker thread.");
-			if let Some(chain_limits) = Self::unsigned_limits() {
-				let mut task = Self::migration_process();
-				if task.finished() {
-					log!(debug, "task is finished, remove `unsigned_limits`.");
-					return
-				}
-
-				task.migrate_until_exhaustion(chain_limits);
-
-				if task.dyn_size > chain_limits.size {
-					// previous `migrate_until_exhaustion` finished with too much size consumption.
-					// This most likely means that if it migrated `x` items, now we need to migrate
-					// `x - 1` items. But, we migrate less by 5 by default, since the state may have
-					// changed between the execution of this offchain worker and time that the
-					// transaction reaches the chain.
-					log!(
-						debug,
-						"reducing item count of {} by {}.",
-						task.dyn_total_items(),
-						T::UnsignedBackOff::get(),
-					);
-					let mut new_task = Self::migration_process();
-					new_task.migrate_until_exhaustion(MigrationLimits {
-						size: chain_limits.size,
-						item: task
-							.dyn_total_items()
-							.saturating_sub(T::UnsignedBackOff::get().max(1)),
-					});
-					task = new_task;
-				}
-
-				let item_limit = task.dyn_total_items();
-				if item_limit.is_zero() {
-					log!(warn, "can't fit anything in a migration.");
-					return
-				}
-
-				// with the above if-statement, the limits must now be STRICTLY respected, so we
-				// panic and crash the OCW otherwise.
-				assert!(
-					task.fully_complies_with(chain_limits),
-					"runtime::state-trie-migration: The offchain worker failed to create transaction."
-				);
-
-				let original_task = Self::migration_process();
-
-				let call = Call::continue_migrate_unsigned {
-					item_limit,
-					witness_size: chain_limits.size,
-					witness_task: original_task,
-				};
-
-				match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-					Ok(_) => {
-						log!(info, "submitted a call to migrate {} items.", item_limit)
-					},
-					Err(why) => {
-						log!(warn, "failed to submit a call to the pool {:?}", why)
-					},
-				}
-			}
-		}
-	}
-
-	#[pallet::validate_unsigned]
-	impl<T: Config> ValidateUnsigned for Pallet<T> {
-		type Call = Call<T>;
-		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::continue_migrate_unsigned { witness_task, .. } = call {
-				match source {
-					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
-					_ => return InvalidTransaction::Call.into(),
-				}
-
-				let onchain_task = Self::migration_process();
-				if &onchain_task != witness_task {
-					return Err(TransactionValidityError::Invalid(InvalidTransaction::Stale))
-				}
-
-				ValidTransaction::with_tag_prefix("StorageVersionMigration")
-					.priority(T::UnsignedPriority::get())
-					// deduplicate based on task data.
-					.and_provides(witness_task)
-					.longevity(5)
-					.propagate(false)
-					.build()
-			} else {
-				InvalidTransaction::Call.into()
-			}
-		}
-
-		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::continue_migrate_unsigned { witness_task, .. } = call {
-				let onchain_task = Self::migration_process();
-				if &onchain_task != witness_task {
-					return Err(TransactionValidityError::Invalid(InvalidTransaction::Stale))
-				}
-				Ok(())
-			} else {
-				Err(InvalidTransaction::Call.into())
-			}
-		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// The path used to identify the offchain worker persistent storage.
-		const OFFCHAIN_LAST_BLOCK: &'static [u8] = b"parity/state-migration/last-block";
-
 		/// The real weight of a migration of the given number of `items` with total `size`.
 		fn dynamic_weight(items: u32, size: u32) -> frame_support::pallet_prelude::Weight {
 			let items = items as Weight;
@@ -949,7 +705,6 @@ pub mod pallet {
 
 		/// Put a stop to all ongoing migrations.
 		fn halt() {
-			UnsignedLimits::<T>::kill();
 			AutoLimits::<T>::kill();
 		}
 
@@ -973,48 +728,6 @@ pub mod pallet {
 			}
 			key.unwrap_or_default()
 		}
-
-		/// Checks if an execution of the offchain worker is permitted at the given block number, or
-		/// not.
-		///
-		/// This makes sure that
-		/// 1. we don't run on previous blocks in case of a re-org
-		/// 2. we don't run twice within a window of length `T::OffchainRepeat`.
-		///
-		/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If
-		/// `Ok()` is returned, `now` is written in storage and will be used in further calls as the
-		/// baseline.
-		pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), &'static str> {
-			let threshold = T::OffchainRepeat::get();
-			let last_block = StorageValueRef::persistent(&Self::OFFCHAIN_LAST_BLOCK);
-
-			let mutate_stat = last_block.mutate::<_, &'static str, _>(
-				|maybe_head: Result<Option<T::BlockNumber>, _>| {
-					match maybe_head {
-						Ok(Some(head)) if now < head => Err("fork."),
-						Ok(Some(head)) if now >= head && now <= head + threshold =>
-							Err("recently executed."),
-						Ok(Some(head)) if now > head + threshold => {
-							// we can run again now. Write the new head.
-							Ok(now)
-						},
-						_ => {
-							// value doesn't exists. Probably this node just booted up. Write, and
-							// okay.
-							Ok(now)
-						},
-					}
-				},
-			);
-
-			match mutate_stat {
-				Ok(_) => Ok(()),
-				Err(MutateStorageError::ConcurrentModification(_)) =>
-					Err("failed to write to offchain db (ConcurrentModification)."),
-				Err(MutateStorageError::ValueFunctionFailed(_)) =>
-					Err("failed to write to offchain db (ValueFunctionFailed)."),
-			}
-		}
 	}
 }
 
@@ -1029,8 +742,9 @@ mod benchmarks {
 
 	frame_benchmarking::benchmarks! {
 		continue_migrate {
-			// note that this benchmark should migrate nothing, as we only want the overhead weight of the bookkeeping,
-			// and the migration cost itself is noted via the `dynamic_weight` function.
+			// note that this benchmark should migrate nothing, as we only want the overhead weight
+			// of the bookkeeping, and the migration cost itself is noted via the `dynamic_weight`
+			// function.
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
 		}: _(frame_system::RawOrigin::Signed(caller), null, 0, StateTrieMigration::<T>::migration_process())
@@ -1075,11 +789,11 @@ mod benchmarks {
 			T::Currency::make_free_balance_be(&caller, stash);
 		}: {
 			assert!(
-				StateTrieMigration::<T>::migrate_custom_top(
+				dbg!(StateTrieMigration::<T>::migrate_custom_top(
 					frame_system::RawOrigin::Signed(caller.clone()).into(),
 					Default::default(),
 					1,
-				).is_err()
+				)).is_err()
 			)
 		}
 		verify {
@@ -1110,22 +824,12 @@ mod benchmarks {
 
 #[cfg(test)]
 mod mock {
-	use parking_lot::RwLock;
-	use std::sync::Arc;
-
 	use super::*;
 	use crate as pallet_state_trie_migration;
 	use frame_support::{parameter_types, traits::Hooks};
 	use frame_system::EnsureRoot;
-	use sp_core::H256;
-	use sp_runtime::{
-		offchain::{
-			testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
-			OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
-		},
-		traits::{BlakeTwo256, Dispatchable, Header as _, IdentityLookup},
-		StateVersion,
-	};
+	use sp_core::{storage::StateVersion, H256};
+	use sp_runtime::traits::{BlakeTwo256, Header as _, IdentityLookup};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -1203,20 +907,7 @@ mod mock {
 		type SignedDepositBase = SignedDepositBase;
 		type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
 		type WeightInfo = ();
-		type UnsignedPriority = ();
-		type UnsignedBackOff = frame_support::traits::ConstU32<2>;
-		type OffchainRepeat = OffchainRepeat;
 	}
-
-	impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
-	where
-		Call: From<LocalCall>,
-	{
-		type OverarchingCall = Call;
-		type Extrinsic = Extrinsic;
-	}
-
-	pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
 	pub fn new_test_ext(version: StateVersion, with_pallets: bool) -> sp_io::TestExternalities {
 		use sp_core::storage::ChildInfo;
@@ -1280,26 +971,6 @@ mod mock {
 		(custom_storage, version).into()
 	}
 
-	pub fn new_offchain_ext(
-		version: StateVersion,
-		with_pallets: bool,
-	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
-		let mut ext = new_test_ext(version, with_pallets);
-		let pool_state = offchainify(&mut ext);
-		(ext, pool_state)
-	}
-
-	pub fn offchainify(ext: &mut sp_io::TestExternalities) -> Arc<RwLock<PoolState>> {
-		let (offchain, _offchain_state) = TestOffchainExt::new();
-		let (pool, pool_state) = TestTransactionPoolExt::new();
-
-		ext.register_extension(OffchainDbExt::new(offchain.clone()));
-		ext.register_extension(OffchainWorkerExt::new(offchain));
-		ext.register_extension(TransactionPoolExt::new(pool));
-
-		pool_state
-	}
-
 	pub fn run_to_block(n: u32) -> H256 {
 		let mut root = Default::default();
 		log::trace!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
@@ -1314,34 +985,6 @@ mod mock {
 		}
 		root
 	}
-
-	pub fn run_to_block_and_drain_pool(n: u32, pool: Arc<RwLock<PoolState>>) -> H256 {
-		let mut root = Default::default();
-		while System::block_number() < n {
-			System::set_block_number(System::block_number() + 1);
-			System::on_initialize(System::block_number());
-
-			StateTrieMigration::on_initialize(System::block_number());
-
-			// drain previous transactions
-			pool.read()
-				.transactions
-				.clone()
-				.into_iter()
-				.map(|uxt| <Extrinsic as codec::Decode>::decode(&mut &*uxt).unwrap())
-				.for_each(|xt| {
-					// dispatch them all with no origin.
-					xt.call.dispatch(frame_system::RawOrigin::None.into()).unwrap();
-				});
-			pool.try_write().unwrap().transactions.clear();
-
-			StateTrieMigration::offchain_worker(System::block_number());
-
-			root = System::finalize().state_root().clone();
-			System::on_finalize(System::block_number());
-		}
-		root
-	}
 }
 
 #[cfg(test)]
@@ -1349,7 +992,6 @@ mod test {
 	use super::{mock::*, *};
 	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
 	use sp_runtime::{traits::Bounded, StateVersion};
-	use std::sync::Arc;
 
 	#[test]
 	fn fails_if_no_migration() {
@@ -1434,48 +1076,6 @@ mod test {
 		run_with_limits(MigrationLimits { item: 5, size: 1000 }, 10, 100);
 		// multi-item, based on size. Note that largest value is 100 bytes.
 		run_with_limits(MigrationLimits { item: 1000, size: 128 }, 10, 100);
-		// unbounded
-		run_with_limits(
-			MigrationLimits { item: Bounded::max_value(), size: Bounded::max_value() },
-			10,
-			100,
-		);
-	}
-
-	#[test]
-	fn ocw_migration_works() {
-		let run_with_limits = |limits, from, until| {
-			let (mut ext, pool) = new_offchain_ext(StateVersion::V0, false);
-			let root_upgraded = ext.execute_with(|| {
-				assert_eq!(UnsignedLimits::<Test>::get(), None);
-				assert_eq!(MigrationProcess::<Test>::get(), Default::default());
-
-				// nothing happens if we don't set the limits.
-				run_to_block_and_drain_pool(from, Arc::clone(&pool));
-				assert_eq!(MigrationProcess::<Test>::get(), Default::default());
-
-				// allow 2 items per run
-				UnsignedLimits::<Test>::put(Some(limits));
-
-				run_to_block_and_drain_pool(until, Arc::clone(&pool))
-			});
-
-			let (mut ext2, pool2) = new_offchain_ext(StateVersion::V1, false);
-			let root = ext2.execute_with(|| {
-				// update ex2 to contain the new items
-				run_to_block_and_drain_pool(from, Arc::clone(&pool2));
-				UnsignedLimits::<Test>::put(Some(limits));
-				run_to_block_and_drain_pool(until, Arc::clone(&pool2))
-			});
-			assert_eq!(root, root_upgraded);
-		};
-
-		// single item
-		run_with_limits(MigrationLimits { item: 1, size: 1000 }, 10, 100);
-		// multi-item
-		run_with_limits(MigrationLimits { item: 5, size: 1000 }, 10, 100);
-		// multi-item, based on size
-		run_with_limits(MigrationLimits { item: 1000, size: 512 }, 10, 100);
 		// unbounded
 		run_with_limits(
 			MigrationLimits { item: Bounded::max_value(), size: Bounded::max_value() },
@@ -1630,7 +1230,6 @@ mod test {
 mod remote_tests {
 	use super::{mock::*, *};
 	use codec::Encode;
-	use mock::run_to_block_and_drain_pool;
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
 	use sp_runtime::traits::{Bounded, HashFor};
 	use std::sync::Arc;
@@ -1729,85 +1328,5 @@ mod remote_tests {
 		run_with_limits(MigrationLimits { item: 8 * 1024, size: 128 * 1024 * 1024 }).await;
 		// size being the bottleneck
 		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 64 * 1024 }).await;
-	}
-
-	#[tokio::test]
-	async fn offchain_worker_migration() {
-		sp_tracing::try_init_simple();
-		let run_with_limits = |limits| async move {
-			let mut ext = remote_externalities::Builder::<Block>::new()
-				.mode(Mode::OfflineOrElseOnline(
-					OfflineConfig {
-						state_snapshot: "/home/kianenigma/remote-builds/state".to_owned().into(),
-					},
-					OnlineConfig {
-						transport: std::env!("WS_API").to_owned().into(),
-						state_snapshot: Some(
-							"/home/kianenigma/remote-builds/state".to_owned().into(),
-						),
-						..Default::default()
-					},
-				))
-				.state_version(sp_core::storage::StateVersion::V0)
-				.build()
-				.await
-				.unwrap();
-			let pool_state = offchainify(&mut ext);
-
-			let mut now = ext.execute_with(|| {
-				UnsignedLimits::<Test>::put(Some(limits));
-				// requires the block number type in our tests to be same as with mainnet, u32.
-				frame_system::Pallet::<Test>::block_number()
-			});
-
-			let mut duration = 0;
-			// set the version to 1, as if the upgrade happened.
-			ext.state_version = sp_core::storage::StateVersion::V1;
-
-			let (top_left, child_left) =
-				ext.as_backend().essence().check_migration_state().unwrap();
-			assert!(top_left > 0);
-			log::info!(
-				target: LOG_TARGET,
-				"initial check: top_left: {}, child_left: {}",
-				top_left,
-				child_left,
-			);
-
-			loop {
-				let finished = ext.execute_with(|| {
-					run_to_block_and_drain_pool(now + 1, Arc::clone(&pool_state));
-					if StateTrieMigration::migration_process().finished() {
-						return true
-					}
-					duration += 1;
-					now += 1;
-					false
-				});
-
-				if finished {
-					break
-				}
-			}
-
-			ext.execute_with(|| {
-				log::info!(
-					target: LOG_TARGET,
-					"finished offchain-worker migration in {} block, final state of the task: {:?}",
-					duration,
-					StateTrieMigration::migration_process()
-				);
-			});
-
-			let (top_left, child_left) =
-				ext.as_backend().essence().check_migration_state().unwrap();
-			assert_eq!(top_left, 0);
-			assert_eq!(child_left, 0);
-		};
-		// item being the bottleneck
-		run_with_limits(MigrationLimits { item: 16 * 1024, size: 4 * 1024 * 1024 }).await;
-		// size being the bottleneck
-		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 2 * 1024 * 1024 })
-			.await;
 	}
 }
