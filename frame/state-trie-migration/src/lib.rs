@@ -974,19 +974,20 @@ mod mock {
 		(custom_storage, version).into()
 	}
 
-	pub fn run_to_block(n: u32) -> H256 {
+	pub(crate) fn run_to_block(n: u32) -> (H256, u64) {
 		let mut root = Default::default();
+		let mut weight_sum = 0;
 		log::trace!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
 			System::on_initialize(System::block_number());
 
-			StateTrieMigration::on_initialize(System::block_number());
+			weight_sum += StateTrieMigration::on_initialize(System::block_number());
 
 			root = System::finalize().state_root().clone();
 			System::on_finalize(System::block_number());
 		}
-		root
+		(root, weight_sum)
 	}
 }
 
@@ -999,10 +1000,10 @@ mod test {
 	#[test]
 	fn fails_if_no_migration() {
 		let mut ext = new_test_ext(StateVersion::V0, false);
-		let root1 = ext.execute_with(|| run_to_block(30));
+		let root1 = ext.execute_with(|| run_to_block(30).0);
 
 		let mut ext2 = new_test_ext(StateVersion::V1, false);
-		let root2 = ext2.execute_with(|| run_to_block(30));
+		let root2 = ext2.execute_with(|| run_to_block(30).0);
 
 		// these two roots should not be the same.
 		assert_ne!(root1, root2);
@@ -1018,7 +1019,7 @@ mod test {
 			child::put(&child::ChildInfo::new_default(b"chk1"), &[], &vec![66u8; 77]);
 
 			AutoLimits::<Test>::put(Some(limit));
-			let root = run_to_block(30);
+			let root = run_to_block(30).0;
 
 			// eventually everything is over.
 			assert!(matches!(
@@ -1032,7 +1033,7 @@ mod test {
 		let root = ext2.execute_with(|| {
 			child::put(&child::ChildInfo::new_default(b"chk1"), &[], &vec![66u8; 77]);
 			AutoLimits::<Test>::put(Some(limit));
-			run_to_block(30)
+			run_to_block(30).0
 		});
 
 		assert_eq!(root, root_upgraded);
@@ -1053,7 +1054,7 @@ mod test {
 				// this should allow 1 item per block to be migrated.
 				AutoLimits::<Test>::put(Some(limit));
 
-				let root = run_to_block(until);
+				let root = run_to_block(until).0;
 
 				// eventually everything is over.
 				assert!(matches!(
@@ -1068,7 +1069,7 @@ mod test {
 				// update ex2 to contain the new items
 				let _ = run_to_block(from);
 				AutoLimits::<Test>::put(Some(limit));
-				run_to_block(until)
+				run_to_block(until).0
 			});
 			assert_eq!(root, root_upgraded);
 		};
@@ -1243,15 +1244,134 @@ mod test {
 	}
 }
 
+/// Exported set of tests to be called against different runtimes.
+#[cfg(feature = "remote-tests")]
+pub mod remote_tests {
+	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
+	use codec::Encode;
+	use frame_benchmarking::Zero;
+	use frame_support::traits::{Get, Hooks};
+	use frame_system::Pallet as System;
+	use remote_externalities::Mode;
+	use sp_core::H256;
+	use sp_runtime::traits::{Block as BlockT, HashFor, Header as _, One};
+	use thousands::Separable;
+
+	fn run_to_block<Runtime: crate::Config<Hash = H256>>(
+		n: <Runtime as frame_system::Config>::BlockNumber,
+	) -> (H256, u64) {
+		let mut root = Default::default();
+		let mut weight_sum = 0;
+		while System::<Runtime>::block_number() < n {
+			System::<Runtime>::set_block_number(System::<Runtime>::block_number() + One::one());
+			System::<Runtime>::on_initialize(System::<Runtime>::block_number());
+
+			weight_sum +=
+				StateTrieMigration::<Runtime>::on_initialize(System::<Runtime>::block_number());
+
+			root = System::<Runtime>::finalize().state_root().clone();
+			System::<Runtime>::on_finalize(System::<Runtime>::block_number());
+		}
+		(root, weight_sum)
+	}
+
+	/// Run the entire migration, against the given `Runtime`, until completion.
+	///
+	/// This will print some very useful statistics, make sure [`crate::LOG_TARGET`] is enabled.
+	pub async fn run_with_limits<
+		Runtime: crate::Config<Hash = H256>,
+		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
+	>(
+		limits: MigrationLimits,
+		mode: Mode<Block>,
+	) {
+		let mut ext = remote_externalities::Builder::<Block>::new()
+			.mode(mode)
+			.state_version(sp_core::storage::StateVersion::V0)
+			.build()
+			.await
+			.unwrap();
+
+		let mut now = ext.execute_with(|| {
+			AutoLimits::<Runtime>::put(Some(limits));
+			// requires the block number type in our tests to be same as with mainnet, u32.
+			frame_system::Pallet::<Runtime>::block_number()
+		});
+
+		let mut duration: <Runtime as frame_system::Config>::BlockNumber = Zero::zero();
+		// set the version to 1, as if the upgrade happened.
+		ext.state_version = sp_core::storage::StateVersion::V1;
+
+		let (top_left, child_left) = ext.as_backend().essence().check_migration_state().unwrap();
+		assert!(top_left > 0);
+
+		log::info!(
+			target: LOG_TARGET,
+			"initial check: top_left: {}, child_left: {}",
+			top_left.separate_with_commas(),
+			child_left.separate_with_commas(),
+		);
+
+		loop {
+			let last_state_root = ext.backend.root().clone();
+			let ((finished, weight), proof) = ext.execute_and_prove(|| {
+				let weight = run_to_block::<Runtime>(now + One::one()).1;
+				if StateTrieMigration::<Runtime>::migration_process().finished() {
+					return (true, weight)
+				}
+				duration += One::one();
+				now += One::one();
+				(false, weight)
+			});
+
+			let compact_proof =
+				proof.clone().into_compact_proof::<HashFor<Block>>(last_state_root).unwrap();
+			log::info!(
+				target: LOG_TARGET,
+				"proceeded to #{}, weight: [{} / {}], proof: [{} / {} / {}]",
+				now,
+				weight.separate_with_commas(),
+				<Runtime as frame_system::Config>::BlockWeights::get()
+					.max_block
+					.separate_with_commas(),
+				proof.encoded_size().separate_with_commas(),
+				compact_proof.encoded_size().separate_with_commas(),
+				zstd::stream::encode_all(&compact_proof.encode()[..], 0)
+					.unwrap()
+					.len()
+					.separate_with_commas(),
+			);
+			ext.commit_all().unwrap();
+
+			if finished {
+				break
+			}
+		}
+
+		ext.execute_with(|| {
+			log::info!(
+				target: LOG_TARGET,
+				"finished on_initialize migration in {} block, final state of the task: {:?}",
+				duration,
+				StateTrieMigration::<Runtime>::migration_process(),
+			)
+		});
+
+		let (top_left, child_left) = ext.as_backend().essence().check_migration_state().unwrap();
+		assert_eq!(top_left, 0);
+		assert_eq!(child_left, 0);
+	}
+}
+
 #[cfg(all(test, feature = "remote-tests"))]
-mod remote_tests {
+mod remote_tests_local {
 	use super::{
 		mock::{Call as MockCall, *},
+		remote_tests::run_with_limits,
 		*,
 	};
-	use codec::Encode;
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
-	use sp_runtime::traits::{Bounded, HashFor};
+	use sp_runtime::traits::Bounded;
 
 	// we only use the hash type from this, so using the mock should be fine.
 	type Extrinsic = sp_runtime::testing::TestXt<MockCall, ()>;
@@ -1260,93 +1380,28 @@ mod remote_tests {
 	#[tokio::test]
 	async fn on_initialize_migration() {
 		sp_tracing::try_init_simple();
-		let run_with_limits = |limits| async move {
-			let mut ext = remote_externalities::Builder::<Block>::new()
-				.mode(Mode::OfflineOrElseOnline(
-					OfflineConfig {
-						state_snapshot: "/home/kianenigma/remote-builds/state".to_owned().into(),
-					},
-					OnlineConfig {
-						transport: std::env!("WS_API").to_owned().into(),
-						state_snapshot: Some(
-							"/home/kianenigma/remote-builds/state".to_owned().into(),
-						),
-						..Default::default()
-					},
-				))
-				.state_version(sp_core::storage::StateVersion::V0)
-				.build()
-				.await
-				.unwrap();
-
-			let mut now = ext.execute_with(|| {
-				AutoLimits::<Test>::put(Some(limits));
-				// requires the block number type in our tests to be same as with mainnet, u32.
-				frame_system::Pallet::<Test>::block_number()
-			});
-
-			let mut duration = 0;
-			// set the version to 1, as if the upgrade happened.
-			ext.state_version = sp_core::storage::StateVersion::V1;
-
-			let (top_left, child_left) =
-				ext.as_backend().essence().check_migration_state().unwrap();
-			assert!(top_left > 0);
-
-			log::info!(
-				target: LOG_TARGET,
-				"initial check: top_left: {}, child_left: {}",
-				top_left,
-				child_left,
-			);
-
-			loop {
-				let last_state_root = ext.backend.root().clone();
-				let (finished, proof) = ext.execute_and_prove(|| {
-					run_to_block(now + 1);
-					if StateTrieMigration::migration_process().finished() {
-						return true
-					}
-					duration += 1;
-					now += 1;
-					false
-				});
-
-				let compact_proof =
-					proof.clone().into_compact_proof::<HashFor<Block>>(last_state_root).unwrap();
-				log::info!(
-					target: LOG_TARGET,
-					"proceeded to #{}, original proof: {}, compact proof size: {}, compact zstd compressed: {}",
-					now,
-					proof.encoded_size(),
-					compact_proof.encoded_size(),
-					zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap().len(),
-				);
-				ext.commit_all().unwrap();
-
-				if finished {
-					break
-				}
-			}
-
-			ext.execute_with(|| {
-				log::info!(
-					target: LOG_TARGET,
-					"finished on_initialize migration in {} block, final state of the task: {:?}",
-					duration,
-					StateTrieMigration::migration_process(),
-				)
-			});
-
-			let (top_left, child_left) =
-				ext.as_backend().essence().check_migration_state().unwrap();
-			assert_eq!(top_left, 0);
-			assert_eq!(child_left, 0);
-		};
+		let mode = Mode::OfflineOrElseOnline(
+			OfflineConfig {
+				state_snapshot: "/home/kianenigma/remote-builds/state".to_owned().into(),
+			},
+			OnlineConfig {
+				transport: std::env!("WS_API").to_owned().into(),
+				state_snapshot: Some("/home/kianenigma/remote-builds/state".to_owned().into()),
+				..Default::default()
+			},
+		);
 
 		// item being the bottleneck
-		run_with_limits(MigrationLimits { item: 8 * 1024, size: 128 * 1024 * 1024 }).await;
+		run_with_limits::<Test, Block>(
+			MigrationLimits { item: 8 * 1024, size: 128 * 1024 * 1024 },
+			mode.clone(),
+		)
+		.await;
 		// size being the bottleneck
-		run_with_limits(MigrationLimits { item: Bounded::max_value(), size: 64 * 1024 }).await;
+		run_with_limits::<Test, Block>(
+			MigrationLimits { item: Bounded::max_value(), size: 64 * 1024 },
+			mode,
+		)
+		.await;
 	}
 }
