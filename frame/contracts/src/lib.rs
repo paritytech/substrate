@@ -257,7 +257,7 @@ pub mod pallet {
 		/// The maximum number of tries that can be queued for deletion.
 		///
 		/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
-		/// immediately but the deletion of the storage item it has accumulated is performed
+		/// immediately, but the deletion of the storage item it has accumulated is performed
 		/// later. The contract address is put into the deletion queue. This defines how many
 		/// contracts can be queued up at the same time. If that limit is reached `seal_terminate`
 		/// will fail. The action then must be retried in a later block.
