@@ -121,6 +121,27 @@ fn set_calls_works() {
 }
 
 #[test]
+fn call_to_indices_works() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![
+			Call::Balances(BalancesCall::force_transfer { source: 0, dest: 0, value: 0 }),
+			Call::Balances(BalancesCall::transfer { dest: 0, value: 0 }),
+		];
+		let indices = Lottery::calls_to_indices(&calls).unwrap().into_inner();
+		// Only comparing the length since it is otherwise dependant on the API
+		// of `BalancesCall`.
+		assert_eq!(indices.len(), calls.len());
+
+		let too_many_calls = vec![
+			Call::Balances(BalancesCall::force_transfer { source: 0, dest: 0, value: 0 }),
+			Call::Balances(BalancesCall::transfer { dest: 0, value: 0 }),
+			Call::System(SystemCall::remark { remark: vec![] }),
+		];
+		assert_noop!(Lottery::calls_to_indices(&too_many_calls), Error::<Test>::TooManyCalls);
+	});
+}
+
+#[test]
 fn start_lottery_works() {
 	new_test_ext().execute_with(|| {
 		let price = 10;
