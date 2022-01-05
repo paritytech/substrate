@@ -1224,7 +1224,7 @@ where
 				.or_else(|| Some((target_header.hash(), *target_header.number())))
 		},
 		Err(e) => {
-			debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
+			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
 			None
 		},
 	};
