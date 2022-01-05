@@ -528,8 +528,11 @@ pub mod test {
 		let b2 = b1.iter().map(|x| x + 1).rev().take(2).try_collect::<ConstU32<2>>().unwrap();
 		assert_eq!(b2, vec![5, 4]);
 
-		// but not length 3
+		// but these worn't work
 		let b2 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<3>>();
+		assert!(b2.is_err());
+
+		let b2 = b1.iter().map(|x| x + 1).rev().take(2).try_collect::<ConstU32<1>>().unwrap();
 		assert!(b2.is_err());
 	}
 
