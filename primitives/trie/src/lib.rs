@@ -24,6 +24,7 @@ pub mod cache;
 mod error;
 mod node_codec;
 mod node_header;
+pub mod recorder;
 mod storage_proof;
 mod trie_codec;
 mod trie_stream;

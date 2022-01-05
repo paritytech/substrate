@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::MemoryDB;
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
@@ -68,8 +69,8 @@ impl StorageProof {
 		self.trie_nodes
 	}
 
-	/// Creates a `MemoryDB` from `Self`.
-	pub fn into_memory_db<H: Hasher>(self) -> crate::MemoryDB<H> {
+	/// Creates a [`MemoryDB`] from `Self`.
+	pub fn into_memory_db<H: Hasher>(self) -> MemoryDB<H> {
 		self.into()
 	}
 
@@ -125,7 +126,7 @@ impl CompactProof {
 		&self,
 		expected_root: Option<&H::Out>,
 	) -> Result<(StorageProof, H::Out), crate::CompactProofError<crate::Layout<H>>> {
-		let mut db = crate::MemoryDB::<H>::new(&[]);
+		let mut db = MemoryDB::<H>::new(&[]);
 		let root = crate::decode_compact::<crate::Layout<H>, _, _>(
 			&mut db,
 			self.iter_compact_encoded_nodes(),
@@ -163,9 +164,9 @@ impl Iterator for StorageProofNodeIterator {
 	}
 }
 
-impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
+impl<H: Hasher> From<StorageProof> for MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
-		let mut db = crate::MemoryDB::default();
+		let mut db = MemoryDB::default();
 		for item in proof.iter_nodes() {
 			db.insert(crate::EMPTY_PREFIX, &item);
 		}
