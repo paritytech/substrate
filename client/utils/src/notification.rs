@@ -47,28 +47,20 @@ pub trait TracingKeyStr {
 /// The sending half of the notifications channel(s).
 ///
 /// Used to send notifications from the BEEFY gadget side.
-pub struct NotificationSender<Payload: Clone, Error> {
+#[derive(Clone)]
+pub struct NotificationSender<Payload: Clone> {
 	subscribers: SharedSenders<Payload>,
-	_err: PhantomData<Error>,
 }
 
-// Because of https://github.com/rust-lang/rust/issues/26925 we need to
-// manually implement `clone` here.
-impl<Payload: Clone, Error> Clone for NotificationSender<Payload, Error> {
-	fn clone(&self) -> Self {
-		Self { subscribers: self.subscribers.clone(), _err: PhantomData }
-	}
-}
-
-impl<Payload: Clone, Error> NotificationSender<Payload, Error> {
+impl<Payload: Clone> NotificationSender<Payload> {
 	/// The `subscribers` should be shared with a corresponding `NotificationStream`.
 	fn new(subscribers: SharedSenders<Payload>) -> Self {
-		Self { subscribers, _err: PhantomData }
+		Self { subscribers }
 	}
 
 	/// Send out a notification to all subscribers that a new payload is available for a
 	/// block.
-	pub fn notify(&self, payload: impl FnOnce() -> Result<Payload, Error>) -> Result<(), Error> {
+	pub fn notify<E>(&self, payload: impl FnOnce() -> Result<Payload, E>) -> Result<(), E> {
 		let mut subscribers = self.subscribers.lock();
 
 		// do an initial prune on closed subscriptions
@@ -87,23 +79,15 @@ impl<Payload: Clone, Error> NotificationSender<Payload, Error> {
 ///
 /// The `NotificationStream` entity stores the `SharedSenders` so it can be
 /// used to add more subscriptions.
-pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr, Error> {
+#[derive(Clone)]
+pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr> {
 	subscribers: SharedSenders<Payload>,
 	_trace_key: PhantomData<TK>,
-	_err: PhantomData<Error>,
 }
 
-// Because of https://github.com/rust-lang/rust/issues/26925 we need to
-// manually implement `clone` here.
-impl<Payload: Clone, TK: TracingKeyStr, Error> Clone for NotificationStream<Payload, TK, Error> {
-	fn clone(&self) -> Self {
-		Self { subscribers: self.subscribers.clone(), _trace_key: PhantomData, _err: PhantomData }
-	}
-}
-
-impl<Payload: Clone, TK: TracingKeyStr, Error> NotificationStream<Payload, TK, Error> {
+impl<Payload: Clone, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	/// Creates a new pair of receiver and sender of `Payload` notifications.
-	pub fn channel() -> (NotificationSender<Payload, Error>, Self) {
+	pub fn channel() -> (NotificationSender<Payload>, Self) {
 		let subscribers = Arc::new(Mutex::new(vec![]));
 		let receiver = NotificationStream::new(subscribers.clone());
 		let sender = NotificationSender::new(subscribers);
@@ -114,7 +98,7 @@ impl<Payload: Clone, TK: TracingKeyStr, Error> NotificationStream<Payload, TK, E
 	///
 	/// The `subscribers` should be shared with a corresponding `NotificationSender`.
 	fn new(subscribers: SharedSenders<Payload>) -> Self {
-		Self { subscribers, _trace_key: PhantomData, _err: PhantomData }
+		Self { subscribers, _trace_key: PhantomData }
 	}
 
 	/// Subscribe to a channel through which the generic payload can be received.
@@ -136,7 +120,7 @@ mod tests {
 		const TRACING_KEY: &'static str = "test_notification_stream";
 	}
 
-	type StringStream = NotificationStream<String, DummyTracingKey, ()>;
+	type StringStream = NotificationStream<String, DummyTracingKey>;
 
 	#[test]
 	fn notification_channel_simple() {
@@ -164,7 +148,8 @@ mod tests {
 		});
 
 		// Send notification.
-		sender.notify(|| Ok(test_payload)).unwrap();
+		let r: std::result::Result<(), ()> = sender.notify(|| Ok(test_payload));
+		r.unwrap();
 
 		// Run receiver future.
 		tokio_test::block_on(future);

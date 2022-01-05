@@ -251,7 +251,7 @@ where
 				self.best_beefy_block = Some(block_num);
 				if let Err(err) = self.client.header(BlockId::number(block_num)).map(|h| {
 					if let Some(header) = h {
-						let _ = self.beefy_best_block_sender.notify(|| Ok(header));
+						let _r: Result<(), ()> = self.beefy_best_block_sender.notify(|| Ok(header));
 					}
 				}) {
 					error!(target: "beefy", "🥩 Failed to get header for block number {}; err: {:?}",
@@ -372,12 +372,13 @@ where
 					trace!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
 				}
 
-				let _ = self.signed_commitment_sender.notify(|| Ok(signed_commitment));
+				let _r: Result<(), ()> =
+					self.signed_commitment_sender.notify(|| Ok(signed_commitment));
 				let block_num = round.1;
 				self.best_beefy_block = Some(block_num);
 				if let Err(err) = self.client.header(BlockId::number(block_num)).map(|h| {
 					if let Some(header) = h {
-						let _ = self.beefy_best_block_sender.notify(|| Ok(header));
+						let _r: Result<(), ()> = self.beefy_best_block_sender.notify(|| Ok(header));
 					}
 				}) {
 					error!(target: "beefy", "🥩 Failed to get header for block number {}; err: {:?}",

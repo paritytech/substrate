@@ -257,7 +257,8 @@ mod tests {
 			extrinsics_root: BlakeTwo256::hash(b"4"),
 			digest: Digest { logs: vec![] },
 		};
-		sender.notify(|| Ok(header)).unwrap();
+		let r: Result<(), ()> = sender.notify(|| Ok(header));
+		r.unwrap();
 
 		// Verify RPC `beefy_getFinalizedHead` returns expected header.
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
@@ -369,7 +370,8 @@ mod tests {
 
 		// Notify with commitment
 		let commitment = create_commitment();
-		commitment_sender.notify(|| Ok(commitment.clone())).unwrap();
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
+		r.unwrap();
 
 		// Inspect what we received
 		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());
