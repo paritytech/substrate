@@ -120,6 +120,9 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						highest_block: Some(3),
 					});
 				},
+				Request::SendToMixnet(_, _) => {
+					panic!("Not expected");
+				},
 			};
 
 			future::ready(())

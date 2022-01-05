@@ -61,6 +61,9 @@ pub enum Error {
 	/// Call to an unsafe RPC was denied.
 	#[error(transparent)]
 	UnsafeRpcCalled(#[from] crate::policy::UnsafeRpcError),
+	/// Network subsystem error.
+	#[error("Network error: {}", .0)]
+	Network(Box<dyn std::error::Error + Send>),
 }
 
 /// Base code for all authorship errors.
@@ -89,6 +92,8 @@ const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
 /// The transaction was not included to the pool since it is unactionable,
 /// it is not propagable and the local node does not author blocks.
 const POOL_UNACTIONABLE: i64 = POOL_INVALID_TX + 8;
+/// The transaction was not submitted because of the network error.
+const NETWORK_ERROR: i64 = POOL_INVALID_TX + 9;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
@@ -165,6 +170,11 @@ impl From<Error> for rpc::Error {
 				),
 			},
 			Error::UnsafeRpcCalled(e) => e.into(),
+			Error::Network(e) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(NETWORK_ERROR),
+				message: "Unknown key type crypto" .into(),
+				data: Some(format!("Error submitting transaction to the network: {}", e).into()),
+			},
 			e => errors::internal(e),
 		}
 	}

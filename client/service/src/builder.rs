@@ -692,7 +692,7 @@ where
 	};
 
 	let author =
-		sc_rpc::author::Author::new(client, transaction_pool, subscriptions, keystore, deny_unsafe);
+		sc_rpc::author::Author::new(client, transaction_pool, subscriptions, keystore, system_rpc_tx.clone(), deny_unsafe);
 	let system = system::System::new(system_info, system_rpc_tx, deny_unsafe);
 
 	let maybe_offchain_rpc = offchain_storage.map(|storage| {

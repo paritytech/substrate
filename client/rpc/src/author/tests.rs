@@ -22,6 +22,7 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use futures::executor;
 use sc_transaction_pool::{BasicPool, FullChainApi};
+use sc_utils::mpsc::tracing_unbounded;
 use sp_core::{
 	blake2_256,
 	crypto::{ByteArray, CryptoTypePublicPair, Pair},
@@ -72,11 +73,24 @@ impl Default for TestSetup {
 
 impl TestSetup {
 	fn author(&self) -> Author<FullTransactionPool, Client<Backend>> {
+		let (tx, rx) = tracing_unbounded("rpc_author_tests");
+		std::thread::spawn(move || {
+			futures::executor::block_on(rx.for_each(move |request| {
+				match request {
+					Request::SendToMixnet(_, sender) => {
+						let _ = sender.send(Ok(()));
+					},
+					_ => panic!("Not expected"),
+				};
+				futures::future::ready(())
+			}))
+		});
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),
 			subscriptions: SubscriptionManager::new(Arc::new(crate::testing::TaskExecutor)),
 			keystore: self.keystore.clone(),
+			network: tx,
 			deny_unsafe: DenyUnsafe::No,
 		}
 	}

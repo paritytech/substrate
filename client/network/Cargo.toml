@@ -38,6 +38,7 @@ linked-hash-map = "0.5.4"
 linked_hash_set = "0.1.3"
 lru = "0.7.0"
 log = "0.4.8"
+mixnet = { git = "https://github.com/paritytech/mixnet" }
 parking_lot = "0.11.2"
 pin-project = "1.0.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }

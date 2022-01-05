@@ -281,6 +281,14 @@ async fn build_network_future<
 							highest_block: network.best_seen_block(),
 						});
 					}
+					sc_rpc::system::Request::SendToMixnet(tx, sender) => {
+						let _ = match network.send_transaction_to_mixnet(tx) {
+							Ok(()) => sender.send(Ok(())),
+							Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+								e.to_string(),
+							))),
+						};
+					}
 				}
 			}
 

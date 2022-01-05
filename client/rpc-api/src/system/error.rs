@@ -33,6 +33,9 @@ pub enum Error {
 	/// Peer argument is malformatted.
 	#[error("{0}")]
 	MalformattedPeerArg(String),
+	/// Error submitting transaction to the mix network.
+	#[error("{0}")]
+	MixnetError(String),
 }
 
 /// Base code for all system errors.
@@ -48,6 +51,11 @@ impl From<Error> for rpc::Error {
 			},
 			Error::MalformattedPeerArg(ref e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+				message: e.clone(),
+				data: None,
+			},
+			Error::MixnetError(ref e) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 3),
 				message: e.clone(),
 				data: None,
 			},

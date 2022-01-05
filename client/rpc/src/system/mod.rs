@@ -73,6 +73,8 @@ pub enum Request<B: traits::Block> {
 	NodeRoles(oneshot::Sender<Vec<NodeRole>>),
 	/// Must return the state of the node syncing.
 	SyncState(oneshot::Sender<SyncState<<B::Header as HeaderT>::Number>>),
+	/// Submit transaction to the mix network.
+	SendToMixnet(Vec<u8>, oneshot::Sender<Result<()>>),
 }
 
 impl<B: traits::Block> System<B> {

@@ -259,7 +259,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			);
 
 			let discovery_config = {
-				let mut config = DiscoveryConfig::new(local_public.clone());
+				let mut config = DiscoveryConfig::new(local_public);
 				config.with_permanent_addresses(known_addresses);
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
@@ -341,12 +341,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
-					local_public,
+					local_identity.clone(),
 					discovery_config,
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					warp_sync_protocol_config,
 					bitswap,
+					params.network_config.mixnet,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
@@ -670,6 +671,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// Returns the list of reserved peers.
 	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
 		self.network_service.behaviour().user_protocol().reserved_peers()
+	}
+
+	/// Submit transaction to the mix network.
+	pub fn send_transaction_to_mixnet(&mut self, tx: Vec<u8>) -> Result<(), String> {
+		self.network_service.behaviour_mut().send_transaction_to_mixnet(tx)
 	}
 }
 
@@ -1858,6 +1864,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 
 					this.event_streams.send(Event::Dht(event));
 				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::MixnetMessage(sender, message))) => {
+					this.tx_handler_controller.inject_transaction(sender, message);
+				}
 				Poll::Ready(SwarmEvent::ConnectionEstablished {
 					peer_id,
 					endpoint,
@@ -1897,14 +1906,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-									EitherError::A(PingFailure::Timeout),
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(EitherError::B(
+									EitherError::A(PingFailure::Timeout)),
 								)))),
 							))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(EitherError::A(
 									NotifsHandlerError::SyncNotificationsClogged,
-								)))),
+								))))),
 							))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) =>
 								"protocol-error",

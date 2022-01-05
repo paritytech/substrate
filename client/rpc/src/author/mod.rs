@@ -29,9 +29,11 @@ use codec::{Decode, Encode};
 use futures::{
 	future::{FutureExt, TryFutureExt},
 	SinkExt, StreamExt as _,
+	channel::oneshot,
 };
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use sc_rpc_api::DenyUnsafe;
+use sc_utils::mpsc::TracingUnboundedSender;
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
 	TransactionSource, TransactionStatus, TxHash,
@@ -46,8 +48,10 @@ use self::error::{Error, FutureResult, Result};
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::author::*;
 
+use crate::system::Request;
+
 /// Authoring API
-pub struct Author<P, Client> {
+pub struct Author<P: TransactionPool + Sync + Send + 'static, Client> {
 	/// Substrate client
 	client: Arc<Client>,
 	/// Transactions pool
@@ -58,18 +62,23 @@ pub struct Author<P, Client> {
 	keystore: SyncCryptoStorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
+	network: TracingUnboundedSender<Request<P::Block>>,
 }
 
-impl<P, Client> Author<P, Client> {
+impl<P, Client> Author<P, Client>
+where
+	P: TransactionPool + Sync + Send + 'static,
+{
 	/// Create new instance of Authoring API.
 	pub fn new(
 		client: Arc<Client>,
 		pool: Arc<P>,
 		subscriptions: SubscriptionManager,
 		keystore: SyncCryptoStorePtr,
+		network: TracingUnboundedSender<Request<P::Block>>,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
-		Author { client, pool, subscriptions, keystore, deny_unsafe }
+		Author { client, pool, subscriptions, keystore, network, deny_unsafe }
 	}
 }
 
@@ -146,6 +155,19 @@ where
 					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
 			})
 			.boxed()
+	}
+
+	fn mix_extrinsic(&self, ext: Bytes) -> FutureResult<()> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.network.unbounded_send(Request::SendToMixnet(ext.to_vec(), tx));
+		async move {
+			match rx.await {
+				Ok(Ok(())) => Ok(()),
+				Ok(Err(e)) => Err(error::Error::Network(Box::new(e))),
+				Err(e) => Err(error::Error::Network(Box::new(e))),
+			}
+		}
+		.boxed()
 	}
 
 	fn pending_extrinsics(&self) -> Result<Vec<Bytes>> {

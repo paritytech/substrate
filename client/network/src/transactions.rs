@@ -227,11 +227,18 @@ impl<H: ExHashT> TransactionsHandlerController<H> {
 	pub fn propagate_transaction(&self, hash: H) {
 		let _ = self.to_handler.unbounded_send(ToHandler::PropagateTransaction(hash));
 	}
+
+	/// Validate and inject transaction received from an external protocol.
+	pub fn inject_transaction(&self, sender: PeerId, data: Vec<u8>) {
+		let _ = self.to_handler.unbounded_send(ToHandler::InjectTransaction(sender, data));
+	}
+
 }
 
 enum ToHandler<H: ExHashT> {
 	PropagateTransactions,
 	PropagateTransaction(H),
+	InjectTransaction(PeerId, Vec<u8>),
 }
 
 /// Handler for transactions. Call [`TransactionsHandler::run`] to start the processing.
@@ -296,6 +303,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 					match message {
 						ToHandler::PropagateTransaction(hash) => self.propagate_transaction(&hash),
 						ToHandler::PropagateTransactions => self.propagate_transactions(),
+						ToHandler::InjectTransaction(peer_id, data) => self.inject_transaction(peer_id, data),
 					}
 				},
 			}
@@ -362,6 +370,16 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 			// Not our concern.
 			Event::NotificationStreamOpened { .. } | Event::NotificationStreamClosed { .. } => {},
+		}
+	}
+
+	fn inject_transaction(&mut self, who: PeerId, transactions: Vec<u8>) {
+		if let Ok(t) = <message::Transactions<B::Extrinsic> as Decode>::decode(
+			&mut transactions.as_ref(),
+		) {
+			self.on_transactions(who, t);
+		} else {
+			warn!(target: "sub-libp2p", "Failed to decode external transactions list");
 		}
 	}
 
