@@ -30,7 +30,7 @@ fn initial_state() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(Lottery::account_id()), 0);
 		assert!(crate::Lottery::<Test>::get().is_none());
-		assert_eq!(Participants::<Test>::get(&1), (0, vec![]));
+		assert_eq!(Participants::<Test>::get(&1), (0, Default::default()));
 		assert_eq!(TicketsCount::<Test>::get(), 0);
 		assert!(Tickets::<Test>::get(0).is_none());
 	});

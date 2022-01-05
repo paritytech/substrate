@@ -28,7 +28,7 @@
 //! users to make those calls on your network. An example of how this could be
 //! used is to set validator nominations as a valid lottery call. If the lottery
 //! is set to repeat every month, then users would be encouraged to re-nominate
-//! validators every month. A user can ony purchase one ticket per valid call
+//! validators every month. A user can only purchase one ticket per valid call
 //! per lottery.
 //!
 //! This pallet can be configured to use dynamically set calls or statically set
@@ -58,6 +58,8 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, Dispatchable, GetDispatchInfo},
 	ensure,
+	pallet_prelude::MaxEncodedLen,
+	storage::bounded_vec::BoundedVec,
 	traits::{Currency, ExistenceRequirement::KeepAlive, Get, Randomness, ReservableCurrency},
 	PalletId, RuntimeDebug,
 };
@@ -76,7 +78,9 @@ type BalanceOf<T> =
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
 
-#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(
+	Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 pub struct LotteryConfig<BlockNumber, Balance> {
 	/// Price per entry.
 	price: Balance,
@@ -120,6 +124,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The pallet's config trait.
@@ -209,8 +214,13 @@ pub mod pallet {
 
 	/// Users who have purchased a ticket. (Lottery Index, Tickets Purchased)
 	#[pallet::storage]
-	pub(crate) type Participants<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, (u32, Vec<CallIndex>), ValueQuery>;
+	pub(crate) type Participants<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		(u32, BoundedVec<CallIndex, T::MaxCalls>),
+		ValueQuery,
+	>;
 
 	/// Total number of tickets sold.
 	#[pallet::storage]
@@ -226,7 +236,8 @@ pub mod pallet {
 	/// The calls stored in this pallet to be used in an active lottery if configured
 	/// by `Config::ValidateCall`.
 	#[pallet::storage]
-	pub(crate) type CallIndices<T> = StorageValue<_, Vec<CallIndex>, ValueQuery>;
+	pub(crate) type CallIndices<T: Config> =
+		StorageValue<_, BoundedVec<CallIndex, T::MaxCalls>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -395,11 +406,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Converts a vector of calls into a vector of call indices.
-	fn calls_to_indices(calls: &[<T as Config>::Call]) -> Result<Vec<CallIndex>, DispatchError> {
-		let mut indices = Vec::with_capacity(calls.len());
+	fn calls_to_indices(
+		calls: &[<T as Config>::Call],
+	) -> Result<BoundedVec<CallIndex, T::MaxCalls>, DispatchError> {
+		let mut indices = BoundedVec::<CallIndex, T::MaxCalls>::default();
 		for c in calls.iter() {
 			let index = Self::call_to_index(c)?;
-			indices.push(index)
+			indices.try_push(index).map_err(|_| Error::<T>::TooManyCalls)?;
 		}
 		Ok(indices)
 	}
@@ -433,7 +446,7 @@ impl<T: Config> Pallet<T> {
 				let index = LotteryIndex::<T>::get();
 				// If lottery index doesn't match, then reset participating calls and index.
 				if *lottery_index != index {
-					*participating_calls = Vec::new();
+					*participating_calls = Default::default();
 					*lottery_index = index;
 				} else {
 					// Check that user is not already participating under this call.
@@ -447,7 +460,7 @@ impl<T: Config> Pallet<T> {
 				// Create a new ticket.
 				TicketsCount::<T>::put(new_ticket_count);
 				Tickets::<T>::insert(ticket_count, caller.clone());
-				participating_calls.push(call_index);
+				participating_calls.try_push(call_index).map_err(|_| Error::<T>::TooManyCalls)?;
 				Ok(())
 			},
 		)?;
