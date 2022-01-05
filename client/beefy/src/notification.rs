@@ -25,12 +25,12 @@ pub type BeefySignedCommitment<Block> =
 
 /// The sending half of the notifications channel(s) used to send
 /// notifications about best BEEFY block from the gadget side.
-pub type BeefyBestBlockSender<Block> = NotificationSender<<Block as BlockT>::Header>;
+pub type BeefyBestBlockSender<Block> = NotificationSender<<Block as BlockT>::Hash>;
 
 /// The receiving half of a notifications channel used to receive
 /// notifications about best BEEFY blocks determined on the gadget side.
 pub type BeefyBestBlockStream<Block> =
-	NotificationStream<<Block as BlockT>::Header, BeefyBestBlockTracingKey>;
+	NotificationStream<<Block as BlockT>::Hash, BeefyBestBlockTracingKey>;
 
 /// The sending half of the notifications channel(s) used to send notifications
 /// about signed commitments generated at the end of a BEEFY round.

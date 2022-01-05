@@ -72,7 +72,7 @@ impl From<Error> for jsonrpc_core::Error {
 
 /// Provides RPC methods for interacting with BEEFY.
 #[rpc]
-pub trait BeefyApi<Notification, Header> {
+pub trait BeefyApi<Notification, Hash> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -100,19 +100,19 @@ pub trait BeefyApi<Notification, Header> {
 		id: SubscriptionId,
 	) -> jsonrpc_core::Result<bool>;
 
-	/// Returns header of the latest BEEFY finalized block as seen by this client.
+	/// Returns hash of the latest BEEFY finalized block as seen by this client.
 	///
 	/// The latest BEEFY block might not be available if the BEEFY gadget is not running
 	/// in the network or if the client is still initializing or syncing with the network.
 	/// In such case an error would be returned.
 	#[rpc(name = "beefy_getFinalizedHead")]
-	fn latest_finalized(&self) -> FutureResult<Header>;
+	fn latest_finalized(&self) -> FutureResult<Hash>;
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	beefy_best_block: Arc<RwLock<Option<Block::Header>>>,
+	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
 	manager: SubscriptionManager,
 }
 
@@ -146,8 +146,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	}
 }
 
-impl<Block> BeefyApi<notification::EncodedSignedCommitment, Block::Header>
-	for BeefyRpcHandler<Block>
+impl<Block> BeefyApi<notification::EncodedSignedCommitment, Block::Hash> for BeefyRpcHandler<Block>
 where
 	Block: BlockT,
 {
@@ -178,8 +177,8 @@ where
 		Ok(self.manager.cancel(id))
 	}
 
-	fn latest_finalized(&self) -> FutureResult<Block::Header> {
-		let result: Result<Block::Header, jsonrpc_core::Error> = self
+	fn latest_finalized(&self) -> FutureResult<Block::Hash> {
+		let result: Result<Block::Hash, jsonrpc_core::Error> = self
 			.beefy_best_block
 			.read()
 			.as_ref()

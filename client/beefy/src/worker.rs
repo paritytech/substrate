@@ -249,7 +249,7 @@ where
 
 				self.best_beefy_block = Some(*notification.header.number());
 				let _r: Result<(), ()> =
-					self.beefy_best_block_sender.notify(|| Ok(notification.header.clone()));
+					self.beefy_best_block_sender.notify(|| Ok(notification.hash.clone()));
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
 				// have a signed commitment for the block. Remove once the above TODO is done.
@@ -337,22 +337,23 @@ where
 				// id is stored for skipped session metric calculation
 				self.last_signed_id = rounds.validator_set_id();
 
+				let block_num = round.1;
 				let commitment = Commitment {
 					payload: round.0,
-					block_number: round.1,
+					block_number: block_num,
 					validator_set_id: self.last_signed_id,
 				};
 
 				let signed_commitment = SignedCommitment { commitment, signatures };
 
-				metric_set!(self, beefy_round_concluded, round.1);
+				metric_set!(self, beefy_round_concluded, block_num);
 
 				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
 
 				if self
 					.backend
 					.append_justification(
-						BlockId::Number(round.1),
+						BlockId::Number(block_num),
 						(
 							BEEFY_ENGINE_ID,
 							VersionedFinalityProof::V1(signed_commitment.clone()).encode(),
@@ -364,21 +365,20 @@ where
 					// conclude certain rounds multiple times.
 					trace!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
 				}
-
 				let _r: Result<(), ()> =
 					self.signed_commitment_sender.notify(|| Ok(signed_commitment));
-				let block_num = round.1;
+
 				self.best_beefy_block = Some(block_num);
-				if let Err(err) = self.client.header(BlockId::number(block_num)).map(|h| {
-					if let Some(header) = h {
-						let _r: Result<(), ()> = self.beefy_best_block_sender.notify(|| Ok(header));
+				if let Err(err) = self.client.hash(block_num).map(|h| {
+					if let Some(hash) = h {
+						let _r: Result<(), ()> = self.beefy_best_block_sender.notify(|| Ok(hash));
 					}
 				}) {
-					error!(target: "beefy", "🥩 Failed to get header for block number {}; err: {:?}",
+					error!(target: "beefy", "🥩 Failed to get hash for block number {}; err: {:?}",
 						block_num, err);
 				}
 
-				metric_set!(self, beefy_best_block, round.1);
+				metric_set!(self, beefy_best_block, block_num);
 			}
 		}
 	}
