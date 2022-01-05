@@ -105,7 +105,7 @@ pub trait BeefyApi<Notification, Header> {
 	/// The latest BEEFY block might not be available if the BEEFY gadget is not running
 	/// in the network or if the client is still initializing or syncing with the network.
 	/// In such case an error would be returned.
-	#[rpc(name = "beefy_getFinalizedBlockHeader")]
+	#[rpc(name = "beefy_getFinalizedHead")]
 	fn latest_finalized(&self) -> FutureResult<Header>;
 }
 
@@ -238,8 +238,7 @@ mod tests {
 	fn uninitialized_rpc_handler() {
 		let (io, _) = setup_io_handler();
 
-		let request =
-			r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedBlockHeader","params":[],"id":1}"#;
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#;
 
 		let meta = sc_rpc::Metadata::default();
@@ -260,9 +259,8 @@ mod tests {
 		};
 		sender.notify(|| Ok(header)).unwrap();
 
-		// Verify RPC `beefy_getFinalizedBlockHeader` returns expected header.
-		let request =
-			r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedBlockHeader","params":[],"id":1}"#;
+		// Verify RPC `beefy_getFinalizedHead` returns expected header.
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
 		let expected = "{\
 			\"jsonrpc\":\"2.0\",\
 			\"result\":{\
