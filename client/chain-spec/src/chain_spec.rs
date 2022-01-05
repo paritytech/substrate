@@ -164,6 +164,7 @@ struct ClientSpec<E> {
 	boot_nodes: Vec<MultiaddrWithPeerId>,
 	telemetry_endpoints: Option<TelemetryEndpoints>,
 	protocol_id: Option<String>,
+	fork_id: Option<String>,
 	properties: Option<Properties>,
 	#[serde(flatten)]
 	extensions: E,
@@ -226,6 +227,11 @@ impl<G, E> ChainSpec<G, E> {
 		self.client_spec.protocol_id.as_deref()
 	}
 
+	/// Optional network fork identifier.
+	pub fn fork_id(&self) -> Option<&str> {
+		self.client_spec.fork_id.as_ref().map(String::as_str)
+	}
+
 	/// Additional loosly-typed properties of the chain.
 	///
 	/// Returns an empty JSON object if 'properties' not defined in config
@@ -257,6 +263,7 @@ impl<G, E> ChainSpec<G, E> {
 		boot_nodes: Vec<MultiaddrWithPeerId>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
+		fork_id: Option<&str>,
 		properties: Option<Properties>,
 		extensions: E,
 	) -> Self {
@@ -267,6 +274,7 @@ impl<G, E> ChainSpec<G, E> {
 			boot_nodes,
 			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
+			fork_id: fork_id.map(str::to_owned),
 			properties,
 			extensions,
 			consensus_engine: (),
@@ -382,6 +390,10 @@ where
 
 	fn protocol_id(&self) -> Option<&str> {
 		ChainSpec::protocol_id(self)
+	}
+
+	fn fork_id(&self) -> Option<&str> {
+		ChainSpec::fork_id(self)
 	}
 
 	fn properties(&self) -> Properties {
