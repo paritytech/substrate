@@ -787,13 +787,16 @@ mod benchmarks {
 			let caller = frame_benchmarking::whitelisted_caller();
 			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
 			T::Currency::make_free_balance_be(&caller, stash);
+			// for tests, we need to make sure there is _something_ in storage that is being
+			// migrated.
+			sp_io::storage::set(b"foo", vec![1u8;33].as_ref());
 		}: {
 			assert!(
-				dbg!(StateTrieMigration::<T>::migrate_custom_top(
+				StateTrieMigration::<T>::migrate_custom_top(
 					frame_system::RawOrigin::Signed(caller.clone()).into(),
-					Default::default(),
+					vec![b"foo".to_vec()],
 					1,
-				)).is_err()
+				).is_err()
 			)
 		}
 		verify {
@@ -1149,11 +1152,25 @@ mod test {
 
 	#[test]
 	fn custom_migrate_top_works() {
+		let correct_witness = 3 + sp_core::storage::TRIE_VALUE_NODE_THRESHOLD * 3 + 1 + 2 + 3;
 		new_test_ext(StateVersion::V0, true).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
 				Origin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
-				3 + sp_core::storage::TRIE_VALUE_NODE_THRESHOLD * 3 + 1 + 2 + 3,
+				correct_witness,
+			));
+
+			// no funds should remain reserved.
+			assert_eq!(Balances::reserved_balance(&1), 0);
+			assert_eq!(Balances::free_balance(&1), 1000);
+		});
+
+		new_test_ext(StateVersion::V0, true).execute_with(|| {
+			// works if the witness is an overestimate
+			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
+				Origin::signed(1),
+				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
+				correct_witness + 99,
 			));
 
 			// no funds should remain reserved.
@@ -1169,7 +1186,7 @@ mod test {
 				StateTrieMigration::migrate_custom_top(
 					Origin::signed(1),
 					vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
-					69, // wrong witness
+					correct_witness - 1,
 				),
 				"wrong witness data"
 			);
@@ -1228,13 +1245,16 @@ mod test {
 
 #[cfg(all(test, feature = "remote-tests"))]
 mod remote_tests {
-	use super::{mock::*, *};
+	use super::{
+		mock::{Call as MockCall, *},
+		*,
+	};
 	use codec::Encode;
 	use remote_externalities::{Mode, OfflineConfig, OnlineConfig};
 	use sp_runtime::traits::{Bounded, HashFor};
-	use std::sync::Arc;
 
 	// we only use the hash type from this, so using the mock should be fine.
+	type Extrinsic = sp_runtime::testing::TestXt<MockCall, ()>;
 	type Block = sp_runtime::testing::Block<Extrinsic>;
 
 	#[tokio::test]
