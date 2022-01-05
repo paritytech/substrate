@@ -592,8 +592,7 @@ mod tests {
 						contract: BOB,
 						amount: Deposit::Charge(<Test as Config>::Currency::minimum_balance() * 2),
 						terminated: false,
-					}],
-					..Default::default()
+					}]
 				}
 			)
 		});
@@ -663,8 +662,7 @@ mod tests {
 							amount: Deposit::Charge(2),
 							terminated: false
 						}
-					],
-					..Default::default()
+					]
 				}
 			)
 		});
@@ -717,8 +715,7 @@ mod tests {
 							amount: Deposit::Charge(12),
 							terminated: false
 						}
-					],
-					..Default::default()
+					]
 				}
 			)
 		});
