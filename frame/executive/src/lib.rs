@@ -196,7 +196,7 @@ where
 		>::execute_block(block);
 	}
 
-	fn execute_block_ver(block: Block) {
+	fn execute_block_ver(block: Block, public: Vec<u8>) {
 		Executive::<
 			System,
 			Block,
@@ -204,7 +204,7 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block_ver(block);
+		>::execute_block_ver(block, public);
 	}
 }
 
@@ -339,7 +339,7 @@ where
 			frame_system::InitKind::Full,
 		);
 
-		<frame_system::Pallet<System>>::set_block_seed(&(frame_system::Pallet::<System>::block_number()), seed);
+		// <frame_system::Pallet<System>>::set_block_seed(&(frame_system::Pallet::<System>::block_number()), seed);
 
 		weight = weight.saturating_add(<frame_system::Pallet<System> as OnInitialize<
 			System::BlockNumber,
@@ -373,6 +373,29 @@ where
 		}
 	}
 
+	fn ver_checks(block: &Block, public_key: Vec<u8>) {
+		// Check that `parent_hash` is correct.
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "ver checks");
+		let header = block.header();
+		let n = header.number().clone();
+
+        // Check that shuffling seedght is generated properly
+		let new_seed = VRFOutput::from_bytes(&header.seed().seed.as_bytes())
+			.expect("cannot parse shuffling seed");
+
+		let proof = VRFProof::from_bytes(&header.seed().proof.as_bytes())
+			.expect("cannot parse shuffling seed proof");
+
+        let ctx = schnorrkel::signing_context(b"hello world");
+        let mut transcript = merlin::Transcript::new(b"shuffling_seed");
+		let prev_seed = <frame_system::Pallet<System>>::block_seed(n - System::BlockNumber::one());
+        transcript.append_message(b"prev_seed", prev_seed.as_bytes());
+
+		schnorrkel::PublicKey::from_bytes(&public_key)
+			.and_then(|p| p.vrf_verify(transcript, &new_seed, &proof))
+            .expect("shuffling seed validation failed");
+	}
+
 	fn initial_checks(block: &Block) {
 
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
@@ -386,24 +409,6 @@ where
 					*header.parent_hash(),
 			"Parent hash should be valid.",
 		);
-
-        // Check that shuffling seed is generated properly
-		let prev_seed = <frame_system::Pallet<System>>::block_seed(n - System::BlockNumber::one());
-		let seed_and_proof = header.seed();
-
-		let new_seed = VRFOutput::from_bytes(&seed_and_proof.seed.as_bytes())
-			.expect("cannot parse shuffling seed");
-
-		let proof = VRFProof::from_bytes(&seed_and_proof.proof.as_bytes())
-			.expect("cannot parse shuffling seed proof");
-        
-
-        let ctx = schnorrkel::signing_context(b"hello world");
-        let mut transcript = merlin::Transcript::new(b"shuffling_seed");
-        transcript.append_message(b"prev_seed", prev_seed.seed.as_bytes());
-		schnorrkel::PublicKey::from_bytes(&[])
-			.and_then(|p| p.vrf_verify(transcript, &new_seed, &proof))
-            .expect("shuffling seed validation failed");
 
 		if let Err(i) = System::ensure_inherents_are_first(block) {
 			panic!("Invalid inherent position for extrinsic at index {}", i);
@@ -442,7 +447,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver(block: Block) {
+	pub fn execute_block_ver(block: Block, public: Vec<u8>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -450,6 +455,7 @@ where
 			Self::initialize_block(block.header());
 
 			// any initial checks
+            // Self::ver_checks(&block, public);
 			Self::initial_checks(&block);
 
 			let signature_batching = sp_runtime::SignatureBatching::start();

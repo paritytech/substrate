@@ -286,7 +286,7 @@ pub trait ExecuteBlock<Block: BlockT> {
 	/// # Panic
 	///
 	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
-	fn execute_block_ver(block: Block){
+	fn execute_block_ver(block: Block, public: Vec<u8>){
         unimplemented!();
     }
 
