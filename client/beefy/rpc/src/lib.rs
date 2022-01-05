@@ -195,7 +195,7 @@ mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
 
-	use beefy_gadget::notification::{BSignedCommitment, BeefySignedCommitmentSender};
+	use beefy_gadget::notification::{BeefySignedCommitment, BeefySignedCommitmentSender};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
 	use sp_runtime::{
@@ -342,9 +342,9 @@ mod tests {
 		);
 	}
 
-	fn create_commitment() -> BSignedCommitment<Block> {
+	fn create_commitment() -> BeefySignedCommitment<Block> {
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
-		BSignedCommitment::<Block> {
+		BeefySignedCommitment::<Block> {
 			commitment: beefy_primitives::Commitment {
 				payload,
 				block_number: 5,
@@ -382,7 +382,7 @@ mod tests {
 		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
 		let recv_commitment: sp_core::Bytes =
 			serde_json::from_value(json_map["result"].take()).unwrap();
-		let recv_commitment: BSignedCommitment<Block> =
+		let recv_commitment: BeefySignedCommitment<Block> =
 			Decode::decode(&mut &recv_commitment[..]).unwrap();
 
 		assert_eq!(recv.method, "beefy_justifications");

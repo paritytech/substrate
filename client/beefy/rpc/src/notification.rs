@@ -29,7 +29,7 @@ pub struct EncodedSignedCommitment(sp_core::Bytes);
 
 impl EncodedSignedCommitment {
 	pub fn new<Block>(
-		signed_commitment: beefy_gadget::notification::BSignedCommitment<Block>,
+		signed_commitment: beefy_gadget::notification::BeefySignedCommitment<Block>,
 	) -> Self
 	where
 		Block: BlockT,

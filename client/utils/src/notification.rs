@@ -37,10 +37,10 @@ use parking_lot::Mutex;
 type SharedSenders<Payload> = Arc<Mutex<Vec<TracingUnboundedSender<Payload>>>>;
 
 /// Trait used to define the "tracing key" string used to tag
-/// and identify the mpsc channels;
+/// and identify the mpsc channels.
 pub trait TracingKeyStr {
 	/// Const `str` representing the "tracing key" used to tag and identify
-	/// the mpsc channels owned by the object implemeting this trait;
+	/// the mpsc channels owned by the object implemeting this trait.
 	const TRACING_KEY: &'static str;
 }
 
@@ -85,7 +85,6 @@ impl<Payload: Clone, Error> NotificationSender<Payload, Error> {
 
 /// The receiving half of the notifications channel.
 ///
-/// Used to receive notifications generated at the BEEFY gadget side.
 /// The `NotificationStream` entity stores the `SharedSenders` so it can be
 /// used to add more subscriptions.
 pub struct NotificationStream<Payload: Clone, TK: TracingKeyStr, Error> {
@@ -118,8 +117,7 @@ impl<Payload: Clone, TK: TracingKeyStr, Error> NotificationStream<Payload, TK, E
 		Self { subscribers, _trace_key: PhantomData, _err: PhantomData }
 	}
 
-	/// Subscribe to a channel through which signed commitments are sent at the end of each BEEFY
-	/// voting round.
+	/// Subscribe to a channel through which the generic payload can be received.
 	pub fn subscribe(&self) -> TracingUnboundedReceiver<Payload> {
 		let (sender, receiver) = tracing_unbounded(TK::TRACING_KEY);
 		self.subscribers.lock().push(sender);
