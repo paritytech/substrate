@@ -2899,3 +2899,29 @@ fn contract_reverted() {
 		assert_eq!(result.data.0, buffer);
 	});
 }
+
+#[test]
+fn code_rejected_error_works() {
+	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None),
+			<Error<Test>>::CodeRejected,
+		);
+
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				wasm,
+				vec![],
+				vec![],
+			),
+			<Error<Test>>::CodeRejected,
+		);
+	});
+}

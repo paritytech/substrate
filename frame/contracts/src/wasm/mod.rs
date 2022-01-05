@@ -122,8 +122,8 @@ where
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
-	) -> Result<Self, DispatchError> {
-		prepare::prepare_contract(original_code, schedule, owner).map_err(Into::into)
+	) -> Result<Self, &'static str> {
+		prepare::prepare_contract(original_code, schedule, owner)
 	}
 
 	/// Store the code without instantiating it.
