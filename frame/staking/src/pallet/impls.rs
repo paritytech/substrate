@@ -1247,7 +1247,7 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = match Self::ledger(who) {
 			None => StakingLedger::default_from(who.clone()),
-			Some(l) => l
+			Some(l) => l,
 		};
 		ledger.active = active;
 
