@@ -251,7 +251,7 @@ where
 	pub fn apply_previous_block_extrinsics(&mut self, seed: ShufflingSeed) {
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
-		// self.api.store_seed(&block_id, seed.seed);
+		self.api.store_seed(&block_id, seed.seed);
 
 		let previous_block_header =
 			self.backend.blockchain().header(BlockId::Hash(parent_hash)).unwrap().unwrap();

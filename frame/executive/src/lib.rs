@@ -444,7 +444,7 @@ where
 
 			Self::initialize_block(block.header());
 
-			// <frame_system::Pallet<System>>::set_block_seed(&block.header().seed().seed);
+			<frame_system::Pallet<System>>::set_block_seed(&block.header().seed().seed);
 
 			// any initial checks
 			// Self::ver_checks(&block, public);
