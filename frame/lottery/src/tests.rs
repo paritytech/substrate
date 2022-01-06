@@ -291,6 +291,22 @@ fn buy_ticket_works() {
 	});
 }
 
+/// Test that `do_buy_ticket` returns an `AlreadyParticipating` error.
+/// Errors of `do_buy_ticket` are ignored by `buy_ticket`, therefore this white-box test.
+#[test]
+fn do_buy_ticket_already_participating() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		assert_ok!(Lottery::start_lottery(Origin::root(), 1, 10, 10, false));
+
+		// Buying once works.
+		assert_ok!(Lottery::do_buy_ticket(&1, &calls[0]));
+		// Buying the same ticket again fails.
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), Error::<Test>::AlreadyParticipating);
+	});
+}
+
 #[test]
 fn start_lottery_will_create_account() {
 	new_test_ext().execute_with(|| {
