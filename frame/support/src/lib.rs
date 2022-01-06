@@ -86,7 +86,7 @@ pub use self::{
 		StorageHasher, Twox128, Twox256, Twox64Concat,
 	},
 	storage::{
-		bounded_vec::{BoundedSlice, BoundedVec, TryCollect},
+		bounded_vec::{BoundedSlice, BoundedVec},
 		migration,
 		weak_bounded_vec::WeakBoundedVec,
 		IterableStorageDoubleMap, IterableStorageMap, IterableStorageNMap, StorageDoubleMap,
