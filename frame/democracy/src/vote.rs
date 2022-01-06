@@ -183,7 +183,7 @@ impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, Ac
 		match self {
 			Voting::Direct { votes, prior, .. } =>
 				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
-			Voting::Delegating { balance, .. } => *balance,
+			Voting::Delegating { balance, prior, .. } => *balance.max(&prior.locked()),
 		}
 	}
 
