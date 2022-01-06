@@ -161,6 +161,8 @@ mod tests {
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
+		use frame_support::traits::ConstU32;
+
 		use super::*;
 		use crate::data_provider;
 
@@ -168,7 +170,7 @@ mod tests {
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
-			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
+			type MaxVotesPerVoter = ConstU32<2>;
 			fn voters(
 				_: Option<usize>,
 			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {

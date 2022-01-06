@@ -820,7 +820,7 @@ pub mod pallet {
 			// NOTE that this pallet does not really need to enforce this in runtime. The
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
-				<T::DataProvider as ElectionDataProvider>::MAXIMUM_VOTES_PER_VOTER,
+				<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
 		}

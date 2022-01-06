@@ -53,10 +53,10 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
 
 benchmarks! {
 	set_keys {
-		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
+		let n = <T as pallet_staking::Config>::MaxNominations::get();
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MAX_NOMINATIONS,
+			<T as pallet_staking::Config>::MaxNominations::get(),
 			false,
 			RewardDestination::Staked,
 		)?;
@@ -70,10 +70,10 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
+		let n = <T as pallet_staking::Config>::MaxNominations::get();
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MAX_NOMINATIONS,
+			<T as pallet_staking::Config>::MaxNominations::get(),
 			false,
 			RewardDestination::Staked
 		)?;

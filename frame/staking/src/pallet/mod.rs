@@ -93,7 +93,7 @@ pub mod pallet {
 		>;
 
 		/// Maximum number of nominations per nominator.
-		const MAX_NOMINATIONS: u32;
+		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -158,15 +158,6 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
-	}
-
-	#[pallet::extra_constants]
-	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
-		fn MaxNominations() -> u32 {
-			T::MAX_NOMINATIONS
-		}
 	}
 
 	#[pallet::type_value]
@@ -249,7 +240,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
+		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
@@ -994,7 +985,7 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
-		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
+		/// which is capped at CompactAssignments::LIMIT (T::MaxNominations).
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
@@ -1022,9 +1013,9 @@ pub mod pallet {
 			}
 
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
+			ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
 
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_inner());
 
 			let targets = targets
 				.into_iter()
@@ -1039,6 +1030,11 @@ pub mod pallet {
 					})
 				})
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
+
+			// TODO: might be able to simplify it with
+			// https://github.com/paritytech/substrate/pull/10590, directly collect into a bounded
+			// vec after altering the vec one last time.
+			let targets = targets.try_into().expect("bound checked in previous line; qed");
 
 			let nominations = Nominations {
 				targets,

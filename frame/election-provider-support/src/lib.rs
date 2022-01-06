@@ -80,6 +80,7 @@
 //! ```rust
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
+//! # use frame_support::traits::ConstU32;
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
@@ -101,7 +102,7 @@
 //!     impl<T: Config> ElectionDataProvider for Pallet<T> {
 //!         type AccountId = AccountId;
 //!         type BlockNumber = BlockNumber;
-//!         const MAXIMUM_VOTES_PER_VOTER: u32 = 1;
+//!         type MaxVotesPerVoter = ConstU32<1>;
 //!
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
@@ -191,7 +192,7 @@ pub trait ElectionDataProvider {
 	type BlockNumber;
 
 	/// Maximum number of votes per voter that this data provider is providing.
-	const MAXIMUM_VOTES_PER_VOTER: u32;
+	type MaxVotesPerVoter: Get<u32>;
 
 	/// All possible targets for the election, i.e. the candidates.
 	///
@@ -266,8 +267,7 @@ pub struct TestDataProvider<X>(sp_std::marker::PhantomData<X>);
 impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountId, BlockNumber)> {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
-
-	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
+	type MaxVotesPerVoter = ();
 	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}

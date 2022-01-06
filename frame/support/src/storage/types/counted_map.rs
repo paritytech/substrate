@@ -429,6 +429,13 @@ where
 			phantom: Default::default(),
 		}
 	}
+
+	/// Enumerate all keys in the counted map.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as MapWrapper>::Map::iter_keys()
+	}
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder

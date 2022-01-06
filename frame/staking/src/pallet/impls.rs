@@ -720,11 +720,15 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((nominator.clone(), weight_of(&nominator), targets));
+					all_voters.push((
+						nominator.clone(),
+						weight_of(&nominator),
+						targets.into_inner(),
+					));
 					nominators_taken.saturating_inc();
 				}
 			} else {
-				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
+				log!(warn, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}, this nominator probably has too many nominations now", nominator)
 			}
 		}
 
@@ -772,7 +776,7 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
+	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
@@ -847,7 +851,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
+	type MaxVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));

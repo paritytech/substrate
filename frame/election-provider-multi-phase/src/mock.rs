@@ -436,6 +436,9 @@ where
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
+parameter_types! {
+	pub MaxNominations: u32 = <TestNposSolution as NposSolution>::LIMIT as u32
+}
 #[derive(Default)]
 pub struct ExtBuilder {}
 
@@ -443,7 +446,7 @@ pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
-	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
+	type MaxVotesPerVoter = MaxNominations;
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
