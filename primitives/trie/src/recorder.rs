@@ -15,27 +15,58 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::{HashMap, HashSet}, hash::Hash, sync::Arc};
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
-use trie_db::{TrieAccess, TrieRecorder, node::NodeOwned};
+use std::{collections::{HashMap, HashSet}, hash::Hash, mem, sync::Arc};
+use trie_db::{node::NodeOwned, TrieAccess, TrieRecorder};
 
+use crate::StorageProof;
+
+#[derive(Default, Clone)]
 pub struct Recorder<H> {
 	inner: Arc<Mutex<RecorderInner<H>>>,
 }
 
-impl<H> Recorder<H> where H: Eq + Hash + Clone {
+impl<H> Recorder<H>
+where
+	H: Eq + Hash + Clone,
+{
 	pub fn as_trie_recorder(&self) -> MutexGuard<impl TrieRecorder<H>> {
 		self.inner.lock()
+	}
+
+	pub fn into_storage_proof(self) -> StorageProof {
+		let mut recorder = mem::take(&mut *self.inner.lock());
+
+		StorageProof::new(recorder.accessed_encoded_nodes.drain().map(|(_, v)| v).collect())
 	}
 }
 
 struct RecorderInner<H> {
+	/// If we are recording while a cache is enabled, we may don't access all nodes because some
+	/// data is already cached. Thus, we will only be informed about the key that was accessed. We
+	/// will use these keys when building the [`StorageProof`] to traverse the trie again and
+	/// collecting the required trie nodes for accessing the data.
 	accessed_keys: HashSet<Vec<u8>>,
+	/// The [`NodeOwned`] we accessed while recording. This should only be populated when a cache is used.
 	accessed_owned_nodes: HashMap<H, NodeOwned<H>>,
+	/// The encoded nodes we accessed while recording. This should only be populated when no cache is used.
 	accessed_encoded_nodes: HashMap<H, Vec<u8>>,
 }
 
-impl<H> trie_db::TrieRecorder<H> for RecorderInner<H> where H:Eq + Hash + Clone {
+impl<H> Default for RecorderInner<H> {
+	fn default() -> Self {
+		Self {
+			accessed_keys: HashSet::new(),
+			accessed_owned_nodes: HashMap::new(),
+			accessed_encoded_nodes: HashMap::new(),
+		}
+	}
+}
+
+impl<H> trie_db::TrieRecorder<H> for RecorderInner<H>
+where
+	H: Eq + Hash + Clone,
+{
 	fn record<'a>(&mut self, access: TrieAccess<'a, H>) {
 		match access {
 			TrieAccess::Key(key) => {
@@ -50,5 +81,53 @@ impl<H> trie_db::TrieRecorder<H> for RecorderInner<H> where H:Eq + Hash + Clone 
 					.or_insert_with(|| encoded_node.into_owned());
 			},
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
+
+	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
+	type Layout = crate::Layout<sp_core::Blake2Hasher>;
+	type Recorder = super::Recorder<sp_core::hash::H256>;
+
+	const TEST_DATA: &[(&[u8], &[u8])] =
+		&[(b"key1", b"val1"), (b"key2", b"val2"), (b"key3", b"val3"), (b"key4", b"val4")];
+
+	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
+		let mut db = MemoryDB::default();
+		let mut root = Default::default();
+
+		{
+			let mut trie = TrieDBMutBuilder::<Layout>::new(&mut db, &mut root).build();
+			for (k, v) in TEST_DATA {
+				trie.insert(k, v).expect("Inserts data");
+			}
+		}
+
+		(db, root)
+	}
+
+	#[test]
+	fn recorder_works() {
+		let (db, root) = create_trie();
+
+		let recorder = Recorder::default();
+
+		{
+			let mut trie_recorder = recorder.as_trie_recorder();
+			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
+				.with_recorder(&mut *trie_recorder)
+				.build();
+			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
+		}
+
+		let storage_proof = recorder.into_storage_proof();
+		let memory_db: MemoryDB = storage_proof.into_memory_db();
+
+		// Check that we recorded the required data
+		let trie = TrieDBBuilder::<Layout>::new_unchecked(&memory_db, &root).build();
+		assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
 	}
 }
