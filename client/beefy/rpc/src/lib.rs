@@ -197,11 +197,8 @@ mod tests {
 	use beefy_gadget::notification::{BeefySignedCommitment, BeefySignedCommitmentSender};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
-	use sp_runtime::{
-		generic::Digest,
-		traits::{BlakeTwo256, Hash},
-	};
-	use substrate_test_runtime_client::runtime::{Block, Header};
+	use sp_runtime::traits::{BlakeTwo256, Hash};
+	use substrate_test_runtime_client::runtime::Block;
 
 	fn setup_io_handler(
 	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
@@ -249,34 +246,30 @@ mod tests {
 		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
 		let (io, _) = setup_io_handler_with_best_block_stream(stream);
 
-		let header = Header {
-			parent_hash: BlakeTwo256::hash(b"1"),
-			number: 2,
-			state_root: BlakeTwo256::hash(b"3"),
-			extrinsics_root: BlakeTwo256::hash(b"4"),
-			digest: Digest { logs: vec![] },
-		};
-		let r: Result<(), ()> = sender.notify(|| Ok(header));
+		let hash = BlakeTwo256::hash(b"42");
+		let r: Result<(), ()> = sender.notify(|| Ok(hash));
 		r.unwrap();
 
-		// Verify RPC `beefy_getFinalizedHead` returns expected header.
+		// Verify RPC `beefy_getFinalizedHead` returns expected hash.
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
 		let expected = "{\
 			\"jsonrpc\":\"2.0\",\
-			\"result\":{\
-				\"digest\":{\"logs\":[]},\
-				\"extrinsicsRoot\":\"0xeb8649214997574e20c464388a172420d25403682bbbb80c496831c8cc1f8f0d\",\
-				\"number\":\"0x2\",\
-				\"parentHash\":\"0x92cdf578c47085a5992256f0dcf97d0b19f1f1c9de4d5fe30c3ace6191b6e5db\",\
-				\"stateRoot\":\"0x581348337b0f3e148620173daaa5f94d00d881705dcbf0aa83efdaba61d2ede1\"\
-			},\
+			\"result\":\"0x2f0039e93a27221fcf657fb877a1d4f60307106113e885096cb44a461cd0afbf\",\
+			\"id\":1\
+		}";
+		let not_ready = "{\
+			\"jsonrpc\":\"2.0\",\
+			\"error\":{\"code\":1,\"message\":\"BEEFY RPC endpoint not ready\"},\
 			\"id\":1\
 		}";
 
 		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
 		while std::time::Instant::now() < deadline {
 			let meta = sc_rpc::Metadata::default();
-			if Some(expected.into()) == io.handle_request_sync(request, meta) {
+			let response = io.handle_request_sync(request, meta);
+			// Retry "not ready" responses.
+			if response != Some(not_ready.into()) {
+				assert_eq!(response, Some(expected.into()));
 				// Success
 				return
 			}
