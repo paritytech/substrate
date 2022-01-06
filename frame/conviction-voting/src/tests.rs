@@ -446,7 +446,6 @@ fn classwise_delegation_works() {
 	});
 }
 
-
 #[test]
 fn redelegation_after_vote_ending_should_keep_lock() {
 	new_test_ext().execute_with(|| {
@@ -464,9 +463,211 @@ fn redelegation_after_vote_ending_should_keep_lock() {
 	});
 }
 
+#[test]
+fn lock_amalgamation_valid_with_multiple_removed_votes() {
+	new_test_ext().execute_with(|| {
+		Polls::set(vec![
+			(0, Ongoing(Tally::default(), 0)),
+			(1, Ongoing(Tally::default(), 0)),
+			(2, Ongoing(Tally::default(), 0)),
+		].into_iter().collect());
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(5, 2)));
+		assert_eq!(Balances::usable_balance(1), 0);
 
+		Polls::set(vec![
+			(0, Completed(1, true)),
+			(1, Completed(1, true)),
+			(2, Completed(1, true)),
+		].into_iter().collect());
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
 
-// TODO: Lock extension/unlocking with different classes active
-// TODO: Lock amalgamation via multiple removed votes
-// TODO: Lock amalgamation via switch to/from delegation
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 2));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		run_to(3);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		run_to(6);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert!(Balances::usable_balance(1) <= 5);
+
+		run_to(7);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn lock_amalgamation_valid_with_multiple_delegations() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 10));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked2x, 5));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+
+		run_to(3);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		run_to(6);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert!(Balances::usable_balance(1) <= 5);
+
+		run_to(7);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn lock_amalgamation_valid_with_move_roundtrip_to_delegation() {
+	new_test_ext().execute_with(|| {
+		Polls::set(vec![(0, Ongoing(Tally::default(), 0))].into_iter().collect());
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
+		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 10));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		Polls::set(vec![(1, Ongoing(Tally::default(), 0))].into_iter().collect());
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(5, 2)));
+		Polls::set(vec![(1, Completed(1, true))].into_iter().collect());
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 1));
+
+		run_to(3);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		run_to(6);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert!(Balances::usable_balance(1) <= 5);
+
+		run_to(7);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn lock_amalgamation_valid_with_move_roundtrip_to_casting() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		Polls::set(vec![(0, Ongoing(Tally::default(), 0))].into_iter().collect());
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(10, 1)));
+		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
+
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked2x, 10));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+
+		run_to(3);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		run_to(6);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert!(Balances::usable_balance(1) <= 5);
+
+		run_to(7);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn lock_aggregation_over_different_classes_with_delegation_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 2, Conviction::Locked2x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 2, Conviction::Locked1x, 10));
+
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 1));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 2));
+
+		run_to(3);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		run_to(6);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		run_to(7);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn lock_aggregation_over_different_classes_with_casting_works() {
+	new_test_ext().execute_with(|| {
+		Polls::set(vec![
+			(0, Ongoing(Tally::default(), 0)),
+			(1, Ongoing(Tally::default(), 1)),
+			(2, Ongoing(Tally::default(), 2)),
+		].into_iter().collect());
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(5, 2)));
+		Polls::set(vec![
+			(0, Completed(1, true)),
+			(1, Completed(1, true)),
+			(2, Completed(1, true)),
+		].into_iter().collect());
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(1), 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(2), 2));
+
+		run_to(3);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		run_to(6);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		run_to(7);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
 // TODO: Errors
