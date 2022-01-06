@@ -349,7 +349,7 @@ impl Config {
 
 		let mut best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
 		if client.usage_info().chain.finalized_state.is_none() {
-			debug!(target: "babe", "No finalized state not available. Reading config from genesis");
+			debug!(target: "babe", "No finalized state is available. Reading config from genesis");
 			best_block_id = BlockId::Hash(client.usage_info().chain.genesis_hash);
 		}
 		let runtime_api = client.runtime_api();
