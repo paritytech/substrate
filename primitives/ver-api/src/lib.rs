@@ -20,5 +20,8 @@ sp_api::decl_runtime_apis! {
 
 		/// Checks if given block will start new session
         fn is_new_session(number: <<Block as BlockT>::Header as HeaderT>::Number) -> bool;
+
+		/// Checks if given block will start new session
+        fn store_seed(seed: sp_core::H256);
 	}
 }

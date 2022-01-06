@@ -10890,6 +10890,7 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-blockchain",
+ "sp-core 4.0.0-dev",
  "sp-runtime 4.0.0-dev",
 ]
 

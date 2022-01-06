@@ -1370,8 +1370,13 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	pub fn set_block_seed(number: &T::BlockNumber, seed: &sp_core::H256){
-		<BlockSeed<T>>::insert(*number, seed);
+	pub fn set_block_seed(seed: &sp_core::H256){
+        let number = <Number<T>>::get();
+        sp_runtime::print("SET SEED");
+        for b in seed.as_bytes(){
+            sp_runtime::print(b);
+        }
+		<BlockSeed<T>>::insert(number, seed);
     }
 
 	/// Start the execution of a particular block.
