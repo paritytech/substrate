@@ -1041,12 +1041,9 @@ pub mod pallet {
 						}
 					})
 				})
-				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
-
-			// TODO: might be able to simplify it with
-			// https://github.com/paritytech/substrate/pull/10590, directly collect into a bounded
-			// vec after altering the vec one last time.
-			let targets = targets.try_into().expect("bound checked in previous line; qed");
+				.collect::<result::Result<Vec<T::AccountId>, _>>()?
+				.try_into()
+				.expect("bound checked in previous line; qed");
 
 			let nominations = Nominations {
 				targets,
