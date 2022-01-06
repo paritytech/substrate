@@ -4669,7 +4669,7 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::get(60).is_some());
 			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 1);
 
-			// now one of them can revive themselves by re-nominating to a proper value
+			// now one of them can revive themselves by re-nominating to a proper value.
 			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
 			assert_eq!(
 				Nominators::<Test>::iter()
@@ -4677,6 +4677,13 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 1), (60, 1)]
 			);
+
+			// or they can be chilled by any account.
+			assert!(Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+			assert_ok!(Staking::chill_other(Origin::signed(70), 100));
+			assert!(!Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
 		})
 }
 

@@ -439,6 +439,7 @@ pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 parameter_types! {
 	pub MaxNominations: u32 = <TestNposSolution as NposSolution>::LIMIT as u32
 }
+
 #[derive(Default)]
 pub struct ExtBuilder {}
 

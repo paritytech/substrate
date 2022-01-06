@@ -268,17 +268,21 @@ impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountI
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type MaxVotesPerVoter = ();
+
 	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}
+
 	fn voters(
 		_maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
 		Ok(Default::default())
 	}
+
 	fn desired_targets() -> data_provider::Result<u32> {
 		Ok(Default::default())
 	}
+
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 		now
 	}
