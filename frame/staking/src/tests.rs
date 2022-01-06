@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2262,7 +2262,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().find(|(stash, _)| *stash == 11).is_some());
+		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
 
 		// but we are still forcing a new era
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
@@ -2279,7 +2279,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().find(|(stash, _)| *stash == 11).is_some());
+		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
 
 		// but it's disabled
 		assert!(is_disabled(10));
@@ -4003,8 +4003,7 @@ mod election_data_provider {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
 				.unwrap()
 				.into_iter()
-				.find(|(w, _, t)| { v == *w && t[0] == *w })
-				.is_some()))
+				.any(|(w, _, t)| { v == w && t[0] == w })))
 		})
 	}
 

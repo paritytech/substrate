@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1224,7 +1224,7 @@ where
 				.or_else(|| Some((target_header.hash(), *target_header.number())))
 		},
 		Err(e) => {
-			debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
+			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
 			None
 		},
 	};

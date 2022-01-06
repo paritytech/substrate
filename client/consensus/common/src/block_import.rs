@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -287,9 +287,9 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 
-		v.downcast::<T>().or_else(|v| {
+		v.downcast::<T>().map_err(|v| {
 			self.intermediates.insert(k, v);
-			Err(Error::InvalidIntermediate)
+			Error::InvalidIntermediate
 		})
 	}
 

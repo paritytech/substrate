@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 thiserror = "1.0.30"
 futures = "0.3.16"
-intervalier = "0.4.0"
+futures-timer = "3.0.2"
 log = "0.4.8"
 parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
 parking_lot = "0.11.2"
@@ -48,6 +48,3 @@ criterion = "0.3"
 [[bench]]
 name = "basics"
 harness = false
-
-[features]
-test-helpers = []

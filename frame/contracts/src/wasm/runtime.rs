@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1712,7 +1712,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> u32 => {
 		use crate::chain_extension::{ChainExtension, Environment, RetVal};
-		if <E::T as Config>::ChainExtension::enabled() == false {
+		if !<E::T as Config>::ChainExtension::enabled() {
 			Err(Error::<E::T>::NoChainExtension)?;
 		}
 		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
