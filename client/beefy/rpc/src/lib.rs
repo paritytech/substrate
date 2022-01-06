@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use sp_runtime::traits::Block as BlockT;
 
-use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
+use futures::{task::SpawnError, FutureExt, SinkExt, StreamExt, TryFutureExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
@@ -36,24 +36,30 @@ mod notification;
 
 type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, jsonrpc_core::Error>>;
 
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, derive_more::From, thiserror::Error)]
 /// Top-level error type for the RPC handler
 pub enum Error {
 	/// The BEEFY RPC endpoint is not ready.
 	#[display(fmt = "BEEFY RPC endpoint not ready")]
 	EndpointNotReady,
+	/// The BEEFY RPC background task failed to spawn.
+	#[display(fmt = "BEEFY RPC background task failed to spawn")]
+	RpcTaskFailure(SpawnError),
 }
 
 /// The error codes returned by jsonrpc.
 pub enum ErrorCode {
 	/// Returned when BEEFY RPC endpoint is not ready.
 	NotReady = 1,
+	/// Returned on BEEFY RPC background task failure.
+	TaskFailure = 2,
 }
 
 impl From<Error> for ErrorCode {
 	fn from(error: Error) -> Self {
 		match error {
 			Error::EndpointNotReady => ErrorCode::NotReady,
+			Error::RpcTaskFailure(_) => ErrorCode::TaskFailure,
 		}
 	}
 }
@@ -122,7 +128,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 		best_block_stream: BeefyBestBlockStream<Block>,
 		executor: E,
-	) -> Self
+	) -> Result<Self, Error>
 	where
 		E: futures::task::Spawn + Send + Sync + 'static,
 	{
@@ -137,12 +143,15 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 			}
 		});
 
-		if executor.spawn_obj(futures::task::FutureObj::new(Box::pin(future))).is_err() {
-			log::error!("Failed to spawn BEEFY RPC background task");
-		}
+		executor
+			.spawn_obj(futures::task::FutureObj::new(Box::pin(future)))
+			.map_err(|e| {
+				log::error!("Failed to spawn BEEFY RPC background task; err: {}", e);
+				e
+			})?;
 
 		let manager = SubscriptionManager::new(Arc::new(executor));
-		Self { signed_commitment_stream, beefy_best_block, manager }
+		Ok(Self { signed_commitment_stream, beefy_best_block, manager })
 	}
 }
 
@@ -216,7 +225,8 @@ mod tests {
 			commitment_stream,
 			best_block_stream,
 			sc_rpc::testing::TaskExecutor,
-		);
+		)
+		.unwrap();
 
 		let mut io = jsonrpc_core::MetaIoHandler::default();
 		io.extend_with(BeefyApi::to_delegate(handler));
