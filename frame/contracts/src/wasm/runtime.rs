@@ -648,11 +648,15 @@ where
 		}
 	}
 
-	/// Extracts the size of the overwritten value or `u32::MAX`.
+	/// Extracts the size of the overwritten value or `u32::MAX` if there
+	/// was no value in storage.
+	///
+	/// # Note
+	///
+	/// We cannot use `0` as sentinel value because there could be a zero sized
+	/// storage entry which is different from a non existing one.
 	fn overwritten_len(outcome: WriteOutcome) -> u32 {
 		match outcome {
-			// We cannot use `0` as sentinel value because there could be a zero sized
-			// storage entry which is different from a non existing one.
 			WriteOutcome::New => u32::MAX,
 			WriteOutcome::Overwritten(len) => len,
 			WriteOutcome::Taken(value) => value.len() as u32,
