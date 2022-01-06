@@ -184,7 +184,7 @@ impl pallet_session::Config for Test {
 }
 
 impl pallet_session::historical::Config for Test {
-	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentification = crate::Exposure<Test>;
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 impl pallet_authorship::Config for Test {
@@ -251,8 +251,8 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 	type TargetsPageSize = ();
 	type VoterPageSize = ();
-	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 }
 
 /// A mock election provider that only does a simple on-chain seq-phragmen, but can return the
@@ -267,6 +267,7 @@ parameter_types! {
 	pub static PaginatedElection: Option<Vec<BoundedSupportsOf<MockElectionProvider>>> = None;
 	// if set, we paginate the supports by nominators, else by validators.
 	pub static PaginateNominators: bool = false;
+	pub static ElectionProviderLookahead: BlockNumber = 0;
 }
 
 impl MockElectionProvider {
@@ -295,7 +296,6 @@ impl MockElectionProvider {
 			})
 			.collect::<Vec<_>>()
 			.try_into()
-			// TODO: If boundedVec has an unlimited bound, we can simply do into().
 			.expect("input was originally of the same bounded type; size has not changed; qed");
 		BoundedSupportsOf::<Self>::from(inner)
 	}
@@ -371,8 +371,9 @@ impl ElectionProvider for MockElectionProvider {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type DataProvider = Staking;
-	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+	// TODO: We need a test where the election provider is not respecting this.
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 	type Error = &'static str;
 	type Pages = ElectionPages;
 
@@ -405,6 +406,7 @@ impl crate::pallet::pallet::Config for Test {
 	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type ElectionProvider = MockElectionProvider;
+	type ElectionProviderLookahead = ElectionProviderLookahead;
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Test>;
 	type WeightInfo = ();
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
@@ -651,7 +653,7 @@ impl ExtBuilder {
 		let mut ext = sp_io::TestExternalities::from(storage);
 
 		if self.initialize_first_session {
-			// We consider all test to start after timestamp is initialized This must be ensured by
+			// We consider all test to start after timestamp is initialized. This must be ensured by
 			// having `timestamp::on_initialize` called before `staking::on_initialize`. Also, if
 			// session length is 1, then it is already triggered.
 			ext.execute_with(|| {
@@ -1005,7 +1007,7 @@ pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 }
 
 pub(crate) fn assert_eq_exposure(
-	expo: Exposure<AccountId, Balance>,
+	expo: Exposure<Test>,
 	total: Balance,
 	own: Balance,
 	individual: Vec<IndividualExposure<AccountId, Balance>>,

@@ -43,8 +43,8 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, Nominations, PagesOf, PositiveImbalanceOf,
-	RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
+	ExposureOf, Forcing, IndividualExposure, MaxIndividualExposuresOf, Nominations, PagesOf,
+	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -270,7 +270,7 @@ impl<T: Config> Pallet<T> {
 
 			// New era.
 			let maybe_new_era_validators =
-				Self::try_trigger_new_era(session_index, is_genesis, current_era);
+				Self::try_trigger_new_era(current_era.saturating_add(1), session_index, is_genesis);
 			if maybe_new_era_validators.is_some() &&
 				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
@@ -279,7 +279,7 @@ impl<T: Config> Pallet<T> {
 
 			maybe_new_era_validators
 		} else {
-			Self::try_trigger_new_era(session_index, is_genesis, 0)
+			Self::try_trigger_new_era(0, session_index, is_genesis)
 		}
 	}
 
@@ -415,17 +415,30 @@ impl<T: Config> Pallet<T> {
 	///
 	/// In case a new era is planned, the new validator set is returned.
 	pub(crate) fn try_trigger_new_era(
+		maybe_starting_era: EraIndex,
 		start_session_index: SessionIndex,
 		is_genesis: bool,
-		maybe_starting_era: EraIndex,
 	) -> Option<Vec<T::AccountId>> {
 		log!(
 			info,
-			"trying to trigger a new era, start session index of the current era {}, genesis? {}.",
+			"trying to trigger a new era {}, start session index of the current era {}, genesis? {}.",
+			maybe_starting_era,
 			start_session_index,
 			is_genesis
 		);
 		let stashes = if is_genesis {
+			// if ErasStakers has already been written to for era 0, then we don't need to to do
+			// anything.
+			let maybe_already_elected_genesis_validators =
+				ErasStakers::<T>::iter_prefix(0).map(|(val, _expo)| val).collect::<Vec<_>>();
+			if !maybe_already_elected_genesis_validators.is_empty() {
+				log!(
+					debug,
+					"genesis stakers already elected, skipping call to GenesisElectionProvider"
+				);
+				return Some(maybe_already_elected_genesis_validators)
+			}
+
 			T::GenesisElectionProvider::elect(0)
 				.map(|supports| {
 					// do everything that we do for the multi-block stuff here, in one go. It is all
@@ -445,9 +458,8 @@ impl<T: Config> Pallet<T> {
 			log!(
 				warn,
 				"chain does not have enough staking candidates to operate for era {:?} ({} \
-					elected, minimum {}). This will not trigger a potentially very expensive \
-					cleanup operation. THIS SHOULD NOT HAPPEN FREQUENTLY. The election provider \
-					must make sure that it is returning enough",
+				elected, minimum {}). This will not potentially trigger a very expensive \
+				cleanup operation. THIS SHOULD NOT HAPPEN FREQUENTLY.",
 				CurrentEra::<T>::get(),
 				stashes.len(),
 				Self::minimum_validator_count(),
@@ -471,6 +483,7 @@ impl<T: Config> Pallet<T> {
 			<ErasStakersClipped<T>>::remove_prefix(maybe_starting_era, None);
 			<ErasValidatorPrefs<T>>::remove_prefix(maybe_starting_era, None);
 			<ErasTotalStake<T>>::remove(maybe_starting_era);
+			log!(warn, "removed all staker data correlated with era {}", maybe_starting_era);
 
 			Self::deposit_event(Event::StakingElectionFailed);
 			return None
@@ -520,7 +533,8 @@ impl<T: Config> Pallet<T> {
 				let _leftover = proceed_page(supports, next_page);
 				log!(
 					info,
-					"continuing exposure collection, next page {}, leftover? {}",
+					"[task] continuing exposure collection for era {}, next page {}, leftover? {}",
+					new_planned_era,
 					next_page,
 					_leftover
 				);
@@ -534,13 +548,13 @@ impl<T: Config> Pallet<T> {
 					// calling `elect`. Note that we don't do `<=` here for simplicity.
 
 					let first_page = <T::ElectionProvider as ElectionProvider>::msp();
-
 					let supports = T::ElectionProvider::elect(first_page)
 						.map_err(|_| "first elect page failed")?;
 					let _leftover = proceed_page(supports, first_page);
 					log!(
 						info,
-						"initiating collection exposure, first page = {}, leftover? {}",
+						"[task] initiating collecting exposure for era {}, first page = {}, leftover? {}",
+						new_planned_era,
 						first_page,
 						_leftover
 					);
@@ -555,8 +569,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Write the `exposures` for era `new_planned_era`.
+	///
+	/// These exposures are potentially partial, the could only correspond to one page of the
+	/// election result.
 	pub(crate) fn store_intermediary_staker_info(
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: Vec<(T::AccountId, Exposure<T>)>,
 		new_planned_era: EraIndex,
 	) {
 		log!(debug, "storing intermediary staker values for era {}", new_planned_era);
@@ -573,10 +590,14 @@ impl<T: Config> Pallet<T> {
 				// enough winners, then we are kinda fucked. I think a reasonable thing to do is to,
 				// for now assume that this will never happen since the election provider guarantees
 				// to select enough winners. If it happens to do, then we stall the election, or
-				// something.
+				// something else.
 				debug_assert!(current_exposure.own.is_zero() || exposure.own.is_zero());
 				current_exposure.own = current_exposure.own.saturating_add(exposure.own);
-				current_exposure.others.extend(exposure.others.into_iter());
+				let _ =
+					current_exposure.others.try_extend(exposure.others.into_iter()).map_err(|_| {
+						debug_assert!(false, "defensive error occurred.");
+						log!(error, "defensive error occurred.")
+					});
 			})
 		}
 
@@ -634,16 +655,17 @@ impl<T: Config> Pallet<T> {
 	// as well.
 	fn collect_exposures(
 		supports: BoundedSupportsOf<T::ElectionProvider>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+	) -> Vec<(T::AccountId, Exposure<T>)> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
-
-		let _ = supports.clone().into_iter().collect::<Vec<_>>();
 
 		supports
 			.into_iter()
 			.map(|(validator, support)| {
-				let mut others = Vec::with_capacity(support.voters.len());
+				let mut others =
+					BoundedVec::<_, MaxIndividualExposuresOf<T>>::with_bounded_capacity(
+						support.voters.len(),
+					);
 				let mut own: BalanceOf<T> = Zero::zero();
 				let mut total: BalanceOf<T> = Zero::zero();
 				support
@@ -655,7 +677,18 @@ impl<T: Config> Pallet<T> {
 							debug_assert!(own.is_zero(), "own can only be set once");
 							own = own.saturating_add(stake);
 						} else {
-							others.push(IndividualExposure { who: nominator, value: stake });
+							// defensive: ElectionProvider must guarantee that the aggregate number
+							// of backers per validator does not exceed
+							// ElectionProvider::MaxBackersPerWinner, which is the bound used in
+							// `Exposure.others`. If this assumption is not held, this is a bug in
+							// the election provider, not something that we can and should deal with
+							// here. Here, we simply silently drop that winner.
+							let _outcome = others
+								.try_push(IndividualExposure { who: nominator, value: stake })
+								.map_err(|_| {
+									debug_assert!(false, "defensive error occurred.");
+									log!(error, "defensive error occurred.");
+								});
 						}
 						total = total.saturating_add(stake);
 					});
@@ -663,7 +696,7 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.collect::<Vec<(T::AccountId, Exposure<_>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -750,11 +783,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	pub fn add_era_stakers(
-		current_era: EraIndex,
-		controller: T::AccountId,
-		exposure: Exposure<T::AccountId, BalanceOf<T>>,
-	) {
+	pub fn add_era_stakers(current_era: EraIndex, controller: T::AccountId, exposure: Exposure<T>) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
 	}
 
@@ -782,18 +811,7 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					// defensive_only: targets length should always be less than the bound, unless
-					// if we change T::MaxNominations.
-					// TODO: maybe don't skip nominators here silently.
-					// TODO: test: reduce maxNominations, observe that invalid voters are skipped.
-					// Same goes for self-votes
-					if let Ok(bounded) = targets.try_into() {
-						round_voters.push((
-							nominator.clone(),
-							Self::weight_of(&nominator),
-							bounded,
-						));
-					}
+					round_voters.push((nominator.clone(), Self::weight_of(&nominator), targets));
 				}
 			} else {
 				log!(error, "invalid item in `SortedListProvider`: {:?}", nominator)
@@ -818,6 +836,9 @@ impl<T: Config> Pallet<T> {
 	/// are included in no particular order, then remainder is taken from the nominators, as
 	/// returned by [`Config::SortedListProvider`].
 	///
+	/// This implies that if `maybe_max_len` is less than the number of validators, a random subset
+	/// of them is returned, as they are stored in no particular order.
+	///
 	/// This will use nominators, and all the validators will inject a self vote.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
@@ -834,9 +855,6 @@ impl<T: Config> Pallet<T> {
 		let max_allowed_len = {
 			let nominator_count = Nominators::<T>::count() as usize;
 			let validator_count = Validators::<T>::count() as usize;
-
-			// TODO: I don't want to deal with this case for now.
-			assert!(maybe_max_len.map_or(true, |m| validator_count < m));
 
 			let all_voter_count = validator_count.saturating_add(nominator_count);
 			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
@@ -907,7 +925,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// all_voters should have never re-allocated.
-		debug_assert_eq!(all_voters.capacity(), all_voters.len());
+		debug_assert!(all_voters.capacity() >= all_voters.len());
 
 		Self::register_weight(T::WeightInfo::get_npos_voters(
 			validators_taken,
@@ -1103,6 +1121,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		now.saturating_add(
 			until_this_session_end.saturating_add(sessions_left.saturating_mul(session_length)),
 		)
+		.saturating_sub(T::ElectionProviderLookahead::get())
 		.saturating_sub(PagesOf::<T>::get().into())
 	}
 
@@ -1236,12 +1255,8 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>
-	for Pallet<T>
-{
-	fn new_session(
-		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T>> for Pallet<T> {
+	fn new_session(new_index: SessionIndex) -> Option<Vec<(T::AccountId, Exposure<T>)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
@@ -1256,9 +1271,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 				.collect()
 		})
 	}
-	fn new_session_genesis(
-		new_index: SessionIndex,
-	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<(T::AccountId, Exposure<T>)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(
 			|validators| {
 				let current_era = Self::current_era()
@@ -1311,7 +1324,7 @@ impl<T: Config>
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+		FullIdentification = Exposure<T>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,

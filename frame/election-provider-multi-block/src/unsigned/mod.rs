@@ -341,7 +341,7 @@ mod validate_unsigned {
 						(40, Support { total: 10, voters: vec![(3, 5)] }),
 						(30, Support { total: 10, voters: vec![(3, 5)] }),
 					]],
-					1,
+					0,
 				);
 				let sufficient_improvement = 55 * 115 / 100;
 				paged.score = [sufficient_improvement, 0, 0];
@@ -417,9 +417,9 @@ mod validate_unsigned {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
 			roll_to_unsigned_open();
 
-			let mut paged = raw_paged_from_supports(
+			let paged = raw_paged_from_supports(
 				vec![vec![(40, Support { total: 10, voters: vec![(3, 10)] })]],
-				1,
+				0,
 			);
 
 			let call = super::Call::submit_unsigned {

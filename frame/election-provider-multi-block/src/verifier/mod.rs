@@ -70,12 +70,13 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 pub trait Verifier {
 	type Solution;
 	type AccountId;
-	type MaxBackersPerSupport: frame_support::traits::Get<u32>;
+
+	type MaxBackersPerWinner: frame_support::traits::Get<u32>;
 	// NOTE: This one is a tricky, we can't know this in advance. This is determined by the
 	// validator count of staking. We should not set this to be too high, since it would mean that
 	// all of our worse cases are actually worse, but ideally it should follow
 	// staking::validator_count closely.
-	type MaxSupportsPerPage: frame_support::traits::Get<u32>;
+	type MaxWinnersPerPage: frame_support::traits::Get<u32>;
 
 	/// This is a page of the solution that we want to verify next, store it.
 	///
@@ -145,8 +146,8 @@ pub trait Verifier {
 impl<T: Config> Verifier for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Solution = SolutionOf<T>;
-	type MaxBackersPerSupport = T::MaxBackersPerSupport;
-	type MaxSupportsPerPage = T::MaxSupportsPerPage;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
 	fn set_unverified_solution_page(
 		page_index: PageIndex,

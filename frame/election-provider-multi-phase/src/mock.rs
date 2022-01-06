@@ -284,8 +284,8 @@ impl onchain::Config for Runtime {
 	type DataProvider = StakingMock;
 	type TargetsPageSize = ();
 	type VoterPageSize = ();
-	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 }
 
 pub struct MockFallback;
@@ -295,8 +295,8 @@ impl ElectionProvider for MockFallback {
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 	type Pages = ();
-	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 
 	fn elect(page: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		assert_eq!(page, 0);

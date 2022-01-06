@@ -318,8 +318,8 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
 	type Pages = ConstU32<0>;
-	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 
 	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
@@ -680,8 +680,8 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
-			MaxBackersPerSupport = ConstU32<{ u32::MAX }>,
-			MaxSupportsPerPage = ConstU32<{ u32::MAX }>,
+			MaxBackersPerWinner = ConstU32<{ u32::MAX }>,
+			MaxWinnersPerPage = ConstU32<{ u32::MAX }>,
 		>;
 
 		/// OCW election solution miner algorithm implementation.
@@ -1517,8 +1517,8 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 
 	// This election provider gives no guarantee in terms of these two parameters, thus not suitable
 	// for a parachain either.
-	type MaxBackersPerSupport = ConstU32<{ u32::MAX }>;
-	type MaxSupportsPerPage = ConstU32<{ u32::MAX }>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 
 	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {

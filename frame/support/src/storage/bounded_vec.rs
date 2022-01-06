@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -107,6 +107,16 @@ impl<T, S> BoundedVec<T, S> {
 		self.0
 	}
 
+	/// Exactly the same semantics as [`Vec::sort_by`].
+	///
+	/// This is safe since sorting cannot change the number of elements in the vector.
+	pub fn sort_by<F>(&mut self, compare: F)
+	where
+		F: FnMut(&T, &T) -> sp_std::cmp::Ordering,
+	{
+		self.0.sort_by(compare)
+	}
+
 	/// Exactly the same semantics as [`Vec::remove`].
 	///
 	/// # Panics
@@ -128,6 +138,13 @@ impl<T, S> BoundedVec<T, S> {
 	/// Exactly the same semantics as [`Vec::retain`].
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
+	}
+
+	/// Exactly the same semantics as [`Vec::truncate`].
+	///
+	/// This is safe because `truncate` can never increase the length of the internal vector.
+	pub fn truncate(&mut self, len: usize) {
+		self.0.truncate(len)
 	}
 
 	/// Exactly the same semantics as [`slice::get_mut`].
@@ -164,12 +181,28 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		S::get() as usize
 	}
 
+	/// Same as `Vec::resize`, but if `size` is more than [`Self::bound`], then [`Self::bound`] is
+	/// used.
 	pub fn bounded_resize(&mut self, size: usize, value: T)
 	where
 		T: Clone,
 	{
 		let size = size.min(Self::bound());
 		self.0.resize(size, value);
+	}
+
+	/// Exactly the same semantics as [`Vec::extend`], but returns an error and does nothing if the
+	/// length of the outcome is larger than the bound.
+	pub fn try_extend<I: IntoIterator<Item = T> + ExactSizeIterator>(
+		&mut self,
+		with: I,
+	) -> Result<(), ()> {
+		if with.len().saturating_add(self.len()) < Self::bound() {
+			self.0.extend(with);
+			Ok(())
+		} else {
+			Err(())
+		}
 	}
 
 	/// Consumes self and mutates self via the given `mutate` function.
@@ -370,15 +403,12 @@ where
 pub trait TryCollect<T> {
 	type Error: sp_std::fmt::Debug;
 
+	/// Try and collect `self` into a bounded vec of the given `Bound`.
+	///
+	/// The length of self must be known in advance (potentially by being an `ExactSizedIterator`),
+	/// and if greater than `Bound`, then `Err` is returned.
 	fn try_collect<Bound: Get<u32>>(self) -> Result<BoundedVec<T, Bound>, Self::Error>;
 }
-
-// much nicer would be to do something like this: mark all iterator types that do not increase
-// the length of the iterator (almost all of them?), then ideally you would be able to collect
-// into a bounded vec directly, as long as the entire chain of iterators is made up of iterators
-// that have this market.
-// pub trait NonIncreasingIterator {}
-// impl<I, F> NonIncreasingIterator for sp_std::iter::Map<I, F> {}
 
 impl<I, T> TryCollect<T> for I
 where
@@ -386,6 +416,7 @@ where
 	I: Iterator<Item = T>,
 {
 	type Error = &'static str;
+
 	fn try_collect<Bound: Get<u32>>(self) -> Result<BoundedVec<T, Bound>, Self::Error> {
 		if self.len() > Bound::get() as usize {
 			Err("iterator length too big")
@@ -511,12 +542,29 @@ pub mod test {
 		assert_eq!(b2, vec![2, 3, 4, 5]);
 
 		// can also be collected into a collection of length 4.
-		let b3 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<4>>().unwrap();
-		assert_eq!(b3, vec![2, 3, 4, 5]);
+		let b2 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<4>>().unwrap();
+		assert_eq!(b2, vec![2, 3, 4, 5]);
 
-		// but not length 3
-		let b4 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<3>>();
-		assert!(b4.is_err());
+		// can be mutated further into iterators that are `ExactSizedIterator`.
+		let b2 = b1.iter().map(|x| x + 1).rev().try_collect::<ConstU32<4>>().unwrap();
+		assert_eq!(b2, vec![5, 4, 3, 2]);
+
+		let b2 = b1.iter().map(|x| x + 1).rev().skip(2).try_collect::<ConstU32<4>>().unwrap();
+		assert_eq!(b2, vec![3, 2]);
+		let b2 = b1.iter().map(|x| x + 1).rev().skip(2).try_collect::<ConstU32<2>>().unwrap();
+		assert_eq!(b2, vec![3, 2]);
+
+		let b2 = b1.iter().map(|x| x + 1).rev().take(2).try_collect::<ConstU32<4>>().unwrap();
+		assert_eq!(b2, vec![5, 4]);
+		let b2 = b1.iter().map(|x| x + 1).rev().take(2).try_collect::<ConstU32<2>>().unwrap();
+		assert_eq!(b2, vec![5, 4]);
+
+		// but these worn't work
+		let b2 = b1.iter().map(|x| x + 1).try_collect::<ConstU32<3>>();
+		assert!(b2.is_err());
+
+		let b2 = b1.iter().map(|x| x + 1).rev().take(2).try_collect::<ConstU32<1>>();
+		assert!(b2.is_err());
 	}
 
 	#[test]

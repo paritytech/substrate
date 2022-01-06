@@ -68,11 +68,11 @@ mod pallet {
 		// TODO: base miner should be tweaked to respect this.
 		// TODO: Type info and shit should not be needed, probably because we use this in dispatch
 		// type??
-		type MaxBackersPerSupport: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
+		type MaxBackersPerWinner: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
 
 		/// Maximum number of supports (aka. winners/validators/targets) that can be represented in
 		/// a page of results.
-		type MaxSupportsPerPage: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
+		type MaxWinnersPerPage: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
 	}
 
 	#[pallet::error]
@@ -269,7 +269,7 @@ mod pallet {
 				entry.0 = entry.0.saturating_add(backing);
 				entry.1 = entry.1.saturating_add(count);
 
-				if entry.1 > T::MaxBackersPerSupport::get() {
+				if entry.1 > T::MaxBackersPerWinner::get() {
 					return Err(FeasibilityError::TooManyBackings)
 				}
 			}
@@ -345,14 +345,15 @@ mod pallet {
 		///
 		/// This is called after *a page* has been validated, but the entire solution is not yet
 		/// known to be valid. At this stage, we write to the invalid variant. Once all pages are
-		/// verified, a call to [`finalize_correct`] will seal the correct pages.
+		/// verified, a call to [`finalize_correct`] will seal the correct pages and flip the
+		/// invalid/valid variants.
 		pub(crate) fn set_invalid_page(page: PageIndex, supports: SupportsOf<Pallet<T>>) {
-			let backings: BoundedVec<_, T::MaxSupportsPerPage> = supports
+			use frame_support::TryCollect;
+			let backings = supports
 				.iter()
 				.map(|(x, s)| (x.clone(), (s.total, s.voters.len() as u32)))
-				.collect::<Vec<_>>()
-				.try_into() // TODO: would be good if we could directly collect into a BoundedVec
-				.expect("TODO");
+				.try_collect::<T::MaxWinnersPerPage>()
+				.expect("`SupportsOf` is bounded by <Pallet<T> as Verifier>::MaxWinnersPerPage, which is assured to be the same as `T::MaxWinnersPerPage` in an integrity test");
 			QueuedSolutionBackings::<T>::insert(page, backings);
 
 			match Self::invalid() {
@@ -462,7 +463,7 @@ mod pallet {
 		#[cfg(test)]
 		pub(crate) fn get_backing_page(
 			page: PageIndex,
-		) -> Option<BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxSupportsPerPage>> {
+		) -> Option<BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxWinnersPerPage>> {
 			QueuedSolutionBackings::<T>::get(page)
 		}
 
@@ -470,7 +471,7 @@ mod pallet {
 		pub(crate) fn backing_iter() -> impl Iterator<
 			Item = (
 				PageIndex,
-				BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxSupportsPerPage>,
+				BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxWinnersPerPage>,
 			),
 		> {
 			QueuedSolutionBackings::<T>::iter()
@@ -506,7 +507,7 @@ mod pallet {
 	/// The `(amount, count)` of backings, divided per page.
 	///
 	/// This is stored because in the last block of verification we need them to compute the score,
-	/// and check `MaxBackersPerSupport`.
+	/// and check `MaxBackersPerWinner`.
 	///
 	/// This can only ever live for the invalid variant of the solution. Once it is valid, we don't
 	/// need this information anymore; the score is already computed once in
@@ -516,7 +517,7 @@ mod pallet {
 		_,
 		Twox64Concat,
 		PageIndex,
-		BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxSupportsPerPage>,
+		BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxWinnersPerPage>,
 	>;
 
 	/// The score of the valid variant of [`QueuedSolution`].
@@ -579,9 +580,9 @@ mod pallet {
 				.into_iter()
 				.map(|s| s.try_into_bounded_supports())
 				.collect::<Result<Vec<_>, _>>()
-				.map_err::<DispatchError, _>(|_| "wrong support others".into())?
+				.map_err::<DispatchError, _>(|_| "wrong support others".into())? // TODO: test
 				.try_into()
-				.map_err(|_| <crate::Error<T>>::WrongPageCount)?;
+				.map_err(|_| <crate::Error<T>>::WrongPageCount)?; // TODO: test
 
 			QueuedSolution::<T>::force_set_valid(bounded_supports, claimed_score);
 
@@ -591,6 +592,16 @@ mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+		fn integrity_test() {
+			// ensure that we have funneled some of our type parameters EXACTLY as-is to the
+			// verifier pallet.
+			assert_eq!(T::MaxWinnersPerPage::get(), <Self as Verifier>::MaxWinnersPerPage::get());
+			assert_eq!(
+				T::MaxBackersPerWinner::get(),
+				<Self as Verifier>::MaxBackersPerWinner::get()
+			);
+		}
+
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			if let Some(current_page) = VerifyingSolution::<T>::current_page() {
 				// TODO: We can optimize this: If at some point we rely on the `unwrap_or_default`,
@@ -770,7 +781,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			supports
 				.iter()
-				.all(|(_, s)| (s.voters.len() as u32) <= T::MaxBackersPerSupport::get()),
+				.all(|(_, s)| (s.voters.len() as u32) <= T::MaxBackersPerWinner::get()),
 			FeasibilityError::TooManyBackings
 		);
 
@@ -957,7 +968,7 @@ mod feasibility_check {
 			// valid solution that has only one winner. We can only detect this in the last page.
 			let paged = raw_paged_from_supports(
 				vec![vec![(40, Support { total: 20, voters: vec![(2, 10), (3, 10)] })]],
-				1,
+				0,
 			);
 			load_solution_for_verification(paged);
 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
@@ -1594,6 +1605,7 @@ mod verifier_trait {
 		});
 	}
 
+	#[test]
 	fn rejects_new_verification_if_ongoing() {
 		todo!("if there's already some verification ongoing, then we don't accept new ones");
 		// not sure what to do about `force_set_single_page_valid`

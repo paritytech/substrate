@@ -25,7 +25,7 @@ use crate::{
 	verifier as verifier_pallet,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_election_provider_support::{data_provider, ElectionDataProvider, Support};
+use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
@@ -165,11 +165,11 @@ parameter_types! {
 	// we have 12 voters in the default setting, this should be enough to make sure they are not
 	// trimmed accidentally in any test.
 	#[derive(Encode, Decode, PartialEq, Eq, Debug, scale_info::TypeInfo, MaxEncodedLen)]
-	pub static MaxBackersPerSupport: u32 = 12;
+	pub static MaxBackersPerWinner: u32 = 12;
 	// we have 4 targets in total and we desire `Desired` thereof, no single page can represent more
 	// than the min of these two.
 	#[derive(Encode, Decode, PartialEq, Eq, Debug, scale_info::TypeInfo, MaxEncodedLen)]
-	pub static MaxSupportsPerPage: u32 = (Targets::get().len() as u32).min(DesiredTargets::get());
+	pub static MaxWinnersPerPage: u32 = (Targets::get().len() as u32).min(DesiredTargets::get());
 	pub static Pages: PageIndex = 3;
 }
 
@@ -255,8 +255,8 @@ impl crate::verifier::Config for Runtime {
 	type Event = Event;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type MaxBackersPerSupport = MaxBackersPerSupport;
-	type MaxSupportsPerPage = MaxSupportsPerPage;
+	type MaxBackersPerWinner = MaxBackersPerWinner;
+	type MaxWinnersPerPage = MaxWinnersPerPage;
 }
 
 pub struct MockUnsignedWeightInfo;
@@ -306,8 +306,8 @@ impl onchain::Config for Runtime {
 	type DataProvider = MockStaking;
 	type TargetsPageSize = ();
 	type VoterPageSize = ();
-	type MaxBackersPerSupport = MaxBackersPerSupport;
-	type MaxSupportsPerPage = MaxSupportsPerPage;
+	type MaxBackersPerWinner = MaxBackersPerWinner;
+	type MaxWinnersPerPage = MaxWinnersPerPage;
 }
 
 pub struct MockFallback;
@@ -317,8 +317,8 @@ impl ElectionProvider for MockFallback {
 	type Error = &'static str;
 	type DataProvider = MockStaking;
 	type Pages = ConstU32<1>;
-	type MaxBackersPerSupport = MaxBackersPerSupport;
-	type MaxSupportsPerPage = MaxSupportsPerPage;
+	type MaxBackersPerWinner = MaxBackersPerWinner;
+	type MaxWinnersPerPage = MaxWinnersPerPage;
 
 	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChianFallback::get() {
@@ -443,7 +443,7 @@ pub struct ExtBuilder {}
 
 impl ExtBuilder {
 	pub(crate) fn max_backing_per_target(self, c: u32) -> Self {
-		<MaxBackersPerSupport>::set(c);
+		<MaxBackersPerWinner>::set(c);
 		self
 	}
 	pub(crate) fn miner_tx_priority(self, p: u64) -> Self {
@@ -766,7 +766,7 @@ pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 		}]
 		.try_into()
 		.unwrap(),
-		round: 1,
+		round: 0,
 		score: [
 			10,  // lowest staked
 			20,  // total staked

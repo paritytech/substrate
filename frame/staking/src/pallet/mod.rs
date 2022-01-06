@@ -86,6 +86,14 @@ pub mod pallet {
 			DataProvider = Pallet<Self>,
 		>;
 
+		/// The lookahead of the election provider.
+		///
+		/// If this is set to a non-zero value `x`, then this pallet will try and trick the
+		/// `ElectionProvider` that the election must be done by `x` blocks before the real estimate
+		/// of the next election. This is done via shifting the result of the
+		/// `ElectionDataProvider::predict_next_election` method.
+		type ElectionProviderLookahead: Get<Self::BlockNumber>;
+
 		/// Something that provides the election functionality at genesis.
 		///
 		/// It should have only 1 page, and it should have the same supports bounds as with the
@@ -95,15 +103,11 @@ pub mod pallet {
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
 			Pages = ConstU32<1>,
-			MaxBackersPerSupport = <Self::ElectionProvider as ElectionProvider>::MaxBackersPerSupport,
-			MaxSupportsPerPage = <Self::ElectionProvider as ElectionProvider>::MaxSupportsPerPage
+			MaxBackersPerWinner = <Self::ElectionProvider as ElectionProvider>::MaxBackersPerWinner,
+			MaxWinnersPerPage = <Self::ElectionProvider as ElectionProvider>::MaxWinnersPerPage,
 		>;
 
 		/// Maximum number of nominations per nominator.
-		// TODO: we need a LOT of docs and tests about wtf do to if we ever reduce this. Say all
-		// voters in storage have 16 nominations, and now we want to set it to 8. We should ideally
-		// not need any cleanup, and just skip these. Nonetheless, I am not sure how the storage
-		// will react. Need to look into the Decode impl of BoundedVec.
 		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
@@ -297,7 +301,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>>,
+		Exposure<T>,
 		ValueQuery,
 	>;
 
@@ -320,7 +324,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Exposure<T::AccountId, BalanceOf<T>>,
+		Exposure<T>,
 		ValueQuery,
 	>;
 
@@ -718,7 +722,8 @@ pub mod pallet {
 		}
 
 		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
-			let next_era = CurrentEra::<T>::get().unwrap_or_default().saturating_add(1);
+			// if first era is set, then the next era is += 1, else next era is 0.
+			let next_era = CurrentEra::<T>::get().map(|e| e.saturating_add(1)).unwrap_or(0);
 
 			// note: we use error just for expressive logging, not much we can do about failures in
 			// `on_initialize`.

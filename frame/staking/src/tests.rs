@@ -151,7 +151,7 @@ fn basic_setup_works() {
 			Exposure {
 				total: 1125,
 				own: 1000,
-				others: vec![IndividualExposure { who: 101, value: 125 }]
+				others: vec![IndividualExposure { who: 101, value: 125 }].try_into().unwrap()
 			},
 		);
 		assert_eq!(
@@ -159,7 +159,7 @@ fn basic_setup_works() {
 			Exposure {
 				total: 1375,
 				own: 1000,
-				others: vec![IndividualExposure { who: 101, value: 375 }]
+				others: vec![IndividualExposure { who: 101, value: 375 }].try_into().unwrap()
 			},
 		);
 
@@ -1156,7 +1156,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000, own: 1000, others: vec![] }
+			Exposure { total: 1000, own: 1000, others: Default::default() }
 		);
 
 		// deposit the extra 100 units
@@ -1175,7 +1175,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Exposure is a snapshot! only updated after the next era update.
 		assert_ne!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: Default::default() }
 		);
 
 		// trigger next era.
@@ -1196,7 +1196,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Exposure is now updated.
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
-			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: Default::default() }
 		);
 
 		// Unbond almost all of the funds in stash.
@@ -1597,7 +1597,11 @@ fn reward_to_stake_works() {
 			let _ = Balances::make_free_balance_be(&20, 1000);
 
 			// Bypass logic and change current exposure
-			ErasStakers::<Test>::insert(0, 21, Exposure { total: 69, own: 69, others: vec![] });
+			ErasStakers::<Test>::insert(
+				0,
+				21,
+				Exposure { total: 69, own: 69, others: Default::default() },
+			);
 			<Ledger<Test>>::insert(
 				&20,
 				StakingLedger {
@@ -2012,7 +2016,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Set staker
 		let _ = Balances::make_free_balance_be(&11, stake);
 
-		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
+		let exposure = Exposure { total: stake, own: stake, others: Default::default() };
 		let reward = EraRewardPoints::<AccountId> {
 			total: 1,
 			individual: vec![(11, 1)].into_iter().collect(),
@@ -2040,7 +2044,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			Exposure {
 				total: stake,
 				own: 1,
-				others: vec![IndividualExposure { who: 2, value: stake - 1 }],
+				others: vec![IndividualExposure { who: 2, value: stake - 1 }].try_into().unwrap(),
 			},
 		);
 
@@ -2213,7 +2217,7 @@ fn slashing_performed_according_exposure() {
 		// Handle an offence with a historical exposure.
 		on_offence_now(
 			&[OffenceDetails {
-				offender: (11, Exposure { total: 500, own: 500, others: vec![] }),
+				offender: (11, Exposure { total: 500, own: 500, others: Default::default() }),
 				reporters: vec![],
 			}],
 			&[Perbill::from_percent(50)],
@@ -3201,7 +3205,7 @@ fn zero_slash_keeps_nominators() {
 }
 
 #[test]
-fn six_session_delay() {
+fn session_manager_interface() {
 	ExtBuilder::default().initialize_first_session(false).build_and_execute(|| {
 		use pallet_session::SessionManager;
 
@@ -3209,6 +3213,7 @@ fn six_session_delay() {
 		let init_session = Session::current_index();
 		let init_active_era = active_era();
 
+		todo!("staking can no longer maintain this test, since it cannot return any stakers in one go, needs rewriting");
 		// pallet-session is delaying session by one, thus the next session to plan is +2.
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
 		assert_eq!(
@@ -4699,7 +4704,7 @@ mod sorted_list_provider {
 
 mod multi_block_election {
 	use super::*;
-	// use crate::mock::*;
+	use frame_election_provider_support::ElectionDataProvider;
 
 	fn assert_stakers_in_era(whos: impl Iterator<Item = AccountId>, exists: bool, era: EraIndex) {
 		for who in whos {
@@ -4741,11 +4746,6 @@ mod multi_block_election {
 				who
 			);
 		}
-	}
-
-	#[test]
-	fn paginate_supports_nominators_works() {
-		todo!();
 	}
 
 	#[test]
@@ -4868,6 +4868,9 @@ mod multi_block_election {
 				assert_stakers_in_era_with_clipped(vec![11, 21, 31, 41].into_iter(), false, 1);
 				assert_eq!(current_era(), 0);
 
+				// we expect election at block 4.
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 4);
+
 				run_to_block(4);
 				assert_eq!(current_era(), 0);
 				// we do the first single page election now, at which point `NextValidators` is
@@ -4922,6 +4925,9 @@ mod multi_block_election {
 				);
 				assert_eq!(current_era(), 0);
 
+				// we expect election at block 3.
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 3);
+
 				run_to_block(3);
 				// we have scraped page 1, and page 0 is next.
 				assert_eq!(<NextElectPage<Test>>::get(), Some(0));
@@ -4930,9 +4936,6 @@ mod multi_block_election {
 				// but exposures for 2 of the validators have been set already.
 				assert_stakers_in_era(vec![31 as AccountId, 41].into_iter(), true, 1);
 				assert_stakers_in_era(vec![11 as AccountId, 21].into_iter(), false, 1);
-
-				// TODO: staking should always have some grace period: pad this entire timeline by a
-				// configurable number of blocks, in case blocks are missed.
 
 				run_to_block(4);
 				// no more pages schedules..
@@ -4974,6 +4977,108 @@ mod multi_block_election {
 	}
 
 	#[test]
+	fn era_progress_double_page_with_lookahead() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.session_per_era(2)
+			.period(5)
+			.election_pages(2)
+			.build_and_execute(|| {
+				ElectionProviderLookahead::set(1);
+
+				// These storage items do not exists.
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// genesis election has worked as expected, that one uses a simpler election
+				// provider.
+				assert_stakers_in_era_with_clipped(
+					vec![11 as AccountId, 21, 31, 41].into_iter(),
+					true,
+					0,
+				);
+				// .. but not 1.
+				assert_stakers_in_era_with_clipped(
+					vec![11 as AccountId, 21, 31, 41].into_iter(),
+					false,
+					1,
+				);
+				assert_eq!(current_era(), 0);
+
+				// we expect the next election at 3 (5 - 2 since we know there are two pages), but
+				// we lie that it is 2.
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 2);
+
+				run_to_block(2);
+				// we have scraped page 1, and page 0 is next.
+				assert_eq!(<NextElectPage<Test>>::get(), Some(0));
+				// not set yet.
+				assert!(<NextValidators<Test>>::get().is_none());
+				// but exposures for 2 of the validators have been set already.
+				assert_stakers_in_era(vec![31 as AccountId, 41].into_iter(), true, 1);
+				assert_stakers_in_era(vec![11 as AccountId, 21].into_iter(), false, 1);
+
+				run_to_block(3);
+				// no more pages schedules..
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// and validators ready for era trigger.
+				assert!(<NextValidators<Test>>::get().is_some());
+				// and the entire exposures are set
+				assert_stakers_in_era_with_clipped(vec![11, 21, 31, 41].into_iter(), true, 1);
+				assert_eq!(current_era(), 0);
+
+				// nothing special happens here, because we had a lookahead
+				run_to_block(4);
+				assert!(<NextElectPage<Test>>::get().is_none());
+				assert!(<NextValidators<Test>>::get().is_some());
+
+				// and finally a new era.
+				run_to_block(5);
+				assert!(<NextElectPage<Test>>::get().is_none());
+				assert!(<NextValidators<Test>>::get().is_none());
+				assert_eq!(current_era(), 1);
+			});
+	}
+
+	#[test]
+	fn era_progress_single_page_with_lookahead_election() {
+		ExtBuilder::default()
+			.set_status(41, StakerStatus::Validator)
+			.validator_count(4)
+			.session_per_era(2)
+			.period(5)
+			.election_pages(1)
+			.build_and_execute(|| {
+				ElectionProviderLookahead::set(1);
+
+				// we expect election at block 4, but we say 3.
+				assert_eq!(Staking::next_election_prediction(System::block_number()), 3);
+
+				run_to_block(3);
+				assert_eq!(current_era(), 0);
+				// validators are ready, but not going to be used anytime soon..
+				assert!(<NextValidators<Test>>::get().is_some());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// .. and era is not yet updated..
+				assert_eq!(current_era(), 0);
+
+				// same deal at block 4, since we had a lookahead
+				run_to_block(4);
+				assert_eq!(current_era(), 0);
+				// validators are ready, but not going to be used anytime soon..
+				assert!(<NextValidators<Test>>::get().is_some());
+				assert!(<NextElectPage<Test>>::get().is_none());
+				// .. and era is not yet updated..
+				assert_eq!(current_era(), 0);
+
+				// ..next block we trigger the new era and ::take `NextValidators`
+				run_to_block(5);
+				assert_eq!(current_era(), 1);
+				assert!(<NextValidators<Test>>::get().is_none());
+			});
+	}
+
+	#[test]
 	fn exposure_merging_works() {
 		ExtBuilder::default()
 			.set_status(41, StakerStatus::Validator)
@@ -5003,6 +5108,8 @@ mod multi_block_election {
 									IndividualExposure { who: 7, value: 251 },
 									IndividualExposure { who: 8, value: 251 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						),
 						(
@@ -5014,6 +5121,8 @@ mod multi_block_election {
 									IndividualExposure { who: 7, value: 279 },
 									IndividualExposure { who: 8, value: 279 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						),
 						(
@@ -5025,6 +5134,8 @@ mod multi_block_election {
 									IndividualExposure { who: 7, value: 248 },
 									IndividualExposure { who: 8, value: 248 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						),
 						(
@@ -5036,6 +5147,8 @@ mod multi_block_election {
 									IndividualExposure { who: 7, value: 222 },
 									IndividualExposure { who: 8, value: 222 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						)
 					]
@@ -5061,6 +5174,8 @@ mod multi_block_election {
 									IndividualExposure { who: 5, value: 251 },
 									IndividualExposure { who: 6, value: 251 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						),
 						(
@@ -5078,6 +5193,8 @@ mod multi_block_election {
 									IndividualExposure { who: 5, value: 279 },
 									IndividualExposure { who: 6, value: 279 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						),
 						(
@@ -5095,6 +5212,8 @@ mod multi_block_election {
 									IndividualExposure { who: 5, value: 248 },
 									IndividualExposure { who: 6, value: 248 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						),
 						(
@@ -5112,6 +5231,8 @@ mod multi_block_election {
 									IndividualExposure { who: 5, value: 222 },
 									IndividualExposure { who: 6, value: 222 }
 								]
+								.try_into()
+								.unwrap()
 							}
 						)
 					]

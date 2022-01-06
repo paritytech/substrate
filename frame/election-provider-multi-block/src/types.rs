@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound};
+use frame_support::{
+	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+};
 use sp_std::{collections::btree_set::BTreeSet, fmt::Debug};
 
 use crate::Verifier;
@@ -29,8 +31,8 @@ use sp_runtime::SaturatedConversion;
 /// The supports that's returned from a given [`Verifier`]. TODO: rename this
 pub type SupportsOf<V> = BoundedSupports<
 	<V as Verifier>::AccountId,
-	<V as Verifier>::MaxSupportsPerPage,
-	<V as Verifier>::MaxBackersPerSupport,
+	<V as Verifier>::MaxWinnersPerPage,
+	<V as Verifier>::MaxBackersPerWinner,
 >;
 
 /// The solution type used by this crate.
@@ -58,6 +60,7 @@ pub type AssignmentOf<T> =
 	EqNoBound,
 	PartialEqNoBound,
 	MaxEncodedLen,
+	DefaultNoBound,
 )]
 #[codec(mel_bound(T: crate::Config))]
 #[scale_info(skip_type_params(T))]
@@ -97,12 +100,6 @@ impl<T> Pagify<T> for Vec<T> {
 
 	fn into_pagify(self, _: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, T)>> {
 		todo!()
-	}
-}
-
-impl<T: crate::Config> Default for PagedRawSolution<T> {
-	fn default() -> Self {
-		Self { round: 1, score: Default::default(), solution_pages: Default::default() }
 	}
 }
 
@@ -264,7 +261,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 mod pagify {
 	use super::Pagify;
 
-	#[cfg(test)]
+	#[test]
 	fn pagify_works() {
 		// is a noop when you have the same length
 		assert_eq!(

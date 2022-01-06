@@ -140,7 +140,7 @@ impl<
 	///
 	/// This always trims the solution to match a few parameters:
 	///
-	/// 1. [`crate::verifier::Config::MaxBackersPerSupport`]
+	/// 1. [`crate::verifier::Config::MaxBackersPerWinner`]
 	/// 2. [`crate::unsigned::Config::MinerMaxLength`]
 	/// 3. [`crate::unsigned::Config::MinerMaxWeight`]
 	pub fn mine_solution(
@@ -295,7 +295,7 @@ impl<
 			})
 			.collect::<Result<Vec<_>, _>>()?
 			.try_into()
-			.expect("TODO");
+			.expect("`paged_assignments` is bound by `T::Pages`; length cannot change in iter chain; qed");
 
 		// now do the weight and length trim.
 		let mut solution_pages_unbounded = solution_pages.into_inner();
@@ -398,7 +398,7 @@ impl<
 	}
 
 	/// Trim the given supports so that the count of backings in none of them exceeds
-	/// [`crate::verifier::Config::MaxBackersPerSupport`].
+	/// [`crate::verifier::Config::MaxBackersPerWinner`].
 	///
 	/// Note that this should only be called on the *global, non-paginated* supports. Calling this
 	/// on a single page of supports is essentially pointless and does not guarantee anything in
@@ -407,7 +407,7 @@ impl<
 	/// Returns the count of supports trimmed.
 	pub fn trim_supports(supports: &mut sp_npos_elections::Supports<T::AccountId>) -> u32 {
 		let limit =
-			<T::Verifier as crate::verifier::Verifier>::MaxBackersPerSupport::get() as usize;
+			<T::Verifier as crate::verifier::Verifier>::MaxBackersPerWinner::get() as usize;
 		let mut count = 0;
 		supports
 			.iter_mut()
@@ -1846,7 +1846,7 @@ mod offchain_worker_miner {
 			// and replace it with something weak.
 			let weak_solution = raw_paged_from_supports(
 				vec![vec![(40, Support { total: 10, voters: vec![(3, 10)] })]],
-				1,
+				0,
 			);
 			let weak_call = crate::unsigned::Call::submit_unsigned {
 				paged_solution: Box::new(weak_solution),

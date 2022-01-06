@@ -137,8 +137,8 @@
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!         type Pages = ();
-//!         type MaxBackersPerSupport = ConstU32<{ u32::MAX} >;
-//!         type MaxSupportsPerPage = ConstU32<{ u32::MAX} >;
+//!         type MaxBackersPerWinner = ConstU32<{ u32::MAX} >;
+//!         type MaxWinnersPerPage = ConstU32<{ u32::MAX} >;
 //!
 //!         fn elect(_page: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 //!             unimplemented!();
@@ -207,8 +207,8 @@ pub trait ElectionDataProvider {
 
 	/// All possible targets for the election, i.e. the candidates.
 	///
-	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v`
-	/// items long.
+	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
+	/// long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
@@ -221,8 +221,8 @@ pub trait ElectionDataProvider {
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
-	/// If `maybe_page_size` is `Some(v)` then the resulting vector MUST NOT be longer than `v`
-	/// items long.
+	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
+	/// long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
@@ -334,12 +334,16 @@ pub trait ElectionProvider {
 		BlockNumber = Self::BlockNumber,
 	>;
 
-	/// Maximum number of backers that a single support may have, in the results returned from this
+	/// Maximum number of backers that a single winner may have, in the results returned from this
 	/// election provider.
-	type MaxBackersPerSupport: Get<u32>;
+	///
+	/// By "backer per winner", this interface means "all backers in all pages" per winner. Thus,
+	/// hypothetically, a user of an election provider should be able to safely aggregate all
+	/// backers of each winner in a bounded vector with this bound.
+	type MaxBackersPerWinner: Get<u32>;
 
-	/// Maximum number of supports that can be returned, per page (i.e. per call to `elect`).
-	type MaxSupportsPerPage: Get<u32>;
+	/// Maximum number of winner that can be returned, per page (i.e. per call to `elect`).
+	type MaxWinnersPerPage: Get<u32>;
 
 	/// The number of pages of support that this election provider can return.
 	///
@@ -381,8 +385,8 @@ impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNu
 	type DataProvider = TestDataProvider<(Self::AccountId, Self::BlockNumber)>;
 	type Pages = frame_support::traits::ConstU32<1>;
 
-	type MaxBackersPerSupport = ();
-	type MaxSupportsPerPage = ();
+	type MaxBackersPerWinner = ();
+	type MaxWinnersPerPage = ();
 
 	fn elect(_: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("<() as ElectionProvider> cannot do anything.")
@@ -650,8 +654,8 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 /// A [`BoundedSupports`] parameterized by something that implements [`ElectionProvider`].
 pub type BoundedSupportsOf<E> = BoundedSupports<
 	<E as ElectionProvider>::AccountId,
-	<E as ElectionProvider>::MaxSupportsPerPage,
-	<E as ElectionProvider>::MaxBackersPerSupport,
+	<E as ElectionProvider>::MaxWinnersPerPage,
+	<E as ElectionProvider>::MaxBackersPerWinner,
 >;
 
 impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> EvaluateSupport

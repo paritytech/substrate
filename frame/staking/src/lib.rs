@@ -304,7 +304,7 @@ use frame_election_provider_support::ElectionProvider;
 use frame_support::{
 	traits::{ConstU32, Currency, Get},
 	weights::Weight,
-	BoundedVec,
+	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -616,21 +616,29 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Exposure<AccountId, Balance: HasCompact> {
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, RuntimeDebugNoBound, TypeInfo,
+)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct Exposure<T: Config> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
-	pub total: Balance,
+	pub total: BalanceOf<T>,
 	/// The validator's own stash that is exposed.
 	#[codec(compact)]
-	pub own: Balance,
+	pub own: BalanceOf<T>,
 	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+	pub others:
+		BoundedVec<IndividualExposure<T::AccountId, BalanceOf<T>>, MaxIndividualExposuresOf<T>>,
 }
 
-impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, Balance> {
+pub type MaxIndividualExposuresOf<T> =
+	<<T as Config>::ElectionProvider as ElectionProvider>::MaxBackersPerWinner;
+
+impl<T: Config> Default for Exposure<T> {
 	fn default() -> Self {
-		Self { total: Default::default(), own: Default::default(), others: vec![] }
+		Self { total: Default::default(), own: Default::default(), others: Default::default() }
 	}
 }
 
@@ -680,7 +688,7 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
-		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+		FullIdentification = Exposure<T>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
@@ -809,10 +817,8 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 /// `active_era`. It can differ from the latest planned exposure in `current_era`.
 pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
-	for ExposureOf<T>
-{
-	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
+impl<T: Config> Convert<T::AccountId, Option<Exposure<T>>> for ExposureOf<T> {
+	fn convert(validator: T::AccountId) -> Option<Exposure<T>> {
 		<Pallet<T>>::active_era()
 			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
 	}

@@ -86,13 +86,13 @@ pub trait Config: frame_system::Config {
 	/// Maximum number of backers allowed per target.
 	///
 	/// This implementation will naively trim some of the backers, without any sorting.
-	type MaxBackersPerSupport: Get<u32>;
+	type MaxBackersPerWinner: Get<u32>;
 
 	/// Maximum number of supports that can be returned per page.
 	///
 	/// Similarly, if this is less than `DataProvider`'s `desired_targets`, then it will naively
 	/// trim the winners without any sorting.
-	type MaxSupportsPerPage: Get<u32>;
+	type MaxWinnersPerPage: Get<u32>;
 }
 
 impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
@@ -101,8 +101,8 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 	type Pages = ConstU32<1>;
-	type MaxBackersPerSupport = T::MaxBackersPerSupport;
-	type MaxSupportsPerPage = T::MaxSupportsPerPage;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
 	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if remaining != 0 {
@@ -206,8 +206,8 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type TargetsPageSize = ();
 		type VoterPageSize = ();
-		type MaxBackersPerSupport = ConstU32<16>;
-		type MaxSupportsPerPage = ConstU32<16>;
+		type MaxBackersPerWinner = ConstU32<16>;
+		type MaxWinnersPerPage = ConstU32<16>;
 	}
 
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;

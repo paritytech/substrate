@@ -204,7 +204,7 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	/// The proportion of the slash.
 	pub(crate) slash: Perbill,
 	/// The exposure of the stash and all nominators.
-	pub(crate) exposure: &'a Exposure<T::AccountId, BalanceOf<T>>,
+	pub(crate) exposure: &'a Exposure<T>,
 	/// The era where the offence occurred.
 	pub(crate) slash_era: EraIndex,
 	/// The first era in the current bonding period.
@@ -376,7 +376,7 @@ fn slash_nominators<T: Config>(
 	let mut reward_payout = Zero::zero();
 
 	nominators_slashed.reserve(params.exposure.others.len());
-	for nominator in &params.exposure.others {
+	for nominator in params.exposure.others.iter() {
 		let stash = &nominator.who;
 		let mut nom_slashed = Zero::zero();
 

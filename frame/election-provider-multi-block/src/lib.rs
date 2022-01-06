@@ -225,9 +225,6 @@ use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
 use verifier::Verifier;
 
-// TODO: integrate type-info and #[pallet::generate_storage_info]
-// TODO: decouple task: Use BoundedVec in internal voter target vec of ElectionDataProvider
-
 #[cfg(test)]
 mod mock;
 #[macro_use]
@@ -281,8 +278,8 @@ impl<T: Config> ElectionProvider for InitiateEmergencyPhase<T> {
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
 	type Pages = ConstU32<1>;
-	type MaxBackersPerSupport = ();
-	type MaxSupportsPerPage = ();
+	type MaxBackersPerWinner = ();
+	type MaxWinnersPerPage = ();
 
 	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		ensure!(remaining == 0, "fallback should only have 1 page");
@@ -423,7 +420,8 @@ pub mod pallet {
 			_maybe_force_phase: Option<Phase<T::BlockNumber>>,
 			_kill_verifier: bool,
 		) -> DispatchResultWithPostInfo {
-			// TODO: reset everything, this should only be called in emergencies.
+			// TODO: reset everything, this should only be called in emergencies. Can also be
+			// back-ported to master earlier.
 			todo!();
 		}
 	}
@@ -583,12 +581,6 @@ pub mod pallet {
 		}
 	}
 
-	// TODO: wtf
-	#[pallet::type_value]
-	pub fn DefaultForRound() -> u32 {
-		1
-	}
-
 	/// Internal counter for the number of rounds.
 	///
 	/// This is useful for de-duplication of transactions submitted to the pool, and general
@@ -597,7 +589,7 @@ pub mod pallet {
 	/// This is merely incremented once per every time that an upstream `elect` is called.
 	#[pallet::storage]
 	#[pallet::getter(fn round)]
-	pub type Round<T: Config> = StorageValue<_, u32, ValueQuery, DefaultForRound>;
+	pub type Round<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// Current phase.
 	#[pallet::storage]
@@ -934,8 +926,8 @@ where
 	T::Fallback: ElectionProvider<
 		AccountId = T::AccountId,
 		BlockNumber = T::BlockNumber,
-		MaxBackersPerSupport = <T::Verifier as Verifier>::MaxBackersPerSupport,
-		MaxSupportsPerPage = <T::Verifier as Verifier>::MaxSupportsPerPage,
+		MaxBackersPerWinner = <T::Verifier as Verifier>::MaxBackersPerWinner,
+		MaxWinnersPerPage = <T::Verifier as Verifier>::MaxWinnersPerPage,
 	>,
 {
 	type AccountId = T::AccountId;
@@ -943,8 +935,8 @@ where
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 	type Pages = T::Pages;
-	type MaxSupportsPerPage = <T::Verifier as Verifier>::MaxSupportsPerPage;
-	type MaxBackersPerSupport = <T::Verifier as Verifier>::MaxBackersPerSupport;
+	type MaxWinnersPerPage = <T::Verifier as Verifier>::MaxWinnersPerPage;
+	type MaxBackersPerWinner = <T::Verifier as Verifier>::MaxBackersPerWinner;
 
 	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		T::Verifier::get_queued_solution_page(remaining)
@@ -996,11 +988,11 @@ mod phase_rotation {
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			Snapshot::<Runtime>::assert_snapshot(false, 1);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(4);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(13);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1010,20 +1002,20 @@ mod phase_rotation {
 
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(0)]);
 			Snapshot::<Runtime>::assert_snapshot(true, 1);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			Snapshot::<Runtime>::assert_snapshot(true, 1);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_block_events(),
-				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
+				vec![Event::SignedPhaseStarted(0), Event::UnsignedPhaseStarted(0)],
 			);
 			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
@@ -1044,13 +1036,13 @@ mod phase_rotation {
 
 			assert!(MultiBlock::current_phase().is_off());
 			Snapshot::<Runtime>::assert_snapshot(false, 1);
-			assert_eq!(MultiBlock::round(), 2);
+			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(43);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
 			roll_to(44);
-			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
+			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0)); // TODO: this event type could have a tuple inside of it, round and page.
 
 			roll_to(45);
 			assert!(MultiBlock::current_phase().is_signed());
@@ -1070,11 +1062,11 @@ mod phase_rotation {
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			Snapshot::<Runtime>::assert_snapshot(false, 2);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(4);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(12);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1089,20 +1081,20 @@ mod phase_rotation {
 
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(0)]);
 			Snapshot::<Runtime>::assert_snapshot(true, 2);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			Snapshot::<Runtime>::assert_snapshot(true, 2);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_block_events(),
-				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
+				vec![Event::SignedPhaseStarted(0), Event::UnsignedPhaseStarted(0)],
 			);
 			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
@@ -1124,7 +1116,7 @@ mod phase_rotation {
 			assert!(MultiBlock::current_phase().is_off());
 			// all snapshots are gone.
 			Snapshot::<Runtime>::assert_snapshot(false, 2);
-			assert_eq!(MultiBlock::round(), 2);
+			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(42);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1154,11 +1146,11 @@ mod phase_rotation {
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			Snapshot::<Runtime>::assert_snapshot(false, 2);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(4);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(11);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1177,20 +1169,20 @@ mod phase_rotation {
 
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(0)]);
 			Snapshot::<Runtime>::assert_snapshot(true, 3);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			Snapshot::<Runtime>::assert_snapshot(true, 3);
-			assert_eq!(MultiBlock::round(), 1);
+			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_block_events(),
-				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
+				vec![Event::SignedPhaseStarted(0), Event::UnsignedPhaseStarted(0)],
 			);
 			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
@@ -1212,7 +1204,7 @@ mod phase_rotation {
 			assert!(MultiBlock::current_phase().is_off());
 			// all snapshots are gone.
 			Snapshot::<Runtime>::assert_snapshot(false, 3);
-			assert_eq!(MultiBlock::round(), 2);
+			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(41);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1279,7 +1271,7 @@ mod election_provider {
 
 			// pre-elect state
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			assert_eq!(Round::<Runtime>::get(), 1);
+			assert_eq!(Round::<Runtime>::get(), 0);
 			assert!(Snapshot::<Runtime>::metadata().is_some());
 			assert!(Snapshot::<Runtime>::desired_targets().is_some());
 			assert!(Snapshot::<Runtime>::targets().is_some());
@@ -1300,7 +1292,7 @@ mod election_provider {
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
-			assert_eq!(Round::<Runtime>::get(), 2);
+			assert_eq!(Round::<Runtime>::get(), 1);
 			// and the snapshot is cleared.
 			assert!(Snapshot::<Runtime>::metadata().is_none());
 			assert!(Snapshot::<Runtime>::desired_targets().is_none());
@@ -1344,7 +1336,7 @@ mod election_provider {
 
 			// pre-elect state:
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			assert_eq!(Round::<Runtime>::get(), 1);
+			assert_eq!(Round::<Runtime>::get(), 0);
 			assert!(Snapshot::<Runtime>::metadata().is_some());
 			assert!(Snapshot::<Runtime>::desired_targets().is_some());
 			assert!(Snapshot::<Runtime>::targets().is_some());
@@ -1358,7 +1350,7 @@ mod election_provider {
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
-			assert_eq!(Round::<Runtime>::get(), 2);
+			assert_eq!(Round::<Runtime>::get(), 1);
 			// and the snapshot is cleared.
 			assert!(Snapshot::<Runtime>::metadata().is_none());
 			assert!(Snapshot::<Runtime>::desired_targets().is_none());
@@ -1402,7 +1394,7 @@ mod election_provider {
 
 			// pre-elect state:
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			assert_eq!(Round::<Runtime>::get(), 1);
+			assert_eq!(Round::<Runtime>::get(), 0);
 			assert!(Snapshot::<Runtime>::metadata().is_some());
 			assert!(Snapshot::<Runtime>::desired_targets().is_some());
 			assert!(Snapshot::<Runtime>::targets().is_some());
@@ -1419,7 +1411,7 @@ mod election_provider {
 
 			// nothing changes from the prelect state
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			assert_eq!(Round::<Runtime>::get(), 1);
+			assert_eq!(Round::<Runtime>::get(), 0);
 			assert!(Snapshot::<Runtime>::metadata().is_some());
 			assert!(Snapshot::<Runtime>::desired_targets().is_some());
 			assert!(Snapshot::<Runtime>::targets().is_some());
