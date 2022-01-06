@@ -388,9 +388,9 @@ where
 		let prev_seed = <frame_system::Pallet<System>>::block_seed(n - System::BlockNumber::one());
         transcript.append_message(b"prev_seed", prev_seed.as_bytes());
 
-		schnorrkel::PublicKey::from_bytes(&public_key)
-			.and_then(|p| p.vrf_verify(transcript, &new_seed, &proof))
-            .expect("shuffling seed validation failed");
+		let pub_key = schnorrkel::PublicKey::from_bytes(&public_key).expect("cannot build public");
+        pub_key.vrf_verify(transcript, &new_seed, &proof).expect("shuffling seed verification failed");
+
 	}
 
 	fn initial_checks(block: &Block) {
@@ -686,7 +686,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::{DigestItem, Era},
-		testing::{Block, Digest, Header},
+		testing::{BlockVer as Block, Digest, HeaderVer as Header},
 		traits::{BlakeTwo256, Block as BlockT, Header as HeaderT, IdentityLookup},
 		transaction_validity::{
 			InvalidTransaction, TransactionValidityError, UnknownTransaction, ValidTransaction,
@@ -1029,6 +1029,8 @@ mod tests {
 					)
 					.into(),
 					digest: Digest { logs: vec![] },
+                    count: 0,
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -1049,6 +1051,8 @@ mod tests {
 					)
 					.into(),
 					digest: Digest { logs: vec![] },
+                    count: 0,
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -1069,6 +1073,8 @@ mod tests {
 					.into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![] },
+                    count: 0,
+                    seed: Default::default(),
 				},
 				extrinsics: vec![],
 			});
@@ -1584,6 +1590,57 @@ mod tests {
 
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+		});
+	}
+
+	// #[should_panic()]
+	#[test]
+	#[should_panic(expect="cannot build public key")]
+	fn ver_block_import_works_panic_due_to_lack_of_public_key() {
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block_ver(Block {
+				header: Header{
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: hex!(
+						"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
+					)
+					.into(),
+					extrinsics_root: hex!(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+					)
+					.into(),
+					digest: Digest { logs: vec![] },
+                    count: 0,
+                    seed: Default::default(),
+				},
+				extrinsics: vec![],
+			}, vec![]);
+		});
+	}
+
+	#[should_panic(expect="shuffling seed verification failed")]
+	#[test]
+	fn ver_block_import_works_panic_due_to_wrong_signature() {
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block_ver(Block {
+				header: Header{
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: hex!(
+						"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
+					)
+					.into(),
+					extrinsics_root: hex!(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+					)
+					.into(),
+					digest: Digest { logs: vec![] },
+                    count: 0,
+                    seed: Default::default(),
+				},
+				extrinsics: vec![],
+			}, vec![0;32]);
 		});
 	}
 }

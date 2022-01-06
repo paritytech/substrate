@@ -189,6 +189,7 @@ pub type Digest = generic::Digest<H256>;
 
 /// Block Header
 pub type Header = generic::Header<u64, BlakeTwo256>;
+pub type HeaderVer = generic::HeaderVer<u64, BlakeTwo256>;
 
 impl Header {
 	/// A new header with the given number and default hash for all other fields.
@@ -199,6 +200,21 @@ impl Header {
 			state_root: Default::default(),
 			parent_hash: Default::default(),
 			digest: Default::default(),
+		}
+	}
+}
+
+impl HeaderVer {
+	/// A new header with the given number and default hash for all other fields.
+	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {
+		Self {
+			number,
+			extrinsics_root: Default::default(),
+			state_root: Default::default(),
+			parent_hash: Default::default(),
+			digest: Default::default(),
+            count: Default::default(),
+            seed: Default::default(),
 		}
 	}
 }
@@ -244,20 +260,21 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 
 /// Testing block
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
-pub struct Block<Xt> {
+pub struct BlockGeneric<HeaderType,Xt> {
 	/// Block header
-	pub header: Header,
+	pub header: HeaderType,
 	/// List of extrinsics
 	pub extrinsics: Vec<Xt>,
 }
 
 impl<
+		HeaderType: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Header,
 		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic,
-	> traits::Block for Block<Xt>
+	> traits::Block for BlockGeneric<HeaderType, Xt>
 {
 	type Extrinsic = Xt;
-	type Header = Header;
-	type Hash = <Header as traits::Header>::Hash;
+	type Header = HeaderType;
+	type Hash = <HeaderType as traits::Header>::Hash;
 
 	fn header(&self) -> &Self::Header {
 		&self.header
@@ -269,16 +286,16 @@ impl<
 		(self.header, self.extrinsics)
 	}
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
-		Block { header, extrinsics }
+		BlockGeneric { header, extrinsics }
 	}
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
 		(header, extrinsics).encode()
 	}
 }
 
-impl<'a, Xt> Deserialize<'a> for Block<Xt>
+impl<'a, HeaderType, Xt> Deserialize<'a> for BlockGeneric<HeaderType,Xt>
 where
-	Block<Xt>: Decode,
+	BlockGeneric<HeaderType, Xt>: Decode,
 {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;
@@ -287,6 +304,8 @@ where
 	}
 }
 
+pub type Block<Xt> = BlockGeneric<Header, Xt>;
+pub type BlockVer<Xt> = BlockGeneric<HeaderVer, Xt>;
 /// Test transaction, tuple of (sender, call, signed_extra)
 /// with index only used if sender is some.
 ///
