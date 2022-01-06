@@ -71,9 +71,10 @@ use sp_runtime::{
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup,
+		UniqueSaturatedInto, Zero,
 	},
-	DispatchError, Either, Perbill, RuntimeDebug,
+	DispatchError, Either, Perbill, RuntimeDebug, SaturatedConversion,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -599,8 +600,7 @@ pub mod pallet {
 	/// Map of block numbers to block hashes.
 	#[pallet::storage]
 	#[pallet::getter(fn block_seed)]
-	pub type BlockSeed<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, sp_core::H256, ValueQuery>;
+	pub type BlockSeed<T: Config> = StorageValue<_, sp_core::H256, ValueQuery>;
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
@@ -686,7 +686,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
-			<BlockSeed<T>>::insert::<_, sp_core::H256>(T::BlockNumber::zero(), Default::default());
+			<BlockSeed<T>>::put::<sp_core::H256>(Default::default());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
@@ -1373,10 +1373,11 @@ impl<T: Config> Pallet<T> {
 	pub fn set_block_seed(seed: &sp_core::H256) {
 		let number = <Number<T>>::get();
 		sp_runtime::print("SET SEED");
+		let number: u64 = number.unique_saturated_into();
 		for b in seed.as_bytes() {
 			sp_runtime::print(b);
 		}
-		<BlockSeed<T>>::insert(number, seed);
+		<BlockSeed<T>>::put(seed);
 	}
 
 	/// Start the execution of a particular block.

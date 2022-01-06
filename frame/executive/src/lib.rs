@@ -369,14 +369,13 @@ where
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "ver checks");
 		let header = block.header();
 		let n = header.number().clone();
-
 		// Check that shuffling seedght is generated properly
 		let new_seed = VRFOutput::from_bytes(&header.seed().seed.as_bytes())
 			.expect("cannot parse shuffling seed");
 
 		let proof = VRFProof::from_bytes(&header.seed().proof.as_bytes())
 			.expect("cannot parse shuffling seed proof");
-		let prev_seed = <frame_system::Pallet<System>>::block_seed(n - System::BlockNumber::one());
+		let prev_seed = <frame_system::Pallet<System>>::block_seed();
 
 		let mut transcript = merlin::Transcript::new(b"shuffling_seed");
 		transcript.append_message(b"prev_seed", prev_seed.as_bytes());
@@ -444,10 +443,10 @@ where
 
 			Self::initialize_block(block.header());
 
-			<frame_system::Pallet<System>>::set_block_seed(&block.header().seed().seed);
 
 			// any initial checks
-			// Self::ver_checks(&block, public);
+			Self::ver_checks(&block, public);
+			<frame_system::Pallet<System>>::set_block_seed(&block.header().seed().seed);
 			Self::initial_checks(&block);
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
