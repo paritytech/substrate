@@ -769,7 +769,7 @@ mod tests {
 						let timestamp = TimestampInherentDataProvider::from_system_time();
 						let slot = InherentDataProvider::from_timestamp_and_duration(
 							*timestamp,
-							Duration::from_secs(6),
+							Duration::from_secs(12),
 						);
 
 						Ok((timestamp, slot))
