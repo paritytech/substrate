@@ -676,24 +676,24 @@ pub trait Header:
 	}
 
 	/// Returns seed used for shuffling
-	fn seed(&self) -> &ShufflingSeed{
-        unimplemented!()
-    }
+	fn seed(&self) -> &ShufflingSeed {
+		unimplemented!()
+	}
 
 	/// Returns seed used for shuffling
-	fn set_seed(&mut self, _seed: ShufflingSeed){
-        unimplemented!()
-    }
+	fn set_seed(&mut self, _seed: ShufflingSeed) {
+		unimplemented!()
+	}
 
 	/// Returns seed used for shuffling
-	fn count(&self) -> &Self::Number{
-        unimplemented!()
-    }
+	fn count(&self) -> &Self::Number {
+		unimplemented!()
+	}
 
 	/// Returns seed used for shuffling
-	fn set_count(&mut self, _count: Self::Number){
-        unimplemented!()
-    }
+	fn set_count(&mut self, _count: Self::Number) {
+		unimplemented!()
+	}
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
@@ -800,7 +800,7 @@ pub trait Checkable<Context>: Sized {
 }
 
 /// Provides information about author
-pub trait HasAddress{
+pub trait HasAddress {
 	/// Returned if `check` succeeds.
 	type AccountId;
 

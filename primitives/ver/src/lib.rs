@@ -3,7 +3,10 @@
 use codec::{Codec, Decode, Encode};
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
-use sp_runtime::{RuntimeString, DigestItem, traits::{Header, Block as BlockT, One, Zero}, ConsensusEngineId};
+use sp_runtime::{
+	traits::{Block as BlockT, Header, One, Zero},
+	ConsensusEngineId, DigestItem, RuntimeString,
+};
 use sp_std::vec::Vec;
 
 // originally in sp-module
@@ -11,8 +14,8 @@ pub const RANDOM_SEED_INHERENT_IDENTIFIER: InherentIdentifier = *b"blckseed";
 pub const VER_ENGINE_ID: ConsensusEngineId = *b"_VER";
 
 #[derive(Clone, Encode, Decode)]
-pub struct PreDigestVer<Block: BlockT>{
-    pub prev_extrisnics: Vec<<Block as BlockT>::Extrinsic>
+pub struct PreDigestVer<Block: BlockT> {
+	pub prev_extrisnics: Vec<<Block as BlockT>::Extrinsic>,
 }
 
 pub trait CompatibleDigestItemVer<B: BlockT>: Sized {
@@ -27,41 +30,40 @@ impl<Hash, B: BlockT> CompatibleDigestItemVer<B> for DigestItem<Hash>
 where
 	Hash: Send + Sync + Eq + Clone + Codec + 'static,
 {
-	fn ver_pre_digest(digest: PreDigestVer<B>) -> Self{
+	fn ver_pre_digest(digest: PreDigestVer<B>) -> Self {
 		DigestItem::PreRuntime(VER_ENGINE_ID, digest.encode())
 	}
 
-	fn as_ver_pre_digest(&self) -> Option<PreDigestVer<B>>{
+	fn as_ver_pre_digest(&self) -> Option<PreDigestVer<B>> {
 		self.pre_runtime_try_to(&VER_ENGINE_ID)
 	}
 }
 
-pub fn find_prev_extrinsics<B: BlockT>(header: &B::Header) -> Option<Vec<B::Extrinsic>>
-{
+pub fn find_prev_extrinsics<B: BlockT>(header: &B::Header) -> Option<Vec<B::Extrinsic>> {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() || header.number().is_one() {
-        return Some(Vec::new());
+		return Some(Vec::new());
 	}
 
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
 		match (log.as_ver_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => {return None;},
+			(Some(_), true) => {
+				return None;
+			}
 			(s, false) => pre_digest = s,
-			(None, _) => {},
+			(None, _) => {}
 		}
-	};
+	}
 	pre_digest.map(|digest: PreDigestVer<B>| digest.prev_extrisnics)
 }
-
 
 #[derive(Encode, sp_runtime::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum RandomSeedInherentError {
 	Other(RuntimeString),
 }
-
 
 impl RandomSeedInherentError {
 	/// Try to create an instance ouf of the given identifier and data.

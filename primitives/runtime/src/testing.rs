@@ -22,8 +22,8 @@ use crate::{
 	generic,
 	scale_info::TypeInfo,
 	traits::{
-		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, HasAddress, OpaqueKeys,
-		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
+		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, HasAddress,
+		OpaqueKeys, PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
@@ -215,8 +215,8 @@ impl HeaderVer {
 			state_root: Default::default(),
 			parent_hash: Default::default(),
 			digest: Default::default(),
-            count: Default::default(),
-            seed: Default::default(),
+			count: Default::default(),
+			seed: Default::default(),
 		}
 	}
 }
@@ -262,7 +262,7 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 
 /// Testing block
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
-pub struct BlockGeneric<HeaderType,Xt> {
+pub struct BlockGeneric<HeaderType, Xt> {
 	/// Block header
 	pub header: HeaderType,
 	/// List of extrinsics
@@ -295,7 +295,7 @@ impl<
 	}
 }
 
-impl<'a, HeaderType, Xt> Deserialize<'a> for BlockGeneric<HeaderType,Xt>
+impl<'a, HeaderType, Xt> Deserialize<'a> for BlockGeneric<HeaderType, Xt>
 where
 	BlockGeneric<HeaderType, Xt>: Decode,
 {
@@ -308,7 +308,6 @@ where
 
 /// Block
 pub type Block<Xt> = BlockGeneric<Header, Xt>;
-
 
 /// Block
 pub type BlockVer<Xt> = BlockGeneric<HeaderVer, Xt>;
@@ -332,12 +331,11 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	}
 }
 
-impl<Call,Extra> HasAddress for TestXt<Call, Extra> where
-{
-    type AccountId = u64;
+impl<Call, Extra> HasAddress for TestXt<Call, Extra> {
+	type AccountId = u64;
 
-	fn get_address(&self) -> Option<Self::AccountId>{
-        self.signature.as_ref().map(|(id,_)| *id)
+	fn get_address(&self) -> Option<Self::AccountId> {
+		self.signature.as_ref().map(|(id, _)| *id)
 	}
 }
 

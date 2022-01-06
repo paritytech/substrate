@@ -501,35 +501,31 @@ mod tests {
 		SyncCryptoStore::insert_unknown(&store, SR25519, secret_uri, key_pair.public().as_ref())
 			.expect("Inserts unknown key");
 
-
-
-        let transcript = crate::vrf::VRFTranscriptData {
-            label: b"shuffling_seed",
-            items: vec![(
-                "prev_seed",
-                crate::vrf::VRFTranscriptValue::Bytes(vec![0u8;32]),
-            )],
-        };
+		let transcript = crate::vrf::VRFTranscriptData {
+			label: b"shuffling_seed",
+			items: vec![("prev_seed", crate::vrf::VRFTranscriptValue::Bytes(vec![0u8; 32]))],
+		};
 
 		let signature = SyncCryptoStore::sr25519_vrf_sign(
 			&store,
 			SR25519,
 			&key_pair.public(),
 			transcript.clone(),
-		).unwrap().unwrap();
+		)
+		.unwrap()
+		.unwrap();
 
-        let proof = signature.proof;
-        let output = signature.output;
+		let proof = signature.proof;
+		let output = signature.output;
 
+		let mut transcript = merlin::Transcript::new(b"shuffling_seed");
+		transcript.append_message(b"prev_seed", &[0u8; 32]);
 
-        let mut transcript = merlin::Transcript::new(b"shuffling_seed");
-        transcript.append_message(b"prev_seed", &[0u8;32]);
-
-		let pub_key = schnorrkel::PublicKey::from_bytes(&key_pair.public()).expect("cannot build public");
-        println!("{:?}", pub_key);
-        pub_key.vrf_verify(transcript, &output, &proof).expect("shuffling seed verification failed");
-
-
+		let pub_key =
+			schnorrkel::PublicKey::from_bytes(&key_pair.public()).expect("cannot build public");
+		println!("{:?}", pub_key);
+		pub_key
+			.vrf_verify(transcript, &output, &proof)
+			.expect("shuffling seed verification failed");
 	}
-
 }
