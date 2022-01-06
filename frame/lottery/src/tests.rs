@@ -90,6 +90,37 @@ fn basic_end_to_end_works() {
 	});
 }
 
+/// Only the manager can stop the Lottery from repeating via `stop_repeat`.
+#[test]
+fn stop_repeat_works() {
+	new_test_ext().execute_with(|| {
+		let price = 10;
+		let length = 20;
+		let delay = 5;
+
+		// Set no calls for the lottery.
+		assert_ok!(Lottery::set_calls(Origin::root(), vec![]));
+		// Start lottery, it repeats.
+		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, true));
+
+		// Non-manager fails to `stop_repeat`.
+		assert_noop!(Lottery::stop_repeat(Origin::signed(1)), DispatchError::BadOrigin);
+		// Manager can `stop_repeat`, even twice.
+		assert_ok!(Lottery::stop_repeat(Origin::root()));
+		assert_ok!(Lottery::stop_repeat(Origin::root()));
+
+		// Lottery still exists.
+		assert!(crate::Lottery::<Test>::get().is_some());
+		// End and pick a winner.
+		run_to_block(length + delay);
+
+		// Lottery stays dead and does not repeat.
+		assert!(crate::Lottery::<Test>::get().is_none());
+		run_to_block(length + delay + 1);
+		assert!(crate::Lottery::<Test>::get().is_none());
+	});
+}
+
 #[test]
 fn set_calls_works() {
 	new_test_ext().execute_with(|| {
