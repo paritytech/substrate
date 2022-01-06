@@ -2911,17 +2911,20 @@ fn code_rejected_error_works() {
 			<Error<Test>>::CodeRejected,
 		);
 
-		assert_err_ignore_postinfo!(
-			Contracts::instantiate_with_code(
-				Origin::signed(ALICE),
-				0,
-				GAS_LIMIT,
-				None,
-				wasm,
-				vec![],
-				vec![],
-			),
-			<Error<Test>>::CodeRejected,
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(Bytes(wasm)),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"module imports a non-existent function"
 		);
 	});
 }
