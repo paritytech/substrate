@@ -35,8 +35,11 @@ pub enum Error {
 	/// JSON error.
 	Json(serde_json::Error),
 	/// Invalid password.
-	#[display(fmt = "Invalid password")]
-	InvalidPassword,
+	#[display(
+		fmt = "Requested public key and public key of the loaded private key do not match. \n
+			This means either that the keystore password is incorrect or that the private key was stored under a wrong public key."
+	)]
+	PublicKeyMismatch,
 	/// Invalid BIP39 phrase
 	#[display(fmt = "Invalid recovery phrase (BIP39) data")]
 	InvalidPhrase,
@@ -58,7 +61,7 @@ impl From<Error> for TraitError {
 	fn from(error: Error) -> Self {
 		match error {
 			Error::KeyNotSupported(id) => TraitError::KeyNotSupported(id),
-			Error::InvalidSeed | Error::InvalidPhrase | Error::InvalidPassword =>
+			Error::InvalidSeed | Error::InvalidPhrase | Error::PublicKeyMismatch =>
 				TraitError::ValidationError(error.to_string()),
 			Error::Unavailable => TraitError::Unavailable,
 			Error::Io(e) => TraitError::Other(e.to_string()),

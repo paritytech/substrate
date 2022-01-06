@@ -881,7 +881,7 @@ fn pallet_expand_deposit_event() {
 
 #[test]
 fn pallet_new_call_variant() {
-	Call::Example(pallet::Call::new_call_variant_foo(3, 4));
+	pallet::Call::<Runtime>::new_call_variant_foo(3, 4);
 }
 
 #[test]

@@ -79,8 +79,8 @@ impl FromStr for BlockNumberOrHash {
 	type Err = String;
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
-		if block_number.starts_with("0x") {
-			if let Some(pos) = &block_number[2..].chars().position(|c| !c.is_ascii_hexdigit()) {
+		if let Some(rest) = block_number.strip_prefix("0x") {
+			if let Some(pos) = rest.chars().position(|c| !c.is_ascii_hexdigit()) {
 				Err(format!(
 					"Expected block hash, found illegal hex character at position: {}",
 					2 + pos,

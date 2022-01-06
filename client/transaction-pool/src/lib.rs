@@ -23,20 +23,12 @@
 #![warn(unused_extern_crates)]
 
 mod api;
+pub mod error;
 mod graph;
 mod metrics;
 mod revalidation;
-
-pub mod error;
-
-/// Common types for testing the transaction pool
-#[cfg(feature = "test-helpers")]
-pub mod test_helpers {
-	pub use super::{
-		graph::{BlockHash, ChainApi, ExtrinsicFor, NumberFor, Pool},
-		revalidation::RevalidationQueue,
-	};
-}
+#[cfg(test)]
+mod tests;
 
 pub use crate::api::FullChainApi;
 use futures::{
@@ -170,13 +162,10 @@ where
 	PoolApi: graph::ChainApi<Block = Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api, for tests.
-	#[cfg(feature = "test-helpers")]
-	pub fn new_test(
-		pool_api: Arc<PoolApi>,
-	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>, intervalier::BackSignalControl) {
+	pub fn new_test(pool_api: Arc<PoolApi>) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
 		let pool = Arc::new(graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
-		let (revalidation_queue, background_task, notifier) =
-			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
+		let (revalidation_queue, background_task) =
+			revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
 		(
 			Self {
 				api: pool_api,
@@ -187,7 +176,6 @@ where
 				metrics: Default::default(),
 			},
 			background_task,
-			notifier,
 		)
 	}
 
@@ -237,7 +225,6 @@ where
 	}
 
 	/// Get access to the underlying api
-	#[cfg(feature = "test-helpers")]
 	pub fn api(&self) -> &PoolApi {
 		&self.api
 	}

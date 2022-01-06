@@ -57,7 +57,7 @@ impl VerifyCmd {
 		let message = utils::read_message(self.message.as_ref(), self.hex)?;
 		let sig_data = utils::decode_hex(&self.sig)?;
 		let uri = utils::read_uri(self.uri.as_ref())?;
-		let uri = if uri.starts_with("0x") { &uri[2..] } else { &uri };
+		let uri = if let Some(uri) = uri.strip_prefix("0x") { uri } else { &uri };
 
 		with_crypto_scheme!(self.crypto_scheme.scheme, verify(sig_data, message, uri))
 	}
