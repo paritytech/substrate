@@ -612,9 +612,9 @@ pub mod pallet {
 		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
-		/// The contracts's code was found to be invalid during validation or instrumentation.
-		/// A more detailed error can be found on the node console with debug messages enabled
-		/// or in the debug buffer which is returned to RPC clients
+		/// The contract's code was found to be invalid during validation or instrumentation.
+		/// A more detailed error can be found on the node console if debug messages are enabled
+		/// or in the debug buffer which is returned to RPC clients.
 		CodeRejected,
 	}
 
