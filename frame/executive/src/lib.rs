@@ -309,7 +309,7 @@ where
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(&header);
-		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests, &header.seed().seed);
+		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> DigestOf<System> {
@@ -326,7 +326,6 @@ where
 		block_number: &System::BlockNumber,
 		parent_hash: &System::Hash,
 		digest: &Digest<System::Hash>,
-		seed: &sp_core::H256,
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
@@ -1022,7 +1021,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!(
-						"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
+						"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
 					)
 					.into(),
 					extrinsics_root: hex!(
