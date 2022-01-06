@@ -60,7 +60,10 @@ impl<Payload: Clone> NotificationSender<Payload> {
 
 	/// Send out a notification to all subscribers that a new payload is available for a
 	/// block.
-	pub fn notify<Error>(&self, payload: impl FnOnce() -> Result<Payload, Error>) -> Result<(), Error> {
+	pub fn notify<Error>(
+		&self,
+		payload: impl FnOnce() -> Result<Payload, Error>,
+	) -> Result<(), Error> {
 		let mut subscribers = self.subscribers.lock();
 
 		// do an initial prune on closed subscriptions
@@ -112,7 +115,7 @@ impl<Payload: Clone, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::{future, task::Poll, StreamExt};
+	use futures::StreamExt;
 
 	#[derive(Clone)]
 	pub struct DummyTracingKey;
@@ -128,15 +131,6 @@ mod tests {
 
 		let test_payload = String::from("test payload");
 		let closure_payload = test_payload.clone();
-		let mut times = 0;
-		let allow_once = future::poll_fn(|_cx| {
-			times += 1;
-			if times <= 1 {
-				Poll::Pending
-			} else {
-				Poll::Ready(())
-			}
-		});
 
 		// Create a future to receive a single notification
 		// from the stream and verify its payload.
