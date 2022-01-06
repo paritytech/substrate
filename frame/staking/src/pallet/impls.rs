@@ -728,6 +728,11 @@ impl<T: Config> Pallet<T> {
 					nominators_taken.saturating_inc();
 				}
 			} else {
+				// this can only happen if: 1. there a pretty bad bug in the bags-list (or whatever
+				// is the sorted list) logic and the state of the two pallets is no longer
+				// compatible, or because the nominators is not decodable since they have more
+				// nomination than `T::MaxNominations`. This can rarely happen, and is not really an
+				// emergency or bug if it does.
 				log!(warn, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}, this nominator probably has too many nominations now", nominator)
 			}
 		}
