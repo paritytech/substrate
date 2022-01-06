@@ -134,12 +134,12 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	hash: &BlockHash,
 ) -> u32 {
 	let (first, mut remainder) = if let Some((first, rest)) = levels.0.split_first_mut() {
-		(Some(first), (rest, &mut levels.1[..]))
+		(Some(first), (rest, &mut *levels.1))
 	} else {
 		if let Some((first, rest)) = levels.1.split_first_mut() {
-			(Some(first), (&mut levels.0[..], rest))
+			(Some(first), (&mut *levels.0, rest))
 		} else {
-			(None, (&mut levels.0[..], &mut levels.1[..]))
+			(None, (&mut *levels.0, &mut *levels.1))
 		}
 	};
 	let mut pinned_children = 0;
@@ -261,8 +261,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				.push((to_meta_key(LAST_CANONICAL, &()), last_canonicalized.encode()));
 			self.last_canonicalized = Some(last_canonicalized);
 		} else if self.last_canonicalized.is_some() {
-			if number < front_block_number ||
-				number >= front_block_number + self.levels.len() as u64 + 1
+			if number < front_block_number || number > front_block_number + self.levels.len() as u64
 			{
 				trace!(target: "state-db", "Failed to insert block {}, current is {} .. {})",
 					number,

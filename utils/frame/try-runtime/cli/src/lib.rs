@@ -496,7 +496,6 @@ impl State {
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 						pallets: pallets.clone().unwrap_or_default(),
 						at,
-						..Default::default()
 					}))
 					.inject_hashed_key(
 						&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),

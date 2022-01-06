@@ -261,7 +261,7 @@ impl<Hash: FromStr + Debug, Number: FromStr + Debug> FromStr for ExtrinsicAddres
 
 		let index = it
 			.next()
-			.ok_or_else(|| format!("Extrinsic index missing: example \"5:0\""))?
+			.ok_or("Extrinsic index missing: example \"5:0\"")?
 			.parse()
 			.map_err(|e| format!("Invalid index format: {}", e))?;
 

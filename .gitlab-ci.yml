@@ -350,7 +350,7 @@ cargo-clippy:
   <<:                              *docker-env
   <<:                              *test-refs
   script:
-    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
 
 cargo-check-benches:
   stage:                           test

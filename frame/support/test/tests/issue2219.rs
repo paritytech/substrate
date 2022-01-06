@@ -184,7 +184,9 @@ frame_support::construct_runtime!(
 
 #[test]
 fn create_genesis_config() {
-	GenesisConfig {
+	let config = GenesisConfig {
 		module: module::GenesisConfig { request_life_time: 0, enable_storage_role: true },
 	};
+	assert_eq!(config.module.request_life_time, 0);
+	assert!(config.module.enable_storage_role);
 }
