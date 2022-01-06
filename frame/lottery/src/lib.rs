@@ -455,12 +455,12 @@ impl<T: Config> Pallet<T> {
 						Error::<T>::AlreadyParticipating
 					);
 				}
+				participating_calls.try_push(call_index).map_err(|_| Error::<T>::TooManyCalls)?;
 				// Check user has enough funds and send it to the Lottery account.
 				T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 				// Create a new ticket.
 				TicketsCount::<T>::put(new_ticket_count);
 				Tickets::<T>::insert(ticket_count, caller.clone());
-				participating_calls.try_push(call_index).map_err(|_| Error::<T>::TooManyCalls)?;
 				Ok(())
 			},
 		)?;
