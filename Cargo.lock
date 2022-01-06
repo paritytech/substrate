@@ -545,6 +545,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
