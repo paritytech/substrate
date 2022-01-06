@@ -249,6 +249,9 @@ pub mod pallet {
 	/// This implies that `::iter_keys().count()` and `::iter().count()` might return different
 	/// values for this map. Moreover, the main `::count()` is aligned with the later, namely the
 	/// number of keys that exist.
+	///
+	/// Lastly, if any of the nominators become non-decodable, they can be chilled immediately via
+	/// [`Call::chill_other`] dispatchable by anyone.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
