@@ -248,8 +248,8 @@ where
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
 				self.best_beefy_block = Some(*notification.header.number());
-				let _r: Result<(), ()> =
-					self.beefy_best_block_sender.notify(|| Ok(notification.hash.clone()));
+				self.beefy_best_block_sender.notify(|| Ok::<_, ()>(notification.hash.clone()));
+					.expect("only returns Err if the closure fails; the closure always returns Ok; qed.");
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
 				// have a signed commitment for the block. Remove once the above TODO is done.
@@ -365,13 +365,14 @@ where
 					// conclude certain rounds multiple times.
 					trace!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
 				}
-				let _r: Result<(), ()> =
-					self.signed_commitment_sender.notify(|| Ok(signed_commitment));
+				self.signed_commitment_sender.notify(|| Ok::<_, ()>(signed_commitment));
+					.expect("only returns Err if the closure fails; the closure always returns Ok; qed.");
 
 				self.best_beefy_block = Some(block_num);
 				if let Err(err) = self.client.hash(block_num).map(|h| {
 					if let Some(hash) = h {
-						let _r: Result<(), ()> = self.beefy_best_block_sender.notify(|| Ok(hash));
+						self.beefy_best_block_sender.notify(|| Ok::<_, ()>(hash));
+							.expect("only returns Err if the closure fails; the closure always returns Ok; qed.");
 					}
 				}) {
 					error!(target: "beefy", "🥩 Failed to get hash for block number {}; err: {:?}",

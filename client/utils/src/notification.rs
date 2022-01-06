@@ -60,7 +60,7 @@ impl<Payload: Clone> NotificationSender<Payload> {
 
 	/// Send out a notification to all subscribers that a new payload is available for a
 	/// block.
-	pub fn notify<E>(&self, payload: impl FnOnce() -> Result<Payload, E>) -> Result<(), E> {
+	pub fn notify<Error>(&self, payload: impl FnOnce() -> Result<Payload, Error>) -> Result<(), Error> {
 		let mut subscribers = self.subscribers.lock();
 
 		// do an initial prune on closed subscriptions
@@ -140,7 +140,7 @@ mod tests {
 
 		// Create a future to receive a single notification
 		// from the stream and verify its payload.
-		let future = stream.subscribe().take_until(allow_once).for_each(move |payload| {
+		let future = stream.subscribe().take(1).for_each(move |payload| {
 			let test_payload = closure_payload.clone();
 			async move {
 				assert_eq!(payload, test_payload);
