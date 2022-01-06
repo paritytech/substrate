@@ -503,7 +503,7 @@ impl KeystoreInner {
 		if &pair.public() == public {
 			Ok(Some(pair))
 		} else {
-			Err(Error::InvalidPassword)
+			Err(Error::PublicKeyMismatch)
 		}
 	}
 

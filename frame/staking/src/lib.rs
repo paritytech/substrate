@@ -412,7 +412,7 @@ impl<AccountId> Default for RewardDestination<AccountId> {
 }
 
 /// Preference of what happens regarding validation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
 pub struct ValidatorPrefs {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.
@@ -422,12 +422,6 @@ pub struct ValidatorPrefs {
 	/// who is not already nominating this validator may nominate them. By default, validators
 	/// are accepting nominations.
 	pub blocked: bool,
-}
-
-impl Default for ValidatorPrefs {
-	fn default() -> Self {
-		ValidatorPrefs { commission: Default::default(), blocked: false }
-	}
 }
 
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.

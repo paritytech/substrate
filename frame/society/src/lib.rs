@@ -1290,7 +1290,7 @@ fn pick_item<'a, R: RngCore, T>(rng: &mut R, items: &'a [T]) -> Option<&'a T> {
 }
 
 /// Pick a new PRN, in the range [0, `max`] (inclusive).
-fn pick_usize<'a, R: RngCore>(rng: &mut R, max: usize) -> usize {
+fn pick_usize<R: RngCore>(rng: &mut R, max: usize) -> usize {
 	(rng.next_u32() % (max as u32 + 1)) as usize
 }
 
@@ -1316,9 +1316,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// Skip ahead to the suggested position
 					.skip(pos)
 					// Keep skipping ahead until the position changes
-					.skip_while(|(_, x)| x.value <= bids[pos].value)
 					// Get the element when things changed
-					.next();
+					.find(|(_, x)| x.value > bids[pos].value);
+
 				// If the element is not at the end of the list, insert the new element
 				// in the spot.
 				if let Some((p, _)) = different_bid {
@@ -1351,7 +1351,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check a user is a bid.
 	fn is_bid(bids: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>, who: &T::AccountId) -> bool {
 		// Bids are ordered by `value`, so we cannot binary search for a user.
-		bids.iter().find(|bid| bid.who == *who).is_some()
+		bids.iter().any(|bid| bid.who == *who)
 	}
 
 	/// Check a user is a candidate.

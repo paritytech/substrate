@@ -88,13 +88,13 @@ impl<H: HeaderT> sp_inherents::InherentDataProvider for InherentDataProvider<H> 
 	async fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
-		error: &[u8],
+		mut error: &[u8],
 	) -> Option<Result<(), Error>> {
 		if *identifier != INHERENT_IDENTIFIER {
 			return None
 		}
 
-		let error = InherentError::decode(&mut &error[..]).ok()?;
+		let error = InherentError::decode(&mut error).ok()?;
 
 		Some(Err(Error::Application(Box::from(format!("{:?}", error)))))
 	}

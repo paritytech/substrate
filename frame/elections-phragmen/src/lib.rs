@@ -836,7 +836,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Check if `who` is currently an active runner-up.
 	fn is_runner_up(who: &T::AccountId) -> bool {
-		Self::runners_up().iter().position(|r| &r.who == who).is_some()
+		Self::runners_up().iter().any(|r| &r.who == who)
 	}
 
 	/// Get the members' account ids.
