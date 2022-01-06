@@ -248,10 +248,8 @@ pub mod pallet {
 						config.start.saturating_add(config.length).saturating_add(config.delay);
 					if payout_block <= n {
 						let (lottery_account, lottery_balance) = Self::pot();
-						let ticket_count = TicketsCount::<T>::get();
 
-						let winning_number = Self::choose_winner(ticket_count);
-						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
+						let winner = Self::choose_account().unwrap_or(lottery_account);
 						// Not much we can do if this fails...
 						let res = T::Currency::transfer(
 							&Self::account_id(),
@@ -470,8 +468,22 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// Randomly choose a winner from among the total number of participants.
-	fn choose_winner(total: u32) -> u32 {
+	// Randomly choose a winning ticket and return the account that purchased it.
+	// The more tickets an account bought, the higher are its chances of winning.
+	// Returns `None` if there is no winner.
+	fn choose_account() -> Option<T::AccountId> {
+		match Self::choose_ticket(TicketsCount::<T>::get()) {
+			None => None,
+			Some(ticket) => Tickets::<T>::get(ticket),
+		}
+	}
+
+	// Randomly choose a winning ticket from among the total number of tickets.
+	// Returns `None` if there are no tickets.
+	fn choose_ticket(total: u32) -> Option<u32> {
+		if total == 0 {
+			return None
+		}
 		let mut random_number = Self::generate_random_number(0);
 
 		// Best effort attempt to remove bias from modulus operator.
@@ -483,7 +495,7 @@ impl<T: Config> Pallet<T> {
 			random_number = Self::generate_random_number(i);
 		}
 
-		random_number % total
+		Some(random_number % total)
 	}
 
 	// Generate a random number from a given seed.
