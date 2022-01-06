@@ -469,9 +469,7 @@ mod tests {
 
 		// Notify with a header and justification
 		let justification = create_justification();
-		let r: Result<(), finality_grandpa::Error> =
-			justification_sender.notify(|| Ok(justification.clone()));
-		r.unwrap();
+		justification_sender.notify(|| Ok::<_, ()>(justification.clone())).unwrap();
 
 		// Inspect what we received
 		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());
