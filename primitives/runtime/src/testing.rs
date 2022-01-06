@@ -189,6 +189,8 @@ pub type Digest = generic::Digest<H256>;
 
 /// Block Header
 pub type Header = generic::Header<u64, BlakeTwo256>;
+
+/// Block Header
 pub type HeaderVer = generic::HeaderVer<u64, BlakeTwo256>;
 
 impl Header {
@@ -304,8 +306,13 @@ where
 	}
 }
 
+/// Block
 pub type Block<Xt> = BlockGeneric<Header, Xt>;
+
+
+/// Block
 pub type BlockVer<Xt> = BlockGeneric<HeaderVer, Xt>;
+
 /// Test transaction, tuple of (sender, call, signed_extra)
 /// with index only used if sender is some.
 ///

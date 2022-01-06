@@ -20,7 +20,7 @@
 use crate::dispatch::Parameter;
 use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
-use sp_runtime::{traits::Block as BlockT, AccountId32, DispatchError};
+use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::prelude::*;
 
 /// Anything that can have a `::len()` method.
@@ -278,6 +278,18 @@ pub trait IsSubType<T> {
 /// Executing a block means that all extrinsics in a given block will be executed and the resulting
 /// header will be checked against the header of the given block.
 pub trait ExecuteBlock<Block: BlockT> {
+	/// Execute the given `block` performing VER shuffling seed verification
+	///
+	/// This will execute all extrinsics in the block and check that the resulting header is
+	/// correct.
+	///
+	/// # Panic
+	///
+	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
+	fn execute_block_ver(_block: Block, _public: Vec<u8>){
+        unimplemented!();
+    }
+
 	/// Execute the given `block`.
 	///
 	/// This will execute all extrinsics in the block and check that the resulting header is
@@ -286,10 +298,6 @@ pub trait ExecuteBlock<Block: BlockT> {
 	/// # Panic
 	///
 	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
-	fn execute_block_ver(block: Block, public: Vec<u8>){
-        unimplemented!();
-    }
-
 	fn execute_block(block: Block);
 }
 

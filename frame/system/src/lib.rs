@@ -1386,7 +1386,6 @@ impl<T: Config> Pallet<T> {
 		digest: &DigestOf<T>,
 		kind: InitKind,
 	) {
-		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..]).unwrap();
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);

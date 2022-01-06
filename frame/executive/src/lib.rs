@@ -128,19 +128,16 @@ use frame_support::{
 use frame_system::{extrinsics_root, DigestOf};
 use schnorrkel::{
 	vrf::{VRFOutput, VRFProof},
-	SignatureError,
 };
-use sp_core::{ShufflingSeed, crypto::UncheckedFrom, Hasher, U256};
-// use sp_keystore::vrf;
 use sp_runtime::{
     SaturatedConversion,
 	generic::Digest,
 	traits::{
-		self, Applyable, BlakeTwo256, CheckEqual, Checkable, Dispatchable, Extrinsic, HasAddress, Header, NumberFor, One, Saturating,
+		self, Applyable, CheckEqual, Checkable, Dispatchable, Extrinsic, HasAddress, Header, NumberFor, One, Saturating,
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	AccountId32, ApplyExtrinsicResult,
+	ApplyExtrinsicResult,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 use crate::traits::AtLeast32BitUnsigned;
@@ -382,10 +379,9 @@ where
 
 		let proof = VRFProof::from_bytes(&header.seed().proof.as_bytes())
 			.expect("cannot parse shuffling seed proof");
-
-        let ctx = schnorrkel::signing_context(b"hello world");
-        let mut transcript = merlin::Transcript::new(b"shuffling_seed");
 		let prev_seed = <frame_system::Pallet<System>>::block_seed(n - System::BlockNumber::one());
+
+        let mut transcript = merlin::Transcript::new(b"shuffling_seed");
         transcript.append_message(b"prev_seed", prev_seed.as_bytes());
 
 		let pub_key = schnorrkel::PublicKey::from_bytes(&public_key).expect("cannot build public");
@@ -683,7 +679,10 @@ mod tests {
 
 	use hex_literal::hex;
 
-	use sp_core::H256;
+	use sp_core::{H256, Pair, sr25519};
+    use sp_core::ShufflingSeed;
+	use sp_core::testing::SR25519;
+    use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 	use sp_runtime::{
 		generic::{DigestItem, Era},
 		testing::{BlockVer as Block, Digest, HeaderVer as Header},
@@ -702,6 +701,7 @@ mod tests {
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
+    use sp_keystore::{SyncCryptoStore};
 
 	const TEST_KEY: &[u8] = &*b":test:key:";
 
@@ -1593,10 +1593,9 @@ mod tests {
 		});
 	}
 
-	// #[should_panic()]
 	#[test]
-	#[should_panic(expect="cannot build public key")]
-	fn ver_block_import_works_panic_due_to_lack_of_public_key() {
+	#[should_panic(expected = "cannot build public")]
+	fn ver_block_import_panic_due_to_lack_of_public_key() {
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block_ver(Block {
 				header: Header{
@@ -1619,9 +1618,9 @@ mod tests {
 		});
 	}
 
-	#[should_panic(expect="shuffling seed verification failed")]
+	#[should_panic(expected = "shuffling seed verification failed")]
 	#[test]
-	fn ver_block_import_works_panic_due_to_wrong_signature() {
+	fn ver_block_import_panic_due_to_wrong_signature() {
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block_ver(Block {
 				header: Header{
@@ -1641,6 +1640,51 @@ mod tests {
 				},
 				extrinsics: vec![],
 			}, vec![0;32]);
+		});
+	}
+
+	#[test]
+	fn ver_block_import_works() {
+		new_test_ext(1).execute_with(|| {
+            let prev_seed = vec![ 0u8; 32 ];
+            let secret_uri = "//Alice";
+            let keystore = sp_keystore::testing::KeyStore::new();
+
+            let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+            keystore.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref()) .expect("Inserts unknown key");
+
+            let transcript = VRFTranscriptData {
+                label: b"shuffling_seed",
+                items: vec![(
+                    "prev_seed",
+                    VRFTranscriptValue::Bytes(prev_seed),
+                )],
+            };
+
+            let signature = keystore.sr25519_vrf_sign( SR25519, &key_pair.public(), transcript.clone(),).unwrap().unwrap();
+
+            let pub_key_bytes = AsRef::<[u8;32]>::as_ref(&key_pair.public()).iter().cloned().collect::<Vec<_>>();
+			Executive::execute_block_ver(Block {
+				header: Header{
+					parent_hash: [69u8; 32].into(),
+					number: 1,
+					state_root: hex!(
+						"9a58dd4cf626052f7d88e73eb5e66ba1c0997e15a9e47760fd6cf9c19ded6023"
+					)
+					.into(),
+					extrinsics_root: hex!(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+					)
+					.into(),
+					digest: Digest { logs: vec![] },
+                    count: 0,
+                    seed: ShufflingSeed{
+                        seed: signature.output.to_bytes().into(),
+                        proof: signature.proof.to_bytes().into(),
+                    },
+				},
+				extrinsics: vec![],
+			}, pub_key_bytes);
 		});
 	}
 }
