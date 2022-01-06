@@ -175,3 +175,9 @@ frame_benchmarking::benchmarks! {
 		)
 	}
 }
+
+frame_benchmarking::impl_benchmark_test_suite!(
+	Pallet,
+	crate::mock::ExtBuilder::default().skip_genesis_ids().build(),
+	crate::mock::Runtime
+);

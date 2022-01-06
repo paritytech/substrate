@@ -92,7 +92,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		{
 			let _key_guard = key_lock.lock();
 			let val = self.db.get(columns::OFFCHAIN, &key);
-			is_set = val.as_ref().map(|x| &**x) == old_value;
+			is_set = val.as_deref() == old_value;
 
 			if is_set {
 				self.set(prefix, item_key, new_value)
