@@ -3296,11 +3296,14 @@ pub(crate) mod tests {
 	#[test]
 	fn test_import_existing_state_fails() {
 		let backend: Backend<Block> = Backend::new_test(10, 10);
-		let genesis = insert_block(&backend, 0, Default::default(), None, Default::default(), vec![], None)
-			.unwrap();
+		let genesis =
+			insert_block(&backend, 0, Default::default(), None, Default::default(), vec![], None)
+				.unwrap();
 
-		insert_block( &backend, 1, genesis, None, Default::default(), vec![], None).unwrap();
-		let err = insert_block( &backend, 1, genesis, None, Default::default(), vec![], None).err().unwrap();
+		insert_block(&backend, 1, genesis, None, Default::default(), vec![], None).unwrap();
+		let err = insert_block(&backend, 1, genesis, None, Default::default(), vec![], None)
+			.err()
+			.unwrap();
 		match err {
 			sp_blockchain::Error::StateDatabase(m) if m == "Block already exists" => (),
 			e @ _ => panic!("Unexpected error {:?}", e),
