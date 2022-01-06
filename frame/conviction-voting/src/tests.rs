@@ -21,10 +21,7 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate as pallet_conviction_voting;
-use frame_support::{
-	ord_parameter_types, parameter_types, assert_ok,
-	traits::{ConstU32, Contains, SortedMembers},
-};
+use frame_support::{parameter_types, assert_ok, traits::{ConstU32, Contains, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -55,7 +52,6 @@ impl Contains<Call> for BaseFilter {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
@@ -74,7 +70,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -85,49 +81,17 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxLocks: u32 = 10;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	type MaxLocks = MaxLocks;
+	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
-}
-parameter_types! {
-	pub const LaunchPeriod: u64 = 2;
-	pub const VotingPeriod: u64 = 2;
-	pub const FastTrackVotingPeriod: u64 = 2;
-	pub const MinimumDeposit: u64 = 1;
-	pub const EnactmentPeriod: u64 = 2;
-	pub const VoteLockingPeriod: u64 = 3;
-	pub const CooloffPeriod: u64 = 2;
-	pub const MaxVotes: u32 = 100;
-	pub const MaxProposals: u32 = 100;
-	pub static PreimageByteDeposit: u64 = 0;
-	pub static InstantAllowed: bool = false;
-}
-ord_parameter_types! {
-	pub const One: u64 = 1;
-	pub const Two: u64 = 2;
-	pub const Three: u64 = 3;
-	pub const Four: u64 = 4;
-	pub const Five: u64 = 5;
-	pub const Six: u64 = 6;
-}
-pub struct OneToFive;
-impl SortedMembers<u64> for OneToFive {
-	fn sorted_members() -> Vec<u64> {
-		vec![1, 2, 3, 4, 5]
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_m: &u64) {}
 }
 
 pub struct TotalIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)>);
@@ -137,7 +101,7 @@ impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TestPollState {
 	Ongoing(TallyOf<Test>, u8),
 	Completed(u64, bool),
@@ -208,8 +172,8 @@ impl frame_support::traits::Polls<TallyOf<Test>> for TestReferenda {
 impl Config for Test {
 	type Event = Event;
 	type Currency = pallet_balances::Pallet<Self>;
-	type VoteLockingPeriod = VoteLockingPeriod;
-	type MaxVotes = MaxVotes;
+	type VoteLockingPeriod = ConstU64<3>;
+	type MaxVotes = ConstU32<100>;
 	type WeightInfo = ();
 	type MaxTurnout = TotalIssuanceOf<Balances, Self::AccountId>;
 	type Referenda = TestReferenda;
@@ -317,3 +281,192 @@ fn basic_voting_works() {
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
+
+#[test]
+fn voting_balance_gets_locked() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(2, 5)));
+		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(2, 5)));
+		assert_eq!(tally(3), Tally::from_parts(0, 10, 2));
+		assert_eq!(Balances::usable_balance(1), 8);
+
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(5, 1)));
+		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(5, 1)));
+		assert_eq!(tally(3), Tally::from_parts(0, 5, 5));
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
+		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(10, 0)));
+		assert_eq!(tally(3), Tally::from_parts(0, 1, 10));
+		assert_eq!(Balances::usable_balance(1), 0);
+
+		assert_ok!(Voting::remove_vote(Origin::signed(1), None, 3));
+		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
+
+		assert_ok!(Voting::unlock(Origin::signed(1), class(3), 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn successful_but_zero_conviction_vote_balance_can_be_unlocked() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(1, 1)));
+		assert_ok!(Voting::vote(Origin::signed(2), 3, nay(20, 0)));
+		let c = class(3);
+		Polls::set(vec![(3, Completed(3, false))].into_iter().collect());
+		assert_ok!(Voting::remove_vote(Origin::signed(2), Some(c), 3));
+		assert_ok!(Voting::unlock(Origin::signed(2), c, 2));
+		assert_eq!(Balances::usable_balance(2), 20);
+	});
+}
+
+#[test]
+fn unsuccessful_conviction_vote_balance_can_be_unlocked() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(1, 1)));
+		assert_ok!(Voting::vote(Origin::signed(2), 3, nay(20, 0)));
+		let c = class(3);
+		Polls::set(vec![(3, Completed(3, false))].into_iter().collect());
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(c), 3));
+		assert_ok!(Voting::unlock(Origin::signed(1), c, 1));
+		assert_eq!(Balances::usable_balance(1), 10);
+	});
+}
+
+#[test]
+fn successful_conviction_vote_balance_stays_locked_for_correct_time() {
+	new_test_ext().execute_with(|| {
+		for i in 1..=5 {
+			assert_ok!(Voting::vote(Origin::signed(i), 3, aye(10, i as u8)));
+		}
+		let c = class(3);
+		Polls::set(vec![(3, Completed(3, true))].into_iter().collect());
+		for i in 1..=5 {
+			assert_ok!(Voting::remove_vote(Origin::signed(i), Some(c), 3));
+		}
+		for block in 1..=(3 + 5 * 3) {
+			run_to(block);
+			for i in 1..=5 {
+				assert_ok!(Voting::unlock(Origin::signed(i), c, i));
+				let expired = block >= (3 << (i - 1)) + 3;
+				assert_eq!(Balances::usable_balance(i), i * 10 - if expired { 0 } else { 10 });
+			}
+		}
+	});
+}
+
+#[test]
+fn classwise_delegation_works() {
+	new_test_ext().execute_with(|| {
+		Polls::set(vec![
+			(0, Ongoing(Tally::default(), 0)),
+			(1, Ongoing(Tally::default(), 1)),
+			(2, Ongoing(Tally::default(), 2)),
+			(3, Ongoing(Tally::default(), 2)),
+		].into_iter().collect());
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 5));
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		assert_ok!(Voting::vote(Origin::signed(2), 0, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(2), 1, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(2), 2, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(3), 0, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(3), 1, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(3), 2, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(4), 0, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(4), 1, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(4), 2, aye(10, 0)));
+		// 4 hasn't voted yet
+
+		assert_eq!(Polls::get(), vec![
+			(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
+			(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
+			(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
+			(3, Ongoing(Tally::from_parts(0, 0, 0), 2)),
+		].into_iter().collect());
+
+		// 4 votes nay to 3.
+		assert_ok!(Voting::vote(Origin::signed(4), 3, nay(10, 0)));
+		assert_eq!(Polls::get(), vec![
+			(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
+			(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
+			(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
+			(3, Ongoing(Tally::from_parts(0, 6, 15), 2)),
+		].into_iter().collect());
+
+		// Redelegate for class 2 to account 3.
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 3, Conviction::Locked1x, 5));
+		assert_eq!(Polls::get(), vec![
+			(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
+			(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
+			(2, Ongoing(Tally::from_parts(1, 7, 35), 2)),
+			(3, Ongoing(Tally::from_parts(0, 1, 10), 2)),
+		].into_iter().collect());
+
+		// Redelegating with a lower lock does not forget previous lock and updates correctly.
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 3));
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 3));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 3));
+		assert_eq!(Polls::get(), vec![
+			(0, Ongoing(Tally::from_parts(4, 2, 33), 0)),
+			(1, Ongoing(Tally::from_parts(4, 2, 33), 1)),
+			(2, Ongoing(Tally::from_parts(4, 2, 33), 2)),
+			(3, Ongoing(Tally::from_parts(0, 4, 13), 2)),
+		].into_iter().collect());
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		// unlock does nothing since the delegation already took place.
+		assert_eq!(Balances::usable_balance(1), 5);
+
+		// Redelegating with higher amount extends previous lock.
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 6));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 4);
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 7));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_eq!(Balances::usable_balance(1), 3);
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 8));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
+		assert_eq!(Balances::usable_balance(1), 2);
+		assert_eq!(Polls::get(), vec![
+			(0, Ongoing(Tally::from_parts(7, 2, 36), 0)),
+			(1, Ongoing(Tally::from_parts(8, 2, 37), 1)),
+			(2, Ongoing(Tally::from_parts(9, 2, 38), 2)),
+			(3, Ongoing(Tally::from_parts(0, 9, 18), 2)),
+		].into_iter().collect());
+	});
+}
+
+
+#[test]
+fn redelegation_after_vote_ending_should_keep_lock() {
+	new_test_ext().execute_with(|| {
+		Polls::set(vec![
+			(0, Ongoing(Tally::default(), 0)),
+		].into_iter().collect());
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::vote(Origin::signed(2), 0, aye(10, 1)));
+		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
+		assert_eq!(Balances::usable_balance(1), 5);
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 3, Conviction::Locked1x, 3));
+		assert_eq!(Balances::usable_balance(1), 5);
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_eq!(Balances::usable_balance(1), 5);
+	});
+}
+
+
+
+// TODO: Lock extension/unlocking with different classes active
+// TODO: Lock amalgamation via multiple removed votes
+// TODO: Lock amalgamation via switch to/from delegation
+// TODO: Errors

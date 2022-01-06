@@ -500,18 +500,20 @@ impl<T: Config> Pallet<T> {
 		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
 		let votes = VotingFor::<T>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
-			let mut old = Voting::Delegating(Delegating {
+			let old = sp_std::mem::replace(voting, Voting::Delegating(Delegating {
 				balance,
 				target: target.clone(),
 				conviction,
 				delegations: Default::default(),
 				prior: Default::default(),
-			});
-			sp_std::mem::swap(&mut old, voting);
+			}));
 			match old {
-				Voting::Delegating(Delegating { balance, target, conviction, delegations, prior, .. }) => {
+				Voting::Delegating(Delegating { balance, target, conviction, delegations, mut prior, .. }) => {
 					// remove any delegation votes to our current target.
 					Self::reduce_upstream_delegation(&target, &class, conviction.votes(balance));
+					let now = frame_system::Pallet::<T>::block_number();
+					let lock_periods = conviction.lock_periods().into();
+					prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
 					voting.set_common(delegations, prior);
 				},
 				Voting::Casting(Casting { votes, delegations, prior }) => {
@@ -520,6 +522,7 @@ impl<T: Config> Pallet<T> {
 					voting.set_common(delegations, prior);
 				},
 			}
+
 			let votes = Self::increase_upstream_delegation(&target, &class, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
