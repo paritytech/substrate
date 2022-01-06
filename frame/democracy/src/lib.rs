@@ -1513,9 +1513,12 @@ impl<T: Config> Pallet<T> {
 			};
 			sp_std::mem::swap(&mut old, voting);
 			match old {
-				Voting::Delegating { balance, target, conviction, delegations, prior, .. } => {
+				Voting::Delegating { balance, target, conviction, delegations, mut prior, .. } => {
 					// remove any delegation votes to our current target.
 					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
+					let now = frame_system::Pallet::<T>::block_number();
+					let lock_periods = conviction.lock_periods().into();
+					prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
 					voting.set_common(delegations, prior);
 				},
 				Voting::Direct { votes, delegations, prior } => {
