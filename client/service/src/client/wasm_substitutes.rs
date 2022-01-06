@@ -44,10 +44,7 @@ struct WasmSubstitute<Block: BlockT> {
 }
 
 impl<Block: BlockT> WasmSubstitute<Block> {
-	fn new(
-		code: Vec<u8>,
-		block_number: NumberFor<Block>,
-	) -> Self {
+	fn new(code: Vec<u8>, block_number: NumberFor<Block>) -> Self {
 		let hash = make_hash(&code);
 		Self { code, hash, block_number }
 	}
