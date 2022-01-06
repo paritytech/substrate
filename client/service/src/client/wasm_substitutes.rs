@@ -39,7 +39,7 @@ use std::{
 struct WasmSubstitute<Block: BlockT> {
 	code: Vec<u8>,
 	hash: Vec<u8>,
-	/// The hash of the block from that on we should use the substitute.
+	/// The block number on which we should start using the substitute.
 	block_number: NumberFor<Block>,
 }
 

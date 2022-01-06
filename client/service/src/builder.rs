@@ -284,7 +284,7 @@ where
 					Error::Application(Box::from(format!(
 						"Failed to parse `{}` as block number for code substitutes. \
 						 In an old version the key for code substitute was a block hash. \
-						 So, please update the chain spec to a version that is compatible with your node.",
+						 Please update the chain spec to a version that is compatible with your node.",
 						n
 					)))
 				})?;
