@@ -179,7 +179,7 @@ fn split_vote_delegation_should_be_ignored() {
 }
 
 #[test]
-fn delegation_keeps_lock() {
+fn redelegation_keeps_lock() {
 	// If transactor voted, delegated vote is overwritten.
 	new_test_ext().execute_with(|| {
 		let r = begin_referendum();
@@ -189,15 +189,29 @@ fn delegation_keeps_lock() {
 		// Delegated vote is huge.
 		assert_eq!(tally(r), Tally { ayes: 121, nays: 0, turnout: 30 });
 
+		let mut prior_lock = vote::PriorLock::new();
+
 		// Locked balance of delegator exists
-		let voting = VotingOf::<Test>::get(2);
-		assert_eq!(voting.locked_balance(), 20);
-		assert_eq!(voting.prior(), &vote::PriorLock::new());
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
 
 		// Delegate someone else at a lower conviction
 		assert_ok!(Democracy::delegate(Origin::signed(2), 3, Conviction::None, 20));
 
-		// 6x prior should appear.
-		assert_eq!(voting.prior(), &vote::PriorLock::new());
+		// 6x prior should appear w/ locked balance.
+		prior_lock.accumulate(98, 20);
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
+		// Unlock shouldn't work
+		assert_ok!(Democracy::unlock(Origin::signed(2), 2));
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
+
+		fast_forward_to(100);
+
+		// Now unlock can remove the prior lock.
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
+		assert_ok!(Democracy::unlock(Origin::signed(2), 2));
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &vote::PriorLock::new());
 	});
 }
