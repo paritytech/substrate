@@ -168,6 +168,28 @@ impl Polling<TallyOf<Test>> for TestPolls {
 		Polls::set(polls);
 		Ok(r)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_ongoing(period: Self::Moment, class: Self::Class) -> Result<Self::Index, ()> {
+		let mut polls = Polls::get();
+		let i = polls.keys().rev().next().map_or(0, |x| x + 1);
+		polls.insert(i, (class, Tally::default()));
+		Polls::set(polls);
+		Ok(i)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn end_ongoing(index: Self::Index, approved: bool) -> Result<(), ()> {
+		let mut polls = Polls::get();
+		match polls.get(&index) {
+			Some(Ongoing(t, _)) => {},
+			_ => return Err(()),
+		}
+		let now = frame_system::Pallet::<Test>::block_number();
+		polls.insert(i, Completed(now, approved));
+		Polls::set(polls);
+		Ok(())
+	}
 }
 
 impl Config for Test {

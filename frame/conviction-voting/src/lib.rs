@@ -190,10 +190,7 @@ pub mod pallet {
 		/// - `vote`: The vote configuration.
 		///
 		/// Weight: `O(R)` where R is the number of polls the voter has voted on.
-		#[pallet::weight(
-			T::WeightInfo::vote_new(T::MaxVotes::get())
-				.max(T::WeightInfo::vote_existing(T::MaxVotes::get()))
-		)]
+		#[pallet::weight(T::WeightInfo::vote_new().max(T::WeightInfo::vote_existing()))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			#[pallet::compact] poll_index: PollIndexOf<T>,
@@ -225,7 +222,7 @@ pub mod pallet {
 		/// Emits `Delegated`.
 		///
 		/// Weight: `O(R)` where R is the number of polls the voter delegating to has
-		///   voted on. Weight is charged as if maximum votes.
+		///   voted on. Weight is initially charged as if maximum votes, but is refunded later.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
@@ -255,7 +252,7 @@ pub mod pallet {
 		/// Emits `Undelegated`.
 		///
 		/// Weight: `O(R)` where R is the number of polls the voter delegating to has
-		///   voted on. Weight is charged as if maximum votes.
+		///   voted on. Weight is initially charged as if maximum votes, but is refunded later.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
 		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
@@ -274,7 +271,7 @@ pub mod pallet {
 		/// - `target`: The account to remove the lock on.
 		///
 		/// Weight: `O(R)` with R number of vote of target.
-		#[pallet::weight(T::WeightInfo::unlock(T::MaxVotes::get()))]
+		#[pallet::weight(T::WeightInfo::unlock())]
 		pub fn unlock(origin: OriginFor<T>, class: ClassOf<T>, target: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(&class, &target);
@@ -310,7 +307,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		#[pallet::weight(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
+		#[pallet::weight(T::WeightInfo::remove_vote())]
 		pub fn remove_vote(
 			origin: OriginFor<T>,
 			class: Option<ClassOf<T>>,
@@ -336,7 +333,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
+		#[pallet::weight(T::WeightInfo::remove_other_vote())]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
 			target: T::AccountId,

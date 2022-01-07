@@ -581,6 +581,53 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 	fn as_ongoing(index: Self::Index) -> Option<(T::Tally, TrackIdOf<T>)> {
 		Self::ensure_ongoing(index).ok().map(|x| (x.tally, x.track))
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_ongoing(period: Self::Moment, class: Self::Class) -> Result<Self::Index, ()> {
+		let index = ReferendumCount::<T>::mutate(|x| {
+			let r = *x;
+			*x += 1;
+			r
+		});
+		let status = ReferendumStatusOf::<T> {
+			class,
+			origin: RawOrigin::Nobody.into(),
+			proposal_hash: BlakeTwo256::hash_of(index),
+			enactment: AtOrAfter::After(0),
+			submitted: frame_system::Pallet::<T>::block_number(),
+			submission_deposit: None,
+			decision_deposit: None,
+			deciding: None,
+			tally: Default::default(),
+			in_queue: false,
+			alarm: Self::ensure_alarm_at(&mut status, index, now + 1_000_000u32.into()),
+		};
+		ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
+		Ok(index)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn end_ongoing(index: Self::Index, approved: bool) -> Result<(), ()> {
+		let mut status = Self::ensure_ongoing(index).map_err(|_| ())?;
+		Self::ensure_no_alarm(&mut status);
+		Self::note_one_fewer_deciding(status.track, track);
+		let now = frame_system::Pallet::<T>::block_number();
+		let info = if approved {
+			ReferendumInfo::Approved(
+				now,
+				status.submission_deposit,
+				status.decision_deposit,
+			)
+		} else {
+			ReferendumInfo::Rejected(
+				now,
+				status.submission_deposit,
+				status.decision_deposit,
+			)
+		};
+		ReferendumInfoFor::<T>::insert(index, info);
+		Ok(())
+	}
 }
 
 impl<T: Config> Pallet<T> {

@@ -143,4 +143,17 @@ pub trait Polling<Tally> {
 		index: Self::Index,
 		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment, Self::Class>) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError>;
+
+	/// Create an ongoing majority-carries poll of given class lasting given period for the purpose
+	/// of benchmarking.
+	///
+	/// May return `Err` if it is impossible.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()>;
+
+	/// End the given ongoing poll and return the result.
+	///
+	/// Returns `Err` if `index` is not an ongoing poll.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn end_ongoing(index: Self::Index, approved: bool) -> Result<(), ()>;
 }
