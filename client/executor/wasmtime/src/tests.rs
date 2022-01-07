@@ -313,7 +313,7 @@ fn test_max_memory_pages() {
 #[test]
 fn test_instances_without_reuse_are_not_leaked() {
 	let runtime = crate::create_runtime::<HostFunctions>(
-		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		crate::Config {
 			heap_pages: 2048,
 			max_memory_size: None,

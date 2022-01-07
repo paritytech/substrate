@@ -464,7 +464,10 @@ impl From<SpanDatum> for sp_rpc::tracing::Span {
 mod tests {
 	use super::*;
 	use parking_lot::Mutex;
-	use std::sync::Arc;
+	use std::sync::{
+		mpsc::{Receiver, Sender},
+		Arc,
+	};
 	use tracing_subscriber::layer::SubscriberExt;
 
 	struct TestTraceHandler {
@@ -617,14 +620,14 @@ mod tests {
 			let span1 = tracing::info_span!(target: "test_target", "test_span1");
 			let _guard1 = span1.enter();
 
-			let (tx, rx) = mpsc::channel();
+			let (tx, rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 			let handle = thread::spawn(move || {
 				let span2 = tracing::info_span!(target: "test_target", "test_span2");
 				let _guard2 = span2.enter();
 				// emit event
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
 				for msg in rx.recv() {
-					if msg == false {
+					if !msg {
 						break
 					}
 				}

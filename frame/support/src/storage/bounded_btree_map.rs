@@ -17,7 +17,10 @@
 
 //! Traits, types and structs to support a bounded BTreeMap.
 
-use crate::{storage::StorageDecodeLength, traits::Get};
+use crate::{
+	storage::StorageDecodeLength,
+	traits::{Get, TryCollect},
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
 	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
@@ -69,6 +72,11 @@ where
 	K: Ord,
 	S: Get<u32>,
 {
+	/// Create `Self` from `t` without any checks.
+	fn unchecked_from(t: BTreeMap<K, V>) -> Self {
+		Self(t, Default::default())
+	}
+
 	/// Create a new `BoundedBTreeMap`.
 	///
 	/// Does not allocate.
@@ -183,16 +191,23 @@ where
 	}
 }
 
-impl<K, V, S> PartialEq for BoundedBTreeMap<K, V, S>
+impl<K, V, S1, S2> PartialEq<BoundedBTreeMap<K, V, S1>> for BoundedBTreeMap<K, V, S2>
 where
 	BTreeMap<K, V>: PartialEq,
+	S1: Get<u32>,
+	S2: Get<u32>,
 {
-	fn eq(&self, other: &Self) -> bool {
-		self.0 == other.0
+	fn eq(&self, other: &BoundedBTreeMap<K, V, S1>) -> bool {
+		S1::get() == S2::get() && self.0 == other.0
 	}
 }
 
-impl<K, V, S> Eq for BoundedBTreeMap<K, V, S> where BTreeMap<K, V>: Eq {}
+impl<K, V, S> Eq for BoundedBTreeMap<K, V, S>
+where
+	BTreeMap<K, V>: Eq,
+	S: Get<u32>,
+{
+}
 
 impl<K, V, S> PartialEq<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S>
 where
@@ -206,6 +221,7 @@ where
 impl<K, V, S> PartialOrd for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: PartialOrd,
+	S: Get<u32>,
 {
 	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
 		self.0.partial_cmp(&other.0)
@@ -215,6 +231,7 @@ where
 impl<K, V, S> Ord for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: Ord,
+	S: Get<u32>,
 {
 	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
 		self.0.cmp(&other.0)
@@ -300,6 +317,23 @@ impl<K, V, S> StorageDecodeLength for BoundedBTreeMap<K, V, S> {}
 impl<K, V, S> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> where
 	BTreeMap<K, V>: Encode
 {
+}
+
+impl<I, K, V, Bound> TryCollect<BoundedBTreeMap<K, V, Bound>> for I
+where
+	K: Ord,
+	I: ExactSizeIterator + Iterator<Item = (K, V)>,
+	Bound: Get<u32>,
+{
+	type Error = &'static str;
+
+	fn try_collect(self) -> Result<BoundedBTreeMap<K, V, Bound>, Self::Error> {
+		if self.len() > Bound::get() as usize {
+			Err("iterator length too big")
+		} else {
+			Ok(BoundedBTreeMap::<K, V, Bound>::unchecked_from(self.collect::<BTreeMap<K, V>>()))
+		}
+	}
 }
 
 #[cfg(test)]
@@ -451,5 +485,54 @@ pub mod test {
 		assert_eq!(zero_key.0, 0);
 		assert_eq!(zero_key.1, false);
 		assert_eq!(*zero_value, 6);
+	}
+
+	#[test]
+	fn can_be_collected() {
+		let b1 = boundedmap_from_keys::<u32, ConstU32<5>>(&[1, 2, 3, 4]);
+		let b2: BoundedBTreeMap<u32, (), ConstU32<5>> =
+			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect().unwrap();
+		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3, 4, 5]);
+
+		// can also be collected into a collection of length 4.
+		let b2: BoundedBTreeMap<u32, (), ConstU32<4>> =
+			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect().unwrap();
+		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3, 4, 5]);
+
+		// can be mutated further into iterators that are `ExactSizedIterator`.
+		let b2: BoundedBTreeMap<u32, (), ConstU32<5>> =
+			b1.iter().map(|(k, v)| (k + 1, *v)).rev().skip(2).try_collect().unwrap();
+		// note that the binary tree will re-sort this, so rev() is not really seen
+		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3]);
+
+		let b2: BoundedBTreeMap<u32, (), ConstU32<5>> =
+			b1.iter().map(|(k, v)| (k + 1, *v)).take(2).try_collect().unwrap();
+		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3]);
+
+		// but these worn't work
+		let b2: Result<BoundedBTreeMap<u32, (), ConstU32<3>>, _> =
+			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect();
+		assert!(b2.is_err());
+
+		let b2: Result<BoundedBTreeMap<u32, (), ConstU32<1>>, _> =
+			b1.iter().map(|(k, v)| (k + 1, *v)).skip(2).try_collect();
+		assert!(b2.is_err());
+	}
+
+	#[test]
+	fn eq_works() {
+		// of same type
+		let b1 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
+		let b2 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
+		assert_eq!(b1, b2);
+
+		// of different type, but same value and bound.
+		crate::parameter_types! {
+			B1: u32 = 7;
+			B2: u32 = 7;
+		}
+		let b1 = boundedmap_from_keys::<u32, B1>(&[1, 2]);
+		let b2 = boundedmap_from_keys::<u32, B2>(&[1, 2]);
+		assert_eq!(b1, b2);
 	}
 }

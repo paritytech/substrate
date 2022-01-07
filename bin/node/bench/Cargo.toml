@@ -17,7 +17,7 @@ sc-client-api = { version = "4.0.0-dev", path = "../../../client/api/" }
 sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machine" }
 serde = "1.0.132"
-serde_json = "1.0.71"
+serde_json = "1.0.74"
 structopt = "0.3"
 derive_more = "0.99.16"
 kvdb = "0.10.0"

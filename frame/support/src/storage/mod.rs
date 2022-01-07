@@ -1018,8 +1018,8 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
-			let value = T::decode(&mut &raw_value[..])?;
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
+			let value = T::decode(&mut raw_value)?;
 			Ok((raw_key_without_prefix.to_vec(), value))
 		};
 
@@ -1045,10 +1045,10 @@ impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 	) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
 			let mut key_material = H::reverse(raw_key_without_prefix);
 			let key = K::decode(&mut key_material)?;
-			let value = T::decode(&mut &raw_value[..])?;
+			let value = T::decode(&mut raw_value)?;
 			Ok((key, value))
 		};
 
