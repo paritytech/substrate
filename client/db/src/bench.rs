@@ -672,7 +672,6 @@ mod test {
 			assert_eq!(rw_tracker.1, 0);
 			assert_eq!(rw_tracker.2, 2);
 			assert_eq!(rw_tracker.3, 0);
-			drop(rw_tracker);
 			bench_state.wipe().unwrap();
 		}
 	}

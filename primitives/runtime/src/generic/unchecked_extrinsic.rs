@@ -395,7 +395,7 @@ mod tests {
 			info: &DispatchInfoOf<Self::Call>,
 			len: usize,
 		) -> Result<Self::Pre, TransactionValidityError> {
-			Ok(self.validate(who, call, info, len).map(|_| ())?)
+			self.validate(who, call, info, len).map(|_| ())
 		}
 	}
 
