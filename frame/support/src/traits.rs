@@ -54,7 +54,8 @@ pub use misc::{
 	ConstU32, ConstU64, ConstU8, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
 	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
 	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider, PreimageRecipient,
-	PrivilegeCmp, SameOrOther, Time, TryDrop, UnixTime, WrapperKeepOpaque, WrapperOpaque,
+	PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime, WrapperKeepOpaque,
+	WrapperOpaque,
 };
 
 mod stored_map;

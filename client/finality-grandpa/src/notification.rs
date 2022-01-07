@@ -16,61 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use parking_lot::Mutex;
-use std::sync::Arc;
+use sc_utils::notification::{NotificationSender, NotificationStream, TracingKeyStr};
 
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_runtime::traits::Block as BlockT;
-
-use crate::{justification::GrandpaJustification, Error};
-
-// Stream of justifications returned when subscribing.
-type JustificationStream<Block> = TracingUnboundedReceiver<GrandpaJustification<Block>>;
-
-// Sending endpoint for notifying about justifications.
-type JustificationSender<Block> = TracingUnboundedSender<GrandpaJustification<Block>>;
-
-// Collection of channel sending endpoints shared with the receiver side so they can register
-// themselves.
-type SharedJustificationSenders<Block> = Arc<Mutex<Vec<JustificationSender<Block>>>>;
+use crate::justification::GrandpaJustification;
 
 /// The sending half of the Grandpa justification channel(s).
 ///
 /// Used to send notifications about justifications generated
 /// at the end of a Grandpa round.
-#[derive(Clone)]
-pub struct GrandpaJustificationSender<Block: BlockT> {
-	subscribers: SharedJustificationSenders<Block>,
-}
-
-impl<Block: BlockT> GrandpaJustificationSender<Block> {
-	/// The `subscribers` should be shared with a corresponding
-	/// `GrandpaJustificationStream`.
-	fn new(subscribers: SharedJustificationSenders<Block>) -> Self {
-		Self { subscribers }
-	}
-
-	/// Send out a notification to all subscribers that a new justification
-	/// is available for a block.
-	pub fn notify(
-		&self,
-		justification: impl FnOnce() -> Result<GrandpaJustification<Block>, Error>,
-	) -> Result<(), Error> {
-		let mut subscribers = self.subscribers.lock();
-
-		// do an initial prune on closed subscriptions
-		subscribers.retain(|n| !n.is_closed());
-
-		// if there's no subscribers we avoid creating
-		// the justification which is a costly operation
-		if !subscribers.is_empty() {
-			let justification = justification()?;
-			subscribers.retain(|n| n.unbounded_send(justification.clone()).is_ok());
-		}
-
-		Ok(())
-	}
-}
+pub type GrandpaJustificationSender<Block> = NotificationSender<GrandpaJustification<Block>>;
 
 /// The receiving half of the Grandpa justification channel.
 ///
@@ -78,33 +32,12 @@ impl<Block: BlockT> GrandpaJustificationSender<Block> {
 /// at the end of a Grandpa round.
 /// The `GrandpaJustificationStream` entity stores the `SharedJustificationSenders`
 /// so it can be used to add more subscriptions.
+pub type GrandpaJustificationStream<Block> =
+	NotificationStream<GrandpaJustification<Block>, GrandpaJustificationsTracingKey>;
+
+/// Provides tracing key for GRANDPA justifications stream.
 #[derive(Clone)]
-pub struct GrandpaJustificationStream<Block: BlockT> {
-	subscribers: SharedJustificationSenders<Block>,
-}
-
-impl<Block: BlockT> GrandpaJustificationStream<Block> {
-	/// Creates a new pair of receiver and sender of justification notifications.
-	pub fn channel() -> (GrandpaJustificationSender<Block>, Self) {
-		let subscribers = Arc::new(Mutex::new(vec![]));
-		let receiver = GrandpaJustificationStream::new(subscribers.clone());
-		let sender = GrandpaJustificationSender::new(subscribers.clone());
-		(sender, receiver)
-	}
-
-	/// Create a new receiver of justification notifications.
-	///
-	/// The `subscribers` should be shared with a corresponding
-	/// `GrandpaJustificationSender`.
-	fn new(subscribers: SharedJustificationSenders<Block>) -> Self {
-		Self { subscribers }
-	}
-
-	/// Subscribe to a channel through which justifications are sent
-	/// at the end of each Grandpa voting round.
-	pub fn subscribe(&self) -> JustificationStream<Block> {
-		let (sender, receiver) = tracing_unbounded("mpsc_justification_notification_stream");
-		self.subscribers.lock().push(sender);
-		receiver
-	}
+pub struct GrandpaJustificationsTracingKey;
+impl TracingKeyStr for GrandpaJustificationsTracingKey {
+	const TRACING_KEY: &'static str = "mpsc_grandpa_justification_notification_stream";
 }
