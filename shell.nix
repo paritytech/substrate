@@ -1,14 +1,11 @@
 let
-  mozillaOverlay =
+  rustOverlay =
     import (builtins.fetchGit {
-      url = "https://github.com/mozilla/nixpkgs-mozilla.git";
-      rev = "7c1e8b1dd6ed0043fb4ee0b12b815256b0b9de6f";
+      url = "https://github.com/oxalica/rust-overlay";
+      rev = "844ee700e1886b5826b809ecaef03cbd96b0b049";
     });
-  nixpkgs = import <nixpkgs> { overlays = [ mozillaOverlay ]; };
-  rust-nightly = with nixpkgs; ((rustChannelOf { rustToolchain = ./rust-toolchain; }).rust.override {
-    extensions = [ "rust-src" ];
-    targets = [ "wasm32-unknown-unknown" ];
-  });
+  nixpkgs = import <nixpkgs> { overlays = [ rustOverlay ]; };
+  rust-nightly = with nixpkgs; rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 in
 with nixpkgs; pkgs.mkShell {
   buildInputs = [
