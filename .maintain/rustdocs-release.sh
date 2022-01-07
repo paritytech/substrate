@@ -13,7 +13,13 @@
 REMOTE_REPO="https://github.com/paritytech/substrate.git"
 TMP_PREFIX="/tmp"                             # tmp location that the built doc is copied to.
 DOC_INDEX_PAGE="sc_service/index.html"
-CARGO_NIGHTLY=true
+
+# Set to `true` if using cargo `nightly` toolchain to build the doc, or set to `false` to use
+#   cargo default toolchain. This is case when you pin a certain nightly version to your default
+#   toolchain.
+CARGO_NIGHTLY=false
+
+# Set this git remote if it isn't the default `origin`
 GIT_REMOTE="origin"
 LATEST=false
 
