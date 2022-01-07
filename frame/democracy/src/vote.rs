@@ -128,6 +128,10 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 			self.1 = Zero::zero();
 		}
 	}
+
+	pub fn new() -> Self {
+		Self(Zero::zero(), Zero::zero())
+	}
 }
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
@@ -198,5 +202,12 @@ impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, Ac
 		};
 		*d = delegations;
 		*p = prior;
+	}
+
+	pub fn prior(&self) -> &PriorLock<BlockNumber, Balance> {
+		match self {
+			Voting::Direct { prior, .. } => prior,
+			Voting::Delegating { prior, .. } => prior,
+		}
 	}
 }
