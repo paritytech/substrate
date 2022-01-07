@@ -1046,7 +1046,7 @@ pub mod pallet {
 				})
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?
 				.try_into()
-				.expect("bound checked in previous line; qed");
+				.expect("bound checked above; qed");
 
 			let nominations = Nominations {
 				targets,
