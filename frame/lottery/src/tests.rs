@@ -307,6 +307,26 @@ fn do_buy_ticket_already_participating() {
 	});
 }
 
+/// `buy_ticket` is a storage noop when called with the same ticket again.
+#[test]
+fn buy_ticket_already_participating() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		assert_ok!(Lottery::start_lottery(Origin::root(), 1, 10, 10, false));
+
+		// Buying once works.
+		let call = Box::new(calls[0].clone());
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
+
+		// Buying the same ticket again returns Ok, but changes nothing.
+		assert_storage_noop!(Lottery::buy_ticket(Origin::signed(1), call).unwrap());
+
+		// Exactly one ticket exists.
+		assert_eq!(TicketsCount::<Test>::get(), 1);
+	});
+}
+
 /// `buy_ticket` is a storage noop when called with insufficient balance.
 #[test]
 fn buy_ticket_insufficient_balance() {
