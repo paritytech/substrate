@@ -454,11 +454,7 @@ pub struct ReadySolution<A> {
 #[scale_info(skip_type_params(T))]
 pub struct RoundSnapshot<T: Config> {
 	/// All of the voters.
-	pub voters: Vec<(
-		T::AccountId,
-		VoteWeight,
-		BoundedVec<T::AccountId, <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter>,
-	)>,
+	pub voters: Vec<VoterOf<T>>,
 	/// All of the targets.
 	pub targets: Vec<T::AccountId>,
 }
@@ -1217,20 +1213,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Same as the getter of the [`Snapshot`] storage item, but it returns the voters converted
-	/// into an unbounded vector.
-	///
-	/// Note that this incurs an extra allocation of the entire snapshot, unfortunately.
-	pub fn snapshot_unbounded(
-	) -> Option<(Vec<T::AccountId>, Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>)> {
-		use frame_election_provider_support::IntoUnboundedVoters;
-		Self::snapshot().map(|snapshot| {
-			let voters = snapshot.voters.into_unbounded_voters();
-			let targets = snapshot.targets;
-			(targets, voters)
-		})
-	}
-
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
 	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
