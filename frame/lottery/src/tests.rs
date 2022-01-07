@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 use mock::{
 	new_test_ext, run_to_block, Balances, BalancesCall, Call, Lottery, Origin, SystemCall, Test,
 };
@@ -304,6 +304,53 @@ fn do_buy_ticket_already_participating() {
 		assert_ok!(Lottery::do_buy_ticket(&1, &calls[0]));
 		// Buying the same ticket again fails.
 		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), Error::<Test>::AlreadyParticipating);
+	});
+}
+
+/// `buy_ticket` is a storage noop when called with insufficient balance.
+#[test]
+fn buy_ticket_insufficient_balance() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		// Price set to 100.
+		assert_ok!(Lottery::start_lottery(Origin::root(), 100, 10, 10, false));
+		let call = Box::new(calls[0].clone());
+
+		// Buying a ticket returns Ok, but changes nothing.
+		assert_storage_noop!(Lottery::buy_ticket(Origin::signed(1), call).unwrap());
+		assert!(TicketsCount::<Test>::get().is_zero());
+	});
+}
+
+#[test]
+fn do_buy_ticket_insufficient_balance() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		// Price set to 101.
+		assert_ok!(Lottery::start_lottery(Origin::root(), 101, 10, 10, false));
+		
+		// Buying fails with InsufficientBalance.
+		assert_noop!(
+			Lottery::do_buy_ticket(&1, &calls[0]),
+			BalancesError::<Test, _>::InsufficientBalance
+		);
+		assert!(TicketsCount::<Test>::get().is_zero());
+	});
+}
+
+#[test]
+fn do_buy_ticket_keep_alive() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::Balances(BalancesCall::transfer { dest: 0, value: 0 })];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
+		// Price set to 100.
+		assert_ok!(Lottery::start_lottery(Origin::root(), 100, 10, 10, false));
+		
+		// Buying fails with KeepAlive.
+		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), BalancesError::<Test, _>::KeepAlive);
+		assert!(TicketsCount::<Test>::get().is_zero());
 	});
 }
 
