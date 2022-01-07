@@ -114,8 +114,15 @@ impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
+/// Build a bounded vec from the given literals.
+///
+/// The type of the outcome must be known.
+///
+/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
+/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
 #[macro_export]
-macro_rules! try_bounded_vec {
+#[cfg(feature = "std")]
+macro_rules! bounded_vec {
 	($ ($values:expr),* ) => {
 		$crate::sp_std::vec![$($values),*].try_into().unwrap()
 	}

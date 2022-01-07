@@ -165,7 +165,7 @@ mod tests {
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
-		use frame_support::{traits::ConstU32, try_bounded_vec};
+		use frame_support::{bounded_vec, traits::ConstU32};
 
 		use super::*;
 		use crate::{data_provider, VoterOf};
@@ -177,9 +177,9 @@ mod tests {
 			type MaxVotesPerVoter = ConstU32<2>;
 			fn voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 				Ok(vec![
-					(1, 10, try_bounded_vec![10, 20]),
-					(2, 20, try_bounded_vec![30, 20]),
-					(3, 30, try_bounded_vec![10, 30]),
+					(1, 10, bounded_vec![10, 20]),
+					(2, 20, bounded_vec![30, 20]),
+					(3, 30, bounded_vec![10, 30]),
 				])
 			}
 

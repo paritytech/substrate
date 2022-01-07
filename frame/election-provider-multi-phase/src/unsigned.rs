@@ -746,7 +746,7 @@ mod tests {
 	use codec::Decode;
 	use frame_benchmarking::Zero;
 	use frame_support::{
-		assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker, try_bounded_vec,
+		assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker, bounded_vec,
 	};
 	use sp_npos_elections::IndexAssignment;
 	use sp_runtime::{
@@ -1046,8 +1046,8 @@ mod tests {
 	fn unsigned_per_dispatch_checks_can_only_submit_threshold_better() {
 		ExtBuilder::default()
 			.desired_targets(1)
-			.add_voter(7, 2, try_bounded_vec![10])
-			.add_voter(8, 5, try_bounded_vec![10])
+			.add_voter(7, 2, bounded_vec![10])
+			.add_voter(8, 5, bounded_vec![10])
 			.solution_improvement_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
 				roll_to(25);

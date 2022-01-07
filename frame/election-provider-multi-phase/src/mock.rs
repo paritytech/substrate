@@ -24,7 +24,7 @@ pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, Hooks},
-	try_bounded_vec,
+	bounded_vec,
 	weights::Weight,
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
@@ -248,15 +248,15 @@ impl pallet_balances::Config for Runtime {
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
 	pub static Voters: Vec<VoterOf<Runtime>> = vec![
-		(1, 10, try_bounded_vec![10, 20]),
-		(2, 10, try_bounded_vec![30, 40]),
-		(3, 10, try_bounded_vec![40]),
-		(4, 10, try_bounded_vec![10, 20, 30, 40]),
+		(1, 10, bounded_vec![10, 20]),
+		(2, 10, bounded_vec![30, 40]),
+		(3, 10, bounded_vec![40]),
+		(4, 10, bounded_vec![10, 20, 30, 40]),
 		// self votes.
-		(10, 10, try_bounded_vec![10]),
-		(20, 20, try_bounded_vec![20]),
-		(30, 30, try_bounded_vec![30]),
-		(40, 40, try_bounded_vec![40]),
+		(10, 10, bounded_vec![10]),
+		(20, 20, bounded_vec![20]),
+		(30, 30, bounded_vec![30]),
+		(40, 40, bounded_vec![40]),
 	];
 
 	pub static DesiredTargets: u32 = 2;
@@ -512,7 +512,7 @@ impl ElectionDataProvider for StakingMock {
 		// to be on-par with staking, we add a self vote as well. the stake is really not that
 		// important.
 		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, try_bounded_vec![target]));
+		current.push((target, ExistentialDeposit::get() as u64, bounded_vec![target]));
 		Voters::set(current);
 	}
 }
