@@ -1587,7 +1587,7 @@ pub mod pallet {
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 
-			if Nominators::<T>::contains_key(&stash) || Nominators::<T>::get(&stash).is_none() {
+			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
 				Self::chill_stash(&stash);
 				return Ok(())
 			}
