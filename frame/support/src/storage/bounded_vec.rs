@@ -20,7 +20,7 @@
 
 use crate::{
 	storage::{StorageDecodeLength, StorageTryAppend},
-	traits::Get,
+	traits::{Get, TryCollect},
 	WeakBoundedVec,
 };
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
@@ -146,9 +146,32 @@ impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {
 }
 
 impl<T, S: Get<u32>> BoundedVec<T, S> {
+	/// Pre-allocate `capacity` items in self.
+	///
+	/// If `capacity` is greater than [`Self::bound`], then the minimum of the two is used.
+	pub fn with_bounded_capacity(capacity: usize) -> Self {
+		let capacity = capacity.min(Self::bound());
+		Self(Vec::with_capacity(capacity), Default::default())
+	}
+
+	/// Allocate self with the maximum possible capacity.
+	pub fn with_max_capacity() -> Self {
+		Self::with_bounded_capacity(Self::bound())
+	}
+
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
 		S::get() as usize
+	}
+
+	/// Same as `Vec::resize`, but if `size` is more than [`Self::bound`], then [`Self::bound`] is
+	/// used.
+	pub fn bounded_resize(&mut self, size: usize, value: T)
+	where
+		T: Clone,
+	{
+		let size = size.min(Self::bound());
+		self.0.resize(size, value);
 	}
 
 	/// Consumes self and mutates self via the given `mutate` function.
@@ -300,15 +323,14 @@ impl<T, S> codec::DecodeLength for BoundedVec<T, S> {
 	}
 }
 
-// NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
-// to allow comparison of bounded vectors with different bounds.
-impl<T, S> PartialEq for BoundedVec<T, S>
+impl<T, BoundSelf, BoundRhs> PartialEq<BoundedVec<T, BoundRhs>> for BoundedVec<T, BoundSelf>
 where
 	T: PartialEq,
+	BoundSelf: Get<u32>,
+	BoundRhs: Get<u32>,
 {
-	fn eq(&self, rhs: &Self) -> bool {
-		self.0 == rhs.0
+	fn eq(&self, rhs: &BoundedVec<T, BoundRhs>) -> bool {
+		BoundSelf::get() == BoundRhs::get() && self.0 == rhs.0
 	}
 }
 
@@ -318,7 +340,7 @@ impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
 	}
 }
 
-impl<T, S> Eq for BoundedVec<T, S> where T: Eq {}
+impl<T, S: Get<u32>> Eq for BoundedVec<T, S> where T: Eq {}
 
 impl<T, S> StorageDecodeLength for BoundedVec<T, S> {}
 
@@ -341,6 +363,22 @@ where
 		codec::Compact(S::get())
 			.encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
+	}
+}
+
+impl<I, T, Bound> TryCollect<BoundedVec<T, Bound>> for I
+where
+	I: ExactSizeIterator + Iterator<Item = T>,
+	Bound: Get<u32>,
+{
+	type Error = &'static str;
+
+	fn try_collect(self) -> Result<BoundedVec<T, Bound>, Self::Error> {
+		if self.len() > Bound::get() as usize {
+			Err("iterator length too big")
+		} else {
+			Ok(BoundedVec::<T, Bound>::unchecked_from(self.collect::<Vec<T>>()))
+		}
 	}
 }
 
@@ -451,5 +489,60 @@ pub mod test {
 			BoundedVec::<u32, ConstU32<4>>::decode(&mut &v.encode()[..]),
 			Err("BoundedVec exceeds its limit".into()),
 		);
+	}
+
+	#[test]
+	fn can_be_collected() {
+		let b1: BoundedVec<u32, ConstU32<5>> = vec![1, 2, 3, 4].try_into().unwrap();
+		let b2: BoundedVec<u32, ConstU32<5>> = b1.iter().map(|x| x + 1).try_collect().unwrap();
+		assert_eq!(b2, vec![2, 3, 4, 5]);
+
+		// can also be collected into a collection of length 4.
+		let b2: BoundedVec<u32, ConstU32<4>> = b1.iter().map(|x| x + 1).try_collect().unwrap();
+		assert_eq!(b2, vec![2, 3, 4, 5]);
+
+		// can be mutated further into iterators that are `ExactSizedIterator`.
+		let b2: BoundedVec<u32, ConstU32<4>> =
+			b1.iter().map(|x| x + 1).rev().try_collect().unwrap();
+		assert_eq!(b2, vec![5, 4, 3, 2]);
+
+		let b2: BoundedVec<u32, ConstU32<4>> =
+			b1.iter().map(|x| x + 1).rev().skip(2).try_collect().unwrap();
+		assert_eq!(b2, vec![3, 2]);
+		let b2: BoundedVec<u32, ConstU32<2>> =
+			b1.iter().map(|x| x + 1).rev().skip(2).try_collect().unwrap();
+		assert_eq!(b2, vec![3, 2]);
+
+		let b2: BoundedVec<u32, ConstU32<4>> =
+			b1.iter().map(|x| x + 1).rev().take(2).try_collect().unwrap();
+		assert_eq!(b2, vec![5, 4]);
+		let b2: BoundedVec<u32, ConstU32<2>> =
+			b1.iter().map(|x| x + 1).rev().take(2).try_collect().unwrap();
+		assert_eq!(b2, vec![5, 4]);
+
+		// but these worn't work
+		let b2: Result<BoundedVec<u32, ConstU32<3>>, _> = b1.iter().map(|x| x + 1).try_collect();
+		assert!(b2.is_err());
+
+		let b2: Result<BoundedVec<u32, ConstU32<1>>, _> =
+			b1.iter().map(|x| x + 1).rev().take(2).try_collect();
+		assert!(b2.is_err());
+	}
+
+	#[test]
+	fn eq_works() {
+		// of same type
+		let b1: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+		let b2: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+		assert_eq!(b1, b2);
+
+		// of different type, but same value and bound.
+		crate::parameter_types! {
+			B1: u32 = 7;
+			B2: u32 = 7;
+		}
+		let b1: BoundedVec<u32, B1> = vec![1, 2, 3].try_into().unwrap();
+		let b2: BoundedVec<u32, B2> = vec![1, 2, 3].try_into().unwrap();
+		assert_eq!(b1, b2);
 	}
 }

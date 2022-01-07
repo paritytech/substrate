@@ -165,6 +165,8 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints>;
 	/// Network protocol id.
 	fn protocol_id(&self) -> Option<&str>;
+	/// Optional network fork identifier. `None` by default.
+	fn fork_id(&self) -> Option<&str>;
 	/// Additional loosly-typed properties of the chain.
 	///
 	/// Returns an empty JSON object if 'properties' not defined in config
