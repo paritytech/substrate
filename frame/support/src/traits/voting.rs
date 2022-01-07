@@ -119,13 +119,13 @@ impl<Tally, Moment, Class> PollStatus<Tally, Moment, Class> {
 	}
 }
 
-pub trait Polls<Tally> {
+pub trait Polling<Tally> {
 	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
 	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
-	type Class: Parameter + Member;
+	type Class: Parameter + Member + Ord + PartialOrd;
 	type Moment;
 
-	/// Provides a slice of values that `T` may take.
+	/// Provides a vec of values that `T` may take.
 	fn classes() -> Vec<Self::Class>;
 
 	/// `Some` if the referendum `index` can be voted on, along with the tally and class of

@@ -20,7 +20,7 @@
 //!
 //! ## Overview
 //!
-//! Pallet for managing actual voting in referenda.
+//! Pallet for managing actual voting in polls.
 
 #![recursion_limit = "256"]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -28,8 +28,8 @@
 use frame_support::{
 	ensure,
 	traits::{
-		Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polls, ReservableCurrency,
-		WithdrawReasons,
+		Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polling,
+		ReservableCurrency, WithdrawReasons,
 	},
 };
 use sp_runtime::{
@@ -62,7 +62,7 @@ type VotingOf<T> = Voting<
 	BalanceOf<T>,
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
-	ReferendumIndexOf<T>,
+	PollIndexOf<T>,
 >;
 #[allow(dead_code)]
 type DelegatingOf<T> = Delegating<
@@ -71,8 +71,8 @@ type DelegatingOf<T> = Delegating<
 	<T as frame_system::Config>::BlockNumber,
 >;
 type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
-type ReferendumIndexOf<T> = <<T as Config>::Referenda as Polls<TallyOf<T>>>::Index;
-type ClassOf<T> = <<T as Config>::Referenda as Polls<TallyOf<T>>>::Class;
+type PollIndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
+type ClassOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Class;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -95,8 +95,8 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
-		/// The implementation of the logic which conducts referenda.
-		type Referenda: Polls<TallyOf<Self>, Votes = BalanceOf<Self>, Moment = Self::BlockNumber>;
+		/// The implementation of the logic which conducts polls.
+		type Polls: Polling<TallyOf<Self>, Votes = BalanceOf<Self>, Moment = Self::BlockNumber>;
 
 		/// The maximum amount of tokens which may be used for voting. May just be
 		/// `Currency::total_issuance`, but you might want to reduce this in order to account for
@@ -152,54 +152,59 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Referendum is not ongoing.
+		/// Poll is not ongoing.
 		NotOngoing,
-		/// The given account did not vote on the referendum.
+		/// The given account did not vote on the poll.
 		NotVoter,
 		/// The actor has no permission to conduct the action.
 		NoPermission,
+		/// The actor has no permission to conduct the action right now but will do in the future.
+		NoPermissionYet,
 		/// The account is already delegating.
 		AlreadyDelegating,
+		/// The account currently has votes attached to it and the operation cannot succeed until
+		/// these are removed, either through `unvote` or `reap_vote`.
+		AlreadyVoting,
 		/// Too high a balance was provided that the account cannot afford.
 		InsufficientFunds,
 		/// The account is not currently delegating.
 		NotDelegating,
-		/// The account currently has votes attached to it and the operation cannot succeed until
-		/// these are removed, either through `unvote` or `reap_vote`.
-		VotesExist,
 		/// Delegation to oneself makes no sense.
 		Nonsense,
 		/// Maximum number of votes reached.
 		MaxVotesReached,
 		/// The class must be supplied since it is not easily determinable from the state.
 		ClassNeeded,
+		/// The class ID supplied is invalid.
+		BadClass,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Vote in a referendum. If `vote.is_aye()`, the vote is to enact the proposal;
+		/// Vote in a poll. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
-		/// - `ref_index`: The index of the referendum to vote for.
+		/// - `poll_index`: The index of the poll to vote for.
 		/// - `vote`: The vote configuration.
 		///
-		/// Weight: `O(R)` where R is the number of referenda the voter has voted on.
+		/// Weight: `O(R)` where R is the number of polls the voter has voted on.
 		#[pallet::weight(
 			T::WeightInfo::vote_new(T::MaxVotes::get())
 				.max(T::WeightInfo::vote_existing(T::MaxVotes::get()))
 		)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			#[pallet::compact] ref_index: ReferendumIndexOf<T>,
+			#[pallet::compact] poll_index: PollIndexOf<T>,
 			vote: AccountVote<BalanceOf<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::try_vote(&who, ref_index, vote)
+			Self::try_vote(&who, poll_index, vote)
 		}
 
-		/// Delegate the voting power (with some given conviction) of the sending account.
+		/// Delegate the voting power (with some given conviction) of the sending account for a
+		/// particular class of polls.
 		///
 		/// The balance delegated is locked for as long as it's delegated, and thereafter for the
 		/// time appropriate for the conviction's lock period.
@@ -210,6 +215,8 @@ pub mod pallet {
 		///     through `reap_vote` or `unvote`).
 		///
 		/// - `to`: The account whose voting the `target` account's voting power will follow.
+		/// - `class`: The class of polls to delegate. To delegate multiple classes, multiple
+		///   calls to this function are required.
 		/// - `conviction`: The conviction that will be attached to the delegated votes. When the
 		///   account is undelegated, the funds will be locked for the corresponding period.
 		/// - `balance`: The amount of the account's balance to be used in delegating. This must not
@@ -217,7 +224,7 @@ pub mod pallet {
 		///
 		/// Emits `Delegated`.
 		///
-		/// Weight: `O(R)` where R is the number of referenda the voter delegating to has
+		/// Weight: `O(R)` where R is the number of polls the voter delegating to has
 		///   voted on. Weight is charged as if maximum votes.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
@@ -235,7 +242,7 @@ pub mod pallet {
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
 		}
 
-		/// Undelegate the voting power of the sending account.
+		/// Undelegate the voting power of the sending account for a particular class of polls.
 		///
 		/// Tokens may be unlocked following once an amount of time consistent with the lock period
 		/// of the conviction with which the delegation was issued.
@@ -243,9 +250,11 @@ pub mod pallet {
 		/// The dispatch origin of this call must be _Signed_ and the signing account must be
 		/// currently delegating.
 		///
+		/// - `class`: The class of polls to remove the delegation from.
+		///
 		/// Emits `Undelegated`.
 		///
-		/// Weight: `O(R)` where R is the number of referenda the voter delegating to has
+		/// Weight: `O(R)` where R is the number of polls the voter delegating to has
 		///   voted on. Weight is charged as if maximum votes.
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
@@ -256,36 +265,35 @@ pub mod pallet {
 			Ok(Some(T::WeightInfo::undelegate(votes)).into())
 		}
 
-		/// Unlock tokens that have an expired lock.
+		/// Remove the lock caused prior voting/delegating which has expired within a particluar
+		/// class.
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
+		/// - `class`: The class of polls to unlock.
 		/// - `target`: The account to remove the lock on.
 		///
 		/// Weight: `O(R)` with R number of vote of target.
-		#[pallet::weight(
-			T::WeightInfo::unlock_set(T::MaxVotes::get())
-				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
-		)]
+		#[pallet::weight(T::WeightInfo::unlock(T::MaxVotes::get()))]
 		pub fn unlock(origin: OriginFor<T>, class: ClassOf<T>, target: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(&class, &target);
 			Ok(())
 		}
 
-		/// Remove a vote for a referendum.
+		/// Remove a vote for a poll.
 		///
 		/// If:
-		/// - the referendum was cancelled, or
-		/// - the referendum is ongoing, or
-		/// - the referendum has ended such that
+		/// - the poll was cancelled, or
+		/// - the poll is ongoing, or
+		/// - the poll has ended such that
 		///   - the vote of the account was in opposition to the result; or
 		///   - there was no conviction to the account's vote; or
 		///   - the account made a split vote
 		/// ...then the vote is removed cleanly and a following call to `unlock` may result in more
 		/// funds being available.
 		///
-		/// If, however, the referendum has ended and:
+		/// If, however, the poll has ended and:
 		/// - it finished corresponding to the vote of the account, and
 		/// - the account made a standard vote with conviction, and
 		/// - the lock period of the conviction is not over
@@ -294,43 +302,46 @@ pub mod pallet {
 		/// of both the amount locked and the time is it locked for).
 		///
 		/// The dispatch origin of this call must be _Signed_, and the signer must have a vote
-		/// registered for referendum `index`.
+		/// registered for poll `index`.
 		///
-		/// - `index`: The index of referendum of the vote to be removed.
+		/// - `index`: The index of poll of the vote to be removed.
+		/// - `class`: Optional parameter, if given it indicates the class of the poll. For polls
+		///   which have finished or are cancelled, this must be `Some`.
 		///
-		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
 		#[pallet::weight(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
 		pub fn remove_vote(
 			origin: OriginFor<T>,
 			class: Option<ClassOf<T>>,
-			index: ReferendumIndexOf<T>,
+			index: PollIndexOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, class, UnvoteScope::Any)
 		}
 
-		/// Remove a vote for a referendum.
+		/// Remove a vote for a poll.
 		///
 		/// If the `target` is equal to the signer, then this function is exactly equivalent to
 		/// `remove_vote`. If not equal to the signer, then the vote must have expired,
-		/// either because the referendum was cancelled, because the voter lost the referendum or
+		/// either because the poll was cancelled, because the voter lost the poll or
 		/// because the conviction period is over.
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
 		/// - `target`: The account of the vote to be removed; this account must have voted for
-		///   referendum `index`.
-		/// - `index`: The index of referendum of the vote to be removed.
+		///   poll `index`.
+		/// - `index`: The index of poll of the vote to be removed.
+		/// - `class`: The class of the poll.
 		///
-		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		/// Weight: `O(R + log R)` where R is the number of polls that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
 		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
 			target: T::AccountId,
 			class: ClassOf<T>,
-			index: ReferendumIndexOf<T>,
+			index: PollIndexOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
@@ -344,15 +355,15 @@ impl<T: Config> Pallet<T> {
 	/// Actually enact a vote, if legit.
 	fn try_vote(
 		who: &T::AccountId,
-		ref_index: ReferendumIndexOf<T>,
+		poll_index: PollIndexOf<T>,
 		vote: AccountVote<BalanceOf<T>>,
 	) -> DispatchResult {
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
-		T::Referenda::try_access_poll(ref_index, |poll_status| {
+		T::Polls::try_access_poll(poll_index, |poll_status| {
 			let (tally, class) = poll_status.ensure_ongoing().ok_or(Error::<T>::NotOngoing)?;
 			VotingFor::<T>::try_mutate(who, &class, |voting| {
 				if let Voting::Casting(Casting { ref mut votes, delegations, .. }) = voting {
-					match votes.binary_search_by_key(&ref_index, |i| i.0) {
+					match votes.binary_search_by_key(&poll_index, |i| i.0) {
 						Ok(i) => {
 							// Shouldn't be possible to fail, but we handle it gracefully.
 							tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
@@ -363,10 +374,10 @@ impl<T: Config> Pallet<T> {
 						},
 						Err(i) => {
 							ensure!(
-								votes.len() as u32 <= T::MaxVotes::get(),
+								(votes.len() as u32) < T::MaxVotes::get(),
 								Error::<T>::MaxVotesReached
 							);
-							votes.insert(i, (ref_index, vote));
+							votes.insert(i, (poll_index, vote));
 						},
 					}
 					// Shouldn't be possible to fail, but we handle it gracefully.
@@ -385,29 +396,29 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// Remove the account's vote for the given referendum if possible. This is possible when:
-	/// - The referendum has not finished.
-	/// - The referendum has finished and the voter lost their direction.
-	/// - The referendum has finished and the voter's lock period is up.
+	/// Remove the account's vote for the given poll if possible. This is possible when:
+	/// - The poll has not finished.
+	/// - The poll has finished and the voter lost their direction.
+	/// - The poll has finished and the voter's lock period is up.
 	///
 	/// This will generally be combined with a call to `unlock`.
 	fn try_remove_vote(
 		who: &T::AccountId,
-		ref_index: ReferendumIndexOf<T>,
+		poll_index: PollIndexOf<T>,
 		class_hint: Option<ClassOf<T>>,
 		scope: UnvoteScope,
 	) -> DispatchResult {
 		let class = class_hint
-			.or_else(|| Some(T::Referenda::as_ongoing(ref_index)?.1))
+			.or_else(|| Some(T::Polls::as_ongoing(poll_index)?.1))
 			.ok_or(Error::<T>::ClassNeeded)?;
 		VotingFor::<T>::try_mutate(who, class, |voting| {
 			if let Voting::Casting(Casting { ref mut votes, delegations, ref mut prior }) = voting {
 				let i = votes
-					.binary_search_by_key(&ref_index, |i| i.0)
+					.binary_search_by_key(&poll_index, |i| i.0)
 					.map_err(|_| Error::<T>::NotVoter)?;
 				let v = votes.remove(i);
 
-				T::Referenda::try_access_poll(ref_index, |poll_status| match poll_status {
+				T::Polls::try_access_poll(poll_index, |poll_status| match poll_status {
 					PollStatus::Ongoing(tally, _) => {
 						ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
 						// Shouldn't be possible to fail, but we handle it gracefully.
@@ -424,14 +435,14 @@ impl<T: Config> Pallet<T> {
 							if now < unlock_at {
 								ensure!(
 									matches!(scope, UnvoteScope::Any),
-									Error::<T>::NoPermission
+									Error::<T>::NoPermissionYet
 								);
 								prior.accumulate(unlock_at, balance)
 							}
 						}
 						Ok(())
 					},
-					PollStatus::None => Ok(()), // Referendum was cancelled.
+					PollStatus::None => Ok(()), // Poll was cancelled.
 				})
 			} else {
 				Ok(())
@@ -449,9 +460,9 @@ impl<T: Config> Pallet<T> {
 			},
 			Voting::Casting(Casting { votes, delegations, .. }) => {
 				*delegations = delegations.saturating_add(amount);
-				for &(ref_index, account_vote) in votes.iter() {
+				for &(poll_index, account_vote) in votes.iter() {
 					if let AccountVote::Standard { vote, .. } = account_vote {
-						T::Referenda::access_poll(ref_index, |poll_status| {
+						T::Polls::access_poll(poll_index, |poll_status| {
 							if let PollStatus::Ongoing(tally, _) = poll_status {
 								tally.increase(vote.aye, amount);
 							}
@@ -473,9 +484,9 @@ impl<T: Config> Pallet<T> {
 			},
 			Voting::Casting(Casting { votes, delegations, .. }) => {
 				*delegations = delegations.saturating_sub(amount);
-				for &(ref_index, account_vote) in votes.iter() {
+				for &(poll_index, account_vote) in votes.iter() {
 					if let AccountVote::Standard { vote, .. } = account_vote {
-						T::Referenda::access_poll(ref_index, |poll_status| {
+						T::Polls::access_poll(poll_index, |poll_status| {
 							if let PollStatus::Ongoing(tally, _) = poll_status {
 								tally.reduce(vote.aye, amount);
 							}
@@ -498,6 +509,7 @@ impl<T: Config> Pallet<T> {
 		balance: BalanceOf<T>,
 	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T>::Nonsense);
+		T::Polls::classes().binary_search(&class).map_err(|_| Error::<T>::BadClass)?;
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
 		let votes = VotingFor::<T>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
 			let old = sp_std::mem::replace(voting, Voting::Delegating(Delegating {
@@ -518,7 +530,7 @@ impl<T: Config> Pallet<T> {
 				},
 				Voting::Casting(Casting { votes, delegations, prior }) => {
 					// here we just ensure that we're currently idling with no votes recorded.
-					ensure!(votes.is_empty(), Error::<T>::VotesExist);
+					ensure!(votes.is_empty(), Error::<T>::AlreadyVoting);
 					voting.set_common(delegations, prior);
 				},
 			}
@@ -541,9 +553,7 @@ impl<T: Config> Pallet<T> {
 		class: ClassOf<T>,
 	) -> Result<u32, DispatchError> {
 		let votes = VotingFor::<T>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
-			let mut old = Voting::default();
-			sp_std::mem::swap(&mut old, voting);
-			match old {
+			match sp_std::mem::replace(voting, Voting::default()) {
 				Voting::Delegating(Delegating { balance, target, conviction, delegations, mut prior }) => {
 					// remove any delegation votes to our current target.
 					let votes =

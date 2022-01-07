@@ -149,9 +149,9 @@ pub struct Delegating<Balance, AccountId, BlockNumber> {
 
 /// Information concerning the direct vote-casting of some voting power.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Casting<Balance, BlockNumber, ReferendumIndex> {
+pub struct Casting<Balance, BlockNumber, PollIndex> {
 	/// The current votes of the account.
-	pub votes: Vec<(ReferendumIndex, AccountVote<Balance>)>,
+	pub votes: Vec<(PollIndex, AccountVote<Balance>)>,
 	/// The total amount of delegations that this account has received, post-conviction-weighting.
 	pub delegations: Delegations<Balance>,
 	/// Any pre-existing locks from past voting/delegating activity.
@@ -160,15 +160,15 @@ pub struct Casting<Balance, BlockNumber, ReferendumIndex> {
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub enum Voting<Balance, AccountId, BlockNumber, ReferendumIndex> {
+pub enum Voting<Balance, AccountId, BlockNumber, PollIndex> {
 	/// The account is voting directly.
-	Casting(Casting<Balance, BlockNumber, ReferendumIndex>),
+	Casting(Casting<Balance, BlockNumber, PollIndex>),
 	/// The account is delegating `balance` of its balance to a `target` account with `conviction`.
 	Delegating(Delegating<Balance, AccountId, BlockNumber>),
 }
 
-impl<Balance: Default, AccountId, BlockNumber: Zero, ReferendumIndex> Default
-	for Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
+impl<Balance: Default, AccountId, BlockNumber: Zero, PollIndex> Default
+	for Voting<Balance, AccountId, BlockNumber, PollIndex>
 {
 	fn default() -> Self {
 		Voting::Casting(Casting {
@@ -179,8 +179,8 @@ impl<Balance: Default, AccountId, BlockNumber: Zero, ReferendumIndex> Default
 	}
 }
 
-impl<Balance, AccountId, BlockNumber, ReferendumIndex> AsMut<PriorLock<BlockNumber, Balance>>
-	for Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
+impl<Balance, AccountId, BlockNumber, PollIndex> AsMut<PriorLock<BlockNumber, Balance>>
+	for Voting<Balance, AccountId, BlockNumber, PollIndex>
 {
 	fn as_mut(&mut self) -> &mut PriorLock<BlockNumber, Balance> {
 		match self {
@@ -194,8 +194,8 @@ impl<
 		Balance: Saturating + Ord + Zero + Copy,
 		BlockNumber: Ord + Copy + Zero,
 		AccountId,
-		ReferendumIndex,
-	> Voting<Balance, AccountId, BlockNumber, ReferendumIndex>
+		PollIndex,
+	> Voting<Balance, AccountId, BlockNumber, PollIndex>
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
 		AsMut::<PriorLock<BlockNumber, Balance>>::as_mut(self).rejig(now);

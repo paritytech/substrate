@@ -21,7 +21,8 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate as pallet_conviction_voting;
-use frame_support::{parameter_types, assert_ok, traits::{ConstU32, Contains, ConstU64}};
+use frame_support::{parameter_types, assert_ok, assert_noop};
+use frame_support::traits::{ConstU32, Contains, ConstU64, Polling};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -116,8 +117,8 @@ parameter_types! {
 	].into_iter().collect();
 }
 
-pub struct TestReferenda;
-impl frame_support::traits::Polls<TallyOf<Test>> for TestReferenda {
+pub struct TestPolls;
+impl Polling<TallyOf<Test>> for TestPolls {
 	type Index = u8;
 	type Votes = u64;
 	type Moment = u64;
@@ -173,10 +174,10 @@ impl Config for Test {
 	type Event = Event;
 	type Currency = pallet_balances::Pallet<Self>;
 	type VoteLockingPeriod = ConstU64<3>;
-	type MaxVotes = ConstU32<100>;
+	type MaxVotes = ConstU32<3>;
 	type WeightInfo = ();
 	type MaxTurnout = TotalIssuanceOf<Balances, Self::AccountId>;
-	type Referenda = TestReferenda;
+	type Polls = TestPolls;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -221,13 +222,13 @@ fn nay(amount: u64, conviction: u8) -> AccountVote<u64> {
 }
 
 fn tally(index: u8) -> TallyOf<Test> {
-	<TestReferenda as frame_support::traits::Polls<TallyOf<Test>>>::as_ongoing(index)
+	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index)
 		.expect("No poll")
 		.0
 }
 
 fn class(index: u8) -> u8 {
-	<TestReferenda as frame_support::traits::Polls<TallyOf<Test>>>::as_ongoing(index)
+	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index)
 		.expect("No poll")
 		.1
 }
@@ -670,4 +671,64 @@ fn lock_aggregation_over_different_classes_with_casting_works() {
 	});
 }
 
-// TODO: Errors
+#[test]
+fn errors_with_vote_work() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Voting::vote(Origin::signed(1), 0, aye(10, 0)), Error::<Test>::NotOngoing);
+		assert_noop!(Voting::vote(Origin::signed(1), 1, aye(10, 0)), Error::<Test>::NotOngoing);
+		assert_noop!(Voting::vote(Origin::signed(1), 2, aye(10, 0)), Error::<Test>::NotOngoing);
+		assert_noop!(Voting::vote(Origin::signed(1), 3, aye(11, 0)), Error::<Test>::InsufficientFunds);
+
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 10));
+		assert_noop!(Voting::vote(Origin::signed(1), 3, aye(10, 0)), Error::<Test>::AlreadyDelegating);
+
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		Polls::set(vec![
+			(0, Ongoing(Tally::default(), 0)),
+			(1, Ongoing(Tally::default(), 0)),
+			(2, Ongoing(Tally::default(), 0)),
+			(3, Ongoing(Tally::default(), 0)),
+		].into_iter().collect());
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(10, 0)));
+		assert_noop!(Voting::vote(Origin::signed(1), 3, aye(10, 0)), Error::<Test>::MaxVotesReached);
+	});
+}
+
+#[test]
+fn errors_with_delegating_work() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 11), Error::<Test>::InsufficientFunds);
+		assert_noop!(Voting::delegate(Origin::signed(1), 3, 2, Conviction::None, 10), Error::<Test>::BadClass);
+
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
+		assert_noop!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 10), Error::<Test>::AlreadyVoting);
+
+		assert_noop!(Voting::undelegate(Origin::signed(1), 0), Error::<Test>::NotDelegating);
+	});
+}
+
+#[test]
+fn remove_other_vote_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3), Error::<Test>::NotVoter);
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 2)));
+		assert_noop!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3), Error::<Test>::NoPermission);
+		Polls::set(vec![(3, Completed(1, true))].into_iter().collect());
+		run_to(6);
+		assert_noop!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3), Error::<Test>::NoPermissionYet);
+		run_to(7);
+		assert_ok!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3));
+	});
+}
+
+#[test]
+fn errors_with_remove_vote_work() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Voting::remove_vote(Origin::signed(1), Some(0), 3), Error::<Test>::NotVoter);
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 2)));
+		Polls::set(vec![(3, Completed(1, true))].into_iter().collect());
+		assert_noop!(Voting::remove_vote(Origin::signed(1), None, 3), Error::<Test>::ClassNeeded);
+	});
+}

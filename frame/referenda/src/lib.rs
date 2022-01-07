@@ -17,7 +17,7 @@
 //!
 //! ## Overview
 //!
-//! A pallet for executing referenda. No voting logic is present here, and the `Polls` and
+//! A pallet for executing referenda. No voting logic is present here, and the `Polling` and
 //! `PollStatus` traits are used to allow the voting logic (likely in a pallet) to be utilized.
 //!
 //! A referendum is a vote on whether a proposal should be dispatched from a particular origin. The
@@ -67,7 +67,7 @@ use frame_support::{
 			DispatchTime, MaybeHashed,
 		},
 		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, OriginTrait, PollStatus,
-		Polls, ReservableCurrency, VoteTally,
+		Polling, ReservableCurrency, VoteTally,
 	},
 	BoundedVec,
 };
@@ -528,7 +528,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Polls<T::Tally> for Pallet<T> {
+impl<T: Config> Polling<T::Tally> for Pallet<T> {
 	type Index = ReferendumIndex;
 	type Votes = VotesOf<T>;
 	type Moment = T::BlockNumber;

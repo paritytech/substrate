@@ -57,7 +57,7 @@ fn add_proposal<T: Config>(n: u32) -> Result<T::Hash, &'static str> {
 	Ok(proposal_hash)
 }
 
-fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
+fn add_referendum<T: Config>(n: u32) -> Result<PollIndex, &'static str> {
 	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 	let vote_threshold = VoteThreshold::SimpleMajority;
 
@@ -67,7 +67,7 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		vote_threshold,
 		0u32.into(),
 	);
-	let referendum_index: ReferendumIndex = ReferendumCount::<T>::get() - 1;
+	let referendum_index: PollIndex = PollCount::<T>::get() - 1;
 	T::Scheduler::schedule_named(
 		(DEMOCRACY_ID, referendum_index).encode(),
 		DispatchTime::At(2u32.into()),
@@ -186,7 +186,7 @@ benchmarks! {
 		let referendum_info = Democracy::<T>::referendum_info(referendum_index)
 			.ok_or("referendum doesn't exist")?;
 		let tally =  match referendum_info {
-			ReferendumInfo::Ongoing(r) => r.tally,
+			PollInfo::Ongoing(r) => r.tally,
 			_ => return Err("referendum not ongoing".into()),
 		};
 		assert_eq!(tally.nays, 1000u32.into(), "changed vote was not recorded");
@@ -198,10 +198,10 @@ benchmarks! {
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 	}: _<T::Origin>(origin, referendum_index)
 	verify {
-		// Referendum has been canceled
+		// Poll has been canceled
 		assert_noop!(
 			Democracy::<T>::referendum_status(referendum_index),
-			Error::<T>::ReferendumInvalid,
+			Error::<T>::PollInvalid,
 		);
 	}
 
@@ -225,10 +225,10 @@ benchmarks! {
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 	}: _<T::Origin>(origin, hash, Some(referendum_index))
 	verify {
-		// Referendum has been canceled
+		// Poll has been canceled
 		assert_noop!(
 			Democracy::<T>::referendum_status(referendum_index),
-			Error::<T>::ReferendumInvalid
+			Error::<T>::PollInvalid
 		);
 	}
 
@@ -361,10 +361,10 @@ benchmarks! {
 
 		// All but the new next external should be finished
 		for i in 0 .. r {
-			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+			if let Some(value) = PollInfoOf::<T>::get(i) {
 				match value {
-					ReferendumInfo::Finished { .. } => (),
-					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished".into()),
+					PollInfo::Finished { .. } => (),
+					PollInfo::Ongoing(_) => return Err("Poll was not finished".into()),
 				}
 			}
 		}
@@ -395,10 +395,10 @@ benchmarks! {
 
 		// All should be finished
 		for i in 0 .. r {
-			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+			if let Some(value) = PollInfoOf::<T>::get(i) {
 				match value {
-					ReferendumInfo::Finished { .. } => (),
-					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished".into()),
+					PollInfo::Finished { .. } => (),
+					PollInfo::Ongoing(_) => return Err("Poll was not finished".into()),
 				}
 			}
 		}
@@ -412,11 +412,11 @@ benchmarks! {
 			add_referendum::<T>(i)?;
 		}
 
-		for (key, mut info) in ReferendumInfoOf::<T>::iter() {
-			if let ReferendumInfo::Ongoing(ref mut status) = info {
+		for (key, mut info) in PollInfoOf::<T>::iter() {
+			if let PollInfo::Ongoing(ref mut status) = info {
 				status.end += 100u32.into();
 			}
-			ReferendumInfoOf::<T>::insert(key, info);
+			PollInfoOf::<T>::insert(key, info);
 		}
 
 		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
@@ -426,10 +426,10 @@ benchmarks! {
 	verify {
 		// All should be on going
 		for i in 0 .. r {
-			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+			if let Some(value) = PollInfoOf::<T>::get(i) {
 				match value {
-					ReferendumInfo::Finished { .. } => return Err("Referendum has been finished".into()),
-					ReferendumInfo::Ongoing(_) => (),
+					PollInfo::Finished { .. } => return Err("Poll has been finished".into()),
+					PollInfo::Ongoing(_) => (),
 				}
 			}
 		}
@@ -442,11 +442,11 @@ benchmarks! {
 			add_referendum::<T>(i)?;
 		}
 
-		for (key, mut info) in ReferendumInfoOf::<T>::iter() {
-			if let ReferendumInfo::Ongoing(ref mut status) = info {
+		for (key, mut info) in PollInfoOf::<T>::iter() {
+			if let PollInfo::Ongoing(ref mut status) = info {
 				status.end += 100u32.into();
 			}
-			ReferendumInfoOf::<T>::insert(key, info);
+			PollInfoOf::<T>::insert(key, info);
 		}
 
 		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
@@ -458,10 +458,10 @@ benchmarks! {
 	verify {
 		// All should be on going
 		for i in 0 .. r {
-			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+			if let Some(value) = PollInfoOf::<T>::get(i) {
 				match value {
-					ReferendumInfo::Finished { .. } => return Err("Referendum has been finished".into()),
-					ReferendumInfo::Ongoing(_) => (),
+					PollInfo::Finished { .. } => return Err("Poll has been finished".into()),
+					PollInfo::Ongoing(_) => (),
 				}
 			}
 		}
