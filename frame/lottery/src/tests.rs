@@ -350,7 +350,7 @@ fn do_buy_ticket_insufficient_balance() {
 		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
 		// Price set to 101.
 		assert_ok!(Lottery::start_lottery(Origin::root(), 101, 10, 10, false));
-		
+
 		// Buying fails with InsufficientBalance.
 		assert_noop!(
 			Lottery::do_buy_ticket(&1, &calls[0]),
@@ -367,7 +367,7 @@ fn do_buy_ticket_keep_alive() {
 		assert_ok!(Lottery::set_calls(Origin::root(), calls.clone()));
 		// Price set to 100.
 		assert_ok!(Lottery::start_lottery(Origin::root(), 100, 10, 10, false));
-		
+
 		// Buying fails with KeepAlive.
 		assert_noop!(Lottery::do_buy_ticket(&1, &calls[0]), BalancesError::<Test, _>::KeepAlive);
 		assert!(TicketsCount::<Test>::get().is_zero());
