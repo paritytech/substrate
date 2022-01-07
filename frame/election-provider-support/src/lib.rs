@@ -108,7 +108,7 @@
 //!             Ok(1)
 //!         }
 //!         fn voters(maybe_max_len: Option<usize>)
-//!           -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
+//!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
 //!         }
