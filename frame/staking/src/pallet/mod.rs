@@ -50,6 +50,8 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
+	use frame_election_provider_support::ElectionDataProvider;
+
 	use crate::BenchmarkingConfig;
 
 	use super::*;
@@ -703,6 +705,14 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
+			// ensure that we funnel the correct value to the `DataProvider::MaxVotesPerVoter`;
+			assert_eq!(
+				T::MaxNominations::get(),
+				<Self as ElectionDataProvider>::MaxVotesPerVoter::get()
+			);
+			// and that MaxNominations is always greater than 1, since we count on this.
+			assert!(!T::MaxNominations::get().is_zero());
+
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
 					assert!(

@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
-	VoteWeight, VoteWeightProvider,
+	VoteWeight, VoteWeightProvider, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -661,9 +661,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
 	/// auto-chilled, but still count towards the limit imposed by `maybe_max_len`.
-	pub fn get_npos_voters(
-		maybe_max_len: Option<usize>,
-	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let nominator_count = Nominators::<T>::count() as usize;
 			let validator_count = Validators::<T>::count() as usize;
@@ -677,8 +675,13 @@ impl<T: Config> Pallet<T> {
 		let mut validators_taken = 0u32;
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
-			let self_vote =
-				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
+			let self_vote = (
+				validator.clone(),
+				Self::weight_of(&validator),
+				vec![validator.clone()]
+					.try_into()
+					.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
+			);
 			all_voters.push(self_vote);
 			validators_taken.saturating_inc();
 		}
@@ -720,11 +723,7 @@ impl<T: Config> Pallet<T> {
 						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 				});
 				if !targets.len().is_zero() {
-					all_voters.push((
-						nominator.clone(),
-						weight_of(&nominator),
-						targets.into_inner(),
-					));
+					all_voters.push((nominator.clone(), weight_of(&nominator), targets));
 					nominators_taken.saturating_inc();
 				}
 			} else {
@@ -863,9 +862,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(Self::validator_count())
 	}
 
-	fn voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
+	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
@@ -918,7 +915,11 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
+	fn add_voter(
+		voter: T::AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<T::AccountId, Self::MaxVotesPerVoter>,
+	) {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -970,7 +971,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		voters: Vec<VoterOf<Self>>,
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {

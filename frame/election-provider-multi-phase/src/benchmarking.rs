@@ -20,7 +20,10 @@
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::account;
-use frame_support::{assert_ok, traits::Hooks};
+use frame_support::{
+	assert_ok,
+	traits::{Hooks, TryCollect},
+};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
@@ -69,11 +72,12 @@ fn solution_with_size<T: Config>(
 	let active_voters = (0..active_voters_count)
 		.map(|i| {
 			// chose a random subset of winners.
-			let winner_votes = winners
+			let winner_votes: BoundedVec<_, _> = winners
 				.as_slice()
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
-				.collect::<Vec<_>>();
+				.try_collect()
+				.expect("<SolutionOf<T>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, winner_votes)
 		})
@@ -87,10 +91,11 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<T::AccountId>>();
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
-			let votes = (&non_winners)
+			let votes: BoundedVec<_, _> = (&non_winners)
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
-				.collect::<Vec<T::AccountId>>();
+				.try_collect()
+				.expect("<SolutionOf<T>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
@@ -174,7 +179,7 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 	(0..v).for_each(|i| {
 		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 		let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
-		T::DataProvider::add_voter(voter, weight, targets.clone());
+		T::DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
 }
 

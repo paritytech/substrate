@@ -17,7 +17,7 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{ElectionDataProvider, ElectionProvider};
+use crate::{ElectionDataProvider, ElectionProvider, IntoUnboundedVoters};
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -87,9 +87,13 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners: _, assignments } =
-			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
-				.map_err(Error::from)?;
+		let ElectionResult { winners: _, assignments } = seq_phragmen::<_, T::Accuracy>(
+			desired_targets as usize,
+			targets,
+			voters.into_unbounded_voters(),
+			None,
+		)
+		.map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
@@ -161,20 +165,22 @@ mod tests {
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
-		use frame_support::traits::ConstU32;
+		use frame_support::{traits::ConstU32, try_bounded_vec};
 
 		use super::*;
-		use crate::data_provider;
+		use crate::{data_provider, VoterOf};
 
 		pub struct DataProvider;
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn voters(
-				_: Option<usize>,
-			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])])
+			fn voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+				Ok(vec![
+					(1, 10, try_bounded_vec![10, 20]),
+					(2, 20, try_bounded_vec![30, 20]),
+					(3, 30, try_bounded_vec![10, 30]),
+				])
 			}
 
 			fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {

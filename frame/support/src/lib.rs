@@ -114,6 +114,13 @@ impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
+#[macro_export]
+macro_rules! try_bounded_vec {
+	($ ($values:expr),* ) => {
+		$crate::sp_std::vec![$($values),*].try_into().unwrap()
+	}
+}
+
 /// Generate a new type alias for [`storage::types::StorageValue`],
 /// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`]
 /// and [`storage::types::StorageNMap`].

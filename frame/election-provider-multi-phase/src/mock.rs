@@ -18,15 +18,16 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
+	data_provider, onchain, ElectionDataProvider, IntoUnboundedVoters, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, Hooks},
+	try_bounded_vec,
 	weights::Weight,
 };
-use multi_phase::unsigned::{IndexAssignmentOf, Voter};
+use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -100,7 +101,7 @@ pub fn roll_to_with_ocw(n: BlockNumber) {
 }
 
 pub struct TrimHelpers {
-	pub voters: Vec<Voter<Runtime>>,
+	pub voters: Vec<VoterOf<Runtime>>,
 	pub assignments: Vec<IndexAssignmentOf<Runtime>>,
 	pub encoded_size_of:
 		Box<dyn Fn(&[IndexAssignmentOf<Runtime>]) -> Result<usize, sp_npos_elections::Error>>,
@@ -134,7 +135,7 @@ pub fn trim_helpers() -> TrimHelpers {
 	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
 		desired_targets as usize,
 		targets.clone(),
-		voters.clone(),
+		voters.clone().into_unbounded_voters(),
 		None,
 	)
 	.unwrap();
@@ -167,7 +168,7 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 		seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
 			desired_targets as usize,
 			targets.clone(),
-			voters.clone(),
+			voters.clone().into_unbounded_voters(),
 			None,
 		)
 		.unwrap();
@@ -246,16 +247,16 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
-		(1, 10, vec![10, 20]),
-		(2, 10, vec![30, 40]),
-		(3, 10, vec![40]),
-		(4, 10, vec![10, 20, 30, 40]),
+	pub static Voters: Vec<VoterOf<Runtime>> = vec![
+		(1, 10, try_bounded_vec![10, 20]),
+		(2, 10, try_bounded_vec![30, 40]),
+		(3, 10, try_bounded_vec![40]),
+		(4, 10, try_bounded_vec![10, 20, 30, 40]),
 		// self votes.
-		(10, 10, vec![10]),
-		(20, 20, vec![20]),
-		(30, 30, vec![30]),
-		(40, 40, vec![40]),
+		(10, 10, try_bounded_vec![10]),
+		(20, 20, try_bounded_vec![20]),
+		(30, 30, try_bounded_vec![30]),
+		(40, 40, try_bounded_vec![40]),
 	];
 
 	pub static DesiredTargets: u32 = 2;
@@ -458,9 +459,7 @@ impl ElectionDataProvider for StakingMock {
 		Ok(targets)
 	}
 
-	fn voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
+	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		let mut voters = Voters::get();
 		if let Some(max_len) = maybe_max_len {
 			voters.truncate(max_len)
@@ -479,7 +478,7 @@ impl ElectionDataProvider for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		voters: Vec<VoterOf<Runtime>>,
 		targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
@@ -494,7 +493,11 @@ impl ElectionDataProvider for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
+	fn add_voter(
+		voter: AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<AccountId, Self::MaxVotesPerVoter>,
+	) {
 		let mut current = Voters::get();
 		current.push((voter, weight, targets));
 		Voters::set(current);
@@ -509,7 +512,7 @@ impl ElectionDataProvider for StakingMock {
 		// to be on-par with staking, we add a self vote as well. the stake is really not that
 		// important.
 		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
+		current.push((target, ExistentialDeposit::get() as u64, try_bounded_vec![target]));
 		Voters::set(current);
 	}
 }
@@ -544,7 +547,12 @@ impl ExtBuilder {
 		<DesiredTargets>::set(t);
 		self
 	}
-	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
+	pub fn add_voter(
+		self,
+		who: AccountId,
+		stake: Balance,
+		targets: BoundedVec<AccountId, MaxNominations>,
+	) -> Self {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
 		self
 	}

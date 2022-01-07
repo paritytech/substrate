@@ -167,7 +167,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::traits::Get;
+use frame_support::{traits::Get, BoundedVec};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
@@ -212,9 +212,7 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>>;
+	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
 	/// The number of targets to elect.
 	///
@@ -234,7 +232,7 @@ pub trait ElectionDataProvider {
 	/// else a noop.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
-		_voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		_voters: Vec<VoterOf<Self>>,
 		_targets: Vec<Self::AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
@@ -245,7 +243,12 @@ pub trait ElectionDataProvider {
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_voter(_voter: Self::AccountId, _weight: VoteWeight, _targets: Vec<Self::AccountId>) {}
+	fn add_voter(
+		_voter: Self::AccountId,
+		_weight: VoteWeight,
+		_targets: BoundedVec<Self::AccountId, Self::MaxVotesPerVoter>,
+	) {
+	}
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
@@ -273,9 +276,7 @@ impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountI
 		Ok(Default::default())
 	}
 
-	fn voters(
-		_maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
+	fn voters(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		Ok(Default::default())
 	}
 
@@ -474,5 +475,26 @@ impl<
 		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+	}
+}
+
+/// A voter, at the level of abstraction of this crate.
+pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId, Bound>);
+
+/// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
+pub type VoterOf<D> =
+	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
+
+/// Extension trait to easily convert from bounded voters to unbounded ones.
+///
+/// Undesirably, this cannot be done (in safe rust) without re-allocating the entire vector, so
+/// don't use it recklessly.
+pub trait IntoUnboundedVoters<AccountId> {
+	fn into_unbounded_voters(self) -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
+}
+
+impl<AccountId, Bound: Get<u32>> IntoUnboundedVoters<AccountId> for Vec<Voter<AccountId, Bound>> {
+	fn into_unbounded_voters(self) -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+		self.into_iter().map(|(x, y, z)| (x, y, z.into_inner())).collect::<Vec<_>>()
 	}
 }
