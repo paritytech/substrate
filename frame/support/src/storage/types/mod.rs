@@ -22,6 +22,7 @@ use crate::metadata::{StorageEntryMetadata, StorageEntryModifier};
 use codec::FullCodec;
 use sp_std::prelude::*;
 
+mod counted_double_map;
 mod counted_map;
 mod double_map;
 mod key;
