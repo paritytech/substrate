@@ -195,8 +195,8 @@ fn redelegation_keeps_lock() {
 		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
 		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
 
-		// Delegate someone else at a lower conviction
-		assert_ok!(Democracy::delegate(Origin::signed(2), 3, Conviction::None, 20));
+		// Delegate someone else at a lower conviction and amount
+		assert_ok!(Democracy::delegate(Origin::signed(2), 3, Conviction::None, 10));
 
 		// 6x prior should appear w/ locked balance.
 		prior_lock.accumulate(98, 20);
@@ -209,9 +209,10 @@ fn redelegation_keeps_lock() {
 
 		fast_forward_to(100);
 
-		// Now unlock can remove the prior lock.
+		// Now unlock can remove the prior lock and reduce the locked amount.
 		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
 		assert_ok!(Democracy::unlock(Origin::signed(2), 2));
 		assert_eq!(VotingOf::<Test>::get(2).prior(), &vote::PriorLock::new());
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 10);
 	});
 }
