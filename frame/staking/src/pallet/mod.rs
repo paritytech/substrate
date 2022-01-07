@@ -247,7 +247,7 @@ pub mod pallet {
 	/// is within the bounds of the newly set `Config::MaxNominations`.
 	///
 	/// This implies that `::iter_keys().count()` and `::iter().count()` might return different
-	/// values for this map. Moreover, the main `::count()` is aligned with the later, namely the
+	/// values for this map. Moreover, the main `::count()` is aligned with the former, namely the
 	/// number of keys that exist.
 	///
 	/// Lastly, if any of the nominators become non-decodable, they can be chilled immediately via
