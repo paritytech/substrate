@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -119,7 +119,7 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	let name = syn::parse_macro_input!(arg as Expr);
 
 	let crate_name = match crate_name("sc-tracing") {
-		Ok(FoundCrate::Itself) => Ident::from(Ident::new("sc_tracing", Span::call_site())),
+		Ok(FoundCrate::Itself) => Ident::new("sc_tracing", Span::call_site()),
 		Ok(FoundCrate::Name(crate_name)) => Ident::new(&crate_name, Span::call_site()),
 		Err(e) => return Error::new(Span::call_site(), e).to_compile_error().into(),
 	};

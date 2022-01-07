@@ -180,6 +180,7 @@ sp_core::wasm_export_functions! {
 			   b"one"[..].into(),
 			   b"two"[..].into(),
 		   ],
+				sp_core::storage::StateVersion::V1,
 	   ).as_ref().to_vec()
    }
 

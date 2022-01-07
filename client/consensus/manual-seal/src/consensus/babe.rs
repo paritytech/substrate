@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -276,7 +276,7 @@ where
 		// a quick check to see if we're in the authorities
 		let epoch = self.epoch(parent, slot)?;
 		let (authority, _) = self.authorities.first().expect("authorities is non-emptyp; qed");
-		let has_authority = epoch.authorities.iter().find(|(id, _)| *id == *authority).is_some();
+		let has_authority = epoch.authorities.iter().any(|(id, _)| *id == *authority);
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");

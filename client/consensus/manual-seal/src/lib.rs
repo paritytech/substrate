@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -173,7 +173,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP>(
 					env: &mut env,
 					select_chain: &select_chain,
 					block_import: &mut block_import,
-					consensus_data_provider: consensus_data_provider.as_ref().map(|p| &**p),
+					consensus_data_provider: consensus_data_provider.as_deref(),
 					pool: pool.clone(),
 					client: client.clone(),
 					create_inherent_data_providers: &create_inherent_data_providers,
@@ -408,8 +408,8 @@ mod tests {
 		})
 		.await
 		.unwrap();
-		// assert that the background task returns ok
-		assert_eq!(rx.await.unwrap().unwrap(), ());
+		// check that the background task returns ok:
+		rx.await.unwrap().unwrap();
 	}
 
 	#[tokio::test]

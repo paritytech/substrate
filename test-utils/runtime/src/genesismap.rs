@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -95,6 +95,7 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 		let state_root =
 			<<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect(),
+				sp_runtime::StateVersion::V1,
 			);
 		(sk.clone(), state_root.encode())
 	});
@@ -102,6 +103,7 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 	storage.top.extend(child_roots);
 	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 		storage.top.clone().into_iter().collect(),
+		sp_runtime::StateVersion::V1,
 	);
 	let block: crate::Block = genesis::construct_genesis_block(state_root);
 	let genesis_hash = block.header.hash();
