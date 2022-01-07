@@ -270,10 +270,7 @@ mod pallet {
 				crate::Error::<T>::EarlySubmission
 			);
 
-			ensure!(
-				dbg!(paged_solution).solution_pages.len() == 1,
-				crate::Error::<T>::WrongPageCount
-			);
+			ensure!(paged_solution.solution_pages.len() == 1, crate::Error::<T>::WrongPageCount);
 
 			Ok(())
 		}

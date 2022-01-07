@@ -261,7 +261,7 @@ fn disable_logging_works() {
 			.output()
 			.unwrap();
 
-		let output = dbg!(String::from_utf8(output.stderr).unwrap());
+		let output = String::from_utf8(output.stderr).unwrap();
 		assert!(!output.contains("Hey I'm runtime"));
 		assert!(output.contains("Logging from native works"));
 	}

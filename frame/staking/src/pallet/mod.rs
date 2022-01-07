@@ -495,6 +495,7 @@ pub mod pallet {
 	/// [`ErasValidatorPrefs`] have been updated. The lack thereof signifies that an error must have
 	/// happened.
 	#[pallet::storage]
+	#[pallet::getter(fn next_validators)]
 	pub(crate) type NextValidators<T: Config> =
 		StorageValue<_, Option<Vec<T::AccountId>>, ValueQuery>;
 

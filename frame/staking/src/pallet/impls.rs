@@ -269,8 +269,11 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// New era.
-			let maybe_new_era_validators =
-				Self::try_trigger_new_era(current_era.saturating_add(1), session_index, is_genesis);
+			let maybe_new_era_validators = Self::try_trigger_new_pending_era(
+				current_era.saturating_add(1),
+				session_index,
+				is_genesis,
+			);
 			if maybe_new_era_validators.is_some() &&
 				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
@@ -279,7 +282,7 @@ impl<T: Config> Pallet<T> {
 
 			maybe_new_era_validators
 		} else {
-			Self::try_trigger_new_era(0, session_index, is_genesis)
+			Self::try_trigger_new_pending_era(0, session_index, is_genesis)
 		}
 	}
 
@@ -388,37 +391,51 @@ impl<T: Config> Pallet<T> {
 
 	/// Plan a new era.
 	///
-	/// * Bump the current era storage (which holds the latest planned era).
+	/// * Set the CurrentEra to the given staring era. This should almost always be the previous
+	///   one, plus one.
 	/// * Store start session index for the new planned era.
 	/// * Clean old era information.
 	/// * Store staking information for the new planned era
 	///
 	/// Returns the new validator set.
-	pub fn trigger_new_era(start_session_index: SessionIndex) {
+	pub fn trigger_new_era(starting_era: EraIndex, start_session_index: SessionIndex) {
 		// Increment or set current era.
-		let new_planned_era = CurrentEra::<T>::mutate(|s| {
-			*s = Some(s.map(|s| s + 1).unwrap_or(0));
-			s.unwrap()
-		});
-		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
+		debug_assert!(
+			Self::current_era()
+				.map_or_else(|| starting_era == 0, |prev_era| prev_era + 1 == starting_era),
+			"Eras not being incremented sequentially, prev {:?}, now {}.",
+			Self::current_era(),
+			starting_era,
+		);
+		CurrentEra::<T>::set(Some(starting_era));
+		ErasStartSessionIndex::<T>::insert(&starting_era, &start_session_index);
 
 		// Clean old era information.
-		if let Some(old_era) = new_planned_era.checked_sub(Self::history_depth() + 1) {
+		if let Some(old_era) = starting_era.checked_sub(Self::history_depth() + 1) {
 			Self::clear_era_information(old_era);
 		}
 	}
 
-	/// Potentially plan a new era.
+	/// Potentially trigger a new era, using the pending era validator information that should have
+	/// already been stored in `<NextValidators>`.
 	///
-	/// Get election result from `T::ElectionProvider`.
-	/// In case election result has more than [`MinimumValidatorCount`] validator trigger a new era.
+	/// If `NextValidators` is empty, ElectionProvider::elect(0) is used as last resort fallback.
 	///
-	/// In case a new era is planned, the new validator set is returned.
-	pub(crate) fn try_trigger_new_era(
+	/// If `is_genesis` is true, then `GenesisElectionProvider` is used.
+	///
+	/// In case election result has more than [`MinimumValidatorCount`] validators, a new era is
+	/// triggered and the new validators are returned.
+	pub(crate) fn try_trigger_new_pending_era(
 		maybe_starting_era: EraIndex,
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
+		let wipe_eras_stakers = |era: EraIndex| {
+			<ErasStakers<T>>::remove_prefix(era, None);
+			<ErasStakersClipped<T>>::remove_prefix(era, None);
+			<ErasValidatorPrefs<T>>::remove_prefix(era, None);
+			<ErasTotalStake<T>>::remove(era);
+		};
 		log!(
 			info,
 			"trying to trigger a new era {}, start session index of the current era {}, genesis? {}.",
@@ -426,32 +443,36 @@ impl<T: Config> Pallet<T> {
 			start_session_index,
 			is_genesis
 		);
-		let stashes = if is_genesis {
-			// if ErasStakers has already been written to for era 0, then we don't need to to do
-			// anything.
-			let maybe_already_elected_genesis_validators =
-				ErasStakers::<T>::iter_prefix(0).map(|(val, _expo)| val).collect::<Vec<_>>();
-			if !maybe_already_elected_genesis_validators.is_empty() {
-				log!(
-					debug,
-					"genesis stakers already elected, skipping call to GenesisElectionProvider"
-				);
-				return Some(maybe_already_elected_genesis_validators)
-			}
 
-			T::GenesisElectionProvider::elect(0)
-				.map(|supports| {
-					// do everything that we do for the multi-block stuff here, in one go. It is all
-					// good, this can only happen in genesis. If something is about to go wrong, the
-					// chain won't even start.
-					let exposures = Self::collect_exposures(supports);
-					Self::store_intermediary_staker_info(exposures, 0);
-					Self::finalize_staker_info_collection(0)
-				})
-				.ok()?
-		} else {
-			<NextValidators<T>>::take()?
-		};
+		let stashes =
+			if is_genesis {
+				T::GenesisElectionProvider::elect(0)
+					.map(|supports| {
+						// do everything that we do for the multi-block stuff here, in one go.
+						// It is all good, this can only happen in genesis. If something is
+						// about to go wrong, the chain won't even start.
+						let exposures = Self::collect_exposures(supports);
+						wipe_eras_stakers(maybe_starting_era);
+						Self::store_intermediary_staker_info(exposures, maybe_starting_era);
+						Self::finalize_staker_info_collection(maybe_starting_era)
+					})
+					.ok()?
+			} else {
+				// we take the validators from `<NExtValidators>`, which should have already been
+				// stored and saved. Else. we do a last attempt at fetching something useful from
+				// the election provider. This comes handy in tests and benchmarks, but also a
+				// reasonable backup to have in production.
+				<NextValidators<T>>::take().or_else(|| {
+					log!(warn, "falling back to T::ElectionProvider::elect(0) instead of <NextValidators<T>>");
+					T::ElectionProvider::elect(0)
+						.map(|supports| {
+							let exposures = Self::collect_exposures(supports);
+							Self::store_intermediary_staker_info(exposures, maybe_starting_era);
+							Self::finalize_staker_info_collection(maybe_starting_era)
+						})
+						.ok()
+				})?
+			};
 
 		if (stashes.len() as u32) < Self::minimum_validator_count().max(1) {
 			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
@@ -479,18 +500,14 @@ impl<T: Config> Pallet<T> {
 			// Clear all storage items that may have bene written to during
 			// `store_intermediary_staker_info`, and `finalize_staker_info_collection`. This will
 			// be  expensive, but extremely rare to happen.
-			<ErasStakers<T>>::remove_prefix(maybe_starting_era, None);
-			<ErasStakersClipped<T>>::remove_prefix(maybe_starting_era, None);
-			<ErasValidatorPrefs<T>>::remove_prefix(maybe_starting_era, None);
-			<ErasTotalStake<T>>::remove(maybe_starting_era);
-			log!(warn, "removed all staker data correlated with era {}", maybe_starting_era);
-
+			log!(warn, "removing all staker data correlated with era {}", maybe_starting_era);
+			wipe_eras_stakers(maybe_starting_era);
 			Self::deposit_event(Event::StakingElectionFailed);
 			return None
 		}
 
 		Self::deposit_event(Event::StakersElected);
-		Self::trigger_new_era(start_session_index);
+		Self::trigger_new_era(maybe_starting_era, start_session_index);
 		Some(stashes)
 	}
 
@@ -653,7 +670,7 @@ impl<T: Config> Pallet<T> {
 	/// Consume a set of [`BoundedSupportsOf`] and collect them into set of [`Exposure`].
 	// TODO: we collect normal, unbounded exposures here, we can and should migrate this to bounded
 	// as well.
-	fn collect_exposures(
+	pub(crate) fn collect_exposures(
 		supports: BoundedSupportsOf<T::ElectionProvider>,
 	) -> Vec<(T::AccountId, Exposure<T>)> {
 		let total_issuance = T::Currency::total_issuance();

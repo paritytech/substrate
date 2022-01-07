@@ -3213,7 +3213,6 @@ fn session_manager_interface() {
 		let init_session = Session::current_index();
 		let init_active_era = active_era();
 
-		todo!("staking can no longer maintain this test, since it cannot return any stakers in one go, needs rewriting");
 		// pallet-session is delaying session by one, thus the next session to plan is +2.
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
 		assert_eq!(

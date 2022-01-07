@@ -109,7 +109,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	ValidatorCount::<T>::put(1);
 
 	// Start a new Era
-	let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one(), true).unwrap();
+	let starting_era = Staking::<T>::current_era().map(|e| e + 1).unwrap_or_default();
+	let new_validators =
+		Staking::<T>::try_trigger_new_pending_era(starting_era, SessionIndex::one(), true).unwrap();
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
@@ -671,8 +673,8 @@ benchmarks! {
 		CurrentEra::<T>::put(e);
 		let dummy = || -> T::AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
 		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasStakers<T>>::insert(i, dummy(), Exposure::<T>::default());
+			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T>::default());
 			<ErasValidatorPrefs<T>>::insert(i, dummy(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
 			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
@@ -730,8 +732,11 @@ benchmarks! {
 		)?;
 		let session_index = SessionIndex::one();
 	}: {
-		let validators = Staking::<T>::try_trigger_new_era(session_index, true, 0)
-			.ok_or("`new_era` failed")?;
+		let validators = Staking::<T>::try_trigger_new_pending_era(
+			Staking::<T>::current_era().map(|e| e + 1).unwrap_or_default(),
+			session_index,
+			true
+		).ok_or("`new_era` failed")?;
 		assert!(validators.len() == v as usize);
 	}
 
@@ -747,7 +752,11 @@ benchmarks! {
 			None,
 		)?;
 		// Start a new Era
-		let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one(), true, 0).unwrap();
+		let new_validators = Staking::<T>::try_trigger_new_pending_era(
+			Staking::<T>::current_era().map(|e| e + 1).unwrap_or_default(),
+			SessionIndex::one(),
+			true,
+		).unwrap();
 		assert!(new_validators.len() == v as usize);
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -913,7 +922,7 @@ benchmarks! {
 mod tests {
 	use super::*;
 	use crate::mock::{Balances, ExtBuilder, Origin, Staking, Test};
-	use frame_support::assert_ok;
+	use frame_support::{assert_ok, traits::Get};
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
@@ -924,7 +933,7 @@ mod tests {
 			create_validators_with_nominators_for_era::<Test>(
 				v,
 				n,
-				<Test as Config>::MaxNominations::get() as usize,
+				<<Test as Config>::MaxNominations as Get<u32>>::get() as usize,
 				false,
 				None,
 			)
