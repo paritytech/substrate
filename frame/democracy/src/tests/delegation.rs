@@ -158,7 +158,7 @@ fn conviction_should_be_honored_in_delegation() {
 	// If transactor voted, delegated vote is overwritten.
 	new_test_ext().execute_with(|| {
 		let r = begin_referendum();
-		// Delegate, undelegate and vote.
+		// Delegate and vote.
 		assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::Locked6x, 20));
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		// Delegated vote is huge.
@@ -175,5 +175,29 @@ fn split_vote_delegation_should_be_ignored() {
 		assert_ok!(Democracy::vote(Origin::signed(1), r, AccountVote::Split { aye: 10, nay: 0 }));
 		// Delegated vote is huge.
 		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 10 });
+	});
+}
+
+#[test]
+fn delegation_keeps_lock() {
+	// If transactor voted, delegated vote is overwritten.
+	new_test_ext().execute_with(|| {
+		let r = begin_referendum();
+		// Delegate and vote.
+		assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::Locked6x, 20));
+		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
+		// Delegated vote is huge.
+		assert_eq!(tally(r), Tally { ayes: 121, nays: 0, turnout: 30 });
+
+		// Locked balance of delegator exists
+		let voting = VotingOf::<Test>::get(2);
+		assert_eq!(voting.locked_balance(), 20);
+		assert_eq!(voting.prior(), &vote::PriorLock::new());
+
+		// Delegate someone else at a lower conviction
+		assert_ok!(Democracy::delegate(Origin::signed(2), 3, Conviction::None, 20));
+
+		// 6x prior should appear.
+		assert_eq!(voting.prior(), &vote::PriorLock::new());
 	});
 }
