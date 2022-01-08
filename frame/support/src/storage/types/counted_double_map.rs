@@ -176,7 +176,7 @@ where
 		KArg1: EncodeLike<Key1>,
 		KArg2: EncodeLike<Key2>,
 	{
-		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&k1), Ref::from(&k2)) {
+		if <Self as MapWrapper>::Map::contains_key(Ref::from(&k1), Ref::from(&k2)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
 		<Self as MapWrapper>::Map::remove(k1, k2)
@@ -675,5 +675,116 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		[<Self as MapWrapper>::Map::partial_storage_info(), CounterFor::<Prefix>::storage_info()]
 			.concat()
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::hash::*;
+	use sp_io::{hashing::twox_128, TestExternalities};
+
+	struct Prefix;
+	impl StorageInstance for Prefix {
+		fn pallet_prefix() -> &'static str {
+			"test"
+		}
+		const STORAGE_PREFIX: &'static str = "foo";
+	}
+
+	struct CounterPrefix;
+	impl StorageInstance for CounterPrefix {
+		fn pallet_prefix() -> &'static str {
+			"test"
+		}
+		const STORAGE_PREFIX: &'static str = "counter_for_foo";
+	}
+	impl CountedStorageDoubleMapInstance for Prefix {
+		type CounterPrefix = CounterPrefix;
+	}
+
+	struct ADefault;
+	impl crate::traits::Get<u32> for ADefault {
+		fn get() -> u32 {
+			97
+		}
+	}
+
+	#[test]
+	fn test_value_query() {
+		type A = CountedStorageDoubleMap<
+			Prefix,
+			Blake2_128Concat,
+			u16,
+			Twox64Concat,
+			u8,
+			u32,
+			OptionQuery,
+		>;
+		TestExternalities::default().execute_with(|| {
+			let mut k: Vec<u8> = vec![];
+			k.extend(&twox_128(b"test"));
+			k.extend(&twox_128(b"foo"));
+			k.extend(&3u16.blake2_128_concat());
+			k.extend(&30u8.twox_64_concat());
+			assert_eq!(A::hashed_key_for(3, 30).to_vec(), k);
+
+			assert_eq!(A::contains_key(3, 30), false);
+			assert_eq!(A::get(3, 30), None);
+			assert_eq!(A::try_get(3, 30), Err(()));
+			assert_eq!(A::count(), 0);
+
+			A::insert(3, 30, 10);
+			assert_eq!(A::contains_key(3, 30), true);
+			assert_eq!(A::get(3, 30), Some(10));
+			assert_eq!(A::try_get(3, 30), Ok(10));
+			assert_eq!(A::count(), 1);
+
+			A::swap(3, 30, 2, 20);
+			assert_eq!(A::contains_key(3, 30), false);
+			assert_eq!(A::contains_key(2, 20), true);
+			assert_eq!(A::get(3, 30), None);
+			assert_eq!(A::try_get(3, 30), Err(()));
+			assert_eq!(A::get(2, 20), Some(10));
+			assert_eq!(A::try_get(2, 20), Ok(10));
+			assert_eq!(A::count(), 1);
+
+			A::swap(3, 30, 2, 20);
+			assert_eq!(A::contains_key(3, 30), true);
+			assert_eq!(A::contains_key(2, 20), false);
+			assert_eq!(A::get(3, 30), Some(10));
+			assert_eq!(A::try_get(3, 30), Ok(10));
+			assert_eq!(A::get(2, 20), None);
+			assert_eq!(A::try_get(2, 20), Err(()));
+			assert_eq!(A::count(), 1);
+
+			A::insert(4, 40, 11);
+			assert_eq!(A::try_get(3, 30), Ok(10));
+			assert_eq!(A::try_get(4, 40), Ok(11));
+			assert_eq!(A::count(), 2);
+
+			// Swap 2 existing.
+			A::swap(3, 30, 4, 40);
+
+			assert_eq!(A::try_get(3, 30), Ok(11));
+			assert_eq!(A::try_get(4, 40), Ok(10));
+			assert_eq!(A::count(), 2);
+
+			// Insert an existing key, shouldn't increment counted values.
+			A::insert(3, 30, 12);
+			assert_eq!(A::try_get(3, 30), Ok(12));
+			assert_eq!(A::count(), 2);
+
+			// Remove non-existing.
+			A::remove(2, 20);
+			assert_eq!(A::contains_key(2, 20), false);
+			assert_eq!(A::count(), 2);
+
+			// Remove existing.
+			A::remove(3, 30);
+
+			assert_eq!(A::try_get(3, 30), Err(()));
+			assert_eq!(A::count(), 1);
+		})
 	}
 }

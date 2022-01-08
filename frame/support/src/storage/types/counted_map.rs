@@ -581,8 +581,9 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			// Insert an existing key, shouldn't increment counted values.
-			A::insert(3, 11);
+			A::insert(3, 12);
 
+			assert_eq!(A::try_get(3), Ok(12));
 			assert_eq!(A::count(), 2);
 
 			// Remove non-existing.
