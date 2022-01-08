@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::parameter_types;
+use frame_support::traits::ConstU32;
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, IdentityLookup},
@@ -110,17 +110,13 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-}
-
-parameter_types! {
-	pub const LowerBound: u32 = 1;
-	pub const UpperBound: u32 = 100;
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_test::Config for Test {
 	type Event = Event;
-	type LowerBound = LowerBound;
-	type UpperBound = UpperBound;
+	type LowerBound = ConstU32<1>;
+	type UpperBound = ConstU32<100>;
 }
 
 impl pallet_test::OtherConfig for Test {

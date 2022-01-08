@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,7 +187,7 @@ fn record_proof_works() {
 		amount: 1000,
 		nonce: 0,
 		from: AccountKeyring::Alice.into(),
-		to: Default::default(),
+		to: AccountKeyring::Bob.into(),
 	}
 	.into_signed_tx();
 
@@ -210,6 +210,7 @@ fn record_proof_works() {
 		WasmExecutionMethod::Interpreted,
 		None,
 		8,
+		2,
 	);
 	execution_proof_check_on_trie_backend(
 		&backend,

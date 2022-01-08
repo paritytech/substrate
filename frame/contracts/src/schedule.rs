@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -270,9 +270,6 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_minimum_balance`.
 	pub minimum_balance: Weight,
-
-	/// Weight of calling `seal_contract_deposit`.
-	pub contract_deposit: Weight,
 
 	/// Weight of calling `seal_block_number`.
 	pub block_number: Weight,
@@ -561,7 +558,6 @@ impl<T: Config> Default for HostFnWeights<T> {
 			balance: cost_batched!(seal_balance),
 			value_transferred: cost_batched!(seal_value_transferred),
 			minimum_balance: cost_batched!(seal_minimum_balance),
-			contract_deposit: cost_batched!(seal_tombstone_deposit),
 			block_number: cost_batched!(seal_block_number),
 			now: cost_batched!(seal_now),
 			weight_to_fee: cost_batched!(seal_weight_to_fee),

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -250,7 +250,6 @@ pub mod pallet {
 		/// Transfer some liquid free balance to another account.
 		///
 		/// `transfer` will set the `FreeBalance` of the sender and receiver.
-		/// It will decrease the total issuance of the system by the `TransferFee`.
 		/// If the sender's account is below the existential deposit as a result
 		/// of the transfer, the account will be reaped.
 		///
@@ -271,8 +270,6 @@ pub mod pallet {
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
 		///     that the transfer will not kill the origin account.
 		/// ---------------------------------
-		/// - Base Weight: 73.64 µs, worst case scenario (account created, account removed)
-		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::transfer())]
@@ -295,21 +292,11 @@ pub mod pallet {
 		/// Set the balances of a given account.
 		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
-		/// also decrease the total issuance of the system (`TotalIssuance`).
+		/// also alter the total issuance of the system (`TotalIssuance`) appropriately.
 		/// If the new free or reserved balance is below the existential deposit,
 		/// it will reset the account nonce (`frame_system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
-		///
-		/// # <weight>
-		/// - Independent of the arguments.
-		/// - Contains a limited number of reads and writes.
-		/// ---------------------
-		/// - Base Weight:
-		///     - Creating: 27.56 µs
-		///     - Killing: 35.11 µs
-		/// - DB Weight: 1 Read, 1 Write to `who`
-		/// # </weight>
 		#[pallet::weight(
 			T::WeightInfo::set_balance_creating() // Creates a new account.
 				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
@@ -381,11 +368,6 @@ pub mod pallet {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Pallet.html#method.transfer
-		/// # <weight>
-		/// - Cheaper than transfer because account cannot be killed.
-		/// - Base Weight: 51.4 µs
-		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
-		/// #</weight>
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
@@ -426,12 +408,7 @@ pub mod pallet {
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive);
 			let dest = T::Lookup::lookup(dest)?;
 			let keep_alive = if keep_alive { KeepAlive } else { AllowDeath };
-			<Self as Currency<_>>::transfer(
-				&transactor,
-				&dest,
-				reducible_balance,
-				keep_alive.into(),
-			)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
 			Ok(())
 		}
 
@@ -640,7 +617,7 @@ pub enum Reasons {
 
 impl From<WithdrawReasons> for Reasons {
 	fn from(r: WithdrawReasons) -> Reasons {
-		if r == WithdrawReasons::from(WithdrawReasons::TRANSACTION_PAYMENT) {
+		if r == WithdrawReasons::TRANSACTION_PAYMENT {
 			Reasons::Fee
 		} else if r.contains(WithdrawReasons::TRANSACTION_PAYMENT) {
 			Reasons::All
@@ -992,7 +969,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			Locks::<T, I>::insert(who, bounded_locks);
 			if !existed {
-				if system::Pallet::<T>::inc_consumers(who).is_err() {
+				if system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
 					// since the funds that are under the lock will themselves be stored in the
 					// account and therefore will need a reference.

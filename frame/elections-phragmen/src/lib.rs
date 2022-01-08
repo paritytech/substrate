@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -147,7 +147,7 @@ pub enum Renouncing {
 }
 
 /// An active voter.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct Voter<AccountId, Balance> {
 	/// The members being backed.
 	pub votes: Vec<AccountId>,
@@ -157,6 +157,12 @@ pub struct Voter<AccountId, Balance> {
 	///
 	/// To be unreserved upon removal.
 	pub deposit: Balance,
+}
+
+impl<AccountId, Balance: Default> Default for Voter<AccountId, Balance> {
+	fn default() -> Self {
+		Self { votes: vec![], stake: Default::default(), deposit: Default::default() }
+	}
 }
 
 /// A holder of a seat as either a member or a runner-up.
@@ -830,7 +836,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Check if `who` is currently an active runner-up.
 	fn is_runner_up(who: &T::AccountId) -> bool {
-		Self::runners_up().iter().position(|r| &r.who == who).is_some()
+		Self::runners_up().iter().any(|r| &r.who == who)
 	}
 
 	/// Get the members' account ids.
@@ -1087,7 +1093,14 @@ impl<T: Config> SortedMembers<T::AccountId> for Pallet<T> {
 	fn add(who: &T::AccountId) {
 		Members::<T>::mutate(|members| match members.binary_search_by(|m| m.who.cmp(who)) {
 			Ok(_) => (),
-			Err(pos) => members.insert(pos, SeatHolder { who: who.clone(), ..Default::default() }),
+			Err(pos) => {
+				let s = SeatHolder {
+					who: who.clone(),
+					stake: Default::default(),
+					deposit: Default::default(),
+				};
+				members.insert(pos, s)
+			},
 		})
 	}
 }
@@ -1108,8 +1121,10 @@ mod tests {
 	use super::*;
 	use crate as elections_phragmen;
 	use frame_support::{
-		assert_noop, assert_ok, dispatch::DispatchResultWithPostInfo, parameter_types,
-		traits::OnInitialize,
+		assert_noop, assert_ok,
+		dispatch::DispatchResultWithPostInfo,
+		parameter_types,
+		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use frame_system::ensure_signed;
 	use sp_core::H256;
@@ -1121,7 +1136,6 @@ mod tests {
 	use substrate_test_utils::assert_eq_uvec;
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -1141,7 +1155,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -1150,17 +1164,14 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-	}
-
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = frame_system::Pallet<Test>;
 		type MaxLocks = ();
 		type MaxReserves = ();

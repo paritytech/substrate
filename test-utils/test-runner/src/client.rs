@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -111,6 +111,7 @@ where
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
+		config.runtime_cache_size,
 	);
 
 	let (client, backend, keystore, mut task_manager) =
@@ -126,7 +127,7 @@ where
 		None,
 	)?;
 
-	let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
+	let slot_duration = sc_consensus_babe::Config::get(&*client)?;
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
 		slot_duration.clone(),
 		grandpa_block_import,

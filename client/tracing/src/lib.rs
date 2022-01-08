@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {
 	targets: Vec<(String, Level)>,
-	trace_handler: Box<dyn TraceHandler>,
+	trace_handlers: Vec<Box<dyn TraceHandler>>,
 }
 
 /// Used to configure how to receive the metrics
@@ -76,14 +76,14 @@ impl Default for TracingReceiver {
 
 /// A handler for tracing `SpanDatum`
 pub trait TraceHandler: Send + Sync {
-	/// Process a `SpanDatum`
-	fn handle_span(&self, span: SpanDatum);
-	/// Process a `TraceEvent`
-	fn handle_event(&self, event: TraceEvent);
+	/// Process a `SpanDatum`.
+	fn handle_span(&self, span: &SpanDatum);
+	/// Process a `TraceEvent`.
+	fn handle_event(&self, event: &TraceEvent);
 }
 
 /// Represents a tracing event, complete with values
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TraceEvent {
 	/// Name of the event.
 	pub name: String,
@@ -98,7 +98,7 @@ pub struct TraceEvent {
 }
 
 /// Represents a single instance of a tracing span
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SpanDatum {
 	/// id for this span
 	pub id: Id,
@@ -213,6 +213,15 @@ impl fmt::Display for Values {
 	}
 }
 
+/// Trace handler event types.
+#[derive(Debug)]
+pub enum TraceHandlerEvents {
+	/// An event.
+	Event(TraceEvent),
+	/// A span.
+	Span(SpanDatum),
+}
+
 impl ProfilingLayer {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
@@ -231,7 +240,12 @@ impl ProfilingLayer {
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
-		Self { targets, trace_handler }
+		Self { targets, trace_handlers: vec![trace_handler] }
+	}
+
+	/// Attach additional handlers to allow handling of custom events/spans.
+	pub fn add_handler(&mut self, trace_handler: Box<dyn TraceHandler>) {
+		self.trace_handlers.push(trace_handler);
 	}
 
 	fn check_target(&self, target: &str, level: &Level) -> bool {
@@ -241,6 +255,18 @@ impl ProfilingLayer {
 			}
 		}
 		false
+	}
+
+	/// Sequentially dispatch a trace event to all handlers.
+	fn dispatch_event(&self, event: TraceHandlerEvents) {
+		match &event {
+			TraceHandlerEvents::Span(span_datum) => {
+				self.trace_handlers.iter().for_each(|handler| handler.handle_span(span_datum));
+			},
+			TraceHandlerEvents::Event(event) => {
+				self.trace_handlers.iter().for_each(|handler| handler.handle_event(event));
+			},
+		}
 	}
 }
 
@@ -320,7 +346,7 @@ where
 			values,
 			parent_id,
 		};
-		self.trace_handler.handle_event(trace_event);
+		self.dispatch_event(TraceHandlerEvents::Event(trace_event));
 	}
 
 	fn on_enter(&self, span: &Id, ctx: Context<S>) {
@@ -348,10 +374,10 @@ where
 						span_datum.target = t;
 					}
 					if self.check_target(&span_datum.target, &span_datum.level) {
-						self.trace_handler.handle_span(span_datum);
+						self.dispatch_event(TraceHandlerEvents::Span(span_datum));
 					}
 				} else {
-					self.trace_handler.handle_span(span_datum);
+					self.dispatch_event(TraceHandlerEvents::Span(span_datum));
 				}
 			}
 		}
@@ -374,7 +400,7 @@ fn log_level(level: Level) -> log::Level {
 }
 
 impl TraceHandler for LogTraceHandler {
-	fn handle_span(&self, span_datum: SpanDatum) {
+	fn handle_span(&self, span_datum: &SpanDatum) {
 		if span_datum.values.is_empty() {
 			log::log!(
 				log_level(span_datum.level),
@@ -383,7 +409,7 @@ impl TraceHandler for LogTraceHandler {
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
 				span_datum.id.into_u64(),
-				span_datum.parent_id.map(|s| s.into_u64()),
+				span_datum.parent_id.as_ref().map(|s| s.into_u64()),
 			);
 		} else {
 			log::log!(
@@ -393,18 +419,18 @@ impl TraceHandler for LogTraceHandler {
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
 				span_datum.id.into_u64(),
-				span_datum.parent_id.map(|s| s.into_u64()),
+				span_datum.parent_id.as_ref().map(|s| s.into_u64()),
 				span_datum.values,
 			);
 		}
 	}
 
-	fn handle_event(&self, event: TraceEvent) {
+	fn handle_event(&self, event: &TraceEvent) {
 		log::log!(
 			log_level(event.level),
 			"{}, parent_id: {:?}, {}",
 			event.target,
-			event.parent_id.map(|s| s.into_u64()),
+			event.parent_id.as_ref().map(|s| s.into_u64()),
 			event.values,
 		);
 	}
@@ -438,7 +464,10 @@ impl From<SpanDatum> for sp_rpc::tracing::Span {
 mod tests {
 	use super::*;
 	use parking_lot::Mutex;
-	use std::sync::Arc;
+	use std::sync::{
+		mpsc::{Receiver, Sender},
+		Arc,
+	};
 	use tracing_subscriber::layer::SubscriberExt;
 
 	struct TestTraceHandler {
@@ -447,12 +476,12 @@ mod tests {
 	}
 
 	impl TraceHandler for TestTraceHandler {
-		fn handle_span(&self, sd: SpanDatum) {
-			self.spans.lock().push(sd);
+		fn handle_span(&self, sd: &SpanDatum) {
+			self.spans.lock().push(sd.clone());
 		}
 
-		fn handle_event(&self, event: TraceEvent) {
-			self.events.lock().push(event);
+		fn handle_event(&self, event: &TraceEvent) {
+			self.events.lock().push(event.clone());
 		}
 	}
 
@@ -591,14 +620,14 @@ mod tests {
 			let span1 = tracing::info_span!(target: "test_target", "test_span1");
 			let _guard1 = span1.enter();
 
-			let (tx, rx) = mpsc::channel();
+			let (tx, rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 			let handle = thread::spawn(move || {
 				let span2 = tracing::info_span!(target: "test_target", "test_span2");
 				let _guard2 = span2.enter();
 				// emit event
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
 				for msg in rx.recv() {
-					if msg == false {
+					if !msg {
 						break
 					}
 				}
