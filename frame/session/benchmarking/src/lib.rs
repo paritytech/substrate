@@ -28,7 +28,7 @@ use sp_std::{prelude::*, vec};
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	traits::{KeyOwnerProofSystem, OnInitialize, Get},
+	traits::{Get, KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};

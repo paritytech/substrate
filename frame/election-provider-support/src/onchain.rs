@@ -109,15 +109,14 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 			return Err(Error::NoMoreThenSinglePageExpected)
 		}
 
-		let unbounded_voters = Self::DataProvider::voters(T::VoterPageSize::get(), 0)
-			.map(|v| v.into_unbounded_voters())
-			.map_err(Error::DataProvider)?;
+		let voters =
+			Self::DataProvider::voters(T::VoterPageSize::get(), 0).map_err(Error::DataProvider)?;
 
 		let targets = Self::DataProvider::targets(T::TargetsPageSize::get(), 0)
 			.map_err(Error::DataProvider)?;
 		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
-		let stake_map: BTreeMap<T::AccountId, VoteWeight> = unbounded_voters
+		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
 			.iter()
 			.map(|(validator, vote_weight, _)| (validator.clone(), *vote_weight))
 			.collect();
@@ -128,7 +127,7 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let ElectionResult { winners: _, assignments } = seq_phragmen::<_, T::Accuracy>(
 			desired_targets as usize,
 			targets,
-			unbounded_voters,
+			voters.into_unbounded_voters(),
 			None,
 		)
 		.map_err(Error::from)?;
@@ -152,7 +151,6 @@ mod tests {
 	use crate::TryIntoBoundedSupports;
 
 	use super::*;
-	use crate::TryIntoBoundedVoters;
 	use frame_support::traits::ConstU32;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
@@ -213,23 +211,22 @@ mod tests {
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
-		use frame_support::traits::ConstU32;
+		use frame_support::{bounded_vec, traits::ConstU32};
 
 		use super::*;
-		use crate::{data_provider, PageIndex};
+		use crate::{data_provider, PageIndex, VoterOf};
 
 		pub struct DataProvider;
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn voters(
-				_: Option<usize>,
-				_: PageIndex,
-			) -> data_provider::Result<Vec<crate::Voter<Self::AccountId, Self::MaxVotesPerVoter>>> {
-				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])]
-					.try_into_bounded_voters()
-					.unwrap())
+			fn voters(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<VoterOf<Self>>> {
+				Ok(vec![
+					(1, 10, bounded_vec![10, 20]),
+					(2, 20, bounded_vec![30, 20]),
+					(3, 30, bounded_vec![10, 30]),
+				])
 			}
 
 			fn targets(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<AccountId>> {

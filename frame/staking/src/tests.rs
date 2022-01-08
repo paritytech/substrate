@@ -3970,7 +3970,8 @@ fn on_finalize_weight_is_nonzero() {
 
 mod election_data_provider {
 	use super::*;
-	use frame_election_provider_support::{ElectionDataProvider, TryIntoBoundedVoters};
+	use frame_election_provider_support::ElectionDataProvider;
+	use frame_support::bounded_vec;
 
 	#[test]
 	fn targets_2sec_block() {
@@ -4077,22 +4078,22 @@ mod election_data_provider {
 					Staking::voters(Some(4), 1).unwrap(),
 					vec![
 						// first come the validators and the self votes.
-						(21, 1000, vec![21]),
-						(11, 1000, vec![11]),
+						(21, 1000, bounded_vec![21]),
+						(11, 1000, bounded_vec![11]),
 						// then come 2 of the nominators.
-						(101, 500, vec![11, 21]),
-						(61, 500, vec![11]),
+						(101, 500, bounded_vec![11, 21]),
+						(61, 500, bounded_vec![11]),
 					]
-					.try_into_bounded_voters()
-					.unwrap()
 				);
 
 				assert_eq!(LastIteratedNominator::<Test>::get(), Some(61));
 				assert_eq!(
 					Staking::voters(Some(4), 0).unwrap(),
-					vec![(71, 500, vec![11]), (81, 500, vec![11]), (91, 500, vec![11])]
-						.try_into_bounded_voters()
-						.unwrap()
+					vec![
+						(71, 500, bounded_vec![11]),
+						(81, 500, bounded_vec![11]),
+						(91, 500, bounded_vec![11])
+					]
 				);
 				assert_eq!(LastIteratedNominator::<Test>::get(), None);
 			});
@@ -4673,6 +4674,100 @@ fn min_commission_works() {
 			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
 		));
 	})
+}
+
+#[test]
+fn change_of_max_nominations() {
+	use frame_election_provider_support::ElectionDataProvider;
+	ExtBuilder::default()
+		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.balance_factor(10)
+		.build_and_execute(|| {
+			// pre-condition
+			assert_eq!(MaxNominations::get(), 16);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			// 3 validators and 3 nominators
+			assert_eq!(Staking::voters(None, 0).unwrap().len(), 3 + 3);
+
+			// abrupt change from 16 to 4, everyone should be fine.
+			MaxNominations::set(4);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::voters(None, 0).unwrap().len(), 3 + 3);
+
+			// abrupt change from 4 to 3, everyone should be fine.
+			MaxNominations::set(3);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::voters(None, 0).unwrap().len(), 3 + 3);
+
+			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(2);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(101, 2), (60, 1)]
+			);
+			// 70 is still in storage..
+			assert!(Nominators::<Test>::contains_key(70));
+			// but its value cannot be decoded and default is returned.
+			assert!(Nominators::<Test>::get(70).is_none());
+
+			assert_eq!(Staking::voters(None, 0).unwrap().len(), 3 + 2);
+			assert!(Nominators::<Test>::contains_key(101));
+
+			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(1);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(60, 1)]
+			);
+			assert!(Nominators::<Test>::contains_key(70));
+			assert!(Nominators::<Test>::contains_key(60));
+			assert!(Nominators::<Test>::get(70).is_none());
+			assert!(Nominators::<Test>::get(60).is_some());
+			assert_eq!(Staking::voters(None, 0).unwrap().len(), 3 + 1);
+
+			// now one of them can revive themselves by re-nominating to a proper value.
+			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 1), (60, 1)]
+			);
+
+			// or they can be chilled by any account.
+			assert!(Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+			assert_ok!(Staking::chill_other(Origin::signed(70), 100));
+			assert!(!Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+		})
 }
 
 mod sorted_list_provider {

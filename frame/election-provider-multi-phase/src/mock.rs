@@ -22,7 +22,7 @@ use frame_election_provider_support::{
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
-	parameter_types,
+	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
 	weights::Weight,
 	BoundedVec,
@@ -247,16 +247,16 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, MaxVotesPerVoter>)> = vec![
-		(1, 10, vec![10, 20].try_into().unwrap()),
-		(2, 10, vec![30, 40].try_into().unwrap()),
-		(3, 10, vec![40].try_into().unwrap()),
-		(4, 10, vec![10, 20, 30, 40].try_into().unwrap()),
+	pub static Voters: Vec<VoterOf<Runtime>> = vec![
+		(1, 10, bounded_vec![10, 20]),
+		(2, 10, bounded_vec![30, 40]),
+		(3, 10, bounded_vec![40]),
+		(4, 10, bounded_vec![10, 20, 30, 40]),
 		// self votes.
-		(10, 10, vec![10].try_into().unwrap()),
-		(20, 20, vec![20].try_into().unwrap()),
-		(30, 30, vec![30].try_into().unwrap()),
-		(40, 40, vec![40].try_into().unwrap()),
+		(10, 10, bounded_vec![10]),
+		(20, 20, bounded_vec![20]),
+		(30, 30, bounded_vec![30]),
+		(40, 40, bounded_vec![40]),
 	];
 
 	pub static DesiredTargets: u32 = 2;
@@ -446,6 +446,10 @@ where
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
+parameter_types! {
+	pub MaxNominations: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
+}
+
 #[derive(Default)]
 pub struct ExtBuilder {}
 
@@ -453,7 +457,7 @@ pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
-	type MaxVotesPerVoter = MaxVotesPerVoter;
+	type MaxVotesPerVoter = MaxNominations;
 
 	fn targets(
 		maybe_max_len: Option<usize>,
@@ -472,9 +476,7 @@ impl ElectionDataProvider for StakingMock {
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<
-		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
-	> {
+	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		assert!(remaining.is_zero());
 
 		let mut voters = Voters::get()
@@ -498,7 +500,7 @@ impl ElectionDataProvider for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
+		voters: Vec<VoterOf<Runtime>>,
 		targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
@@ -532,7 +534,7 @@ impl ElectionDataProvider for StakingMock {
 		// to be on-par with staking, we add a self vote as well. the stake is really not that
 		// important.
 		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, vec![target].try_into().unwrap()));
+		current.push((target, ExistentialDeposit::get() as u64, bounded_vec![target]));
 		Voters::set(current);
 	}
 }
@@ -567,8 +569,13 @@ impl ExtBuilder {
 		<DesiredTargets>::set(t);
 		self
 	}
-	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
-		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets.try_into().unwrap())));
+	pub fn add_voter(
+		self,
+		who: AccountId,
+		stake: Balance,
+		targets: BoundedVec<AccountId, MaxNominations>,
+	) -> Self {
+		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
 		self
 	}
 	pub fn signed_max_submission(self, count: u32) -> Self {

@@ -174,7 +174,7 @@ pub fn target_at_fn<T: Config>(
 /// This is not optimized and uses a linear search.
 #[cfg(test)]
 pub fn stake_of_fn_linear<T: Config>(
-	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	snapshot: &Vec<VoterOf<T>>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + '_ {
 	move |who| {
 		snapshot

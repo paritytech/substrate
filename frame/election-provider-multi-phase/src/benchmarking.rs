@@ -23,7 +23,6 @@ use frame_benchmarking::account;
 use frame_support::{
 	assert_ok,
 	traits::{Hooks, TryCollect},
-	BoundedVec,
 };
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
@@ -259,7 +258,7 @@ frame_benchmarking::benchmarks! {
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
 		let targets = T::DataProvider::targets(None, 0)?;
-		let voters = T::DataProvider::voters(None, 0).map(IntoUnboundedVoters::into_unbounded_voters)?;
+		let voters = T::DataProvider::voters(None, 0)?;
 		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {

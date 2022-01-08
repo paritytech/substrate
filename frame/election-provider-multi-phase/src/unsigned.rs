@@ -23,8 +23,8 @@ use crate::{
 	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::{ElectionDataProvider, NposSolver, PerThing128};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
+use frame_election_provider_support::{IntoUnboundedVoters, NposSolver, PerThing128};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
@@ -48,14 +48,7 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 
 /// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
 /// voted.
-pub type VoterOf<T> = (
-	<T as frame_system::Config>::AccountId,
-	sp_npos_elections::VoteWeight,
-	BoundedVec<
-		<T as frame_system::Config>::AccountId,
-		<<T as Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
-	>,
-);
+pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::DataProvider>;
 
 /// The relative distribution of a voter's stake among the winning targets.
 pub type Assignment<T> =
@@ -282,11 +275,11 @@ impl<T: Config> Pallet<T> {
 	where
 		S: NposSolver<AccountId = T::AccountId, Error = SolverErrorOf<T>>,
 	{
-		let (targets, voters) =
-			Self::snapshot_unbounded().ok_or(MinerError::SnapshotUnAvailable)?;
+		let RoundSnapshot { targets, voters } =
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
-		S::solve(desired_targets as usize, targets, voters)
+		S::solve(desired_targets as usize, targets, voters.into_unbounded_voters())
 			.map_err(|e| MinerError::Solver::<T>(e))
 			.and_then(|e| Self::prepare_election_result::<S::Accuracy>(e))
 	}
@@ -754,7 +747,9 @@ mod tests {
 	};
 	use codec::Decode;
 	use frame_benchmarking::Zero;
-	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
+	use frame_support::{
+		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
+	};
 	use sp_npos_elections::IndexAssignment;
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
@@ -1053,8 +1048,8 @@ mod tests {
 	fn unsigned_per_dispatch_checks_can_only_submit_threshold_better() {
 		ExtBuilder::default()
 			.desired_targets(1)
-			.add_voter(7, 2, vec![10])
-			.add_voter(8, 5, vec![10])
+			.add_voter(7, 2, bounded_vec![10])
+			.add_voter(8, 5, bounded_vec![10])
 			.solution_improvement_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
 				roll_to(25);

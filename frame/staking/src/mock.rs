@@ -237,6 +237,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static MaxNominations: u32 = 16;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -390,7 +391,7 @@ impl ElectionProvider for MockElectionProvider {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	type MaxNominations = ConstU32<16>;
+	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -681,7 +682,7 @@ fn post_conditions() {
 }
 
 fn check_count() {
-	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let nominator_count = Nominators::<Test>::iter_keys().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
 	assert_eq!(nominator_count, Nominators::<Test>::count());
 	assert_eq!(validator_count, Validators::<Test>::count());

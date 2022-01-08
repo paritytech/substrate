@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ExtendedBalance,
-	PageIndex, SortedListProvider, VoteWeight, VoteWeightProvider,
+	PageIndex, SortedListProvider, VoteWeight, VoteWeightProvider, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -868,7 +868,7 @@ impl<T: Config> Pallet<T> {
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
 		slashing_spans: &BTreeMap<T::AccountId, slashing::SlashingSpans>,
-	) -> Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxNominations>)> {
+	) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let nominator_count = Nominators::<T>::count() as usize;
 			let validator_count = Validators::<T>::count() as usize;
@@ -883,11 +883,15 @@ impl<T: Config> Pallet<T> {
 		let mut validators_taken = 0u32;
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
-			if let Ok(bounded_self_vote) = vec![validator.clone()].try_into() {
-				let self_vote = (validator.clone(), Self::weight_of(&validator), bounded_self_vote);
-				all_voters.push(self_vote);
-				validators_taken.saturating_inc();
-			}
+			let self_vote = (
+				validator.clone(),
+				Self::weight_of(&validator),
+				vec![validator.clone()]
+					.try_into()
+					.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
+			);
+			all_voters.push(self_vote);
+			validators_taken.saturating_inc();
 		}
 
 		// .. and grab whatever we have left from nominators.
@@ -930,7 +934,12 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 			} else {
-				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
+				// this can only happen if: 1. there a pretty bad bug in the bags-list (or whatever
+				// is the sorted list) logic and the state of the two pallets is no longer
+				// compatible, or because the nominators is not decodable since they have more
+				// nomination than `T::MaxNominations`. This can rarely happen, and is not really an
+				// emergency or bug if it does.
+				log!(warn, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}, this nominator probably has too many nominations now", nominator)
 			}
 		}
 
@@ -1071,9 +1080,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	fn voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
-	) -> data_provider::Result<
-		Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, Self::MaxVotesPerVoter>)>,
-	> {
+	) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// check a few counters one last time...
 		debug_assert_eq!(
 			Nominators::<T>::count(),
@@ -1151,7 +1158,6 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
-
 		<Bonded<T>>::insert(voter.clone(), voter.clone());
 		<Ledger<T>>::insert(
 			voter.clone(),
@@ -1163,6 +1169,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				claimed_rewards: vec![],
 			},
 		);
+
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
@@ -1198,7 +1205,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, Self::MaxVotesPerVoter>)>,
+		voters: Vec<VoterOf<Self>>,
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
@@ -1240,7 +1247,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			);
 			Self::do_add_nominator(
 				&v,
-				Nominations { targets: t, submitted_in: 0, suppressed: false },
+				Nominations { targets: t.try_into().unwrap(), submitted_in: 0, suppressed: false },
 			);
 		});
 	}
