@@ -1210,4 +1210,27 @@ mod test {
 			assert_eq!(A::get(2, 20), Some(1));
 		})
 	}
+
+	#[test]
+	fn test_iter_drain_translate() {
+		type A = CountedStorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 10, 1);
+			A::insert(2, 20, 2);
+
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(2, 20, 2), (1, 10, 1)]);
+
+			assert_eq!(A::count(), 2);
+
+			A::translate::<u32, _>(
+				|key1, key2, value| if key1 == 1 { None } else { Some(key1 as u32 * value) },
+			);
+
+			assert_eq!(A::count(), 1);
+
+			assert_eq!(A::drain().collect::<Vec<_>>(), vec![(2, 20, 4)]);
+
+			assert_eq!(A::count(), 0);
+		})
+	}
 }
