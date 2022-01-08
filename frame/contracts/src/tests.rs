@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1582,7 +1582,8 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1666,7 +1667,8 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1749,7 +1751,8 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 

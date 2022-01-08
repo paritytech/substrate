@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -275,9 +275,8 @@ fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 						});
 
 						// remove either one of them.
-						let who_removed = remove_indices.iter().find(|i| **i < 2usize).is_some();
-						let other_removed =
-							remove_indices.into_iter().find(|i| *i >= 2usize).is_some();
+						let who_removed = remove_indices.iter().any(|i| *i < 2usize);
+						let other_removed = remove_indices.into_iter().any(|i| i >= 2usize);
 
 						match (who_removed, other_removed) {
 							(false, true) => {

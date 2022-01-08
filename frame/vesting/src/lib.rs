@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -572,14 +572,13 @@ impl<T: Config> Pallet<T> {
 		let mut total_locked_now: BalanceOf<T> = Zero::zero();
 		let filtered_schedules = action
 			.pick_schedules::<T>(schedules)
-			.filter_map(|schedule| {
+			.filter(|schedule| {
 				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
-				if locked_now.is_zero() {
-					None
-				} else {
+				let keep = !locked_now.is_zero();
+				if keep {
 					total_locked_now = total_locked_now.saturating_add(locked_now);
-					Some(schedule)
 				}
+				keep
 			})
 			.collect::<Vec<_>>();
 

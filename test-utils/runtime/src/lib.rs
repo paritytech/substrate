@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -665,13 +665,7 @@ fn code_using_trie() -> u64 {
 
 	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
-			let mut iter_pairs = Vec::new();
-			for pair in iter {
-				if let Ok((key, value)) = pair {
-					iter_pairs.push((key, value.to_vec()));
-				}
-			}
-			iter_pairs.len() as u64
+			iter.flatten().count() as u64
 		} else {
 			102
 		}

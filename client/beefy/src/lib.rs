@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -31,6 +31,8 @@ use sp_runtime::traits::Block;
 
 use beefy_primitives::BeefyApi;
 
+use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
+
 mod error;
 mod gossip;
 mod keystore;
@@ -39,15 +41,40 @@ mod round;
 mod worker;
 
 pub mod notification;
+pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
-pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
+pub(crate) mod beefy_protocol_name {
+	use sc_chain_spec::ChainSpec;
+
+	const NAME: &'static str = "/beefy/1";
+	/// Old names for the notifications protocol, used for backward compatibility.
+	pub(crate) const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/beefy/1"];
+
+	/// Name of the notifications protocol used by BEEFY.
+	///
+	/// Must be registered towards the networking in order for BEEFY to properly function.
+	pub fn standard_name<Hash: std::fmt::Display>(
+		genesis_hash: &Hash,
+		chain_spec: &Box<dyn ChainSpec>,
+	) -> std::borrow::Cow<'static, str> {
+		let chain_prefix = match chain_spec.fork_id() {
+			Some(fork_id) => format!("/{}/{}", genesis_hash, fork_id),
+			None => format!("/{}", genesis_hash),
+		};
+		format!("{}{}", chain_prefix, NAME).into()
+	}
+}
 
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
-pub fn beefy_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg =
-		sc_network::config::NonDefaultSetConfig::new(BEEFY_PROTOCOL_NAME.into(), 1024 * 1024);
+/// For standard protocol name see [`beefy_protocol_name::standard_name`].
+pub fn beefy_peers_set_config(
+	protocol_name: std::borrow::Cow<'static, str>,
+) -> sc_network::config::NonDefaultSetConfig {
+	let mut cfg = sc_network::config::NonDefaultSetConfig::new(protocol_name, 1024 * 1024);
+
 	cfg.allow_non_reserved(25, 25);
+	cfg.add_fallback_names(beefy_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect());
 	cfg
 }
 
@@ -96,11 +123,15 @@ where
 	/// Gossip network
 	pub network: N,
 	/// BEEFY signed commitment sender
-	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
+	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	/// BEEFY best block sender
+	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
+	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
+	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
 /// Start the BEEFY gadget.
@@ -120,13 +151,14 @@ where
 		key_store,
 		network,
 		signed_commitment_sender,
+		beefy_best_block_sender,
 		min_block_delta,
 		prometheus_registry,
+		protocol_name,
 	} = beefy_params;
 
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
-	let gossip_engine =
-		GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
 
 	let metrics =
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
@@ -147,6 +179,7 @@ where
 		backend,
 		key_store: key_store.into(),
 		signed_commitment_sender,
+		beefy_best_block_sender,
 		gossip_engine,
 		gossip_validator,
 		min_block_delta,

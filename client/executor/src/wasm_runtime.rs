@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -77,7 +77,7 @@ struct VersionedRuntime {
 
 impl VersionedRuntime {
 	/// Run the given closure `f` with an instance of this runtime.
-	fn with_instance<'c, R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
+	fn with_instance<R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,

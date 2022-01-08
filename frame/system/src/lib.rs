@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -637,17 +637,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { code: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
