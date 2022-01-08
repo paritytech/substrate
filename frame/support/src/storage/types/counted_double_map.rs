@@ -139,7 +139,13 @@ where
 		KArg1: EncodeLike<Key1>,
 		KArg2: EncodeLike<Key2>,
 	{
-		<Self as MapWrapper>::Map::take(k1, k2)
+		let removed_value = <Self as MapWrapper>::Map::mutate_exists(k1, k2, |value| {
+			core::mem::replace(value, None)
+		});
+		if removed_value.is_some() {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+		}
+		QueryKind::from_optional_value_to_query(removed_value)
 	}
 
 	/// Swap the values of two key-pairs.
@@ -722,7 +728,8 @@ mod test {
 			Twox64Concat,
 			u8,
 			u32,
-			OptionQuery,
+			ValueQuery,
+			ADefault,
 		>;
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
@@ -733,31 +740,31 @@ mod test {
 			assert_eq!(A::hashed_key_for(3, 30).to_vec(), k);
 
 			assert_eq!(A::contains_key(3, 30), false);
-			assert_eq!(A::get(3, 30), None);
+			assert_eq!(A::get(3, 30), ADefault::get());
 			assert_eq!(A::try_get(3, 30), Err(()));
 			assert_eq!(A::count(), 0);
 
 			A::insert(3, 30, 10);
 			assert_eq!(A::contains_key(3, 30), true);
-			assert_eq!(A::get(3, 30), Some(10));
+			assert_eq!(A::get(3, 30), 10);
 			assert_eq!(A::try_get(3, 30), Ok(10));
 			assert_eq!(A::count(), 1);
 
 			A::swap(3, 30, 2, 20);
 			assert_eq!(A::contains_key(3, 30), false);
 			assert_eq!(A::contains_key(2, 20), true);
-			assert_eq!(A::get(3, 30), None);
+			assert_eq!(A::get(3, 30), ADefault::get());
 			assert_eq!(A::try_get(3, 30), Err(()));
-			assert_eq!(A::get(2, 20), Some(10));
+			assert_eq!(A::get(2, 20), 10);
 			assert_eq!(A::try_get(2, 20), Ok(10));
 			assert_eq!(A::count(), 1);
 
 			A::swap(3, 30, 2, 20);
 			assert_eq!(A::contains_key(3, 30), true);
 			assert_eq!(A::contains_key(2, 20), false);
-			assert_eq!(A::get(3, 30), Some(10));
+			assert_eq!(A::get(3, 30), 10);
 			assert_eq!(A::try_get(3, 30), Ok(10));
-			assert_eq!(A::get(2, 20), None);
+			assert_eq!(A::get(2, 20), ADefault::get());
 			assert_eq!(A::try_get(2, 20), Err(()));
 			assert_eq!(A::count(), 1);
 
@@ -788,6 +795,128 @@ mod test {
 
 			assert_eq!(A::try_get(3, 30), Err(()));
 			assert_eq!(A::count(), 1);
+
+			// Mutate non-existing to existing.
+			A::mutate(3, 30, |query| {
+				assert_eq!(*query, ADefault::get());
+				*query = 40;
+			});
+
+			assert_eq!(A::try_get(3, 30), Ok(40));
+			assert_eq!(A::count(), 2);
+
+			// Try fail mutate non-existing to existing.
+			A::try_mutate(2, 20, |query| {
+				assert_eq!(*query, ADefault::get());
+				*query = 4;
+				Result::<(), ()>::Err(())
+			})
+			.err()
+			.unwrap();
+
+			assert_eq!(A::try_get(2, 20), Err(()));
+			assert_eq!(A::count(), 2);
+
+			// Try succeed mutate non-existing to existing.
+			A::try_mutate(2, 20, |query| {
+				assert_eq!(*query, ADefault::get());
+				*query = 41;
+				Result::<(), ()>::Ok(())
+			})
+			.unwrap();
+
+			assert_eq!(A::try_get(2, 20), Ok(41));
+			assert_eq!(A::count(), 3);
+
+			// Try succeed mutate existing to existing.
+			A::try_mutate(2, 20, |query| {
+				assert_eq!(*query, 41);
+				*query = 41;
+				Result::<(), ()>::Ok(())
+			})
+			.unwrap();
+
+			assert_eq!(A::try_get(2, 20), Ok(41));
+			assert_eq!(A::count(), 3);
+
+			// Try fail mutate non-existing to existing.
+			A::try_mutate_exists(1, 10, |query| {
+				assert_eq!(*query, None);
+				*query = Some(4);
+				Result::<(), ()>::Err(())
+			})
+			.err()
+			.unwrap();
+
+			assert_eq!(A::try_get(1, 10), Err(()));
+			assert_eq!(A::count(), 3);
+
+			// Try succeed mutate non-existing to existing.
+			A::try_mutate_exists(1, 10, |query| {
+				assert_eq!(*query, None);
+				*query = Some(43);
+				Result::<(), ()>::Ok(())
+			})
+			.unwrap();
+
+			assert_eq!(A::try_get(1, 10), Ok(43));
+			assert_eq!(A::count(), 4);
+
+			// Try succeed mutate existing to existing.
+			A::try_mutate_exists(1, 10, |query| {
+				assert_eq!(*query, Some(43));
+				*query = Some(45);
+				Result::<(), ()>::Ok(())
+			})
+			.unwrap();
+
+			assert_eq!(A::try_get(1, 10), Ok(45));
+			assert_eq!(A::count(), 4);
+
+			// Try succeed mutate existing to non-existing.
+			A::try_mutate_exists(1, 10, |query| {
+				assert_eq!(*query, Some(45));
+				*query = None;
+				Result::<(), ()>::Ok(())
+			})
+			.unwrap();
+
+			assert_eq!(A::try_get(1, 10), Err(()));
+			assert_eq!(A::count(), 3);
+
+			// Take exsisting.
+			assert_eq!(A::take(4, 40), 10);
+
+			assert_eq!(A::try_get(4, 40), Err(()));
+			assert_eq!(A::count(), 2);
+
+			// Take non-exsisting.
+			assert_eq!(A::take(4, 40), ADefault::get());
+
+			assert_eq!(A::try_get(4, 40), Err(()));
+			assert_eq!(A::count(), 2);
+
+			// Remove all.
+			A::remove_all();
+
+			assert_eq!(A::count(), 0);
+			assert_eq!(A::initialize_counter(), 0);
+
+			A::insert(1, 10, 1);
+			A::insert(2, 20, 2);
+
+			// Iter values.
+			assert_eq!(A::iter_values().collect::<Vec<_>>(), vec![2, 1]);
+
+			// Iter drain values.
+			assert_eq!(A::iter_values().drain().collect::<Vec<_>>(), vec![2, 1]);
+			assert_eq!(A::count(), 0);
+
+			A::insert(1, 10, 1);
+			A::insert(2, 20, 2);
+
+			// Test initialize_counter.
+			assert_eq!(A::initialize_counter(), 2);
 		})
 	}
 }
