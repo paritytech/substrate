@@ -690,7 +690,7 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::hash::*;
+	use crate::{hash::*, storage::bounded_vec::BoundedVec, traits::ConstU32};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -1148,6 +1148,43 @@ mod test {
 
 			// Test initialize_counter.
 			assert_eq!(B::initialize_counter(), 2);
+		})
+	}
+
+	#[test]
+	fn append_decode_len_works() {
+		type B = CountedStorageDoubleMap<Prefix, Blake2_256, u16, Twox64Concat, u8, Vec<u32>>;
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(B::decode_len(1, 10), None);
+			B::append(1, 10, 3);
+			assert_eq!(B::decode_len(1, 10), Some(1));
+			B::append(1, 10, 3);
+			assert_eq!(B::decode_len(1, 10), Some(2));
+			B::append(1, 10, 3);
+			assert_eq!(B::decode_len(1, 10), Some(3));
+		})
+	}
+
+	#[test]
+	fn try_append_decode_len_works() {
+		type B = CountedStorageDoubleMap<
+			Prefix,
+			Blake2_256,
+			u16,
+			Twox64Concat,
+			u8,
+			BoundedVec<u32, ConstU32<3u32>>,
+		>;
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(B::decode_len(1, 10), None);
+			B::try_append(1, 10, 3).unwrap();
+			assert_eq!(B::decode_len(1, 10), Some(1));
+			B::try_append(1, 10, 3).unwrap();
+			assert_eq!(B::decode_len(1, 10), Some(2));
+			B::try_append(1, 10, 3).unwrap();
+			assert_eq!(B::decode_len(1, 10), Some(3));
+			B::try_append(1, 10, 3).err().unwrap();
+			assert_eq!(B::decode_len(1, 10), Some(3));
 		})
 	}
 }
