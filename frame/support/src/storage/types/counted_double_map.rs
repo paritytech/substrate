@@ -1,12 +1,18 @@
 use crate::{
+	metadata::StorageEntryMetadata,
 	storage::{
-		types::{OptionQuery, QueryKindTrait, StorageDoubleMap, StorageValue, ValueQuery},
+		types::{
+			OptionQuery, QueryKindTrait, StorageDoubleMap, StorageEntryMetadataBuilder,
+			StorageValue, ValueQuery,
+		},
 		StorageAppend, StorageDecodeLength, StorageTryAppend,
 	},
-	traits::{Get, GetDefault, StorageInstance},
+	traits::{
+		Get, GetDefault, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
+	},
 	Never,
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec, Ref};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
 use sp_runtime::traits::Saturating;
 
 pub struct CountedStorageDoubleMap<
@@ -580,5 +586,94 @@ where
 			}
 			res
 		})
+	}
+}
+
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	StorageEntryMetadataBuilder
+	for CountedStorageDoubleMap<
+		Prefix,
+		Hasher1,
+		Key1,
+		Hasher2,
+		Key2,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+	> where
+	Prefix: CountedStorageDoubleMapInstance,
+	Hasher1: crate::hash::StorageHasher,
+	Hasher2: crate::hash::StorageHasher,
+	Key1: FullCodec + scale_info::StaticTypeInfo,
+	Key2: FullCodec + scale_info::StaticTypeInfo,
+	Value: FullCodec + scale_info::StaticTypeInfo,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		<Self as MapWrapper>::Map::build_metadata(docs, entries);
+		CounterFor::<Prefix>::build_metadata(
+			vec![&"Counter for the related counted storage map"],
+			entries,
+		);
+	}
+}
+
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues> StorageInfoTrait
+	for CountedStorageDoubleMap<
+		Prefix,
+		Hasher1,
+		Key1,
+		Hasher2,
+		Key2,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+	> where
+	Prefix: CountedStorageDoubleMapInstance,
+	Hasher1: crate::hash::StorageHasher,
+	Hasher2: crate::hash::StorageHasher,
+	Key1: FullCodec + MaxEncodedLen,
+	Key2: FullCodec + MaxEncodedLen,
+	Value: FullCodec + MaxEncodedLen,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn storage_info() -> Vec<StorageInfo> {
+		[<Self as MapWrapper>::Map::storage_info(), CounterFor::<Prefix>::storage_info()].concat()
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	PartialStorageInfoTrait
+	for CountedStorageDoubleMap<
+		Prefix,
+		Hasher1,
+		Key1,
+		Hasher2,
+		Key2,
+		Value,
+		QueryKind,
+		OnEmpty,
+		MaxValues,
+	> where
+	Prefix: CountedStorageDoubleMapInstance,
+	Hasher1: crate::hash::StorageHasher,
+	Hasher2: crate::hash::StorageHasher,
+	Key1: FullCodec,
+	Key2: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		[<Self as MapWrapper>::Map::partial_storage_info(), CounterFor::<Prefix>::storage_info()]
+			.concat()
 	}
 }
