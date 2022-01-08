@@ -1187,4 +1187,27 @@ mod test {
 			assert_eq!(B::decode_len(1, 10), Some(3));
 		})
 	}
+
+	#[test]
+	fn migrate_keys_works() {
+		type A = CountedStorageDoubleMap<Prefix, Blake2_128, u16, Twox64Concat, u8, u32>;
+		type B = CountedStorageDoubleMap<Prefix, Blake2_256, u16, Twox64Concat, u8, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 10, 1);
+			assert_eq!(B::migrate_keys::<Blake2_128, Twox64Concat, _, _>(1, 10), Some(1));
+			assert_eq!(B::get(1, 10), Some(1));
+		})
+	}
+
+	#[test]
+	fn translate_values() {
+		type A = CountedStorageDoubleMap<Prefix, Blake2_128, u16, Twox64Concat, u8, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 10, 1);
+			A::insert(2, 20, 2);
+			A::translate_values::<u32, _>(|old_value| if old_value == 1 { None } else { Some(1) });
+			assert_eq!(A::count(), 1);
+			assert_eq!(A::get(2, 20), Some(1));
+		})
+	}
 }
