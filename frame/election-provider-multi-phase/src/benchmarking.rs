@@ -23,6 +23,7 @@ use frame_benchmarking::account;
 use frame_support::{
 	assert_ok,
 	traits::{Hooks, TryCollect},
+	BoundedVec,
 };
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};

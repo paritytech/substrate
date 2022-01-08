@@ -22,10 +22,10 @@ use frame_election_provider_support::{
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
-	parameter_types,
+	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
-	bounded_vec,
 	weights::Weight,
+	BoundedVec,
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
 use parking_lot::RwLock;
@@ -496,7 +496,7 @@ impl ElectionDataProvider for StakingMock {
 	fn add_voter(
 		voter: AccountId,
 		weight: VoteWeight,
-		targets: BoundedVec<AccountId, Self::MaxVotesPerVoter>,
+		targets: frame_support::BoundedVec<AccountId, Self::MaxVotesPerVoter>,
 	) {
 		let mut current = Voters::get();
 		current.push((voter, weight, targets));
