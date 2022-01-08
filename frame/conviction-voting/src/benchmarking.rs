@@ -44,36 +44,13 @@ fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	caller
 }
 
-fn add_referendum<T: Config>(n: u32) -> Result<PollIndex, &'static str> {
-	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
-	let vote_threshold = VoteThreshold::SimpleMajority;
-
-	ConvictionVoting::<T>::inject_referendum(
-		T::LaunchPeriod::get(),
-		proposal_hash,
-		vote_threshold,
-		0u32.into(),
-	);
-	let referendum_index: PollIndex = PollCount::<T>::get() - 1;
-	T::Scheduler::schedule_named(
-		(DEMOCRACY_ID, referendum_index).encode(),
-		DispatchTime::At(2u32.into()),
-		None,
-		63,
-		frame_system::RawOrigin::Root.into(),
-		Call::enact_proposal { proposal_hash, index: referendum_index }.into(),
-	)
-	.map_err(|_| "failed to schedule named")?;
-	Ok(referendum_index)
-}
-
 fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 	let v = Vote { aye: true, conviction: Conviction::Locked1x };
 
 	AccountVote::Standard { vote: v, balance: b }
 }
 
-benchmarks! {
+	/*
 	vote_new {
 		let r in 1 .. MAX_REFERENDUMS;
 
@@ -337,7 +314,13 @@ benchmarks! {
 			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
-	}
+	}*/
+benchmarks! {
+	unlock {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let class = <T as Config>::Polls::classes().into_iter().next().unwrap();
+	}: _(RawOrigin::Signed(caller.clone()), class, caller.clone())
 
 	impl_benchmark_test_suite!(
 		ConvictionVoting,
