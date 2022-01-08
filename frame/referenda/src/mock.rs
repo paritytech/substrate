@@ -23,7 +23,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait,
+		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
 		PreimageRecipient, SortedMembers,
 	},
 	weights::Weight,
@@ -335,7 +335,7 @@ pub fn tally(r: ReferendumIndex) -> Tally {
 }
 
 pub fn set_tally(index: ReferendumIndex, ayes: u32, nays: u32) {
-	<Referenda as Polls<Tally>>::access_poll(index, |status| {
+	<Referenda as Polling<Tally>>::access_poll(index, |status| {
 		let tally = status.ensure_ongoing().unwrap().0;
 		tally.ayes = ayes;
 		tally.nays = nays;

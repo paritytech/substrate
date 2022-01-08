@@ -107,7 +107,7 @@ fn make_passing_after<T: Config>(index: ReferendumIndex, period_portion: Perbill
 	let turnout = info::<T>(index).min_turnout.threshold(period_portion);
 	let approval = info::<T>(index).min_approval.threshold(period_portion);
 	Referenda::<T>::access_poll(index, |status| {
-		if let PollStatus::Ongoing(tally) = status {
+		if let PollStatus::Ongoing(tally, ..) = status {
 			*tally = T::Tally::from_requirements(turnout, approval);
 		}
 	});
@@ -115,7 +115,7 @@ fn make_passing_after<T: Config>(index: ReferendumIndex, period_portion: Perbill
 
 fn make_passing<T: Config>(index: ReferendumIndex) {
 	Referenda::<T>::access_poll(index, |status| {
-		if let PollStatus::Ongoing(tally) = status {
+		if let PollStatus::Ongoing(tally, ..) = status {
 			*tally = T::Tally::unanimity();
 		}
 	});
@@ -123,7 +123,7 @@ fn make_passing<T: Config>(index: ReferendumIndex) {
 
 fn make_failing<T: Config>(index: ReferendumIndex) {
 	Referenda::<T>::access_poll(index, |status| {
-		if let PollStatus::Ongoing(tally) = status {
+		if let PollStatus::Ongoing(tally, ..) = status {
 			*tally = T::Tally::default();
 		}
 	});

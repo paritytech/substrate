@@ -432,11 +432,10 @@ pub mod pallet {
 		pub fn cancel(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::CancelOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
-			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
 			if let Some((_, last_alarm)) = status.alarm {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
-			Self::note_one_fewer_deciding(status.track, track);
+			Self::note_one_fewer_deciding(status.track);
 			Self::deposit_event(Event::<T>::Cancelled { index, tally: status.tally });
 			let info = ReferendumInfo::Cancelled(
 				frame_system::Pallet::<T>::block_number(),
@@ -457,11 +456,10 @@ pub mod pallet {
 		pub fn kill(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			T::KillOrigin::ensure_origin(origin)?;
 			let status = Self::ensure_ongoing(index)?;
-			let track = Self::track(status.track).ok_or(Error::<T>::BadTrack)?;
 			if let Some((_, last_alarm)) = status.alarm {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
-			Self::note_one_fewer_deciding(status.track, track);
+			Self::note_one_fewer_deciding(status.track);
 			Self::deposit_event(Event::<T>::Killed { index, tally: status.tally });
 			Self::slash_deposit(Some(status.submission_deposit.clone()));
 			Self::slash_deposit(status.decision_deposit.clone());
@@ -583,25 +581,30 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn create_ongoing(period: Self::Moment, class: Self::Class) -> Result<Self::Index, ()> {
+	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()> {
 		let index = ReferendumCount::<T>::mutate(|x| {
 			let r = *x;
 			*x += 1;
 			r
 		});
-		let status = ReferendumStatusOf::<T> {
-			class,
-			origin: RawOrigin::Nobody.into(),
-			proposal_hash: BlakeTwo256::hash_of(index),
-			enactment: AtOrAfter::After(0),
-			submitted: frame_system::Pallet::<T>::block_number(),
-			submission_deposit: None,
+		let now = frame_system::Pallet::<T>::block_number();
+		let dummy_account_id =
+			codec::Decode::decode(&mut sp_runtime::traits::TrailingZeroInput::new(&b"dummy"[..]))
+				.expect("infinite length input; no invalid inputs for type; qed");
+		let mut status = ReferendumStatusOf::<T> {
+			track: class,
+			origin: frame_support::dispatch::RawOrigin::Root.into(),
+			proposal_hash: <T::Hashing as sp_runtime::traits::Hash>::hash_of(&index),
+			enactment: AtOrAfter::After(Zero::zero()),
+			submitted: now,
+			submission_deposit: Deposit { who: dummy_account_id, amount: Zero::zero() },
 			decision_deposit: None,
 			deciding: None,
 			tally: Default::default(),
 			in_queue: false,
-			alarm: Self::ensure_alarm_at(&mut status, index, now + 1_000_000u32.into()),
+			alarm: None,
 		};
+		Self::ensure_alarm_at(&mut status, index, sp_runtime::traits::Bounded::max_value());
 		ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 		Ok(index)
 	}
@@ -610,7 +613,7 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 	fn end_ongoing(index: Self::Index, approved: bool) -> Result<(), ()> {
 		let mut status = Self::ensure_ongoing(index).map_err(|_| ())?;
 		Self::ensure_no_alarm(&mut status);
-		Self::note_one_fewer_deciding(status.track, track);
+		Self::note_one_fewer_deciding(status.track);
 		let now = frame_system::Pallet::<T>::block_number();
 		let info = if approved {
 			ReferendumInfo::Approved(
@@ -770,7 +773,7 @@ impl<T: Config> Pallet<T> {
 	/// Schedule a call to `one_fewer_deciding` function via the dispatchable
 	/// `defer_one_fewer_deciding`. We could theoretically call it immediately (and it would be
 	/// overall more efficient), however the weights become rather less easy to measure.
-	fn note_one_fewer_deciding(track: TrackIdOf<T>, _track_info: &TrackInfoOf<T>) {
+	fn note_one_fewer_deciding(track: TrackIdOf<T>) {
 		// Set an alarm call for the next block to nudge the track along.
 		let now = frame_system::Pallet::<T>::block_number();
 		let next_block = now + One::one();
@@ -919,7 +922,7 @@ impl<T: Config> Pallet<T> {
 						Some(t) if now >= t => {
 							// Passed!
 							Self::ensure_no_alarm(&mut status);
-							Self::note_one_fewer_deciding(status.track, track);
+							Self::note_one_fewer_deciding(status.track);
 							let (desired, call_hash) = (status.enactment, status.proposal_hash);
 							Self::schedule_enactment(
 								index,
@@ -955,7 +958,7 @@ impl<T: Config> Pallet<T> {
 					if now >= deciding.since.saturating_add(track.decision_period) {
 						// Failed!
 						Self::ensure_no_alarm(&mut status);
-						Self::note_one_fewer_deciding(status.track, track);
+						Self::note_one_fewer_deciding(status.track);
 						Self::deposit_event(Event::<T>::Rejected { index, tally: status.tally });
 						return (
 							ReferendumInfo::Rejected(
