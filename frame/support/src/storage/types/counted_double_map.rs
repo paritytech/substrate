@@ -690,7 +690,12 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{hash::*, storage::bounded_vec::BoundedVec, traits::ConstU32};
+	use crate::{
+		hash::*,
+		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		storage::bounded_vec::BoundedVec,
+		traits::ConstU32,
+	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -1232,5 +1237,44 @@ mod test {
 
 			assert_eq!(A::count(), 0);
 		})
+	}
+
+	#[test]
+	fn test_metadata() {
+		type A = CountedStorageDoubleMap<
+			Prefix,
+			Blake2_128Concat,
+			u16,
+			Twox64Concat,
+			u8,
+			u32,
+			ValueQuery,
+			ADefault,
+		>;
+		let mut entries = vec![];
+		A::build_metadata(vec![], &mut entries);
+		assert_eq!(
+			entries,
+			vec![
+				StorageEntryMetadata {
+					name: "foo",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map {
+						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+						key: scale_info::meta_type::<(u16, u8)>(),
+						value: scale_info::meta_type::<u32>(),
+					},
+					default: 97u32.encode(),
+					docs: vec![],
+				},
+				StorageEntryMetadata {
+					name: "counter_for_foo",
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![0, 0, 0, 0],
+					docs: vec!["Counter for the related counted storage map"],
+				},
+			]
+		);
 	}
 }
