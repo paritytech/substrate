@@ -176,14 +176,14 @@ where
 		<Self as MapWrapper>::Map::remove(k1, k2)
 	}
 
+	// TODO: implement
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KArg1>(k1: KArg1)
-	where
-		KArg1: ?Sized + EncodeLike<Key1>,
-	{
-		// TODO: implement
-		// <Self as MapWrapper>::Map::remove_prefix(k1, limit)
-	}
+	// pub fn remove_prefix<KArg1>(k1: KArg1)
+	// where
+	// 	KArg1: ?Sized + EncodeLike<Key1>,
+	// {
+	// 	<Self as MapWrapper>::Map::remove_prefix(k1, limit)
+	// }
 
 	/// Iterate over values that share the first key.
 	pub fn iter_prefix_values<KArg1>(
@@ -202,70 +202,73 @@ where
 		}
 	}
 
+	// TODO: implement
 	/// Mutate the value under the given keys.
-	pub fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
-	where
-		KArg1: EncodeLike<Key1>,
-		KArg2: EncodeLike<Key2>,
-		F: FnOnce(&mut QueryKind::Query) -> R,
-	{
-		Self::try_mutate(k1, k2, |v| Ok::<R, Never>(f(v)))
-			.expect("`Never` can not be constructed; qed")
-	}
+	// pub fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	// where
+	// 	KArg1: EncodeLike<Key1>,
+	// 	KArg2: EncodeLike<Key2>,
+	// 	F: FnOnce(&mut QueryKind::Query) -> R,
+	// {
+	// 	Self::try_mutate(k1, k2, |v| Ok::<R, Never>(f(v)))
+	// 		.expect("`Never` can not be constructed; qed")
+	// }
 
+	// TODO: implement
 	/// Mutate the value under the given keys when the closure returns `Ok`.
-	pub fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
-	where
-		KArg1: EncodeLike<Key1>,
-		KArg2: EncodeLike<Key2>,
-		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
-	{
-		// TODO: implement
-		// Self::try_mutate_exists(k1, k2, |option_value_ref| {
-		// 	let option_value = core::mem::replace(option_value_ref, None);
-		// 	let mut query = <Self as MapWrapper>::Map::from_optional_value_to_query(option_value);
-		// 	let res = f(&mut query);
-		// 	let option_value = <Self as MapWrapper>::Map::from_query_to_optional_value(query);
-		// 	let _ = core::mem::replace(option_value_ref, option_value);
-		// 	res
-		// })
-	}
+	// pub fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	// where
+	// 	KArg1: EncodeLike<Key1>,
+	// 	KArg2: EncodeLike<Key2>,
+	// 	F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
+	// {
+	// 	Self::try_mutate_exists(k1, k2, |option_value_ref| {
+	// 		let option_value = core::mem::replace(option_value_ref, None);
+	// 		let mut query = <Self as MapWrapper>::Map::from_optional_value_to_query(option_value);
+	// 		let res = f(&mut query);
+	// 		let option_value = <Self as MapWrapper>::Map::from_query_to_optional_value(query);
+	// 		let _ = core::mem::replace(option_value_ref, option_value);
+	// 		res
+	// 	})
+	// }
 
+	// TODO: implement
 	/// Mutate the value under the given keys. Deletes the item if mutated to a `None`.
-	pub fn mutate_exists<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
-	where
-		KArg1: EncodeLike<Key1>,
-		KArg2: EncodeLike<Key2>,
-		F: FnOnce(&mut Option<Value>) -> R,
-	{
-		Self::try_mutate_exists(k1, k2, |v| Ok::<R, Never>(f(v)))
-			.expect("`Never` can not be constructed; qed")
-	}
+	// pub fn mutate_exists<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	// where
+	// 	KArg1: EncodeLike<Key1>,
+	// 	KArg2: EncodeLike<Key2>,
+	// 	F: FnOnce(&mut Option<Value>) -> R,
+	// {
+	// 	Self::try_mutate_exists(k1, k2, |v| Ok::<R, Never>(f(v)))
+	// 		.expect("`Never` can not be constructed; qed")
+	// }
 
+	// TODO: implement
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
-	pub fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
-	where
-		KArg1: EncodeLike<Key1>,
-		KArg2: EncodeLike<Key2>,
-		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
-	{
-		<Self as MapWrapper>::Map::try_mutate_exists(k1, k2, |option_value| {
-			let existed = option_value.is_some();
-			let res = f(option_value);
-			let exist = option_value.is_some();
+	// pub fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	// where
+	// 	KArg1: EncodeLike<Key1>,
+	// 	KArg2: EncodeLike<Key2>,
+	// 	F: FnOnce(&mut Option<Value>) -> Result<R, E>,
+	// {
+	// 	<Self as MapWrapper>::Map::try_mutate_exists(k1, k2, |option_value| {
+	// 		let existed = option_value.is_some();
+	// 		let res = f(option_value);
+	// 		let exist = option_value.is_some();
 
-			if res.is_ok() {
-				if existed && !exist {
-					// Value was deleted
-					CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
-				} else if !existed && exist {
-					// Value was added
-					CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
-				}
-			}
-			res
-		})
-	}
+	// 		if res.is_ok() {
+	// 			if existed && !exist {
+	// 				// Value was deleted
+	// 				CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+	// 			} else if !existed && exist {
+	// 				// Value was added
+	// 				CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
+	// 			}
+	// 		}
+	// 		res
+	// 	})
+	// }
 
 	/// Append the given item to the value in the storage.
 	///
@@ -363,7 +366,7 @@ where
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
-	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
+	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(mut f: F) {
 		<Self as MapWrapper>::Map::translate_values(|old_value| {
 			let res = f(old_value);
 			if res.is_none() {
@@ -373,26 +376,26 @@ where
 		})
 	}
 
+	// TODO: implement
 	/// Try and append the given item to the value in the storage.
 	///
 	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
-	pub fn try_append<KArg1, KArg2, Item, EncodeLikeItem>(
-		key1: KArg1,
-		key2: KArg2,
-		item: EncodeLikeItem,
-	) -> Result<(), ()>
-	where
-		KArg1: EncodeLike<Key1> + Clone,
-		KArg2: EncodeLike<Key2> + Clone,
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		Value: StorageTryAppend<Item>,
-	{
-		// TODO: implement
-		// <Self as crate::storage::TryAppendDoubleMap<Key1, Key2, Value, Item>>::try_append(
-		// 	key1, key2, item,
-		// )
-	}
+	// pub fn try_append<KArg1, KArg2, Item, EncodeLikeItem>(
+	// 	key1: KArg1,
+	// 	key2: KArg2,
+	// 	item: EncodeLikeItem,
+	// ) -> Result<(), ()>
+	// where
+	// 	KArg1: EncodeLike<Key1> + Clone,
+	// 	KArg2: EncodeLike<Key2> + Clone,
+	// 	Item: Encode,
+	// 	EncodeLikeItem: EncodeLike<Item>,
+	// 	Value: StorageTryAppend<Item>,
+	// {
+	// 	<Self as crate::storage::TryAppendDoubleMap<Key1, Key2, Value, Item>>::try_append(
+	// 		key1, key2, item,
+	// 	)
+	// }
 
 	/// Initialize the counter with the actual number of items in the map.
 	///
@@ -409,5 +412,173 @@ where
 	/// Return the count.
 	pub fn count() -> u32 {
 		CounterFor::<Prefix>::get()
+	}
+}
+
+impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	CountedStorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: CountedStorageDoubleMapInstance,
+	Hasher1: crate::hash::StorageHasher + crate::ReversibleStorageHasher,
+	Key1: FullCodec,
+	Hasher2: crate::hash::StorageHasher + crate::ReversibleStorageHasher,
+	Key2: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	/// Enumerate all elements in the map with first key `k1` in no particular order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_prefix(
+		k1: impl EncodeLike<Key1>,
+	) -> crate::storage::PrefixIterator<(Key2, Value), OnRemovalCounterUpdate<Prefix>> {
+		let map_iterator = <Self as MapWrapper>::Map::iter_prefix(k1);
+		crate::storage::PrefixIterator {
+			prefix: map_iterator.prefix,
+			previous_key: map_iterator.previous_key,
+			drain: map_iterator.drain,
+			closure: map_iterator.closure,
+			phantom: Default::default(),
+		}
+	}
+
+	/// Enumerate all elements in the map with first key `k1` after a specified `starting_raw_key`
+	/// in no particular order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_prefix_from(
+		k1: impl EncodeLike<Key1>,
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key2, Value), OnRemovalCounterUpdate<Prefix>> {
+		let map_iterator = <Self as MapWrapper>::Map::iter_prefix_from(k1, starting_raw_key);
+		crate::storage::PrefixIterator {
+			prefix: map_iterator.prefix,
+			previous_key: map_iterator.previous_key,
+			drain: map_iterator.drain,
+			closure: map_iterator.closure,
+			phantom: Default::default(),
+		}
+	}
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
+	/// order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix(k1: impl EncodeLike<Key1>) -> crate::storage::KeyPrefixIterator<Key2> {
+		<Self as MapWrapper>::Map::iter_key_prefix(k1)
+	}
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` after a specified
+	/// `starting_raw_key` in no particular order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix_from(
+		k1: impl EncodeLike<Key1>,
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::KeyPrefixIterator<Key2> {
+		<Self as MapWrapper>::Map::iter_key_prefix_from(k1, starting_raw_key)
+	}
+
+	/// Remove all elements from the map with first key `k1` and iterate through them in no
+	/// particular order.
+	///
+	/// If you add elements with first key `k1` to the map while doing this, you'll get undefined
+	/// results.
+	pub fn drain_prefix(
+		k1: impl EncodeLike<Key1>,
+	) -> crate::storage::PrefixIterator<(Key2, Value), OnRemovalCounterUpdate<Prefix>> {
+		let map_iterator = <Self as MapWrapper>::Map::drain_prefix(k1);
+		crate::storage::PrefixIterator {
+			prefix: map_iterator.prefix,
+			previous_key: map_iterator.previous_key,
+			drain: map_iterator.drain,
+			closure: map_iterator.closure,
+			phantom: Default::default(),
+		}
+	}
+
+	/// Enumerate all elements in the map in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter(
+	) -> crate::storage::PrefixIterator<(Key1, Key2, Value), OnRemovalCounterUpdate<Prefix>> {
+		let map_iterator = <Self as MapWrapper>::Map::iter();
+		crate::storage::PrefixIterator {
+			prefix: map_iterator.prefix,
+			previous_key: map_iterator.previous_key,
+			drain: map_iterator.drain,
+			closure: map_iterator.closure,
+			phantom: Default::default(),
+		}
+	}
+
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in no particular
+	/// order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key1, Key2, Value), OnRemovalCounterUpdate<Prefix>> {
+		let map_iterator = <Self as MapWrapper>::Map::iter_from(starting_raw_key);
+		crate::storage::PrefixIterator {
+			prefix: map_iterator.prefix,
+			previous_key: map_iterator.previous_key,
+			drain: map_iterator.drain,
+			closure: map_iterator.closure,
+			phantom: Default::default(),
+		}
+	}
+
+	/// Enumerate all keys `k1` and `k2` in the map in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as MapWrapper>::Map::iter_keys()
+	}
+
+	/// Enumerate all keys `k1` and `k2` in the map after a specified `starting_raw_key` in no
+	/// particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as MapWrapper>::Map::iter_keys_from(starting_raw_key)
+	}
+
+	/// Remove all elements from the map and iterate through them in no particular order.
+	///
+	/// If you add elements to the map while doing this, you'll get undefined results.
+	pub fn drain(
+	) -> crate::storage::PrefixIterator<(Key1, Key2, Value), OnRemovalCounterUpdate<Prefix>> {
+		let map_iterator = <Self as MapWrapper>::Map::drain();
+		crate::storage::PrefixIterator {
+			prefix: map_iterator.prefix,
+			previous_key: map_iterator.previous_key,
+			drain: map_iterator.drain,
+			closure: map_iterator.closure,
+			phantom: Default::default(),
+		}
+	}
+
+	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	///
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
+	pub fn translate<O: Decode, F: FnMut(Key1, Key2, O) -> Option<Value>>(mut f: F) {
+		<Self as MapWrapper>::Map::translate(|k1, k2, old_value| {
+			let res = f(k1, k2, old_value);
+			if res.is_none() {
+				CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+			}
+			res
+		})
 	}
 }
