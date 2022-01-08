@@ -208,73 +208,69 @@ where
 		}
 	}
 
-	// TODO: implement
 	/// Mutate the value under the given keys.
-	// pub fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
-	// where
-	// 	KArg1: EncodeLike<Key1>,
-	// 	KArg2: EncodeLike<Key2>,
-	// 	F: FnOnce(&mut QueryKind::Query) -> R,
-	// {
-	// 	Self::try_mutate(k1, k2, |v| Ok::<R, Never>(f(v)))
-	// 		.expect("`Never` can not be constructed; qed")
-	// }
+	pub fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	where
+		KArg1: EncodeLike<Key1>,
+		KArg2: EncodeLike<Key2>,
+		F: FnOnce(&mut QueryKind::Query) -> R,
+	{
+		Self::try_mutate(k1, k2, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
+	}
 
-	// TODO: implement
 	/// Mutate the value under the given keys when the closure returns `Ok`.
-	// pub fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
-	// where
-	// 	KArg1: EncodeLike<Key1>,
-	// 	KArg2: EncodeLike<Key2>,
-	// 	F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
-	// {
-	// 	Self::try_mutate_exists(k1, k2, |option_value_ref| {
-	// 		let option_value = core::mem::replace(option_value_ref, None);
-	// 		let mut query = <Self as MapWrapper>::Map::from_optional_value_to_query(option_value);
-	// 		let res = f(&mut query);
-	// 		let option_value = <Self as MapWrapper>::Map::from_query_to_optional_value(query);
-	// 		let _ = core::mem::replace(option_value_ref, option_value);
-	// 		res
-	// 	})
-	// }
+	pub fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	where
+		KArg1: EncodeLike<Key1>,
+		KArg2: EncodeLike<Key2>,
+		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
+	{
+		Self::try_mutate_exists(k1, k2, |option_value_ref| {
+			let option_value = core::mem::replace(option_value_ref, None);
+			let mut query = QueryKind::from_optional_value_to_query(option_value);
+			let res = f(&mut query);
+			let option_value = QueryKind::from_query_to_optional_value(query);
+			let _ = core::mem::replace(option_value_ref, option_value);
+			res
+		})
+	}
 
-	// TODO: implement
 	/// Mutate the value under the given keys. Deletes the item if mutated to a `None`.
-	// pub fn mutate_exists<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
-	// where
-	// 	KArg1: EncodeLike<Key1>,
-	// 	KArg2: EncodeLike<Key2>,
-	// 	F: FnOnce(&mut Option<Value>) -> R,
-	// {
-	// 	Self::try_mutate_exists(k1, k2, |v| Ok::<R, Never>(f(v)))
-	// 		.expect("`Never` can not be constructed; qed")
-	// }
+	pub fn mutate_exists<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	where
+		KArg1: EncodeLike<Key1>,
+		KArg2: EncodeLike<Key2>,
+		F: FnOnce(&mut Option<Value>) -> R,
+	{
+		Self::try_mutate_exists(k1, k2, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
+	}
 
-	// TODO: implement
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
-	// pub fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
-	// where
-	// 	KArg1: EncodeLike<Key1>,
-	// 	KArg2: EncodeLike<Key2>,
-	// 	F: FnOnce(&mut Option<Value>) -> Result<R, E>,
-	// {
-	// 	<Self as MapWrapper>::Map::try_mutate_exists(k1, k2, |option_value| {
-	// 		let existed = option_value.is_some();
-	// 		let res = f(option_value);
-	// 		let exist = option_value.is_some();
+	pub fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	where
+		KArg1: EncodeLike<Key1>,
+		KArg2: EncodeLike<Key2>,
+		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
+	{
+		<Self as MapWrapper>::Map::try_mutate_exists(k1, k2, |option_value| {
+			let existed = option_value.is_some();
+			let res = f(option_value);
+			let exist = option_value.is_some();
 
-	// 		if res.is_ok() {
-	// 			if existed && !exist {
-	// 				// Value was deleted
-	// 				CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
-	// 			} else if !existed && exist {
-	// 				// Value was added
-	// 				CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
-	// 			}
-	// 		}
-	// 		res
-	// 	})
-	// }
+			if res.is_ok() {
+				if existed && !exist {
+					// Value was deleted
+					CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+				} else if !existed && exist {
+					// Value was added
+					CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
+				}
+			}
+			res
+		})
+	}
 
 	/// Append the given item to the value in the storage.
 	///
@@ -382,26 +378,33 @@ where
 		})
 	}
 
-	// TODO: implement
 	/// Try and append the given item to the value in the storage.
 	///
 	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
-	// pub fn try_append<KArg1, KArg2, Item, EncodeLikeItem>(
-	// 	key1: KArg1,
-	// 	key2: KArg2,
-	// 	item: EncodeLikeItem,
-	// ) -> Result<(), ()>
-	// where
-	// 	KArg1: EncodeLike<Key1> + Clone,
-	// 	KArg2: EncodeLike<Key2> + Clone,
-	// 	Item: Encode,
-	// 	EncodeLikeItem: EncodeLike<Item>,
-	// 	Value: StorageTryAppend<Item>,
-	// {
-	// 	<Self as crate::storage::TryAppendDoubleMap<Key1, Key2, Value, Item>>::try_append(
-	// 		key1, key2, item,
-	// 	)
-	// }
+	pub fn try_append<KArg1, KArg2, Item, EncodeLikeItem>(
+		key1: KArg1,
+		key2: KArg2,
+		item: EncodeLikeItem,
+	) -> Result<(), ()>
+	where
+		KArg1: EncodeLike<Key1> + Clone,
+		KArg2: EncodeLike<Key2> + Clone,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		Value: StorageTryAppend<Item>,
+	{
+		let bound = Value::bound();
+		let current = <Self as MapWrapper>::Map::decode_len(Ref::from(&key1), Ref::from(&key2))
+			.unwrap_or_default();
+		if current < bound {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
+			let key = <Self as MapWrapper>::Map::hashed_key_for(key1, key2);
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
 
 	/// Initialize the counter with the actual number of items in the map.
 	///
