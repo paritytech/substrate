@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -635,7 +635,7 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> IntoIterator
 	for BoundedSupports<AccountId, BOuter, BInner>
 {
 	type Item = (AccountId, BoundedSupport<AccountId, BInner>);
-	type IntoIter = std::vec::IntoIter<Self::Item>;
+	type IntoIter = sp_std::vec::IntoIter<Self::Item>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()

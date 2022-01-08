@@ -348,11 +348,11 @@ mod pallet {
 		/// verified, a call to [`finalize_correct`] will seal the correct pages and flip the
 		/// invalid/valid variants.
 		pub(crate) fn set_invalid_page(page: PageIndex, supports: SupportsOf<Pallet<T>>) {
-			use frame_support::TryCollect;
-			let backings = supports
+			use frame_support::traits::TryCollect;
+			let backings: BoundedVec<_, _> = supports
 				.iter()
 				.map(|(x, s)| (x.clone(), (s.total, s.voters.len() as u32)))
-				.try_collect::<T::MaxWinnersPerPage>()
+				.try_collect()
 				.expect("`SupportsOf` is bounded by <Pallet<T> as Verifier>::MaxWinnersPerPage, which is assured to be the same as `T::MaxWinnersPerPage` in an integrity test");
 			QueuedSolutionBackings::<T>::insert(page, backings);
 

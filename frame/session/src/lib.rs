@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -478,11 +478,11 @@ pub mod pallet {
 			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
-				.filter_map(|v| {
-					Some((
+				.map(|v| {
+					(
 						v.clone(),
 						Pallet::<T>::load_keys(&v).expect("Validator in session 1 missing keys!"),
-					))
+					)
 				})
 				.collect();
 

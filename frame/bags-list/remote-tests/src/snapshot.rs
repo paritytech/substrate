@@ -55,8 +55,10 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 			<Runtime as pallet_staking::Config>::SortedListProvider::count(),
 		);
 
+		// TODO: we want a multi-page snapshot test here as well.
 		let voters =
-			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::voters(voter_limit).unwrap();
+			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::voters(voter_limit, 0)
+				.unwrap();
 
 		let mut voters_nominator_only = voters
 			.iter()

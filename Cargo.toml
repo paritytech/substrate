@@ -81,7 +81,7 @@ members = [
 	"frame/contracts/rpc/runtime-api",
 	"frame/democracy",
 	"frame/try-runtime",
-	"frame/election-playground",
+	# "frame/election-playground",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-multi-block",
 	"frame/election-provider-support",

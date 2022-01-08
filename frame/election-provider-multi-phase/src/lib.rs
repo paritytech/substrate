@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -231,14 +231,14 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, IntoUnboundedVoters, PageIndex,
-	TryIntoBoundedSupports,
+	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex, TryIntoBoundedSupports,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{ConstU32, Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
+	BoundedVec,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -272,6 +272,7 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
+use unsigned::VoterOf;
 pub use weights::WeightInfo;
 
 pub use signed::{
@@ -454,11 +455,17 @@ pub struct ReadySolution<A> {
 ///
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct RoundSnapshot<A> {
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct RoundSnapshot<T: Config> {
 	/// All of the voters.
-	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
+	pub voters: Vec<(
+		T::AccountId,
+		VoteWeight,
+		BoundedVec<T::AccountId, <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter>,
+	)>,
 	/// All of the targets.
-	pub targets: Vec<A>,
+	pub targets: Vec<T::AccountId>,
 }
 
 /// Encodes the length of a solution or a snapshot.
@@ -1148,7 +1155,7 @@ pub mod pallet {
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot)]
-	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId>>;
+	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T>>;
 
 	/// Desired number of targets to elect for this round.
 	///
@@ -1217,6 +1224,20 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Same as the getter of the [`Snapshot`] storage item, but it returns the voters converted
+	/// into an unbounded vector.
+	///
+	/// Note that this incurs an extra allocation of the entire snapshot, unfortunately.
+	pub fn snapshot_unbounded(
+	) -> Option<(Vec<T::AccountId>, Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>)> {
+		use frame_election_provider_support::IntoUnboundedVoters;
+		Self::snapshot().map(|snapshot| {
+			let voters = snapshot.voters.into_unbounded_voters();
+			let targets = snapshot.targets;
+			(targets, voters)
+		})
+	}
+
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
 	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
@@ -1264,7 +1285,7 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
 		targets: Vec<T::AccountId>,
-		voters: Vec<crate::unsigned::VoterOf<T>>,
+		voters: Vec<VoterOf<T>>,
 		desired_targets: u32,
 	) {
 		let metadata =
@@ -1277,7 +1298,7 @@ impl<T: Config> Pallet<T> {
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
 		// `encoded_size` encodes it without storing it anywhere, this should not cause any
 		// allocation.
-		let snapshot = RoundSnapshot { voters, targets };
+		let snapshot = RoundSnapshot::<T> { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
@@ -1295,16 +1316,15 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::VoterOf<T>>, u32), ElectionError<T>> {
+	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		// for now we have just a single block snapshot.
 		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
 
 		let targets =
 			T::DataProvider::targets(Some(target_limit), 0).map_err(ElectionError::DataProvider)?;
-		let voters = T::DataProvider::voters(Some(voter_limit), 0)
-			.map(IntoUnboundedVoters::into_unbounded_voters)
-			.map_err(ElectionError::DataProvider)?;
+		let voters =
+			T::DataProvider::voters(Some(voter_limit), 0).map_err(ElectionError::DataProvider)?;
 		let desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 

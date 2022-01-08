@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,8 +23,8 @@ use crate::{
 	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::{NposSolver, PerThing128};
-use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
+use frame_election_provider_support::{ElectionDataProvider, NposSolver, PerThing128};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
@@ -51,7 +51,10 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 pub type VoterOf<T> = (
 	<T as frame_system::Config>::AccountId,
 	sp_npos_elections::VoteWeight,
-	Vec<<T as frame_system::Config>::AccountId>,
+	BoundedVec<
+		<T as frame_system::Config>::AccountId,
+		<<T as Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
+	>,
 );
 
 /// The relative distribution of a voter's stake among the winning targets.
@@ -279,8 +282,8 @@ impl<T: Config> Pallet<T> {
 	where
 		S: NposSolver<AccountId = T::AccountId, Error = SolverErrorOf<T>>,
 	{
-		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let (targets, voters) =
+			Self::snapshot_unbounded().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
 		S::solve(desired_targets as usize, targets, voters)
@@ -546,7 +549,7 @@ impl<T: Config> Pallet<T> {
 
 		// Time to finish. We might have reduced less than expected due to rounding error. Increase
 		// one last time if we have any room left, the reduce until we are sure we are below limit.
-		while voters + 1 <= max_voters && weight_with(voters + 1) < max_weight {
+		while voters < max_voters && weight_with(voters + 1) < max_weight {
 			voters += 1;
 		}
 		while voters.checked_sub(1).is_some() && weight_with(voters) > max_weight {

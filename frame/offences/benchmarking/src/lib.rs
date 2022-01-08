@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ mod mock;
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks};
-use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
@@ -147,8 +147,11 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 		nominator_stashes.push(nominator_stash.clone());
 	}
 
-	let exposure =
-		Exposure { total: amount.clone() * n.into(), own: amount, others: individual_exposures };
+	let exposure = Exposure {
+		total: amount.clone() * n.into(),
+		own: amount,
+		others: individual_exposures.try_into().unwrap(),
+	};
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
 

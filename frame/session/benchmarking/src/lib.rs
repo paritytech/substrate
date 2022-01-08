@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +28,7 @@ use sp_std::{prelude::*, vec};
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	traits::{KeyOwnerProofSystem, OnInitialize},
+	traits::{KeyOwnerProofSystem, OnInitialize, Get},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};

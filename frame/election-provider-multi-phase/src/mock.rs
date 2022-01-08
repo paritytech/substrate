@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
+	data_provider, onchain, ElectionDataProvider, IntoUnboundedVoters, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
@@ -135,7 +135,7 @@ pub fn trim_helpers() -> TrimHelpers {
 	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
 		desired_targets as usize,
 		targets.clone(),
-		voters.clone(),
+		voters.clone().into_unbounded_voters(),
 		None,
 	)
 	.unwrap();
@@ -168,7 +168,7 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 		seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
 			desired_targets as usize,
 			targets.clone(),
-			voters.clone(),
+			voters.clone().into_unbounded_voters(),
 			None,
 		)
 		.unwrap();
@@ -247,16 +247,16 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
-		(1, 10, vec![10, 20]),
-		(2, 10, vec![30, 40]),
-		(3, 10, vec![40]),
-		(4, 10, vec![10, 20, 30, 40]),
+	pub static Voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, MaxVotesPerVoter>)> = vec![
+		(1, 10, vec![10, 20].try_into().unwrap()),
+		(2, 10, vec![30, 40].try_into().unwrap()),
+		(3, 10, vec![40].try_into().unwrap()),
+		(4, 10, vec![10, 20, 30, 40].try_into().unwrap()),
 		// self votes.
-		(10, 10, vec![10]),
-		(20, 20, vec![20]),
-		(30, 30, vec![30]),
-		(40, 40, vec![40]),
+		(10, 10, vec![10].try_into().unwrap()),
+		(20, 20, vec![20].try_into().unwrap()),
+		(30, 30, vec![30].try_into().unwrap()),
+		(40, 40, vec![40].try_into().unwrap()),
 	];
 
 	pub static DesiredTargets: u32 = 2;
@@ -277,6 +277,7 @@ parameter_types! {
 	pub static VoterSnapshotPerBlock: VoterIndex = Bounded::max_value();
 	pub static EpochLength: u64 = 30;
 	pub static OnChianFallback: bool = true;
+	pub MaxVotesPerVoter: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 }
 
 impl onchain::Config for Runtime {
@@ -452,7 +453,7 @@ pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
-	type MaxVotesPerVoter = ConstU32<{ <TestNposSolution as NposSolution>::LIMIT as u32 }>;
+	type MaxVotesPerVoter = MaxVotesPerVoter;
 
 	fn targets(
 		maybe_max_len: Option<usize>,
@@ -497,7 +498,7 @@ impl ElectionDataProvider for StakingMock {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
 		targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
@@ -512,7 +513,11 @@ impl ElectionDataProvider for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
+	fn add_voter(
+		voter: AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<AccountId, Self::MaxVotesPerVoter>,
+	) {
 		let mut current = Voters::get();
 		current.push((voter, weight, targets));
 		Voters::set(current);
@@ -527,7 +532,7 @@ impl ElectionDataProvider for StakingMock {
 		// to be on-par with staking, we add a self vote as well. the stake is really not that
 		// important.
 		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
+		current.push((target, ExistentialDeposit::get() as u64, vec![target].try_into().unwrap()));
 		Voters::set(current);
 	}
 }
@@ -563,7 +568,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
-		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
+		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets.try_into().unwrap())));
 		self
 	}
 	pub fn signed_max_submission(self, count: u32) -> Self {

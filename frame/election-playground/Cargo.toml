@@ -26,3 +26,5 @@ pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-session = { version = "4.0.0-dev", path = "../session" }
 pallet-election-provider-multi-block = { version = "4.0.0-dev", path = "../election-provider-multi-block" }
+
+scale-info = "1"

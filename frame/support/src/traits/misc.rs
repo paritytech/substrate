@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,16 @@ use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncoded
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
+
+/// Try and collect into a collection `C`.
+pub trait TryCollect<C> {
+	type Error;
+	/// Consume self and try to collect the results into `C`.
+	///
+	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
+	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
+	fn try_collect(self) -> Result<C, Self::Error>;
+}
 
 /// Anything that can have a `::len()` method.
 pub trait Len {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -462,7 +462,10 @@ mod sorted_list_provider {
 	fn iter_from_works() {
 		ExtBuilder::default().add_ids(vec![(5, 5), (6, 15)]).build_and_execute(|| {
 			// given
-			assert_eq!(get_bags(), vec![(10, vec![1, 5]), (20, vec![6]), (1000, vec![2, 3, 4])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1, 5]), (20, vec![6]), (1000, vec![2, 3, 4])]
+			);
 
 			assert_eq!(BagsList::iter_from(&3).unwrap().collect::<Vec<_>>(), vec![4, 6, 1, 5]);
 			assert_eq!(BagsList::iter_from(&4).unwrap().collect::<Vec<_>>(), vec![6, 1, 5]);
