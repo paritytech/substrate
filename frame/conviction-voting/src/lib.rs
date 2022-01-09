@@ -29,7 +29,7 @@ use frame_support::{
 	ensure,
 	traits::{
 		Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polling,
-		ReservableCurrency, WithdrawReasons,
+		ReservableCurrency, WithdrawReasons, fungible,
 	},
 };
 use sp_runtime::{
@@ -72,6 +72,7 @@ type DelegatingOf<T> = Delegating<
 >;
 type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
 type PollIndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
+#[cfg(feature = "runtime-benchmarks")]
 type IndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
 type ClassOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Class;
 
@@ -94,7 +95,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
+			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+			+ fungible::Inspect<Self::AccountId>;
 
 		/// The implementation of the logic which conducts polls.
 		type Polls: Polling<TallyOf<Self>, Votes = BalanceOf<Self>, Moment = Self::BlockNumber>;
@@ -518,13 +520,8 @@ impl<T: Config> Pallet<T> {
 				prior: Default::default(),
 			}));
 			match old {
-				Voting::Delegating(Delegating { balance, target, conviction, delegations, mut prior, .. }) => {
-					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, &class, conviction.votes(balance));
-					let now = frame_system::Pallet::<T>::block_number();
-					let lock_periods = conviction.lock_periods().into();
-					prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
-					voting.set_common(delegations, prior);
+				Voting::Delegating(Delegating { .. }) => {
+					Err(Error::<T>::AlreadyDelegating)?
 				},
 				Voting::Casting(Casting { votes, delegations, prior }) => {
 					// here we just ensure that we're currently idling with no votes recorded.

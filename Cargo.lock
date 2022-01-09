@@ -5566,6 +5566,7 @@ dependencies = [
 name = "pallet-conviction-voting"
 version = "4.0.0-dev"
 dependencies = [
+ "assert_matches",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

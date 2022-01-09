@@ -156,4 +156,11 @@ pub trait Polling<Tally> {
 	/// Returns `Err` if `index` is not an ongoing poll.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn end_ongoing(index: Self::Index, approved: bool) -> Result<(), ()>;
+
+	/// The maximum amount of ongoing polls within any single class. By default it practically
+	/// unlimited (`u32::max_value()`).
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_ongoing() -> (Self::Class, u32) {
+		(Self::classes().into_iter().next().expect("Always one class"), u32::max_value())
+	}
 }

@@ -631,6 +631,14 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 		ReferendumInfoFor::<T>::insert(index, info);
 		Ok(())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_ongoing() -> (Self::Class, u32) {
+		let r = T::Tracks::tracks().iter()
+			.max_by_key(|(id, info)| info.max_deciding)
+			.expect("Always one class");
+		(r.0.clone(), r.1.max_deciding)
+	}
 }
 
 impl<T: Config> Pallet<T> {

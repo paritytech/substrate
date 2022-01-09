@@ -21,39 +21,28 @@ use super::*;
 
 use std::collections::BTreeMap;
 use frame_benchmarking::{account, benchmarks, whitelist_account};
-use frame_support::{
-	assert_noop, assert_ok,
-	codec::Decode,
-	traits::{
-		schedule::DispatchTime, Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable,
-	},
-};
-use frame_system::{Pallet as System, RawOrigin};
-use sp_runtime::traits::{BadOrigin, Bounded, One};
+use frame_support::traits::{Currency, Get, fungible};
+use assert_matches::assert_matches;
+use frame_support::dispatch::RawOrigin;
+use sp_runtime::traits::Bounded;
 
 use crate::Pallet as ConvictionVoting;
 
 const SEED: u32 = 0;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
-}
-
 /// Fill all classes as much as possible up to `MaxVotes` and return the Class with the most votes
 /// ongoing.
 fn fill_voting<T: Config>() -> (ClassOf<T>, BTreeMap<ClassOf<T>, Vec<IndexOf<T>>>) {
-	let max: Option<(ClassOf<T>, u32)> = None;
-	let r: TreeMap<ClassOf<T>, Vec<IndexOf<T>>> = BTreeMap::new();
+	let mut r = BTreeMap::<ClassOf<T>, Vec<IndexOf<T>>>::new();
 	for class in T::Polls::classes().into_iter() {
-		let mut counter = 0;
-		for i in 0..T::MaxVotes::get() {
-			match T::Polls::create_ongoing(class) {
-				Ok(i) => r.entry(class).or_default().push(i),
+		for _ in 0..T::MaxVotes::get() {
+			match T::Polls::create_ongoing(class.clone()) {
+				Ok(i) => r.entry(class.clone()).or_default().push(i),
 				Err(()) => break,
 			}
 		}
 	}
-	let c = r.iter().map(|(ref c, ref v)| (v.len(), c.clone())).max(|(l, _)| l).unwrap().1;
+	let c = r.iter().max_by_key(|(_, ref v)| v.len()).unwrap().0.clone();
 	(c, r)
 }
 
@@ -72,37 +61,209 @@ fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 benchmarks! {
 	vote_new {
 		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
 		let account_vote = account_vote::<T>(100u32.into());
 
 		let (class, all_polls) = fill_voting::<T>();
-		let polls = all_polls[&class];
+		let polls = &all_polls[&class];
 		let r = polls.len() - 1;
 		// We need to create existing votes
 		for i in polls.iter().skip(1) {
 			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, account_vote.clone())?;
 		}
 		let votes = match VotingFor::<T>::get(&caller, &class) {
-			Voting::Direct { votes, .. } => votes,
+			Voting::Casting(Casting { votes, .. }) => votes,
 			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 
-		whitelist_account!(caller);
 		let index = polls[0];
-	}: vote(RawOrigin::Signed(caller.clone()), *index, account_vote)
+	}: vote(RawOrigin::Signed(caller.clone()), index, account_vote)
 	verify {
+		assert_matches!(
+			VotingFor::<T>::get(&caller, &class),
+			Voting::Casting(Casting { votes, .. }) if votes.len() == (r + 1) as usize
+		);
+	}
+
+	vote_existing {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let old_account_vote = account_vote::<T>(100u32.into());
+
+		let (class, all_polls) = fill_voting::<T>();
+		let polls = &all_polls[&class];
+		let r = polls.len();
+		// We need to create existing votes
+		for i in polls.iter() {
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote.clone())?;
+		}
 		let votes = match VotingFor::<T>::get(&caller, &class) {
-			Voting::Direct { votes, .. } => votes,
+			Voting::Casting(Casting { votes, .. }) => votes,
 			_ => return Err("Votes are not direct".into()),
 		};
-		assert_eq!(votes.len(), (r + 1) as usize, "Vote was not recorded.");
+		assert_eq!(votes.len(), r, "Votes were not recorded.");
+
+		let new_account_vote = account_vote::<T>(200u32.into());
+		let index = polls[0];
+	}: vote(RawOrigin::Signed(caller.clone()), index, new_account_vote)
+	verify {
+		assert_matches!(
+			VotingFor::<T>::get(&caller, &class),
+			Voting::Casting(Casting { votes, .. }) if votes.len() == r as usize
+		);
+	}
+
+	remove_vote {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let old_account_vote = account_vote::<T>(100u32.into());
+
+		let (class, all_polls) = fill_voting::<T>();
+		let polls = &all_polls[&class];
+		let r = polls.len();
+		// We need to create existing votes
+		for i in polls.iter() {
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, old_account_vote.clone())?;
+		}
+		let votes = match VotingFor::<T>::get(&caller, &class) {
+			Voting::Casting(Casting { votes, .. }) => votes,
+			_ => return Err("Votes are not direct".into()),
+		};
+		assert_eq!(votes.len(), r, "Votes were not recorded.");
+
+		let index = polls[0];
+	}: _(RawOrigin::Signed(caller.clone()), Some(class.clone()), index)
+	verify {
+		assert_matches!(
+			VotingFor::<T>::get(&caller, &class),
+			Voting::Casting(Casting { votes, .. }) if votes.len() == (r - 1) as usize
+		);
+	}
+
+	remove_other_vote {
+		let caller = funded_account::<T>("caller", 0);
+		let voter = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let old_account_vote = account_vote::<T>(100u32.into());
+
+		let (class, all_polls) = fill_voting::<T>();
+		let polls = &all_polls[&class];
+		let r = polls.len();
+		// We need to create existing votes
+		for i in polls.iter() {
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, old_account_vote.clone())?;
+		}
+		let votes = match VotingFor::<T>::get(&caller, &class) {
+			Voting::Casting(Casting { votes, .. }) => votes,
+			_ => return Err("Votes are not direct".into()),
+		};
+		assert_eq!(votes.len(), r, "Votes were not recorded.");
+
+		let index = polls[0];
+		assert!(T::Polls::end_ongoing(index, false).is_ok());
+	}: _(RawOrigin::Signed(caller.clone()), voter.clone(), class.clone(), index)
+	verify {
+		assert_matches!(
+			VotingFor::<T>::get(&voter, &class),
+			Voting::Casting(Casting { votes, .. }) if votes.len() == (r - 1) as usize
+		);
+	}
+
+	delegate {
+		let r in 0 .. T::MaxVotes::get().min(T::Polls::max_ongoing().1);
+
+		let all_polls = fill_voting::<T>().1;
+		let class = T::Polls::max_ongoing().0;
+		let polls = &all_polls[&class];
+		let voter = funded_account::<T>("voter", 0);
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+
+		let delegated_balance: BalanceOf<T> = 1000u32.into();
+		let delegate_vote = account_vote::<T>(delegated_balance);
+
+		// We need to create existing delegations
+		for i in polls.iter().take(r as usize) {
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote.clone())?;
+		}
+		assert_matches!(
+			VotingFor::<T>::get(&voter, &class),
+			Voting::Casting(Casting { votes, .. }) if votes.len() == r as usize
+		);
+
+	}: _(RawOrigin::Signed(caller.clone()), class.clone(), voter.clone(), Conviction::Locked1x, delegated_balance)
+	verify {
+		assert_matches!(VotingFor::<T>::get(&caller, &class), Voting::Delegating(_));
+	}
+
+	undelegate {
+		let r in 0 .. T::MaxVotes::get().min(T::Polls::max_ongoing().1);
+
+		let all_polls = fill_voting::<T>().1;
+		let class = T::Polls::max_ongoing().0;
+		let polls = &all_polls[&class];
+		let voter = funded_account::<T>("voter", 0);
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+
+		let delegated_balance: BalanceOf<T> = 1000u32.into();
+		let delegate_vote = account_vote::<T>(delegated_balance);
+
+		ConvictionVoting::<T>::delegate(
+			RawOrigin::Signed(caller.clone()).into(),
+			class.clone(),
+			voter.clone(),
+			Conviction::Locked1x,
+			delegated_balance,
+		)?;
+
+		// We need to create delegations
+		for i in polls.iter().take(r as usize) {
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(voter.clone()).into(), *i, delegate_vote.clone())?;
+		}
+		assert_matches!(
+			VotingFor::<T>::get(&voter, &class),
+			Voting::Casting(Casting { votes, .. }) if votes.len() == r as usize
+		);
+		assert_matches!(VotingFor::<T>::get(&caller, &class), Voting::Delegating(_));
+	}: _(RawOrigin::Signed(caller.clone()), class.clone())
+	verify {
+		assert_matches!(VotingFor::<T>::get(&caller, &class), Voting::Casting(_));
 	}
 
 	unlock {
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-		let class = <T as Config>::Polls::classes().into_iter().next().unwrap();
+		let normal_account_vote = account_vote::<T>(100u32.into());
+		let big_account_vote = account_vote::<T>(200u32.into());
+
+		let orig_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false);
+
+		// Fill everything up to the max by filling all classes with votes and voting on them all.
+		let (class, all_polls) = fill_voting::<T>();
+		for (class, polls) in all_polls.iter() {
+			for i in polls.iter() {
+				ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, normal_account_vote.clone())?;
+			}
+		}
+		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false) + 100u32.into());
+
+		let polls = &all_polls[&class];
+
+		// Vote big on the class with the most ongoing votes of them to bump the lock and make it
+		// hard to recompute when removed.
+		ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), polls[0], big_account_vote.clone())?;
+		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false) + 200u32.into());
+
+		// Remove the vote
+		ConvictionVoting::<T>::remove_vote(RawOrigin::Signed(caller.clone()).into(), Some(class.clone()), polls[0])?;
+
+		// We can now unlock on `class` from 200 to 100...
 	}: _(RawOrigin::Signed(caller.clone()), class, caller.clone())
+	verify {
+		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false) + 100u32.into());
+	}
 
 	impl_benchmark_test_suite!(
 		ConvictionVoting,
@@ -110,241 +271,3 @@ benchmarks! {
 		crate::tests::Test
 	);
 }
-
-	/*
-	vote_existing {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let caller = funded_account::<T>("caller", 0);
-		let account_vote = account_vote::<T>(100u32.into());
-
-		// We need to create existing direct votes
-		for i in 0 ..=r {
-			let ref_idx = add_referendum::<T>(i)?;
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-		let votes = match VotingOf::<T>::get(&caller) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
-
-		// Change vote from aye to nay
-		let nay = Vote { aye: false, conviction: Conviction::Locked1x };
-		let new_vote = AccountVote::Standard { vote: nay, balance: 1000u32.into() };
-		let referendum_index = ConvictionVoting::<T>::referendum_count() - 1;
-
-		// This tests when a user changes a vote
-		whitelist_account!(caller);
-	}: vote(RawOrigin::Signed(caller.clone()), referendum_index, new_vote)
-	verify {
-		let votes = match VotingOf::<T>::get(&caller) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), (r + 1) as usize, "Vote was incorrectly added");
-		let referendum_info = ConvictionVoting::<T>::referendum_info(referendum_index)
-			.ok_or("referendum doesn't exist")?;
-		let tally =  match referendum_info {
-			PollInfo::Ongoing(r) => r.tally,
-			_ => return Err("referendum not ongoing".into()),
-		};
-		assert_eq!(tally.nays, 1000u32.into(), "changed vote was not recorded");
-	}
-
-	delegate {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let initial_balance: BalanceOf<T> = 100u32.into();
-		let delegated_balance: BalanceOf<T> = 1000u32.into();
-
-		let caller = funded_account::<T>("caller", 0);
-		// Caller will initially delegate to `old_delegate`
-		let old_delegate: T::AccountId = funded_account::<T>("old_delegate", r);
-		ConvictionVoting::<T>::delegate(
-			RawOrigin::Signed(caller.clone()).into(),
-			old_delegate.clone(),
-			Conviction::Locked1x,
-			delegated_balance,
-		)?;
-		let (target, balance) = match VotingOf::<T>::get(&caller) {
-			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(target, old_delegate, "delegation target didn't work");
-		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
-		// Caller will now switch to `new_delegate`
-		let new_delegate: T::AccountId = funded_account::<T>("new_delegate", r);
-		let account_vote = account_vote::<T>(initial_balance);
-		// We need to create existing direct votes for the `new_delegate`
-		for i in 0..r {
-			let ref_idx = add_referendum::<T>(i)?;
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(new_delegate.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-		let votes = match VotingOf::<T>::get(&new_delegate) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
-		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller.clone()), new_delegate.clone(), Conviction::Locked1x, delegated_balance)
-	verify {
-		let (target, balance) = match VotingOf::<T>::get(&caller) {
-			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(target, new_delegate, "delegation target didn't work");
-		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
-		let delegations = match VotingOf::<T>::get(&new_delegate) {
-			Voting::Direct { delegations, .. } => delegations,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(delegations.capital, delegated_balance, "delegation was not recorded.");
-	}
-
-	undelegate {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let initial_balance: BalanceOf<T> = 100u32.into();
-		let delegated_balance: BalanceOf<T> = 1000u32.into();
-
-		let caller = funded_account::<T>("caller", 0);
-		// Caller will delegate
-		let the_delegate: T::AccountId = funded_account::<T>("delegate", r);
-		ConvictionVoting::<T>::delegate(
-			RawOrigin::Signed(caller.clone()).into(),
-			the_delegate.clone(),
-			Conviction::Locked1x,
-			delegated_balance,
-		)?;
-		let (target, balance) = match VotingOf::<T>::get(&caller) {
-			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(target, the_delegate, "delegation target didn't work");
-		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
-		// We need to create votes direct votes for the `delegate`
-		let account_vote = account_vote::<T>(initial_balance);
-		for i in 0..r {
-			let ref_idx = add_referendum::<T>(i)?;
-			ConvictionVoting::<T>::vote(
-				RawOrigin::Signed(the_delegate.clone()).into(),
-				ref_idx,
-				account_vote.clone()
-			)?;
-		}
-		let votes = match VotingOf::<T>::get(&the_delegate) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
-		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller.clone()))
-	verify {
-		// Voting should now be direct
-		match VotingOf::<T>::get(&caller) {
-			Voting::Direct { .. } => (),
-			_ => return Err("undelegation failed".into()),
-		}
-	}
-
-	// Test when unlock will set a new value
-	unlock {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let locker = funded_account::<T>("locker", 0);
-		// Populate votes so things are locked
-		let base_balance: BalanceOf<T> = 100u32.into();
-		let small_vote = account_vote::<T>(base_balance);
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(locker.clone()).into(), ref_idx, small_vote.clone())?;
-		}
-
-		// Create a big vote so lock increases
-		let big_vote = account_vote::<T>(base_balance * 10u32.into());
-		let referendum_index = add_referendum::<T>(r)?;
-		ConvictionVoting::<T>::vote(RawOrigin::Signed(locker.clone()).into(), referendum_index, big_vote)?;
-
-		let votes = match VotingOf::<T>::get(&locker) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
-
-		let voting = VotingOf::<T>::get(&locker);
-		assert_eq!(voting.locked_balance(), base_balance * 10u32.into());
-
-		ConvictionVoting::<T>::remove_vote(RawOrigin::Signed(locker.clone()).into(), referendum_index)?;
-
-		let caller = funded_account::<T>("caller", 0);
-		whitelist_account!(caller);
-	}: unlock(RawOrigin::Signed(caller), locker.clone())
-	verify {
-		let votes = match VotingOf::<T>::get(&locker) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), r as usize, "Vote was not removed");
-
-		let voting = VotingOf::<T>::get(&locker);
-		// Note that we may want to add a `get_lock` api to actually verify
-		assert_eq!(voting.locked_balance(), base_balance);
-	}
-
-	remove_vote {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let caller = funded_account::<T>("caller", 0);
-		let account_vote = account_vote::<T>(100u32.into());
-
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-
-		let votes = match VotingOf::<T>::get(&caller) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), r as usize, "Votes not created");
-
-		let referendum_index = r - 1;
-		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller.clone()), referendum_index)
-	verify {
-		let votes = match VotingOf::<T>::get(&caller) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
-	}
-
-	// Worst case is when target == caller and referendum is ongoing
-	remove_other_vote {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let caller = funded_account::<T>("caller", r);
-		let account_vote = account_vote::<T>(100u32.into());
-
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-
-		let votes = match VotingOf::<T>::get(&caller) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), r as usize, "Votes not created");
-
-		let referendum_index = r - 1;
-		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller.clone()), caller.clone(), referendum_index)
-	verify {
-		let votes = match VotingOf::<T>::get(&caller) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct".into()),
-		};
-		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
-	}*/
