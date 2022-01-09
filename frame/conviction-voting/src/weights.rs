@@ -69,7 +69,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_new() -> Weight {
-		(115_000_000 as Weight)
+		(130_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
@@ -79,7 +79,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_existing() -> Weight {
-		(229_000_000 as Weight)
+		(226_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
@@ -87,14 +87,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn remove_vote() -> Weight {
-		(208_000_000 as Weight)
+		(225_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:0)
 	fn remove_other_vote() -> Weight {
-		(38_000_000 as Weight)
+		(45_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -104,9 +104,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn delegate(r: u32, ) -> Weight {
-		(37_000_000 as Weight)
-			// Standard Error: 1_204_000
-			.saturating_add((28_500_000 as Weight).saturating_mul(r as Weight))
+		(43_167_000 as Weight)
+			// Standard Error: 3_423_000
+			.saturating_add((32_000_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -116,9 +116,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn undelegate(r: u32, ) -> Weight {
-		(23_833_000 as Weight)
-			// Standard Error: 1_447_000
-			.saturating_add((24_167_000 as Weight).saturating_mul(r as Weight))
+		(27_333_000 as Weight)
+			// Standard Error: 1_885_000
+			.saturating_add((24_000_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -128,7 +128,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: ConvictionVoting ClassLocksFor (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	fn unlock() -> Weight {
-		(56_000_000 as Weight)
+		(55_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -142,7 +142,7 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_new() -> Weight {
-		(115_000_000 as Weight)
+		(130_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
@@ -152,7 +152,7 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_existing() -> Weight {
-		(229_000_000 as Weight)
+		(226_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
@@ -160,14 +160,14 @@ impl WeightInfo for () {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn remove_vote() -> Weight {
-		(208_000_000 as Weight)
+		(225_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:0)
 	fn remove_other_vote() -> Weight {
-		(38_000_000 as Weight)
+		(45_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -177,9 +177,9 @@ impl WeightInfo for () {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn delegate(r: u32, ) -> Weight {
-		(37_000_000 as Weight)
-			// Standard Error: 1_204_000
-			.saturating_add((28_500_000 as Weight).saturating_mul(r as Weight))
+		(43_167_000 as Weight)
+			// Standard Error: 3_423_000
+			.saturating_add((32_000_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
@@ -189,9 +189,9 @@ impl WeightInfo for () {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn undelegate(r: u32, ) -> Weight {
-		(23_833_000 as Weight)
-			// Standard Error: 1_447_000
-			.saturating_add((24_167_000 as Weight).saturating_mul(r as Weight))
+		(27_333_000 as Weight)
+			// Standard Error: 1_885_000
+			.saturating_add((24_000_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
@@ -201,7 +201,7 @@ impl WeightInfo for () {
 	// Storage: ConvictionVoting ClassLocksFor (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	fn unlock() -> Weight {
-		(56_000_000 as Weight)
+		(55_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
