@@ -63,7 +63,7 @@ impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
 	}
 }
 
-impl<T: Ord, Bound> Ord for BoundedVec<T, Bound> {
+impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
 	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
 		self.0.cmp(&other.0)
 	}
