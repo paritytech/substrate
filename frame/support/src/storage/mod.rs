@@ -803,7 +803,8 @@ pub struct PrefixIterator<T, OnRemoval = ()> {
 }
 
 impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
-	pub fn into_other<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
+	/// Converts to the same iterator but with the different 'OnRemoval' type
+	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
 		PrefixIterator::<T, OnRemoval2> {
 			prefix: self.prefix,
 			previous_key: self.previous_key,
