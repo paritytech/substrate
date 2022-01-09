@@ -94,6 +94,9 @@ pub mod pallet {
 		/// `ElectionProvider` that the election must be done by `x` blocks before the real estimate
 		/// of the next election. This is done via shifting the result of the
 		/// `ElectionDataProvider::predict_next_election` method.
+		///
+		/// If [`Config::ElectionProvider`] is set to something that does not use
+		/// `predict_next_election`, then you should not care about this config.
 		type ElectionProviderLookahead: Get<Self::BlockNumber>;
 
 		/// Something that provides the election functionality at genesis.

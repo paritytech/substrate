@@ -41,6 +41,18 @@ use sp_std::{marker::PhantomData, prelude::*};
 #[scale_info(skip_type_params(S))]
 pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
+impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.0.cmp(&other.0)
+	}
+}
+
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.

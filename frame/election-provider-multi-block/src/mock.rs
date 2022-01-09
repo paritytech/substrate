@@ -304,7 +304,7 @@ where
 impl onchain::Config for Runtime {
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = MockStaking;
-	type TargetsPageSize = ();
+	type TargetPageSize = ();
 	type VoterPageSize = ();
 	type MaxBackersPerWinner = MaxBackersPerWinner;
 	type MaxWinnersPerPage = MaxWinnersPerPage;

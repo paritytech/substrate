@@ -153,6 +153,10 @@ pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+	type TargetPageSize = ();
+	type VoterPageSize = ();
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 }
 
 impl pallet_staking::Config for Test {
@@ -174,6 +178,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type ElectionProviderLookahead = (); // TODO: this might not be a good idea, since it is quite irrelevant in such cases.
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;

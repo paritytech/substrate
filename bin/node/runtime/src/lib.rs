@@ -503,8 +503,8 @@ impl pallet_session::Config for Runtime {
 }
 
 impl pallet_session::historical::Config for Runtime {
-	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Runtime>;
+	type FullIdentification = pallet_staking::Exposure<Self>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
 
 pallet_staking_reward_curve::build! {
@@ -526,12 +526,16 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 	pub OffchainRepeat: BlockNumber = 5;
+	pub Lookahead: BlockNumber = 5u32.into();
 }
 
-use frame_election_provider_support::onchain;
-impl onchain::Config for Runtime {
+impl frame_election_provider_support::onchain::Config for Runtime {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+	type VoterPageSize = ();
+	type TargetPageSize = ();
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 }
 
 pub struct StakingBenchmarkingConfig;
@@ -563,6 +567,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
+	type ElectionProviderLookahead = Lookahead;
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
 	// Note that the aforementioned does not scale to a very large number of nominators.

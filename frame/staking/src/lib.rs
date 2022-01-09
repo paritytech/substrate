@@ -627,6 +627,34 @@ pub struct Exposure<T: Config> {
 		BoundedVec<IndividualExposure<T::AccountId, BalanceOf<T>>, MaxIndividualExposuresOf<T>>,
 }
 
+use sp_std::cmp::Ordering;
+// TODO: PartialOrdNoBound and OrdNoBound
+
+impl<T: Config> PartialOrd for Exposure<T> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		match self.total.partial_cmp(&other.total) {
+			Some(Ordering::Equal) => match self.own.partial_cmp(&other.own) {
+				Some(Ordering::Equal) => self.others.partial_cmp(&other.others),
+				cmp => cmp,
+			},
+			cmp => cmp,
+		}
+	}
+}
+
+impl<T: Config> Ord for Exposure<T> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		match self.total.cmp(&other.total) {
+			Ordering::Equal => match self.own.cmp(&other.own) {
+				Ordering::Equal => self.others.cmp(&other.others),
+				cmp => cmp,
+			},
+			cmp => cmp,
+		}
+	}
+}
+
+/// Maximum number of [`IndividualExposure`] that each [`Exposure`] can have.
 pub type MaxIndividualExposuresOf<T> =
 	<<T as Config>::ElectionProvider as ElectionProvider>::MaxBackersPerWinner;
 

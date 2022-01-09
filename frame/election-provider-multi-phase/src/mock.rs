@@ -283,7 +283,7 @@ parameter_types! {
 impl onchain::Config for Runtime {
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = StakingMock;
-	type TargetsPageSize = ();
+	type TargetPageSize = ();
 	type VoterPageSize = ();
 	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;

@@ -78,7 +78,7 @@ pub trait Config: frame_system::Config {
 	>;
 
 	/// Maximum targets to get from the data provider.
-	type TargetsPageSize: Get<Option<usize>>;
+	type TargetPageSize: Get<Option<usize>>;
 
 	/// Maximum voters to get from the data provider.
 	type VoterPageSize: Get<Option<usize>>;
@@ -112,7 +112,7 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let voters =
 			Self::DataProvider::voters(T::VoterPageSize::get(), 0).map_err(Error::DataProvider)?;
 
-		let targets = Self::DataProvider::targets(T::TargetsPageSize::get(), 0)
+		let targets = Self::DataProvider::targets(T::TargetPageSize::get(), 0)
 			.map_err(Error::DataProvider)?;
 		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
@@ -202,7 +202,7 @@ mod tests {
 	impl Config for Runtime {
 		type Accuracy = Perbill;
 		type DataProvider = mock_data_provider::DataProvider;
-		type TargetsPageSize = ();
+		type TargetPageSize = ();
 		type VoterPageSize = ();
 		type MaxBackersPerWinner = ConstU32<16>;
 		type MaxWinnersPerPage = ConstU32<16>;

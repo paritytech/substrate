@@ -159,8 +159,8 @@ where
 impl onchain::Config for Test {
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
-	type TargetsPageSize = ();
-	type VotersPageSize = ();
+	type TargetPageSize = ();
+	type VoterPageSize = ();
 	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 }

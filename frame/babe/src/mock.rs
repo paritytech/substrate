@@ -177,6 +177,10 @@ parameter_types! {
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+	type TargetPageSize = ();
+	type VoterPageSize = ();
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
+	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 }
 
 impl pallet_staking::Config for Test {
@@ -197,6 +201,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
+	type ElectionProviderLookahead = ();
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
