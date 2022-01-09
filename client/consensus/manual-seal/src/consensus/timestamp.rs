@@ -77,7 +77,7 @@ impl SlotTimestampProvider {
 	}
 
 	/// Create a new mocked time stamp provider, for aura
-	pub fn aura<B, C>(client: Arc<C>) -> Result<Self, Error>
+	pub fn new_aura<B, C>(client: Arc<C>) -> Result<Self, Error>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
