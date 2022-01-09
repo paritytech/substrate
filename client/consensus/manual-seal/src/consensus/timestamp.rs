@@ -107,7 +107,7 @@ impl SlotTimestampProvider {
 		let time = if info.best_number != Zero::zero() {
 			let header = client
 				.header(BlockId::Hash(info.best_hash))?
-				.ok_or_else(|| format!("best header not found in the db!"))?;
+				.ok_or_else(|| "best header not found in the db!".to_string())?;
 			let slot = func(header)?;
 			// add the slot duration so there's no collision of slots
 			(slot * slot_duration) + slot_duration
