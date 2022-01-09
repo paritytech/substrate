@@ -72,6 +72,7 @@ type DelegatingOf<T> = Delegating<
 >;
 type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
 type PollIndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
+type IndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
 type ClassOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Class;
 
 #[frame_support::pallet]

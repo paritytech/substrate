@@ -19,6 +19,7 @@
 
 use super::*;
 
+use std::collections::BTreeMap;
 use frame_benchmarking::{account, benchmarks, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
@@ -38,6 +39,24 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
+/// Fill all classes as much as possible up to `MaxVotes` and return the Class with the most votes
+/// ongoing.
+fn fill_voting<T: Config>() -> (ClassOf<T>, BTreeMap<ClassOf<T>, Vec<IndexOf<T>>>) {
+	let max: Option<(ClassOf<T>, u32)> = None;
+	let r: TreeMap<ClassOf<T>, Vec<IndexOf<T>>> = BTreeMap::new();
+	for class in T::Polls::classes().into_iter() {
+		let mut counter = 0;
+		for i in 0..T::MaxVotes::get() {
+			match T::Polls::create_ongoing(class) {
+				Ok(i) => r.entry(class).or_default().push(i),
+				Err(()) => break,
+			}
+		}
+	}
+	let c = r.iter().map(|(ref c, ref v)| (v.len(), c.clone())).max(|(l, _)| l).unwrap().1;
+	(c, r)
+}
+
 fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -50,35 +69,49 @@ fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 	AccountVote::Standard { vote: v, balance: b }
 }
 
-	/*
+benchmarks! {
 	vote_new {
-		let r in 1 .. MAX_REFERENDUMS;
-
 		let caller = funded_account::<T>("caller", 0);
 		let account_vote = account_vote::<T>(100u32.into());
 
-		// We need to create existing direct votes
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+		let (class, all_polls) = fill_voting::<T>();
+		let polls = all_polls[&class];
+		let r = polls.len() - 1;
+		// We need to create existing votes
+		for i in polls.iter().skip(1) {
+			ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, account_vote.clone())?;
 		}
-		let votes = match VotingOf::<T>::get(&caller) {
+		let votes = match VotingFor::<T>::get(&caller, &class) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 
-		let referendum_index = add_referendum::<T>(r)?;
 		whitelist_account!(caller);
-	}: vote(RawOrigin::Signed(caller.clone()), referendum_index, account_vote)
+		let index = polls[0];
+	}: vote(RawOrigin::Signed(caller.clone()), *index, account_vote)
 	verify {
-		let votes = match VotingOf::<T>::get(&caller) {
+		let votes = match VotingFor::<T>::get(&caller, &class) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct".into()),
 		};
 		assert_eq!(votes.len(), (r + 1) as usize, "Vote was not recorded.");
 	}
 
+	unlock {
+		let caller = funded_account::<T>("caller", 0);
+		whitelist_account!(caller);
+		let class = <T as Config>::Polls::classes().into_iter().next().unwrap();
+	}: _(RawOrigin::Signed(caller.clone()), class, caller.clone())
+
+	impl_benchmark_test_suite!(
+		ConvictionVoting,
+		crate::tests::new_test_ext(),
+		crate::tests::Test
+	);
+}
+
+	/*
 	vote_existing {
 		let r in 1 .. MAX_REFERENDUMS;
 
@@ -315,16 +348,3 @@ fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 		};
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}*/
-benchmarks! {
-	unlock {
-		let caller = funded_account::<T>("caller", 0);
-		whitelist_account!(caller);
-		let class = <T as Config>::Polls::classes().into_iter().next().unwrap();
-	}: _(RawOrigin::Signed(caller.clone()), class, caller.clone())
-
-	impl_benchmark_test_suite!(
-		ConvictionVoting,
-		crate::tests::new_test_ext(),
-		crate::tests::Test
-	);
-}
