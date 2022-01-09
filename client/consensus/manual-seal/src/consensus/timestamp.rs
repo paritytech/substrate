@@ -58,7 +58,7 @@ pub struct SlotTimestampProvider {
 
 impl SlotTimestampProvider {
 	/// Create a new mocked time stamp provider, for babe.
-	pub fn babe<B, C>(client: Arc<C>) -> Result<Self, Error>
+	pub fn new_babe<B, C>(client: Arc<C>) -> Result<Self, Error>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
