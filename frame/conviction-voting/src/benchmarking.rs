@@ -19,7 +19,7 @@
 
 use super::*;
 
-use std::collections::BTreeMap;
+use sp_std::collections::btree_map::BTreeMap;
 use frame_benchmarking::{account, benchmarks, whitelist_account};
 use frame_support::traits::{Currency, Get, fungible};
 use assert_matches::assert_matches;
@@ -235,26 +235,27 @@ benchmarks! {
 	unlock {
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-		let normal_account_vote = account_vote::<T>(100u32.into());
-		let big_account_vote = account_vote::<T>(200u32.into());
-
-		let orig_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false);
+		let normal_account_vote = account_vote::<T>(T::Currency::free_balance(&caller) - 100u32.into());
+		let big_account_vote = account_vote::<T>(T::Currency::free_balance(&caller));
 
 		// Fill everything up to the max by filling all classes with votes and voting on them all.
 		let (class, all_polls) = fill_voting::<T>();
+		assert!(all_polls.len() > 0);
 		for (class, polls) in all_polls.iter() {
+			assert!(polls.len() > 0);
 			for i in polls.iter() {
 				ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), *i, normal_account_vote.clone())?;
 			}
 		}
-		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false) + 100u32.into());
 
+		let orig_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false);
 		let polls = &all_polls[&class];
 
 		// Vote big on the class with the most ongoing votes of them to bump the lock and make it
 		// hard to recompute when removed.
 		ConvictionVoting::<T>::vote(RawOrigin::Signed(caller.clone()).into(), polls[0], big_account_vote.clone())?;
-		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false) + 200u32.into());
+		let now_usable = <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false);
+		assert_eq!(orig_usable - now_usable, 100u32.into());
 
 		// Remove the vote
 		ConvictionVoting::<T>::remove_vote(RawOrigin::Signed(caller.clone()).into(), Some(class.clone()), polls[0])?;
@@ -262,7 +263,7 @@ benchmarks! {
 		// We can now unlock on `class` from 200 to 100...
 	}: _(RawOrigin::Signed(caller.clone()), class, caller.clone())
 	verify {
-		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false) + 100u32.into());
+		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false));
 	}
 
 	impl_benchmark_test_suite!(

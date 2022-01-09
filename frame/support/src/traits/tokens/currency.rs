@@ -21,6 +21,7 @@ use super::{
 	imbalance::{Imbalance, SignedImbalance},
 	misc::{Balance, ExistenceRequirement, WithdrawReasons},
 };
+use crate::traits::Get;
 use crate::dispatch::{DispatchError, DispatchResult};
 use codec::MaxEncodedLen;
 use sp_runtime::traits::MaybeSerializeDeserialize;
@@ -198,6 +199,15 @@ pub trait Currency<AccountId> {
 		who: &AccountId,
 		balance: Self::Balance,
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
+}
+
+/// A non-const `Get` implementation parameterised by a `Currency` impl which provides the result
+/// of `total_issuance`.
+pub struct TotalIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)>);
+impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
+	fn get() -> C::Balance {
+		C::total_issuance()
+	}
 }
 
 #[cfg(feature = "std")]

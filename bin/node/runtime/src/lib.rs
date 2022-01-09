@@ -695,6 +695,20 @@ impl pallet_bags_list::Config for Runtime {
 }
 
 parameter_types! {
+	pub const VoteLockingPeriod: BlockNumber = 30 * DAYS;
+}
+
+impl pallet_conviction_voting::Config for Runtime {
+	type WeightInfo = pallet_conviction_voting::weights::SubstrateWeight<Self>;
+	type Event = Event;
+	type Currency = Balances;
+	type VoteLockingPeriod = VoteLockingPeriod;
+	type MaxVotes = ConstU32<512>;
+	type MaxTurnout = frame_support::traits::TotalIssuanceOf<Balances, Self::AccountId>;
+	type Polls = Referenda;
+}
+
+parameter_types! {
 	pub const AlarmInterval: BlockNumber = 1;
 	pub const SubmissionDeposit: Balance = 100 * DOLLARS;
 	pub const UndecidingTimeout: BlockNumber = 28 * DAYS;
@@ -739,42 +753,8 @@ impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
 	}
 }
 
-// TODO: Replace with conviction voting tally.
-use scale_info::TypeInfo;
-#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, Default)]
-pub struct Tally {
-	pub ayes: u32,
-	pub nays: u32,
-}
-
-impl frame_support::traits::VoteTally<u32> for Tally {
-	fn ayes(&self) -> u32 {
-		self.ayes
-	}
-
-	fn turnout(&self) -> Perbill {
-		Perbill::from_percent(self.ayes + self.nays)
-	}
-
-	fn approval(&self) -> Perbill {
-		Perbill::from_rational(self.ayes, self.ayes + self.nays)
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self {
-		Self { ayes: 100, nays: 0 }
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
-		let turnout = turnout.mul_ceil(100u32);
-		let ayes = approval.mul_ceil(turnout);
-		Self { ayes, nays: turnout - ayes }
-	}
-}
-
 impl pallet_referenda::Config for Runtime {
-	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Runtime>;
+	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
 	type Call = Call;
 	type Event = Event;
 	type Scheduler = Scheduler;
@@ -782,8 +762,8 @@ impl pallet_referenda::Config for Runtime {
 	type CancelOrigin = EnsureRoot<AccountId>;
 	type KillOrigin = EnsureRoot<AccountId>;
 	type Slash = ();
-	type Votes = u32;
-	type Tally = Tally;
+	type Votes = pallet_conviction_voting::VotesOf<Runtime>;
+	type Tally = pallet_conviction_voting::TallyOf<Runtime>;
 	type SubmissionDeposit = SubmissionDeposit;
 	type MaxQueued = ConstU32<100>;
 	type UndecidingTimeout = UndecidingTimeout;
@@ -1429,6 +1409,7 @@ construct_runtime!(
 		BagsList: pallet_bags_list,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
+		ConvictionVoting: pallet_conviction_voting,
 	}
 );
 
@@ -1783,6 +1764,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_child_bounties, ChildBounties);
 			list_benchmark!(list, extra, pallet_collective, Council);
 			list_benchmark!(list, extra, pallet_contracts, Contracts);
+			list_benchmark!(list, extra, pallet_conviction_voting, ConvictionVoting);
 			list_benchmark!(list, extra, pallet_democracy, Democracy);
 			list_benchmark!(list, extra, pallet_election_provider_multi_phase, ElectionProviderMultiPhase);
 			list_benchmark!(list, extra, pallet_elections_phragmen, Elections);
@@ -1863,6 +1845,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_child_bounties, ChildBounties);
 			add_benchmark!(params, batches, pallet_collective, Council);
 			add_benchmark!(params, batches, pallet_contracts, Contracts);
+			add_benchmark!(params, batches, pallet_conviction_voting, ConvictionVoting);
 			add_benchmark!(params, batches, pallet_democracy, Democracy);
 			add_benchmark!(params, batches, pallet_election_provider_multi_phase, ElectionProviderMultiPhase);
 			add_benchmark!(params, batches, pallet_elections_phragmen, Elections);

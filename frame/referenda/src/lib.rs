@@ -635,7 +635,7 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn max_ongoing() -> (Self::Class, u32) {
 		let r = T::Tracks::tracks().iter()
-			.max_by_key(|(id, info)| info.max_deciding)
+			.max_by_key(|(_, info)| info.max_deciding)
 			.expect("Always one class");
 		(r.0.clone(), r.1.max_deciding)
 	}

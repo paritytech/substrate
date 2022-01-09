@@ -95,13 +95,6 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-pub struct TotalIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)>);
-impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
-	fn get() -> C::Balance {
-		C::total_issuance()
-	}
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TestPollState {
 	Ongoing(TallyOf<Test>, u8),
@@ -198,7 +191,7 @@ impl Config for Test {
 	type VoteLockingPeriod = ConstU64<3>;
 	type MaxVotes = ConstU32<3>;
 	type WeightInfo = ();
-	type MaxTurnout = TotalIssuanceOf<Balances, Self::AccountId>;
+	type MaxTurnout = frame_support::traits::TotalIssuanceOf<Balances, Self::AccountId>;
 	type Polls = TestPolls;
 }
 

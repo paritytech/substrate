@@ -70,7 +70,8 @@ type DelegatingOf<T> = Delegating<
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
 >;
-type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
+pub type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
+pub type VotesOf<T> = BalanceOf<T>;
 type PollIndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
 #[cfg(feature = "runtime-benchmarks")]
 type IndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;

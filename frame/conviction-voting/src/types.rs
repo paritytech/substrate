@@ -17,11 +17,11 @@
 
 //! Miscellaneous additional datatypes.
 
-use std::marker::PhantomData;
+use sp_std::marker::PhantomData;
 
 use super::*;
 use crate::{AccountVote, Conviction, Vote};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Codec};
 use frame_support::{CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound};
 use frame_support::traits::VoteTally;
 use scale_info::TypeInfo;
@@ -32,7 +32,8 @@ use sp_runtime::{
 
 /// Info regarding an ongoing referendum.
 #[derive(CloneNoBound, DefaultNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound, TypeInfo, Encode, Decode)]
-pub struct Tally<Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug, Total> {
+#[scale_info(skip_type_params(Total))]
+pub struct Tally<Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + TypeInfo + Codec, Total> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
 	pub ayes: Votes,
 	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
@@ -44,7 +45,7 @@ pub struct Tally<Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug, T
 }
 
 impl<
-	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned,
+	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
 	Total: Get<Votes>,
 > VoteTally<Votes>
 	for Tally<Votes, Total>
@@ -75,7 +76,7 @@ impl<
 }
 
 impl<
-	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned,
+	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
 	Total: Get<Votes>,
 > Tally<Votes, Total> {
 	/// Create a new tally.

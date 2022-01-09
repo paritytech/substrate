@@ -18,6 +18,7 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
+use sp_std::prelude::*;
 use crate::dispatch::{DispatchError, Parameter};
 use codec::HasCompact;
 use sp_arithmetic::{
