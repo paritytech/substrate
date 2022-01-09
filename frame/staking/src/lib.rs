@@ -658,6 +658,11 @@ impl<T: Config> Ord for Exposure<T> {
 pub type MaxIndividualExposuresOf<T> =
 	<<T as Config>::ElectionProvider as ElectionProvider>::MaxBackersPerWinner;
 
+/// Maximum number of exposures (validators) that each page of our [`Config::ElectionProvider`]
+/// might return.
+pub type MaxExposuresPerPageOf<T> =
+	<<T as Config>::ElectionProvider as ElectionProvider>::MaxWinnersPerPage;
+
 impl<T: Config> Default for Exposure<T> {
 	fn default() -> Self {
 		Self { total: Default::default(), own: Default::default(), others: Default::default() }

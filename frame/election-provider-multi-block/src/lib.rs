@@ -612,10 +612,7 @@ pub mod pallet {
 			);
 		}
 
-		pub(crate) fn set_voters(
-			page: PageIndex,
-			voters: BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>,
-		) {
+		pub(crate) fn set_voters(page: PageIndex, voters: VoterPageOf<T>) {
 			Self::write_storage_with_pre_allocate(
 				&PagedVoterSnapshot::<T>::hashed_key_for(page),
 				voters,
@@ -657,9 +654,7 @@ pub mod pallet {
 			DesiredTargets::<T>::get()
 		}
 
-		pub(crate) fn voters(
-			page: PageIndex,
-		) -> Option<BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>> {
+		pub(crate) fn voters(page: PageIndex) -> Option<VoterPageOf<T>> {
 			PagedVoterSnapshot::<T>::get(page)
 		}
 
@@ -775,8 +770,7 @@ pub mod pallet {
 
 	/// Paginated voter snapshot. At most [`T::Pages`] keys will exist.
 	#[pallet::storage]
-	type PagedVoterSnapshot<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>>;
+	type PagedVoterSnapshot<T: Config> = StorageMap<_, Twox64Concat, PageIndex, VoterPageOf<T>>;
 
 	/// Paginated target snapshot. At most ONE key will exist.
 	#[pallet::storage]

@@ -22,7 +22,9 @@ use crate::{
 	verifier::{self},
 };
 use codec::Encode;
-use frame_election_provider_support::{ExtendedBalance, NposSolver, Support, VoteWeight};
+use frame_election_provider_support::{
+	ExtendedBalance, IntoUnboundedVoters, NposSolver, Support, VoteWeight,
+};
 use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -76,6 +78,8 @@ pub enum MinerError<T: super::Config> {
 	InvalidPage,
 	/// Too many winners were removed during trimming.
 	TooManyWinnersRemoved,
+	/// A defensive error has occurred.
+	Defensive(&'static str),
 }
 
 impl<T: super::Config> From<sp_npos_elections::Error> for MinerError<T> {
@@ -187,18 +191,18 @@ impl<
 		let target_index_fn = helpers::target_index_fn::<T>(&all_targets);
 
 		// now flatten the voters, ready to be used as if pagination did not existed.
-		let all_voters = voter_pages
-			.clone() // TODO: iter().cloned()??
-			.into_iter()
-			.map(|x| x.into_inner())
+		let all_voters: AllVoterPagesFlattenedOf<T> = voter_pages
+			.iter()
+			.cloned()
 			.flatten()
-			.map(|(x, y, z)| (x, y, z.into_inner()))
-			.collect::<Vec<_>>();
+			.collect::<Vec<_>>()
+			.try_into()
+			.expect("Flattening the voters into `AllVoterPagesFlattenedOf` cannot fail; qed");
 
 		let ElectionResult { winners: _, assignments } = Solver::solve(
 			desired_targets as usize,
 			all_targets.clone().to_vec(),
-			all_voters.clone(),
+			all_voters.clone().into_inner().into_unbounded_voters(),
 		)
 		.map_err(|e| MinerError::Solver(e))?;
 
@@ -216,8 +220,8 @@ impl<
 
 			// These closures are of no use in the rest of these code, since they only deal with the
 			// overall list of voters.
-			let cache = helpers::generate_voter_cache_unbounded::<T>(&all_voters);
-			let stake_of = helpers::stake_of_fn_unbounded::<T>(&all_voters, &cache);
+			let cache = helpers::generate_voter_cache::<T, _>(&all_voters);
+			let stake_of = helpers::stake_of_fn::<T, _>(&all_voters, &cache);
 
 			// 1. convert to staked and reduce
 			let (reduced_count, staked) = {
@@ -283,7 +287,7 @@ impl<
 					.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Voters(page)))?;
 
 				let voter_index_fn = {
-					let cache = helpers::generate_voter_cache_bounded::<T>(&voter_snapshot_page);
+					let cache = helpers::generate_voter_cache::<T, _>(&voter_snapshot_page);
 					helpers::voter_index_fn_owned::<T>(cache)
 				};
 				<SolutionOf<T>>::from_assignment(
@@ -406,8 +410,7 @@ impl<
 	///
 	/// Returns the count of supports trimmed.
 	pub fn trim_supports(supports: &mut sp_npos_elections::Supports<T::AccountId>) -> u32 {
-		let limit =
-			<T::Verifier as crate::verifier::Verifier>::MaxBackersPerWinner::get() as usize;
+		let limit = <T::Verifier as crate::verifier::Verifier>::MaxBackersPerWinner::get() as usize;
 		let mut count = 0;
 		supports
 			.iter_mut()
@@ -444,7 +447,7 @@ impl<
 	/// of the transaction and its weight (e.g. signed or unsigned).
 	pub fn maybe_trim_weight_and_len(
 		solution_pages: &mut Vec<SolutionOf<T>>,
-		voter_pages: &BoundedVec<BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>, T::Pages>,
+		voter_pages: &AllVoterPagesOf<T>,
 	) -> Result<u32, MinerError<T>> {
 		debug_assert_eq!(solution_pages.len(), voter_pages.len());
 		let size_limit = T::MinerMaxLength::get();

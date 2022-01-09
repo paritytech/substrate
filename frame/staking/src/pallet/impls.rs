@@ -25,7 +25,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, LockableCurrency,
-		OnUnbalanced, UnixTime, WithdrawReasons,
+		OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -43,8 +43,9 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, MaxIndividualExposuresOf, Nominations, PagesOf,
-	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
+	ExposureOf, Forcing, IndividualExposure, MaxExposuresPerPageOf, MaxIndividualExposuresOf,
+	Nominations, PagesOf, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
+	ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -451,9 +452,9 @@ impl<T: Config> Pallet<T> {
 						// do everything that we do for the multi-block stuff here, in one go.
 						// It is all good, this can only happen in genesis. If something is
 						// about to go wrong, the chain won't even start.
-						let exposures = Self::collect_exposures(supports);
+						let exposures = Self::collect_page_exposures(supports);
 						wipe_eras_stakers(maybe_starting_era);
-						Self::store_intermediary_staker_info(exposures, maybe_starting_era);
+						Self::store_page_staker_info(exposures, maybe_starting_era);
 						Self::finalize_staker_info_collection(maybe_starting_era)
 					})
 					.ok()?
@@ -466,8 +467,8 @@ impl<T: Config> Pallet<T> {
 					log!(warn, "falling back to T::ElectionProvider::elect(0) instead of <NextValidators<T>>");
 					T::ElectionProvider::elect(0)
 						.map(|supports| {
-							let exposures = Self::collect_exposures(supports);
-							Self::store_intermediary_staker_info(exposures, maybe_starting_era);
+							let exposures = Self::collect_page_exposures(supports);
+							Self::store_page_staker_info(exposures, maybe_starting_era);
 							Self::finalize_staker_info_collection(maybe_starting_era)
 						})
 						.ok()
@@ -498,8 +499,8 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// Clear all storage items that may have bene written to during
-			// `store_intermediary_staker_info`, and `finalize_staker_info_collection`. This will
-			// be  expensive, but extremely rare to happen.
+			// `store_page_staker_info`, and `finalize_staker_info_collection`. This will be
+			// expensive, but extremely rare to happen.
 			log!(warn, "removing all staker data correlated with era {}", maybe_starting_era);
 			wipe_eras_stakers(maybe_starting_era);
 			Self::deposit_event(Event::StakingElectionFailed);
@@ -530,8 +531,8 @@ impl<T: Config> Pallet<T> {
 
 		let proceed_page = |supports: BoundedSupportsOf<T::ElectionProvider>,
 		                    current_page: PageIndex| {
-			let exposures = Self::collect_exposures(supports);
-			Self::store_intermediary_staker_info(exposures, new_planned_era);
+			let exposures = Self::collect_page_exposures(supports);
+			Self::store_page_staker_info(exposures, new_planned_era);
 			let is_last_page = maybe_proceed_next_page(current_page);
 			if is_last_page {
 				let next_validators = Self::finalize_staker_info_collection(new_planned_era);
@@ -589,8 +590,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// These exposures are potentially partial, the could only correspond to one page of the
 	/// election result.
-	pub(crate) fn store_intermediary_staker_info(
-		exposures: Vec<(T::AccountId, Exposure<T>)>,
+	pub(crate) fn store_page_staker_info(
+		exposures: BoundedVec<(T::AccountId, Exposure<T>), MaxExposuresPerPageOf<T>>,
 		new_planned_era: EraIndex,
 	) {
 		log!(debug, "storing intermediary staker values for era {}", new_planned_era);
@@ -668,11 +669,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Consume a set of [`BoundedSupportsOf`] and collect them into set of [`Exposure`].
-	// TODO: we collect normal, unbounded exposures here, we can and should migrate this to bounded
-	// as well.
-	pub(crate) fn collect_exposures(
+	///
+	/// These exposures must represent validators in a single page, and comply with its
+	/// corresponding bounds.
+	pub(crate) fn collect_page_exposures(
 		supports: BoundedSupportsOf<T::ElectionProvider>,
-	) -> Vec<(T::AccountId, Exposure<T>)> {
+	) -> BoundedVec<(T::AccountId, Exposure<T>), MaxExposuresPerPageOf<T>> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
 
@@ -713,7 +715,8 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_>)>>()
+			.try_collect()
+			.expect("`BoundedSupports` has the same bound as `MaxExposuresPerPageOf`; iterator chain does not alter length; qed")
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -809,6 +812,7 @@ impl<T: Config> Pallet<T> {
 		SlashRewardFraction::<T>::put(fraction);
 	}
 
+	/// Continue getting the npos voters.
 	pub fn get_npos_voters_continue(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
@@ -842,28 +846,12 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		// TODO: register weight.
+		// TODO: register weight. (zeke)
 
 		round_voters
 	}
 
-	/// Get all of the voters that are eligible for the npos election.
-	///
-	/// `maybe_max_len` can imposes a cap on the number of voters returned; First all the validator
-	/// are included in no particular order, then remainder is taken from the nominators, as
-	/// returned by [`Config::SortedListProvider`].
-	///
-	/// This implies that if `maybe_max_len` is less than the number of validators, a random subset
-	/// of them is returned, as they are stored in no particular order.
-	///
-	/// This will use nominators, and all the validators will inject a self vote.
-	///
-	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	///
-	/// ### Slashing
-	///
-	/// All nominations that have been submitted before the last non-zero slash of the validator are
-	/// auto-chilled.
+	/// TODO:
 	pub fn get_npos_voters_init(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,

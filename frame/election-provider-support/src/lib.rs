@@ -686,7 +686,7 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 // code as it seems.
 
 /// Extension trait to convert an unbounded [`sp_npos_elections::Supports`]
-// NOTE: someday we can have an expensive `SortIntoBoundedSupports` as well.
+// TODO: someday we can have an expensive `SortIntoBoundedSupports` as well.
 pub trait TruncateIntoBoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>> {
 	fn truncate_into_bounded_supports(self) -> BoundedSupports<AccountId, BOuter, BInner>;
 }

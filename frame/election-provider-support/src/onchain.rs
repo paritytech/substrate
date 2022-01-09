@@ -50,14 +50,18 @@ impl From<sp_npos_elections::Error> for Error {
 ///
 /// This will accept voting data on the fly and produce the results immediately.
 ///
+/// The amount of voters and targets that is fetched from [`Config::DataProvider`] is configurable
+/// via [`Config::VoterPageSize`] and [`Config::TargetPageSize`].
+///
+/// The bounds of the returning results is determined by [`Config::MaxBackersPerWinner`] and
+/// [`Config::MaxWinnersPerPage`]. Note that this implementation will simply TRUNCATE the results to
+/// fit into this size.
+///
 /// ### Warning
 ///
 /// This can be very expensive to run frequently on-chain. Use with care. Moreover, this
 /// implementation ignores the additional data of the election data provider and gives no insight on
 /// how much weight was consumed.
-///
-/// Finally, this implementation does not impose any limits on the number of voters and targets that
-/// are provided.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
@@ -96,11 +100,11 @@ pub trait Config: frame_system::Config {
 }
 
 impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type Error = Error;
+	type Pages = ConstU32<1>;
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
-	type Error = Error;
 	type DataProvider = T::DataProvider;
-	type Pages = ConstU32<1>;
 	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 

@@ -726,7 +726,7 @@ impl<T: Config> Pallet<T> {
 			crate::Snapshot::<T>::voters(page).ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		// ----- Start building. First, we need some closures.
-		let cache = helpers::generate_voter_cache_bounded::<T>(&snapshot_voters);
+		let cache = helpers::generate_voter_cache::<T, _>(&snapshot_voters);
 		let voter_at = helpers::voter_at_fn::<T>(&snapshot_voters);
 		let target_at = helpers::target_at_fn::<T>(&snapshot_targets);
 		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
@@ -764,7 +764,7 @@ impl<T: Config> Pallet<T> {
 			.collect::<Result<(), FeasibilityError>>()?;
 
 		// ----- Start building support. First, we need one more closure.
-		let stake_of = helpers::stake_of_fn::<T>(&snapshot_voters, &cache);
+		let stake_of = helpers::stake_of_fn::<T, _>(&snapshot_voters, &cache);
 
 		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
 		let staked_assignments =

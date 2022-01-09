@@ -20,9 +20,9 @@
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
 use crate::{
 	types::{PageIndex, VoterOf},
-	UnboundedVoterOf,
+	AllVoterPagesOf, VoterPageOf,
 };
-use frame_support::BoundedVec;
+use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
@@ -38,7 +38,7 @@ macro_rules! log {
 
 /// Generate an `efficient closure of voters and the page in which they live in.
 pub fn generate_voter_page_fn<T: Config>(
-	paged_snapshot: &BoundedVec<BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>, T::Pages>,
+	paged_snapshot: &AllVoterPagesOf<T>,
 ) -> impl Fn(&T::AccountId) -> Option<PageIndex> {
 	let mut cache: BTreeMap<T::AccountId, PageIndex> = BTreeMap::new();
 	paged_snapshot
@@ -62,23 +62,8 @@ pub fn generate_voter_page_fn<T: Config>(
 /// voters.
 ///
 /// This can be used to efficiently build index getter closures.
-pub fn generate_voter_cache_unbounded<T: Config>(
-	snapshot: &Vec<UnboundedVoterOf<T>>,
-) -> BTreeMap<T::AccountId, usize> {
-	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
-	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
-		let _existed = cache.insert(x.clone(), i);
-		// if a duplicate exists, we only consider the last one. Defensive only, should never
-		// happen.
-		debug_assert!(_existed.is_none());
-	});
-
-	cache
-}
-
-// TODO: can we avoid duplicate?
-pub fn generate_voter_cache_bounded<T: Config>(
-	snapshot: &BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>,
+pub fn generate_voter_cache<T: Config, AnyBound: Get<u32>>(
+	snapshot: &BoundedVec<VoterOf<T>, AnyBound>,
 ) -> BTreeMap<T::AccountId, usize> {
 	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
@@ -235,20 +220,8 @@ pub fn stake_of_fn_linear<T: Config>(
 ///
 /// The cache need must be derived from the same snapshot. Zero is returned if a voter is
 /// non-existent.
-pub fn stake_of_fn<'a, T: Config>(
-	snapshot: &'a BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>,
-	cache: &'a BTreeMap<T::AccountId, usize>,
-) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
-	move |who| {
-		if let Some(index) = cache.get(who) {
-			snapshot.get(*index).map(|(_, x, _)| x).cloned().unwrap_or_default()
-		} else {
-			0
-		}
-	}
-}
-pub fn stake_of_fn_unbounded<'a, T: Config>(
-	snapshot: &'a Vec<UnboundedVoterOf<T>>,
+pub fn stake_of_fn<'a, T: Config, AnyBound: Get<u32>>(
+	snapshot: &'a BoundedVec<VoterOf<T>, AnyBound>,
 	cache: &'a BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
 	move |who| {

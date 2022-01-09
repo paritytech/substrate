@@ -23,7 +23,7 @@ use sp_std::{collections::btree_set::BTreeSet, fmt::Debug};
 use crate::Verifier;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use frame_election_provider_support::PageIndex;
-use frame_election_provider_support::{BoundedSupports, ElectionDataProvider, ElectionProvider};
+use frame_election_provider_support::{BoundedSupports, ElectionProvider};
 use scale_info::TypeInfo;
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
 use sp_runtime::SaturatedConversion;
@@ -132,26 +132,32 @@ impl<T: crate::Config> PagedRawSolution<T> {
 	}
 }
 
-/// Alias for a voter in the npos system.
-///
-/// This type is bounded.
-pub type VoterOf<T> = (
-	<T as frame_system::Config>::AccountId,
-	sp_npos_elections::VoteWeight,
-	BoundedVec<
-		<T as frame_system::Config>::AccountId,
-		<<T as crate::Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
-	>,
-);
+// NOTE on naming conventions: type aliases that end with `Of` should always be `Of<T: Config>`.
 
-/// Alias for a voter in the npos system.
+/// Alias for a voter, parameterized by this crate's config.
+pub(crate) type VoterOf<T> =
+	frame_election_provider_support::VoterOf<<T as crate::Config>::DataProvider>;
+
+/// Alias for a page of voters, parameterized by this crate's config.
+pub(crate) type VoterPageOf<T> =
+	BoundedVec<VoterOf<T>, <T as crate::Config>::VoterSnapshotPerBlock>;
+
+/// Alias for all pages of voters, parameterized by this crate's config.
+pub(crate) type AllVoterPagesOf<T> = BoundedVec<VoterPageOf<T>, <T as crate::Config>::Pages>;
+
+/// Maximum number of items that [`AllVoterPagesOf`] can contain, when flattened.
+pub(crate) struct MaxFlattenedVoters<T: crate::Config>(sp_std::marker::PhantomData<T>);
+impl<T: crate::Config> frame_support::traits::Get<u32> for MaxFlattenedVoters<T> {
+	fn get() -> u32 {
+		T::VoterSnapshotPerBlock::get().saturating_mul(T::Pages::get())
+	}
+}
+
+/// Same as [`AllVoterPagesOf`], but instead of being a nested bounded vec, the entire voters are
+/// flattened into one outer, unbounded `Vec` type.
 ///
-/// This type is unbounded.
-pub type UnboundedVoterOf<T> = (
-	<T as frame_system::Config>::AccountId,
-	sp_npos_elections::VoteWeight,
-	Vec<<T as frame_system::Config>::AccountId>,
-);
+/// This is bounded by [`MaxFlattenedVoters`].
+pub(crate) type AllVoterPagesFlattenedOf<T> = BoundedVec<VoterOf<T>, MaxFlattenedVoters<T>>;
 
 /// Encodes the length of a solution or a snapshot.
 ///
