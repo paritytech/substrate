@@ -1,5 +1,5 @@
 error: `Pallet` does not have #[pallet::call] defined, perhaps you should remove `Call` from construct_runtime?
-  --> $DIR/undefined_call_part.rs:5:1
+  --> tests/construct_runtime_ui/undefined_call_part.rs:5:1
    |
 5  |   #[frame_support::pallet]
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -16,13 +16,13 @@ error: `Pallet` does not have #[pallet::call] defined, perhaps you should remove
    = note: this error originates in the macro `pallet::__substrate_call_check::is_call_part_defined` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/undefined_call_part.rs:28:11
+  --> tests/construct_runtime_ui/undefined_call_part.rs:28:11
    |
 28 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
    |                 ^^^^^^ use of undeclared crate or module `system`
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/undefined_call_part.rs:22:1
+  --> tests/construct_runtime_ui/undefined_call_part.rs:22:1
    |
 22 | / construct_runtime! {
 23 | |     pub enum Runtime where
@@ -34,13 +34,15 @@ error[E0433]: failed to resolve: use of undeclared crate or module `system`
    | |_^ not found in `system`
    |
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
-help: consider importing this enum
+help: consider importing one of these items
+   |
+1  | use frame_support::dispatch::RawOrigin;
    |
 1  | use frame_system::RawOrigin;
    |
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/undefined_call_part.rs:22:1
+  --> tests/construct_runtime_ui/undefined_call_part.rs:22:1
    |
 22 | / construct_runtime! {
 23 | |     pub enum Runtime where
@@ -64,13 +66,13 @@ help: consider importing one of these items
    |
 
 error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
-  --> $DIR/undefined_call_part.rs:20:6
+  --> tests/construct_runtime_ui/undefined_call_part.rs:20:6
    |
 20 | impl pallet::Config for Runtime {}
    |      ^^^^^^^^^^^^^^ the trait `frame_system::Config` is not implemented for `Runtime`
    |
 note: required by a bound in `pallet::Config`
-  --> $DIR/undefined_call_part.rs:8:20
+  --> tests/construct_runtime_ui/undefined_call_part.rs:8:20
    |
 8  |     pub trait Config: frame_system::Config {}
    |                       ^^^^^^^^^^^^^^^^^^^^ required by this bound in `pallet::Config`

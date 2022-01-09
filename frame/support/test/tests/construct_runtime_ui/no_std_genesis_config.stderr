@@ -1,5 +1,5 @@
 error: `Pallet` does not have the std feature enabled, this will cause the `test_pallet::GenesisConfig` type to be undefined.
-  --> $DIR/no_std_genesis_config.rs:13:1
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:13:1
    |
 13 | / construct_runtime! {
 14 | |     pub enum Runtime where
@@ -13,13 +13,13 @@ error: `Pallet` does not have the std feature enabled, this will cause the `test
    = note: this error originates in the macro `test_pallet::__substrate_genesis_config_check::is_std_enabled_for_genesis` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/no_std_genesis_config.rs:19:11
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:19:11
    |
 19 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
    |                 ^^^^^^ use of undeclared crate or module `system`
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/no_std_genesis_config.rs:13:1
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:13:1
    |
 13 | / construct_runtime! {
 14 | |     pub enum Runtime where
@@ -31,13 +31,15 @@ error[E0433]: failed to resolve: use of undeclared crate or module `system`
    | |_^ not found in `system`
    |
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
-help: consider importing this enum
+help: consider importing one of these items
+   |
+1  | use frame_support::dispatch::RawOrigin;
    |
 1  | use frame_system::RawOrigin;
    |
 
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/no_std_genesis_config.rs:13:1
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:13:1
    |
 13 | / construct_runtime! {
 14 | |     pub enum Runtime where
@@ -59,7 +61,7 @@ help: consider importing one of these items
    |
 
 error[E0412]: cannot find type `GenesisConfig` in crate `test_pallet`
-  --> $DIR/no_std_genesis_config.rs:13:1
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:13:1
    |
 13 | / construct_runtime! {
 14 | |     pub enum Runtime where
@@ -77,13 +79,13 @@ help: consider importing this struct
    |
 
 error[E0277]: the trait bound `Runtime: frame_system::pallet::Config` is not satisfied
-  --> $DIR/no_std_genesis_config.rs:11:6
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:11:6
    |
 11 | impl test_pallet::Config for Runtime {}
    |      ^^^^^^^^^^^^^^^^^^^ the trait `frame_system::pallet::Config` is not implemented for `Runtime`
    |
 note: required by a bound in `Config`
-  --> $DIR/lib.rs:30:20
+  --> pallet/src/lib.rs
    |
-30 |     pub trait Config: frame_system::Config {}
+   |     pub trait Config: frame_system::Config {}
    |                       ^^^^^^^^^^^^^^^^^^^^ required by this bound in `Config`
