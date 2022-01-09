@@ -188,14 +188,26 @@ where
 		<Self as MapWrapper>::Map::remove(k1, k2)
 	}
 
-	// TODO: implement
 	/// Remove all values under the first key.
-	// pub fn remove_prefix<KArg1>(k1: KArg1)
-	// where
-	// 	KArg1: ?Sized + EncodeLike<Key1>,
-	// {
-	// 	<Self as MapWrapper>::Map::remove_prefix(k1, limit)
-	// }
+	///
+	/// # Warning
+	///
+	/// Expensive operation, need to iterate over all 'k1' prefixes to calculate how many values
+	/// need to remove
+	pub fn remove_prefix<KArg1>(k1: KArg1)
+	where
+		KArg1: ?Sized + EncodeLike<Key1>,
+	{
+		let mut on_remove = 0;
+		Self::iter_prefix_values(Ref::from(&k1)).for_each(|_| {
+			on_remove += 1;
+		});
+		dbg!(&on_remove);
+		CounterFor::<Prefix>::mutate(|value| {
+			*value = value.saturating_sub(on_remove);
+		});
+		<Self as MapWrapper>::Map::remove_prefix(k1, None);
+	}
 
 	/// Iterate over values that share the first key.
 	pub fn iter_prefix_values<KArg1>(
@@ -1228,12 +1240,42 @@ mod test {
 			assert_eq!(A::count(), 2);
 
 			A::translate::<u32, _>(
-				|key1, key2, value| if key1 == 1 { None } else { Some(key1 as u32 * value) },
+				|key1, _key2, value| if key1 == 1 { None } else { Some(key1 as u32 * value) },
 			);
 
 			assert_eq!(A::count(), 1);
 
 			assert_eq!(A::drain().collect::<Vec<_>>(), vec![(2, 20, 4)]);
+
+			assert_eq!(A::count(), 0);
+		})
+	}
+
+	#[test]
+	fn test_iter_drain_prefix() {
+		type A = CountedStorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 10, 1);
+			A::insert(1, 11, 2);
+			A::insert(2, 20, 3);
+			A::insert(2, 21, 4);
+
+			assert_eq!(A::iter_prefix_values(1).collect::<Vec<_>>(), vec![1, 2]);
+			assert_eq!(A::iter_prefix(1).collect::<Vec<_>>(), vec![(10, 1), (11, 2)]);
+			assert_eq!(A::iter_prefix_values(2).collect::<Vec<_>>(), vec![4, 3]);
+			assert_eq!(A::iter_prefix(2).collect::<Vec<_>>(), vec![(21, 4), (20, 3)]);
+
+			assert_eq!(A::count(), 4);
+
+			A::remove_prefix(1);
+			assert_eq!(A::iter_prefix(1).collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::iter_prefix(2).collect::<Vec<_>>(), vec![(21, 4), (20, 3)]);
+
+			assert_eq!(A::count(), 2);
+
+			assert_eq!(A::drain_prefix(2).collect::<Vec<_>>(), vec![(21, 4), (20, 3)]);
+			assert_eq!(A::iter_prefix(2).collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::drain_prefix(2).collect::<Vec<_>>(), vec![]);
 
 			assert_eq!(A::count(), 0);
 		})
