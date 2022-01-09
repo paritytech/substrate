@@ -19,12 +19,14 @@
 
 use super::*;
 
-use sp_std::collections::btree_map::BTreeMap;
-use frame_benchmarking::{account, benchmarks, whitelist_account};
-use frame_support::traits::{Currency, Get, fungible};
 use assert_matches::assert_matches;
-use frame_support::dispatch::RawOrigin;
+use frame_benchmarking::{account, benchmarks, whitelist_account};
+use frame_support::{
+	dispatch::RawOrigin,
+	traits::{fungible, Currency, Get},
+};
 use sp_runtime::traits::Bounded;
+use sp_std::collections::btree_map::BTreeMap;
 
 use crate::Pallet as ConvictionVoting;
 

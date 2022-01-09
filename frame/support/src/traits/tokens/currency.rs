@@ -21,8 +21,10 @@ use super::{
 	imbalance::{Imbalance, SignedImbalance},
 	misc::{Balance, ExistenceRequirement, WithdrawReasons},
 };
-use crate::traits::Get;
-use crate::dispatch::{DispatchError, DispatchResult};
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::Get,
+};
 use codec::MaxEncodedLen;
 use sp_runtime::traits::MaybeSerializeDeserialize;
 use sp_std::fmt::Debug;

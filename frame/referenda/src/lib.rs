@@ -384,11 +384,13 @@ pub mod pallet {
 			let mut status = Self::ensure_ongoing(index)?;
 			ensure!(status.decision_deposit.is_none(), Error::<T>::HaveDeposit);
 			let track = Self::track(status.track).ok_or(Error::<T>::NoTrack)?;
-			status.decision_deposit = Some(Self::take_deposit(who.clone(), track.decision_deposit)?);
+			status.decision_deposit =
+				Some(Self::take_deposit(who.clone(), track.decision_deposit)?);
 			let now = frame_system::Pallet::<T>::block_number();
 			let (info, _, branch) = Self::service_referendum(now, index, status);
 			ReferendumInfoFor::<T>::insert(index, info);
-			let e = Event::<T>::DecisionDepositPlaced { index, who, amount: track.decision_deposit };
+			let e =
+				Event::<T>::DecisionDepositPlaced { index, who, amount: track.decision_deposit };
 			Self::deposit_event(e);
 			Ok(branch.weight_of_deposit::<T>().into())
 		}
@@ -548,17 +550,17 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				result
 			},
-			Some(ReferendumInfo::Approved(end, ..))
-			=> f(PollStatus::Completed(end, true)),
-			Some(ReferendumInfo::Rejected(end, ..))
-			=> f(PollStatus::Completed(end, false)),
+			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Completed(end, false)),
 			_ => f(PollStatus::None),
 		}
 	}
 
 	fn try_access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T>>) -> Result<R, DispatchError>,
+		f: impl FnOnce(
+			PollStatus<&mut T::Tally, T::BlockNumber, TrackIdOf<T>>,
+		) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
 		match ReferendumInfoFor::<T>::get(index) {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
@@ -568,10 +570,8 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 				ReferendumInfoFor::<T>::insert(index, ReferendumInfo::Ongoing(status));
 				Ok(result)
 			},
-			Some(ReferendumInfo::Approved(end, ..))
-			=> f(PollStatus::Completed(end, true)),
-			Some(ReferendumInfo::Rejected(end, ..))
-			=> f(PollStatus::Completed(end, false)),
+			Some(ReferendumInfo::Approved(end, ..)) => f(PollStatus::Completed(end, true)),
+			Some(ReferendumInfo::Rejected(end, ..)) => f(PollStatus::Completed(end, false)),
 			_ => f(PollStatus::None),
 		}
 	}
@@ -616,17 +616,9 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 		Self::note_one_fewer_deciding(status.track);
 		let now = frame_system::Pallet::<T>::block_number();
 		let info = if approved {
-			ReferendumInfo::Approved(
-				now,
-				status.submission_deposit,
-				status.decision_deposit,
-			)
+			ReferendumInfo::Approved(now, status.submission_deposit, status.decision_deposit)
 		} else {
-			ReferendumInfo::Rejected(
-				now,
-				status.submission_deposit,
-				status.decision_deposit,
-			)
+			ReferendumInfo::Rejected(now, status.submission_deposit, status.decision_deposit)
 		};
 		ReferendumInfoFor::<T>::insert(index, info);
 		Ok(())
@@ -634,7 +626,8 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn max_ongoing() -> (Self::Class, u32) {
-		let r = T::Tracks::tracks().iter()
+		let r = T::Tracks::tracks()
+			.iter()
 			.max_by_key(|(_, info)| info.max_deciding)
 			.expect("Always one class");
 		(r.0.clone(), r.1.max_deciding)

@@ -18,7 +18,6 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
-use sp_std::prelude::*;
 use crate::dispatch::{DispatchError, Parameter};
 use codec::HasCompact;
 use sp_arithmetic::{
@@ -26,6 +25,7 @@ use sp_arithmetic::{
 	Perbill,
 };
 use sp_runtime::traits::Member;
+use sp_std::prelude::*;
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex

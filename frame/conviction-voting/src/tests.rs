@@ -21,8 +21,10 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate as pallet_conviction_voting;
-use frame_support::{parameter_types, assert_ok, assert_noop};
-use frame_support::traits::{ConstU32, Contains, ConstU64, Polling};
+use frame_support::{
+	assert_noop, assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64, Contains, Polling},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -116,10 +118,17 @@ impl Polling<TallyOf<Test>> for TestPolls {
 	type Votes = u64;
 	type Moment = u64;
 	type Class = u8;
-	fn classes() -> Vec<u8> { vec![0, 1, 2] }
+	fn classes() -> Vec<u8> {
+		vec![0, 1, 2]
+	}
 	fn as_ongoing(index: u8) -> Option<(TallyOf<Test>, Self::Class)> {
-		Polls::get().remove(&index)
-			.and_then(|x| if let TestPollState::Ongoing(t, c) = x { Some((t, c)) } else { None })
+		Polls::get().remove(&index).and_then(|x| {
+			if let TestPollState::Ongoing(t, c) = x {
+				Some((t, c))
+			} else {
+				None
+			}
+		})
 	}
 	fn access_poll<R>(
 		index: Self::Index,
@@ -128,15 +137,10 @@ impl Polling<TallyOf<Test>> for TestPolls {
 		let mut polls = Polls::get();
 		let entry = polls.get_mut(&index);
 		let r = match entry {
-			Some(Ongoing(ref mut tally_mut_ref, class)) => {
-				f(PollStatus::Ongoing(tally_mut_ref, *class))
-			},
-			Some(Completed(when, succeeded)) => {
-				f(PollStatus::Completed(*when, *succeeded))
-			},
-			None => {
-				f(PollStatus::None)
-			}
+			Some(Ongoing(ref mut tally_mut_ref, class)) =>
+				f(PollStatus::Ongoing(tally_mut_ref, *class)),
+			Some(Completed(when, succeeded)) => f(PollStatus::Completed(*when, *succeeded)),
+			None => f(PollStatus::None),
 		};
 		Polls::set(polls);
 		r
@@ -148,15 +152,10 @@ impl Polling<TallyOf<Test>> for TestPolls {
 		let mut polls = Polls::get();
 		let entry = polls.get_mut(&index);
 		let r = match entry {
-			Some(Ongoing(ref mut tally_mut_ref, class)) => {
-				f(PollStatus::Ongoing(tally_mut_ref, *class))
-			},
-			Some(Completed(when, succeeded)) => {
-				f(PollStatus::Completed(*when, *succeeded))
-			},
-			None => {
-				f(PollStatus::None)
-			}
+			Some(Ongoing(ref mut tally_mut_ref, class)) =>
+				f(PollStatus::Ongoing(tally_mut_ref, *class)),
+			Some(Completed(when, succeeded)) => f(PollStatus::Completed(*when, *succeeded)),
+			None => f(PollStatus::None),
 		}?;
 		Polls::set(polls);
 		Ok(r)
@@ -237,15 +236,11 @@ fn nay(amount: u64, conviction: u8) -> AccountVote<u64> {
 }
 
 fn tally(index: u8) -> TallyOf<Test> {
-	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index)
-		.expect("No poll")
-		.0
+	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index).expect("No poll").0
 }
 
 fn class(index: u8) -> u8 {
-	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index)
-		.expect("No poll")
-		.1
+	<TestPolls as Polling<TallyOf<Test>>>::as_ongoing(index).expect("No poll").1
 }
 
 #[test]
@@ -378,12 +373,16 @@ fn successful_conviction_vote_balance_stays_locked_for_correct_time() {
 #[test]
 fn classwise_delegation_works() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![
-			(0, Ongoing(Tally::default(), 0)),
-			(1, Ongoing(Tally::default(), 1)),
-			(2, Ongoing(Tally::default(), 2)),
-			(3, Ongoing(Tally::default(), 2)),
-		].into_iter().collect());
+		Polls::set(
+			vec![
+				(0, Ongoing(Tally::default(), 0)),
+				(1, Ongoing(Tally::default(), 1)),
+				(2, Ongoing(Tally::default(), 2)),
+				(3, Ongoing(Tally::default(), 2)),
+			]
+			.into_iter()
+			.collect(),
+		);
 		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
 		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 5));
 		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 5));
@@ -400,31 +399,46 @@ fn classwise_delegation_works() {
 		assert_ok!(Voting::vote(Origin::signed(4), 2, aye(10, 0)));
 		// 4 hasn't voted yet
 
-		assert_eq!(Polls::get(), vec![
-			(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
-			(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
-			(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
-			(3, Ongoing(Tally::from_parts(0, 0, 0), 2)),
-		].into_iter().collect());
+		assert_eq!(
+			Polls::get(),
+			vec![
+				(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
+				(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
+				(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
+				(3, Ongoing(Tally::from_parts(0, 0, 0), 2)),
+			]
+			.into_iter()
+			.collect()
+		);
 
 		// 4 votes nay to 3.
 		assert_ok!(Voting::vote(Origin::signed(4), 3, nay(10, 0)));
-		assert_eq!(Polls::get(), vec![
-			(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
-			(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
-			(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
-			(3, Ongoing(Tally::from_parts(0, 6, 15), 2)),
-		].into_iter().collect());
+		assert_eq!(
+			Polls::get(),
+			vec![
+				(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
+				(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
+				(2, Ongoing(Tally::from_parts(6, 2, 35), 2)),
+				(3, Ongoing(Tally::from_parts(0, 6, 15), 2)),
+			]
+			.into_iter()
+			.collect()
+		);
 
 		// Redelegate for class 2 to account 3.
 		assert_ok!(Voting::undelegate(Origin::signed(1), 2));
 		assert_ok!(Voting::delegate(Origin::signed(1), 2, 3, Conviction::Locked1x, 5));
-		assert_eq!(Polls::get(), vec![
-			(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
-			(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
-			(2, Ongoing(Tally::from_parts(1, 7, 35), 2)),
-			(3, Ongoing(Tally::from_parts(0, 1, 10), 2)),
-		].into_iter().collect());
+		assert_eq!(
+			Polls::get(),
+			vec![
+				(0, Ongoing(Tally::from_parts(6, 2, 35), 0)),
+				(1, Ongoing(Tally::from_parts(6, 2, 35), 1)),
+				(2, Ongoing(Tally::from_parts(1, 7, 35), 2)),
+				(3, Ongoing(Tally::from_parts(0, 1, 10), 2)),
+			]
+			.into_iter()
+			.collect()
+		);
 
 		// Redelegating with a lower lock does not forget previous lock and updates correctly.
 		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
@@ -433,12 +447,17 @@ fn classwise_delegation_works() {
 		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 3));
 		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 3));
 		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 3));
-		assert_eq!(Polls::get(), vec![
-			(0, Ongoing(Tally::from_parts(4, 2, 33), 0)),
-			(1, Ongoing(Tally::from_parts(4, 2, 33), 1)),
-			(2, Ongoing(Tally::from_parts(4, 2, 33), 2)),
-			(3, Ongoing(Tally::from_parts(0, 4, 13), 2)),
-		].into_iter().collect());
+		assert_eq!(
+			Polls::get(),
+			vec![
+				(0, Ongoing(Tally::from_parts(4, 2, 33), 0)),
+				(1, Ongoing(Tally::from_parts(4, 2, 33), 1)),
+				(2, Ongoing(Tally::from_parts(4, 2, 33), 2)),
+				(3, Ongoing(Tally::from_parts(0, 4, 13), 2)),
+			]
+			.into_iter()
+			.collect()
+		);
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
@@ -460,21 +479,24 @@ fn classwise_delegation_works() {
 		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 8));
 		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 2);
-		assert_eq!(Polls::get(), vec![
-			(0, Ongoing(Tally::from_parts(7, 2, 36), 0)),
-			(1, Ongoing(Tally::from_parts(8, 2, 37), 1)),
-			(2, Ongoing(Tally::from_parts(9, 2, 38), 2)),
-			(3, Ongoing(Tally::from_parts(0, 9, 18), 2)),
-		].into_iter().collect());
+		assert_eq!(
+			Polls::get(),
+			vec![
+				(0, Ongoing(Tally::from_parts(7, 2, 36), 0)),
+				(1, Ongoing(Tally::from_parts(8, 2, 37), 1)),
+				(2, Ongoing(Tally::from_parts(9, 2, 38), 2)),
+				(3, Ongoing(Tally::from_parts(0, 9, 18), 2)),
+			]
+			.into_iter()
+			.collect()
+		);
 	});
 }
 
 #[test]
 fn redelegation_after_vote_ending_should_keep_lock() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![
-			(0, Ongoing(Tally::default(), 0)),
-		].into_iter().collect());
+		Polls::set(vec![(0, Ongoing(Tally::default(), 0))].into_iter().collect());
 		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
 		assert_ok!(Voting::vote(Origin::signed(2), 0, aye(10, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
@@ -490,21 +512,25 @@ fn redelegation_after_vote_ending_should_keep_lock() {
 #[test]
 fn lock_amalgamation_valid_with_multiple_removed_votes() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![
-			(0, Ongoing(Tally::default(), 0)),
-			(1, Ongoing(Tally::default(), 0)),
-			(2, Ongoing(Tally::default(), 0)),
-		].into_iter().collect());
+		Polls::set(
+			vec![
+				(0, Ongoing(Tally::default(), 0)),
+				(1, Ongoing(Tally::default(), 0)),
+				(2, Ongoing(Tally::default(), 0)),
+			]
+			.into_iter()
+			.collect(),
+		);
 		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
 		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 1)));
 		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(5, 2)));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		Polls::set(vec![
-			(0, Completed(1, true)),
-			(1, Completed(1, true)),
-			(2, Completed(1, true)),
-		].into_iter().collect());
+		Polls::set(
+			vec![(0, Completed(1, true)), (1, Completed(1, true)), (2, Completed(1, true))]
+				.into_iter()
+				.collect(),
+		);
 		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
 		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
@@ -659,19 +685,23 @@ fn lock_aggregation_over_different_classes_with_delegation_works() {
 #[test]
 fn lock_aggregation_over_different_classes_with_casting_works() {
 	new_test_ext().execute_with(|| {
-		Polls::set(vec![
-			(0, Ongoing(Tally::default(), 0)),
-			(1, Ongoing(Tally::default(), 1)),
-			(2, Ongoing(Tally::default(), 2)),
-		].into_iter().collect());
+		Polls::set(
+			vec![
+				(0, Ongoing(Tally::default(), 0)),
+				(1, Ongoing(Tally::default(), 1)),
+				(2, Ongoing(Tally::default(), 2)),
+			]
+			.into_iter()
+			.collect(),
+		);
 		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
 		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 1)));
 		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(5, 2)));
-		Polls::set(vec![
-			(0, Completed(1, true)),
-			(1, Completed(1, true)),
-			(2, Completed(1, true)),
-		].into_iter().collect());
+		Polls::set(
+			vec![(0, Completed(1, true)), (1, Completed(1, true)), (2, Completed(1, true))]
+				.into_iter()
+				.collect(),
+		);
 		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
 		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(1), 1));
 		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(2), 2));
@@ -702,33 +732,55 @@ fn errors_with_vote_work() {
 		assert_noop!(Voting::vote(Origin::signed(1), 0, aye(10, 0)), Error::<Test>::NotOngoing);
 		assert_noop!(Voting::vote(Origin::signed(1), 1, aye(10, 0)), Error::<Test>::NotOngoing);
 		assert_noop!(Voting::vote(Origin::signed(1), 2, aye(10, 0)), Error::<Test>::NotOngoing);
-		assert_noop!(Voting::vote(Origin::signed(1), 3, aye(11, 0)), Error::<Test>::InsufficientFunds);
+		assert_noop!(
+			Voting::vote(Origin::signed(1), 3, aye(11, 0)),
+			Error::<Test>::InsufficientFunds
+		);
 
 		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 10));
-		assert_noop!(Voting::vote(Origin::signed(1), 3, aye(10, 0)), Error::<Test>::AlreadyDelegating);
+		assert_noop!(
+			Voting::vote(Origin::signed(1), 3, aye(10, 0)),
+			Error::<Test>::AlreadyDelegating
+		);
 
 		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
-		Polls::set(vec![
-			(0, Ongoing(Tally::default(), 0)),
-			(1, Ongoing(Tally::default(), 0)),
-			(2, Ongoing(Tally::default(), 0)),
-			(3, Ongoing(Tally::default(), 0)),
-		].into_iter().collect());
+		Polls::set(
+			vec![
+				(0, Ongoing(Tally::default(), 0)),
+				(1, Ongoing(Tally::default(), 0)),
+				(2, Ongoing(Tally::default(), 0)),
+				(3, Ongoing(Tally::default(), 0)),
+			]
+			.into_iter()
+			.collect(),
+		);
 		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(10, 0)));
 		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 0)));
 		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(10, 0)));
-		assert_noop!(Voting::vote(Origin::signed(1), 3, aye(10, 0)), Error::<Test>::MaxVotesReached);
+		assert_noop!(
+			Voting::vote(Origin::signed(1), 3, aye(10, 0)),
+			Error::<Test>::MaxVotesReached
+		);
 	});
 }
 
 #[test]
 fn errors_with_delegating_work() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 11), Error::<Test>::InsufficientFunds);
-		assert_noop!(Voting::delegate(Origin::signed(1), 3, 2, Conviction::None, 10), Error::<Test>::BadClass);
+		assert_noop!(
+			Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 11),
+			Error::<Test>::InsufficientFunds
+		);
+		assert_noop!(
+			Voting::delegate(Origin::signed(1), 3, 2, Conviction::None, 10),
+			Error::<Test>::BadClass
+		);
 
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
-		assert_noop!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 10), Error::<Test>::AlreadyVoting);
+		assert_noop!(
+			Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 10),
+			Error::<Test>::AlreadyVoting
+		);
 
 		assert_noop!(Voting::undelegate(Origin::signed(1), 0), Error::<Test>::NotDelegating);
 	});
@@ -737,12 +789,21 @@ fn errors_with_delegating_work() {
 #[test]
 fn remove_other_vote_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3), Error::<Test>::NotVoter);
+		assert_noop!(
+			Voting::remove_other_vote(Origin::signed(2), 1, 0, 3),
+			Error::<Test>::NotVoter
+		);
 		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 2)));
-		assert_noop!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3), Error::<Test>::NoPermission);
+		assert_noop!(
+			Voting::remove_other_vote(Origin::signed(2), 1, 0, 3),
+			Error::<Test>::NoPermission
+		);
 		Polls::set(vec![(3, Completed(1, true))].into_iter().collect());
 		run_to(6);
-		assert_noop!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3), Error::<Test>::NoPermissionYet);
+		assert_noop!(
+			Voting::remove_other_vote(Origin::signed(2), 1, 0, 3),
+			Error::<Test>::NoPermissionYet
+		);
 		run_to(7);
 		assert_ok!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3));
 	});

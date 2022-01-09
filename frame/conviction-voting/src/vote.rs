@@ -216,8 +216,10 @@ impl<
 		prior: PriorLock<BlockNumber, Balance>,
 	) {
 		let (d, p) = match self {
-			Voting::Casting(Casting { ref mut delegations, ref mut prior, .. }) => (delegations, prior),
-			Voting::Delegating(Delegating { ref mut delegations, ref mut prior, .. }) => (delegations, prior),
+			Voting::Casting(Casting { ref mut delegations, ref mut prior, .. }) =>
+				(delegations, prior),
+			Voting::Delegating(Delegating { ref mut delegations, ref mut prior, .. }) =>
+				(delegations, prior),
 		};
 		*d = delegations;
 		*p = prior;

@@ -21,9 +21,11 @@ use sp_std::marker::PhantomData;
 
 use super::*;
 use crate::{AccountVote, Conviction, Vote};
-use codec::{Decode, Encode, Codec};
-use frame_support::{CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound};
-use frame_support::traits::VoteTally;
+use codec::{Codec, Decode, Encode};
+use frame_support::{
+	traits::VoteTally, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
+	RuntimeDebugNoBound,
+};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
@@ -31,9 +33,21 @@ use sp_runtime::{
 };
 
 /// Info regarding an ongoing referendum.
-#[derive(CloneNoBound, DefaultNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound, TypeInfo, Encode, Decode)]
+#[derive(
+	CloneNoBound,
+	DefaultNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	Encode,
+	Decode,
+)]
 #[scale_info(skip_type_params(Total))]
-pub struct Tally<Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + TypeInfo + Codec, Total> {
+pub struct Tally<
+	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + TypeInfo + Codec,
+	Total,
+> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
 	pub ayes: Votes,
 	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
@@ -45,10 +59,17 @@ pub struct Tally<Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + 
 }
 
 impl<
-	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
-	Total: Get<Votes>,
-> VoteTally<Votes>
-	for Tally<Votes, Total>
+		Votes: Clone
+			+ Default
+			+ PartialEq
+			+ Eq
+			+ sp_std::fmt::Debug
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ TypeInfo
+			+ Codec,
+		Total: Get<Votes>,
+	> VoteTally<Votes> for Tally<Votes, Total>
 {
 	fn ayes(&self) -> Votes {
 		self.ayes
@@ -76,9 +97,18 @@ impl<
 }
 
 impl<
-	Votes: Clone + Default + PartialEq + Eq + sp_std::fmt::Debug + Copy + AtLeast32BitUnsigned + TypeInfo + Codec,
-	Total: Get<Votes>,
-> Tally<Votes, Total> {
+		Votes: Clone
+			+ Default
+			+ PartialEq
+			+ Eq
+			+ sp_std::fmt::Debug
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ TypeInfo
+			+ Codec,
+		Total: Get<Votes>,
+	> Tally<Votes, Total>
+{
 	/// Create a new tally.
 	pub fn new(vote: Vote, balance: Votes) -> Self {
 		let Delegations { votes, capital } = vote.conviction.votes(balance);
