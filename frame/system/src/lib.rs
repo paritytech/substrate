@@ -944,27 +944,6 @@ where
 	}
 }
 
-/// A type of block initialization to perform.
-pub enum InitKind {
-	/// Leave inspectable storage entries in state.
-	///
-	/// i.e. `Events` are not being reset.
-	/// Should only be used for off-chain calls,
-	/// regular block execution should clear those.
-	Inspection,
-
-	/// Reset also inspectable storage entries.
-	///
-	/// This should be used for regular block execution.
-	Full,
-}
-
-impl Default for InitKind {
-	fn default() -> Self {
-		InitKind::Full
-	}
-}
-
 /// Reference status; can be either referenced or unreferenced.
 #[derive(RuntimeDebug)]
 pub enum RefStatus {
@@ -1306,7 +1285,6 @@ impl<T: Config> Pallet<T> {
 		number: &T::BlockNumber,
 		parent_hash: &T::Hash,
 		digest: &generic::Digest,
-		kind: InitKind,
 	) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
@@ -1318,13 +1296,6 @@ impl<T: Config> Pallet<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::<T>::kill();
-
-		// Kill inspectable storage entries in state when `InitKind::Full`.
-		if let InitKind::Full = kind {
-			<Events<T>>::kill();
-			EventCount::<T>::kill();
-			<EventTopics<T>>::remove_all(None);
-		}
 	}
 
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
@@ -1446,7 +1417,6 @@ impl<T: Config> Pallet<T> {
 
 	/// Reset events. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();

@@ -24,7 +24,6 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
-use frame_system::InitKind;
 use pallet_session::historical as pallet_session_historical;
 use pallet_staking::EraIndex;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
@@ -255,7 +254,8 @@ pub fn go_to_block(n: u64, s: u64) {
 
 	let pre_digest = make_secondary_plain_pre_digest(0, s.into());
 
-	System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
+	System::reset_events();
+	System::initialize(&n, &parent_hash, &pre_digest);
 
 	Babe::on_initialize(n);
 	Session::on_initialize(n);
@@ -421,7 +421,8 @@ pub fn generate_equivocation_proof(
 	let make_header = || {
 		let parent_hash = System::parent_hash();
 		let pre_digest = make_secondary_plain_pre_digest(offender_authority_index, slot);
-		System::initialize(&current_block, &parent_hash, &pre_digest, InitKind::Full);
+		System::reset_events();
+		System::initialize(&current_block, &parent_hash, &pre_digest);
 		System::set_block_number(current_block);
 		Timestamp::set_timestamp(current_block);
 		System::finalize()

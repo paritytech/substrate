@@ -294,6 +294,11 @@ where
 		parent_hash: &System::Hash,
 		digest: &Digest,
 	) {
+		// Reset events before apply runtime upgrade hook.
+		// This is required to preserve events from runtime upgrade hook.
+		// This means the format of all the event related storages must always be compatible.
+		<frame_system::Pallet<System>>::reset_events();
+
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
 			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
@@ -302,7 +307,6 @@ where
 			block_number,
 			parent_hash,
 			digest,
-			frame_system::InitKind::Full,
 		);
 		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
 			System::BlockNumber,
@@ -510,7 +514,6 @@ where
 			&(frame_system::Pallet::<System>::block_number() + One::one()),
 			&block_hash,
 			&Default::default(),
-			frame_system::InitKind::Inspection,
 		);
 
 		enter_span! { sp_tracing::Level::TRACE, "validate_transaction" };
@@ -545,7 +548,6 @@ where
 			header.number(),
 			header.parent_hash(),
 			&digests,
-			frame_system::InitKind::Inspection,
 		);
 
 		// Frame system only inserts the parent hash into the block hashes as normally we don't know
