@@ -1411,7 +1411,9 @@ impl<T: Config> Pallet<T> {
 		AllExtrinsicsLen::<T>::put(len as u32);
 	}
 
-	/// Reset events. This needs to be used in addition with `initialize` for each new block
+	/// Reset events.
+	///
+	/// This needs to be used in prior calling [`initialize`](Self::initialize) for each new block
 	/// to clear events from previous block.
 	pub fn reset_events() {
 		<Events<T>>::kill();
