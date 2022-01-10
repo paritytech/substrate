@@ -216,14 +216,7 @@ where
 	where
 		KArg1: ?Sized + EncodeLike<Key1>,
 	{
-		let map_iterator = <Self as MapWrapper>::Map::iter_prefix_values(k1);
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_prefix_values(k1).convert_on_removal()
 	}
 
 	/// Mutate the value under the given keys.
@@ -363,14 +356,7 @@ where
 	///
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value, OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_values();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_values().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -462,14 +448,7 @@ where
 	pub fn iter_prefix(
 		k1: impl EncodeLike<Key1>,
 	) -> crate::storage::PrefixIterator<(Key2, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_prefix(k1);
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_prefix(k1).convert_on_removal()
 	}
 
 	/// Enumerate all elements in the map with first key `k1` after a specified `starting_raw_key`
@@ -481,14 +460,7 @@ where
 		k1: impl EncodeLike<Key1>,
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::PrefixIterator<(Key2, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_prefix_from(k1, starting_raw_key);
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_prefix_from(k1, starting_raw_key).convert_on_removal()
 	}
 
 	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
@@ -520,14 +492,7 @@ where
 	pub fn drain_prefix(
 		k1: impl EncodeLike<Key1>,
 	) -> crate::storage::PrefixIterator<(Key2, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::drain_prefix(k1);
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::drain_prefix(k1).convert_on_removal()
 	}
 
 	/// Enumerate all elements in the map in no particular order.
@@ -535,14 +500,7 @@ where
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter(
 	) -> crate::storage::PrefixIterator<(Key1, Key2, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter().convert_on_removal()
 	}
 
 	/// Enumerate all elements in the map after a specified `starting_raw_key` in no particular
@@ -552,14 +510,7 @@ where
 	pub fn iter_from(
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::PrefixIterator<(Key1, Key2, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_from(starting_raw_key);
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
 
 	/// Enumerate all keys `k1` and `k2` in the map in no particular order.
@@ -584,14 +535,7 @@ where
 	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain(
 	) -> crate::storage::PrefixIterator<(Key1, Key2, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::drain();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::drain().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
