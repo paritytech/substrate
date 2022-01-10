@@ -800,7 +800,7 @@ publish-rustdoc:
     # exit immediately.
     # Putting spaces at the front and back to ensure we are not matching just any substring, but the
     # whole space-separated value.
-    - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
+    # - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     # setup ssh
     - eval $(ssh-agent)
     - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
