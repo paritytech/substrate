@@ -333,14 +333,14 @@ impl BenchmarkCmd {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
 							log::info!(
-								"Running Benchmark:\t{}\t{}\t{}/{}\t{}/{}",
+								"Running Benchmark: {}.{} {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
-								s, // todo show step
+								s + 1, // s starts at 0. todo show step
 								self.steps,
-								r,
+								r + 1,
 								self.external_repeat,
 							);
 						}
