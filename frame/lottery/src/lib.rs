@@ -394,7 +394,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Return the pot account and amount of money in the pot.
-	// The existential deposit is not part of the pot so lottery account never gets deleted.
+	/// The existential deposit is not part of the pot so lottery account never gets deleted.
 	fn pot() -> (T::AccountId, BalanceOf<T>) {
 		let account_id = Self::account_id();
 		let balance =
@@ -403,7 +403,7 @@ impl<T: Config> Pallet<T> {
 		(account_id, balance)
 	}
 
-	// Converts a vector of calls into a vector of call indices.
+	/// Converts a vector of calls into a vector of call indices.
 	fn calls_to_indices(
 		calls: &[<T as Config>::Call],
 	) -> Result<BoundedVec<CallIndex, T::MaxCalls>, DispatchError> {
@@ -415,7 +415,7 @@ impl<T: Config> Pallet<T> {
 		Ok(indices)
 	}
 
-	// Convert a call to it's call index by encoding the call and taking the first two bytes.
+	/// Convert a call to it's call index by encoding the call and taking the first two bytes.
 	fn call_to_index(call: &<T as Config>::Call) -> Result<CallIndex, DispatchError> {
 		let encoded_call = call.encode();
 		if encoded_call.len() < 2 {
@@ -424,7 +424,7 @@ impl<T: Config> Pallet<T> {
 		return Ok((encoded_call[0], encoded_call[1]))
 	}
 
-	// Logic for buying a ticket.
+	/// Logic for buying a ticket.
 	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Config>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
@@ -468,9 +468,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// Randomly choose a winning ticket and return the account that purchased it.
-	// The more tickets an account bought, the higher are its chances of winning.
-	// Returns `None` if there is no winner.
+	/// Randomly choose a winning ticket and return the account that purchased it.
+	/// The more tickets an account bought, the higher are its chances of winning.
+	/// Returns `None` if there is no winner.
 	fn choose_account() -> Option<T::AccountId> {
 		match Self::choose_ticket(TicketsCount::<T>::get()) {
 			None => None,
@@ -478,8 +478,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	// Randomly choose a winning ticket from among the total number of tickets.
-	// Returns `None` if there are no tickets.
+	/// Randomly choose a winning ticket from among the total number of tickets.
+	/// Returns `None` if there are no tickets.
 	fn choose_ticket(total: u32) -> Option<u32> {
 		if total == 0 {
 			return None
@@ -498,12 +498,12 @@ impl<T: Config> Pallet<T> {
 		Some(random_number % total)
 	}
 
-	// Generate a random number from a given seed.
-	// Note that there is potential bias introduced by using modulus operator.
-	// You should call this function with different seed values until the random
-	// number lies within `u32::MAX - u32::MAX % n`.
-	// TODO: deal with randomness freshness
-	// https://github.com/paritytech/substrate/issues/8311
+	/// Generate a random number from a given seed.
+	/// Note that there is potential bias introduced by using modulus operator.
+	/// You should call this function with different seed values until the random
+	/// number lies within `u32::MAX - u32::MAX % n`.
+	/// TODO: deal with randomness freshness
+	/// https://github.com/paritytech/substrate/issues/8311
 	fn generate_random_number(seed: u32) -> u32 {
 		let (random_seed, _) = T::Randomness::random(&(T::PalletId::get(), seed).encode());
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
