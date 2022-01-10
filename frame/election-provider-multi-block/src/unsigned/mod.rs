@@ -132,7 +132,7 @@ mod pallet {
 			let valid_score = supports.evaluate();
 			assert_eq!(valid_score, paged_solution.score, "{}", error_message);
 
-			log!(info, "queued an unsigned solution with score {:?}", valid_score);
+			sublog!(info, "unsigned", "queued an unsigned solution with score {:?}", valid_score);
 
 			// all good, now we write this to the verifier directly.
 			T::Verifier::force_set_single_page_verified_solution(supports, valid_score);
@@ -153,7 +153,12 @@ mod pallet {
 
 				let _ = Self::validate_unsigned_checks(paged_solution.as_ref())
 					.map_err(|err| {
-						log!(debug, "unsigned transaction validation failed due to {:?}", err);
+						sublog!(
+							debug,
+							"unsigned",
+							"unsigned transaction validation failed due to {:?}",
+							err
+						);
 						err
 					})
 					.map_err(dispatch_error_to_invalid)?;
@@ -207,7 +212,12 @@ mod pallet {
 					Self::do_synchronized_offchain_worker(now);
 				},
 				Err(deadline) => {
-					log!(debug, "offchain worker lock not released, deadline is {:?}", deadline);
+					sublog!(
+						debug,
+						"unsigned",
+						"offchain worker lock not released, deadline is {:?}",
+						deadline
+					);
 				},
 			};
 		}
@@ -220,14 +230,24 @@ mod pallet {
 			use miner::OffchainWorkerMiner;
 
 			let current_phase = crate::Pallet::<T>::current_phase();
-			log!(trace, "lock for offchain worker acquired. Phase = {:?}", current_phase);
+			sublog!(
+				trace,
+				"unsigned",
+				"lock for offchain worker acquired. Phase = {:?}",
+				current_phase
+			);
 			match current_phase {
 				Phase::Unsigned((true, opened)) if opened == now => {
 					// Mine a new solution, cache it, and attempt to submit it
 					let initial_output =
 						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now)
 							.and_then(|_| OffchainWorkerMiner::<T>::mine_check_save_submit());
-					log!(debug, "initial offchain worker output: {:?}", initial_output);
+					sublog!(
+						debug,
+						"unsigned",
+						"initial offchain worker output: {:?}",
+						initial_output
+					);
 				},
 				Phase::Unsigned((true, opened)) if opened < now => {
 					// Try and resubmit the cached solution, and recompute ONLY if it is not
@@ -236,14 +256,15 @@ mod pallet {
 						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now).and_then(
 							|_| OffchainWorkerMiner::<T>::restore_or_compute_then_maybe_submit(),
 						);
-					log!(debug, "resubmit offchain worker output: {:?}", resubmit_output);
+					sublog!(
+						debug,
+						"unsigned",
+						"resubmit offchain worker output: {:?}",
+						resubmit_output
+					);
 				},
 				_ => {},
 			}
-
-			// TODO: we don't clear the cache here. I don't think it has any implications. It will
-			// be overwritten sometime in the future. In either case, once we add the snapshot hash
-			// check, an outdated cache is never a problem. backport this as well.
 		}
 
 		/// The checks that should happen in the `ValidateUnsigned`'s `pre_dispatch` and
@@ -255,7 +276,7 @@ mod pallet {
 			paged_solution: &PagedRawSolution<T>,
 		) -> DispatchResult {
 			Self::unsigned_specific_checks(paged_solution)
-				.and(crate::Pallet::<T>::snapshot_independent_checks(paged_solution))
+				.and(crate::Pallet::<T>::snapshot_independent_checks(paged_solution, None))
 				.map_err(Into::into)
 		}
 

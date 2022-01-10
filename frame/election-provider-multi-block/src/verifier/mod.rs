@@ -97,7 +97,7 @@ pub trait Verifier {
 	fn queued_solution() -> Option<ElectionScore>;
 
 	/// Check if the claimed score is sufficient.
-	fn check_claimed_score(claimed_score: ElectionScore) -> bool;
+	fn ensure_claimed_score_improves(claimed_score: ElectionScore) -> bool;
 
 	/// Get the current stage of the verification process.
 	///
@@ -153,16 +153,16 @@ impl<T: Config> Verifier for Pallet<T> {
 		page_index: PageIndex,
 		page_solution: Self::Solution,
 	) -> Result<(), ()> {
-		log!(trace, "setting unverified solution at page_index {}", page_index);
+		sublog!(trace, "verifier", "setting unverified solution at page_index {}", page_index);
 		VerifyingSolution::<T>::put_page(page_index, page_solution)
 	}
 
 	fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
-		log!(trace, "sealing unverified solution with score {:?}", claimed_score);
+		sublog!(trace, "verifier", "sealing unverified solution with score {:?}", claimed_score);
 		VerifyingSolution::<T>::seal_unverified_solution(claimed_score)
 	}
 
-	fn check_claimed_score(claimed_score: ElectionScore) -> bool {
+	fn ensure_claimed_score_improves(claimed_score: ElectionScore) -> bool {
 		Self::ensure_score_quality(claimed_score).is_ok()
 	}
 

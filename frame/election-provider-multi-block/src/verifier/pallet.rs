@@ -30,9 +30,6 @@ pub(super) use pallet::{QueuedSolution, VerifyingSolution};
 // export publicly.
 pub use pallet::{Config, Error, Event, Pallet, __substrate_event_check};
 
-// TODO: would be really good if our logs would be separate per crate.. but I don't want to
-// duplicate the log! macro.
-
 #[frame_support::pallet]
 mod pallet {
 	use crate::{
@@ -129,7 +126,7 @@ mod pallet {
 		/// be returned.
 		pub(crate) fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
 			if Self::exists() {
-				log!(warn, "an attempt was made to overwrite the solution actively be verified. This is a system logic error that should be reported.");
+				sublog!(warn, "verifier", "an attempt was made to overwrite the solution actively be verified. This is a system logic error that should be reported.");
 				return Err(())
 			}
 
@@ -297,8 +294,9 @@ mod pallet {
 		///
 		/// NOTE: we don't check if this is a better score, the call site must ensure that.
 		pub(crate) fn finalize_correct(score: ElectionScore) {
-			log!(
+			sublog!(
 				info,
+				"verifier",
 				"finalizing verification a correct solution, replacing old score {:?} with {:?}",
 				QueuedSolutionScore::<T>::get(),
 				score
@@ -369,8 +367,6 @@ mod pallet {
 			paged_supports: BoundedVec<SupportsOf<Pallet<T>>, T::Pages>,
 			score: ElectionScore,
 		) {
-			// TODO: would be nice if we could consume `Vec<_>.pagify` as well, but rustc is not
-			// cooperating.
 			for (page_index, supports) in paged_supports.pagify(T::Pages::get()) {
 				match Self::valid() {
 					ValidSolution::X => QueuedSolutionX::<T>::insert(page_index, supports),
@@ -614,8 +610,9 @@ mod pallet {
 				let maybe_support =
 					<Self as Verifier>::feasibility_check_page(page_solution, current_page);
 
-				log!(
+				sublog!(
 					trace,
+					"verifier",
 					"verified page {} of a solution, contains, outcome = {:?}",
 					current_page,
 					maybe_support.as_ref().map(|s| s.len())
@@ -630,7 +627,12 @@ mod pallet {
 
 						if !has_more_pages {
 							let _outcome = Self::finalize_verification();
-							log!(debug, "finalize verification outcome: {:?}", _outcome)
+							sublog!(
+								debug,
+								"verifier",
+								"finalize verification outcome: {:?}",
+								_outcome
+							)
 						}
 					},
 					Err(err) => {
@@ -682,7 +684,7 @@ impl<T: Config> Pallet<T> {
 				}
 			})
 			.map_err(|err| {
-				log!(warn, "Finalizing solution was invalid due {:?}.", err);
+				sublog!(warn, "verifier", "Finalizing solution was invalid due {:?}.", err);
 				// In case of any of the errors, kill the solution.
 				Self::deposit_event(Event::<T>::VerificationFailed(0, err.clone()));
 				VerifyingSolution::<T>::kill();

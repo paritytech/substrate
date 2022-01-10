@@ -230,7 +230,7 @@ mod mock;
 #[macro_use]
 pub mod helpers;
 
-const LOG_TARGET: &'static str = "runtime::multiblock-election";
+const LOG_PREFIX: &'static str = "runtime::multiblock-election";
 
 // pub mod signed;
 pub mod types;
@@ -241,6 +241,12 @@ pub mod weights;
 pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
+
+// NOTE: unify naming: everything should be
+// xxx_page: singular
+// paged_xxx: plural
+// NOTE: also about naming crates: only 1 super should be ever allowed. Anything else will be
+// crate::xxx
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -334,7 +340,7 @@ pub mod pallet {
 	use frame_support::{pallet_prelude::*, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{traits::CheckedAdd, PerThing, UpperOf};
-	use sp_runtime::traits::{Saturating, Zero};
+	use sp_runtime::traits::{Hash, Saturating, Zero};
 	use sp_std::convert::TryInto;
 
 	#[pallet::config]
@@ -351,9 +357,6 @@ pub mod pallet {
 		type SignedPhase: Get<Self::BlockNumber>;
 
 		/// The number of snapshot voters to fetch per block.
-		// TODO: here we use u32, but the type that is used in compact can still be different. Just
-		// needs an integrity test to check that `size_of::<VoterIndex> <= size_of::<u32>`, which
-		// would already be pretty darn crazy.
 		#[pallet::constant]
 		type VoterSnapshotPerBlock: Get<u32>;
 
@@ -506,6 +509,11 @@ pub mod pallet {
 			assert!(size_of::<SolutionVoterIndexOf<T>>() <= size_of::<usize>());
 			assert!(size_of::<SolutionTargetIndexOf<T>>() <= size_of::<usize>());
 
+			// also, because `VoterSnapshotPerBlock` and `TargetSnapshotPerBlock` are in u32, we
+			// assert that both of these types are smaller than u32 as well.
+			assert!(size_of::<SolutionVoterIndexOf<T>>() <= size_of::<u32>());
+			assert!(size_of::<SolutionTargetIndexOf<T>>() <= size_of::<u32>());
+
 			let pages_bn: T::BlockNumber = T::Pages::get().into();
 			// pages must be at least 1.
 			assert!(T::Pages::get() > 0);
@@ -565,6 +573,8 @@ pub mod pallet {
 		WrongPageCount,
 		/// Wrong number of winners presented.
 		WrongWinnerCount,
+		/// The snapshot fingerprint is not a match. The solution is likely outdated.
+		WrongFingerprint,
 	}
 
 	impl<T: Config> PartialEq for Error<T> {
@@ -606,17 +616,19 @@ pub mod pallet {
 		}
 
 		pub(crate) fn set_targets(targets: BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>) {
-			Self::write_storage_with_pre_allocate(
-				&PagedTargetSnapshot::<T>::hashed_key_for(0),
+			let hash = Self::write_storage_with_pre_allocate(
+				&PagedTargetSnapshot::<T>::hashed_key_for(Pallet::<T>::lsp()),
 				targets,
 			);
+			PagedTargetSnapshotHash::<T>::insert(Pallet::<T>::lsp(), hash);
 		}
 
 		pub(crate) fn set_voters(page: PageIndex, voters: VoterPageOf<T>) {
-			Self::write_storage_with_pre_allocate(
+			let hash = Self::write_storage_with_pre_allocate(
 				&PagedVoterSnapshot::<T>::hashed_key_for(page),
 				voters,
 			);
+			PagedVoterSnapshotHash::<T>::insert(page, hash);
 		}
 
 		pub(crate) fn update_metadata(
@@ -646,7 +658,9 @@ pub mod pallet {
 			DesiredTargets::<T>::kill();
 			SnapshotMetadata::<T>::kill();
 			PagedVoterSnapshot::<T>::remove_all(None);
+			PagedVoterSnapshotHash::<T>::remove_all(None);
 			PagedTargetSnapshot::<T>::remove_all(None);
+			PagedTargetSnapshotHash::<T>::remove_all(None);
 		}
 
 		// ----------- non-mutables
@@ -656,6 +670,10 @@ pub mod pallet {
 
 		pub(crate) fn voters(page: PageIndex) -> Option<VoterPageOf<T>> {
 			PagedVoterSnapshot::<T>::get(page)
+		}
+
+		pub(crate) fn voters_hash(page: PageIndex) -> Option<T::Hash> {
+			PagedVoterSnapshotHash::<T>::get(page)
 		}
 
 		pub(crate) fn voters_decode_len(page: PageIndex) -> Option<usize> {
@@ -671,8 +689,48 @@ pub mod pallet {
 			PagedTargetSnapshot::<T>::get(Pallet::<T>::lsp())
 		}
 
+		pub(crate) fn targets_hash() -> Option<T::Hash> {
+			PagedTargetSnapshotHash::<T>::get(Pallet::<T>::lsp())
+		}
+
 		pub(crate) fn metadata() -> Option<SolutionOrSnapshotSize> {
 			SnapshotMetadata::<T>::get()
+		}
+
+		/// Get a fingerprint of the snapshot, from all the hashes that are stored for each page of
+		/// the snapshot.
+		///
+		/// This is computed as: `(target_hash, voter_hash_n, voter_hash_(n-1), ..., voter_hash_0)`
+		/// where `n` is `T::Pages - 1`. In other words, it is the concatenated hash of targets, and
+		/// voters, from `msp` to `lsp`.
+		pub fn fingerprint() -> T::Hash {
+			let mut targets = PagedTargetSnapshotHash::<T>::get(Pallet::<T>::lsp())
+				.unwrap_or_default()
+				.as_ref()
+				.to_vec();
+			let voters = (Pallet::<T>::msp()..=Pallet::<T>::lsp())
+				.map(|i| PagedVoterSnapshotHash::<T>::get(i).unwrap_or_default())
+				.map(|hash| <T::Hash as AsRef<[u8]>>::as_ref(&hash).to_owned())
+				.flatten()
+				.collect::<Vec<u8>>();
+			targets.extend(voters);
+			T::Hashing::hash(&targets)
+		}
+
+		fn write_storage_with_pre_allocate<E: Encode>(key: &[u8], data: E) -> T::Hash {
+			let size = data.encoded_size();
+			let mut buffer = Vec::with_capacity(size);
+			data.encode_to(&mut buffer);
+
+			let hash = T::Hashing::hash(&buffer);
+
+			// do some checks.
+			debug_assert_eq!(buffer, data.encode());
+			// buffer should have not re-allocated since.
+			debug_assert!(buffer.len() == size && size == buffer.capacity());
+			sp_io::storage::set(key, &buffer);
+
+			hash
 		}
 
 		#[cfg(any(test, debug_assertions))]
@@ -687,29 +745,19 @@ pub mod pallet {
 			);
 			assert!(exists ^ !Self::metadata().is_some(), "metadata mismatch");
 			assert!(exists ^ !Self::targets().is_some(), "targets mismatch");
+			assert!(exists ^ !Self::targets_hash().is_some(), "targets hash mismatch");
 
 			(crate::Pallet::<T>::msp()..=crate::Pallet::<T>::lsp())
 				.take(up_to_page as usize)
 				.for_each(|p| {
 					assert!(
-						exists ^ !Self::voters(p).is_some(),
+						(exists ^ !Self::voters(p).is_some()) &&
+							(exists ^ !Self::voters_hash(p).is_some()),
 						"voter page {} mismatch {}",
 						p,
 						exists
 					);
 				});
-		}
-
-		fn write_storage_with_pre_allocate<E: Encode>(key: &[u8], data: E) {
-			let size = data.encoded_size();
-			let mut buffer = Vec::with_capacity(size);
-			data.encode_to(&mut buffer);
-
-			// do some checks.
-			debug_assert_eq!(buffer, data.encode());
-			// buffer should have not re-allocated since.
-			debug_assert!(buffer.len() == size && size == buffer.capacity());
-			sp_io::storage::set(key, &buffer);
 		}
 	}
 
@@ -772,10 +820,24 @@ pub mod pallet {
 	#[pallet::storage]
 	type PagedVoterSnapshot<T: Config> = StorageMap<_, Twox64Concat, PageIndex, VoterPageOf<T>>;
 
-	/// Paginated target snapshot. At most ONE key will exist.
+	/// Same as [`PagedVoterSnapshot`], but it will store the hash of the snapshot.
+	///
+	/// The hash is generated using [`frame_system::Config::Hashing`].
+	#[pallet::storage]
+	type PagedVoterSnapshotHash<T: Config> = StorageMap<_, Twox64Concat, PageIndex, T::Hash>;
+
+	/// Paginated target snapshot.
+	///
+	/// For the time being, since we assume one pages of targets, at most ONE key will exist.
 	#[pallet::storage]
 	type PagedTargetSnapshot<T: Config> =
 		StorageMap<_, Twox64Concat, PageIndex, BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>>;
+
+	/// Same as [`PagedTargetSnapshot`], but it will store the hash of the snapshot.
+	///
+	/// The hash is generated using [`frame_system::Config::Hashing`].
+	#[pallet::storage]
+	type PagedTargetSnapshotHash<T: Config> = StorageMap<_, Twox64Concat, PageIndex, T::Hash>;
 
 	#[pallet::pallet]
 	#[pallet::generate_storage_info]
@@ -802,25 +864,32 @@ impl<T: Config> Pallet<T> {
 		Zero::zero()
 	}
 
-	/// Perform all the basic checks that are independent of the snapshot.
+	/// Perform all the basic checks that are independent of the snapshot. TO be more specific,
+	/// these are all the checks that you can do without the need to read the massive blob of the
+	/// actual snapshot. This function only contains a handful of storage reads, with bounded size.
 	///
 	/// A sneaky detail is that this does check the `DesiredTargets` aspect of the snapshot, but
 	/// neither of the large storage items.
 	///
+	/// Moreover, we do optionally check the fingerprint of the snapshot, if provided.
+	///
 	/// These compliment a feasibility-check, which is exactly the opposite: snapshot-dependent
 	/// checks.
 	pub(crate) fn snapshot_independent_checks(
-		// Note that the order of these checks are critical for the correctness of
-		// `restore_or_compute_then_maybe_submit`. We want to make sure that we always check round
-		// first, so that if it has a wrong round, we can detect and delete it from the cache.
 		paged_solution: &PagedRawSolution<T>,
+		maybe_snapshot_fingerprint: Option<T::Hash>,
 	) -> Result<(), Error<T>> {
+		// Note that the order of these checks are critical for the correctness and performance of
+		// `restore_or_compute_then_maybe_submit`. We want to make sure that we always check round
+		// first, so that if it has a wrong round, we can detect and delete it from the cache right
+		// from the get go.
+
 		// ensure round is current
 		ensure!(Self::round() == paged_solution.round, Error::<T>::WrongRound);
 
 		// ensure score is being improved, if the claim is even correct.
 		ensure!(
-			<T::Verifier as Verifier>::check_claimed_score(paged_solution.score),
+			<T::Verifier as Verifier>::ensure_claimed_score_improves(paged_solution.score),
 			Error::<T>::WeakSubmission,
 		);
 
@@ -830,8 +899,6 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::WrongPageCount
 		);
 
-		// TODO: check the hash of snapshot.
-
 		// finally, check the winner count being correct.
 		if let Some(desired_targets) = Snapshot::<T>::desired_targets() {
 			ensure!(
@@ -839,6 +906,14 @@ impl<T: Config> Pallet<T> {
 				Error::<T>::WrongWinnerCount
 			)
 		}
+
+		// check the snapshot fingerprint, if asked for.
+		ensure!(
+			maybe_snapshot_fingerprint
+				.map_or(true, |snapshot_fingerprint| Snapshot::<T>::fingerprint() ==
+					snapshot_fingerprint),
+			Error::<T>::WrongFingerprint
+		);
 
 		Ok(())
 	}
@@ -1223,6 +1298,11 @@ mod phase_rotation {
 	#[test]
 	fn phase_rotation_multi_with_lookahead() {
 		todo!();
+	}
+
+	#[test]
+	fn fingerprint_works() {
+		todo!("one hardcoded test of the fingerprint value.");
 	}
 }
 

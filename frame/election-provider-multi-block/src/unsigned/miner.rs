@@ -17,7 +17,7 @@
 
 use super::WeightInfo;
 use crate::{
-	helpers, log,
+	helpers,
 	types::*,
 	verifier::{self},
 };
@@ -33,13 +33,6 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 // TODO: the miner will def. need a fuzzer.
-
-// TODO: unify naming: everything should be
-// xxx_page: singular
-// paged_xxx: plural
-
-// TODO: also about naming crates: only 1 super should be ever allowed. Anything else will be
-// crate::xxx
 
 /// The type of the snapshot.
 ///
@@ -166,8 +159,9 @@ impl<
 			.take(pages as usize)
 			.rev();
 
-		log!(
+		sublog!(
 			debug,
+			"unsigned::miner",
 			"mining a solution with {} pages, voter snapshot range will be: {:?}",
 			pages,
 			voter_pages_range.clone().collect::<Vec<_>>()
@@ -251,8 +245,9 @@ impl<
 				(pre_score, num_trimmed, assignments)
 			};
 
-			log!(
+			sublog!(
 				debug,
+				"unsigned::miner",
 				"initial score = {:?}, reduced {} edges, trimmed {} supports",
 				_pre_score,
 				reduced_count,
@@ -308,7 +303,12 @@ impl<
 		let solution_pages = solution_pages_unbounded
 			.try_into()
 			.expect("maybe_trim_weight_and_len cannot increase the length of its input; qed.");
-		log!(debug, "trimmed {} voters due to length/weight restriction.", _trim_length_weight);
+		sublog!(
+			debug,
+			"unsigned::miner",
+			"trimmed {} voters due to length/weight restriction.",
+			_trim_length_weight
+		);
 
 		// finally, wrap everything up. Assign a fake score here, since we might need to re-compute
 		// it.
@@ -320,8 +320,9 @@ impl<
 		let score = Self::compute_score(&paged).map_err::<MinerError<T>, _>(Into::into)?;
 		paged.score = score.clone();
 
-		log!(
+		sublog!(
 			info,
+			"unsigned::miner",
 			"mined a solution with score {:?}, {} winners, {} voters, {} edges, and {} bytes",
 			score,
 			paged.winner_count_single_page_target_snapshot(),
@@ -339,21 +340,37 @@ impl<
 		reduce: bool,
 	) -> Result<PagedRawSolution<T>, MinerError<T>> {
 		let paged_solution = Self::mine_solution(pages, reduce)?;
-		let _ = Self::full_checks(&paged_solution, "mined")?;
+		let _ = Self::check_solution(&paged_solution, None, true, "mined")?;
 		Ok(paged_solution)
 	}
 
-	/// Perform all checks, from the perspective of the base miner:
+	/// Check the solution, from the perspective of the base miner:
 	///
-	/// 1. feasibility check.
-	/// 2. snapshot-independent checks.
-	pub fn full_checks(
+	/// 1. snapshot-independent checks.
+	/// 	- with the fingerprint check being an optional step fo that.
+	/// 2. optionally, feasibility check.
+	///
+	/// In most cases, you should always use this either with `do_feasibility = true` or
+	/// `maybe_snapshot_fingerprint.is_some()`. Doing both could be an overkill. The snapshot
+	/// staying constant (which can be checked via the hash) is a string guarantee that the
+	/// feasibility still holds.
+	pub fn check_solution(
 		paged_solution: &PagedRawSolution<T>,
+		maybe_snapshot_fingerprint: Option<T::Hash>,
+		do_feasibility: bool,
 		solution_type: &str,
 	) -> Result<(), MinerError<T>> {
-		crate::Pallet::<T>::snapshot_independent_checks(paged_solution)
-			.map_err(|pe| MinerError::SnapshotIndependentChecks(pe))
-			.and_then(|_| Self::check_feasibility(&paged_solution, solution_type).map(|_| ()))
+		let _ = crate::Pallet::<T>::snapshot_independent_checks(
+			paged_solution,
+			maybe_snapshot_fingerprint,
+		)
+		.map_err(|pe| MinerError::SnapshotIndependentChecks(pe))?;
+
+		if do_feasibility {
+			let _ = Self::check_feasibility(&paged_solution, solution_type)?;
+		}
+
+		Ok(())
 	}
 
 	/// perform the feasibility check on all pages of a solution, returning `Ok(())` if all good and
@@ -374,7 +391,13 @@ impl<
 			})
 			.collect::<Result<Vec<_>, _>>()
 			.map_err(|err| {
-				log!(warn, "feasibility check failed for {} solution at: {:?}", solution_type, err);
+				sublog!(
+					warn,
+					"unsigned::miner",
+					"feasibility check failed for {} solution at: {:?}",
+					solution_type,
+					err
+				);
 				MinerError::from(err)
 			})
 	}
@@ -485,7 +508,7 @@ impl<
 			let next_active_targets = winner_count_of(solution_pages);
 			if next_active_targets < desired_targets {
 				// TODO: this log is a bit misplaced, but I don't really want to
-				log!(warn, "trimming has cause a solution to have less targets than desired, this might fail feasibility");
+				sublog!(warn, "unsigned::miner", "trimming has cause a solution to have less targets than desired, this might fail feasibility");
 			}
 
 			let weight = <T as super::Config>::WeightInfo::submit_unsigned(
@@ -545,8 +568,9 @@ impl<
 					let stake_of_fn = current_trimming_page_stake_of(current_trimming_page);
 					page.remove_weakest_sorted(&stake_of_fn)
 				}) {
-				log!(
+				sublog!(
 					trace,
+					"unsigned::miner",
 					"removed voter at index {:?} of (un-pagified) page {} as the weakest due to weight/length limits.",
 					removed_idx,
 					current_trimming_page
@@ -555,8 +579,9 @@ impl<
 				removed.saturating_inc();
 			} else {
 				// this page cannot support remove anymore. Try and go to the next page.
-				log!(
+				sublog!(
 					debug,
+					"unsigned::miner",
 					"page {} seems to be fully empty now, moving to the next one",
 					current_trimming_page
 				);
@@ -565,8 +590,9 @@ impl<
 					current_trimming_page = next_page;
 					sort_current_trimming_page(current_trimming_page, solution_pages);
 				} else {
-					log!(
+					sublog!(
 						warn,
+						"unsigned::miner",
 						"no more pages to trim from at page {}, already trimmed",
 						current_trimming_page
 					);
@@ -587,7 +613,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	pub(crate) const OFFCHAIN_LOCK: &'static [u8] = b"parity/multi-block-unsigned-election/lock";
 	/// Storage key used to store the last block number at which offchain worker ran.
 	const OFFCHAIN_LAST_BLOCK: &'static [u8] = b"parity/multi-block-unsigned-election";
-	/// Storage key used to cache the solution `call`.
+	/// Storage key used to cache the solution `call` and its snapshot fingerprint.
 	const OFFCHAIN_CACHED_CALL: &'static [u8] = b"parity/multi-block-unsigned-election/call";
 	/// The number of pages that the offchain worker miner will try and mine.
 	const MINING_PAGES: PageIndex = 1;
@@ -606,7 +632,8 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 		let paged_solution =
 			BaseMiner::<T, T::OffchainSolver>::mine_solution(Self::MINING_PAGES, reduce)
 				.map_err::<OffchainMinerError<T>, _>(Into::into)?;
-		let _ = Self::full_checks(&paged_solution, "mined")?;
+		// check the call fully, no fingerprinting.
+		let _ = Self::check_solution(&paged_solution, None, true, "mined")?;
 
 		let call: super::Call<T> =
 			super::Call::<T>::submit_unsigned { paged_solution: Box::new(paged_solution), witness }
@@ -618,34 +645,41 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	/// Mine a new checked solution, cache it, and submit it back to the chain as an unsigned
 	/// transaction.
 	pub fn mine_check_save_submit() -> Result<(), OffchainMinerError<T>> {
-		log!(debug, "miner attempting to compute an unsigned solution.");
+		sublog!(debug, "unsigned::miner", "miner attempting to compute an unsigned solution.");
 		let call = Self::mine_checked_call()?;
-		Self::save_solution(&call)?;
+		Self::save_solution(&call, crate::Snapshot::<T>::fingerprint())?;
 		Self::submit_call(call)
 	}
 
-	/// Perform all checks, from the perspective of the offchain-worker miner:
+	/// Check the solution, from the perspective of the offchain-worker miner:
 	///
-	/// 1. full-checks of the base miner
-	/// 	1. feasibility check.
+	/// 1. unsigned-specific checks.
+	/// 2. full-checks of the base miner
+	/// 	1. optionally feasibility check.
 	/// 	2. snapshot-independent checks.
-	/// 2. unsigned-specific checks.
-	pub fn full_checks(
+	/// 		1. optionally, snapshot fingerprint.
+	pub fn check_solution(
 		paged_solution: &PagedRawSolution<T>,
+		maybe_snapshot_fingerprint: Option<T::Hash>,
+		do_feasibility: bool,
 		solution_type: &str,
 	) -> Result<(), OffchainMinerError<T>> {
-		// NOTE: we prefer cheap checks first, so first run unsigned, then run base miner's full
-		// check, which should itself be cheap to heavy.
+		// NOTE: we prefer cheap checks first, so first run unsigned checks.
 		super::Pallet::unsigned_specific_checks(paged_solution)
 			.map_err(|pe| OffchainMinerError::UnsignedChecks(pe))
 			.and_then(|_| {
-				BaseMiner::<T, T::OffchainSolver>::full_checks(paged_solution, solution_type)
-					.map_err(|bm| OffchainMinerError::BaseMiner(bm))
+				BaseMiner::<T, T::OffchainSolver>::check_solution(
+					paged_solution,
+					maybe_snapshot_fingerprint,
+					do_feasibility,
+					solution_type,
+				)
+				.map_err(OffchainMinerError::BaseMiner)
 			})
 	}
 
 	fn submit_call(call: super::Call<T>) -> Result<(), OffchainMinerError<T>> {
-		log!(debug, "miner submitting a solution as an unsigned transaction");
+		sublog!(debug, "unsigned::miner", "miner submitting a solution as an unsigned transaction");
 		frame_system::offchain::SubmitTransaction::<T, super::Call<T>>::submit_unsigned_transaction(
 			call.into(),
 		)
@@ -655,17 +689,25 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way,
 	/// submit if our call's score is greater than that of the cached solution.
 	pub fn restore_or_compute_then_maybe_submit() -> Result<(), OffchainMinerError<T>> {
-		log!(debug, "miner attempting to restore or compute an unsigned solution.");
+		sublog!(
+			debug,
+			"unsigned::miner",
+			"miner attempting to restore or compute an unsigned solution."
+		);
 
 		let call = Self::restore_solution()
-			.and_then(|call| {
+			.and_then(|(call, snapshot_fingerprint)| {
 				// ensure the cached call is still current before submitting
 				if let super::Call::submit_unsigned { paged_solution, .. } = &call {
-					// prevent errors arising from state changes in a forkful chain.
-					// TODO: once we have snapshot hash here, we can avoid needing to do the
-					// `feasibility_check` again.
-					OffchainWorkerMiner::<T>::full_checks(paged_solution, "restored")
-						.map_err::<OffchainMinerError<T>, _>(Into::into)?;
+					// we check the snapshot fingerprint instead of doing a full feasibility.
+					// TODO: this might not be worth the risk. After all, we are still in the
+					// offchain worker context. Who cares of we re-do feasibility?
+					OffchainWorkerMiner::<T>::check_solution(
+						paged_solution,
+						Some(snapshot_fingerprint),
+						false,
+						"restored"
+					).map_err::<OffchainMinerError<T>, _>(Into::into)?;
 					Ok(call)
 				} else {
 					Err(OffchainMinerError::SolutionCallInvalid)
@@ -677,15 +719,15 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 				match error {
 					NoStoredSolution => {
-						log!(trace, "mining a new solution.");
 						// IFF, not present regenerate.
 						let call = Self::mine_checked_call()?;
-						Self::save_solution(&call)?;
+						Self::save_solution(&call, crate::Snapshot::<T>::fingerprint())?;
 						Ok(call)
 					},
 					UnsignedChecks(ref e) => {
-						log!(
+						sublog!(
 							error,
+							"unsigned::miner",
 							"unsigned specific checks failed ({:?}) while restoring solution. This should never happen. clearing cache.",
 							e,
 						);
@@ -695,7 +737,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 					BaseMiner(Feasibility(_)) | BaseMiner(SnapshotIndependentChecks(crate::Error::<T>::WrongRound)) => {
 						// note that failing `Feasibility` can only mean that the solution was
 						// computed over a snapshot that has changed due to a fork.
-						log!(warn, "wiping infeasible solution.");
+						sublog!(warn, "unsigned::miner", "wiping infeasible solution.");
 						// kill the "bad" solution.
 						Self::clear_offchain_solution_cache();
 
@@ -703,7 +745,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 						Err(error)
 					},
 					_ => {
-						log!(debug, "unhandled error in restoring offchain solution {:?}", error);
+						sublog!(debug, "unsigned::miner", "unhandled error in restoring offchain solution {:?}", error);
 						// nothing to do. Return the error as-is.
 						Err(error)
 					},
@@ -761,10 +803,13 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	}
 
 	/// Save a given call into OCW storage.
-	fn save_solution(call: &super::Call<T>) -> Result<(), OffchainMinerError<T>> {
-		log!(debug, "saving a call to the offchain storage.");
+	fn save_solution(
+		call: &super::Call<T>,
+		snapshot_fingerprint: T::Hash,
+	) -> Result<(), OffchainMinerError<T>> {
+		sublog!(debug, "unsigned::miner", "saving a call to the offchain storage.");
 		let storage = StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL);
-		match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
+		match storage.mutate::<_, (), _>(|_| Ok((call.clone(), snapshot_fingerprint))) {
 			Ok(_) => Ok(()),
 			Err(MutateStorageError::ConcurrentModification(_)) =>
 				Err(OffchainMinerError::FailedToStoreSolution),
@@ -779,7 +824,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 	}
 
 	/// Get a saved solution from OCW storage if it exists.
-	fn restore_solution() -> Result<super::Call<T>, OffchainMinerError<T>> {
+	fn restore_solution() -> Result<(super::Call<T>, T::Hash), OffchainMinerError<T>> {
 		StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL)
 			.get()
 			.ok()
@@ -789,7 +834,7 @@ impl<T: super::Config> OffchainWorkerMiner<T> {
 
 	/// Clear a saved solution from OCW storage.
 	fn clear_offchain_solution_cache() {
-		log!(debug, "clearing offchain call cache storage.");
+		sublog!(debug, "unsigned::miner", "clearing offchain call cache storage.");
 		let mut storage = StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL);
 		storage.clear();
 	}
@@ -1153,7 +1198,7 @@ mod base_miner {
 			assert_eq!(paged.solution_pages.len(), 1);
 
 			// this solution must be feasible and submittable.
-			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification
 			load_solution_for_verification(paged.clone());
 			let supports = roll_to_full_verification();
@@ -1235,7 +1280,7 @@ mod base_miner {
 			);
 
 			// this solution must be feasible and submittable.
-			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			BaseMiner::<Runtime>::check_solution(&paged, None, false, "mined").unwrap();
 
 			// it must also be verified in the verifier
 			load_solution_for_verification(paged.clone());
@@ -1319,7 +1364,7 @@ mod base_miner {
 			);
 
 			// this solution must be feasible and submittable.
-			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification
 			load_solution_for_verification(paged.clone());
 			let supports = roll_to_full_verification();
@@ -1395,7 +1440,7 @@ mod base_miner {
 			);
 
 			// this solution must be feasible and submittable.
-			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification.
 			load_solution_for_verification(paged.clone());
 			let supports = roll_to_full_verification();
@@ -1456,7 +1501,7 @@ mod base_miner {
 			let paged = mine_solution(2).unwrap();
 
 			// this solution must be feasible and submittable.
-			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 
 			assert_eq!(
 				paged.solution_pages,
@@ -1486,7 +1531,7 @@ mod base_miner {
 			);
 
 			// this solution must be feasible and submittable.
-			BaseMiner::<Runtime>::full_checks(&paged, "mined").unwrap();
+			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification.
 			load_solution_for_verification(paged.clone());
 			let supports = roll_to_full_verification();
@@ -1600,8 +1645,6 @@ mod offchain_worker_miner {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with_sanity_checks(|| {
 			let offchain_repeat = <Runtime as crate::unsigned::Config>::OffchainRepeat::get();
-
-			// TODO: backport to base pallet: simplify this.
 
 			// first execution -- okay.
 			assert!(OffchainWorkerMiner::<Runtime>::ensure_offchain_repeat_frequency(25).is_ok());

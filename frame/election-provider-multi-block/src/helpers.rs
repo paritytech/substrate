@@ -20,17 +20,26 @@
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
 use crate::{
 	types::{PageIndex, VoterOf},
-	AllVoterPagesOf, VoterPageOf,
+	AllVoterPagesOf,
 };
 use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
+macro_rules! sublog {
+	($level:tt, $sub_pallet:tt, $pattern:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: format!("{}::{}", $crate::LOG_PREFIX, $sub_pallet).as_ref(),
+			concat!("[#{:?}] 🗳  ", $pattern), <frame_system::Pallet<T>>::block_number() $(, $values)*
+		)
+	};
+}
+
 #[macro_export]
 macro_rules! log {
 	($level:tt, $pattern:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
-			target: $crate::LOG_TARGET,
+			target: $crate::LOG_PREFIX,
 			concat!("[#{:?}] 🗳  ", $pattern), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
