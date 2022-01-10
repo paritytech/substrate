@@ -191,6 +191,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_call` for the given input size.
 	CallBase(u32),
 	/// Weight of calling `seal_call_code` for the given input size.
+	#[cfg(feature = "unstable-interface")]
 	CallCode(u32),
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
@@ -267,8 +268,8 @@ impl RuntimeCosts {
 				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
-			CallCode(len) =>
-				s.call_code.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			#[cfg(feature = "unstable-interface")]
+			CallCode(len) => s.call_code.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
 				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
@@ -367,6 +368,7 @@ bitflags! {
 /// Call is to call to another instantiated contract
 enum CallType {
 	Call(u32),
+	#[cfg(feature = "unstable-interface")]
 	CallCode(u32),
 }
 
@@ -718,6 +720,7 @@ where
 	) -> Result<ReturnCode, TrapReason> {
 		let call_cost = match callee {
 			CallType::Call(_) => RuntimeCosts::CallBase(input_data_len),
+			#[cfg(feature = "unstable-interface")]
 			CallType::CallCode(_) => RuntimeCosts::CallCode(input_data_len),
 		};
 		self.charge_gas(call_cost)?;
@@ -734,6 +737,7 @@ where
 		}
 
 		let call_outcome = match callee {
+			#[cfg(feature = "unstable-interface")]
 			CallType::CallCode(code_hash_ptr) => {
 				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
 				self.ext.call_code(code_hash, input_data)

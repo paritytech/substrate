@@ -590,6 +590,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "unstable-interface")]
 	fn contract_call_code() {
 		const CODE: &str = r#"
 (module
