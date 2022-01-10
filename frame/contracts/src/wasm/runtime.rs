@@ -1882,8 +1882,8 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - flags: See [`CallFlags`] for a documenation of the supported flags.
-	// - code_hash: a pointer to the address of the code to be called.
+	// - flags: See [`CallFlags`] for a documentation of the supported flags.
+	// - code_hash: a pointer to the hash of the code to be called.
 	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
 	// - input_data_len: length of the input data buffer.
 	// - output_ptr: a pointer where the output buffer is copied to.
@@ -1897,6 +1897,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::CodeNotFound`
 	[__unstable__] seal_call_code(
 		ctx,
 		flags: u32,

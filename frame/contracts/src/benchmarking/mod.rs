@@ -1348,11 +1348,6 @@ benchmarks! {
 		let hashes_len = hashes_bytes.len();
 		let hashes_offset = 0;
 
-		let value = T::Currency::minimum_balance();
-		assert!(value > 0u32.into());
-		let value_bytes = value.encode();
-		let value_offset = hashes_offset + hashes_len;
-
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -1373,15 +1368,11 @@ benchmarks! {
 					offset: hashes_offset as u32,
 					value: hashes_bytes,
 				},
-				DataSegment {
-					offset: value_offset as u32,
-					value: value_bytes,
-				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Regular(Instruction::I32Const(0)), // flags
 				Counter(hashes_offset as u32, hash_len as u32), // code_hash_ptr
-				Regular(Instruction::I32Const(value_offset as i32)), // input_data_ptr
+				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
@@ -1391,7 +1382,6 @@ benchmarks! {
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
-		instance.set_balance(value * (r * API_BENCHMARK_BATCH_SIZE + 1).into());
 		let callee = instance.addr.clone();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
