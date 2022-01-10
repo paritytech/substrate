@@ -20,6 +20,7 @@
 use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
+use sp_arithmetic::traits::{Bounded, CheckedAdd, CheckedMul, CheckedSub};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -36,7 +37,7 @@ use sp_std::{cmp::Ordering, prelude::*};
 ///    best shot of fully diagnosing the error would be to infer the block number of which the log
 ///    message was emitted, then re-execute that block using `check-block` or `try-runtime`
 ///    subcommands in substrate client.
-trait Defensive<T> {
+pub trait Defensive<T> {
 	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
 	/// docs.
 	fn defensive_unwrap_or(self, other: T) -> T;
@@ -56,7 +57,7 @@ trait Defensive<T> {
 /// Each defensive operation must contain a proof as well, as it should, in principle, be
 /// infallible. The API of this trait expects this proof to be given as a string, which is in turn
 /// printed in the emitting logs and panic stack trace. This can help with easier diagnosis.
-trait DefensiveWithProof<T> {
+pub trait DefensiveWithProof<T> {
 	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
 	/// docs.
 	fn defensive_unwrap_or_proof(self, other: T, proof: &'static str) -> T;
@@ -68,6 +69,31 @@ trait DefensiveWithProof<T> {
 	fn defensive_unwrap_or_default_proof(self, proof: &'static str) -> T
 	where
 		T: Default;
+}
+
+/// A variant of [`Defensive`] with the same rationale, for the arithmetic operations where in case
+/// an infallible operation fails, it saturates.
+pub trait DefensiveSaturating {
+	/// Add `self` and `other` defensively.
+	fn defensive_saturating_add(&mut self, other: Self) -> Self;
+	/// Subtract `other` from `self` defensively.
+	fn defensive_saturating_sub(&mut self, other: Self) -> Self;
+	/// Multiply `self` and `other` defensively.
+	fn defensive_saturating_mul(&mut self, other: Self) -> Self;
+}
+
+// NOTE: A bit unfortunate, since T has to be bound by all the traits needed. Could make it
+// `DefensiveSaturating<T>` to mitigate, but anyways okay for a draft PR.
+impl<T: CheckedAdd + CheckedMul + CheckedSub + Bounded> DefensiveSaturating for T {
+	fn defensive_saturating_add(&mut self, other: Self) -> Self {
+		self.checked_add(&other).defensive_unwrap_or_else(Bounded::max_value)
+	}
+	fn defensive_saturating_mul(&mut self, other: Self) -> Self {
+		self.checked_sub(&other).defensive_unwrap_or_else(Bounded::max_value)
+	}
+	fn defensive_saturating_sub(&mut self, other: Self) -> Self {
+		self.checked_mul(&other).defensive_unwrap_or_else(Bounded::min_value)
+	}
 }
 
 const DEFENSIVE_UNWRAP_PUBLIC_ERROR: &'static str = "a defensive unwrap has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
