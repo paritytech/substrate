@@ -34,8 +34,9 @@ pub fn get<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> {
 			sp_io::default_child_storage::get(storage_key, key).and_then(|v| {
 				Decode::decode(&mut &v[..]).map(Some).unwrap_or_else(|_| {
 					// TODO #3700: error should be handleable.
-					crate::runtime_print!(
-						"ERROR: Corrupted state in child trie at {:?}/{:?}",
+					log::error!(
+						target: "runtime::storage",
+						"Corrupted state in child trie at {:?}/{:?}",
 						storage_key,
 						key,
 					);
