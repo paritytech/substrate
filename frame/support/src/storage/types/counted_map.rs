@@ -285,14 +285,7 @@ where
 	///
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value, OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_values();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_values().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -374,28 +367,14 @@ where
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter().convert_on_removal()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::drain();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::drain().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -420,14 +399,7 @@ where
 	pub fn iter_from(
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_from(starting_raw_key);
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
 }
 
