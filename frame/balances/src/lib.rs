@@ -250,7 +250,6 @@ pub mod pallet {
 		/// Transfer some liquid free balance to another account.
 		///
 		/// `transfer` will set the `FreeBalance` of the sender and receiver.
-		/// It will decrease the total issuance of the system by the `TransferFee`.
 		/// If the sender's account is below the existential deposit as a result
 		/// of the transfer, the account will be reaped.
 		///
@@ -293,7 +292,7 @@ pub mod pallet {
 		/// Set the balances of a given account.
 		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
-		/// also decrease the total issuance of the system (`TotalIssuance`).
+		/// also alter the total issuance of the system (`TotalIssuance`) appropriately.
 		/// If the new free or reserved balance is below the existential deposit,
 		/// it will reset the account nonce (`frame_system::AccountNonce`).
 		///
