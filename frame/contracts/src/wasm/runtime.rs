@@ -171,6 +171,9 @@ pub enum RuntimeCosts {
 	DebugMessage,
 	/// Weight of calling `seal_set_storage` for the given storage item size.
 	SetStorage(u32),
+	/// Weight of calling `seal_set_code_hash`
+	#[cfg(feature = "unstable-interface")]
+	SetCodeHash,
 	/// Weight of calling `seal_clear_storage`.
 	ClearStorage,
 	/// Weight of calling `seal_contains_storage`.
@@ -251,6 +254,8 @@ impl RuntimeCosts {
 			DebugMessage => s.debug_message,
 			SetStorage(len) =>
 				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
+			#[cfg(feature = "unstable-interface")]
+			SetCodeHash => s.set_code_hash,
 			ClearStorage => s.clear_storage,
 			#[cfg(feature = "unstable-interface")]
 			ContainsStorage => s.contains_storage,
@@ -1859,6 +1864,7 @@ define_env!(Env, <E: Ext>,
 	// - requested buffer is not within the bounds of the sandbox memory.
 	// - the buffer contents cannot be decoded as the required type.
 	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
 		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
 		ctx.ext.set_code_hash(code_hash);
 		Ok(ReturnCode::Success)

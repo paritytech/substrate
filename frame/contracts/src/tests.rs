@@ -2813,6 +2813,53 @@ fn call_after_killed_account_needs_funding() {
 }
 
 #[test]
+#[cfg(feature = "unstable-interface")]
+fn set_code_hash() {
+	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
+	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();
+
+	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the 'caller'
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		// upload new code
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
+
+		// First call sets new code_hash and returns 1
+		let result = Contracts::bare_call(
+			ALICE,
+			contract_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			new_code_hash.as_ref().to_vec(),
+			true,
+		)
+		.result
+		.unwrap();
+		assert_return_code!(result, 1);
+
+		// Second calls new contract code that returns 17
+		let result =
+			Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, vec![], true)
+				.result
+				.unwrap();
+		assert_return_code!(result, 17);
+	});
+}
+
+#[test]
 fn contract_reverted() {
 	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
 

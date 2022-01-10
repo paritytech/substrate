@@ -808,6 +808,46 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	seal_set_code_hash {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+		let code_hashes_len = code_hashes_bytes.len();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_set_code_hash",
+				params: vec![
+					ValueType::I32,
+				],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0 as u32,
+					value: code_hashes_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0 as u32, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	seal_set_storage_per_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
 		let key = T::Hashing::hash_of(&1u32).as_ref().to_vec();
