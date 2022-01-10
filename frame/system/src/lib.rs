@@ -1411,8 +1411,8 @@ impl<T: Config> Pallet<T> {
 		AllExtrinsicsLen::<T>::put(len as u32);
 	}
 
-	/// Reset events. Can be used as an alternative to
-	/// `initialize` for tests that don't need to bother with the other environment entries.
+	/// Reset events. This needs to be used in addition with `initialize` for each new block
+	/// to clear events from previous block.
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
