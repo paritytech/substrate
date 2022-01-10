@@ -4227,17 +4227,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "memory-db"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d505169b746dacf02f7d14d8c80b34edfd8212159c63d23c977739a0d960c626"
-dependencies = [
- "hash-db",
- "hashbrown 0.11.2",
- "parity-util-mem",
-]
-
-[[package]]
 name = "memory_units"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9980,7 +9969,7 @@ dependencies = [
  "criterion",
  "hash-db",
  "hex-literal",
- "memory-db 0.28.0",
+ "memory-db",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -10001,7 +9990,6 @@ dependencies = [
  "parity-wasm 0.42.2",
  "scale-info",
  "serde",
- "sp-core-hashing-proc-macro",
  "sp-runtime",
  "sp-std",
  "sp-version-proc-macro",
@@ -10274,7 +10262,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "futures 0.3.16",
  "log 0.4.14",
- "memory-db 0.27.0",
+ "memory-db",
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
@@ -10926,14 +10914,14 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 
 [[package]]
 name = "trie-bench"
-version = "0.29.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36ac46f6503d0fa976193db46f9dbb1d454e5dbde76495f1316f576c7f3f0e6b"
+checksum = "4edd9bdf0c2e08fd77c0fb2608179cac7ebed997ae18f58d47a2d96425ff51f0"
 dependencies = [
  "criterion",
  "hash-db",
  "keccak-hasher",
- "memory-db 0.28.0",
+ "memory-db",
  "parity-scale-codec",
  "trie-db",
  "trie-root",
@@ -10942,9 +10930,9 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.23.0"
+version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3ddae50680c12ef75bfbf58416ca6622fa43d879553f6cb2ed1a817346e1ffe"
+checksum = "9eac131e334e81b6b3be07399482042838adcd7957aa0010231d0813e39e02fa"
 dependencies = [
  "hash-db",
  "hashbrown 0.11.2",
@@ -10955,9 +10943,9 @@ dependencies = [
 
 [[package]]
 name = "trie-root"
-version = "0.17.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a36c5ca3911ed3c9a5416ee6c679042064b93fc637ded67e25f92e68d783891"
+checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
  "hash-db",
 ]

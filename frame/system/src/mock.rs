@@ -53,7 +53,6 @@ parameter_types! {
 		impl_version: 1,
 		apis: sp_version::create_apis_vec!([]),
 		transaction_version: 1,
-		state_version: 1,
 	};
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 10,

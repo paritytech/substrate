@@ -23,7 +23,7 @@ use crate::{
 };
 use codec::Encode;
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
+use sp_core::storage::{ChildInfo, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_std::vec::Vec;
@@ -140,7 +140,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord;
@@ -152,7 +151,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
-		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord;
@@ -178,6 +176,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
+
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
@@ -187,7 +186,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_deltas: impl Iterator<
 			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
-		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord + Encode,
@@ -196,8 +194,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
-			let (child_root, empty, child_txs) =
-				self.child_storage_root(&child_info, child_delta, state_version);
+			let (child_root, empty, child_txs) = self.child_storage_root(&child_info, child_delta);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -210,7 +207,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			delta
 				.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))
 				.chain(child_roots.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))),
-			state_version,
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -290,11 +286,7 @@ impl Consolidate for Vec<(Option<ChildInfo>, StorageCollection)> {
 	}
 }
 
-impl<H, KF> Consolidate for sp_trie::GenericMemoryDB<H, KF>
-where
-	H: Hasher,
-	KF: sp_trie::KeyFunction<H>,
-{
+impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMemoryDB<H, KF> {
 	fn consolidate(&mut self, other: Self) {
 		sp_trie::GenericMemoryDB::consolidate(self, other)
 	}

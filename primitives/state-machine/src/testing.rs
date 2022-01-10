@@ -32,7 +32,7 @@ use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{is_child_storage_key, CODE},
-		StateVersion, Storage,
+		Storage,
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
@@ -54,8 +54,6 @@ where
 	pub backend: InMemoryBackend<H>,
 	/// Extensions.
 	pub extensions: Extensions,
-	/// State version to use during tests.
-	pub state_version: StateVersion,
 }
 
 impl<H: Hasher> TestExternalities<H>
@@ -74,31 +72,18 @@ where
 
 	/// Create a new instance of `TestExternalities` with storage.
 	pub fn new(storage: Storage) -> Self {
-		Self::new_with_code_and_state(&[], storage, Default::default())
-	}
-
-	/// Create a new instance of `TestExternalities` with storage for a given state version.
-	pub fn new_with_state_version(storage: Storage, state_version: StateVersion) -> Self {
-		Self::new_with_code_and_state(&[], storage, state_version)
+		Self::new_with_code(&[], storage)
 	}
 
 	/// New empty test externalities.
 	pub fn new_empty() -> Self {
-		Self::new_with_code_and_state(&[], Storage::default(), Default::default())
+		Self::new_with_code(&[], Storage::default())
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], storage: Storage) -> Self {
-		Self::new_with_code_and_state(code, storage, Default::default())
-	}
+	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
+		let overlay = OverlayedChanges::default();
 
-	/// Create a new instance of `TestExternalities` with code and storage for a given state
-	/// version.
-	pub fn new_with_code_and_state(
-		code: &[u8],
-		mut storage: Storage,
-		state_version: StateVersion,
-	) -> Self {
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
@@ -109,15 +94,12 @@ where
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
-		let backend = (storage, state_version).into();
-
 		TestExternalities {
-			overlay: OverlayedChanges::default(),
+			overlay,
 			offchain_db,
 			extensions,
-			backend,
+			backend: storage.into(),
 			storage_transaction_cache: Default::default(),
-			state_version,
 		}
 	}
 
@@ -138,14 +120,14 @@ where
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
-		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
+		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
 	}
 
 	/// Insert key/value into backend.
 	///
 	/// This only supports inserting keys in child tries.
 	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
-		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])], self.state_version);
+		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])]);
 	}
 
 	/// Registers the given extension for this instance.
@@ -169,7 +151,7 @@ where
 			))
 		}
 
-		self.backend.update(transaction, self.state_version)
+		self.backend.update(transaction)
 	}
 
 	/// Commit all pending changes to the underlying backend.
@@ -182,7 +164,6 @@ where
 			&self.backend,
 			Default::default(),
 			&mut Default::default(),
-			self.state_version,
 		)?;
 
 		self.backend
@@ -259,8 +240,7 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	fn default() -> Self {
-		// default to default version.
-		Self::new_with_state_version(Storage::default(), Default::default())
+		Self::new(Default::default())
 	}
 }
 
@@ -269,16 +249,7 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	fn from(storage: Storage) -> Self {
-		Self::new_with_state_version(storage, Default::default())
-	}
-}
-
-impl<H: Hasher> From<(Storage, StateVersion)> for TestExternalities<H>
-where
-	H::Out: Ord + 'static + codec::Codec,
-{
-	fn from((storage, state_version): (Storage, StateVersion)) -> Self {
-		Self::new_with_state_version(storage, state_version)
+		Self::new(storage)
 	}
 }
 
@@ -338,15 +309,14 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
-		let storage = Storage::default(); // avoid adding the trie threshold.
-		let mut ext = TestExternalities::<BlakeTwo256>::from((storage, Default::default()));
+		let mut ext = TestExternalities::<BlakeTwo256>::default();
 		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		let root =
 			H256::from(hex!("ed4d8c799d996add422395a6abd7545491d40bd838d738afafa1b8a4de625489"));
-		assert_eq!(H256::from_slice(ext.storage_root(Default::default()).as_slice()), root);
+		assert_eq!(H256::from_slice(ext.storage_root().as_slice()), root);
 	}
 
 	#[test]

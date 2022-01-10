@@ -24,11 +24,9 @@ use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
 #[cfg(feature = "std")]
 use sp_core::hexdisplay::HexDisplay;
-use sp_core::storage::{
-	well_known_keys::is_child_storage_key, ChildInfo, StateVersion, TrackedStorageKey,
-};
+use sp_core::storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey};
 use sp_externalities::{Extension, ExtensionStore, Externalities};
-use sp_trie::{empty_child_trie_root, LayoutV1};
+use sp_trie::{empty_child_trie_root, trie_types::Layout};
 
 use crate::{log_error, trace, warn, StorageTransactionCache};
 use sp_std::{
@@ -507,7 +505,7 @@ where
 		StorageAppend::new(current_value).append(value);
 	}
 
-	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
+	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
 			trace!(
@@ -520,9 +518,7 @@ where
 			return root.encode()
 		}
 
-		let root =
-			self.overlay
-				.storage_root(self.backend, self.storage_transaction_cache, state_version);
+		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
 		trace!(
 			target: "state",
 			method = "StorageRoot",
@@ -533,11 +529,7 @@ where
 		root.encode()
 	}
 
-	fn child_storage_root(
-		&mut self,
-		child_info: &ChildInfo,
-		state_version: StateVersion,
-	) -> Vec<u8> {
+	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8> {
 		let _guard = guard();
 		let storage_key = child_info.storage_key();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
@@ -545,8 +537,7 @@ where
 			let root = self
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
-				// V1 is equivalent to V0 on empty root.
-				.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
+				.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
 			trace!(
 				target: "state",
 				method = "ChildStorageRoot",
@@ -559,7 +550,7 @@ where
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta, state_version))
+				Some(self.backend.child_storage_root(info, delta))
 			} else {
 				None
 			};
@@ -592,8 +583,7 @@ where
 				let root = self
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
-					// V1 is equivalent to V0 on empty root.
-					.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
+					.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
 
 				trace!(
 					target: "state",
@@ -658,12 +648,7 @@ where
 			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
 		}
 		self.overlay
-			.drain_storage_changes(
-				self.backend,
-				Default::default(),
-				self.storage_transaction_cache,
-				Default::default(), // using any state
-			)
+			.drain_storage_changes(self.backend, Default::default(), self.storage_transaction_cache)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
@@ -673,19 +658,12 @@ where
 	}
 
 	fn commit(&mut self) {
-		// Bench always use latest state.
-		let state_version = StateVersion::default();
 		for _ in 0..self.overlay.transaction_depth() {
 			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
 		let changes = self
 			.overlay
-			.drain_storage_changes(
-				self.backend,
-				Default::default(),
-				self.storage_transaction_cache,
-				state_version,
-			)
+			.drain_storage_changes(self.backend, Default::default(), self.storage_transaction_cache)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend
 			.commit(
@@ -900,18 +878,15 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(vec![20], None);
 		overlay.set_storage(vec![30], Some(vec![31]));
-		let backend = (
-			Storage {
-				top: map![
-					vec![10] => vec![10],
-					vec![20] => vec![20],
-					vec![40] => vec![40]
-				],
-				children_default: map![],
-			},
-			StateVersion::default(),
-		)
-			.into();
+		let backend = Storage {
+			top: map![
+				vec![10] => vec![10],
+				vec![20] => vec![20],
+				vec![40] => vec![40]
+			],
+			children_default: map![],
+		}
+		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None);
 
@@ -949,16 +924,13 @@ mod tests {
 		overlay.set_storage(vec![27], None);
 		overlay.set_storage(vec![28], None);
 		overlay.set_storage(vec![29], None);
-		let backend = (
-			Storage {
-				top: map![
-					vec![30] => vec![30]
-				],
-				children_default: map![],
-			},
-			StateVersion::default(),
-		)
-			.into();
+		let backend = Storage {
+			top: map![
+				vec![30] => vec![30]
+			],
+			children_default: map![],
+		}
+		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None);
 
@@ -976,23 +948,20 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(child_info, vec![20], None);
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
-		let backend = (
-			Storage {
-				top: map![],
-				children_default: map![
-					child_info.storage_key().to_vec() => StorageChild {
-						data: map![
-							vec![10] => vec![10],
-							vec![20] => vec![20],
-							vec![40] => vec![40]
-						],
-						child_info: child_info.to_owned(),
-					}
-				],
-			},
-			StateVersion::default(),
-		)
-			.into();
+		let backend = Storage {
+			top: map![],
+			children_default: map![
+				child_info.storage_key().to_vec() => StorageChild {
+					data: map![
+						vec![10] => vec![10],
+						vec![20] => vec![20],
+						vec![40] => vec![40]
+					],
+					child_info: child_info.to_owned(),
+				}
+			],
+		}
+		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None);
 
@@ -1024,23 +993,20 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(child_info, vec![20], None);
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
-		let backend = (
-			Storage {
-				top: map![],
-				children_default: map![
-					child_info.storage_key().to_vec() => StorageChild {
-						data: map![
-							vec![10] => vec![10],
-							vec![20] => vec![20],
-							vec![30] => vec![40]
-						],
-						child_info: child_info.to_owned(),
-					}
-				],
-			},
-			StateVersion::default(),
-		)
-			.into();
+		let backend = Storage {
+			top: map![],
+			children_default: map![
+				child_info.storage_key().to_vec() => StorageChild {
+					data: map![
+						vec![10] => vec![10],
+						vec![20] => vec![20],
+						vec![30] => vec![40]
+					],
+					child_info: child_info.to_owned(),
+				}
+			],
+		}
+		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None);
 
@@ -1066,21 +1032,18 @@ mod tests {
 		let child_info = &child_info;
 		let mut cache = StorageTransactionCache::default();
 		let mut overlay = OverlayedChanges::default();
-		let backend = (
-			Storage {
-				top: map![],
-				children_default: map![
-					child_info.storage_key().to_vec() => StorageChild {
-						data: map![
-							vec![30] => vec![40]
-						],
-						child_info: child_info.to_owned(),
-					}
-				],
-			},
-			StateVersion::default(),
-		)
-			.into();
+		let backend = Storage {
+			top: map![],
+			children_default: map![
+				child_info.storage_key().to_vec() => StorageChild {
+					data: map![
+						vec![30] => vec![40]
+					],
+					child_info: child_info.to_owned(),
+				}
+			],
+		}
+		.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None);
 

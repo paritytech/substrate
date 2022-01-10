@@ -58,7 +58,7 @@ where
 	};
 
 	if let Some(uri) = command.state.live_uri() {
-		let (expected_spec_name, expected_spec_version, _) =
+		let (expected_spec_name, expected_spec_version) =
 			local_spec::<Block, ExecDispatch>(&ext, &executor);
 		ensure_matching_spec::<Block>(
 			uri,
