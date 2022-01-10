@@ -23,6 +23,158 @@ use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
+/// A trait to handle errors and options when you are really sure that a condition must hold, but
+/// not brave enough to `expect` on it, or a default fallback value makes more sense.
+///
+/// Each function in this trait will have two side effects, aside from behaving exactly as the name
+/// would suggest:
+///
+/// 1. It panics on `#[debug_assertions]`, so if the infallible code is reached in any of the tests,
+///    you realize.
+/// 2. It will log a warning using the runtime logging system. This might help you detect such bugs
+///    in production as well. Note that the log message, as of now, are not super expressive. Your
+///    best shot of fully diagnosing the error would be to infer the block number of which the log
+///    message was emitted, then re-execute that block using `check-block` or `try-runtime`
+///    subcommands in substrate client.
+trait Defensive<T> {
+	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
+	/// docs.
+	fn defensive_unwrap_or(self, other: T) -> T;
+	/// Exactly the same as `unwrap_or_else`, but it does the defensive warnings explained in the
+	/// trait docs.
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T;
+	/// Exactly the same as `unwrap_or_default`, but it does the defensive warnings explained in the
+	/// trait docs.
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default;
+}
+
+/// Same as [`Defensive`], but it fixes the second issue (logs not being expressive) at the cost of
+/// having a more verbose API.
+///
+/// Each defensive operation must contain a proof as well, as it should, in principle, be
+/// infallible. The API of this trait expects this proof to be given as a string, which is in turn
+/// printed in the emitting logs and panic stack trace. This can help with easier diagnosis.
+trait DefensiveWithProof<T> {
+	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
+	/// docs.
+	fn defensive_unwrap_or_proof(self, other: T, proof: &'static str) -> T;
+	/// Exactly the same as `unwrap_or_else`, but it does the defensive warnings explained in the
+	/// trait docs.
+	fn defensive_unwrap_or_else_proof<F: FnOnce() -> T>(self, f: F, proof: &'static str) -> T;
+	/// Exactly the same as `unwrap_or_default`, but it does the defensive warnings explained in the
+	/// trait docs.
+	fn defensive_unwrap_or_default_proof(self, proof: &'static str) -> T
+	where
+		T: Default;
+}
+
+const DEFENSIVE_UNWRAP_PUBLIC_ERROR: &'static str = "a defensive unwrap has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
+const DEFENSIVE_UNWRAP_INTERNAL_ERROR: &'static str = "Defensive unwrap has been triggered!";
+
+impl<T> Defensive<T> for Option<T> {
+	fn defensive_unwrap_or(self, or: T) -> T {
+		match self {
+			Some(inner) => inner,
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_UNWRAP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_UNWRAP_PUBLIC_ERROR
+				);
+				or
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
+		match self {
+			Some(inner) => inner,
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_UNWRAP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_UNWRAP_PUBLIC_ERROR
+				);
+				f()
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default,
+	{
+		match self {
+			Some(inner) => inner,
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_UNWRAP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_UNWRAP_PUBLIC_ERROR
+				);
+				Default::default()
+			},
+		}
+	}
+}
+impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
+	fn defensive_unwrap_or(self, or: T) -> T {
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_UNWRAP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_UNWRAP_PUBLIC_ERROR,
+					e
+				);
+				or
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_UNWRAP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_UNWRAP_PUBLIC_ERROR,
+					e
+				);
+				f()
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default,
+	{
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_UNWRAP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_UNWRAP_PUBLIC_ERROR,
+					e
+				);
+				Default::default()
+			},
+		}
+	}
+}
+
 /// Try and collect into a collection `C`.
 pub trait TryCollect<C> {
 	type Error;
