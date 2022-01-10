@@ -14,6 +14,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
 use sp_runtime::traits::Saturating;
+use sp_std::prelude::*;
 
 pub struct CountedStorageDoubleMap<
 	Prefix,
@@ -202,7 +203,6 @@ where
 		Self::iter_prefix_values(Ref::from(&k1)).for_each(|_| {
 			on_remove += 1;
 		});
-		dbg!(&on_remove);
 		CounterFor::<Prefix>::mutate(|value| {
 			*value = value.saturating_sub(on_remove);
 		});
