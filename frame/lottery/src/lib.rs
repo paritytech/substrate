@@ -407,7 +407,7 @@ impl<T: Config> Pallet<T> {
 	fn calls_to_indices(
 		calls: &[<T as Config>::Call],
 	) -> Result<BoundedVec<CallIndex, T::MaxCalls>, DispatchError> {
-		let mut indices = BoundedVec::<CallIndex, T::MaxCalls>::default();
+		let mut indices = BoundedVec::<CallIndex, T::MaxCalls>::with_bounded_capacity(calls.len());
 		for c in calls.iter() {
 			let index = Self::call_to_index(c)?;
 			indices.try_push(index).map_err(|_| Error::<T>::TooManyCalls)?;
