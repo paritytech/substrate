@@ -303,11 +303,7 @@ where
 		if Self::runtime_upgraded() {
 			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
-		<frame_system::Pallet<System>>::initialize(
-			block_number,
-			parent_hash,
-			digest,
-		);
+		<frame_system::Pallet<System>>::initialize(block_number, parent_hash, digest);
 		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
 			System::BlockNumber,
 		>>::on_initialize(*block_number));
@@ -544,11 +540,7 @@ where
 		// OffchainWorker RuntimeApi should skip initialization.
 		let digests = header.digest().clone();
 
-		<frame_system::Pallet<System>>::initialize(
-			header.number(),
-			header.parent_hash(),
-			&digests,
-		);
+		<frame_system::Pallet<System>>::initialize(header.number(), header.parent_hash(), &digests);
 
 		// Frame system only inserts the parent hash into the block hashes as normally we don't know
 		// the hash for the header before. However, here we are aware of the hash and we can add it

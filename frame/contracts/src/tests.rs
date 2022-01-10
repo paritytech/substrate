@@ -533,7 +533,8 @@ fn run_out_of_gas() {
 }
 
 fn initialize_block(number: u64) {
-	System::initialize(&number, &[0u8; 32].into(), &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 #[test]

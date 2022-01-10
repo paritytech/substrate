@@ -41,11 +41,7 @@ fn new_block() -> u64 {
 	LEAF_DATA.with(|r| r.borrow_mut().a = number);
 
 	frame_system::Pallet::<Test>::reset_events();
-	frame_system::Pallet::<Test>::initialize(
-		&number,
-		&hash,
-		&Default::default(),
-	);
+	frame_system::Pallet::<Test>::initialize(&number, &hash, &Default::default());
 	MMR::on_initialize(number)
 }
 
