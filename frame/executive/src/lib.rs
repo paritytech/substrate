@@ -824,6 +824,7 @@ mod tests {
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
+			System::deposit_event(frame_system::Event::CodeUpdated);
 			100
 		}
 	}
@@ -1287,6 +1288,30 @@ mod tests {
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+		});
+	}
+
+	#[test]
+	fn event_from_runtime_upgrade_is_included() {
+		new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| {
+				*v.borrow_mut() =
+					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			});
+
+			// set block number to non zero so events are not exlcuded
+			System::set_block_number(1);
+
+			Executive::initialize_block(&Header::new(
+				2,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			System::assert_last_event(frame_system::Event::<Runtime>::CodeUpdated.into());
 		});
 	}
 
