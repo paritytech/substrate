@@ -1,25 +1,44 @@
 #!/usr/bin/env bash
 # set -x
 
+# This script manages the deployment of Substrate rustdocs to https://paritytech.github.io/substrate/.
+# - With `deploy` sub-command, it will checkout the passed-in branch/tag ref, build the rustdocs
+#   locally (this takes some time), update the `index.html` index page, and push it to remote
+#   `gh-pages` branch. So users running this command need to have write access to the remote
+#   `gh-pages` branch. This sub-command depends on [@jimmychu0807/index-tpl-crud](https://www.npmjs.com/package/@jimmychu0807/index-tpl-crud)
+#   to update the DOM of index.html page.
+# - With `remove` sub-command, it will remove the deployed rustdocs from `gh-pages`, and update the
+#   index.html page as necessary. It may remove the `latest` symbolic link.
+#
 # Examples:
+#   # Showing help text
 #   rustdocs-release.sh -h
+#
+#   # Deploy rustdocs of `monthly-2021-10` tag
 #   rustdocs-release.sh deploy monthly-2021-10
+#
+#   # In addition to the above, the `latest` symlink will point to this version of rustdocs
 #   rustdocs-release.sh deploy -l monthly-2021-10
+#
+#   # Remove the rustdocs of `monthly-2021-10` from `gh-pages`.
 #   rustdocs-release.sh remove monthly-2021-10
+#
+# Dependencies:
+#   - @jimmychu0807/index-tpl-crud - https://www.npmjs.com/package/@jimmychu0807/index-tpl-crud
+#
 
 # Script setting
-
 # The git repo http URL
 REMOTE_REPO="https://github.com/paritytech/substrate.git"
 TMP_PREFIX="/tmp"                             # tmp location that the built doc is copied to.
 DOC_INDEX_PAGE="sc_service/index.html"
 
-# Set to `true` if using cargo `nightly` toolchain to build the doc, or set to `false` to use
-#   cargo default toolchain. This is case when you pin a certain nightly version to your default
-#   toolchain.
+# Set to `true` if using cargo `nightly` toolchain to build the doc.
+# Set to `false` to use the default cargo toolchain. This is preferred if you want to build
+# the rustdocs with a pinned nightly version set to your default toolchain.
 CARGO_NIGHTLY=false
 
-# Set this git remote if it isn't the default `origin`
+# Set the git remote name. Most of the time the default is `origin`.
 GIT_REMOTE="origin"
 LATEST=false
 
