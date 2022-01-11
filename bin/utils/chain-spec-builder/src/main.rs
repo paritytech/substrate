@@ -275,7 +275,7 @@ fn main() -> Result<(), String> {
 				chain_spec::get_account_id_from_seed::<sr25519::Public>(&sudo_seed).to_ss58check();
 
 			(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)
-		}
+		},
 		ChainSpecBuilder::New {
 			authority_seeds,
 			nominator_accounts,

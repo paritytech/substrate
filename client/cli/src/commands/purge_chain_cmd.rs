@@ -61,11 +61,11 @@ impl PurgeChainCmd {
 			let input = input.trim();
 
 			match input.chars().nth(0) {
-				Some('y') | Some('Y') => {}
+				Some('y') | Some('Y') => {},
 				_ => {
 					println!("Aborted");
-					return Ok(());
-				}
+					return Ok(())
+				},
 			}
 		}
 
@@ -73,11 +73,11 @@ impl PurgeChainCmd {
 			Ok(_) => {
 				println!("{:?} removed.", &db_path);
 				Ok(())
-			}
+			},
 			Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
 				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
-			}
+			},
 			Err(err) => Result::Err(err.into()),
 		}
 	}

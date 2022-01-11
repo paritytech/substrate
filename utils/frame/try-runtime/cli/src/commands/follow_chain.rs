@@ -79,12 +79,12 @@ where
 			Ok(Some(header)) => header,
 			Ok(None) => {
 				log::warn!("subscription returned `None`. Probably decoding has failed.");
-				break;
-			}
+				break
+			},
 			Err(why) => {
 				log::warn!("subscription returned error: {:?}.", why);
-				continue;
-			}
+				continue
+			},
 		};
 
 		let hash = header.hash();

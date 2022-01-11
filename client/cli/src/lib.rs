@@ -134,9 +134,9 @@ pub trait SubstrateCli: Sized {
 			.about(about.as_str())
 			.version(full_version.as_str())
 			.setting(
-				AppSettings::PropagateVersion
-					| AppSettings::ArgsNegateSubcommands
-					| AppSettings::SubcommandsNegateReqs,
+				AppSettings::PropagateVersion |
+					AppSettings::ArgsNegateSubcommands |
+					AppSettings::SubcommandsNegateReqs,
 			);
 
 		let matches = match app.try_get_matches_from(iter) {

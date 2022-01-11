@@ -80,11 +80,11 @@ impl ExecuteBlockCmd {
 			(Some(block_at), State::Live { .. }) => {
 				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
 				hash_of::<Block>(&block_at)
-			}
+			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
 			_ => {
 				panic!("either `--block-at` must be provided, or state must be `live with a proper `--at``");
-			}
+			},
 		}
 	}
 
@@ -98,11 +98,11 @@ impl ExecuteBlockCmd {
 			(Some(block_ws_uri), State::Live { .. }) => {
 				log::error!(target: LOG_TARGET, "--block-uri is provided while state type is live, Are you sure you know what you are doing?");
 				block_ws_uri.to_owned()
-			}
+			},
 			(None, State::Live { uri, .. }) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--block-uri` must be provided, or state must be `live`");
-			}
+			},
 		}
 	}
 }

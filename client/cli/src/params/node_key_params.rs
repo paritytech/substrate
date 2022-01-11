@@ -107,7 +107,7 @@ impl NodeKeyParams {
 				};
 
 				NodeKeyConfig::Ed25519(secret)
-			}
+			},
 		})
 	}
 }
@@ -149,9 +149,7 @@ mod tests {
 				params.node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 && &sk[..] == ski.as_ref() =>
-					{
-						Ok(())
-					}
+						Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into())),
 				})
 			})
@@ -176,7 +174,7 @@ mod tests {
 				.expect("Creates node key pair");
 
 			match node_key {
-				Keypair::Ed25519(ref pair) if pair.secret().as_ref() == key.as_ref() => {}
+				Keypair::Ed25519(ref pair) if pair.secret().as_ref() == key.as_ref() => {},
 				_ => panic!("Invalid key"),
 			}
 		}
@@ -211,9 +209,7 @@ mod tests {
 				params.node_key(net_config_dir).and_then(move |c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 						if typ == NodeKeyType::Ed25519 && f == &dir.join(NODE_KEY_ED25519_FILE) =>
-					{
-						Ok(())
-					}
+						Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into())),
 				})
 			})

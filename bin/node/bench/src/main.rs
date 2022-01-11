@@ -175,7 +175,7 @@ fn main() {
 				println!("{}: {}", benchmark.name(), benchmark.path().full())
 			}
 		}
-		return;
+		return
 	}
 
 	let mut results = Vec::new();

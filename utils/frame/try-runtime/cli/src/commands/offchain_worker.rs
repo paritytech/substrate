@@ -72,11 +72,11 @@ impl OffchainWorkerCmd {
 			(Some(header_at), State::Live { .. }) => {
 				log::error!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
 				hash_of::<Block>(&header_at)
-			}
+			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
 			_ => {
 				panic!("either `--header-at` must be provided, or state must be `live` with a proper `--at`");
-			}
+			},
 		}
 	}
 
@@ -90,11 +90,11 @@ impl OffchainWorkerCmd {
 			(Some(header_ws_uri), State::Live { .. }) => {
 				log::error!(target: LOG_TARGET, "--header-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
 				header_ws_uri.to_owned()
-			}
+			},
 			(None, State::Live { uri, .. }) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--header-uri` must be provided, or state must be `live`");
-			}
+			},
 		}
 	}
 }

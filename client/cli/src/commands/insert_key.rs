@@ -71,7 +71,7 @@ impl InsertKeyCmd {
 				let public = with_crypto_scheme!(self.scheme, to_vec(&suri, password.clone()))?;
 				let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(path, password)?);
 				(keystore, public)
-			}
+			},
 			_ => unreachable!("keystore_config always returns path and password; qed"),
 		};
 

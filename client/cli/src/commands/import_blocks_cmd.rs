@@ -78,7 +78,7 @@ impl ImportBlocksCmd {
 				let mut buffer = Vec::new();
 				io::stdin().read_to_end(&mut buffer)?;
 				Box::new(io::Cursor::new(buffer))
-			}
+			},
 		};
 
 		import_blocks(client, import_queue, file, false, self.binary)
