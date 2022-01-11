@@ -243,6 +243,7 @@ impl<T> Lookup for IdentityLookup<T> {
 }
 
 /// A lookup implementation returning the `AccountId` from a `MultiAddress`.
+#[derive(Default)]
 pub struct AccountIdLookup<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
 impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, AccountIndex>
 where
