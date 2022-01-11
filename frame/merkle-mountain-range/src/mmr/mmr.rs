@@ -49,8 +49,9 @@ where
 }
 
 /// Stateless verification of the proof for a batch of leaves.
-/// Note, the leaves should be sorted such that each corresponding leafs and leaf indices have the
-/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the proof
+/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
+/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
+/// [primitives::BatchProof]
 pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
 	leaves: Vec<Node<H, L>>,
@@ -122,9 +123,9 @@ where
 	}
 
 	/// Verify proof of a single leaf.
-	/// Note, the leaves should be sorted such that each corresponding leafs and leaf indices have
+	/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have
 	/// the same position in both the `leaves` vector and the `leaf_indices` vector contained in the
-	/// proof
+	/// [primitives::BatchProof]
 	pub fn verify_leaves_proof(
 		&self,
 		leaves: Vec<L>,
