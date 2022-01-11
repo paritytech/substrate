@@ -351,6 +351,17 @@ impl_leaf_data_for_tuple!(A:0, B:1, C:2);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
 
+/// A MMR proof data for a group of leaves.
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
+pub struct BatchProof<Hash> {
+	/// The indices of the leaves the proof is for.
+	pub leaf_indices: Vec<LeafIndex>,
+	/// Number of leaves in MMR, when the proof was generated.
+	pub leaf_count: NodeIndex,
+	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
+	pub items: Vec<Hash>,
+}
+
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
@@ -417,6 +428,25 @@ sp_api::decl_runtime_apis! {
 
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
+		/// Generate MMR proof for a series of leaves under given indices.
+		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>) -> Result<(Vec<(EncodableOpaqueLeaf, LeafIndex)>, BatchProof<Hash>), Error>;
+
+		/// Verify MMR proof against on-chain MMR for a batch of leaves.
+		///
+		/// Note this function will use on-chain MMR root hash and check if the proof
+		/// matches the hash.
+		/// Leaves must be sorted in same order as the leaf indices in the proof
+		fn verify_batch_proof(leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>) -> Result<(), Error>;
+
+		/// Verify MMR proof against given root hash or a batch of leaves.
+		///
+		/// Note this function does not require any on-chain storage - the
+		/// proof is verified against given MMR root hash.
+		///
+		/// The leaf data is expected to be encoded in it's compact form.
+		/// Leaves must be sorted in same order as the leaf indices in the proof
+		fn verify_batch_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>)
+			-> Result<(), Error>;
 	}
 }
 
