@@ -45,7 +45,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 				.unwrap(),
 		);
 
-		common::wait_n_finalized_blocks(3, 30).await.unwrap();
+		common::wait_n_finalized_blocks(3, 60).await.expect("Blocks are produced in time");
 		assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
 		kill(Pid::from_raw(cmd.id().try_into().unwrap()), signal).unwrap();
 		assert_eq!(
