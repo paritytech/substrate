@@ -1828,17 +1828,17 @@ impl_runtime_apis! {
 			-> Result<(Vec<(mmr::EncodableOpaqueLeaf, pallet_mmr::primitives::LeafIndex)>, mmr::BatchProof<mmr::Hash>), mmr::Error>
 		{
 			Mmr::generate_batch_proof(leaf_indices)
-				.map(|(leaves, proof)| (leaves.into_iter().map(|(pos, leaf)| (mmr::EncodableOpaqueLeaf::from_leaf(&leaf), pos)).collect(), proof))
+				.map(|(leaves, proof)| (leaves.into_iter().map(|(leaf, pos)| (mmr::EncodableOpaqueLeaf::from_leaf(&leaf), pos)).collect(), proof))
 		}
 
 		fn verify_batch_proof(leaves: Vec<mmr::EncodableOpaqueLeaf>, proof: mmr::BatchProof<mmr::Hash>)
 			-> Result<(), mmr::Error>
 		{
-			let leaf = leaves.into_iter().map(|leaf|
+			let leaves = leaves.into_iter().map(|leaf|
 				leaf.into_opaque_leaf()
 				.try_decode()
-				.ok_or(mmr::Error::Verify)).collect::<Result<Vec<mmr::Leaf >>, mmr::Error>()?;
-			Mmr::verify_leaves(leaf, proof)
+				.ok_or(mmr::Error::Verify)).collect::<Result<Vec<mmr::Leaf>, mmr::Error>>()?;
+			Mmr::verify_leaves(leaves, proof)
 		}
 
 		fn verify_batch_proof_stateless(
