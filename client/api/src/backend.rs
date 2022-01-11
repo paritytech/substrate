@@ -70,7 +70,7 @@ pub struct ImportSummary<Block: BlockT> {
 	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
 }
 
-/// Import operation wrapper
+/// Import operation wrapper.
 pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	/// DB Operation.
 	pub op: B::BlockImportOperation,
