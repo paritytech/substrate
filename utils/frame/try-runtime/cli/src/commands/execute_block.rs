@@ -26,25 +26,25 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::ExecuteBlock`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// Overwrite the wasm code in state or not.
-	#[structopt(long)]
+	#[clap(long)]
 	overwrite_wasm_code: bool,
 
 	/// If set, then the state root check is disabled by the virtue of calling into
 	/// `TryRuntime_execute_block_no_check` instead of
 	/// `Core_execute_block`.
-	#[structopt(long)]
+	#[clap(long)]
 	no_check: bool,
 
 	/// The block hash at which to fetch the block.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = crate::parse::hash)
 	)]
 	block_at: Option<String>,
@@ -53,9 +53,9 @@ pub struct ExecuteBlockCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = crate::parse::url)
 	)]
 	block_ws_uri: Option<String>,
@@ -65,7 +65,7 @@ pub struct ExecuteBlockCmd {
 	/// For this command only, if the `live` is used, then state of the parent block is fetched.
 	///
 	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	state: State,
 }
 
@@ -80,11 +80,11 @@ impl ExecuteBlockCmd {
 			(Some(block_at), State::Live { .. }) => {
 				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
 				hash_of::<Block>(&block_at)
-			},
+			}
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
 			_ => {
 				panic!("either `--block-at` must be provided, or state must be `live with a proper `--at``");
-			},
+			}
 		}
 	}
 
@@ -98,11 +98,11 @@ impl ExecuteBlockCmd {
 			(Some(block_ws_uri), State::Live { .. }) => {
 				log::error!(target: LOG_TARGET, "--block-uri is provided while state type is live, Are you sure you know what you are doing?");
 				block_ws_uri.to_owned()
-			},
+			}
 			(None, State::Live { uri, .. }) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--block-uri` must be provided, or state must be `live`");
-			},
+			}
 		}
 	}
 }

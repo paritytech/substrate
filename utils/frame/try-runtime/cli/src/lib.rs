@@ -293,7 +293,7 @@ pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &'static str = "try-runtime::cli";
 
 /// Possible commands of `try-runtime`.
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Subcommand)]
 pub enum Command {
 	/// Execute the migrations of the "local runtime".
 	///
@@ -373,70 +373,70 @@ pub enum Command {
 }
 
 /// Shared parameters of the `try-runtime` commands
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct SharedParams {
 	/// Shared parameters of substrate cli.
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[structopt(
+	#[clap(
 		long = "execution",
 		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-		default_value = "Wasm",
+		arg_enum,
+		ignore_case = true,
+		default_value = "Wasm"
 	)]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
-	#[structopt(
+	#[clap(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
-		case_insensitive = true,
+		possible_values = WasmExecutionMethod::variants(),
+		ignore_case = true,
 		default_value = "Compiled"
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
-	#[structopt(long)]
+	#[clap(long)]
 	pub heap_pages: Option<u64>,
 
 	/// When enabled, the spec name check will not panic, and instead only show a warning.
-	#[structopt(long)]
+	#[clap(long)]
 	pub no_spec_name_check: bool,
 }
 
 /// Our `try-runtime` command.
 ///
 /// See [`Command`] for more info.
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct TryRuntimeCmd {
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared: SharedParams,
 
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	pub command: Command,
 }
 
 /// The source of runtime *state* to use.
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
 	///
 	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
-		#[structopt(short, long)]
+		#[clap(short, long)]
 		snapshot_path: PathBuf,
 	},
 
 	/// Use a live chain as the source of runtime state.
 	Live {
 		/// The url to connect to.
-		#[structopt(
+		#[clap(
 			short,
 			long,
 			parse(try_from_str = parse::url),
@@ -447,20 +447,20 @@ pub enum State {
 		///
 		/// If non provided, then the latest finalized head is used. This is particularly useful
 		/// for [`Command::OnRuntimeUpgrade`].
-		#[structopt(
+		#[clap(
 			short,
 			long,
-			multiple = false,
+			multiple_values = false,
 			parse(try_from_str = parse::hash),
 		)]
 		at: Option<String>,
 
 		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
-		#[structopt(short, long)]
+		#[clap(short, long)]
 		snapshot_path: Option<PathBuf>,
 
 		/// The pallets to scrape. If empty, entire chain state will be scraped.
-		#[structopt(short, long, require_delimiter = true)]
+		#[clap(short, long, require_delimiter = true)]
 		pallets: Option<Vec<String>>,
 
 		/// Fetch the child-keys as well.
@@ -468,7 +468,7 @@ pub enum State {
 		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other
 		/// words, if you scrape the whole state the child tree data is included out of the box.
 		/// Otherwise, it must be enabled explicitly using this flag.
-		#[structopt(long, require_delimiter = true)]
+		#[clap(long, require_delimiter = true)]
 		child_tree: bool,
 	},
 }
@@ -481,10 +481,11 @@ impl State {
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		Ok(match self {
-			State::Snap { snapshot_path } =>
+			State::Snap { snapshot_path } => {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
-				})),
+				}))
+			}
 			State::Live { snapshot_path, pallets, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
@@ -504,7 +505,7 @@ impl State {
 					builder = builder.inject_default_child_tree_prefix();
 				}
 				builder
-			},
+			}
 		})
 	}
 
@@ -529,34 +530,38 @@ impl TryRuntimeCmd {
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		match &self.command {
-			Command::OnRuntimeUpgrade(ref cmd) =>
+			Command::OnRuntimeUpgrade(ref cmd) => {
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
-			Command::OffchainWorker(cmd) =>
+				.await
+			}
+			Command::OffchainWorker(cmd) => {
 				commands::offchain_worker::offchain_worker::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
-			Command::ExecuteBlock(cmd) =>
+				.await
+			}
+			Command::ExecuteBlock(cmd) => {
 				commands::execute_block::execute_block::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
-			Command::FollowChain(cmd) =>
+				.await
+			}
+			Command::FollowChain(cmd) => {
 				commands::follow_chain::follow_chain::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
+				.await
+			}
 		}
 	}
 }
@@ -643,7 +648,7 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 					version
 				);
 			}
-		},
+		}
 		Err(why) => {
 			log::error!(
 				target: LOG_TARGET,
@@ -651,7 +656,7 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 				uri,
 				why
 			);
-		},
+		}
 	}
 }
 

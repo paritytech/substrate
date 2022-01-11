@@ -34,13 +34,13 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
+clap = { version = "3.0", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde = { version = "1.0.132", features = ["derive"] }
 futures = "0.3.16"
 hex-literal = "0.3.4"
 log = "0.4.8"
-rand = "0.7.2"
-structopt = { version = "0.3.25", optional = true }
+rand = "0.8"
 
 # primitives
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/authority-discovery" }
@@ -97,12 +97,8 @@ node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
 [target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
-node-executor = { version = "3.0.0-dev", path = "../executor", features = [
-	"wasmtime",
-] }
-sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = [
-	"wasmtime",
-] }
+node-executor = { version = "3.0.0-dev", path = "../executor", features = ["wasmtime"] }
+sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = ["wasmtime"] }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
 	"wasmtime",
 ] }
@@ -129,7 +125,7 @@ regex = "1"
 platforms = "2.0"
 async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
-criterion = { version = "0.3.5", features = [ "async_tokio" ] }
+criterion = { version = "0.3.5", features = ["async_tokio"] }
 tokio = { version = "1.15", features = ["macros", "time"] }
 jsonrpsee-ws-client = "0.4.1"
 wait-timeout = "0.2"
@@ -137,7 +133,8 @@ remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 
 [build-dependencies]
-structopt = { version = "0.3.25", optional = true }
+clap = { version = "3.0", optional = true }
+clap_complete = { version = "3.0", optional = true }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "3.0.0", optional = true, path = "../../../utils/build-script-utils" }
@@ -155,14 +152,12 @@ cli = [
 	"frame-benchmarking-cli",
 	"substrate-frame-cli",
 	"sc-service/db",
-	"structopt",
+	"clap",
+	"clap_complete",
 	"substrate-build-script-utils",
 	"try-runtime-cli",
 ]
-runtime-benchmarks = [
-	"node-runtime/runtime-benchmarks",
-	"frame-benchmarking-cli",
-]
+runtime-benchmarks = ["node-runtime/runtime-benchmarks", "frame-benchmarking-cli"]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
 try-runtime = ["node-runtime/try-runtime", "try-runtime-cli"]

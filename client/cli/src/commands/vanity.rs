@@ -21,30 +21,30 @@
 use crate::{
 	error, utils, with_crypto_scheme, CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
 };
+use clap::Parser;
 use rand::{rngs::OsRng, RngCore};
 use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
-use structopt::StructOpt;
 use utils::print_from_uri;
 
 /// The `vanity` command
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "vanity", about = "Generate a seed that provides a vanity address")]
+#[derive(Debug, Clone, Parser)]
+#[clap(name = "vanity", about = "Generate a seed that provides a vanity address")]
 pub struct VanityCmd {
 	/// Desired pattern
-	#[structopt(long, parse(try_from_str = assert_non_empty_string))]
+	#[clap(long, parse(try_from_str = assert_non_empty_string))]
 	pattern: String,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	network_scheme: NetworkSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -103,7 +103,7 @@ where
 			best = score;
 			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				return Ok(utils::format_seed::<Pair>(seed.clone()))
+				return Ok(utils::format_seed::<Pair>(seed.clone()));
 			}
 		}
 		done += 1;
@@ -128,11 +128,11 @@ fn next_seed(seed: &mut [u8]) {
 		match seed[i] {
 			255 => {
 				seed[i] = 0;
-			},
+			}
 			_ => {
 				seed[i] += 1;
-				break
-			},
+				break;
+			}
 		}
 	}
 }
@@ -144,7 +144,7 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 		let snip_size = _desired.len() - truncate;
 		let truncated = &_desired[0..snip_size];
 		if let Some(pos) = key.find(truncated) {
-			return (47 - pos) + (snip_size * 48)
+			return (47 - pos) + (snip_size * 48);
 		}
 	}
 	0
@@ -166,13 +166,12 @@ mod tests {
 		crypto::{default_ss58_version, Ss58AddressFormatRegistry, Ss58Codec},
 		sr25519, Pair,
 	};
-	use structopt::StructOpt;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 
 	#[test]
 	fn vanity() {
-		let vanity = VanityCmd::from_iter(&["vanity", "--pattern", "j"]);
+		let vanity = VanityCmd::parse_from(&["vanity", "--pattern", "j"]);
 		assert!(vanity.run().is_ok());
 	}
 
