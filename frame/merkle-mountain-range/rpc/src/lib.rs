@@ -244,6 +244,27 @@ mod tests {
 	}
 
 	#[test]
+	fn should_serialize_leaf_batch_proof() {
+		// given
+		let leaf = vec![1_u8, 2, 3, 4];
+		let proof = BatchProof {
+			leaf_indices: vec![1],
+			leaf_count: 9,
+			items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
+		};
+
+		let leaf_proof = LeafBatchProof::new(H256::repeat_byte(0), vec![(leaf, 1)], proof);
+
+		// when
+		let actual = serde_json::to_string(&leaf_proof).unwrap();
+		// then
+		assert_eq!(
+			actual,
+			r#"{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","leaves":"0x0410010203040100000000000000","proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"}"#
+		);
+	}
+
+	#[test]
 	fn should_deserialize_leaf_proof() {
 		// given
 		let expected = LeafProof {
@@ -264,6 +285,33 @@ mod tests {
 			"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
 			"leaf":"0x1001020304",
 			"proof":"0x010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"
+		}"#).unwrap();
+
+		// then
+		assert_eq!(actual, expected);
+	}
+
+	#[test]
+	fn should_deserialize_leaf_batch_proof() {
+		// given
+		let expected = LeafBatchProof {
+			block_hash: H256::repeat_byte(0),
+			leaves: Bytes(vec![(vec![1_u8, 2, 3, 4], 1)].encode()),
+			proof: Bytes(
+				BatchProof {
+					leaf_indices: vec![1],
+					leaf_count: 9,
+					items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
+				}
+				.encode(),
+			),
+		};
+
+		// when
+		let actual: LeafBatchProof<H256> = serde_json::from_str(r#"{
+			"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
+			"leaves":"0x04100102030401000000",
+			"proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"
 		}"#).unwrap();
 
 		// then
