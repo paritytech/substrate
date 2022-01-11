@@ -71,6 +71,8 @@ mod tests;
 
 pub use pallet::*;
 pub use pallet_mmr_primitives::{self as primitives, NodeIndex};
+#[cfg(not(feature = "std"))]
+use sp_std::prelude::Vec;
 
 pub trait WeightInfo {
 	fn on_initialize(peaks: NodeIndex) -> Weight;
