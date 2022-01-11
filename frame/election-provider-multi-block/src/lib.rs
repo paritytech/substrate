@@ -209,6 +209,22 @@
 //! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 
+// Implementation notes:
+//
+// - Naming convention is: `${singular}_page` for singular, e.g. `voter_page` for `Vec<Voter>`.
+//   `paged_${plural}` for plural, e.g. `paged_voters` for `Vec<Vec<Voter>>`.
+//
+// - Since this crate has multiple `Pallet` and `Configs`, in each sub-pallet, we only reference the
+//   local `Pallet` without a prefix and allow it to be imported via `use`. Avoid `super::Pallet`
+//   except for the case of a modules that want to reference their local `Pallet` . The
+//   `crate::Pallet` is always reserved for the parent pallet. Other sibling pallets must be
+//   referenced with full path, e.g. `crate::Verifier::Pallet`. Do NOT write something like `use
+//   unsigned::Pallet as UnsignedPallet`.
+//
+// - Respecting private storage items with wrapper We move all implementations out of the `mod
+//   pallet` as much as possible to ensure we NEVER access the internal storage items directly. All
+//   operations should happen with the wrapper types.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_election_provider_support::{
@@ -233,6 +249,7 @@ pub mod helpers;
 const LOG_PREFIX: &'static str = "runtime::multiblock-election";
 
 // pub mod signed;
+pub mod signed;
 pub mod types;
 pub mod unsigned;
 pub mod verifier;
@@ -241,12 +258,6 @@ pub mod weights;
 pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
-
-// NOTE: unify naming: everything should be
-// xxx_page: singular
-// paged_xxx: plural
-// NOTE: also about naming crates: only 1 super should be ever allowed. Anything else will be
-// crate::xxx
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -803,6 +814,11 @@ pub mod pallet {
 			PagedTargetSnapshot::<T>::mutate(crate::Pallet::<T>::lsp(), |maybe_targets| {
 				if let Some(targets) = maybe_targets {
 					targets.remove(at);
+					// and update the hash.
+					PagedTargetSnapshotHash::<T>::insert(
+						crate::Pallet::<T>::lsp(),
+						T::Hashing::hash(&targets.encode()),
+					)
 				}
 			})
 		}

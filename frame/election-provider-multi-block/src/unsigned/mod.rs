@@ -89,7 +89,7 @@ mod pallet {
 		/// this value.
 		type MinerMaxLength: Get<u32>;
 
-		type WeightInfo: super::WeightInfo;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -98,11 +98,15 @@ mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Submit an unsigned solution.
+		///
+		/// This works very much like an inherent, as only the validators are permitted to submit
+		/// anything. By default validators will compute this call in their `offchain_worker` hook
+		/// and try and submit it back.
 		#[pallet::weight((0, DispatchClass::Operational))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
 			paged_solution: Box<PagedRawSolution<T>>,
-			_witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
@@ -111,8 +115,6 @@ mod pallet {
 			// phase, round, claimed score, page-count and hash are checked in pre-dispatch. we
 			// don't check them here anymore.
 			debug_assert!(Self::validate_unsigned_checks(&paged_solution).is_ok());
-
-			// TODO: ensure correct witness
 
 			let only_page = paged_solution
 				.solution_pages
@@ -311,6 +313,7 @@ mod validate_unsigned {
 		unsigned::{TransactionSource, TransactionValidityError, ValidateUnsigned},
 	};
 
+	use super::Call;
 	use crate::{mock::*, types::*, verifier::Verifier};
 
 	#[test]
@@ -331,10 +334,7 @@ mod validate_unsigned {
 
 				// this is just worse
 				let attempt = fake_unsigned_solution([20, 0, 0]);
-				let call = super::Call::submit_unsigned {
-					paged_solution: Box::new(attempt),
-					witness: witness(),
-				};
+				let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 				assert_eq!(
 					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
 					TransactionValidityError::Invalid(InvalidTransaction::Custom(2)),
@@ -343,10 +343,7 @@ mod validate_unsigned {
 				// this is better, but not enough better.
 				let insufficient_improvement = 55 * 105 / 100;
 				let attempt = fake_unsigned_solution([insufficient_improvement, 0, 0]);
-				let call = super::Call::submit_unsigned {
-					paged_solution: Box::new(attempt),
-					witness: witness(),
-				};
+				let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 				assert_eq!(
 					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
 					TransactionValidityError::Invalid(InvalidTransaction::Custom(2)),
@@ -363,10 +360,7 @@ mod validate_unsigned {
 				);
 				let sufficient_improvement = 55 * 115 / 100;
 				paged.score = [sufficient_improvement, 0, 0];
-				let call = super::Call::submit_unsigned {
-					paged_solution: Box::new(paged),
-					witness: witness(),
-				};
+				let call = Call::submit_unsigned { paged_solution: Box::new(paged) };
 				assert!(UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).is_ok());
 			})
 	}
@@ -378,10 +372,7 @@ mod validate_unsigned {
 
 			let mut attempt = fake_unsigned_solution([5, 0, 0]);
 			attempt.round += 1;
-			let call = super::Call::submit_unsigned {
-				paged_solution: Box::new(attempt),
-				witness: witness(),
-			};
+			let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 
 			assert_eq!(
 				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
@@ -398,10 +389,7 @@ mod validate_unsigned {
 			// page count.
 			roll_to_unsigned_open();
 			let attempt = mine_full_solution().unwrap();
-			let call = super::Call::submit_unsigned {
-				paged_solution: Box::new(attempt),
-				witness: witness(),
-			};
+			let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 
 			assert_eq!(
 				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
@@ -410,10 +398,7 @@ mod validate_unsigned {
 			);
 
 			let attempt = mine_solution(2).unwrap();
-			let call = super::Call::submit_unsigned {
-				paged_solution: Box::new(attempt),
-				witness: witness(),
-			};
+			let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 
 			assert_eq!(
 				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
@@ -421,10 +406,7 @@ mod validate_unsigned {
 			);
 
 			let attempt = mine_solution(1).unwrap();
-			let call = super::Call::submit_unsigned {
-				paged_solution: Box::new(attempt),
-				witness: witness(),
-			};
+			let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 
 			assert!(UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).is_ok(),);
 		})
@@ -440,10 +422,7 @@ mod validate_unsigned {
 				0,
 			);
 
-			let call = super::Call::submit_unsigned {
-				paged_solution: Box::new(paged),
-				witness: witness(),
-			};
+			let call = Call::submit_unsigned { paged_solution: Box::new(paged) };
 
 			assert_eq!(
 				UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
@@ -458,10 +437,7 @@ mod validate_unsigned {
 		ExtBuilder::default().build_and_execute(|| {
 			let solution = raw_paged_solution_low_score();
 
-			let call = super::Call::submit_unsigned {
-				paged_solution: Box::new(solution.clone()),
-				witness: witness(),
-			};
+			let call = Call::submit_unsigned { paged_solution: Box::new(solution.clone()) };
 
 			// initial
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -533,10 +509,7 @@ mod validate_unsigned {
 				assert!(MultiBlock::current_phase().is_unsigned());
 
 				let solution = fake_unsigned_solution([5, 0, 0]);
-				let call = super::Call::submit_unsigned {
-					paged_solution: Box::new(solution.clone()),
-					witness: witness(),
-				};
+				let call = Call::submit_unsigned { paged_solution: Box::new(solution.clone()) };
 
 				assert_eq!(
 					<UnsignedPallet as ValidateUnsigned>::validate_unsigned(

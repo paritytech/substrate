@@ -17,10 +17,9 @@
 
 //! Some helper functions/macros for this crate.
 
-use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
 use crate::{
 	types::{PageIndex, VoterOf},
-	AllVoterPagesOf,
+	AllVoterPagesOf, Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight,
 };
 use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::SaturatedConversion;

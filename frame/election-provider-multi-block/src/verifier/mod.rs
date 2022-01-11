@@ -58,6 +58,10 @@ pub enum FeasibilityError {
 	/// Internal error from the election crate.
 	#[codec(skip)]
 	NposElection(sp_npos_elections::Error),
+	/// The solution is incomplete, it has too few pages.
+	///
+	/// This is (somewhat) synonym to `WrongPageCount` in other places.
+	Incomplete,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -66,9 +70,11 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 	}
 }
 
-/// The interface of something that cna be the verifier.
+/// The interface of something that can verify solutions for other sub-pallets.
 pub trait Verifier {
+	/// The solution type.
 	type Solution;
+	/// The account if type.
 	type AccountId;
 
 	type MaxBackersPerWinner: frame_support::traits::Get<u32>;
@@ -123,8 +129,6 @@ pub trait Verifier {
 	/// Corresponding snapshots are assumed to be available.
 	///
 	/// A page that is `None` must always be valid.
-	///
-	/// IMPORTANT: this does not check any scores.
 	fn feasibility_check_page(
 		partial_solution: Self::Solution,
 		page: PageIndex,

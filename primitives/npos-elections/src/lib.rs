@@ -429,7 +429,7 @@ impl<AccountId: IdentifierT> EvaluateSupport for Supports<AccountId> {
 
 /// Generic representation of a support.
 pub trait Backings {
-	/// THe
+	/// The total backing of an individual winner.
 	fn total(&self) -> ExtendedBalance;
 }
 

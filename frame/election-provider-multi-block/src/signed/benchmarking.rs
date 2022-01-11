@@ -1,0 +1,1 @@
+frame_benchmarking::benchmarks! {}

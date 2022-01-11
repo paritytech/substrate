@@ -16,13 +16,13 @@
 // limitations under the License.
 
 use crate::{helpers, SolutionOf, SupportsOf};
-use frame_election_provider_support::{ExtendedBalance, PageIndex, Support};
-use sp_npos_elections::{ElectionScore, EvaluateSupport, NposSolution};
+use frame_election_provider_support::{ExtendedBalance, PageIndex};
+use sp_npos_elections::{ElectionScore, NposSolution};
 use sp_runtime::traits::One;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-use super::FeasibilityError;
-use frame_support::{ensure, traits::Get};
+use super::{FeasibilityError, Verifier};
+use frame_support::{dispatch::Weight, ensure, traits::Get};
 
 // export only to super.
 pub(super) use pallet::{QueuedSolution, VerifyingSolution};
@@ -40,6 +40,26 @@ mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_npos_elections::evaluate_support_core;
+
+	/// A simple newtype that represents the partial backing of a winner. It only stores the total
+	/// backing, and the sum of backings, as opposed to a [`sp_npos_elections::Support`] that also
+	/// stores all of the backers' individual contribution.
+	///
+	/// This is mainly here to allow us to implement `Backings` for it.
+	#[derive(Default, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	pub struct PartialBackings {
+		/// The total backing of this particular winner.
+		pub total: ExtendedBalance,
+		/// The number of backers.
+		pub backers: u32,
+	}
+
+	impl sp_npos_elections::Backings for PartialBackings {
+		fn total(&self) -> ExtendedBalance {
+			self.total
+		}
+	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -62,9 +82,6 @@ mod pallet {
 		///
 		/// This must be set such that the memory limits in the rest of the system are well
 		/// respected.
-		// TODO: base miner should be tweaked to respect this.
-		// TODO: Type info and shit should not be needed, probably because we use this in dispatch
-		// type??
 		type MaxBackersPerWinner: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
 
 		/// Maximum number of supports (aka. winners/validators/targets) that can be represented in
@@ -190,6 +207,7 @@ mod pallet {
 			VerifyingSolutionStorage::<T>::get(index)
 		}
 
+		/// The current page that is being verified.
 		pub(crate) fn current_page() -> Option<PageIndex> {
 			VerifyingSolutionPage::<T>::get()
 		}
@@ -246,44 +264,32 @@ mod pallet {
 		/// `QueuedSolution`. Recall that the score of this solution is not yet verified, so it
 		/// should never become `valid`.
 		pub(crate) fn final_score() -> Result<(ElectionScore, u32), FeasibilityError> {
-			// TODO: this could be made into a proper error.
-			// TODO: integrate counted map types
-			debug_assert_eq!(
-				QueuedSolutionBackings::<T>::iter_keys().count(),
-				T::Pages::get() as usize
-			);
+			// ensure that this is only called when all pages are verified individually.
+			if QueuedSolutionBackings::<T>::iter_keys().count() != T::Pages::get() as usize {
+				return Err(FeasibilityError::Incomplete)
+			}
 
-			let mut total_supports: BTreeMap<T::AccountId, (ExtendedBalance, u32)> =
-				Default::default();
-			// ASSUMPTION: total number of targets can fit into one page (and thus the desired
-			// number of targets can always fit in one page).
-			// ATTACK VECTOR: if the solution includes more targets than can fit into memory we
-			// could OOM
-			for (who, (backing, count)) in
-				QueuedSolutionBackings::<T>::iter().map(|(_page, backings)| backings).flatten()
+			let mut total_supports: BTreeMap<T::AccountId, PartialBackings> = Default::default();
+			// ASSUMPTION: in the staking level, we will eventually collect all exposures, which
+			// has the same length as the `total_supports`, but it even has more byte size to it.
+			// Thus, this code is 100% safe, but on the staking side there should be caution to
+			// make sure exposure collection cannot fail.
+			for (who, PartialBackings { backers, total }) in
+				QueuedSolutionBackings::<T>::iter().map(|(_, pb)| pb).flatten()
 			{
 				let mut entry = total_supports.entry(who).or_default();
-				entry.0 = entry.0.saturating_add(backing);
-				entry.1 = entry.1.saturating_add(count);
+				entry.total = entry.total.saturating_add(total);
+				entry.backers = entry.backers.saturating_add(backers);
 
-				if entry.1 > T::MaxBackersPerWinner::get() {
+				if entry.backers > T::MaxBackersPerWinner::get() {
 					return Err(FeasibilityError::TooManyBackings)
 				}
 			}
 
-			// this support is kinda fake, but it has a real `.total` filed, which is all we care
-			// about here.
-			// TODO: optimize this: we should be able to compute the score from
-			// `total_supports` directly, no need to allocate mock_support and consume it.
-			let mock_supports = total_supports
-				.into_iter()
-				.map(|(who, (backing, _))| (who, backing.into()))
-				.map(|(who, total)| (who, Support { total, ..Default::default() }))
-				.collect::<Vec<_>>();
+			let winner_count = total_supports.len() as u32;
+			let score = evaluate_support_core(total_supports.into_iter().map(|(_who, pb)| pb));
 
-			let winner_count = mock_supports.len() as u32;
-
-			Ok((mock_supports.evaluate(), winner_count))
+			Ok((score, winner_count))
 		}
 
 		/// Finalize a correct solution.
@@ -306,7 +312,7 @@ mod pallet {
 			QueuedSolutionScore::<T>::put(score);
 
 			// TODO: THIS IS CRITICAL AT THIS POINT. otherwise reducing T::Pages could fuck us real
-			// hard, real real hard.
+			// hard, real real hard. Write a test for this.
 			QueuedSolutionBackings::<T>::remove_all(None);
 			// Clear what was previously the valid variant.
 			Self::clear_invalid();
@@ -349,7 +355,7 @@ mod pallet {
 			use frame_support::traits::TryCollect;
 			let backings: BoundedVec<_, _> = supports
 				.iter()
-				.map(|(x, s)| (x.clone(), (s.total, s.voters.len() as u32)))
+				.map(|(x, s)| (x.clone(), PartialBackings { total: s.total, backers: s.voters.len() as u32 } ))
 				.try_collect()
 				.expect("`SupportsOf` is bounded by <Pallet<T> as Verifier>::MaxWinnersPerPage, which is assured to be the same as `T::MaxWinnersPerPage` in an integrity test");
 			QueuedSolutionBackings::<T>::insert(page, backings);
@@ -459,16 +465,13 @@ mod pallet {
 		#[cfg(test)]
 		pub(crate) fn get_backing_page(
 			page: PageIndex,
-		) -> Option<BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxWinnersPerPage>> {
+		) -> Option<BoundedVec<(T::AccountId, PartialBackings), T::MaxWinnersPerPage>> {
 			QueuedSolutionBackings::<T>::get(page)
 		}
 
 		#[cfg(test)]
 		pub(crate) fn backing_iter() -> impl Iterator<
-			Item = (
-				PageIndex,
-				BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxWinnersPerPage>,
-			),
+			Item = (PageIndex, BoundedVec<(T::AccountId, PartialBackings), T::MaxWinnersPerPage>),
 		> {
 			QueuedSolutionBackings::<T>::iter()
 		}
@@ -513,7 +516,7 @@ mod pallet {
 		_,
 		Twox64Concat,
 		PageIndex,
-		BoundedVec<(T::AccountId, (ExtendedBalance, u32)), T::MaxWinnersPerPage>,
+		BoundedVec<(T::AccountId, PartialBackings), T::MaxWinnersPerPage>,
 	>;
 
 	/// The score of the valid variant of [`QueuedSolution`].
@@ -522,7 +525,7 @@ mod pallet {
 	#[pallet::storage]
 	type QueuedSolutionScore<T: Config> = StorageValue<_, ElectionScore>;
 
-	// End storage items wrapped by QueuedSolution.
+	// --- End of storage items wrapped by QueuedSolution.
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
 	/// feasible.
@@ -599,60 +602,72 @@ mod pallet {
 		}
 
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			if let Some(current_page) = VerifyingSolution::<T>::current_page() {
-				// TODO: We can optimize this: If at some point we rely on the `unwrap_or_default`,
-				// it means that this verifying solution is over, early exit. Although, keeping it
-				// like this is also better in some sense: We can be sure that we need x pages for
-				// export, while otherwise we might not know this.
-				let page_solution =
-					VerifyingSolution::<T>::get_page(current_page).unwrap_or_default();
-
-				let maybe_support =
-					<Self as Verifier>::feasibility_check_page(page_solution, current_page);
-
-				sublog!(
-					trace,
-					"verifier",
-					"verified page {} of a solution, contains, outcome = {:?}",
-					current_page,
-					maybe_support.as_ref().map(|s| s.len())
-				);
-
-				match maybe_support {
-					Ok(support) => {
-						Self::deposit_event(Event::<T>::Verified(current_page));
-						// this page was noice; write it and check-in the next page.
-						QueuedSolution::<T>::set_invalid_page(current_page, support);
-						let has_more_pages = VerifyingSolution::<T>::proceed_page();
-
-						if !has_more_pages {
-							let _outcome = Self::finalize_verification();
-							sublog!(
-								debug,
-								"verifier",
-								"finalize verification outcome: {:?}",
-								_outcome
-							)
-						}
-					},
-					Err(err) => {
-						// the page solution was invalid
-						Self::deposit_event(Event::<T>::VerificationFailed(current_page, err));
-						VerifyingSolution::<T>::kill();
-						QueuedSolution::<T>::clear_invalid();
-					},
-				};
-			}
-
-			0
+			Self::do_on_initialize()
 		}
 	}
 }
 
-// NOTE: we move all implementations out of the `mod pallet` as much as possible to ensure we NEVER
-// access the internal storage items directly. All operations should happen with the wrapper types.
-
 impl<T: Config> Pallet<T> {
+	// enum Status {
+	// 	Ongoing(PageIndex),
+	// 	Finished(ElectionScore),
+	// 	Nothing,
+	// }
+
+	// fn do_on_initialize_remote() -> Weight {
+	// 	// check if status is Ongoing(`page`)
+	// 	// fetch `page_data` from `SolutionDataProvider::get(page)`
+	// 	// verify `page_data`
+	// 	// store in invalid variant
+	// 	// put status to its next variant (tick forward)
+	// 	// if NOT LAST PAGE, then finish for this block
+	// 	// if LAST PAGE, then
+	// 	//    - flip valid invalid variant, finalize
+	// 	//    - inform `SolutionDataProvider`
+	// 	//    -
+	// 	//    -
+	// }
+
+	fn do_on_initialize() -> Weight {
+		if let Some(current_page) = VerifyingSolution::<T>::current_page() {
+			// TODO: This means that one of the pages was empty, as if the call site forgot it.
+			// This should never happen and must be defensive, nonetheless `default` is a valid
+			// solution and we continue. Write a test for this as well.
+			let page_solution = VerifyingSolution::<T>::get_page(current_page).unwrap_or_default();
+
+			let maybe_support =
+				<Self as Verifier>::feasibility_check_page(page_solution, current_page);
+
+			sublog!(
+				debug,
+				"verifier",
+				"verified page {} of a solution, contains, outcome = {:?}",
+				current_page,
+				maybe_support.as_ref().map(|s| s.len())
+			);
+
+			match maybe_support {
+				Ok(support) => {
+					Self::deposit_event(Event::<T>::Verified(current_page));
+					// this page was gucci; write it and check-in the next page.
+					QueuedSolution::<T>::set_invalid_page(current_page, support);
+					let has_more_pages = VerifyingSolution::<T>::proceed_page();
+
+					if !has_more_pages {
+						let _outcome = Self::finalize_verification();
+					}
+				},
+				Err(err) => {
+					// the page solution was invalid
+					Self::deposit_event(Event::<T>::VerificationFailed(current_page, err));
+					VerifyingSolution::<T>::kill();
+					QueuedSolution::<T>::clear_invalid();
+				},
+			};
+		}
+		0
+	}
+
 	/// This should only be called when we are sure that no other page of `VerifyingSolutionStorage`
 	/// needs verification.
 	///
@@ -660,7 +675,7 @@ impl<T: Config> Pallet<T> {
 	/// solution will be updated, and the verifying solution will be removed. Returns
 	/// `Err(Feasibility)` if any of the last verification steps fail.
 	fn finalize_verification() -> Result<(), FeasibilityError> {
-		QueuedSolution::<T>::final_score()
+		let outcome = QueuedSolution::<T>::final_score()
 			.and_then(|(final_score, winner_count)| {
 				let claimed_score = VerifyingSolution::<T>::get_score().unwrap();
 
@@ -690,7 +705,9 @@ impl<T: Config> Pallet<T> {
 				VerifyingSolution::<T>::kill();
 				QueuedSolution::<T>::clear_invalid();
 				err
-			})
+			});
+		sublog!(debug, "verifier", "finalize verification outcome: {:?}", outcome);
+		outcome
 	}
 
 	// Ensure that the given score is:
@@ -698,14 +715,13 @@ impl<T: Config> Pallet<T> {
 	// - better than the queued solution, if one exists.
 	// - greater than the minimum untrusted score.
 	pub(crate) fn ensure_score_quality(score: ElectionScore) -> Result<(), FeasibilityError> {
-		let is_improvement =
-			<Self as super::Verifier>::queued_solution().map_or(true, |best_score| {
-				sp_npos_elections::is_score_better::<sp_runtime::Perbill>(
-					score,
-					best_score,
-					T::SolutionImprovementThreshold::get(),
-				)
-			});
+		let is_improvement = <Self as Verifier>::queued_solution().map_or(true, |best_score| {
+			sp_npos_elections::is_score_better::<sp_runtime::Perbill>(
+				score,
+				best_score,
+				T::SolutionImprovementThreshold::get(),
+			)
+		});
 		ensure!(is_improvement, FeasibilityError::ScoreTooLow);
 
 		let is_greater_than_min_trusted =
@@ -1288,8 +1304,6 @@ mod verifier_trait {
 		});
 	}
 
-	// TODO test scenario where there are empty pages
-
 	#[test]
 	fn correct_solution_becomes_queued() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -1591,7 +1605,6 @@ mod verifier_trait {
 			assert!(VerifierPallet::seal_unverified_solution(bad_paged.score.clone(),).is_err());
 
 			// then the verifying solution storage is wiped
-			// TODO is there a better way to verify that this is not the bad solution?
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
 
 			// everything about the verifying solution is removed
