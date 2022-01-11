@@ -160,7 +160,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
 	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
-	/// [`clap::ErrorKind::HelpDisplayed`] or [`clap::ErrorKind::VersionDisplayed`] respectively.
+	/// [`clap::ErrorKind::DisplayHelp`] or [`clap::ErrorKind::DisplayVersion`] respectively.
 	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
 	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
 	where
@@ -184,7 +184,7 @@ pub trait SubstrateCli: Sized {
 
 		let matches = app.try_get_matches_from(iter)?;
 
-		Ok(<Self as FromArgMatches>::from_arg_matches(&matches)?)
+		<Self as FromArgMatches>::from_arg_matches(&matches)
 	}
 
 	/// Returns the client ID: `{impl_name}/v{impl_version}`
