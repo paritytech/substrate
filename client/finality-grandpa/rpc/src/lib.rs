@@ -435,7 +435,7 @@ mod tests {
 
 		// Notify with a header and justification
 		let justification = create_justification();
-		justification_sender.notify(|| Ok(justification.clone())).unwrap();
+		justification_sender.notify(|| Ok::<_, ()>(justification.clone())).unwrap();
 
 		// Inspect what we received
 		let (recv_justification, recv_sub_id): (sp_core::Bytes, SubscriptionId) =

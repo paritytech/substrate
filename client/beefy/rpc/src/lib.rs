@@ -20,18 +20,46 @@
 
 #![warn(missing_docs)]
 
-use beefy_gadget::notification::BeefySignedCommitmentStream;
-use futures::{future, task::Spawn, FutureExt, StreamExt};
+use parking_lot::RwLock;
+use std::sync::Arc;
+
+use sc_rpc::SubscriptionTaskExecutor;
+use sp_runtime::traits::Block as BlockT;
+
+use futures::{
+	future,
+	task::{Spawn, SpawnError},
+	FutureExt, StreamExt,
+};
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	SubscriptionSink,
 };
 use log::warn;
-use sc_rpc::SubscriptionTaskExecutor;
-use sp_runtime::traits::Block as BlockT;
+
+use beefy_gadget::notification::BeefySignedCommitmentStream;
 
 mod notification;
+
+#[derive(Debug, derive_more::Display, derive_more::From, thiserror::Error)]
+/// Top-level error type for the RPC handler
+pub enum Error {
+	/// The BEEFY RPC endpoint is not ready.
+	#[display(fmt = "BEEFY RPC endpoint not ready")]
+	EndpointNotReady,
+	/// The BEEFY RPC background task failed to spawn.
+	#[display(fmt = "BEEFY RPC background task failed to spawn")]
+	RpcTaskFailure(SpawnError),
+}
+
+/// The error codes returned by jsonrpc.
+pub enum ErrorCode {
+	/// Returned when BEEFY RPC endpoint is not ready.
+	NotReady = 1,
+	/// Returned on BEEFY RPC background task failure.
+	TaskFailure = 2,
+}
 
 /// Provides RPC methods for interacting with BEEFY.
 #[rpc(client, server, namespace = "beefy")]
@@ -42,12 +70,21 @@ pub trait BeefyApi<Notification, Hash> {
 		item = Notification,
 	)]
 	fn subscribe_justifications(&self) -> RpcResult<()>;
+
+	/// Returns hash of the latest BEEFY finalized block as seen by this client.
+	///
+	/// The latest BEEFY block might not be available if the BEEFY gadget is not running
+	/// in the network or if the client is still initializing or syncing with the network.
+	/// In such case an error would be returned.
+	#[method(name = "getFinalizedHead")]
+	async fn latest_finalized(&self) -> RpcResult<Hash>;
 }
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 	executor: SubscriptionTaskExecutor,
+	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
 }
 
 impl<Block> BeefyRpcHandler<Block>
@@ -59,11 +96,14 @@ where
 		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 		executor: SubscriptionTaskExecutor,
 	) -> Self {
-		Self { signed_commitment_stream, executor }
+		let beefy_best_block = Arc::new(RwLock::new(None));
+		Self { signed_commitment_stream, beefy_best_block, executor }
 	}
 }
 
-impl<Block> BeefyApiServer<notification::SignedCommitment, Block> for BeefyRpcHandler<Block>
+#[async_trait]
+impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash>
+	for BeefyRpcHandler<Block>
 where
 	Block: BlockT,
 {
@@ -79,7 +119,7 @@ where
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
-			.map(|sc| notification::SignedCommitment::new::<Block>(sc));
+			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
 		let fut = async move {
 			stream
@@ -93,13 +133,22 @@ where
 			.spawn_obj(fut.into())
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
+
+	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
+		self.beefy_best_block
+			.read()
+			.as_ref()
+			.cloned()
+			.ok_or(Error::EndpointNotReady)
+			.map_err(|e| JsonRpseeError::to_call_error(e))
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	use beefy_gadget::notification::{BeefySignedCommitmentSender, SignedCommitment};
+	use beefy_gadget::notification::{BeefySignedCommitment, BeefySignedCommitmentSender};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
 	use jsonrpsee::{types::EmptyParams, RpcModule};
@@ -107,13 +156,29 @@ mod tests {
 
 	fn setup_io_handler() -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>)
 	{
-		let (commitment_sender, commitment_stream) = BeefySignedCommitmentStream::channel();
+		let (commitment_sender, commitment_stream) =
+			BeefySignedCommitmentStream::<Block>::channel();
 
 		(
 			BeefyRpcHandler::new(commitment_stream, sc_rpc::SubscriptionTaskExecutor::default())
 				.into_rpc(),
 			commitment_sender,
 		)
+	}
+
+	#[tokio::test]
+	async fn uninitialized_rpc_handler() {
+		let (rpc, _) = setup_io_handler();
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
+		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
+		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
+
+		assert_eq!(expected_response, result,);
+	}
+
+	// TODO: (dp)
+	#[tokio::test]
+	async fn latest_finalized_rpc() {
 	}
 
 	#[tokio::test]
@@ -168,9 +233,9 @@ mod tests {
 		assert_eq!(response, expected);
 	}
 
-	fn create_commitment() -> SignedCommitment<Block> {
+	fn create_commitment() -> BeefySignedCommitment<Block> {
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
-		SignedCommitment::<Block> {
+		BeefySignedCommitment::<Block> {
 			commitment: beefy_primitives::Commitment {
 				payload,
 				block_number: 5,
@@ -192,11 +257,13 @@ mod tests {
 
 		// Notify with commitment
 		let commitment = create_commitment();
-		commitment_sender.notify(commitment.clone());
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
+		r.unwrap();
 
 		// Inspect what we received
 		let (bytes, recv_sub_id) = sub.next::<sp_core::Bytes>().await.unwrap().unwrap();
-		let recv_commitment: SignedCommitment<Block> = Decode::decode(&mut &bytes[..]).unwrap();
+		let recv_commitment: BeefySignedCommitment<Block> =
+			Decode::decode(&mut &bytes[..]).unwrap();
 		assert_eq!(&recv_sub_id, sub.subscription_id());
 		assert_eq!(recv_commitment, commitment);
 	}

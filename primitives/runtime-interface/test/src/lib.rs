@@ -62,17 +62,17 @@ fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExte
 
 #[test]
 fn test_return_data() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_data");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_data");
 }
 
 #[test]
 fn test_return_option_data() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_option_data");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_option_data");
 }
 
 #[test]
 fn test_set_storage() {
-	let mut ext = call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_set_storage");
+	let mut ext = call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_set_storage");
 
 	let expected = "world";
 	assert_eq!(expected.as_bytes(), &ext.ext().storage("hello".as_bytes()).unwrap()[..]);
@@ -81,30 +81,30 @@ fn test_set_storage() {
 #[test]
 fn test_return_value_into_mutable_reference() {
 	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
+		wasm_binary_unwrap(),
 		"test_return_value_into_mutable_reference",
 	);
 }
 
 #[test]
 fn test_get_and_return_array() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_get_and_return_array");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_get_and_return_array");
 }
 
 #[test]
 fn test_array_as_mutable_reference() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_array_as_mutable_reference");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_array_as_mutable_reference");
 }
 
 #[test]
 fn test_return_input_public_key() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_input_public_key");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_input_public_key");
 }
 
 #[test]
 fn host_function_not_found() {
-	let err = call_wasm_method_with_result::<()>(&wasm_binary_unwrap()[..], "test_return_data")
-		.unwrap_err();
+	let err =
+		call_wasm_method_with_result::<()>(wasm_binary_unwrap(), "test_return_data").unwrap_err();
 
 	assert!(err.contains("Instantiation: Export "));
 	assert!(err.contains(" not found"));
@@ -114,7 +114,7 @@ fn host_function_not_found() {
 #[should_panic(expected = "Invalid utf8 data provided")]
 fn test_invalid_utf8_data_should_return_an_error() {
 	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
+		wasm_binary_unwrap(),
 		"test_invalid_utf8_data_should_return_an_error",
 	);
 }
@@ -122,7 +122,7 @@ fn test_invalid_utf8_data_should_return_an_error() {
 #[test]
 fn test_overwrite_native_function_implementation() {
 	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
+		wasm_binary_unwrap(),
 		"test_overwrite_native_function_implementation",
 	);
 }
@@ -130,7 +130,7 @@ fn test_overwrite_native_function_implementation() {
 #[test]
 fn test_u128_i128_as_parameter_and_return_value() {
 	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
+		wasm_binary_unwrap(),
 		"test_u128_i128_as_parameter_and_return_value",
 	);
 }
@@ -138,7 +138,7 @@ fn test_u128_i128_as_parameter_and_return_value() {
 #[test]
 fn test_vec_return_value_memory_is_freed() {
 	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
+		wasm_binary_unwrap(),
 		"test_vec_return_value_memory_is_freed",
 	);
 }
@@ -146,7 +146,7 @@ fn test_vec_return_value_memory_is_freed() {
 #[test]
 fn test_encoded_return_value_memory_is_freed() {
 	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
+		wasm_binary_unwrap(),
 		"test_encoded_return_value_memory_is_freed",
 	);
 }
@@ -154,7 +154,7 @@ fn test_encoded_return_value_memory_is_freed() {
 #[test]
 fn test_array_return_value_memory_is_freed() {
 	call_wasm_method::<HostFunctions>(
-		&wasm_binary_unwrap()[..],
+		wasm_binary_unwrap(),
 		"test_array_return_value_memory_is_freed",
 	);
 }
@@ -162,14 +162,11 @@ fn test_array_return_value_memory_is_freed() {
 #[test]
 fn test_versionining_with_new_host_works() {
 	// We call to the new wasm binary with new host function.
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_versionning_works");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_versionning_works");
 
 	// we call to the old wasm binary with a new host functions
 	// old versions of host functions should be called and test should be ok!
-	call_wasm_method::<HostFunctions>(
-		&wasm_binary_deprecated_unwrap()[..],
-		"test_versionning_works",
-	);
+	call_wasm_method::<HostFunctions>(wasm_binary_deprecated_unwrap(), "test_versionning_works");
 }
 
 #[test]
@@ -224,7 +221,7 @@ fn test_tracing() {
 	let _guard = tracing::subscriber::set_default(subscriber.clone());
 
 	// Call some method to generate a trace
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_data");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_data");
 
 	let inner = subscriber.0.lock().unwrap();
 	assert!(inner.spans.contains("return_input_version_1"));
@@ -232,5 +229,5 @@ fn test_tracing() {
 
 #[test]
 fn test_return_input_as_tuple() {
-	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_input_as_tuple");
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_input_as_tuple");
 }

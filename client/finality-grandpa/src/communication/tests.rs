@@ -22,7 +22,7 @@ use super::{
 	gossip::{self, GossipValidator},
 	Round, SetId, VoterSet,
 };
-use crate::{communication::GRANDPA_PROTOCOL_NAME, environment::SharedVoterSetState};
+use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetState};
 use futures::prelude::*;
 use parity_scale_codec::Encode;
 use sc_network::{config::Role, Event as NetworkEvent, ObservedRole, PeerId};
@@ -97,7 +97,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 		<Self as sc_network_gossip::Network<Block>>::write_notification(
 			self,
 			who.clone(),
-			GRANDPA_PROTOCOL_NAME.into(),
+			grandpa_protocol_name::NAME.into(),
 			data,
 		);
 	}
@@ -148,6 +148,7 @@ fn config() -> crate::Config {
 		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
+		protocol_name: grandpa_protocol_name::NAME.into(),
 	}
 }
 
@@ -286,7 +287,7 @@ fn good_commit_leads_to_relay() {
 					// Add the sending peer and send the commit
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
-						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
@@ -294,7 +295,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(
-							GRANDPA_PROTOCOL_NAME.into(),
+							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
 						)],
 					});
@@ -303,7 +304,7 @@ fn good_commit_leads_to_relay() {
 					let receiver_id = sc_network::PeerId::random();
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
-						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
@@ -321,7 +322,10 @@ fn good_commit_leads_to_relay() {
 
 						sender.unbounded_send(NetworkEvent::NotificationsReceived {
 							remote: receiver_id,
-							messages: vec![(GRANDPA_PROTOCOL_NAME.into(), msg.encode().into())],
+							messages: vec![(
+								grandpa_protocol_name::NAME.into(),
+								msg.encode().into(),
+							)],
 						})
 					};
 
@@ -433,14 +437,14 @@ fn bad_commit_leads_to_report() {
 				Event::EventStream(sender) => {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
-						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
 						messages: vec![(
-							GRANDPA_PROTOCOL_NAME.into(),
+							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
 						)],
 					});

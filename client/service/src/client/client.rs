@@ -194,7 +194,7 @@ pub struct ClientConfig<Block: BlockT> {
 	pub no_genesis: bool,
 	/// Map of WASM runtime substitute starting at the child of the given block until the runtime
 	/// version doesn't match anymore.
-	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
+	pub wasm_runtime_substitutes: HashMap<NumberFor<Block>, Vec<u8>>,
 }
 
 impl<Block: BlockT> Default for ClientConfig<Block> {
@@ -1409,10 +1409,9 @@ where
 		id: &BlockId<Block>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self
-			.state_at(id)?
+		self.state_at(id)?
 			.storage_hash(&key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn child_storage_keys(
@@ -1449,10 +1448,9 @@ where
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self
-			.state_at(id)?
+		self.state_at(id)?
 			.child_storage_hash(child_info, &key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 }
 

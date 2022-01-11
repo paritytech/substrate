@@ -479,9 +479,9 @@ mod tests {
 		where
 			I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 		{
-			for (id, data) in digests {
+			for (id, mut data) in digests {
 				if id == TEST_ID {
-					return u64::decode(&mut &data[..]).ok()
+					return u64::decode(&mut data).ok()
 				}
 			}
 
@@ -499,9 +499,9 @@ mod tests {
 			let author =
 				AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
 
-			for (id, seal) in seals {
+			for (id, mut seal) in seals {
 				if id == TEST_ID {
-					match u64::decode(&mut &seal[..]) {
+					match u64::decode(&mut seal) {
 						Err(_) => return Err("wrong seal"),
 						Ok(a) => {
 							if a != author {
