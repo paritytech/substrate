@@ -5950,6 +5950,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-pools"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-arithmetic",
+]
+
+[[package]]
 name = "pallet-preimage"
 version = "4.0.0-dev"
 dependencies = [
