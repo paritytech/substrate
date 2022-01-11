@@ -92,7 +92,7 @@ pub fn run() -> Result<()> {
 				runner.sync_run(|config| cmd.run::<Block, ExecutorDispatch>(config))
 			} else {
 				Err("Benchmarking wasn't enabled when building the node. \
-				  You can enable it with `--features runtime-benchmarks`."
+				You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
@@ -160,7 +160,7 @@ pub fn run() -> Result<()> {
 		},
 		#[cfg(not(feature = "try-runtime"))]
 		Some(Subcommand::TryRuntime) => Err("TryRuntime wasn't enabled when building the node. \
-				  You can enable it with `--features try-runtime`."
+				You can enable it with `--features try-runtime`."
 			.into()),
 	}
 }

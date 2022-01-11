@@ -10089,8 +10089,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "ss58-registry"
-version = "1.10.0"
-source = "git+https://github.com/paritytech/ss58-registry.git?rev=86cf570#86cf570cca4badc5898e6405802f883ea21db252"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1230685dc82f8699110640244d361a7099c602f08bddc5c90765a5153b4881dc"
 dependencies = [
  "Inflector",
  "proc-macro2",
