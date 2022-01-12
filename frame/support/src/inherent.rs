@@ -44,7 +44,7 @@ pub trait ProvideInherent {
 	/// the runtime should happen in the returned `Call`.
 	/// E.g. if this provides the timestamp, the call will check that the given timestamp is
 	/// increasing the old timestamp by more than a minimum and it will also check that the
-	/// timestamp hasn't already been set.
+	/// timestamp hasn't already been set in the current block.
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
 	/// Determines whether this inherent is required in this block.
@@ -63,7 +63,7 @@ pub trait ProvideInherent {
 	/// * type is [`Self::Call`],
 	/// * [`Self::is_inherent`] returns true.
 	///
-	/// NOTE: This is currently only checked by block validators, not all full nodes.
+	/// NOTE: This is currently only checked by block producers, not all full nodes.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
 		Ok(None)
 	}
@@ -96,6 +96,6 @@ pub trait ProvideInherent {
 	/// In FRAME, inherents are enforced to be executed before other extrinsics. For this reason,
 	/// pallets with unsigned transactions **must ensure** that no unsigned transaction call
 	/// is an inherent call, when implementing `ValidateUnsigned::validate_unsigned`.
-	/// Otherwise block producers can produce invalid blocks by including them after non-inherents.
+	/// Otherwise block producers can produce invalid blocks by including them after non inherents.
 	fn is_inherent(call: &Self::Call) -> bool;
 }
