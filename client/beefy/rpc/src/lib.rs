@@ -53,6 +53,7 @@ pub enum Error {
 	RpcTaskFailure(SpawnError),
 }
 
+// TODO: (dp) Is there code out there that expects these error codes? I think this should be removed/reworked. The error code and be in the -32000 to -32099 range.
 /// The error codes returned by jsonrpc.
 pub enum ErrorCode {
 	/// Returned when BEEFY RPC endpoint is not ready.
@@ -231,21 +232,6 @@ mod tests {
 				return
 			}
 			std::thread::sleep(std::time::Duration::from_millis(50))
-			// match response {
-			// 	(payload, _) if payload != not_ready => {
-			// 		assert_eq!(payload, expected);
-			// 		// Success
-			// 		return
-			// 	}
-			// 	_ => std::thread::sleep(std::time::Duration::from_millis(50)),
-
-			// }
-			// if response != Some(not_ready.into()) {
-			// 	assert_eq!(response, Some(expected.into()));
-			// 	// Success
-			// 	return
-			// }
-			// std::thread::sleep(std::time::Duration::from_millis(50));
 		}
 
 		panic!(
