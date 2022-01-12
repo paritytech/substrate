@@ -520,35 +520,6 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
-
-# Mostly same as the job above, additional instrumentation was added to push test run times
-# to the time series database.
-# This is temporary and will be eventually removed.
-bench-test-full-crypto-feature:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *build-refs
-  variables:
-    <<:                            *default-vars
-    RUSTFLAGS:                     "-Cdebug-assertions=y"
-    RUST_BACKTRACE: 1
-  before_script: [""]
-  script:
-    # disable sccache for the bench purposes
-    - unset RUSTC_WRAPPER
-    - START_TIME=`date '+%s'`
-    - cd primitives/core/
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
-    - cd ../application-crypto
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
-    - END_TIME=`date '+%s'`
-    - TOTAL_TIME=`expr $END_TIME - $START_TIME`
-    # send the job time measuring to the prometheus endpoint
-    - curl -d "parity_gitlab_job_time{project=\"$CI_PROJECT_PATH\",job=\"$CI_JOB_NAME\",runner=\"gitlab\"} $TOTAL_TIME" -X POST $VM_LONGTERM_URI/api/v1/import/prometheus
-  tags:
-    - linux-docker-compare
-
-
 test-wasmer-sandbox:
   stage:                           test
   <<:                              *docker-env
