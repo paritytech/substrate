@@ -1,4 +1,11 @@
 //! Delegation pools for nominating in `pallet-staking`.
+//!
+//! Each pool is represented by: (the actively staked funds), a rewards pool (the
+//! rewards earned by the actively staked funds) and a group of unbonding pools (pools )
+//!
+//! * primary pool: This pool represents the actively staked funds ...
+//! * rewards pool: The rewards earned by actively staked funds. Delegator can withdraw rewards once
+//! they
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -8,8 +15,8 @@ use frame_support::{
 	traits::{Currency, ExistenceRequirement},
 };
 use scale_info::TypeInfo;
-use sp_arithmetic::{traits::Saturating, FixedPointNumber, FixedU128};
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Zero};
+use sp_arithmetic::{FixedPointNumber, FixedU128};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Saturating, Zero};
 
 pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
@@ -53,18 +60,20 @@ pub trait NominationProviderTrait<Balance, AccountId, EraIndex> {
 pub struct Delegator<T: Config> {
 	pool: PoolId,
 	shares: SharesOf<T>,
-	last_paid_out_era: T::EraIndex,
 
-	/// The reward pools total payout ever the last time this delegator claimed a payout.
-	total_payout_ever: BalanceOf<T>, // Probably needs to be some typ eof BigUInt
+	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
+	/// Assumiing no massive burning events, we expect this value to always be below total
+	/// issuance. This value lines up with the `RewardPool.total_earnings` after a delegator claims
+	/// a payout. TODO ^ double check the above is an OK assumption
+	reward_pool_total_earnings: BalanceOf<T>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Pool<T: Config> {
-	shares: SharesOf<T>,
-	// The _Stash_ AND _Controller_ account for the pool.
+	shares: SharesOf<T>, // Probably needs to be some type of BigUInt
+	// The _Stash_ and _Controller_ account for the pool.
 	account_id: T::AccountId,
 }
 
@@ -90,9 +99,11 @@ pub struct RewardPool<T: Config> {
 	balance: BalanceOf<T>,
 	/// The shares of this reward pool after the last claimed payout
 	shares: BalanceOf<T>,
-	/// The total earnings ever of this reward pool after the last claimed payout. I.E. the sum of
-	/// all incoming balance.
+	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
+	/// of all incoming balance.
 	total_earnings: BalanceOf<T>,
+	/// The reward destination for the pool.
+	account_id: T::AccountId,
 }
 
 // #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -173,16 +184,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
+		// TODO: these operations are per delegator - so these events could become decently noisy
+		// if things scale a lot - consider not including these.
 		Joined { delegator: T::AccountId, pool: PoolId, bonded: BalanceOf<T> },
+		Payout { delegator: T::AccountId, pool: PoolId, payout: BalanceOf<T> },
 	}
 
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
 	pub enum Error<T> {
-		/// The given pool id does not exist.
+		/// The given (primary) pool id does not exist.
 		PoolNotFound,
 		/// The given account is not a delegator.
 		DelegatorNotFound,
+		// The given reward pool does not exist. In all cases this is a system logic error.
+		RewardPoolNotFound,
 		/// The account is already delegating in another pool. An account may only belong to one
 		/// pool at a time.
 		AccountBelongsToOtherPool,
@@ -227,25 +243,12 @@ pub mod pallet {
 			// issue the new shares
 			let new_shares = primary_pool.shares_to_issue(exact_amount_to_bond, old_free_balance);
 			primary_pool.shares = primary_pool.shares.saturating_add(new_shares);
-			let delegator = {
-				// Determine the last paid out era. Note that in the reward calculations we will
-				// start attributing rewards to this delegator in `last_paid_out_era  + 1`.
-				let last_paid_out_era = if T::NominationProvider::is_ongoing_election() {
-					// If there is an ongoing election the new funds will start to help generating
-					// rewards in current_era + 2.
-					T::NominationProvider::current_era().saturating_add(One::one())
-				} else {
-					// If there is no ongoing election, the new funds will start help generating
-					// generating rewards in current_era + 1.
-					T::NominationProvider::current_era()
-				};
-
-				Delegator::<T> {
-					pool: target,
-					shares: new_shares,
-					last_paid_out_era,
-					total_payout_ever: Zero::zero(),
-				}
+			let delegator = Delegator::<T> {
+				pool: target,
+				shares: new_shares,
+				// TODO this likely needs to be the reward pools total earnings at this block
+				// - go and double check
+				reward_pool_total_earnings: Zero::zero(),
 			};
 
 			// Do bond extra
@@ -267,26 +270,102 @@ pub mod pallet {
 
 		// fn unbond()
 
-		// /// Claim a payout for a delegator can use this to claim their payout based on the
-		// rewards /// that the pool has accumulated since their last claimed payout (OR since
-		// joining if this /// is there for). The payout will go to the delegators account.
-		// ///
-		// /// This extrinsic is permisionless in the sense that any account can call it for any
-		// /// delegator in the system.
-		// #[pallet::weight(666)]
-		// pub fn claim_payout_other(origin: OriginFor<T>, delegator: T::AccountId) ->
-		// DispatchResult { 	ensure_signed(origin)?;
+		/// Claim a payout for a delegator can use this to claim their payout based on the
+		/// rewards /// that the pool has accumulated since their last claimed payout (OR since
+		///
+		/// joining if this /// is there for). The payout will go to the delegators account.
+		///
+		/// This extrinsic is permisionless in the sense that any account can call it for any
+		/// delegator in the system.
+		#[pallet::weight(666)]
+		pub fn claim_payout_other(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
+			ensure_signed(origin)?;
 
-		// 	let delegator = Delegators::<T>::get(&delegator).ok_or(Error::<T>::DelegatorNotFound)?;
+			// READ THINGS FROM STORAGE
+			let mut delegator =
+				Delegators::<T>::get(&account).ok_or(Error::<T>::DelegatorNotFound)?;
+			let primary_pool = PrimaryPools::<T>::get(&delegator.pool).ok_or_else(|| {
+				log!(error, "A primary pool could not be found, this is a system logic error.");
+				debug_assert!(
+					false,
+					"A primary pool could not be found, this is a system logic error."
+				);
+				Error::<T>::PoolNotFound
+			})?;
+			let mut reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
+				log!(error, "A reward pool could not be found, this is a system logic error.");
+				debug_assert!(
+					false,
+					"A reward pool could not be found, this is a system logic error."
+				);
+				Error::<T>::RewardPoolNotFound
+			})?;
+			let current_balance = T::Currency::free_balance(&reward_pool.account_id);
 
-		// 	let reward_pool = RewardPools::<T>::get(&delegator.pool).unwrap_or_else(|| {
-		// 		// The reward pool does not yet exist; this must be the first claimed payout for
-		// 		// the pool, so we must make the reward pool
-		// 		RewardPool { balance: Zero::zero(), shares: Zero::zero(), total_earnings: Zero::zero() }
-		// 	});
+			// DO MATHS TO CALCULATE PAYOUT
 
-		// 	Ok(())
-		// }
+			// The earnings since the last claimed payout
+			let new_earnings = current_balance.saturating_sub(reward_pool.balance);
+
+			// The lifetime earnings of the of the reward pool
+			let new_total_earnings = new_earnings.saturating_add(reward_pool.total_earnings);
+
+			// The new shares that will be added to the pool. For every unit of balance that has
+			// been earned by the reward pool, we inflate the reward pool shares by
+			// `primary_pool.total_shares`. In effect this allows each, single unit of balance (e.g.
+			// plank) to be divvied up pro-rata among delegators based on shares.
+			// TODO this needs to be some sort of BigUInt arithmetic
+			let new_shares = primary_pool.shares.saturating_mul(new_earnings);
+
+			// The shares of the reward pool after taking into account the new earnings
+			let current_shares = reward_pool.shares.saturating_add(new_shares);
+
+			// The rewards pool's earnings since the last time this delegator claimed a payout
+			let new_earnings_since_last_claim =
+				new_total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
+			// The shares of the reward pool that belong to the delegator.
+			let delegator_virtual_shares =
+				delegator.shares.saturating_mul(new_earnings_since_last_claim);
+
+			let delegator_payout = {
+				let delegator_ratio_of_shares = FixedU128::saturating_from_rational(
+					T::BalanceToU128::convert(delegator_virtual_shares),
+					T::BalanceToU128::convert(current_shares),
+				);
+
+				let payout = delegator_ratio_of_shares
+					.saturating_mul_int(T::BalanceToU128::convert(current_balance));
+				T::U128ToBalance::convert(payout)
+			};
+
+			// TRANSFER PAYOUT TO DELEGATOR
+			T::Currency::transfer(
+				&reward_pool.account_id,
+				&account,
+				delegator_payout,
+				// TODO double check we are ok with dusting the account - If their is a very high
+				// ED this could lead to a non-negligible loss of rewards
+				ExistenceRequirement::AllowDeath, // Dust may be lost here
+			)?;
+
+			Self::deposit_event(Event::<T>::Payout {
+				delegator: account.clone(),
+				pool: delegator.pool,
+				payout: delegator_payout,
+			});
+
+			// RECORD RELEVANT UPDATES
+			delegator.reward_pool_total_earnings = new_total_earnings;
+			reward_pool.shares = current_shares.saturating_sub(delegator_virtual_shares);
+			reward_pool.balance = current_balance;
+			reward_pool.total_earnings = new_total_earnings;
+
+			// WRITE UPDATED DELEGATOR AND REWARD POOL TO STORAGE
+			RewardPools::insert(delegator.pool, reward_pool);
+			Delegators::insert(account.clone(), delegator);
+
+			Ok(())
+		}
 	}
 }
 
@@ -298,8 +377,13 @@ pub mod pallet {
 // 	) -> DispatchResult {
 // Create Stash/Controller account based on parent block hash, block number, and extrinsic index
 // Create Reward Pool account based on Stash/Controller account
+// Move `amount` to the stash / controller account
+// Read in `bondable` - the free balance that we can bond after any neccesary reserv etc
 
 // Bond with `amount`, ensuring that it is over the minimum bond (by min)
+// (might has need to ensure number of targets etc is valid)
+
+// Generate a pool id (look at how assets IDs are generated for inspiration)
 
 //
 // 	}
