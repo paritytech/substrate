@@ -9,13 +9,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use std::collections::BTreeMap;
+
 use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	traits::{Currency, ExistenceRequirement},
 };
 use scale_info::TypeInfo;
-use sp_arithmetic::{FixedPointNumber, FixedU128, biguint::BigUint};
+use sp_arithmetic::{FixedPointNumber, FixedU128};
 use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Saturating, Zero};
 
 pub use pallet::*;
@@ -59,6 +61,7 @@ pub trait NominationProviderTrait<Balance, AccountId, EraIndex> {
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
 	pool: PoolId,
+	/// The quantity of shares this delegator has in the p
 	shares: SharesOf<T>,
 
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
@@ -66,6 +69,8 @@ pub struct Delegator<T: Config> {
 	/// issuance. This value lines up with the `RewardPool.total_earnings` after a delegator claims
 	/// a payout. TODO ^ double check the above is an OK assumption
 	reward_pool_total_earnings: BalanceOf<T>,
+	/// The era this delegator started unbonding at.
+	unbonding_era: Option<T::EraIndex>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -80,6 +85,7 @@ pub struct Pool<T: Config> {
 impl<T: Config> Pool<T> {
 	fn shares_to_issue(&self, new_funds: BalanceOf<T>, pool_free: BalanceOf<T>) -> SharesOf<T> {
 		let shares_per_balance = {
+			// TODO if balance.is_zero() || shares.is_zero() 
 			let balance = T::BalanceToU128::convert(pool_free);
 			let shares = T::BalanceToU128::convert(self.shares);
 			FixedU128::saturating_from_rational(shares, balance)
@@ -98,7 +104,7 @@ pub struct RewardPool<T: Config> {
 	/// The balance of this reward pool after the last claimed payout.
 	balance: BalanceOf<T>,
 	/// The shares of this reward pool after the last claimed payout
-	shares: BigUint,
+	shares: BalanceOf<T>, // TODO maybe MaxEncodedLen or something
 	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
 	/// of all incoming balance.
 	total_earnings: BalanceOf<T>,
@@ -106,13 +112,18 @@ pub struct RewardPool<T: Config> {
 	account_id: T::AccountId,
 }
 
-// #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-// #[codec(mel_bound(T: Config))]
-// struct SubPools<T: frame_system::Config> {
-// 	shares: Shares,
-// 	balance: Balance,
-// 	account_id: T::AccountId,
-// }
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+struct UnbondPool {
+
+}
+
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[codec(mel_bound(T: Config))]
+struct SubPools<T: frame_system::Config> {
+	unbonding: UnbondPool,
+	unbonding: BTreeMap<T::EraIndex, UnbondPools>
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -157,6 +168,10 @@ pub mod pallet {
 			Self::AccountId,
 			Self::EraIndex,
 		>;
+
+		/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
+		/// "average" (TODO need better terminology) unbonding pool.
+		const MAX_UNBOND_POOL_LIFE: u32;
 
 		// MaxPools
 	}
@@ -204,6 +219,8 @@ pub mod pallet {
 		AccountBelongsToOtherPool,
 		/// The pool has insufficient balance to bond as a nominator.
 		InsufficientBond,
+		/// The delegator is already unbonding.
+		AlreadyUnbonding,
 	}
 
 	#[pallet::call]
@@ -249,6 +266,7 @@ pub mod pallet {
 				// TODO this likely needs to be the reward pools total earnings at this block
 				// - go and double check
 				reward_pool_total_earnings: Zero::zero(),
+				unbonding_era: None,
 			};
 
 			// Do bond extra
@@ -268,8 +286,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// fn unbond()
-
 		/// Claim a payout for a delegator can use this to claim their payout based on the
 		/// rewards /// that the pool has accumulated since their last claimed payout (OR since
 		///
@@ -284,6 +300,10 @@ pub mod pallet {
 			// READ THINGS FROM STORAGE
 			let mut delegator =
 				Delegators::<T>::get(&account).ok_or(Error::<T>::DelegatorNotFound)?;
+
+			// If the delegator is unbonding they cannot claim rewards. Note that when the delagator
+			// goes to unbond, the unbond function should claim rewards for the final time.
+			ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
 			let primary_pool = PrimaryPools::<T>::get(&delegator.pool).ok_or_else(|| {
 				log!(error, "A primary pool could not be found, this is a system logic error.");
 				debug_assert!(
@@ -315,10 +335,10 @@ pub mod pallet {
 			// `primary_pool.total_shares`. In effect this allows each, single unit of balance (e.g.
 			// plank) to be divvied up pro-rata among delegators based on shares.
 			// TODO this needs to be some sort of BigUInt arithmetic
-			let new_shares = primary_pool.shares.mul(new_earnings.into());
+			let new_shares = primary_pool.shares.saturating_mul(new_earnings);
 
 			// The shares of the reward pool after taking into account the new earnings
-			let current_shares = reward_pool.shares.add(new_shares);
+			let current_shares = reward_pool.shares.saturating_add(new_shares);
 
 			// The rewards pool's earnings since the last time this delegator claimed a payout
 			let new_earnings_since_last_claim =
@@ -366,7 +386,26 @@ pub mod pallet {
 
 			Ok(())
 		}
-	}
+
+		/// Unbond _all_ funds.
+		#[pallet::weight(666)]
+		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+
+			// Unbonding is all or nothing and a delegator can only belong to 1 pool.
+			ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
+
+			 let primary_pool = PrimaryPools::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
+			 let sub_pools = SubPools::<T>::get(delegator.pool).ok_or_else(|| {
+				// make sub pool
+			 })?;
+
+
+			// TODO claim rewards (will need to refactor the rewards function)
+			Ok(())
+		}
+    }
 }
 
 // impl<T: Config> Pallet<T> {
