@@ -15,7 +15,7 @@ use frame_support::{
 	traits::{Currency, ExistenceRequirement},
 };
 use scale_info::TypeInfo;
-use sp_arithmetic::{FixedPointNumber, FixedU128};
+use sp_arithmetic::{FixedPointNumber, FixedU128, biguint::BigUint};
 use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Saturating, Zero};
 
 pub use pallet::*;
@@ -98,7 +98,7 @@ pub struct RewardPool<T: Config> {
 	/// The balance of this reward pool after the last claimed payout.
 	balance: BalanceOf<T>,
 	/// The shares of this reward pool after the last claimed payout
-	shares: BalanceOf<T>,
+	shares: BigUint,
 	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
 	/// of all incoming balance.
 	total_earnings: BalanceOf<T>,
@@ -315,10 +315,10 @@ pub mod pallet {
 			// `primary_pool.total_shares`. In effect this allows each, single unit of balance (e.g.
 			// plank) to be divvied up pro-rata among delegators based on shares.
 			// TODO this needs to be some sort of BigUInt arithmetic
-			let new_shares = primary_pool.shares.saturating_mul(new_earnings);
+			let new_shares = primary_pool.shares.mul(new_earnings.into());
 
 			// The shares of the reward pool after taking into account the new earnings
-			let current_shares = reward_pool.shares.saturating_add(new_shares);
+			let current_shares = reward_pool.shares.add(new_shares);
 
 			// The rewards pool's earnings since the last time this delegator claimed a payout
 			let new_earnings_since_last_claim =
