@@ -36,7 +36,7 @@ std = [
 	"lite-json/std",
 	"sp-core/std",
 	"sp-io/std",
-	"sp-keystore",
+	"sp-keystore/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"log/std",
