@@ -766,12 +766,7 @@ where
 		network_config.extra_sets = config
 			.notifications_protocols
 			.into_iter()
-			.map(|p| NonDefaultSetConfig {
-				notifications_protocol: p,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: Default::default(),
-			})
+			.map(|p| NonDefaultSetConfig::new(p, 1024 * 1024).with_config(Default::default()))
 			.collect();
 		if let Some(connect_to) = config.connect_to_peers {
 			let addrs = connect_to

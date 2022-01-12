@@ -146,17 +146,7 @@ impl TransactionsHandlerPrototype {
 
 	/// Returns the configuration of the set to put in the network configuration.
 	pub fn set_config(&self) -> config::NonDefaultSetConfig {
-		config::NonDefaultSetConfig {
-			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: Vec::new(),
-			max_notification_size: MAX_TRANSACTIONS_SIZE,
-			set_config: config::SetConfig {
-				in_peers: 0,
-				out_peers: 0,
-				reserved_nodes: Vec::new(),
-				non_reserved_mode: config::NonReservedPeerMode::Deny,
-			},
-		}
+		config::NonDefaultSetConfig::new(self.protocol_name.clone(), MAX_TRANSACTIONS_SIZE)
 	}
 
 	/// Turns the prototype into the actual handler. Returns a controller that allows controlling

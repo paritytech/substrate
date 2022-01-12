@@ -154,30 +154,23 @@ fn build_nodes_one_proto() -> (
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![config::NonDefaultSetConfig {
-			notifications_protocol: PROTOCOL_NAME,
-			fallback_names: Vec::new(),
-			max_notification_size: 1024 * 1024,
-			set_config: Default::default(),
-		}],
+		extra_sets: vec![config::NonDefaultSetConfig::new(PROTOCOL_NAME, 1024 * 1024)
+			.with_config(Default::default())],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		..config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![config::NonDefaultSetConfig {
-			notifications_protocol: PROTOCOL_NAME,
-			fallback_names: Vec::new(),
-			max_notification_size: 1024 * 1024,
-			set_config: config::SetConfig {
+		extra_sets: vec![config::NonDefaultSetConfig::new(PROTOCOL_NAME, 1024 * 1024).with_config(
+			config::SetConfig {
 				reserved_nodes: vec![config::MultiaddrWithPeerId {
 					multiaddr: listen_addr,
 					peer_id: node1.local_peer_id().clone(),
 				}],
 				..Default::default()
 			},
-		}],
+		)],
 		listen_addresses: vec![],
 		transport: config::TransportConfig::MemoryOnly,
 		..config::NetworkConfiguration::new_local()
@@ -345,12 +338,8 @@ fn lots_of_incoming_peers_works() {
 
 	let (main_node, _) = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
-		extra_sets: vec![config::NonDefaultSetConfig {
-			notifications_protocol: PROTOCOL_NAME,
-			fallback_names: Vec::new(),
-			max_notification_size: 1024 * 1024,
-			set_config: config::SetConfig { in_peers: u32::MAX, ..Default::default() },
-		}],
+		extra_sets: vec![config::NonDefaultSetConfig::new(PROTOCOL_NAME, 1024 * 1024)
+			.with_config(config::SetConfig { in_peers: u32::MAX, ..Default::default() })],
 		transport: config::TransportConfig::MemoryOnly,
 		..config::NetworkConfiguration::new_local()
 	});
@@ -364,18 +353,14 @@ fn lots_of_incoming_peers_works() {
 	for _ in 0..32 {
 		let (_dialing_node, event_stream) = build_test_full_node(config::NetworkConfiguration {
 			listen_addresses: vec![],
-			extra_sets: vec![config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: config::SetConfig {
+			extra_sets: vec![config::NonDefaultSetConfig::new(PROTOCOL_NAME, 1024 * 1024)
+				.with_config(config::SetConfig {
 					reserved_nodes: vec![config::MultiaddrWithPeerId {
 						multiaddr: listen_addr.clone(),
 						peer_id: main_node_peer_id,
 					}],
 					..Default::default()
-				},
-			}],
+				})],
 			transport: config::TransportConfig::MemoryOnly,
 			..config::NetworkConfiguration::new_local()
 		});
@@ -477,30 +462,24 @@ fn fallback_name_working() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, mut events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![config::NonDefaultSetConfig {
-			notifications_protocol: NEW_PROTOCOL_NAME.clone(),
-			fallback_names: vec![PROTOCOL_NAME],
-			max_notification_size: 1024 * 1024,
-			set_config: Default::default(),
-		}],
+		extra_sets: vec![config::NonDefaultSetConfig::new(NEW_PROTOCOL_NAME.clone(), 1024 * 1024)
+			.add_fallback_names(vec![PROTOCOL_NAME])
+			.with_config(Default::default())],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		..config::NetworkConfiguration::new_local()
 	});
 
 	let (_, mut events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![config::NonDefaultSetConfig {
-			notifications_protocol: PROTOCOL_NAME,
-			fallback_names: Vec::new(),
-			max_notification_size: 1024 * 1024,
-			set_config: config::SetConfig {
+		extra_sets: vec![config::NonDefaultSetConfig::new(PROTOCOL_NAME, 1024 * 1024).with_config(
+			config::SetConfig {
 				reserved_nodes: vec![config::MultiaddrWithPeerId {
 					multiaddr: listen_addr,
 					peer_id: node1.local_peer_id().clone(),
 				}],
 				..Default::default()
 			},
-		}],
+		)],
 		listen_addresses: vec![],
 		transport: config::TransportConfig::MemoryOnly,
 		..config::NetworkConfiguration::new_local()

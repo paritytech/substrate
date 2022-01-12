@@ -550,11 +550,12 @@ impl Default for SetConfig {
 	}
 }
 
-/// Extension to [`SetConfig`] for sets that aren't the default set.
-///
-/// > **Note**: As new fields might be added in the future, please consider using the `new` method
-/// >			and modifiers instead of creating this struct manually.
 #[derive(Clone, Debug)]
+struct Trap;
+
+/// Extension to [`SetConfig`] for sets that aren't the default set.
+#[derive(Clone, Debug)]
+#[must_use = "Why would you build a config if you do not use it afterwards?"]
 pub struct NonDefaultSetConfig {
 	/// Name of the notifications protocols of this set. A substream on this set will be
 	/// considered established once this protocol is open.
@@ -573,6 +574,9 @@ pub struct NonDefaultSetConfig {
 	pub max_notification_size: u64,
 	/// Base configuration.
 	pub set_config: SetConfig,
+
+	/// You must use [`NonDefaultSetConfig::new`] to create this structure.
+	_use_new_to_create: Trap,
 }
 
 impl NonDefaultSetConfig {
@@ -588,26 +592,36 @@ impl NonDefaultSetConfig {
 				reserved_nodes: Vec::new(),
 				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
+			_use_new_to_create: Trap,
 		}
 	}
 
 	/// Modifies the configuration to allow non-reserved nodes.
-	pub fn allow_non_reserved(&mut self, in_peers: u32, out_peers: u32) {
+	pub fn allow_non_reserved(mut self, in_peers: u32, out_peers: u32) -> Self {
 		self.set_config.in_peers = in_peers;
 		self.set_config.out_peers = out_peers;
 		self.set_config.non_reserved_mode = NonReservedPeerMode::Accept;
+		self
 	}
 
 	/// Add a node to the list of reserved nodes.
-	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
+	pub fn add_reserved(mut self, peer: MultiaddrWithPeerId) -> Self {
 		self.set_config.reserved_nodes.push(peer);
+		self
 	}
 
 	/// Add a list of protocol names used for backward compatibility.
 	///
 	/// See the explanations in [`NonDefaultSetConfig::fallback_names`].
-	pub fn add_fallback_names(&mut self, fallback_names: Vec<Cow<'static, str>>) {
+	pub fn add_fallback_names(mut self, fallback_names: Vec<Cow<'static, str>>) -> Self {
 		self.fallback_names.extend(fallback_names);
+		self
+	}
+
+	/// Replace the peer set configuration
+	pub fn with_config(mut self, config: SetConfig) -> Self {
+		self.set_config = config;
+		self
 	}
 }
 

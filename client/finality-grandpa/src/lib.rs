@@ -722,18 +722,9 @@ pub fn grandpa_peers_set_config(
 	protocol_name: std::borrow::Cow<'static, str>,
 ) -> sc_network::config::NonDefaultSetConfig {
 	use communication::grandpa_protocol_name;
-	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: protocol_name,
-		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
-		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
-		max_notification_size: 1024 * 1024,
-		set_config: sc_network::config::SetConfig {
-			in_peers: 0,
-			out_peers: 0,
-			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
-		},
-	}
+	// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+	sc_network::config::NonDefaultSetConfig::new(protocol_name, 1024 * 1024)
+		.add_fallback_names(grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect())
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
