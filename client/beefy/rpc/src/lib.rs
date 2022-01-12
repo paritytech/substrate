@@ -38,7 +38,7 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::notification::BeefySignedCommitmentStream;
+use beefy_gadget::notification::{BeefySignedCommitmentStream, BeefyBestBlockStream};
 
 mod notification;
 
@@ -83,8 +83,8 @@ pub trait BeefyApi<Notification, Hash> {
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	executor: SubscriptionTaskExecutor,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<Block> BeefyRpcHandler<Block>
@@ -94,10 +94,22 @@ where
 	/// Creates a new BeefyRpcHandler instance.
 	pub fn new(
 		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+		best_block_stream: BeefyBestBlockStream<Block>,
 		executor: SubscriptionTaskExecutor,
-	) -> Self {
+	) -> Result<Self, Error> {
 		let beefy_best_block = Arc::new(RwLock::new(None));
-		Self { signed_commitment_stream, beefy_best_block, executor }
+
+		let stream = best_block_stream.subscribe();
+		let closure_clone = beefy_best_block.clone();
+		let future = stream.for_each(move |best_beefy| {
+			let async_clone = closure_clone.clone();
+			async move {
+				*async_clone.write() = Some(best_beefy)
+			}
+		});
+
+		executor.spawn_obj(future.boxed().into())?;
+		Ok(Self { signed_commitment_stream, beefy_best_block, executor })
 	}
 }
 
@@ -148,37 +160,97 @@ where
 mod tests {
 	use super::*;
 
-	use beefy_gadget::notification::{BeefySignedCommitment, BeefySignedCommitmentSender};
+	use beefy_gadget::notification::{BeefySignedCommitment, BeefySignedCommitmentSender, BeefyBestBlockStream};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
+	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use jsonrpsee::{types::EmptyParams, RpcModule};
 	use substrate_test_runtime_client::runtime::Block;
 
 	fn setup_io_handler() -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>)
 	{
+		let (_, stream) = BeefyBestBlockStream::<Block>::channel();
+		setup_io_handler_with_best_block_stream(stream)
+	}
+
+	fn setup_io_handler_with_best_block_stream(best_block_stream: BeefyBestBlockStream<Block>) -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (commitment_sender, commitment_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
 
-		(
-			BeefyRpcHandler::new(commitment_stream, sc_rpc::SubscriptionTaskExecutor::default())
-				.into_rpc(),
-			commitment_sender,
-		)
+		let handler = BeefyRpcHandler::new(
+			commitment_stream,
+			best_block_stream,
+			sc_rpc::SubscriptionTaskExecutor::default(),
+		).expect("Setting up the BEEFY RPC handler works");
+
+		(handler.into_rpc(), commitment_sender)
 	}
 
 	#[tokio::test]
 	async fn uninitialized_rpc_handler() {
 		let (rpc, _) = setup_io_handler();
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
+		// TODO: master uses `"code":1` here, see the `impl From<Error> for ErrorCode` – I think this is misusing the
+		// JSONRPC error codes and that it should be left to the JSONRPC library to set the error code.
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 
 		assert_eq!(expected_response, result,);
 	}
 
-	// TODO: (dp)
 	#[tokio::test]
 	async fn latest_finalized_rpc() {
+		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
+		let (io, _) = setup_io_handler_with_best_block_stream(stream);
+
+		let hash = BlakeTwo256::hash(b"42");
+		let r: Result<(), ()> = sender.notify(|| Ok(hash));
+		r.unwrap();
+
+		// Verify RPC `beefy_getFinalizedHead` returns expected hash.
+		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
+		let expected = "{\
+			\"jsonrpc\":\"2.0\",\
+			\"result\":\"0x2f0039e93a27221fcf657fb877a1d4f60307106113e885096cb44a461cd0afbf\",\
+			\"id\":1\
+		}".to_string();
+		// TODO: master uses `"code":1` here, see the `impl From<Error> for ErrorCode` – I think this is misusing the
+		// JSONRPC error codes and that it should be left to the JSONRPC library to set the error code.
+		let not_ready = "{\
+			\"jsonrpc\":\"2.0\",\
+			\"error\":{\"code\":-32000,\"message\":\"BEEFY RPC endpoint not ready\"},\
+			\"id\":1\
+		}".to_string();
+
+		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+		while std::time::Instant::now() < deadline {
+			let (response, _) = io.raw_json_request(request).await.expect("RPC requests work");
+			if response != not_ready {
+				assert_eq!(response, expected);
+				// Success
+				return
+			}
+			std::thread::sleep(std::time::Duration::from_millis(50))
+			// match response {
+			// 	(payload, _) if payload != not_ready => {
+			// 		assert_eq!(payload, expected);
+			// 		// Success
+			// 		return
+			// 	}
+			// 	_ => std::thread::sleep(std::time::Duration::from_millis(50)),
+
+			// }
+			// if response != Some(not_ready.into()) {
+			// 	assert_eq!(response, Some(expected.into()));
+			// 	// Success
+			// 	return
+			// }
+			// std::thread::sleep(std::time::Duration::from_millis(50));
+		}
+
+		panic!(
+			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?"
+		);
 	}
 
 	#[tokio::test]
