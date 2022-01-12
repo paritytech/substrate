@@ -44,10 +44,10 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for frame_benchmarking.
 pub trait WeightInfo {
-	fn addition(i: u32, ) -> Weight;
-	fn subtraction(i: u32, ) -> Weight;
-	fn multiplication(i: u32, ) -> Weight;
-	fn division(i: u32, ) -> Weight;
+	fn addition() -> Weight;
+	fn subtraction() -> Weight;
+	fn multiplication() -> Weight;
+	fn division() -> Weight;
 	fn hashing(i: u32, ) -> Weight;
 	fn sr25519_verification(i: u32, ) -> Weight;
 	fn storage_read(i: u32, ) -> Weight;
@@ -57,16 +57,16 @@ pub trait WeightInfo {
 /// Weights for frame_benchmarking using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn addition(_i: u32, ) -> Weight {
+	fn addition() -> Weight {
 		(284_000 as Weight)
 	}
-	fn subtraction(_i: u32, ) -> Weight {
+	fn subtraction() -> Weight {
 		(279_000 as Weight)
 	}
-	fn multiplication(_i: u32, ) -> Weight {
+	fn multiplication() -> Weight {
 		(278_000 as Weight)
 	}
-	fn division(_i: u32, ) -> Weight {
+	fn division() -> Weight {
 		(274_000 as Weight)
 	}
 	fn hashing(i: u32, ) -> Weight {
@@ -97,13 +97,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn addition(_i: u32, ) -> Weight {
+	fn addition() -> Weight {
 		(284_000 as Weight)
 	}
-	fn subtraction(_i: u32, ) -> Weight {
+	fn subtraction() -> Weight {
 		(279_000 as Weight)
 	}
-	fn multiplication(_i: u32, ) -> Weight {
+	fn multiplication() -> Weight {
 		(278_000 as Weight)
 	}
 	fn division(_i: u32, ) -> Weight {
