@@ -28,7 +28,7 @@
 //! users to make those calls on your network. An example of how this could be
 //! used is to set validator nominations as a valid lottery call. If the lottery
 //! is set to repeat every month, then users would be encouraged to re-nominate
-//! validators every month. A user can ony purchase one ticket per valid call
+//! validators every month. A user can only purchase one ticket per valid call
 //! per lottery.
 //!
 //! This pallet can be configured to use dynamically set calls or statically set
@@ -58,6 +58,8 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, Dispatchable, GetDispatchInfo},
 	ensure,
+	pallet_prelude::MaxEncodedLen,
+	storage::bounded_vec::BoundedVec,
 	traits::{Currency, ExistenceRequirement::KeepAlive, Get, Randomness, ReservableCurrency},
 	PalletId, RuntimeDebug,
 };
@@ -76,7 +78,9 @@ type BalanceOf<T> =
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
 
-#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(
+	Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 pub struct LotteryConfig<BlockNumber, Balance> {
 	/// Price per entry.
 	price: Balance,
@@ -120,6 +124,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The pallet's config trait.
@@ -209,8 +214,13 @@ pub mod pallet {
 
 	/// Users who have purchased a ticket. (Lottery Index, Tickets Purchased)
 	#[pallet::storage]
-	pub(crate) type Participants<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, (u32, Vec<CallIndex>), ValueQuery>;
+	pub(crate) type Participants<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		(u32, BoundedVec<CallIndex, T::MaxCalls>),
+		ValueQuery,
+	>;
 
 	/// Total number of tickets sold.
 	#[pallet::storage]
@@ -226,7 +236,8 @@ pub mod pallet {
 	/// The calls stored in this pallet to be used in an active lottery if configured
 	/// by `Config::ValidateCall`.
 	#[pallet::storage]
-	pub(crate) type CallIndices<T> = StorageValue<_, Vec<CallIndex>, ValueQuery>;
+	pub(crate) type CallIndices<T: Config> =
+		StorageValue<_, BoundedVec<CallIndex, T::MaxCalls>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -237,10 +248,8 @@ pub mod pallet {
 						config.start.saturating_add(config.length).saturating_add(config.delay);
 					if payout_block <= n {
 						let (lottery_account, lottery_balance) = Self::pot();
-						let ticket_count = TicketsCount::<T>::get();
 
-						let winning_number = Self::choose_winner(ticket_count);
-						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
+						let winner = Self::choose_account().unwrap_or(lottery_account);
 						// Not much we can do if this fails...
 						let res = T::Currency::transfer(
 							&Self::account_id(),
@@ -385,7 +394,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Return the pot account and amount of money in the pot.
-	// The existential deposit is not part of the pot so lottery account never gets deleted.
+	/// The existential deposit is not part of the pot so lottery account never gets deleted.
 	fn pot() -> (T::AccountId, BalanceOf<T>) {
 		let account_id = Self::account_id();
 		let balance =
@@ -394,17 +403,19 @@ impl<T: Config> Pallet<T> {
 		(account_id, balance)
 	}
 
-	// Converts a vector of calls into a vector of call indices.
-	fn calls_to_indices(calls: &[<T as Config>::Call]) -> Result<Vec<CallIndex>, DispatchError> {
-		let mut indices = Vec::with_capacity(calls.len());
+	/// Converts a vector of calls into a vector of call indices.
+	fn calls_to_indices(
+		calls: &[<T as Config>::Call],
+	) -> Result<BoundedVec<CallIndex, T::MaxCalls>, DispatchError> {
+		let mut indices = BoundedVec::<CallIndex, T::MaxCalls>::with_bounded_capacity(calls.len());
 		for c in calls.iter() {
 			let index = Self::call_to_index(c)?;
-			indices.push(index)
+			indices.try_push(index).map_err(|_| Error::<T>::TooManyCalls)?;
 		}
 		Ok(indices)
 	}
 
-	// Convert a call to it's call index by encoding the call and taking the first two bytes.
+	/// Convert a call to it's call index by encoding the call and taking the first two bytes.
 	fn call_to_index(call: &<T as Config>::Call) -> Result<CallIndex, DispatchError> {
 		let encoded_call = call.encode();
 		if encoded_call.len() < 2 {
@@ -413,7 +424,7 @@ impl<T: Config> Pallet<T> {
 		return Ok((encoded_call[0], encoded_call[1]))
 	}
 
-	// Logic for buying a ticket.
+	/// Logic for buying a ticket.
 	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Config>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
@@ -433,7 +444,7 @@ impl<T: Config> Pallet<T> {
 				let index = LotteryIndex::<T>::get();
 				// If lottery index doesn't match, then reset participating calls and index.
 				if *lottery_index != index {
-					*participating_calls = Vec::new();
+					*participating_calls = Default::default();
 					*lottery_index = index;
 				} else {
 					// Check that user is not already participating under this call.
@@ -442,12 +453,12 @@ impl<T: Config> Pallet<T> {
 						Error::<T>::AlreadyParticipating
 					);
 				}
+				participating_calls.try_push(call_index).map_err(|_| Error::<T>::TooManyCalls)?;
 				// Check user has enough funds and send it to the Lottery account.
 				T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 				// Create a new ticket.
 				TicketsCount::<T>::put(new_ticket_count);
 				Tickets::<T>::insert(ticket_count, caller.clone());
-				participating_calls.push(call_index);
 				Ok(())
 			},
 		)?;
@@ -457,8 +468,22 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// Randomly choose a winner from among the total number of participants.
-	fn choose_winner(total: u32) -> u32 {
+	/// Randomly choose a winning ticket and return the account that purchased it.
+	/// The more tickets an account bought, the higher are its chances of winning.
+	/// Returns `None` if there is no winner.
+	fn choose_account() -> Option<T::AccountId> {
+		match Self::choose_ticket(TicketsCount::<T>::get()) {
+			None => None,
+			Some(ticket) => Tickets::<T>::get(ticket),
+		}
+	}
+
+	/// Randomly choose a winning ticket from among the total number of tickets.
+	/// Returns `None` if there are no tickets.
+	fn choose_ticket(total: u32) -> Option<u32> {
+		if total == 0 {
+			return None
+		}
 		let mut random_number = Self::generate_random_number(0);
 
 		// Best effort attempt to remove bias from modulus operator.
@@ -470,15 +495,15 @@ impl<T: Config> Pallet<T> {
 			random_number = Self::generate_random_number(i);
 		}
 
-		random_number % total
+		Some(random_number % total)
 	}
 
-	// Generate a random number from a given seed.
-	// Note that there is potential bias introduced by using modulus operator.
-	// You should call this function with different seed values until the random
-	// number lies within `u32::MAX - u32::MAX % n`.
-	// TODO: deal with randomness freshness
-	// https://github.com/paritytech/substrate/issues/8311
+	/// Generate a random number from a given seed.
+	/// Note that there is potential bias introduced by using modulus operator.
+	/// You should call this function with different seed values until the random
+	/// number lies within `u32::MAX - u32::MAX % n`.
+	/// TODO: deal with randomness freshness
+	/// https://github.com/paritytech/substrate/issues/8311
 	fn generate_random_number(seed: u32) -> u32 {
 		let (random_seed, _) = T::Randomness::random(&(T::PalletId::get(), seed).encode());
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
