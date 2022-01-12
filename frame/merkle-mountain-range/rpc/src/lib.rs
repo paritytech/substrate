@@ -70,7 +70,7 @@ pub struct LeafBatchProof<BlockHash> {
 }
 
 impl<BlockHash> LeafBatchProof<BlockHash> {
-	/// Create new `LeafBatchProof` from a given vector of concrete `leaf` and `proof`.
+	/// Create new `LeafBatchProof` from a given vector of ([Leaf], [LeafIndex]) and a [BatchProof].
 	pub fn new<Leaf, MmrHash>(
 		block_hash: BlockHash,
 		leaves: Vec<(Leaf, LeafIndex)>,
