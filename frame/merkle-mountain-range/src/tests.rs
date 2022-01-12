@@ -289,7 +289,7 @@ fn should_generate_batch_proof_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for all leaves
-		let (leaves, proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap();
+		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap();
 
 		// then
 		assert_eq!(
