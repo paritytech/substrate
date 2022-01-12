@@ -42,7 +42,6 @@ variables:                         &default-vars
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
-  PIPELINE_SCRIPTS_TAG:            "v0.4"
 
 default:
   cache:                           {}
@@ -543,6 +542,8 @@ cargo-check-macos:
 
 #### stage:                        build
 
+# PIPELINE_SCRIPTS_TAG can be found in the project variables
+
 .check-dependent-project:          &check-dependent-project
   stage:                           build
   <<:                              *docker-env
@@ -772,8 +773,6 @@ publish-rustdoc:
     # whole space-separated value.
     - '[[ " ${RUSTDOCS_DEPLOY_REFS} " =~ " ${CI_COMMIT_REF_NAME} " ]] || exit 0'
     # setup ssh
-    # FIXME: add ssh to docker image
-    - apt-get update && apt-get install -y ssh
     - eval $(ssh-agent)
     - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
     - mkdir ~/.ssh && touch ~/.ssh/known_hosts
