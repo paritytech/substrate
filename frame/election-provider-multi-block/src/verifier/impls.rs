@@ -15,30 +15,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: clean and standardize the imports
+
 use crate::{helpers, SolutionOf, SupportsOf};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{ExtendedBalance, PageIndex};
 use sp_npos_elections::{ElectionScore, NposSolution};
-use sp_runtime::traits::One;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-use super::{FeasibilityError, Verifier};
-use frame_support::{dispatch::Weight, ensure, traits::Get};
+use super::*;
+use frame_support::{dispatch::Weight, ensure, traits::Get, RuntimeDebug};
 
-// export only to super.
-pub(super) use pallet::{QueuedSolution, VerifyingSolution};
+use pallet::*;
 
-// export publicly.
-pub use pallet::{Config, Error, Event, Pallet, __substrate_event_check};
+#[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy, MaxEncodedLen, RuntimeDebug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub enum Status {
+	Ongoing(PageIndex),
+	Nothing,
+}
+
+impl Default for Status {
+	fn default() -> Self {
+		Self::Nothing
+	}
+}
+
+#[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy, MaxEncodedLen)]
+enum ValidSolution {
+	X,
+	Y,
+}
+
+impl Default for ValidSolution {
+	fn default() -> Self {
+		ValidSolution::Y
+	}
+}
+
+impl ValidSolution {
+	fn other(&self) -> Self {
+		match *self {
+			ValidSolution::X => ValidSolution::Y,
+			ValidSolution::Y => ValidSolution::X,
+		}
+	}
+}
 
 #[frame_support::pallet]
-mod pallet {
+pub(crate) mod pallet {
 	use crate::{
 		types::{Pagify, SupportsOf},
 		verifier::Verifier,
 	};
 
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::pallet_prelude::{ValueQuery, *};
 	use frame_system::pallet_prelude::*;
 	use sp_npos_elections::evaluate_support_core;
 
@@ -87,6 +119,8 @@ mod pallet {
 		/// Maximum number of supports (aka. winners/validators/targets) that can be represented in
 		/// a page of results.
 		type MaxWinnersPerPage: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
+
+		type SolutionDataProvider: crate::verifier::SolutionDataProvider<Solution = Self::Solution>;
 	}
 
 	#[pallet::error]
@@ -103,151 +137,11 @@ mod pallet {
 		/// NOTE: if the index is 0, then this could mean either the feasibility of the last page
 		/// was wrong, or the final checks of `finalize_verification` failed.
 		VerificationFailed(PageIndex, FeasibilityError),
-		/// The given page of a solution has been verified.
-		Verified(PageIndex),
+		/// The given page of a solution has been verified, with the given number of winners being
+		/// found in it.
+		Verified(PageIndex, u32),
 		/// A solution with the given score has replaced our current best solution.
 		Queued(ElectionScore, Option<ElectionScore>),
-	}
-
-	/// A wrapper struct for storage items related to the current verifying solution.
-	///
-	/// It manages
-	/// - [`VerifyingSolutionStorage`]
-	/// - [`VerifyingSolutionPage`]
-	/// - [`VerifyingSolutionScore`]
-	///
-	/// All 3 of these are created with a [`Self::put`], and removed with [`Self::kill`].
-	pub(crate) struct VerifyingSolution<T: Config>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> VerifyingSolution<T> {
-		// -------------------- mutating methods
-
-		/// Write a new verifying solution's page.
-		pub(crate) fn put_page(
-			page_index: PageIndex,
-			page_solution: SolutionOf<T>,
-		) -> Result<(), ()> {
-			if Self::exists() {
-				return Err(())
-			}
-			VerifyingSolutionStorage::<T>::insert(page_index, page_solution);
-
-			Ok(())
-		}
-
-		/// This should be called after all pages of a verifying solution are loaded with
-		/// [`put_page`].
-		///
-		/// If solution is actively being verified this will exit early andreturn an error.
-		///
-		/// If the score is not adequate the the verify solution will be wiped and an error will
-		/// be returned.
-		pub(crate) fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
-			if Self::exists() {
-				sublog!(warn, "verifier", "an attempt was made to overwrite the solution actively be verified. This is a system logic error that should be reported.");
-				return Err(())
-			}
-
-			// this is the first check within this pallet of the score. NOTE: this must be the last
-			// check as it wipes the storage of the verifying solution.
-			if let Err(_) = Pallet::<T>::ensure_score_quality(claimed_score) {
-				Self::kill();
-				return Err(())
-			}
-
-			VerifyingSolutionScore::<T>::put(claimed_score);
-			VerifyingSolutionPage::<T>::put(crate::Pallet::<T>::msp());
-
-			Ok(())
-		}
-
-		/// Remove all associated storage items.
-		pub(crate) fn kill() {
-			VerifyingSolutionStorage::<T>::remove_all(None);
-			VerifyingSolutionPage::<T>::kill();
-			VerifyingSolutionScore::<T>::kill();
-		}
-
-		/// Try and proceed the [`VerifyingSolutionPage`] to its next value.
-		///
-		/// If [`VerifyingSolutionPage`] exists and its value is larger than 1, then it is
-		/// decremented and true is returned. This index can be used to fetch the next page that
-		/// needs to be verified.
-		///
-		/// If [`VerifyingSolutionPage`] does not exists, or its value is 0 (verification is already
-		/// over), `false` is returned.
-		pub(crate) fn proceed_page() -> bool {
-			if let Some(current) = VerifyingSolutionPage::<T>::get() {
-				if let Some(x) = current.checked_sub(One::one()) {
-					VerifyingSolutionPage::<T>::put(x);
-					true
-				} else {
-					false
-				}
-			} else {
-				false
-			}
-		}
-
-		// -------------------- non-mutating methods
-
-		/// `true` if a SEALED solution is already exist in the verification queue. No other
-		/// submissions to the verifier should be allowed while this is true, else you risk
-		/// overwriting the solution actively being verified.
-		pub(crate) fn exists() -> bool {
-			VerifyingSolutionScore::<T>::exists()
-		}
-
-		/// The `claimed` score of the current verifying solution.
-		pub(crate) fn get_score() -> Option<ElectionScore> {
-			VerifyingSolutionScore::<T>::get()
-		}
-
-		/// Get the partial solution at the given page of the verifying solution.
-		pub(crate) fn get_page(index: PageIndex) -> Option<SolutionOf<T>> {
-			VerifyingSolutionStorage::<T>::get(index)
-		}
-
-		/// The current page that is being verified.
-		pub(crate) fn current_page() -> Option<PageIndex> {
-			VerifyingSolutionPage::<T>::get()
-		}
-
-		#[cfg(test)]
-		pub(crate) fn iter() -> impl Iterator<Item = (PageIndex, SolutionOf<T>)> {
-			VerifyingSolutionStorage::<T>::iter()
-		}
-	}
-
-	/// A solution that should be verified next.
-	#[pallet::storage]
-	type VerifyingSolutionStorage<T: Config> =
-		StorageMap<_, Twox64Concat, PageIndex, SolutionOf<T>>;
-	/// Next page that should be verified.
-	#[pallet::storage]
-	type VerifyingSolutionPage<T: Config> = StorageValue<_, PageIndex>;
-	/// The claimed score of the current verifying solution
-	#[pallet::storage]
-	type VerifyingSolutionScore<T: Config> = StorageValue<_, ElectionScore>;
-
-	#[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy, MaxEncodedLen)]
-	enum ValidSolution {
-		X,
-		Y,
-	}
-
-	impl Default for ValidSolution {
-		fn default() -> Self {
-			ValidSolution::Y
-		}
-	}
-
-	impl ValidSolution {
-		fn other(&self) -> Self {
-			match *self {
-				ValidSolution::X => ValidSolution::Y,
-				ValidSolution::Y => ValidSolution::X,
-			}
-		}
 	}
 
 	// ---- All storage items about the verifying solution.
@@ -533,7 +427,11 @@ mod pallet {
 	/// Can be set via `set_minimum_untrusted_score`.
 	#[pallet::storage]
 	#[pallet::getter(fn minimum_untrusted_score)]
-	type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
+	pub(crate) type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn status_storage)]
+	pub(crate) type StatusStorage<T: Config> = StorageValue<_, Status, ValueQuery>;
 
 	#[pallet::pallet]
 	#[pallet::generate_storage_info]
@@ -607,64 +505,67 @@ mod pallet {
 	}
 }
 
+impl<T: Config> crate::verifier::SignedVerifier for Pallet<T> {
+	type SolutionDataProvider = T::SolutionDataProvider;
+	fn start() {
+		StatusStorage::<T>::put(Status::Ongoing(crate::Pallet::<T>::msp()));
+	}
+}
+
 impl<T: Config> Pallet<T> {
-	// enum Status {
-	// 	Ongoing(PageIndex),
-	// 	Finished(ElectionScore),
-	// 	Nothing,
-	// }
-
-	// fn do_on_initialize_remote() -> Weight {
-	// 	// check if status is Ongoing(`page`)
-	// 	// fetch `page_data` from `SolutionDataProvider::get(page)`
-	// 	// verify `page_data`
-	// 	// store in invalid variant
-	// 	// put status to its next variant (tick forward)
-	// 	// if NOT LAST PAGE, then finish for this block
-	// 	// if LAST PAGE, then
-	// 	//    - flip valid invalid variant, finalize
-	// 	//    - inform `SolutionDataProvider`
-	// 	//    -
-	// 	//    -
-	// }
-
 	fn do_on_initialize() -> Weight {
-		if let Some(current_page) = VerifyingSolution::<T>::current_page() {
-			// TODO: This means that one of the pages was empty, as if the call site forgot it.
-			// This should never happen and must be defensive, nonetheless `default` is a valid
-			// solution and we continue. Write a test for this as well.
-			let page_solution = VerifyingSolution::<T>::get_page(current_page).unwrap_or_default();
-
-			let maybe_support =
+		if let Status::Ongoing(current_page) = Self::status_storage() {
+			let page_solution =
+				<T::SolutionDataProvider as SolutionDataProvider>::get_page(current_page);
+			let maybe_supports =
 				<Self as Verifier>::feasibility_check_page(page_solution, current_page);
 
 			sublog!(
 				debug,
 				"verifier",
-				"verified page {} of a solution, contains, outcome = {:?}",
+				"verified page {} of a solution, outcome = {:?}",
 				current_page,
-				maybe_support.as_ref().map(|s| s.len())
+				maybe_supports.as_ref().map(|s| s.len())
 			);
 
-			match maybe_support {
-				Ok(support) => {
-					Self::deposit_event(Event::<T>::Verified(current_page));
-					// this page was gucci; write it and check-in the next page.
-					QueuedSolution::<T>::set_invalid_page(current_page, support);
-					let has_more_pages = VerifyingSolution::<T>::proceed_page();
+			match maybe_supports {
+				Ok(supports) => {
+					Self::deposit_event(Event::<T>::Verified(current_page, supports.len() as u32));
+					QueuedSolution::<T>::set_invalid_page(current_page, supports);
 
-					if !has_more_pages {
-						let _outcome = Self::finalize_verification();
+					if current_page > crate::Pallet::<T>::lsp() {
+						// not last page, just tick forward.
+						StatusStorage::<T>::put(Status::Ongoing(current_page.saturating_sub(1)));
+					} else {
+						// last page, finalize everything.
+						let claimed_score = T::SolutionDataProvider::get_score();
+						match Self::finalize_verification(claimed_score) {
+							Ok(_) => {
+								T::SolutionDataProvider::report_result(VerificationResult::Valid);
+							},
+							Err(err) => {
+								Self::deposit_event(Event::<T>::VerificationFailed(
+									current_page,
+									err,
+								));
+								QueuedSolution::<T>::clear_invalid();
+								T::SolutionDataProvider::report_result(VerificationResult::Invalid)
+							},
+							// in both cases, we are not back to the nothing state.
+						}
+						StatusStorage::<T>::put(Status::Nothing);
 					}
 				},
 				Err(err) => {
-					// the page solution was invalid
+					// the page solution was invalid.
 					Self::deposit_event(Event::<T>::VerificationFailed(current_page, err));
-					VerifyingSolution::<T>::kill();
+					StatusStorage::<T>::put(Status::Nothing);
 					QueuedSolution::<T>::clear_invalid();
+					T::SolutionDataProvider::report_result(VerificationResult::Invalid)
 				},
-			};
+			}
 		}
+
 		0
 	}
 
@@ -674,17 +575,14 @@ impl<T: Config> Pallet<T> {
 	/// Returns `Ok()` if everything is okay, at which point the valid variant of the queued
 	/// solution will be updated, and the verifying solution will be removed. Returns
 	/// `Err(Feasibility)` if any of the last verification steps fail.
-	fn finalize_verification() -> Result<(), FeasibilityError> {
+	fn finalize_verification(claimed_score: ElectionScore) -> Result<(), FeasibilityError> {
 		let outcome = QueuedSolution::<T>::final_score()
 			.and_then(|(final_score, winner_count)| {
-				let claimed_score = VerifyingSolution::<T>::get_score().unwrap();
-
 				let desired_targets = crate::Snapshot::<T>::desired_targets().unwrap();
 				// claimed_score checked prior in seal_unverified_solution
 				match (final_score == claimed_score, winner_count == desired_targets) {
 					(true, true) => {
 						// all good, finalize this solution
-						VerifyingSolution::<T>::kill();
 						// NOTE: must be before the call to `finalize_correct`.
 						Self::deposit_event(Event::<T>::Queued(
 							final_score,
@@ -699,10 +597,8 @@ impl<T: Config> Pallet<T> {
 				}
 			})
 			.map_err(|err| {
-				sublog!(warn, "verifier", "Finalizing solution was invalid due {:?}.", err);
+				sublog!(warn, "verifier", "Finalizing solution was invalid due to {:?}.", err);
 				// In case of any of the errors, kill the solution.
-				Self::deposit_event(Event::<T>::VerificationFailed(0, err.clone()));
-				VerifyingSolution::<T>::kill();
 				QueuedSolution::<T>::clear_invalid();
 				err
 			});
@@ -816,12 +712,17 @@ impl<T: Config> Pallet<T> {
 
 #[cfg(test)]
 mod feasibility_check {
-	use crate::{mock::*, types::*, verifier::*, *};
+	use crate::{
+		mock::*,
+		types::*,
+		verifier::{impls::Status, *},
+		*,
+	};
 	// disambiguate event
 	use crate::verifier::Event;
 
 	use frame_election_provider_support::Support;
-	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::Bounded;
 
 	#[test]
@@ -988,31 +889,37 @@ mod feasibility_check {
 				vec![vec![(40, Support { total: 20, voters: vec![(2, 10), (3, 10)] })]],
 				0,
 			);
-			load_solution_for_verification(paged);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+
+			// initial state
+			assert_eq!(VerifierPallet::status_storage(), Status::Nothing);
+			assert!(MockSignedResults::get().is_empty());
+
+			load_and_start_verification(paged);
+			assert_eq!(VerifierPallet::status_storage(), Status::Ongoing(2));
 
 			// now let it verify
 			roll_to(26);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
+			assert_eq!(VerifierPallet::status_storage(), Status::Ongoing(1));
 			roll_to(27);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(0));
+			assert_eq!(VerifierPallet::status_storage(), Status::Ongoing(0));
+			assert!(MockSignedResults::get().is_empty());
 			roll_to(28);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+			assert_eq!(VerifierPallet::status_storage(), Status::Nothing);
 
-			// everything about verifying is cleared..
-			assert_storage_noop!(VerifyingSolution::<Runtime>::kill());
 			// ..nothing is queued
 			assert!(QueuedSolution::<Runtime>::queued_solution().is_none());
 			// ..and these are our events.
 			assert_eq!(
 				verifier_events(),
 				vec![
-					Event::<Runtime>::Verified(2),
-					Event::<Runtime>::Verified(1),
-					Event::<Runtime>::Verified(0),
+					Event::<Runtime>::Verified(2, 1), // msp has one winner, but no more.
+					Event::<Runtime>::Verified(1, 0),
+					Event::<Runtime>::Verified(0, 0),
 					Event::<Runtime>::VerificationFailed(0, FeasibilityError::WrongWinnerCount),
 				]
 			);
+
+			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Invalid]);
 		})
 	}
 
@@ -1026,7 +933,7 @@ mod feasibility_check {
 			paged.score[0] += 1;
 			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
 
-			load_solution_for_verification(paged);
+			load_and_start_verification(paged);
 			roll_to_full_verification();
 
 			// nothing is verified.
@@ -1034,17 +941,19 @@ mod feasibility_check {
 			assert_eq!(
 				verifier_events(),
 				vec![
-					Event::<Runtime>::Verified(2),
-					Event::<Runtime>::Verified(1),
-					Event::<Runtime>::Verified(0),
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Verified(1, 2),
+					Event::<Runtime>::Verified(0, 2),
 					Event::<Runtime>::VerificationFailed(0, FeasibilityError::InvalidScore)
 				]
 			);
+
+			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Invalid]);
 		})
 	}
 
 	#[test]
-	fn heuristic_max_voters_per_target_per_page() {
+	fn heuristic_max_backers_per_winner_per_page() {
 		ExtBuilder::default().max_backing_per_target(2).build_and_execute(|| {
 			roll_to(25);
 			ensure_full_snapshot();
@@ -1059,19 +968,20 @@ mod feasibility_check {
 				solution_pages: vec![solution].try_into().unwrap(),
 				..Default::default()
 			};
-			load_solution_for_verification(paged);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+			load_and_start_verification(paged);
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 
 			// now let it verify. It should fail on the first page.
 			roll_to(26);
+
 			// killing all storage items should be a noop, which is equal to saying: ensure none of
 			// them exist anymore.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_storage_noop!(VerifyingSolution::<Runtime>::kill());
+			assert_eq!(VerifierPallet::status(), Status::Nothing);
 			assert_eq!(
 				verifier_events(),
 				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::TooManyBackings)]
 			);
+			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Invalid]);
 		})
 	}
 
@@ -1096,17 +1006,18 @@ mod feasibility_check {
 				solution_pages: vec![solution].try_into().unwrap(),
 				..Default::default()
 			};
-			load_solution_for_verification(paged);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+			load_and_start_verification(paged);
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 
 			// now let it verify. It should fail on the first page.
 			roll_to(26);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_storage_noop!(VerifyingSolution::<Runtime>::kill());
+
+			assert_eq!(VerifierPallet::status(), Status::Nothing);
 			assert_eq!(
 				verifier_events(),
 				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::WrongWinnerCount)]
 			);
+			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Invalid]);
 		})
 	}
 }
@@ -1126,22 +1037,27 @@ mod misc {
 			ensure_full_snapshot();
 
 			let solution = mine_full_solution().unwrap();
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 
 			// now let it verify
 			roll_to(26);
+
 			// It done after just one block.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+			assert_eq!(VerifierPallet::status(), Status::Nothing);
 			assert_eq!(
 				verifier_events(),
-				vec![Event::<Runtime>::Verified(0), Event::<Runtime>::Queued([15, 40, 850], None)]
+				vec![
+					Event::<Runtime>::Verified(0, 2),
+					Event::<Runtime>::Queued([15, 40, 850], None)
+				]
 			);
+			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Valid]);
 		});
 	}
 
 	#[test]
 	fn basic_multi_verification_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().pages(3).build_and_execute(|| {
 			// load a solution after the snapshot has been created.
 			roll_to(25);
 			ensure_full_snapshot();
@@ -1149,31 +1065,44 @@ mod misc {
 			let solution = mine_full_solution().unwrap();
 			// ------------- ^^^^^^^^^^^^
 
-			load_solution_for_verification(solution);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+			load_and_start_verification(solution);
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
 
 			// now let it verify
 			roll_to(26);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
-			assert_eq!(verifier_events(), vec![Event::<Runtime>::Verified(2)]);
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(1));
+			assert_eq!(verifier_events(), vec![Event::<Runtime>::Verified(2, 2)]);
+			// 1 page verified, stored as invalid.
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
+
 			roll_to(27);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(0));
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(0));
 			assert_eq!(
 				verifier_events(),
-				vec![Event::<Runtime>::Verified(2), Event::<Runtime>::Verified(1),]
+				vec![Event::<Runtime>::Verified(2, 2), Event::<Runtime>::Verified(1, 2),]
 			);
+			// 2 pages verified, stored as invalid.
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
+
+			// nothing is queued yet.
+			assert_eq!(MockSignedResults::get(), vec![]);
+			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
+			assert!(QueuedSolution::<Runtime>::queued_solution().is_none());
+
+			// last block.
 			roll_to(28);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+			assert_eq!(VerifierPallet::status(), Status::Nothing);
 			assert_eq!(
 				verifier_events(),
 				vec![
-					Event::<Runtime>::Verified(2),
-					Event::<Runtime>::Verified(1),
-					Event::<Runtime>::Verified(0),
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Verified(1, 2),
+					Event::<Runtime>::Verified(0, 2),
 					Event::<Runtime>::Queued([55, 130, 8650], None),
 				]
 			);
+			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Valid]);
 
 			// a solution has been queued
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
@@ -1191,35 +1120,49 @@ mod misc {
 			let solution = mine_solution(2).unwrap();
 			// -------------------------^^^
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
 
 			// now let it verify
 			roll_to(26);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
-			assert_eq!(verifier_events(), vec![Event::<Runtime>::Verified(2)]);
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(1));
+			assert_eq!(verifier_events(), vec![Event::<Runtime>::Verified(2, 2)]);
+			// 1 page verified, stored as invalid.
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
+
 			roll_to(27);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(0));
+			assert_eq!(VerifierPallet::status(), Status::Ongoing(0));
 			assert_eq!(
 				verifier_events(),
-				vec![Event::<Runtime>::Verified(2), Event::<Runtime>::Verified(1),]
+				vec![Event::<Runtime>::Verified(2, 2), Event::<Runtime>::Verified(1, 2),]
 			);
+			// 2 page verified, stored as invalid.
+			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
+
+			// nothing is queued yet.
+			assert_eq!(MockSignedResults::get(), vec![]);
+			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
+			assert!(QueuedSolution::<Runtime>::queued_solution().is_none());
+
 			roll_to(28);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+			assert_eq!(VerifierPallet::status(), Status::Nothing);
 
 			assert_eq!(
 				verifier_events(),
 				vec![
-					Event::<Runtime>::Verified(2),
-					Event::<Runtime>::Verified(1),
-					Event::<Runtime>::Verified(0),
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Verified(1, 2),
+					// this is a partial solution, no one in this page (lsp).
+					Event::<Runtime>::Verified(0, 0),
 					Event::<Runtime>::Queued([30, 70, 2500], None),
 				]
 			);
 
 			// a solution has been queued
+			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Valid]);
+			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
 			assert!(QueuedSolution::<Runtime>::queued_solution().is_some());
 
 			// page 0 is empty..
@@ -1231,398 +1174,399 @@ mod misc {
 	}
 }
 
-#[cfg(test)]
-mod verifier_trait {
-	use super::*;
-	use crate::{mock::*, types::Pagify, verifier::Verifier};
-
-	#[test]
-	fn setting_unverified_and_sealing_it() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			roll_to(25);
-			let paged = mine_full_solution().unwrap();
-			let score = paged.score.clone();
-
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index as PageIndex,
-					solution_page,
-				));
-			}
-
-			// after this, the pages should be set
-			assert_ok!(VerifierPallet::seal_unverified_solution(paged.score.clone(),));
-
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), Some(score));
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-
-			roll_to(26);
-
-			// check the queued solution variants
-			assert!(QueuedSolution::<Runtime>::get_invalid_page(2).is_some());
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
-
-			// check the backings
-			assert!(QueuedSolution::<Runtime>::get_backing_page(2).is_some());
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 1);
-
-			// check the page cursor.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
-
-			roll_to(27);
-
-			// check the queued solution variants
-			assert!(QueuedSolution::<Runtime>::get_invalid_page(1).is_some());
-			assert!(QueuedSolution::<Runtime>::get_backing_page(1).is_some());
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
-
-			// check the backings
-			assert!(QueuedSolution::<Runtime>::get_backing_page(1).is_some());
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 2);
-
-			// check the page cursor.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(0));
-
-			// now we finalize everything.
-			roll_to(28);
-
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-
-			// invalid related queued solution data is cleared
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-
-			// everything about the verifying solution is now removed.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
-		});
-	}
-
-	#[test]
-	fn correct_solution_becomes_queued() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
-			let paged = mine_full_solution().unwrap();
-
-			// set each page of the solution
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index as PageIndex,
-					solution_page,
-				));
-			}
-
-			// seal the solution
-			assert_ok!(VerifierPallet::seal_unverified_solution(paged.score.clone(),));
-
-			// load the last page of the solution
-			roll_to(27);
-
-			// the invalid queued solution is full
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
-			// and there is no queued solution
-			assert_eq!(QueuedSolution::<Runtime>::queued_solution(), None);
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 2);
-
-			// now we finalize everything
-			roll_to(28);
-
-			// the solution becomes the valid solution
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-			// which is also the queued solution
-			assert!(matches!(QueuedSolution::<Runtime>::queued_solution(), Some(_)));
-
-			// backing is cleared
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-
-			// everything about the verifying solution is now removed.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
-		});
-	}
-
-	#[test]
-	fn incorrect_solution_is_discarded() {
-		// first solution and invalid, should do nothing and make sure storage is totally cleared.
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			roll_to(25);
-			let mut paged = mine_full_solution().unwrap();
-			let score = paged.score.clone();
-
-			// change a vote in the 2nd page to out an out-of-bounds target index
-			assert_eq!(
-				paged.solution_pages[1]
-					.votes2
-					.iter_mut()
-					.filter(|(v, _, _)| *v == 0)
-					.map(|(_, t, _)| t[0].0 = 4)
-					.count(),
-				1,
-			);
-
-			// set each page of the solution
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				let page_index = page_index as PageIndex;
-				assert_ok!(
-					VerifierPallet::set_unverified_solution_page(page_index, solution_page,)
-				);
-			}
-
-			// seal the solution
-			assert_ok!(VerifierPallet::seal_unverified_solution(paged.score.clone(),));
-			// thus full loading the verify solution
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 3);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), Some(score));
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
-
-			// the queued solution is untouched
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-
-			// verifying the 1st page is fine since it is valid
-			roll_to(26);
-
-			// cursor decrements by 1
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
-			// the queued solution has its first page
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
-			// and the target backings now include the first page
-			assert!(QueuedSolution::<Runtime>::get_backing_page(2).is_some());
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 1);
-
-			// the 2nd page is rejected since it is invalid
-			roll_to(27);
-
-			// .. so the verifying solution is totally cleared
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-
-			// and the invalid backing solution is totally cleared/
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-		});
-	}
-
-	#[test]
-	fn better_solution_replaces_ok_solution() {
-		// we have an ok solution, new better one comes along, we stored it.
-
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			roll_to(25);
-			let good_paged = mine_full_solution().unwrap();
-			let good_score = good_paged.score.clone();
-			let ok_paged = raw_paged_solution_low_score();
-			let ok_score = ok_paged.score.clone();
-
-			// ensure the good solution is actually better than the ok solution
-			assert!(good_score > ok_score);
-
-			// set
-			for (page_index, solution_page) in ok_paged.solution_pages.pagify(Pages::get()) {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index,
-					solution_page.clone(),
-				));
-			}
-			// and seal the ok solution against the verifier
-			assert_ok!(VerifierPallet::seal_unverified_solution(ok_score));
-
-			// load the 2nd page of the ok solution
-			roll_to(27);
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
-
-			// load the last page of the ok solution, and finalize it
-			roll_to(28);
-
-			// the valid solution and invalid are flipped
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(ok_score));
-
-			// everything about the verifying solution is now removed
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
-
-			// the queued solutions backings are cleared
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-
-			for (page_index, solution_page) in good_paged.solution_pages.iter().enumerate() {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index as PageIndex,
-					solution_page.clone(),
-				));
-			}
-			// and seal the good solution against the verifier
-			assert_ok!(VerifierPallet::seal_unverified_solution(good_score,));
-
-			// load the 2nd page of the good solution
-			roll_to(30);
-
-			// the invalid solution is the good solution
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), Some(good_score));
-
-			// and the valid solution is still the ok one
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(ok_score));
-
-			// finalize the good solution
-			roll_to(31);
-
-			// the invalid solution is cleared
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-
-			// the good solution becomes the valid solution
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
-
-			// the verifying solution is now removed.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
-
-			// the queued solutions backings are cleared
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-		});
-	}
-
-	#[test]
-	fn ok_solution_does_not_replace_good_solution() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			roll_to(25);
-			let good_paged = mine_full_solution().unwrap();
-			let good_score = good_paged.score.clone();
-			let ok_paged = raw_paged_solution_low_score();
-			let ok_score = ok_paged.score.clone();
-
-			// ensure the good solution is actually better than the ok solution
-			assert!(good_score > ok_score);
-
-			// set
-			for (page_index, solution_page) in good_paged.solution_pages.pagify(Pages::get()) {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index,
-					solution_page.clone(),
-				));
-			}
-			// and seal the ok solution against the verifier
-			assert_ok!(VerifierPallet::seal_unverified_solution(good_paged.score.clone(),));
-
-			// load the last page of the ok solution, and finalize it
-			roll_to(28);
-
-			// the valid solution and invalid are flipped
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
-
-			// set
-			for (page_index, solution_page) in ok_paged.solution_pages.pagify(Pages::get()) {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index,
-					solution_page.clone(),
-				));
-			}
-			// and the solution will not be successfully sealed because the score is too low
-			assert!(VerifierPallet::seal_unverified_solution(ok_score,).is_err());
-
-			// the invalid solution is cleared
-			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
-
-			// the good solution is still the valid solution
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
-
-			// everything about the verifying solution is now removed.
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
-
-			// the queued solutions backings are cleared
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-		});
-	}
-
-	#[test]
-	fn incorrect_solution_does_not_mess_with_queued() {
-		// we have a good solution, bad one comes along, we discard it safely
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			roll_to(25);
-
-			let paged = mine_full_solution().unwrap();
-			let score = paged.score.clone();
-			assert_eq!(score, [55, 130, 8650,]);
-
-			let mut bad_paged = mine_full_solution().unwrap();
-			bad_paged.score = [54, 129, 8640];
-
-			// change a vote in the 2nd page to out an out-of-bounds target index
-			assert_eq!(
-				bad_paged.solution_pages[1]
-					.votes2
-					.iter_mut()
-					.filter(|(v, _, _)| *v == 0)
-					.map(|(_, t, _)| t[0].0 = 4)
-					.count(),
-				1,
-			);
-
-			// set
-			for (page_index, solution_page) in paged.solution_pages.pagify(Pages::get()) {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index,
-					solution_page.clone(),
-				));
-			}
-			// and seal the solution against the verifier
-			assert_ok!(VerifierPallet::seal_unverified_solution(score));
-
-			// finalize the solution
-			roll_to(28);
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
-
-			// set
-			for (page_index, solution_page) in bad_paged.solution_pages.pagify(Pages::get()) {
-				assert_ok!(VerifierPallet::set_unverified_solution_page(
-					page_index,
-					solution_page.clone(),
-				));
-			}
-			// and the bad solution cannot be successfully sealed against the verifier because it
-			// has a bad score.
-			assert!(VerifierPallet::seal_unverified_solution(bad_paged.score.clone(),).is_err());
-
-			// then the verifying solution storage is wiped
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
-
-			// everything about the verifying solution is removed
-			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
-			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
-
-			// the queued solutions backings are cleared
-			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
-
-			// the valid solution is unchanged
-			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-		});
-	}
-
-	#[test]
-	fn rejects_new_verification_if_ongoing() {
-		todo!("if there's already some verification ongoing, then we don't accept new ones");
-		// not sure what to do about `force_set_single_page_valid`
-	}
-}
+// TODO: maybe a task for zeke.
+// #[cfg(test)]
+// mod verifier_trait {
+// 	use super::*;
+// 	use crate::{mock::*, types::Pagify, verifier::Verifier};
+
+// 	#[test]
+// 	fn setting_unverified_and_sealing_it() {
+// 		ExtBuilder::default().pages(3).build_and_execute(|| {
+// 			roll_to(25);
+// 			let paged = mine_full_solution().unwrap();
+// 			let score = paged.score.clone();
+
+// 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index as PageIndex,
+// 					solution_page,
+// 				));
+// 			}
+
+// 			// after this, the pages should be set
+// 			assert_ok!(VerifierPallet::seal_unverified_solution(paged.score.clone(),));
+
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), Some(score));
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+// 			roll_to(26);
+
+// 			// check the queued solution variants
+// 			assert!(QueuedSolution::<Runtime>::get_invalid_page(2).is_some());
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
+
+// 			// check the backings
+// 			assert!(QueuedSolution::<Runtime>::get_backing_page(2).is_some());
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 1);
+
+// 			// check the page cursor.
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
+
+// 			roll_to(27);
+
+// 			// check the queued solution variants
+// 			assert!(QueuedSolution::<Runtime>::get_invalid_page(1).is_some());
+// 			assert!(QueuedSolution::<Runtime>::get_backing_page(1).is_some());
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
+
+// 			// check the backings
+// 			assert!(QueuedSolution::<Runtime>::get_backing_page(1).is_some());
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 2);
+
+// 			// check the page cursor.
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(0));
+
+// 			// now we finalize everything.
+// 			roll_to(28);
+
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+
+// 			// invalid related queued solution data is cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+// 			// everything about the verifying solution is now removed.
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+// 		});
+// 	}
+
+// 	#[test]
+// 	fn correct_solution_becomes_queued() {
+// 		ExtBuilder::default().build_and_execute(|| {
+// 			roll_to(25);
+// 			let paged = mine_full_solution().unwrap();
+
+// 			// set each page of the solution
+// 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index as PageIndex,
+// 					solution_page,
+// 				));
+// 			}
+
+// 			// seal the solution
+// 			assert_ok!(VerifierPallet::seal_unverified_solution(paged.score.clone(),));
+
+// 			// load the last page of the solution
+// 			roll_to(27);
+
+// 			// the invalid queued solution is full
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
+// 			// and there is no queued solution
+// 			assert_eq!(QueuedSolution::<Runtime>::queued_solution(), None);
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 2);
+
+// 			// now we finalize everything
+// 			roll_to(28);
+
+// 			// the solution becomes the valid solution
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+// 			// which is also the queued solution
+// 			assert!(matches!(QueuedSolution::<Runtime>::queued_solution(), Some(_)));
+
+// 			// backing is cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+// 			// everything about the verifying solution is now removed.
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+// 		});
+// 	}
+
+// 	#[test]
+// 	fn incorrect_solution_is_discarded() {
+// 		// first solution and invalid, should do nothing and make sure storage is totally cleared.
+// 		ExtBuilder::default().pages(3).build_and_execute(|| {
+// 			roll_to(25);
+// 			let mut paged = mine_full_solution().unwrap();
+// 			let score = paged.score.clone();
+
+// 			// change a vote in the 2nd page to out an out-of-bounds target index
+// 			assert_eq!(
+// 				paged.solution_pages[1]
+// 					.votes2
+// 					.iter_mut()
+// 					.filter(|(v, _, _)| *v == 0)
+// 					.map(|(_, t, _)| t[0].0 = 4)
+// 					.count(),
+// 				1,
+// 			);
+
+// 			// set each page of the solution
+// 			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
+// 				let page_index = page_index as PageIndex;
+// 				assert_ok!(
+// 					VerifierPallet::set_unverified_solution_page(page_index, solution_page,)
+// 				);
+// 			}
+
+// 			// seal the solution
+// 			assert_ok!(VerifierPallet::seal_unverified_solution(paged.score.clone(),));
+// 			// thus full loading the verify solution
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 3);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), Some(score));
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(2));
+
+// 			// the queued solution is untouched
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+// 			// verifying the 1st page is fine since it is valid
+// 			roll_to(26);
+
+// 			// cursor decrements by 1
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), Some(1));
+// 			// the queued solution has its first page
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 1);
+// 			// and the target backings now include the first page
+// 			assert!(QueuedSolution::<Runtime>::get_backing_page(2).is_some());
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 1);
+
+// 			// the 2nd page is rejected since it is invalid
+// 			roll_to(27);
+
+// 			// .. so the verifying solution is totally cleared
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+
+// 			// and the invalid backing solution is totally cleared/
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+// 		});
+// 	}
+
+// 	#[test]
+// 	fn better_solution_replaces_ok_solution() {
+// 		// we have an ok solution, new better one comes along, we stored it.
+
+// 		ExtBuilder::default().pages(3).build_and_execute(|| {
+// 			roll_to(25);
+// 			let good_paged = mine_full_solution().unwrap();
+// 			let good_score = good_paged.score.clone();
+// 			let ok_paged = raw_paged_solution_low_score();
+// 			let ok_score = ok_paged.score.clone();
+
+// 			// ensure the good solution is actually better than the ok solution
+// 			assert!(good_score > ok_score);
+
+// 			// set
+// 			for (page_index, solution_page) in ok_paged.solution_pages.pagify(Pages::get()) {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index,
+// 					solution_page.clone(),
+// 				));
+// 			}
+// 			// and seal the ok solution against the verifier
+// 			assert_ok!(VerifierPallet::seal_unverified_solution(ok_score));
+
+// 			// load the 2nd page of the ok solution
+// 			roll_to(27);
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
+
+// 			// load the last page of the ok solution, and finalize it
+// 			roll_to(28);
+
+// 			// the valid solution and invalid are flipped
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(ok_score));
+
+// 			// everything about the verifying solution is now removed
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+
+// 			// the queued solutions backings are cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+// 			for (page_index, solution_page) in good_paged.solution_pages.iter().enumerate() {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index as PageIndex,
+// 					solution_page.clone(),
+// 				));
+// 			}
+// 			// and seal the good solution against the verifier
+// 			assert_ok!(VerifierPallet::seal_unverified_solution(good_score,));
+
+// 			// load the 2nd page of the good solution
+// 			roll_to(30);
+
+// 			// the invalid solution is the good solution
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 2);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), Some(good_score));
+
+// 			// and the valid solution is still the ok one
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(ok_score));
+
+// 			// finalize the good solution
+// 			roll_to(31);
+
+// 			// the invalid solution is cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+
+// 			// the good solution becomes the valid solution
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
+
+// 			// the verifying solution is now removed.
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+
+// 			// the queued solutions backings are cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+// 		});
+// 	}
+
+// 	#[test]
+// 	fn ok_solution_does_not_replace_good_solution() {
+// 		ExtBuilder::default().pages(3).build_and_execute(|| {
+// 			roll_to(25);
+// 			let good_paged = mine_full_solution().unwrap();
+// 			let good_score = good_paged.score.clone();
+// 			let ok_paged = raw_paged_solution_low_score();
+// 			let ok_score = ok_paged.score.clone();
+
+// 			// ensure the good solution is actually better than the ok solution
+// 			assert!(good_score > ok_score);
+
+// 			// set
+// 			for (page_index, solution_page) in good_paged.solution_pages.pagify(Pages::get()) {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index,
+// 					solution_page.clone(),
+// 				));
+// 			}
+// 			// and seal the ok solution against the verifier
+// 			assert_ok!(VerifierPallet::seal_unverified_solution(good_paged.score.clone(),));
+
+// 			// load the last page of the ok solution, and finalize it
+// 			roll_to(28);
+
+// 			// the valid solution and invalid are flipped
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
+
+// 			// set
+// 			for (page_index, solution_page) in ok_paged.solution_pages.pagify(Pages::get()) {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index,
+// 					solution_page.clone(),
+// 				));
+// 			}
+// 			// and the solution will not be successfully sealed because the score is too low
+// 			assert!(VerifierPallet::seal_unverified_solution(ok_score,).is_err());
+
+// 			// the invalid solution is cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::invalid_iter().count(), 0);
+
+// 			// the good solution is still the valid solution
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(good_score));
+
+// 			// everything about the verifying solution is now removed.
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+
+// 			// the queued solutions backings are cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+// 		});
+// 	}
+
+// 	#[test]
+// 	fn incorrect_solution_does_not_mess_with_queued() {
+// 		// we have a good solution, bad one comes along, we discard it safely
+// 		ExtBuilder::default().pages(3).build_and_execute(|| {
+// 			roll_to(25);
+
+// 			let paged = mine_full_solution().unwrap();
+// 			let score = paged.score.clone();
+// 			assert_eq!(score, [55, 130, 8650,]);
+
+// 			let mut bad_paged = mine_full_solution().unwrap();
+// 			bad_paged.score = [54, 129, 8640];
+
+// 			// change a vote in the 2nd page to out an out-of-bounds target index
+// 			assert_eq!(
+// 				bad_paged.solution_pages[1]
+// 					.votes2
+// 					.iter_mut()
+// 					.filter(|(v, _, _)| *v == 0)
+// 					.map(|(_, t, _)| t[0].0 = 4)
+// 					.count(),
+// 				1,
+// 			);
+
+// 			// set
+// 			for (page_index, solution_page) in paged.solution_pages.pagify(Pages::get()) {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index,
+// 					solution_page.clone(),
+// 				));
+// 			}
+// 			// and seal the solution against the verifier
+// 			assert_ok!(VerifierPallet::seal_unverified_solution(score));
+
+// 			// finalize the solution
+// 			roll_to(28);
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+
+// 			// set
+// 			for (page_index, solution_page) in bad_paged.solution_pages.pagify(Pages::get()) {
+// 				assert_ok!(VerifierPallet::set_unverified_solution_page(
+// 					page_index,
+// 					solution_page.clone(),
+// 				));
+// 			}
+// 			// and the bad solution cannot be successfully sealed against the verifier because it
+// 			// has a bad score.
+// 			assert!(VerifierPallet::seal_unverified_solution(bad_paged.score.clone(),).is_err());
+
+// 			// then the verifying solution storage is wiped
+// 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+
+// 			// everything about the verifying solution is removed
+// 			assert_eq!(VerifyingSolution::<Runtime>::current_page(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::get_score(), None);
+// 			assert_eq!(VerifyingSolution::<Runtime>::iter().count(), 0);
+
+// 			// the queued solutions backings are cleared
+// 			assert_eq!(QueuedSolution::<Runtime>::backing_iter().count(), 0);
+
+// 			// the valid solution is unchanged
+// 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
+// 		});
+// 	}
+
+// 	#[test]
+// 	fn rejects_new_verification_if_ongoing() {
+// 		todo!("if there's already some verification ongoing, then we don't accept new ones");
+// 		// not sure what to do about `force_set_single_page_valid`
+// 	}
+// }

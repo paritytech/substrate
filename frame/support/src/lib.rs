@@ -124,7 +124,11 @@ impl TypeId for PalletId {
 #[cfg(feature = "std")]
 macro_rules! bounded_vec {
 	($ ($values:expr),* ) => {
-		$crate::sp_std::vec![$($values),*].try_into().unwrap()
+		{
+			// bring in `vec` and `try_into`.
+			use $crate::sp_std::prelude::*;
+			$crate::sp_std::vec![$($values),*].try_into().unwrap()
+		}
 	}
 }
 

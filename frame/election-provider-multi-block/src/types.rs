@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryInto;
+
 use frame_support::{
 	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -83,15 +85,16 @@ pub trait Pagify<T> {
 }
 
 impl<T> Pagify<T> for Vec<T> {
-	fn pagify(&self, bound: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_> {
+	fn pagify(&self, desired_pages: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, &T)> + '_> {
 		Box::new(
 			self.into_iter()
 				.enumerate()
 				.map(|(p, s)| (p.saturated_into::<PageIndex>(), s))
 				.map(move |(p, s)| {
-					let bound_usize = bound as usize;
-					debug_assert!(self.len() <= bound_usize);
-					let padding = bound_usize.saturating_sub(self.len());
+					let desired_pages_usize = desired_pages as usize;
+					// TODO: this could be an error.
+					debug_assert!(self.len() <= desired_pages_usize);
+					let padding = desired_pages_usize.saturating_sub(self.len());
 					let new_page = p.saturating_add(padding.saturated_into::<PageIndex>());
 					(new_page, s)
 				}),
@@ -100,6 +103,30 @@ impl<T> Pagify<T> for Vec<T> {
 
 	fn into_pagify(self, _: PageIndex) -> Box<dyn Iterator<Item = (PageIndex, T)>> {
 		todo!()
+	}
+}
+
+pub trait PadSolutionPages: Sized {
+	fn pad_solution_pages(self, desired_pages: PageIndex) -> Self;
+}
+
+impl<T: Default + Clone, Bound: frame_support::traits::Get<u32>> PadSolutionPages
+	for BoundedVec<T, Bound>
+{
+	fn pad_solution_pages(self, desired_pages: PageIndex) -> Self {
+		let desired_pages_usize = (desired_pages).min(Bound::get()) as usize;
+		debug_assert!(self.len() <= desired_pages_usize);
+		if self.len() == desired_pages_usize {
+			return self
+		}
+
+		// we basically need to prepend the list with this many items.
+		let empty_slots = desired_pages_usize.saturating_sub(self.len());
+		let self_as_vec = sp_std::iter::repeat(Default::default())
+			.take(empty_slots)
+			.chain(self.into_iter())
+			.collect::<Vec<_>>();
+		self_as_vec.try_into().expect("sum of both iterators has at most `desired_pages_usize` items; `desired_pages_usize` is `min`-ed by `Bound`; conversion cannot fail; qed")
 	}
 }
 
@@ -265,7 +292,9 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 
 #[cfg(test)]
 mod pagify {
-	use super::Pagify;
+	use frame_support::{bounded_vec, traits::ConstU32, BoundedVec};
+
+	use super::{PadSolutionPages, Pagify};
 
 	#[test]
 	fn pagify_works() {
@@ -278,5 +307,20 @@ mod pagify {
 		// pads the values otherwise
 		assert_eq!(vec![10, 11].pagify(3).collect::<Vec<_>>(), vec![(1, &10), (2, &11)]);
 		assert_eq!(vec![10].pagify(3).collect::<Vec<_>>(), vec![(2, &10)]);
+	}
+
+	#[test]
+	fn pad_solution_pages_works() {
+		// noop if the solution is complete, as with pagify.
+		let solution: BoundedVec<_, ConstU32<3>> = bounded_vec![1u32, 2, 3];
+		assert_eq!(solution.pad_solution_pages(3).into_inner(), vec![1, 2, 3]);
+
+		// pads the solution with default if partial..
+		let solution: BoundedVec<_, ConstU32<3>> = bounded_vec![2, 3];
+		assert_eq!(solution.pad_solution_pages(3).into_inner(), vec![0, 2, 3]);
+
+		// behaves the same as `pad_solution_pages(3)`.
+		let solution: BoundedVec<_, ConstU32<3>> = bounded_vec![2, 3];
+		assert_eq!(solution.pad_solution_pages(4).into_inner(), vec![0, 2, 3]);
 	}
 }

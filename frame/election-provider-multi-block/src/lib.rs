@@ -1327,36 +1327,28 @@ mod election_provider {
 	use super::*;
 	use crate::{mock::*, unsigned::miner::BaseMiner, verifier::Verifier, Phase};
 	use frame_election_provider_support::ElectionProvider;
-	use frame_support::assert_ok;
+	use frame_support::assert_storage_noop;
 
 	#[test]
 	fn multi_page_elect_works() {
 		ExtBuilder::default().pages(3).build_and_execute(|| {
+			// TODO: this test is quite similar to `basic_multi_verification_works`, except this one
+			// should ideally be written using a real signed phase implementation.
 			roll_to(25);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
-
-			// put each submitted page
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				assert_ok!(<Runtime as crate::Config>::Verifier::set_unverified_solution_page(
-					page_index as PageIndex,
-					solution_page,
-				));
-			}
-
-			// "seal" the submission
-			assert_ok!(<Runtime as crate::Config>::Verifier::seal_unverified_solution(score));
+			load_and_start_verification(paged);
 
 			// there is no queued solution prior to the last page of the solution getting verified
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
 
-			// roll to the block it is finalized
+			// roll to the block it is finalized.
 			roll_to(28);
 
-			// there is now a queued solution
+			// there is now a queued solution.
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
 
 			// pre-elect state
@@ -1367,26 +1359,21 @@ mod election_provider {
 			assert!(Snapshot::<Runtime>::targets().is_some());
 
 			// call elect for each page
-			let msp = <Runtime as Config>::Pages::get();
-			let solutions = (0..msp)
+			let _paged_solution = (MultiBlock::lsp()..MultiBlock::msp())
 				.rev() // 2, 1, 0
 				.map(|page| {
 					crate::Pallet::<Runtime>::elect(page as PageIndex).unwrap();
 				})
 				.collect::<Vec<_>>();
-			assert_eq!(solutions.len(), msp as usize);
 
-			// after the last elect:
-			// verifier is cleared,
+			// after the last elect, verifier is cleared,
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
 			assert_eq!(Round::<Runtime>::get(), 1);
 			// and the snapshot is cleared.
-			assert!(Snapshot::<Runtime>::metadata().is_none());
-			assert!(Snapshot::<Runtime>::desired_targets().is_none());
-			assert!(Snapshot::<Runtime>::targets().is_none());
+			assert_storage_noop!(Snapshot::<Runtime>::kill());
 		});
 	}
 
@@ -1399,21 +1386,7 @@ mod election_provider {
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
-
-			// put each submitted page
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				assert_ok!(
-					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
-					)
-				);
-			}
-
-			// "seal" the submission
-			assert_ok!(
-				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(score)
-			);
+			load_and_start_verification(paged);
 
 			// there is no queued solution prior to the last page of the solution getting verified
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
@@ -1434,44 +1407,27 @@ mod election_provider {
 			// there are 3 pages (indexes 2..=0), but we short circuit by just calling 0.
 			let _solution = crate::Pallet::<Runtime>::elect(0).unwrap();
 
-			// after elect(0) is called:
-			// verifier is cleared,
+			// after elect(0) is called, verifier is cleared,
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
 			assert_eq!(Round::<Runtime>::get(), 1);
 			// and the snapshot is cleared.
-			assert!(Snapshot::<Runtime>::metadata().is_none());
-			assert!(Snapshot::<Runtime>::desired_targets().is_none());
-			assert!(Snapshot::<Runtime>::targets().is_none());
+			assert_storage_noop!(Snapshot::<Runtime>::kill());
 		});
 	}
 
 	#[test]
 	fn elect_does_not_finish_without_call_of_page_0() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().pages(3).build_and_execute(|| {
 			roll_to(25);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
-
-			// put each submitted page
-			for (page_index, solution_page) in paged.solution_pages.into_iter().enumerate() {
-				assert_ok!(
-					<<Runtime as crate::Config>::Verifier as Verifier>::set_unverified_solution_page(
-						page_index as PageIndex,
-						solution_page,
-					)
-				);
-			}
-
-			// "seal" the submission
-			assert_ok!(
-				<<Runtime as crate::Config>::Verifier as Verifier>::seal_unverified_solution(score)
-			);
+			load_and_start_verification(paged);
 
 			// there is no queued solution prior to the last page of the solution getting verified
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
@@ -1490,8 +1446,7 @@ mod election_provider {
 			assert!(Snapshot::<Runtime>::targets().is_some());
 
 			// call elect for page 2 and 1, but NOT 0
-			let msp = <Runtime as Config>::Pages::get();
-			let solutions = (1..msp)
+			let solutions = (1..=MultiBlock::msp())
 				.rev() // 2, 1
 				.map(|page| {
 					crate::Pallet::<Runtime>::elect(page as PageIndex).unwrap();
@@ -1541,294 +1496,292 @@ mod snapshot {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	/*
-	#[test]
-	fn signed_phase_void() {
-		ExtBuilder::default().phases(0, 10).build_and_execute(|| {
-			roll_to(15);
-			assert!(MultiBlock::current_phase().is_off());
+// #[cfg(test)]
+// mod tests {
 
-			roll_to(19);
-			assert!(MultiBlock::current_phase().is_off());
+// 	#[test]
+// 	fn signed_phase_void() {
+// 		ExtBuilder::default().phases(0, 10).build_and_execute(|| {
+// 			roll_to(15);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			roll_to(20);
-			assert!(MultiBlock::current_phase().is_unsigned_open_at(20));
-			assert!(MultiBlock::snapshot().is_some());
+// 			roll_to(19);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			roll_to(30);
-			assert!(MultiBlock::current_phase().is_unsigned_open_at(20));
+// 			roll_to(20);
+// 			assert!(MultiBlock::current_phase().is_unsigned_open_at(20));
+// 			assert!(MultiBlock::snapshot().is_some());
 
-			MultiBlock::elect().unwrap();
+// 			roll_to(30);
+// 			assert!(MultiBlock::current_phase().is_unsigned_open_at(20));
 
-			assert!(MultiBlock::current_phase().is_off());
-			assert!(MultiBlock::snapshot().is_none());
-		});
-	}
+// 			MultiBlock::elect().unwrap();
 
-	#[test]
-	fn unsigned_phase_void() {
-		ExtBuilder::default().phases(10, 0).build_and_execute(|| {
-			roll_to(15);
-			assert!(MultiBlock::current_phase().is_off());
+// 			assert!(MultiBlock::current_phase().is_off());
+// 			assert!(MultiBlock::snapshot().is_none());
+// 		});
+// 	}
 
-			roll_to(19);
-			assert!(MultiBlock::current_phase().is_off());
+// 	#[test]
+// 	fn unsigned_phase_void() {
+// 		ExtBuilder::default().phases(10, 0).build_and_execute(|| {
+// 			roll_to(15);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			roll_to(20);
-			assert!(MultiBlock::current_phase().is_signed());
-			assert!(MultiBlock::snapshot().is_some());
+// 			roll_to(19);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			roll_to(30);
-			assert!(MultiBlock::current_phase().is_signed());
+// 			roll_to(20);
+// 			assert!(MultiBlock::current_phase().is_signed());
+// 			assert!(MultiBlock::snapshot().is_some());
 
-			assert_ok!(MultiBlock::elect());
+// 			roll_to(30);
+// 			assert!(MultiBlock::current_phase().is_signed());
 
-			assert!(MultiBlock::current_phase().is_off());
-			assert!(MultiBlock::snapshot().is_none());
-		});
-	}
+// 			assert_ok!(MultiBlock::elect());
 
-	#[test]
-	fn both_phases_void() {
-		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
-			roll_to(15);
-			assert!(MultiBlock::current_phase().is_off());
+// 			assert!(MultiBlock::current_phase().is_off());
+// 			assert!(MultiBlock::snapshot().is_none());
+// 		});
+// 	}
 
-			roll_to(19);
-			assert!(MultiBlock::current_phase().is_off());
+// 	#[test]
+// 	fn both_phases_void() {
+// 		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
+// 			roll_to(15);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			roll_to(20);
-			assert!(MultiBlock::current_phase().is_off());
+// 			roll_to(19);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			roll_to(30);
-			assert!(MultiBlock::current_phase().is_off());
+// 			roll_to(20);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			// This module is now only capable of doing on-chain backup.
-			assert_ok!(MultiBlock::elect());
+// 			roll_to(30);
+// 			assert!(MultiBlock::current_phase().is_off());
 
-			assert!(MultiBlock::current_phase().is_off());
-		});
-	}
+// 			// This module is now only capable of doing on-chain backup.
+// 			assert_ok!(MultiBlock::elect());
 
-	#[test]
-	fn early_termination() {
-		// An early termination in the signed phase, with no queued solution.
-		ExtBuilder::default().build_and_execute(|| {
-			// Signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+// 			assert!(MultiBlock::current_phase().is_off());
+// 		});
+// 	}
 
-			roll_to(15);
-			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
-			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			assert_eq!(MultiBlock::round(), 1);
+// 	#[test]
+// 	fn early_termination() {
+// 		// An early termination in the signed phase, with no queued solution.
+// 		ExtBuilder::default().build_and_execute(|| {
+// 			// Signed phase started at block 15 and will end at 25.
+// 			roll_to(14);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
-			// An unexpected call to elect.
-			roll_to(20);
-			MultiBlock::elect().unwrap();
+// 			roll_to(15);
+// 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+// 			assert_eq!(MultiBlock::round(), 1);
 
-			// We surely can't have any feasible solutions. This will cause an on-chain election.
-			assert_eq!(
-				multi_block_events(),
-				vec![
-					Event::SignedPhaseStarted(1),
-					Event::ElectionFinalized(Some(ElectionCompute::OnChain))
-				],
-			);
-			// All storage items must be cleared.
-			assert_eq!(MultiBlock::round(), 2);
-			assert!(MultiBlock::snapshot().is_none());
-			assert!(MultiBlock::snapshot_metadata().is_none());
-			assert!(MultiBlock::desired_targets().is_none());
-			assert!(MultiBlock::queued_solution().is_none());
-			assert!(MultiBlock::signed_submissions().is_empty());
-		})
-	}
+// 			// An unexpected call to elect.
+// 			roll_to(20);
+// 			MultiBlock::elect().unwrap();
 
-	#[test]
-	fn early_termination_with_submissions() {
-		// an early termination in the signed phase, with no queued solution.
-		ExtBuilder::default().build_and_execute(|| {
-			// signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+// 			// We surely can't have any feasible solutions. This will cause an on-chain election.
+// 			assert_eq!(
+// 				multi_block_events(),
+// 				vec![
+// 					Event::SignedPhaseStarted(1),
+// 					Event::ElectionFinalized(Some(ElectionCompute::OnChain))
+// 				],
+// 			);
+// 			// All storage items must be cleared.
+// 			assert_eq!(MultiBlock::round(), 2);
+// 			assert!(MultiBlock::snapshot().is_none());
+// 			assert!(MultiBlock::snapshot_metadata().is_none());
+// 			assert!(MultiBlock::desired_targets().is_none());
+// 			assert!(MultiBlock::queued_solution().is_none());
+// 			assert!(MultiBlock::signed_submissions().is_empty());
+// 		})
+// 	}
 
-			roll_to(15);
-			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
-			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			assert_eq!(MultiBlock::round(), 1);
+// 	#[test]
+// 	fn early_termination_with_submissions() {
+// 		// an early termination in the signed phase, with no queued solution.
+// 		ExtBuilder::default().build_and_execute(|| {
+// 			// signed phase started at block 15 and will end at 25.
+// 			roll_to(14);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
-			// fill the queue with signed submissions
-			for s in 0..SignedMaxSubmissions::get() {
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
-				assert_ok!(MultiBlock::submit(
-					crate::mock::Origin::signed(99),
-					Box::new(solution),
-					MultiBlock::signed_submissions().len() as u32
-				));
-			}
+// 			roll_to(15);
+// 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(1)]);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+// 			assert_eq!(MultiBlock::round(), 1);
 
-			// an unexpected call to elect.
-			roll_to(20);
-			assert!(MultiBlock::elect().is_ok());
+// 			// fill the queue with signed submissions
+// 			for s in 0..SignedMaxSubmissions::get() {
+// 				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+// 				assert_ok!(MultiBlock::submit(
+// 					crate::mock::Origin::signed(99),
+// 					Box::new(solution),
+// 					MultiBlock::signed_submissions().len() as u32
+// 				));
+// 			}
 
-			// all storage items must be cleared.
-			assert_eq!(MultiBlock::round(), 2);
-			assert!(MultiBlock::snapshot().is_none());
-			assert!(MultiBlock::snapshot_metadata().is_none());
-			assert!(MultiBlock::desired_targets().is_none());
-			assert!(MultiBlock::queued_solution().is_none());
-			assert!(MultiBlock::signed_submissions().is_empty());
-		})
-	}
+// 			// an unexpected call to elect.
+// 			roll_to(20);
+// 			assert!(MultiBlock::elect().is_ok());
 
-	#[test]
-	fn fallback_strategy_works() {
-		ExtBuilder::default().fallback(FallbackStrategy::OnChain).build_and_execute(|| {
-			roll_to(15);
-			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+// 			// all storage items must be cleared.
+// 			assert_eq!(MultiBlock::round(), 2);
+// 			assert!(MultiBlock::snapshot().is_none());
+// 			assert!(MultiBlock::snapshot_metadata().is_none());
+// 			assert!(MultiBlock::desired_targets().is_none());
+// 			assert!(MultiBlock::queued_solution().is_none());
+// 			assert!(MultiBlock::signed_submissions().is_empty());
+// 		})
+// 	}
 
-			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+// 	#[test]
+// 	fn fallback_strategy_works() {
+// 		ExtBuilder::default().fallback(FallbackStrategy::OnChain).build_and_execute(|| {
+// 			roll_to(15);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
-			// Zilch solutions thus far.
-			let (supports, _) = MultiBlock::elect().unwrap();
+// 			roll_to(25);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
-			assert_eq!(
-				supports,
-				vec![
-					(30, Support { total: 40, voters: vec![(2, 5), (4, 5), (30, 30)] }),
-					(40, Support { total: 60, voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)] })
-				]
-			)
-		});
+// 			// Zilch solutions thus far.
+// 			let (supports, _) = MultiBlock::elect().unwrap();
 
-		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
-			roll_to(15);
-			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+// 			assert_eq!(
+// 				supports,
+// 				vec![
+// 					(30, Support { total: 40, voters: vec![(2, 5), (4, 5), (30, 30)] }),
+// 					(40, Support { total: 60, voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)] })
+// 				]
+// 			)
+// 		});
 
-			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+// 		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
+// 			roll_to(15);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
-			// Zilch solutions thus far.
-			assert_eq!(MultiBlock::elect().unwrap_err(), ElectionError::NoFallbackConfigured);
-		})
-	}
+// 			roll_to(25);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
-	#[test]
-	fn snapshot_too_big_failure_onchain_fallback() {
-		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
-		ExtBuilder::default().build_and_execute(|| {
-			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
+// 			// Zilch solutions thus far.
+// 			assert_eq!(MultiBlock::elect().unwrap_err(), ElectionError::NoFallbackConfigured);
+// 		})
+// 	}
 
-			// Signed phase failed to open.
-			roll_to(15);
-			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+// 	#[test]
+// 	fn snapshot_too_big_failure_onchain_fallback() {
+// 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
+// 		ExtBuilder::default().build_and_execute(|| {
+// 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
-			// Unsigned phase failed to open.
-			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+// 			// Signed phase failed to open.
+// 			roll_to(15);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
-			// On-chain backup works though.
-			roll_to(29);
-			let (supports, _) = MultiBlock::elect().unwrap();
-			assert!(supports.len() > 0);
-		});
-	}
+// 			// Unsigned phase failed to open.
+// 			roll_to(25);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
-	#[test]
-	fn snapshot_too_big_failure_no_fallback() {
-		// and if the backup mode is nothing, we go into the emergency mode..
-		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
-			crate::mock::Targets::set(
-				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
-			);
+// 			// On-chain backup works though.
+// 			roll_to(29);
+// 			let (supports, _) = MultiBlock::elect().unwrap();
+// 			assert!(supports.len() > 0);
+// 		});
+// 	}
 
-			// Signed phase failed to open.
-			roll_to(15);
-			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+// 	#[test]
+// 	fn snapshot_too_big_failure_no_fallback() {
+// 		// and if the backup mode is nothing, we go into the emergency mode..
+// 		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
+// 			crate::mock::Targets::set(
+// 				(0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>(),
+// 			);
 
-			// Unsigned phase failed to open.
-			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Off);
+// 			// Signed phase failed to open.
+// 			roll_to(15);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
-			roll_to(29);
-			let err = MultiBlock::elect().unwrap_err();
-			assert_eq!(err, ElectionError::NoFallbackConfigured);
-			assert_eq!(MultiBlock::current_phase(), Phase::Emergency);
-		});
-	}
+// 			// Unsigned phase failed to open.
+// 			roll_to(25);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
-	#[test]
-	fn snapshot_too_big_truncate() {
-		// but if there are too many voters, we simply truncate them.
-		ExtBuilder::default().build_and_execute(|| {
-			// we have 8 voters in total.
-			assert_eq!(crate::mock::Voters::get().len(), 8);
-			// but we want to take 4.
-			crate::mock::VoterSnapshotPerBlock::set(2);
+// 			roll_to(29);
+// 			let err = MultiBlock::elect().unwrap_err();
+// 			assert_eq!(err, ElectionError::NoFallbackConfigured);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Emergency);
+// 		});
+// 	}
 
-			// Signed phase opens just fine.
-			roll_to(15);
-			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+// 	#[test]
+// 	fn snapshot_too_big_truncate() {
+// 		// but if there are too many voters, we simply truncate them.
+// 		ExtBuilder::default().build_and_execute(|| {
+// 			// we have 8 voters in total.
+// 			assert_eq!(crate::mock::Voters::get().len(), 8);
+// 			// but we want to take 4.
+// 			crate::mock::VoterSnapshotPerBlock::set(2);
 
-			assert_eq!(
-				MultiBlock::snapshot_metadata().unwrap(),
-				SolutionOrSnapshotSize { voters: 2, targets: 4 }
-			);
-		})
-	}
+// 			// Signed phase opens just fine.
+// 			roll_to(15);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
-	#[test]
-	fn untrusted_score_verification_is_respected() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
-			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+// 			assert_eq!(
+// 				MultiBlock::snapshot_metadata().unwrap(),
+// 				SolutionOrSnapshotSize { voters: 2, targets: 4 }
+// 			);
+// 		})
+// 	}
 
-			let (solution, _) = MultiBlock::mine_solution(2, falase).unwrap();
-			// Default solution has a score of [50, 100, 5000].
-			assert_eq!(solution.score, [50, 100, 5000]);
+// 	#[test]
+// 	fn untrusted_score_verification_is_respected() {
+// 		ExtBuilder::default().build_and_execute(|| {
+// 			roll_to(15);
+// 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
-			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
-			assert_ok!(MultiBlock::feasibility_check(solution.clone(), ElectionCompute::Signed));
+// 			let (solution, _) = MultiBlock::mine_solution(2, falase).unwrap();
+// 			// Default solution has a score of [50, 100, 5000].
+// 			assert_eq!(solution.score, [50, 100, 5000]);
 
-			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
-			assert_noop!(
-				MultiBlock::feasibility_check(solution, ElectionCompute::Signed),
-				FeasibilityError::UntrustedScoreTooLow,
-			);
-		})
-	}
+// 			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
+// 			assert_ok!(MultiBlock::feasibility_check(solution.clone(), ElectionCompute::Signed));
 
-	#[test]
-	fn number_of_voters_allowed_2sec_block() {
-		// Just a rough estimate with the substrate weights.
-		assert!(!MockWeightInfo::get());
+// 			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
+// 			assert_noop!(
+// 				MultiBlock::feasibility_check(solution, ElectionCompute::Signed),
+// 				FeasibilityError::UntrustedScoreTooLow,
+// 			);
+// 		})
+// 	}
 
-		let all_voters: u32 = 10_000;
-		let all_targets: u32 = 5_000;
-		let desired: u32 = 1_000;
-		let weight_with = |active| {
-			<Runtime as Config>::WeightInfo::submit_unsigned(
-				all_voters,
-				all_targets,
-				active,
-				desired,
-			)
-		};
+// 	#[test]
+// 	fn number_of_voters_allowed_2sec_block() {
+// 		// Just a rough estimate with the substrate weights.
+// 		assert!(!MockWeightInfo::get());
 
-		let mut active = 1;
-		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
-			active == all_voters
+// 		let all_voters: u32 = 10_000;
+// 		let all_targets: u32 = 5_000;
+// 		let desired: u32 = 1_000;
+// 		let weight_with = |active| {
+// 			<Runtime as Config>::WeightInfo::submit_unsigned(
+// 				all_voters,
+// 				all_targets,
+// 				active,
+// 				desired,
+// 			)
+// 		};
 
-		{
-			active += 1;
-		}
+// 		let mut active = 1;
+// 		while weight_with(active) <=
+// 			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
+// 			active == all_voters
+// 		{
+// 			active += 1;
+// 		}
 
-		println!("can support {} voters to yield a weight of {}", active, weight_with(active));
-	}
-	*/
-}
+// 		println!("can support {} voters to yield a weight of {}", active, weight_with(active));
+// 	}
+// }

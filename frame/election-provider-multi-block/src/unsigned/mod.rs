@@ -324,7 +324,7 @@ mod validate_unsigned {
 				roll_to_snapshot_created();
 
 				let solution = mine_full_solution().unwrap();
-				load_solution_for_verification(solution.clone());
+				load_and_start_verification(solution.clone());
 				roll_to_full_verification();
 
 				// Some good solution is queued now.

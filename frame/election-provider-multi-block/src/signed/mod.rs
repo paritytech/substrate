@@ -65,7 +65,7 @@ mod pallet {
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, PageIndex, T::Solution>;
 	/// Map from account to the metadata of their submission.
 	///
-	/// invarinat: for any Key1 of type `AccountId` in [`Submissions`], this storage map also has a
+	/// invariant: for any Key1 of type `AccountId` in [`Submissions`], this storage map also has a
 	/// value.
 	#[pallet::storage]
 	type SubmissionMetadataStorage<T: Config> =

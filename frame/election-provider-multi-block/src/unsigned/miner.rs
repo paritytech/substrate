@@ -138,6 +138,12 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 	/// 1. [`crate::verifier::Config::MaxBackersPerWinner`]
 	/// 2. [`crate::unsigned::Config::MinerMaxLength`]
 	/// 3. [`crate::unsigned::Config::MinerMaxWeight`]
+	///
+	/// The order of pages returned is aligned with the snapshot. For example, the index 0 of the
+	/// returning solution pages corresponds to the page 0 of the snapshot.
+	///
+	/// The only difference is, if the solution is partial, then [`Pagify`] must be used to properly
+	/// pad the results.
 	pub fn mine_solution(
 		mut pages: PageIndex,
 		do_reduce: bool,
@@ -876,7 +882,7 @@ mod trim_weight_length {
 				8
 			);
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 			let supports = roll_to_full_verification();
 
 			// NOTE: this test is a bit funny because our msp snapshot page actually contains voters
@@ -920,7 +926,7 @@ mod trim_weight_length {
 				4
 			);
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -959,7 +965,7 @@ mod trim_weight_length {
 				7
 			);
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1000,7 +1006,7 @@ mod trim_weight_length {
 				4
 			);
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1040,7 +1046,7 @@ mod trim_weight_length {
 				1
 			);
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 			let supports = roll_to_full_verification();
 
 			// nothing is queued
@@ -1073,7 +1079,7 @@ mod trim_weight_length {
 
 			assert_eq!(solution.solution_pages.encoded_size(), 105);
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1115,7 +1121,7 @@ mod trim_weight_length {
 
 			assert_eq!(solution.solution_pages.encoded_size(), 99);
 
-			load_solution_for_verification(solution);
+			load_and_start_verification(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1201,7 +1207,7 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification
-			load_solution_for_verification(paged.clone());
+			load_and_start_verification(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1284,7 +1290,7 @@ mod base_miner {
 			BaseMiner::<Runtime>::check_solution(&paged, None, false, "mined").unwrap();
 
 			// it must also be verified in the verifier
-			load_solution_for_verification(paged.clone());
+			load_and_start_verification(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1367,7 +1373,7 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification
-			load_solution_for_verification(paged.clone());
+			load_and_start_verification(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1443,7 +1449,7 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification.
-			load_solution_for_verification(paged.clone());
+			load_and_start_verification(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1534,7 +1540,7 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification.
-			load_solution_for_verification(paged.clone());
+			load_and_start_verification(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1596,7 +1602,7 @@ mod base_miner {
 
 				// now we let the miner mine something for us..
 				let paged = mine_full_solution().unwrap();
-				load_solution_for_verification(paged.clone());
+				load_and_start_verification(paged.clone());
 
 				// this must be correct
 				let supports = roll_to_full_verification();

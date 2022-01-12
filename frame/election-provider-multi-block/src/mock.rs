@@ -22,12 +22,14 @@ use crate::{
 		self as unsigned_pallet,
 		miner::{BaseMiner, MinerError},
 	},
-	verifier as verifier_pallet,
+	verifier::{
+		self as verifier_pallet, SignedVerifier, SolutionDataProvider, Status, VerificationResult,
+	},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{parameter_types, traits::Hooks, weights::Weight};
+use frame_support::{bounded_vec, parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -42,7 +44,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16, Perbill,
 };
-use std::{sync::Arc, vec};
+use std::{borrow::BorrowMut, sync::Arc, vec};
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -126,20 +128,20 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, MaxVotesPerVoter>)> = vec![
-		(1, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10, 20]).unwrap()),
-		(2, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![30, 40]).unwrap()),
-		(3, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![40]).unwrap()),
-		(4, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10, 20, 40]).unwrap()),
-		(5, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10, 30, 40]).unwrap()),
-		(6, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![20, 30, 40]).unwrap()),
-		(7, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![20, 30]).unwrap()),
-		(8, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10]).unwrap()),
+	pub static Voters: Vec<VoterOf<Runtime>> = vec![
+		(1, 10, bounded_vec![10, 20]),
+		(2, 10, bounded_vec![30, 40]),
+		(3, 10, bounded_vec![40]),
+		(4, 10, bounded_vec![10, 20, 40]),
+		(5, 10, bounded_vec![10, 30, 40]),
+		(6, 10, bounded_vec![20, 30, 40]),
+		(7, 10, bounded_vec![20, 30]),
+		(8, 10, bounded_vec![10]),
 		// self votes.
-		(10, 10, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![10]).unwrap()),
-		(20, 20, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![20]).unwrap()),
-		(30, 30, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![30]).unwrap()),
-		(40, 40, BoundedVec::<_, MaxVotesPerVoter>::try_from(vec![40]).unwrap()),
+		(10, 10, bounded_vec![10]),
+		(20, 20, bounded_vec![20]),
+		(30, 30, bounded_vec![30]),
+		(40, 40, bounded_vec![40]),
 	];
 	pub static LastIteratedVoterIndex: Option<usize> = None;
 
@@ -251,12 +253,34 @@ impl multi_block::weights::WeightInfo for DualMockWeightInfo {
 	}
 }
 
+parameter_types! {
+	pub static MockSignedNextSolution: BoundedVec<SolutionOf<Runtime>, Pages> = Default::default();
+	pub static MockSignedNextScore: ElectionScore = Default::default();
+	pub static MockSignedResults: Vec<VerificationResult> = Default::default();
+}
+pub struct MockSignedPhase;
+impl SolutionDataProvider for MockSignedPhase {
+	type Solution = <Runtime as crate::Config>::Solution;
+	fn get_page(page: PageIndex) -> Self::Solution {
+		MockSignedNextSolution::get().get(page as usize).cloned().unwrap_or_default()
+	}
+
+	fn get_score() -> ElectionScore {
+		MockSignedNextScore::get()
+	}
+
+	fn report_result(result: verifier::VerificationResult) {
+		MOCK_SIGNED_RESULTS.with(|r| r.borrow_mut().push(result));
+	}
+}
+
 impl crate::verifier::Config for Runtime {
 	type Event = Event;
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxBackersPerWinner = MaxBackersPerWinner;
 	type MaxWinnersPerPage = MaxWinnersPerPage;
+	type SolutionDataProvider = MockSignedPhase;
 }
 
 pub struct MockUnsignedWeightInfo;
@@ -563,15 +587,15 @@ pub fn witness() -> SolutionOrSnapshotSize {
 ///
 /// This will progress the blocks until the verifier pallet is done verifying it.
 ///
-/// The solution must have already been loaded via `load_solution_for_verification`.
+/// The solution must have already been loaded via `load_and_start_verification`.
 ///
 /// Return the final supports, which is the outcome. If this succeeds, then the valid variant of the
 /// `QueuedSolution` form `verifier` is ready to be read.
 pub fn roll_to_full_verification() -> Vec<BoundedSupportsOf<MultiBlock>> {
 	// we must be ready to verify.
-	assert_eq!(VerifierPallet::status(), Some(Pages::get() - 1));
+	assert_eq!(VerifierPallet::status(), Status::Ongoing(Pages::get() - 1));
 
-	while VerifierPallet::status().is_some() {
+	while matches!(VerifierPallet::status(), Status::Ongoing(_)) {
 		roll_to(System::block_number() + 1);
 	}
 
@@ -581,15 +605,12 @@ pub fn roll_to_full_verification() -> Vec<BoundedSupportsOf<MultiBlock>> {
 }
 
 /// Load a full raw paged solution for verification.
-pub fn load_solution_for_verification(raw_paged: PagedRawSolution<Runtime>) {
-	// set
-	for (page_index, solution_page) in raw_paged.solution_pages.pagify(Pages::get()) {
-		assert_ok!(
-			VerifierPallet::set_unverified_solution_page(page_index, solution_page.clone(),)
-		);
-	}
-	// and seal the ok solution against the verifier
-	assert_ok!(VerifierPallet::seal_unverified_solution(raw_paged.score));
+pub fn load_and_start_verification(raw_paged: PagedRawSolution<Runtime>) {
+	MockSignedNextSolution::set(raw_paged.solution_pages.pad_solution_pages(Pages::get()));
+	MockSignedNextScore::set(raw_paged.score);
+
+	// Let's gooooo!
+	<VerifierPallet as SignedVerifier>::start();
 }
 
 /// Generate a single page of `TestNposSolution` from the give supports.

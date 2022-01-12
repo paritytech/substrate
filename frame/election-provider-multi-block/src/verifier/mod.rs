@@ -19,17 +19,20 @@
 //!
 //! TODO
 
-// Only these items are public from this pallet.
-pub use pallet::*;
-
-mod pallet;
+mod impls;
 
 // internal imports
 use crate::{SolutionOf, SupportsOf};
 use frame_election_provider_support::PageIndex;
-use pallet::{QueuedSolution, VerifyingSolution};
+use frame_support::RuntimeDebug;
+use impls::pallet::QueuedSolution;
 use sp_npos_elections::ElectionScore;
 use std::fmt::Debug;
+
+pub use impls::{
+	pallet::{Call, Config, Error, Event, Pallet, __substrate_event_check},
+	Status,
+};
 
 /// Errors that can happen in the feasibility check.
 #[derive(Debug, Eq, PartialEq, codec::Encode, codec::Decode, scale_info::TypeInfo, Clone)]
@@ -84,21 +87,6 @@ pub trait Verifier {
 	// staking::validator_count closely.
 	type MaxWinnersPerPage: frame_support::traits::Get<u32>;
 
-	/// This is a page of the solution that we want to verify next, store it.
-	///
-	/// This should be used to load solutions into this pallet.
-	fn set_unverified_solution_page(
-		remaining: PageIndex,
-		page_solution: Self::Solution,
-	) -> Result<(), ()>;
-
-	/// Indicate that the previous calls to `set_unverified_solution_page` are now enough to form
-	/// one full solution.
-	///
-	/// Fails previous calls to `set_unverified_solution_page` to form exactly `T::Pages` pages.
-	/// Fails if
-	fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()>;
-
 	/// The score of the current best solution. `None` if there is no best solution.
 	fn queued_solution() -> Option<ElectionScore>;
 
@@ -106,11 +94,7 @@ pub trait Verifier {
 	fn ensure_claimed_score_improves(claimed_score: ElectionScore) -> bool;
 
 	/// Get the current stage of the verification process.
-	///
-	/// Returns `Some(n)` if there's a ongoing verification; where `n` is the remaining number
-	/// of blocks for the verification process. Returns `None` if there isn't a verification
-	/// ongoing.
-	fn status() -> Option<PageIndex>;
+	fn status() -> Status;
 
 	/// Clear everything, there's nothing else for you to do until further notice.
 	fn kill();
@@ -147,24 +131,31 @@ pub trait Verifier {
 	);
 }
 
+#[derive(Clone, Copy, RuntimeDebug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub enum VerificationResult {
+	Valid,
+	Invalid,
+}
+
+pub trait SolutionDataProvider {
+	type Solution;
+	fn get_page(page: PageIndex) -> Self::Solution;
+	fn get_score() -> ElectionScore;
+	fn report_result(result: VerificationResult);
+}
+
+/// Something that can do the verification, with the flavour that is suitable for the signed phase.
+pub trait SignedVerifier: Verifier {
+	type SolutionDataProvider: SolutionDataProvider;
+	fn start();
+}
+
 impl<T: Config> Verifier for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Solution = SolutionOf<T>;
 	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type MaxWinnersPerPage = T::MaxWinnersPerPage;
-
-	fn set_unverified_solution_page(
-		page_index: PageIndex,
-		page_solution: Self::Solution,
-	) -> Result<(), ()> {
-		sublog!(trace, "verifier", "setting unverified solution at page_index {}", page_index);
-		VerifyingSolution::<T>::put_page(page_index, page_solution)
-	}
-
-	fn seal_unverified_solution(claimed_score: ElectionScore) -> Result<(), ()> {
-		sublog!(trace, "verifier", "sealing unverified solution with score {:?}", claimed_score);
-		VerifyingSolution::<T>::seal_unverified_solution(claimed_score)
-	}
 
 	fn ensure_claimed_score_improves(claimed_score: ElectionScore) -> bool {
 		Self::ensure_score_quality(claimed_score).is_ok()
@@ -174,12 +165,11 @@ impl<T: Config> Verifier for Pallet<T> {
 		QueuedSolution::<T>::queued_solution()
 	}
 
-	fn status() -> Option<PageIndex> {
-		VerifyingSolution::<T>::current_page()
+	fn status() -> Status {
+		Pallet::<T>::status_storage()
 	}
 
 	fn kill() {
-		VerifyingSolution::<T>::kill();
 		QueuedSolution::<T>::kill();
 	}
 
