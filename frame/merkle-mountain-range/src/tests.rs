@@ -64,7 +64,8 @@ fn decode_node(
 	type A = DataOrHash<<Test as Config>::Hashing, (BlockNumber, H256)>;
 	type B = DataOrHash<<Test as Config>::Hashing, LeafData>;
 	type Node = mmr::Node<<Test as Config>::Hashing, (A, B)>;
-	let tuple: Node = codec::Decode::decode(&mut &v[..]).unwrap();
+	let bucket: Vec<(Vec<u8>, Vec<u8>)> = codec::Decode::decode(&mut &v[..]).unwrap();
+	let tuple: Node = codec::Decode::decode(&mut &bucket[0].1[..]).unwrap();
 
 	match tuple {
 		mmr::Node::Data((DataOrHash::Data(a), DataOrHash::Data(b))) => mmr::Node::Data((a, b)),

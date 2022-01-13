@@ -58,7 +58,7 @@
 
 use codec::Encode;
 use frame_support::weights::Weight;
-use sp_runtime::traits;
+use sp_runtime::traits::{self, BlockNumberProvider};
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -230,6 +230,10 @@ where
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
+	}
+
+	fn offchain_secondary_key() -> sp_std::prelude::Vec<u8> {
+		frame_system::Pallet::<T>::get_parent_hash().encode()
 	}
 
 	/// Generate a MMR proof for the given `leaf_index`.

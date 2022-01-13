@@ -1044,13 +1044,11 @@ pub trait OffchainIndex {
 	}
 
 	/// Write a key value pair to the Offchain DB database in a buffered fashion.
-	/// The value of key is set to Vec<(secondary_key, value)> in the db
-	/// the secondary_key is automatically set to the parent blockhash
+	/// The value of key is set to Vec<(secondary_key, value)> in the db.
+	/// The secondary_key should  be set to the parent blockhash always
 	#[version(2)]
-	fn set(&mut self, key: &[u8], value: &[u8]) {
-		// Secondary key should be the block hash
-		let secondary_key = Some(&[0u8][..]);
-		self.set_offchain_storage(key, secondary_key, Some(value));
+	fn set(&mut self, key: &[u8], secondary_key: &[u8], value: &[u8]) {
+		self.set_offchain_storage(key, Some(secondary_key), Some(value));
 	}
 
 	/// Remove a key and its associated value from the Offchain DB.

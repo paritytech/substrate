@@ -62,8 +62,8 @@ impl OffchainOverlayedChanges {
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
-	/// if a secodary key is provided (secondary_key, value) will be pushed into the to Vec<(secondary_key, value)>
-	/// at the position of the key
+	/// if a secodary key is provided (secondary_key, value) will be pushed into the to
+	/// Vec<(secondary_key, value)> at the position of the key
 	pub fn set(&mut self, prefix: &[u8], key: &[u8], secondary_key: Option<&[u8]>, value: &[u8]) {
 		let key = (prefix.to_vec(), key.to_vec());
 		let secondary_key = secondary_key.map(|k| k.to_vec());

@@ -17,7 +17,7 @@
 
 //! A MMR storage implementations.
 
-use codec::Encode;
+use codec::{Decode, Encode};
 use frame_support::log;
 use mmr_lib::helper;
 use sp_io::offchain_index;
@@ -30,6 +30,8 @@ use crate::{
 	primitives::{self, NodeIndex},
 	Config, Nodes, NumberOfLeaves, Pallet,
 };
+
+use sp_runtime::traits::{BlockNumberProvider, One};
 
 /// A marker type for runtime-specific storage implementation.
 ///
@@ -68,8 +70,24 @@ where
 	fn get_elem(&self, pos: NodeIndex) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
 		let key = Pallet::<T, I>::offchain_key(pos);
 		// Retrieve the element from Off-chain DB.
-		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
-			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
+		let bucket: Option<Vec<(Vec<u8>, Vec<u8>)>> =
+			sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+				.and_then(|v| codec::Decode::decode(&mut &*v).ok());
+		let block_hashes = frame_system::Pallet::<T>::get_block_hashes();
+
+		let node = bucket.map(|k| {
+			for x in k.into_iter() {
+				let block_hash = <<T as frame_system::Config>::Hash>::decode(&mut &x.0[..]);
+				if block_hash.is_err() {
+					continue
+				}
+				if block_hashes.contains(&block_hash.as_ref().unwrap()) {
+					return <NodeOf<T, I, L>>::decode(&mut &x.1[..]).ok()
+				}
+			}
+			None
+		});
+		Ok(node.unwrap_or(None))
 	}
 
 	fn append(&mut self, _: NodeIndex, _: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
@@ -116,7 +134,11 @@ where
 		for elem in elems {
 			// Indexing API is used to store the full node content (both leaf and inner).
 			elem.using_encoded(|elem| {
-				offchain_index::set(&Pallet::<T, I>::offchain_key(node_index), elem)
+				offchain_index::set(
+					&Pallet::<T, I>::offchain_key(node_index),
+					&Pallet::<T, I>::offchain_secondary_key(),
+					elem,
+				)
 			});
 
 			// On-chain we are going to only store new peaks.

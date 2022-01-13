@@ -974,6 +974,14 @@ impl<T: Config> Pallet<T> {
 		Account::<T>::contains_key(who)
 	}
 
+	pub fn get_parent_hash() -> T::Hash {
+		ParentHash::<T>::get()
+	}
+
+	pub fn get_block_hashes() -> Vec<T::Hash> {
+		BlockHash::<T>::iter_values().collect()
+	}
+
 	/// Write code to the storage and emit related events and digest items.
 	///
 	/// Note this function almost never should be used directly. It is exposed

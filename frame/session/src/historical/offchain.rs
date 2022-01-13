@@ -205,11 +205,13 @@ mod tests {
 
 	#[test]
 	fn onchain_to_offchain() {
+		use codec::Encode;
 		let mut ext = new_test_ext();
 
 		const DATA: &[u8] = &[7, 8, 9, 10, 11];
 		ext.execute_with(|| {
-			b"alphaomega"[..].using_encoded(|key| sp_io::offchain_index::set(key, DATA));
+			b"alphaomega"[..]
+				.using_encoded(|key| sp_io::offchain_index::set(key, &[69u8; 32], DATA));
 		});
 
 		ext.persist_offchain_overlay();
@@ -218,7 +220,7 @@ mod tests {
 			let data = b"alphaomega"[..].using_encoded(|key| {
 				sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, key)
 			});
-			assert_eq!(data, Some(DATA.to_vec()));
+			assert_eq!(data, Some(vec![(&[69u8; 32].to_vec(), DATA.to_vec())].encode()));
 		});
 	}
 
