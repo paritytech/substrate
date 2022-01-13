@@ -176,8 +176,13 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>,
 {
-	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		self.overlay.set_offchain_storage(key, value)
+	fn set_offchain_storage(
+		&mut self,
+		key: &[u8],
+		secondary_key: Option<&[u8]>,
+		value: Option<&[u8]>,
+	) {
+		self.overlay.set_offchain_storage(key, secondary_key, value)
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {

@@ -626,10 +626,15 @@ impl OverlayedChanges {
 	}
 
 	/// Write a key value pair to the offchain storage overlay.
-	pub fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+	pub fn set_offchain_storage(
+		&mut self,
+		key: &[u8],
+		secondary_key: Option<&[u8]>,
+		value: Option<&[u8]>,
+	) {
 		use sp_core::offchain::STORAGE_PREFIX;
 		match value {
-			Some(value) => self.offchain.set(STORAGE_PREFIX, key, value),
+			Some(value) => self.offchain.set(STORAGE_PREFIX, key, secondary_key, value),
 			None => self.offchain.remove(STORAGE_PREFIX, key),
 		}
 	}
@@ -808,7 +813,8 @@ mod tests {
 
 		overlayed.start_transaction();
 
-		overlayed.set_offchain_storage(key.as_slice(), Some(&[1, 2, 3][..]));
+		overlayed.set_offchain_storage(key.as_slice(), None, Some(&[1, 2, 3][..]));
+
 		check_offchain_content(&overlayed, 1, vec![(key.clone(), Some(vec![1, 2, 3]))]);
 
 		overlayed.commit_transaction().unwrap();
@@ -817,17 +823,17 @@ mod tests {
 
 		overlayed.start_transaction();
 
-		overlayed.set_offchain_storage(key.as_slice(), Some(&[][..]));
+		overlayed.set_offchain_storage(key.as_slice(), None, Some(&[][..]));
 		check_offchain_content(&overlayed, 1, vec![(key.clone(), Some(vec![]))]);
 
-		overlayed.set_offchain_storage(key.as_slice(), None);
+		overlayed.set_offchain_storage(key.as_slice(), None, None);
 		check_offchain_content(&overlayed, 1, vec![(key.clone(), None)]);
 
 		overlayed.rollback_transaction().unwrap();
 
 		check_offchain_content(&overlayed, 0, vec![(key.clone(), Some(vec![1, 2, 3]))]);
 
-		overlayed.set_offchain_storage(key.as_slice(), None);
+		overlayed.set_offchain_storage(key.as_slice(), None, None);
 		check_offchain_content(&overlayed, 0, vec![(key.clone(), None)]);
 	}
 

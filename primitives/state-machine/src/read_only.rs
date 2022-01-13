@@ -75,7 +75,12 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> ReadOnlyExternalities<'a, H, B> {
 }
 
 impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<'a, H, B> {
-	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {
+	fn set_offchain_storage(
+		&mut self,
+		_key: &[u8],
+		_secondary_key: Option<&[u8]>,
+		_value: Option<&[u8]>,
+	) {
 		panic!("Should not be used in read-only externalities!")
 	}
 

@@ -1040,12 +1040,22 @@ pub trait TransactionIndex {
 pub trait OffchainIndex {
 	/// Write a key value pair to the Offchain DB database in a buffered fashion.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
-		self.set_offchain_storage(key, Some(value));
+		self.set_offchain_storage(key, None, Some(value));
+	}
+
+	/// Write a key value pair to the Offchain DB database in a buffered fashion.
+	/// The value of key is set to Vec<(secondary_key, value)> in the db
+	/// the secondary_key is automatically set to the parent blockhash
+	#[version(2)]
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		// Secondary key should be the block hash
+		let secondary_key = Some(&[0u8][..]);
+		self.set_offchain_storage(key, secondary_key, Some(value));
 	}
 
 	/// Remove a key and its associated value from the Offchain DB.
 	fn clear(&mut self, key: &[u8]) {
-		self.set_offchain_storage(key, None);
+		self.set_offchain_storage(key, None, None);
 	}
 }
 
