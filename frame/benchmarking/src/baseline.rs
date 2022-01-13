@@ -45,7 +45,7 @@ pub trait Config: frame_system::Config {}
 
 benchmarks! {
 	addition {
-		let i in 0 .. 1_000_000;
+		let i = 1_000_000;
 		let mut start = 0;
 	}: {
 		(0..i).for_each(|_| start += 1);
@@ -54,7 +54,7 @@ benchmarks! {
 	}
 
 	subtraction {
-		let i in 0 .. 1_000_000;
+		let i = 1_000_000;
 		let mut start = u32::MAX;
 	}: {
 		(0..i).for_each(|_| start -= 1);
