@@ -987,8 +987,11 @@ where
 }
 
 pub struct EnsureMember<AccountId, I: 'static>(PhantomData<(AccountId, I)>);
-impl<O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>, I, AccountId>
-	EnsureOrigin<O> for EnsureMember<AccountId, I>
+impl<
+		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
+		I,
+		AccountId: Decode,
+	> EnsureOrigin<O> for EnsureMember<AccountId, I>
 {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
