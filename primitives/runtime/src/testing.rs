@@ -306,11 +306,11 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	}
 }
 
-impl<Call,Extra> HasAddress for TestXt<Call, Extra> where
+impl<Lookup,Call,Extra> HasAddress<Lookup> for TestXt<Call, Extra> where
 {
-    type AccountId = u64;
+    type Address = u64;
 
-	fn get_address(&self) -> Option<Self::AccountId>{
+	fn get_address(&self, _: &Lookup) -> Option<Self::Address>{
         self.signature.as_ref().map(|(id,_)| *id)
 	}
 }

@@ -177,7 +177,7 @@ impl<
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: HasAddress<AccountId = System::AccountId> + Checkable<Context> + Codec,
+	Block::Extrinsic: HasAddress<Context, Address = System::AccountId> + Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -232,7 +232,7 @@ impl<
 	> Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
     <System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
-    Block::Extrinsic: HasAddress<AccountId = System::AccountId> + Checkable<Context> + Codec,
+    Block::Extrinsic: HasAddress<Context, Address = System::AccountId> + Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -463,19 +463,19 @@ where
             let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
             let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
 
-            let extrinsics_with_author: Vec<(_,_)> = tx_to_be_executed.into_iter().map(|e| 
-                    (     
-                        (e.get_address(), e)
-                    )
-            ).collect();
-            let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
-            // let shuffled_extrinsics = tx_to_be_executed;
-            
-            Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
-
-			if !signature_batching.verify() {
-				panic!("Signature verification failed.");
-			}
+            // let extrinsics_with_author: Vec<(_,_)> = tx_to_be_executed.into_iter().map(|e| 
+            //         (     
+            //             (e.get_address(), e)
+            //         )
+            // ).collect();
+            // let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
+            // // let shuffled_extrinsics = tx_to_be_executed;
+            //
+            // Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
+            //
+			// if !signature_batching.verify() {
+			// 	panic!("Signature verification failed.");
+			// }
 
 			// any final checks
 			Self::final_checks(&header);

@@ -800,13 +800,15 @@ pub trait Checkable<Context>: Sized {
 }
 
 /// Provides information about author
-pub trait HasAddress{
+pub trait HasAddress<AddressLookup>{
 	/// Returned if `check` succeeds.
-	type AccountId;
+	type Address;
+	// type Address;
 
 	/// Check self, given an instance of Context.
-	fn get_address(&self) -> Option<Self::AccountId>;
+	fn get_address(&self, lookup: &AddressLookup) -> Option<Self::Address>;
 }
+
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
