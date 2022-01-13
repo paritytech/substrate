@@ -22,7 +22,6 @@
 use crate::mock::{new_test_ext, Aura, MockDisabledValidators, System};
 use codec::Encode;
 use frame_support::traits::OnInitialize;
-use frame_system::InitKind;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
 use sp_runtime::{Digest, DigestItem};
 
@@ -45,7 +44,8 @@ fn disabled_validators_cannot_author_blocks() {
 		let pre_digest =
 			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())] };
 
-		System::initialize(&42, &System::parent_hash(), &pre_digest, InitKind::Full);
+		System::reset_events();
+		System::initialize(&42, &System::parent_hash(), &pre_digest);
 
 		// let's disable the validator
 		MockDisabledValidators::disable_validator(1);
