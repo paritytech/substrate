@@ -21,7 +21,7 @@ use crate::{
     AccountId32,
 	generic::CheckedExtrinsic,
 	traits::{
-		self, HasAddress, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
+		self, IdentifyAccountWithLookup, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
 		SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
@@ -164,19 +164,23 @@ where
 	}
 }
 
-impl<Lookup, AccountId, Address, Call, Signature, Extra> HasAddress<Lookup>
+impl<Lookup, Address, AccountId, Call, Signature, Extra> IdentifyAccountWithLookup<Lookup>
     for UncheckedExtrinsic<Address, Call, Signature, Extra> where
 	Address: Member + MaybeDisplay + Clone,
-	Signature: Member + traits::Verify,
+	Signature: Member + traits::Verify + Clone,
 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
 	Extra: SignedExtension<AccountId = AccountId>,
 	AccountId: Member + MaybeDisplay,
 	Lookup: traits::Lookup<Source = Address, Target = AccountId>,
 {
-    type Address = AccountId;
-
-	fn get_address(&self, lookup: &Lookup) -> Option<Self::Address>{
-        self.signature.as_ref().map(|(addr,_,_)| lookup.lookup(addr.clone()).unwrap())
+    type AccountId = AccountId;
+	fn get_account_id(&self, lookup: &Lookup) -> Option<Self::AccountId>{
+		match self.signature {
+			Some((ref signed, _, _)) => {
+				Some(lookup.lookup(signed.clone()).unwrap())
+			},
+			None => None
+		}
     }
 }
 //

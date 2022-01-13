@@ -3,7 +3,7 @@
 use codec::{Codec, Decode, Encode};
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
-use sp_runtime::{RuntimeString, DigestItem, traits::{Header, Block as BlockT, HasAddress, One, Zero}, ConsensusEngineId};
+use sp_runtime::{RuntimeString, DigestItem, traits::{Header, Block as BlockT, One, Zero}, ConsensusEngineId};
 use sp_std::vec::Vec;
 
 // originally in sp-module

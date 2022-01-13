@@ -22,7 +22,7 @@ use crate::{
 	generic,
 	scale_info::TypeInfo,
 	traits::{
-		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, HasAddress, OpaqueKeys,
+		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, IdentifyAccountWithLookup, OpaqueKeys,
 		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
@@ -306,14 +306,14 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	}
 }
 
-impl<Lookup,Call,Extra> HasAddress<Lookup> for TestXt<Call, Extra> where
-{
-    type Address = u64;
-
-	fn get_address(&self, _: &Lookup) -> Option<Self::Address>{
-        self.signature.as_ref().map(|(id,_)| *id)
-	}
-}
+// impl<Lookup,Call,Extra> HasAddress<Lookup> for TestXt<Call, Extra> where
+// {
+//     type Address = u64;
+//
+// 	fn get_address(&self, _: &Lookup) -> Option<Self::Address>{
+//         self.signature.as_ref().map(|(id,_)| *id)
+// 	}
+// }
 
 // Non-opaque extrinsics always 0.
 parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
