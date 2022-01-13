@@ -1,5 +1,4 @@
 use super::super::*;
-//  use frame_support::traits::Get;
 
 /// Migrate the locks and vote stake on accounts that have more than their free balance locked.
 ///
