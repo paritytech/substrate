@@ -316,13 +316,6 @@ pub mod pallet {
 		Unapproved,
 	}
 
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migration::migrate_to_v1::<T, I, Self>()
-		}
-	}
-
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Get the owner of the asset instance, if the asset exists.
 		pub fn owner(class: T::ClassId, instance: T::InstanceId) -> Option<T::AccountId> {

@@ -321,10 +321,6 @@ pub mod pallet {
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
 				.saturating_add(T::WeightInfo::on_initialize())
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>()
-		}
 	}
 
 	#[pallet::call]
