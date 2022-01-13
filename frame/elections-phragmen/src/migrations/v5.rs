@@ -18,7 +18,6 @@ pub fn migrate<T: Config>() -> Weight {
 
 		if locked > free_balance {
 			voter.stake = free_balance;
-			// we have overlocked
 			Voting::<T>::insert(&who, voter);
 
 			let pallet_id = T::PalletId::get();
