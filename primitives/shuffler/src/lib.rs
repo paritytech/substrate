@@ -76,7 +76,7 @@ fn fisher_yates<T>(data: &mut Vec<T>, seed: [u8; 32]) {
 	}
 }
 
-pub fn shuffle_using_seed<A: Encode + Clone, E: Encode>(
+pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode>(
 	extrinsics: Vec<(Option<A>, E)>,
 	seed: &H256,
 ) -> Vec<E> {
@@ -94,7 +94,7 @@ pub fn shuffle_using_seed<A: Encode + Clone, E: Encode>(
 
 	let mut grouped_extrinsics: BTreeMap<Option<_>, VecDeque<_>> =
 		extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
-			groups.entry(who.as_ref().map(BlakeTwo256::hash_of))
+			groups.entry(who)
                   .or_insert_with(VecDeque::new).push_back(tx);
 			groups
 		});
@@ -108,7 +108,7 @@ pub fn shuffle_using_seed<A: Encode + Clone, E: Encode>(
 	// [ AliceExtrinsic1, BobExtrinsic1, ... , AliceExtrinsicN, BobExtrinsicN ]
 	let shuffled_extrinsics: Vec<_> = slots
 		.into_iter()
-		.map(|who| grouped_extrinsics.get_mut(&who.as_ref().map(BlakeTwo256::hash_of)).unwrap().pop_front().unwrap())
+		.map(|who| grouped_extrinsics.get_mut(&who).unwrap().pop_front().unwrap())
 		.collect();
 
 	log::debug!(target: "block_shuffler", "shuffled order:[");

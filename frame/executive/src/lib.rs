@@ -232,7 +232,7 @@ impl<
 	> Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
     <System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
-    Block::Extrinsic: IdentifyAccountWithLookup<Context> + Checkable<Context> + Codec,
+    Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId=System::AccountId> + Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -469,9 +469,8 @@ where
                     )
             ).collect();
             let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
-            // let shuffled_extrinsics = tx_to_be_executed;
 
-            // Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
+            Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");

@@ -164,17 +164,16 @@ where
 	}
 }
 
-impl<Lookup, Address, AccountId, Call, Signature, Extra> IdentifyAccountWithLookup<Lookup>
+impl<Lookup, Address, Call, Signature, Extra> IdentifyAccountWithLookup<Lookup>
     for UncheckedExtrinsic<Address, Call, Signature, Extra> where
 	Address: Member + MaybeDisplay + Clone,
 	Signature: Member + traits::Verify + Clone,
-	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
-	Extra: SignedExtension<AccountId = AccountId>,
-	AccountId: Member + MaybeDisplay,
-	Lookup: traits::Lookup<Source = Address, Target = AccountId>,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId32>,
+	Extra: SignedExtension<AccountId = AccountId32>,
+	Lookup: traits::Lookup<Source = Address, Target = AccountId32>,
 {
-    type AccountId = AccountId;
-	fn get_account_id(&self, lookup: &Lookup) -> Option<Self::AccountId>{
+    type AccountId = AccountId32;
+	fn get_account_id(&self, lookup: &Lookup) -> Option<AccountId32>{
 		match self.signature {
 			Some((ref signed, _, _)) => {
 				Some(lookup.lookup(signed.clone()).unwrap())
