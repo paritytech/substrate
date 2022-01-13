@@ -53,15 +53,6 @@ pub enum Error {
 	RpcTaskFailure(SpawnError),
 }
 
-// TODO: (dp) Is there code out there that expects these error codes? I think this should be removed/reworked. The error code and be in the -32000 to -32099 range.
-/// The error codes returned by jsonrpc.
-pub enum ErrorCode {
-	/// Returned when BEEFY RPC endpoint is not ready.
-	NotReady = 1,
-	/// Returned on BEEFY RPC background task failure.
-	TaskFailure = 2,
-}
-
 /// Provides RPC methods for interacting with BEEFY.
 #[rpc(client, server, namespace = "beefy")]
 pub trait BeefyApi<Notification, Hash> {
@@ -191,8 +182,6 @@ mod tests {
 	async fn uninitialized_rpc_handler() {
 		let (rpc, _) = setup_io_handler();
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
-		// TODO: master uses `"code":1` here, see the `impl From<Error> for ErrorCode` – I think this is misusing the
-		// JSONRPC error codes and that it should be left to the JSONRPC library to set the error code.
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
 		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
 
@@ -215,8 +204,6 @@ mod tests {
 			\"result\":\"0x2f0039e93a27221fcf657fb877a1d4f60307106113e885096cb44a461cd0afbf\",\
 			\"id\":1\
 		}".to_string();
-		// TODO: master uses `"code":1` here, see the `impl From<Error> for ErrorCode` – I think this is misusing the
-		// JSONRPC error codes and that it should be left to the JSONRPC library to set the error code.
 		let not_ready = "{\
 			\"jsonrpc\":\"2.0\",\
 			\"error\":{\"code\":-32000,\"message\":\"BEEFY RPC endpoint not ready\"},\
