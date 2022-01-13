@@ -418,7 +418,7 @@ where
 	) -> std::result::Result<(), Error> {
 		let stream = self
 			.client
-			.storage_changes_notification_stream(keys.as_ref().map(|keys| &**keys), None)
+			.storage_changes_notification_stream(keys.as_deref(), None)
 			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
 
 		// initial values
