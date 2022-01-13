@@ -55,7 +55,7 @@ pub fn post_migrate<T: crate::Config>() {
 	for (who, voter) in Voting::<T>::iter() {
 		let free_balance = T::Currency::free_balance(&who);
 
-		assert!(voter.stake < free_balance, "migration should have made locked <= free_balance");
+		assert!(voter.stake <= free_balance, "migration should have made locked <= free_balance");
 		// Ideally we would also check that the locks and AccountData.misc_frozen where correctly
 		// updated, but since both of those are generic we can't do that without further bounding T.
 	}
