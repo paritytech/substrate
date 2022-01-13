@@ -75,23 +75,23 @@ pub trait DefensiveWithProof<T> {
 /// an infallible operation fails, it saturates.
 pub trait DefensiveSaturating {
 	/// Add `self` and `other` defensively.
-	fn defensive_saturating_add(&mut self, other: Self) -> Self;
+	fn defensive_saturating_add(self, other: Self) -> Self;
 	/// Subtract `other` from `self` defensively.
-	fn defensive_saturating_sub(&mut self, other: Self) -> Self;
+	fn defensive_saturating_sub(self, other: Self) -> Self;
 	/// Multiply `self` and `other` defensively.
-	fn defensive_saturating_mul(&mut self, other: Self) -> Self;
+	fn defensive_saturating_mul(self, other: Self) -> Self;
 }
 
 // NOTE: A bit unfortunate, since T has to be bound by all the traits needed. Could make it
 // `DefensiveSaturating<T>` to mitigate, but anyways okay for a draft PR.
 impl<T: CheckedAdd + CheckedMul + CheckedSub + Bounded> DefensiveSaturating for T {
-	fn defensive_saturating_add(&mut self, other: Self) -> Self {
+	fn defensive_saturating_add(self, other: Self) -> Self {
 		self.checked_add(&other).defensive_unwrap_or_else(Bounded::max_value)
 	}
-	fn defensive_saturating_mul(&mut self, other: Self) -> Self {
+	fn defensive_saturating_mul(self, other: Self) -> Self {
 		self.checked_sub(&other).defensive_unwrap_or_else(Bounded::max_value)
 	}
-	fn defensive_saturating_sub(&mut self, other: Self) -> Self {
+	fn defensive_saturating_sub(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(Bounded::min_value)
 	}
 }
