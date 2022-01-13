@@ -38,7 +38,7 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::notification::{BeefySignedCommitmentStream, BeefyBestBlockStream};
+use beefy_gadget::notification::{BeefyBestBlockStream, BeefySignedCommitmentStream};
 
 mod notification;
 
@@ -95,9 +95,7 @@ where
 		let closure_clone = beefy_best_block.clone();
 		let future = stream.for_each(move |best_beefy| {
 			let async_clone = closure_clone.clone();
-			async move {
-				*async_clone.write() = Some(best_beefy)
-			}
+			async move { *async_clone.write() = Some(best_beefy) }
 		});
 
 		executor.spawn_obj(future.boxed().into())?;
@@ -152,11 +150,13 @@ where
 mod tests {
 	use super::*;
 
-	use beefy_gadget::notification::{BeefySignedCommitment, BeefySignedCommitmentSender, BeefyBestBlockStream};
+	use beefy_gadget::notification::{
+		BeefyBestBlockStream, BeefySignedCommitment, BeefySignedCommitmentSender,
+	};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
-	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use jsonrpsee::{types::EmptyParams, RpcModule};
+	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 
 	fn setup_io_handler() -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>)
@@ -165,7 +165,9 @@ mod tests {
 		setup_io_handler_with_best_block_stream(stream)
 	}
 
-	fn setup_io_handler_with_best_block_stream(best_block_stream: BeefyBestBlockStream<Block>) -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>) {
+	fn setup_io_handler_with_best_block_stream(
+		best_block_stream: BeefyBestBlockStream<Block>,
+	) -> (RpcModule<BeefyRpcHandler<Block>>, BeefySignedCommitmentSender<Block>) {
 		let (commitment_sender, commitment_stream) =
 			BeefySignedCommitmentStream::<Block>::channel();
 
@@ -173,7 +175,8 @@ mod tests {
 			commitment_stream,
 			best_block_stream,
 			sc_rpc::SubscriptionTaskExecutor::default(),
-		).expect("Setting up the BEEFY RPC handler works");
+		)
+		.expect("Setting up the BEEFY RPC handler works");
 
 		(handler.into_rpc(), commitment_sender)
 	}
@@ -203,12 +206,14 @@ mod tests {
 			\"jsonrpc\":\"2.0\",\
 			\"result\":\"0x2f0039e93a27221fcf657fb877a1d4f60307106113e885096cb44a461cd0afbf\",\
 			\"id\":1\
-		}".to_string();
+		}"
+		.to_string();
 		let not_ready = "{\
 			\"jsonrpc\":\"2.0\",\
 			\"error\":{\"code\":-32000,\"message\":\"BEEFY RPC endpoint not ready\"},\
 			\"id\":1\
-		}".to_string();
+		}"
+		.to_string();
 
 		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
 		while std::time::Instant::now() < deadline {
