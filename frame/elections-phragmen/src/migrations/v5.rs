@@ -4,8 +4,8 @@ use super::super::*;
 ///
 /// This migration addresses a bug were a voter could lock up to their reserved balance + free
 /// balance. Since locks are only designed to operate on free balance, this put those affected in a
-/// situation where they could increase their free balance but still not be able to use there funds
-/// because it is less than the lock.
+/// situation where they could increase their free balance but still not be able to use their funds
+/// because they were less than the lock.
 pub fn migrate<T: Config>() -> Weight {
 	let mut weight = 0;
 
