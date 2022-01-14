@@ -215,7 +215,9 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 
 	/// Forces the insertion of `s` into `self` retaining all items with index at most `index`.
 	///
-	/// If `index == Self::bound()` and `self.len() == Self::bound()` then this is a no-op.
+	/// If `index == Self::bound()` and `self.len() == Self::bound()`, then this is a no-op.
+	///
+	/// If `Self::bound() < index` or `self.len() < index`, then this is also a no-op.
 	///
 	/// Returns `true` if the item was inserted.
 	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> bool {
