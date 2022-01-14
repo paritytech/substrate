@@ -121,7 +121,7 @@ groups:
   ##############################################################################
 
   - alert: NumberOfFileDescriptorsHigh
-    expr: 'node_filefd_allocated > 10000'
+    expr: 'node_filefd_allocated{chain!=""} > 10000'
     for: 3m
     labels:
       severity: warning
