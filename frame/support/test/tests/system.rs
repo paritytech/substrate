@@ -17,6 +17,7 @@
 
 use frame_support::{
 	codec::{Decode, Encode, EncodeLike},
+	dispatch::RawOrigin,
 	traits::Get,
 	weights::RuntimeDbWeight,
 };
@@ -66,23 +67,6 @@ frame_support::decl_error! {
 		AnotherError,
 		// Required by construct_runtime
 		CallFiltered,
-	}
-}
-
-/// Origin for the system module.
-#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
-pub enum RawOrigin<AccountId> {
-	Root,
-	Signed(AccountId),
-	None,
-}
-
-impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-		match s {
-			Some(who) => RawOrigin::Signed(who),
-			None => RawOrigin::None,
-		}
 	}
 }
 
