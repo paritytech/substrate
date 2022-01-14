@@ -666,6 +666,12 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+// TODO
+// - rebond_rewards
+// - force pool creation
+// - force pool update
+// - force pool delete?
+
 // impl<T: Config> Pallet<T> {
 // 	do_create_pool(
 // 		creator: T::AccountId,
