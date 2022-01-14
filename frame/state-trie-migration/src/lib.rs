@@ -40,7 +40,7 @@
 //!
 //! as a backup, the migration process can be set in motion via signed transactions that basically
 //! say in advance how many items and how many bytes they will consume, and pay for it as well. This
-//! can be a good safe alternative, if the former two systems are not desirable.
+//! can be a good safe alternative, if the former system is not desirable.
 //!
 //! The (minor) caveat of this approach is that we cannot know in advance how many bytes reading a
 //! certain number of keys will incur. To overcome this, the runtime needs to configure this pallet
