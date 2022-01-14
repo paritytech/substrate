@@ -147,7 +147,7 @@ pub trait ShouldEndSession<BlockNumber> {
 }
 /// Returns the session boundary
 pub trait SessionBoundary<BlockNumber> {
-	/// Returns the block at which the last session ended
+	/// Returns the block number at which the session began
 	fn get_session_boundary() -> BlockNumber;
 }
 
@@ -582,7 +582,8 @@ pub mod pallet {
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
-				Self::rotate_session(n);
+				Self::rotate_session();
+				SessionStart::<T>::put(n);
 				T::BlockWeights::get().max_block
 			} else {
 				// NOTE: the non-database part of the weight for `should_end_session(n)` is
@@ -647,7 +648,7 @@ impl<T: Config> Pallet<T> {
 	/// Move on to next session. Register new validator set and session keys. Changes to the
 	/// validator set have a session of delay to take effect. This allows for equivocation
 	/// punishment after a fork.
-	pub fn rotate_session(n: T::BlockNumber) {
+	pub fn rotate_session() {
 		let session_index = <CurrentIndex<T>>::get();
 		log::trace!(target: "runtime::session", "rotating session {:?}", session_index);
 
@@ -721,7 +722,6 @@ impl<T: Config> Pallet<T> {
 
 		<QueuedKeys<T>>::put(queued_amalgamated.clone());
 		<QueuedChanged<T>>::put(next_changed);
-		SessionStart::<T>::put(n);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession { session_index });
