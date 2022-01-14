@@ -107,7 +107,6 @@ pub type MmrLeaf = beefy_primitives::mmr::MmrLeaf<
 	<Test as pallet_mmr::Config>::Hash,
 >;
 
-type MmrHash = <Keccak256 as Hasher>::Out;
 impl pallet_mmr::Config for Test {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr";
 
