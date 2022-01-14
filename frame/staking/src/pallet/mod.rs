@@ -28,7 +28,7 @@ use frame_support::{
 };
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
-	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
+	traits::{CheckedSub, SaturatedConversion, Saturating, StaticLookup, Zero},
 	DispatchError, Perbill, Percent,
 };
 use sp_staking::SessionIndex;
@@ -880,7 +880,16 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				ledger.unlocking.push(UnlockChunk { value, era });
+				if let Some(mut chunk) =
+					ledger.unlocking.last_mut().filter(|chunk| chunk.era == era)
+				{
+					// To keep the chunk count down, we only keep one chunk per era. Since
+					// `unlocking` is a FiFo queue, if a chunk exists for `era` we know that it will
+					// be the last one.
+					chunk.value = chunk.value.saturating_add(value)
+				} else {
+					ledger.unlocking.push(UnlockChunk { value, era });
+				};
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 

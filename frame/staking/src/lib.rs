@@ -448,8 +448,9 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// rounds.
 	#[codec(compact)]
 	pub active: Balance,
-	/// Any balance that is becoming free, which may eventually be transferred out
-	/// of the stash (assuming it doesn't get slashed first).
+	/// Any balance that is becoming free, which may eventually be transferred out of the stash
+	/// (assuming it doesn't get slashed first). It is assumed that this will be treated as a first
+	/// in, first out queue where the new (higher value) eras get pushing on the back.
 	pub unlocking: Vec<UnlockChunk<Balance>>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.

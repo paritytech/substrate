@@ -1262,23 +1262,32 @@ fn bond_extra_and_withdraw_unbonded_works() {
 #[test]
 fn too_many_unbond_calls_should_not_work() {
 	ExtBuilder::default().build_and_execute(|| {
-		// locked at era 0 until 3
-		for _ in 0..MAX_UNLOCKING_CHUNKS - 1 {
+		let mut current_era = 0;
+		// locked at era MAX_UNLOCKING_CHUNKS - 1 until 3
+		for i in 0..MAX_UNLOCKING_CHUNKS - 1 {
+			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
+			current_era = i as u32;
+			mock::start_active_era(current_era);
 			assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		}
 
-		mock::start_active_era(1);
+		current_era += 1;
+		mock::start_active_era(current_era);
 
-		// locked at era 1 until 4
+		// This chunk is locked at `current_era` through `current_era + 2` (because BondingDuration
+		// == 3).
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
+		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), MAX_UNLOCKING_CHUNKS);
 		// can't do more.
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
-		mock::start_active_era(3);
+		current_era += 2;
+		mock::start_active_era(current_era);
 
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
-		// free up.
+		// free up everything except the most recently added chunk.
 		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 1);
 
 		// Can add again.
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
@@ -1396,11 +1405,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![
-					UnlockChunk { value: 300, era: 5 },
-					UnlockChunk { value: 300, era: 5 },
-					UnlockChunk { value: 300, era: 5 },
-				],
+				unlocking: vec![UnlockChunk { value: 900, era: 5 },],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1413,10 +1418,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: vec![
-					UnlockChunk { value: 300, era: 5 },
-					UnlockChunk { value: 100, era: 5 },
-				],
+				unlocking: vec![UnlockChunk { value: 400, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
