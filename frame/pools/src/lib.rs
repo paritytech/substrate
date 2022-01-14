@@ -59,6 +59,9 @@ pub trait NominationProviderTrait<Balance, AccountId, EraIndex> {
 	fn bond_extra(controller: &AccountId, extra: Balance) -> DispatchResult;
 
 	fn unbond(controller: &AccountId, value: Balance) -> DispatchResult;
+
+	/// Number of eras that staked funds must remain bonded for.
+	fn bond_duration() -> EraIndex;
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -178,6 +181,22 @@ impl<T: Config> UnbondPool<T> {
 
 			T::U128ToBalance::convert(shares_per_balance.saturating_mul_int(new_funds))
 		}
+	}
+
+	fn balance_to_unbond(&self, delegator_shares: SharesOf<T>) -> BalanceOf<T> {
+		if self.balance.is_zero() || delegator_shares.is_zero() {
+			// There is nothing to unbond
+			return Zero::zero();
+		}
+
+		let balance_per_share = {
+			let balance = T::BalanceToU128::convert(self.balance);
+			let shares = T::BalanceToU128::convert(self.shares);
+			FixedU128::saturating_from_rational(balance, shares)
+		};
+		let delegator_shares = T::BalanceToU128::convert(delegator_shares);
+
+		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_shares))
 	}
 }
 
@@ -340,6 +359,10 @@ pub mod pallet {
 		InsufficientBond,
 		/// The delegator is already unbonding.
 		AlreadyUnbonding,
+		/// The delegator is not unbonding and thus cannot withdraw funds.
+		NotUnbonding,
+		/// Unbonded funds cannot be withdrawn yet because the bond duration has not passed.
+		NotUnbondedYet,
 	}
 
 	#[pallet::call]
@@ -488,6 +511,49 @@ pub mod pallet {
 			PrimaryPools::insert(delegator.pool, primary_pool);
 			SubPools::insert(delegator.pool, sub_pools);
 			Delegators::insert(who, delegator);
+
+			Ok(())
+		}
+
+		#[pallet::weight(666)]
+		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let delegator = Delegators::<T>::take(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+
+			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
+			let current_era = T::NominationProvider::current_era();
+			if current_era.saturating_sub(unbonding_era) < T::NominationProvider::bond_duration() {
+				return Err(Error::<T>::NotUnbondedYet.into());
+			};
+
+			let mut sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
+
+			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&current_era) {
+				let balance_to_unbond = pool.balance_to_unbond(delegator.shares);
+				pool.shares = pool.shares.saturating_sub(delegator.shares);
+				pool.balance = pool.balance.saturating_sub(balance_to_unbond);
+
+				balance_to_unbond
+			} else {
+				// A pool does not belong to this era, so it must have been merged to the era-less pool.
+				let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.shares);
+				sub_pools.no_era.shares = sub_pools.no_era.shares.saturating_sub(delegator.shares);
+				sub_pools.no_era.balance =
+					sub_pools.no_era.balance.saturating_sub(balance_to_unbond);
+
+				balance_to_unbond
+			};
+
+			let primary_pool =
+				PrimaryPools::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
+			T::Currency::transfer(
+				&primary_pool.account_id,
+				&who,
+				balance_to_unbond,
+				ExistenceRequirement::AllowDeath,
+			)?;
+
+			SubPools::<T>::insert(delegator.pool, sub_pools);
 
 			Ok(())
 		}
