@@ -244,7 +244,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	///   the item which is being moved.
 	///
 	/// Returns `true` of the operation was successful, otherwise `false` if a noop.
-	pub fn slide(&mut self, index: usize, insert_position: usize) -> bool{
+	pub fn slide(&mut self, index: usize, insert_position: usize) -> bool {
 		// Check against panics.
 		if self.len() <= index || self.len() < insert_position || index == usize::MAX {
 			return false
