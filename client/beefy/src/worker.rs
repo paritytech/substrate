@@ -100,7 +100,7 @@ where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -146,7 +146,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
 {
 	/// Return `true`, if we should vote on block `number`
 	fn should_vote_on(&self, number: NumberFor<B>) -> bool {
@@ -247,14 +247,17 @@ where
 
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
-				self.best_beefy_block = Some(*notification.header.number());
+				let at = BlockId::hash(notification.header.hash());
+				let session_boundary = self.client.runtime_api().get_session_boundary(&at).ok();
+				self.best_beefy_block = Some(session_boundary);
 				self.beefy_best_block_sender
 					.notify(|| Ok::<_, ()>(notification.hash.clone()))
 					.expect("forwards closure result; the closure always returns Ok; qed.");
 
-				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
-				// have a signed commitment for the block. Remove once the above TODO is done.
-				metric_set!(self, beefy_best_block, *notification.header.number());
+				// this metric is kind of 'fake'. Best BEEFY block should only be updated once
+				// we have a signed commitment for the block. Remove once the above TODO is
+				// done.
+				metric_set!(self, beefy_best_block, session_boundary);
 			}
 		}
 

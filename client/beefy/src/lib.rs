@@ -27,7 +27,7 @@ use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
-use sp_runtime::traits::Block;
+use sp_runtime::traits::{Block, NumberFor};
 
 use beefy_primitives::BeefyApi;
 
@@ -111,7 +111,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	/// BEEFY client
@@ -142,7 +142,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	let BeefyParams {
