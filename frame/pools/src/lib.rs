@@ -9,16 +9,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use std::collections::BTreeMap;
-
 use frame_support::{
 	ensure,
 	pallet_prelude::*,
-	traits::{Currency, ExistenceRequirement},
+	storage::bounded_btree_map::BoundedBTreeMap,
+	traits::{Currency, ExistenceRequirement, Get},
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Saturating, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, Saturating, Zero};
 
 pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
@@ -38,6 +37,7 @@ type PoolId = u32;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type SharesOf<T> = BalanceOf<T>;
+type SubPoolsWithEra<T> = BoundedBTreeMap<<T as Config>::EraIndex, UnbondPool<T>, MaxUnbonding<T>>;
 
 pub trait NominationProviderTrait<Balance, AccountId, EraIndex> {
 	/// The minimum amount necessary to bond to be a nominator. This does not necessarily mean the
@@ -53,7 +53,12 @@ pub trait NominationProviderTrait<Balance, AccountId, EraIndex> {
 	/// following era.
 	fn is_ongoing_election() -> bool;
 
+	/// Balance `controller` has bonded for nominating.
+	fn bonded_balance(controller: &AccountId) -> Balance;
+
 	fn bond_extra(controller: &AccountId, extra: Balance) -> DispatchResult;
+
+	fn unbond(controller: &AccountId, value: Balance) -> DispatchResult;
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -63,7 +68,6 @@ pub struct Delegator<T: Config> {
 	pool: PoolId,
 	/// The quantity of shares this delegator has in the p
 	shares: SharesOf<T>,
-
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assumiing no massive burning events, we expect this value to always be below total
 	/// issuance. This value lines up with the `RewardPool.total_earnings` after a delegator claims
@@ -83,16 +87,53 @@ pub struct Pool<T: Config> {
 }
 
 impl<T: Config> Pool<T> {
-	fn shares_to_issue(&self, new_funds: BalanceOf<T>, pool_free: BalanceOf<T>) -> SharesOf<T> {
-		let shares_per_balance = {
-			// TODO if balance.is_zero() || shares.is_zero() 
-			let balance = T::BalanceToU128::convert(pool_free);
-			let shares = T::BalanceToU128::convert(self.shares);
-			FixedU128::saturating_from_rational(shares, balance)
-		};
-		let new_funds = T::BalanceToU128::convert(new_funds);
+	/// Get the amount of shares to issue for some new funds that will be bonded
+	/// in the pool.
+	///
+	/// * `new_funds`: Incoming funds to be bonded against the pool.
+	/// * `bonded_balance`: Current bonded balance of the pool.
+	fn shares_to_issue(
+		&self,
+		new_funds: BalanceOf<T>,
+		bonded_balance: BalanceOf<T>,
+	) -> SharesOf<T> {
+		if bonded_balance.is_zero() || self.shares.is_zero() {
+			debug_assert!(bonded_balance.is_zero() && self.shares.is_zero());
 
-		T::U128ToBalance::convert(shares_per_balance.saturating_mul_int(new_funds))
+			// all pools start with a 1:1 ratio of balance:shares
+			new_funds
+		} else {
+			let shares_per_balance = {
+				let balance = T::BalanceToU128::convert(bonded_balance);
+				let shares = T::BalanceToU128::convert(self.shares);
+				FixedU128::saturating_from_rational(shares, balance)
+			};
+			let new_funds = T::BalanceToU128::convert(new_funds);
+
+			T::U128ToBalance::convert(shares_per_balance.saturating_mul_int(new_funds))
+		}
+	}
+
+	/// Based on the given shares, unbond the equivalent balance, update the pool accordingly, and
+	/// return the balance unbonded.
+	fn balance_to_unbond(
+		&self,
+		delegator_shares: SharesOf<T>,
+		bonded_balance: BalanceOf<T>,
+	) -> BalanceOf<T> {
+		if bonded_balance.is_zero() || delegator_shares.is_zero() {
+			// There is nothing to unbond
+			return Zero::zero();
+		}
+
+		let balance_per_share = {
+			let balance = T::BalanceToU128::convert(bonded_balance);
+			let shares = T::BalanceToU128::convert(self.shares);
+			FixedU128::saturating_from_rational(balance, shares)
+		};
+		let delegator_shares = T::BalanceToU128::convert(delegator_shares);
+
+		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_shares))
 	}
 }
 
@@ -113,16 +154,93 @@ pub struct RewardPool<T: Config> {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-struct UnbondPool {
-
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+struct UnbondPool<T: Config> {
+	shares: SharesOf<T>,
+	balance: BalanceOf<T>,
 }
 
+impl<T: Config> UnbondPool<T> {
+	fn shares_to_issue(&self, new_funds: BalanceOf<T>) -> SharesOf<T> {
+		if self.balance.is_zero() || self.shares.is_zero() {
+			debug_assert!(self.balance.is_zero() && self.shares.is_zero());
+
+			// all pools start with a 1:1 ratio of balance:shares
+			new_funds
+		} else {
+			let shares_per_balance = {
+				let balance = T::BalanceToU128::convert(self.balance);
+				let shares = T::BalanceToU128::convert(self.shares);
+				FixedU128::saturating_from_rational(shares, balance)
+			};
+			let new_funds = T::BalanceToU128::convert(new_funds);
+
+			T::U128ToBalance::convert(shares_per_balance.saturating_mul_int(new_funds))
+		}
+	}
+}
+
+impl<T: Config> Default for UnbondPool<T> {
+	fn default() -> Self {
+		Self { shares: Zero::zero(), balance: Zero::zero() }
+	}
+}
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound(T: Config))]
-struct SubPools<T: frame_system::Config> {
-	unbonding: UnbondPool,
-	unbonding: BTreeMap<T::EraIndex, UnbondPools>
+#[scale_info(skip_type_params(T))]
+struct SubPoolContainer<T: Config> {
+	/// A general, era agnostic pool of funds that have fully unbonded. The pools
+	/// of `self.with_era` will lazily be merged into into this pool if they are
+	/// older then `current_era - T::MAX_UNBONDING`.
+	no_era: UnbondPool<T>,
+	/// Map of era => unbond pools.
+	with_era: SubPoolsWithEra<T>,
+}
+
+impl<T: Config> SubPoolContainer<T> {
+	/// Merge the oldest unbonding pool with an era into the general unbond pool with no associated
+	/// era.
+	fn maybe_merge_pools(mut self, current_era: T::EraIndex) -> Self {
+		if current_era < T::MAX_UNBONDING.into() {
+			// For the first `T::MAX_UNBONDING` eras of the chain we don't need to do anything.
+			// I.E. if `MAX_UNBONDING` is 5 and we are in era 4 we can add a pool for this era and
+			// have exactly `MAX_UNBONDING` pools.
+			return self;
+		}
+
+		//  I.E. if `MAX_UNBONDING` is 5 and current era is 10, we only want to retain pools 6..=10.
+		let oldest_era_to_keep = current_era - (T::MAX_UNBONDING.saturating_add(1)).into();
+
+		let eras_to_remove: Vec<_> =
+			self.with_era.keys().cloned().filter(|era| *era < oldest_era_to_keep).collect();
+		for era in eras_to_remove {
+			if let Some(p) = self.with_era.remove(&era) {
+				self.no_era.shares.saturating_add(p.shares);
+				self.no_era.balance.saturating_add(p.balance);
+			} else {
+				// lol
+			}
+		}
+
+		self
+	}
+}
+
+// TODO figure out why the Default derive did not work for SubPoolContainer
+impl<T: Config> sp_std::default::Default for SubPoolContainer<T> {
+	fn default() -> Self {
+		Self { no_era: UnbondPool::<T>::default(), with_era: SubPoolsWithEra::<T>::default() }
+	}
+}
+
+// Wrapper for `T::MAX_UNBONDING` to satisfy `trait Get`.
+pub struct MaxUnbonding<T>(PhantomData<T>);
+impl<T: Config> Get<u32> for MaxUnbonding<T> {
+	fn get() -> u32 {
+		T::MAX_UNBONDING
+	}
 }
 
 #[frame_support::pallet]
@@ -171,7 +289,7 @@ pub mod pallet {
 
 		/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
 		/// "average" (TODO need better terminology) unbonding pool.
-		const MAX_UNBOND_POOL_LIFE: u32;
+		const MAX_UNBONDING: u32;
 
 		// MaxPools
 	}
@@ -191,10 +309,11 @@ pub mod pallet {
 	pub(crate) type RewardPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, RewardPool<T>>;
 
-	// /// Groups of unbonding pools. Each group of unbonding pools belongs to a primary pool,
-	// /// hence the name sub-pools.
-	// #[pallet::storage]
-	// type SubPools = CountedStorageMap<_, PoolId, SubPools, _>;
+	/// Groups of unbonding pools. Each group of unbonding pools belongs to a primary pool,
+	/// hence the name sub-pools.
+	#[pallet::storage]
+	pub(crate) type SubPools<T: Config> =
+		CountedStorageMap<_, Twox64Concat, PoolId, SubPoolContainer<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -257,8 +376,9 @@ pub mod pallet {
 			// we get the exact amount we can bond extra
 			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
 
+			let bonded_balance = T::NominationProvider::bonded_balance(&primary_pool.account_id);
 			// issue the new shares
-			let new_shares = primary_pool.shares_to_issue(exact_amount_to_bond, old_free_balance);
+			let new_shares = primary_pool.shares_to_issue(exact_amount_to_bond, bonded_balance);
 			primary_pool.shares = primary_pool.shares.saturating_add(new_shares);
 			let delegator = Delegator::<T> {
 				pool: target,
@@ -294,12 +414,9 @@ pub mod pallet {
 		/// This extrinsic is permisionless in the sense that any account can call it for any
 		/// delegator in the system.
 		#[pallet::weight(666)]
-		pub fn claim_payout_other(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
-			ensure_signed(origin)?;
-
-			// READ THINGS FROM STORAGE
-			let mut delegator =
-				Delegators::<T>::get(&account).ok_or(Error::<T>::DelegatorNotFound)?;
+		pub fn claim_payout_other(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			// If the delegator is unbonding they cannot claim rewards. Note that when the delagator
 			// goes to unbond, the unbond function should claim rewards for the final time.
@@ -321,8 +438,6 @@ pub mod pallet {
 				Error::<T>::RewardPoolNotFound
 			})?;
 			let current_balance = T::Currency::free_balance(&reward_pool.account_id);
-
-			// DO MATHS TO CALCULATE PAYOUT
 
 			// The earnings since the last claimed payout
 			let new_earnings = current_balance.saturating_sub(reward_pool.balance);
@@ -358,10 +473,10 @@ pub mod pallet {
 				T::U128ToBalance::convert(payout)
 			};
 
-			// TRANSFER PAYOUT TO DELEGATOR
+			// Transfer payout to the delegator. note if this succeeds we don't want to fail after.
 			T::Currency::transfer(
 				&reward_pool.account_id,
-				&account,
+				&who,
 				delegator_payout,
 				// TODO double check we are ok with dusting the account - If their is a very high
 				// ED this could lead to a non-negligible loss of rewards
@@ -369,20 +484,20 @@ pub mod pallet {
 			)?;
 
 			Self::deposit_event(Event::<T>::Payout {
-				delegator: account.clone(),
+				delegator: who.clone(),
 				pool: delegator.pool,
 				payout: delegator_payout,
 			});
 
-			// RECORD RELEVANT UPDATES
+			// Record updates
 			delegator.reward_pool_total_earnings = new_total_earnings;
 			reward_pool.shares = current_shares.saturating_sub(delegator_virtual_shares);
 			reward_pool.balance = current_balance;
 			reward_pool.total_earnings = new_total_earnings;
 
-			// WRITE UPDATED DELEGATOR AND REWARD POOL TO STORAGE
+			// Write the updated delegator and reward pool to storage
 			RewardPools::insert(delegator.pool, reward_pool);
-			Delegators::insert(account.clone(), delegator);
+			Delegators::insert(who, delegator);
 
 			Ok(())
 		}
@@ -396,16 +511,54 @@ pub mod pallet {
 			// Unbonding is all or nothing and a delegator can only belong to 1 pool.
 			ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
 
-			 let primary_pool = PrimaryPools::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
-			 let sub_pools = SubPools::<T>::get(delegator.pool).ok_or_else(|| {
-				// make sub pool
-			 })?;
+			let mut primary_pool =
+				PrimaryPools::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
+			// Note that we lazily create the unbonding pools here if they don't already exist
+			let sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
+			// TODO double check if we need to count for elections when
+			// the unbonding era.
+			let current_era = T::NominationProvider::current_era();
 
+			let bonded_balance = T::NominationProvider::bonded_balance(&primary_pool.account_id);
+			let balance_to_unbond =
+				primary_pool.balance_to_unbond(delegator.shares, bonded_balance);
+
+			// Update the primary pool. Note that we must do this *after* calculating the balance
+			// to unbond.
+			primary_pool.shares = primary_pool.shares.saturating_sub(delegator.shares);
+			// Unbond in the actual underlying pool
+			// TODO - we can only do this for as many locking chunks are accepted
+			T::NominationProvider::unbond(&primary_pool.account_id, balance_to_unbond)?;
+
+			// Merge any older pools into the general, era agnostic unbond pool. Note that we do
+			// this before inserting to ensure we don't go over the max unbonding pools.
+			let mut sub_pools = sub_pools.maybe_merge_pools(current_era);
+
+			// Update the unbond pool associated with the current era with the
+			// unbonded funds. Note that we lazily create the unbond pool if it
+			// does not yet exist.
+			// let unbond_pool = sub_pools
+			// 	.with_era
+			// 	.entry(current_era)
+			// 	.or_insert_with(|| UnbondPool::<T>::default());
+			{
+				let unbond_pool = sub_pools.with_era.get_mut(&current_era).unwrap();
+				let shares_to_issue = unbond_pool.shares_to_issue(balance_to_unbond);
+				unbond_pool.shares = unbond_pool.shares.saturating_add(shares_to_issue);
+				unbond_pool.balance = unbond_pool.balance.saturating_add(balance_to_unbond);
+			}
+
+			delegator.unbonding_era = Some(current_era);
+
+			// Write the updated delegator, primary pool, and sub pool to storage
+			PrimaryPools::insert(delegator.pool, primary_pool);
+			SubPools::insert(delegator.pool, sub_pools);
+			Delegators::insert(who, delegator);
 
 			// TODO claim rewards (will need to refactor the rewards function)
 			Ok(())
 		}
-    }
+	}
 }
 
 // impl<T: Config> Pallet<T> {

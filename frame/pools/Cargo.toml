@@ -21,6 +21,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-arithmetic = { version = "4.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 # third party
 log = { version = "0.4.14", default-features = false }
