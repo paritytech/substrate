@@ -414,13 +414,9 @@ pub mod pallet {
 		/// This extrinsic is permisionless in the sense that any account can call it for any
 		/// delegator in the system.
 		#[pallet::weight(666)]
-		pub fn claim_payout_other(origin: OriginFor<T>) -> DispatchResult {
+		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
-
-			// If the delegator is unbonding they cannot claim rewards. Note that when the delagator
-			// goes to unbond, the unbond function should claim rewards for the final time.
-			ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
+			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let primary_pool = PrimaryPools::<T>::get(&delegator.pool).ok_or_else(|| {
 				log!(error, "A primary pool could not be found, this is a system logic error.");
 				debug_assert!(
@@ -429,7 +425,7 @@ pub mod pallet {
 				);
 				Error::<T>::PoolNotFound
 			})?;
-			let mut reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
+			let reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
 				log!(error, "A reward pool could not be found, this is a system logic error.");
 				debug_assert!(
 					false,
@@ -437,63 +433,17 @@ pub mod pallet {
 				);
 				Error::<T>::RewardPoolNotFound
 			})?;
-			let current_balance = T::Currency::free_balance(&reward_pool.account_id);
 
-			// The earnings since the last claimed payout
-			let new_earnings = current_balance.saturating_sub(reward_pool.balance);
-
-			// The lifetime earnings of the of the reward pool
-			let new_total_earnings = new_earnings.saturating_add(reward_pool.total_earnings);
-
-			// The new shares that will be added to the pool. For every unit of balance that has
-			// been earned by the reward pool, we inflate the reward pool shares by
-			// `primary_pool.total_shares`. In effect this allows each, single unit of balance (e.g.
-			// plank) to be divvied up pro-rata among delegators based on shares.
-			// TODO this needs to be some sort of BigUInt arithmetic
-			let new_shares = primary_pool.shares.saturating_mul(new_earnings);
-
-			// The shares of the reward pool after taking into account the new earnings
-			let current_shares = reward_pool.shares.saturating_add(new_shares);
-
-			// The rewards pool's earnings since the last time this delegator claimed a payout
-			let new_earnings_since_last_claim =
-				new_total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
-			// The shares of the reward pool that belong to the delegator.
-			let delegator_virtual_shares =
-				delegator.shares.saturating_mul(new_earnings_since_last_claim);
-
-			let delegator_payout = {
-				let delegator_ratio_of_shares = FixedU128::saturating_from_rational(
-					T::BalanceToU128::convert(delegator_virtual_shares),
-					T::BalanceToU128::convert(current_shares),
-				);
-
-				let payout = delegator_ratio_of_shares
-					.saturating_mul_int(T::BalanceToU128::convert(current_balance));
-				T::U128ToBalance::convert(payout)
-			};
+			let (reward_pool, delegator, delegator_payout) =
+				Self::calculate_delegator_payout(&primary_pool, reward_pool, delegator)?;
 
 			// Transfer payout to the delegator. note if this succeeds we don't want to fail after.
-			T::Currency::transfer(
+			Self::transfer_reward(
 				&reward_pool.account_id,
-				&who,
+				who.clone(),
+				delegator.pool,
 				delegator_payout,
-				// TODO double check we are ok with dusting the account - If their is a very high
-				// ED this could lead to a non-negligible loss of rewards
-				ExistenceRequirement::AllowDeath, // Dust may be lost here
 			)?;
-
-			Self::deposit_event(Event::<T>::Payout {
-				delegator: who.clone(),
-				pool: delegator.pool,
-				payout: delegator_payout,
-			});
-
-			// Record updates
-			delegator.reward_pool_total_earnings = new_total_earnings;
-			reward_pool.shares = current_shares.saturating_sub(delegator_virtual_shares);
-			reward_pool.balance = current_balance;
-			reward_pool.total_earnings = new_total_earnings;
 
 			// Write the updated delegator and reward pool to storage
 			RewardPools::insert(delegator.pool, reward_pool);
@@ -558,6 +508,83 @@ pub mod pallet {
 			// TODO claim rewards (will need to refactor the rewards function)
 			Ok(())
 		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Calculate the rewards for `delegator`. This is does no
+	fn calculate_delegator_payout(
+		primary_pool: &Pool<T>,
+		mut reward_pool: RewardPool<T>,
+		mut delegator: Delegator<T>,
+	) -> Result<(RewardPool<T>, Delegator<T>, BalanceOf<T>), DispatchError> {
+		// If the delegator is unbonding they cannot claim rewards. Note that when the delagator
+		// goes to unbond, the unbond function should claim rewards for the final time.
+		ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
+
+		let current_balance = T::Currency::free_balance(&reward_pool.account_id);
+
+		// The earnings since the last claimed payout
+		let new_earnings = current_balance.saturating_sub(reward_pool.balance);
+
+		// The lifetime earnings of the of the reward pool
+		let new_total_earnings = new_earnings.saturating_add(reward_pool.total_earnings);
+
+		// The new shares that will be added to the pool. For every unit of balance that has
+		// been earned by the reward pool, we inflate the reward pool shares by
+		// `primary_pool.total_shares`. In effect this allows each, single unit of balance (e.g.
+		// plank) to be divvied up pro-rata among delegators based on shares.
+		// TODO this needs to be some sort of BigUInt arithmetic
+		let new_shares = primary_pool.shares.saturating_mul(new_earnings);
+
+		// The shares of the reward pool after taking into account the new earnings
+		let current_shares = reward_pool.shares.saturating_add(new_shares);
+
+		// The rewards pool's earnings since the last time this delegator claimed a payout
+		let new_earnings_since_last_claim =
+			new_total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
+		// The shares of the reward pool that belong to the delegator.
+		let delegator_virtual_shares =
+			delegator.shares.saturating_mul(new_earnings_since_last_claim);
+
+		let delegator_payout = {
+			let delegator_ratio_of_shares = FixedU128::saturating_from_rational(
+				T::BalanceToU128::convert(delegator_virtual_shares),
+				T::BalanceToU128::convert(current_shares),
+			);
+
+			let payout = delegator_ratio_of_shares
+				.saturating_mul_int(T::BalanceToU128::convert(current_balance));
+			T::U128ToBalance::convert(payout)
+		};
+
+		// Record updates
+		delegator.reward_pool_total_earnings = new_total_earnings;
+		reward_pool.shares = current_shares.saturating_sub(delegator_virtual_shares);
+		reward_pool.balance = current_balance;
+		reward_pool.total_earnings = new_total_earnings;
+
+		Ok((reward_pool, delegator, delegator_payout))
+	}
+
+	/// Transfer the delegator their payout from the pool and deposit the corresponding event.
+	fn transfer_reward(
+		reward_pool: &T::AccountId,
+		delegator: T::AccountId,
+		pool: PoolId,
+		payout: BalanceOf<T>,
+	) -> Result<(), DispatchError> {
+		T::Currency::transfer(
+			reward_pool,
+			&delegator,
+			payout,
+			// TODO double check we are ok with dusting the account - If their is a very high
+			// ED this could lead to a non-negligible loss of rewards
+			ExistenceRequirement::AllowDeath, // Dust may be lost here
+		)?;
+		Self::deposit_event(Event::<T>::Payout { delegator, pool, payout });
+
+		Ok(())
 	}
 }
 
