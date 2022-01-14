@@ -114,10 +114,8 @@ fn should_contain_valid_leaf_data() {
 				root: hex!("176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96")
 					.into(),
 			},
-			parachain_heads: hex!(
-				"ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e"
-			)
-			.into(),
+			leaf_extra: hex!("ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e")
+				.into(),
 		}
 	);
 
@@ -138,10 +136,8 @@ fn should_contain_valid_leaf_data() {
 				root: hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5")
 					.into(),
 			},
-			parachain_heads: hex!(
-				"ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e"
-			)
-			.into(),
+			leaf_extra: hex!("ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e")
+				.into(),
 		}
 	);
 }

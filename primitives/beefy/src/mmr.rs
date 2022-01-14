@@ -28,6 +28,26 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_core::H256;
+use sp_std::convert::AsRef;
+#[derive(Encode, Decode)]
+pub enum BeefyLeafExtra<H: IntoIterator<Item = I>, I: Encode, MerkleRoot: AsRef<[u8]>> {
+	/// A collection of values that will be merklelized
+	Collection(H),
+	/// This should be a merkle root hash of some arbitrary data
+	Blob(MerkleRoot),
+}
+
+pub trait BeefyDataProvider<T> {
+	fn extra_data() -> T;
+}
+
+/// A default implementation for runtimes without parachains.
+impl BeefyDataProvider<BeefyLeafExtra<Vec<()>, (), H256>> for () {
+	fn extra_data() -> BeefyLeafExtra<Vec<()>, (), H256> {
+		BeefyLeafExtra::Collection(Vec::new())
+	}
+}
 
 /// A standard leaf that gets added every block to the MMR constructed by Substrate's `pallet_mmr`.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -41,8 +61,8 @@ pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot> {
 	pub parent_number_and_hash: (BlockNumber, Hash),
 	/// A merkle root of the next BEEFY authority set.
 	pub beefy_next_authority_set: BeefyNextAuthoritySet<MerkleRoot>,
-	/// A merkle root of all registered parachain heads.
-	pub parachain_heads: MerkleRoot,
+	/// A merkle root of an arbitrary extra leaf data.
+	pub leaf_extra: MerkleRoot,
 }
 
 /// A MMR leaf versioning scheme.
