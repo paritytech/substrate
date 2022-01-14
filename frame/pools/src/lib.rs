@@ -425,29 +425,8 @@ pub mod pallet {
 				);
 				Error::<T>::PoolNotFound
 			})?;
-			let reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
-				log!(error, "A reward pool could not be found, this is a system logic error.");
-				debug_assert!(
-					false,
-					"A reward pool could not be found, this is a system logic error."
-				);
-				Error::<T>::RewardPoolNotFound
-			})?;
 
-			let (reward_pool, delegator, delegator_payout) =
-				Self::calculate_delegator_payout(&primary_pool, reward_pool, delegator)?;
-
-			// Transfer payout to the delegator. note if this succeeds we don't want to fail after.
-			Self::transfer_reward(
-				&reward_pool.account_id,
-				who.clone(),
-				delegator.pool,
-				delegator_payout,
-			)?;
-
-			// Write the updated delegator and reward pool to storage
-			RewardPools::insert(delegator.pool, reward_pool);
-			Delegators::insert(who, delegator);
+			Self::do_reward_payout(who, delegator, &primary_pool)?;
 
 			Ok(())
 		}
@@ -456,13 +435,17 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
-
-			// Unbonding is all or nothing and a delegator can only belong to 1 pool.
-			ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
-
+			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let mut primary_pool =
 				PrimaryPools::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
+
+			// Claim the the payout prior to unbonding. Once the user is unbonding their shares
+			// no longer exist in the primary pool and thus they can no longer claim their payouts.
+			// It is not strictly necessary to claim the rewards, but we do it here for UX.
+			Self::do_reward_payout(who.clone(), delegator, &primary_pool)?;
+
+			// Re-fetch the delegator because they where updated by `do_reward_payout`.
+			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
 			// TODO double check if we need to count for elections when
@@ -476,7 +459,8 @@ pub mod pallet {
 			// Update the primary pool. Note that we must do this *after* calculating the balance
 			// to unbond.
 			primary_pool.shares = primary_pool.shares.saturating_sub(delegator.shares);
-			// Unbond in the actual underlying pool
+
+			// Unbond in the actual underlying pool - we can't fail after this
 			// TODO - we can only do this for as many locking chunks are accepted
 			T::NominationProvider::unbond(&primary_pool.account_id, balance_to_unbond)?;
 
@@ -500,19 +484,18 @@ pub mod pallet {
 
 			delegator.unbonding_era = Some(current_era);
 
-			// Write the updated delegator, primary pool, and sub pool to storage
+			// Now that we know everything has worked write the items to storage.
 			PrimaryPools::insert(delegator.pool, primary_pool);
 			SubPools::insert(delegator.pool, sub_pools);
 			Delegators::insert(who, delegator);
 
-			// TODO claim rewards (will need to refactor the rewards function)
 			Ok(())
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Calculate the rewards for `delegator`. This is does no
+	/// Calculate the rewards for `delegator`.
 	fn calculate_delegator_payout(
 		primary_pool: &Pool<T>,
 		mut reward_pool: RewardPool<T>,
@@ -583,6 +566,35 @@ impl<T: Config> Pallet<T> {
 			ExistenceRequirement::AllowDeath, // Dust may be lost here
 		)?;
 		Self::deposit_event(Event::<T>::Payout { delegator, pool, payout });
+
+		Ok(())
+	}
+
+	fn do_reward_payout(
+		delegator_id: T::AccountId,
+		delegator: Delegator<T>,
+		primary_pool: &Pool<T>,
+	) -> DispatchResult {
+		let reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
+			log!(error, "A reward pool could not be found, this is a system logic error.");
+			debug_assert!(false, "A reward pool could not be found, this is a system logic error.");
+			Error::<T>::RewardPoolNotFound
+		})?;
+
+		let (reward_pool, delegator, delegator_payout) =
+			Self::calculate_delegator_payout(primary_pool, reward_pool, delegator)?;
+
+		// Transfer payout to the delegator.
+		Self::transfer_reward(
+			&reward_pool.account_id,
+			delegator_id.clone(),
+			delegator.pool,
+			delegator_payout,
+		)?;
+
+		// Write the updated delegator and reward pool to storage
+		RewardPools::insert(delegator.pool, reward_pool);
+		Delegators::insert(delegator_id, delegator);
 
 		Ok(())
 	}
