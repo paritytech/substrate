@@ -338,7 +338,7 @@ mod origin_test {
 		// Now test for root origin and filters:
 		let mut origin = Origin::from(Some(0));
 		origin.set_caller_from(Origin::root());
-		assert!(matches!(origin.caller, OriginCaller::system(super::system::RawOrigin::Root)));
+		assert!(matches!(origin.caller, OriginCaller::system(frame_support::dispatch::RawOrigin::Root)));
 
 		// Root origin bypass all filter.
 		assert_eq!(origin.filter_call(&accepted_call), true);
@@ -417,7 +417,7 @@ fn integrity_test_works() {
 fn origin_codec() {
 	use codec::Encode;
 
-	let origin = OriginCaller::system(system::RawOrigin::None);
+	let origin = OriginCaller::system(frame_support::dispatch::RawOrigin::None);
 	assert_eq!(origin.encode()[0], 30);
 
 	let origin = OriginCaller::Module1_1(module1::Origin(Default::default()));
