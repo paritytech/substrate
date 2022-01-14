@@ -36,9 +36,7 @@
 use sp_runtime::traits::{Convert, Hash};
 use sp_std::prelude::*;
 
-use beefy_primitives::mmr::{
-	BeefyDataProvider, BeefyLeafExtra, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion,
-};
+use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
 use pallet_mmr::primitives::LeafDataProvider;
 
 use codec::Encode;
@@ -123,17 +121,8 @@ pub mod pallet {
 		/// efficiency reasons.
 		type BeefyAuthorityToMerkleLeaf: Convert<<Self as pallet_beefy::Config>::BeefyId, Vec<u8>>;
 
-		/// Specifications for extra data added to the mmr leaf
-		type LeafExtraCollectionItem: Encode;
-		type LeafExtraCollection: IntoIterator<Item = Self::LeafExtraCollectionItem>;
 		/// Retrieve arbitrary data that should be added to the mmr leaf
-		type BeefyDataProvider: BeefyDataProvider<
-			BeefyLeafExtra<
-				Self::LeafExtraCollection,
-				Self::LeafExtraCollectionItem,
-				<Self as pallet_mmr::Config>::Hash,
-			>,
-		>;
+		type BeefyDataProvider: BeefyDataProvider;
 	}
 
 	/// Details of next BEEFY authority set.
@@ -159,7 +148,7 @@ where
 		MmrLeaf {
 			version: T::LeafVersion::get(),
 			parent_number_and_hash: frame_system::Pallet::<T>::leaf_data(),
-			leaf_extra: Pallet::<T>::get_beefy_extra_data(),
+			leaf_extra: T::BeefyDataProvider::extra_data(),
 			beefy_next_authority_set: Pallet::<T>::update_beefy_next_authority_set(),
 		}
 	}
@@ -178,22 +167,6 @@ impl<T: Config> Pallet<T>
 where
 	MerkleRootOf<T>: From<beefy_merkle_tree::Hash> + Into<beefy_merkle_tree::Hash>,
 {
-	/// Returns root hash of arbitrary data to insert in the merkle leaf
-	/// NOTE This is an initial and inefficient implementation, which re-constructs
-	/// the merkle tree every block. Instead we should update the merkle root in
-	/// [Self::on_initialize] call of this pallet and update the merkle tree efficiently (use
-	/// on-chain storage to persist inner nodes).
-	fn get_beefy_extra_data() -> MerkleRootOf<T> {
-		let extra = T::BeefyDataProvider::extra_data();
-		match extra {
-			BeefyLeafExtra::Collection(col) => beefy_merkle_tree::merkle_root::<Self, _, _>(
-				col.into_iter().map(|item| item.encode()),
-			)
-			.into(),
-			BeefyLeafExtra::Blob(root) => root,
-		}
-	}
-
 	/// Returns details of the next BEEFY authority set.
 	///
 	/// Details contain authority set id, authority set length and a merkle root,

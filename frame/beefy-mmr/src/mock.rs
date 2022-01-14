@@ -18,6 +18,7 @@
 use std::vec;
 
 use beefy_primitives::mmr::MmrLeafVersion;
+use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
@@ -35,9 +36,7 @@ use sp_runtime::{
 use crate as pallet_beefy_mmr;
 
 pub use beefy_primitives::{
-	crypto::AuthorityId as BeefyId,
-	mmr::{BeefyDataProvider, BeefyLeafExtra},
-	ConsensusLog, BEEFY_ENGINE_ID,
+	crypto::AuthorityId as BeefyId, mmr::BeefyDataProvider, ConsensusLog, BEEFY_ENGINE_ID,
 };
 
 impl_opaque_keys! {
@@ -131,31 +130,23 @@ parameter_types! {
 	pub LeafVersion: MmrLeafVersion = MmrLeafVersion::new(1, 5);
 }
 
-type ParaId = u32;
-type ParaHead = Vec<u8>;
-type LeafExtraCollectionItem = (ParaId, ParaHead);
-type LeafExtraCollection = Vec<LeafExtraCollectionItem>;
-
 impl pallet_beefy_mmr::Config for Test {
 	type LeafVersion = LeafVersion;
 
 	type BeefyAuthorityToMerkleLeaf = pallet_beefy_mmr::BeefyEcdsaToEthereum;
 
 	type BeefyDataProvider = DummyParaHeads;
-
-	type LeafExtraCollection = LeafExtraCollection;
-
-	type LeafExtraCollectionItem = LeafExtraCollectionItem;
 }
 
 pub struct DummyParaHeads;
-impl BeefyDataProvider<BeefyLeafExtra<LeafExtraCollection, LeafExtraCollectionItem, MmrHash>>
-	for DummyParaHeads
-{
-	fn extra_data() -> BeefyLeafExtra<LeafExtraCollection, LeafExtraCollectionItem, MmrHash> {
+impl BeefyDataProvider for DummyParaHeads {
+	fn extra_data() -> Vec<u8> {
 		let mut col = vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])];
 		col.sort();
-		BeefyLeafExtra::Collection(col)
+		beefy_merkle_tree::merkle_root::<crate::Pallet<Test>, _, _>(
+			col.into_iter().map(|pair| pair.encode()),
+		)
+		.to_vec()
 	}
 }
 

@@ -71,7 +71,7 @@ fn should_contain_mmr_digest() {
 		assert_eq!(
 			System::digest().logs,
 			vec![beefy_log(ConsensusLog::MmrRoot(
-				hex!("969d516e5279540ef38e4a710fb0645cab4c3b01e528be7285b85ec9c5fb55c8").into()
+				hex!("70f23210010ba218f1308fd8c79e4bdaafca91c702036feab354de4600f13ed2").into()
 			))]
 		);
 
@@ -82,13 +82,13 @@ fn should_contain_mmr_digest() {
 			System::digest().logs,
 			vec![
 				beefy_log(ConsensusLog::MmrRoot(
-					hex!("969d516e5279540ef38e4a710fb0645cab4c3b01e528be7285b85ec9c5fb55c8").into()
+					hex!("70f23210010ba218f1308fd8c79e4bdaafca91c702036feab354de4600f13ed2").into()
 				)),
 				beefy_log(ConsensusLog::AuthoritiesChange(
 					ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4),], 1,).unwrap()
 				)),
 				beefy_log(ConsensusLog::MmrRoot(
-					hex!("8c42b7b040d262f7f2e26abeb61ab0c3c448f60c7f2f19e6ca0035d9bb3ae7e2").into()
+					hex!("aad00bf972bfe41d9556bc8526efa3cd523cc2c98c486f7f53556da419d12a3f").into()
 				)),
 			]
 		);
@@ -114,8 +114,10 @@ fn should_contain_valid_leaf_data() {
 				root: hex!("176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96")
 					.into(),
 			},
-			leaf_extra: hex!("ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e")
-				.into(),
+			leaf_extra: vec![
+				85, 184, 233, 225, 204, 159, 13, 183, 119, 111, 172, 12, 166, 99, 24, 239, 138,
+				207, 184, 236, 38, 219, 17, 227, 115, 18, 5, 131, 224, 126, 230, 72
+			],
 		}
 	);
 
@@ -136,8 +138,10 @@ fn should_contain_valid_leaf_data() {
 				root: hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5")
 					.into(),
 			},
-			leaf_extra: hex!("ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e")
-				.into(),
+			leaf_extra: vec![
+				85, 184, 233, 225, 204, 159, 13, 183, 119, 111, 172, 12, 166, 99, 24, 239, 138,
+				207, 184, 236, 38, 219, 17, 227, 115, 18, 5, 131, 224, 126, 230, 72
+			],
 		}
 	);
 }
